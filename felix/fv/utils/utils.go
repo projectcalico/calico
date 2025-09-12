@@ -28,7 +28,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
@@ -107,7 +107,7 @@ func run(input []byte, checkNoError bool, command string, args ...string) error 
 		}
 	}
 	if checkNoError {
-		ExpectWithOffset(2, err).NotTo(HaveOccurred(), fmt.Sprintf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v",
+		gomega.ExpectWithOffset(2, err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v",
 			command, args, string(outputBytes)))
 	}
 	if err != nil {
@@ -163,11 +163,11 @@ func Command(name string, args ...string) *exec.Cmd {
 func LogOutput(cmd *exec.Cmd, name string) error {
 	outPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Getting StdoutPipe failed for %s: %v", name, err)
+		return fmt.Errorf("getting StdoutPipe failed for %s: %v", name, err)
 	}
 	errPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("Getting StderrPipe failed for %s: %v", name, err)
+		return fmt.Errorf("getting StderrPipe failed for %s: %v", name, err)
 	}
 	stdoutReader := bufio.NewReader(outPipe)
 	stderrReader := bufio.NewReader(errPipe)
@@ -203,13 +203,13 @@ func GetEtcdClient(etcdIP string) client.Interface {
 			},
 		},
 	})
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return client
 }
 
 func IPSetIDForSelector(rawSelector string) string {
 	sel, err := selector.Parse(rawSelector)
-	Expect(err).ToNot(HaveOccurred())
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	ipSetData := calc.IPSetData{
 		Selector: sel,
@@ -279,12 +279,12 @@ func UpdateFelixConfig(client client.Interface, deltaFn func(*api.FelixConfigura
 		cfg.Name = "default"
 		deltaFn(cfg)
 		_, err = client.FelixConfigurations().Create(ctx, cfg, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	} else {
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		deltaFn(cfg)
 		_, err = client.FelixConfigurations().Update(ctx, cfg, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 }
 
