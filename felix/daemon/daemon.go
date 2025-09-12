@@ -1240,13 +1240,14 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVe
 		if ipVersion == proto.IPVersion_IPV6 {
 			storedPublicKey = node.Status.WireguardPublicKeyV6
 		} else if ipVersion != proto.IPVersion_IPV4 {
-			return fmt.Errorf("Unknown IP version: %d", ipVersion)
+			return fmt.Errorf("unknown IP version: %d", ipVersion)
 		}
 		if storedPublicKey != dpPubKey {
 			updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			if ipVersion == proto.IPVersion_IPV4 {
+			switch ipVersion {
+			case proto.IPVersion_IPV4:
 				node.Status.WireguardPublicKey = dpPubKey
-			} else if ipVersion == proto.IPVersion_IPV6 {
+			case proto.IPVersion_IPV6:
 				node.Status.WireguardPublicKeyV6 = dpPubKey
 			}
 			_, err := fc.datastorev3.Nodes().Update(updateCtx, node, options.SetOptions{})
