@@ -82,7 +82,9 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	// with the Calico API server and should instead use crd.projectcalico.org/v1 resources directly.
 	v3 := UsingV3CRDs(ca)
 	if v3 {
-		log.Info("Using projectcalico.org/v3 API group for CRDs")
+		log.Info("Using API group projectcalico.org/v3 for CRDs")
+	} else {
+		log.Info("Using API group crd.projectcalico.org/v1 for CRDs")
 	}
 
 	config, cs, err := CreateKubernetesClientset(ca)
