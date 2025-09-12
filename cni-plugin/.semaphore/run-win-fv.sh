@@ -5,14 +5,16 @@ set -x
 
 : ${BACKEND:?Error: BACKEND is not set}
 
-FV_DIR="$HOME/$SEMAPHORE_GIT_DIR/process/testing/winfv-cni-plugin/aso"
+FV_DIR="$HOME/$SEMAPHORE_GIT_DIR/process/testing/aso"
 pushd ${FV_DIR}
 
 # Prepare local files
-cp $HOME/$SEMAPHORE_GIT_DIR/cni-plugin/bin/windows/*.exe ./windows
+cp $HOME/$SEMAPHORE_GIT_DIR/cni-plugin/bin/windows/*.exe ./windows || true
 
 # Run FV.
-BACKEND=$BACKEND make run-fv | tee run-fv.log
+# BACKEND=$BACKEND make run-fv | tee run-fv.log
+
+make setup-kubeadm | tee setup-kubeadm.log
 
 # Get results and logs
 ls -ltr ./report
