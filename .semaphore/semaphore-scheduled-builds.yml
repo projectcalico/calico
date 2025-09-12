@@ -23,7 +23,7 @@ global_job_config:
       - mkdir artifacts
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - retry git fetch --unshallow
+      - if [[ "${SEMAPHORE_BLOCK_NAME}" != "Prerequisites" ]]; then retry git fetch --unshallow; fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
@@ -114,7 +114,7 @@ promotions:
 blocks:
   - name: Check images availability
     run:
-      when: "true or change_in(['/charts/', '/manifests/'])"
+      when: "true or change_in(['/charts/', '/manifests/'], {pipeline_file: 'ignore'})"
     dependencies: []
     task:
       jobs:
@@ -124,13 +124,32 @@ blocks:
   - name: Prerequisites
     dependencies: []
     task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
       jobs:
         - name: Pre-flight checks
           commands:
             - make ci-preflight-checks
+  - name: API
+    run:
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd api
+      jobs:
+        - name: make ci
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: apiserver
     run:
-      when: "true or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -152,24 +171,9 @@ blocks:
                 - s390x
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
-  - name: API
-    run:
-      when: "true or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-    execution_time_limit:
-      minutes: 30
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - cd api
-      jobs:
-        - name: make ci
-          commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: app-policy
     run:
-      when: "true or change_in(['/*', '/app-policy/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -182,7 +186,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: calicoctl
     run:
-      when: "true or change_in(['/*', '/calicoctl/', '/libcalico-go/', '/api/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -195,7 +199,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: cni-plugin
     run:
-      when: "true or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -211,7 +215,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make image-windows
   - name: "cni-plugin: Windows"
     run:
-      when: "true or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -235,8 +239,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-            - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+            - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
             - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
       env_vars:
         - name: SEMAPHORE_ARTIFACT_EXPIRY
@@ -262,7 +266,7 @@ blocks:
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
   - name: confd
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/confd/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -277,7 +281,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: crypto
     run:
-      when: "true or change_in(['/lib.Makefile', '/crypto/'])"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -288,9 +292,21 @@ blocks:
         - name: "crypto tests"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+  - name: e2e script & pipeline validations
+    run:
+      when: "true or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 5
+    dependencies:
+      - Prerequisites
+    task:
+      jobs:
+        - name: Test Pipeline files are valid yaml
+          commands:
+            - ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh
   - name: e2e tests
     run:
-      when: "true or change_in(['/*', '/e2e/', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -304,7 +320,7 @@ blocks:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
   - name: envoy-gateway
     run:
-      when: "true or change_in(['/*', '/third_party/envoy-gateway'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -328,7 +344,7 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: envoy-proxy
     run:
-      when: "true or change_in(['/*', '/third_party/envoy-proxy'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -352,7 +368,7 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: envoy-ratelimit
     run:
-      when: "true or change_in(['/*', '/third_party/envoy-ratelimit'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -376,7 +392,7 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "Felix: Build"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -409,7 +425,7 @@ blocks:
             - ../.semaphore/run-and-monitor static-checks.log make static-checks
   - name: "Felix: multi-arch build"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - "Felix: Build"
     task:
@@ -431,7 +447,7 @@ blocks:
             - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: "Felix: Build - native arm64 runner"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - "Felix: Build"
     task:
@@ -449,7 +465,7 @@ blocks:
             - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
   - name: "Felix: Build Windows binaries"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -460,7 +476,7 @@ blocks:
             - make bin/calico-felix.exe fv/win-fv.exe
   - name: "Felix: Windows FV capz"
     run:
-      when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "false or true"
     dependencies: ["Felix: Build Windows binaries"]
     task:
       secrets:
@@ -482,7 +498,7 @@ blocks:
       epilogue:
         always:
           commands:
-            - artifact push job ${REPORT_DIR} --destination test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - artifact push job ${REPORT_DIR} --destination test-results || true
       env_vars:
         - name: FV_PROVISIONER
           value: "capz"
@@ -498,7 +514,7 @@ blocks:
             - ./.semaphore/run-win-fv
   - name: "Felix: FV Tests"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - "Felix: Build"
     task:
@@ -567,7 +583,7 @@ blocks:
             - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
   - name: "Felix: BPF UT/FV tests on Ubuntu 24.04"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -604,7 +620,7 @@ blocks:
         - name: google-service-account-for-gce
   - name: "Felix: BPF UT/FV tests on Ubuntu 22.04 (nftables)"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -643,7 +659,7 @@ blocks:
         - name: google-service-account-for-gce
   - name: goldmane
     run:
-      when: "true or change_in(['/*', '/goldmane/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -671,7 +687,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: guardian
     run:
-      when: "true or change_in(['/*', '/guardian/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -695,7 +711,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -706,22 +722,9 @@ blocks:
         - name: "kube-controllers: tests"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-  - name: libcalico-go
-    run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - cd libcalico-go
-      jobs:
-        - name: "libcalico-go: tests"
-          commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: lib
     run:
-      when: "true or change_in(['/lib/'])"
+      when: "true or change_in(['/lib/'], {pipeline_file: 'ignore'})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -734,9 +737,22 @@ blocks:
         - name: make ci
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
+  - name: libcalico-go
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd libcalico-go
+      jobs:
+        - name: "libcalico-go: tests"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: "Node: Build"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -753,7 +769,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: "Node: multi-arch build"
     run:
-      when: "true or change_in(['/felix/', '/confd/', '/node/'])"
+      when: "true"
     dependencies:
       - "Node: Build"
     task:
@@ -777,7 +793,7 @@ blocks:
             - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
   - name: "Node: Build - native arm64 runner"
     run:
-      when: "true or change_in(['/felix/', '/confd/', '/node/'])"
+      when: "true"
     dependencies:
       - "Node: Build"
     task:
@@ -793,7 +809,8 @@ blocks:
             - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
   - name: "Node: kind-cluster tests"
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      # KinD tests also build and run all the other images.
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -825,7 +842,7 @@ blocks:
         - name: google-service-account-for-gce
   - name: pod2daemon
     run:
-      when: "true or change_in(['/*', '/pod2daemon/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -839,7 +856,7 @@ blocks:
             - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
   - name: "Tools (hack directory)"
     run:
-      when: "true or change_in(['/*', '/hack/', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
       - Prerequisites
     task:
@@ -852,7 +869,7 @@ blocks:
             - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: Typha
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -887,7 +904,7 @@ blocks:
             - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true
   - name: whisker-backend
     run:
-      when: "true or change_in(['/*', '/whisker-backend/', '/goldmane/', '/lib/std/', '/lib/httpmachinery/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -911,7 +928,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: whisker
     run:
-      when: "true or change_in(['/*', '/whisker/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -935,7 +952,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: key-cert-provisioner
     run:
-      when: "true or change_in(['/*', '/key-cert-provisioner/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -948,7 +965,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: "OpenStack integration (Yoga)"
     run:
-      when: "true or change_in(['/networking-calico/'])"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'], {pipeline_file: 'ignore'})"
     dependencies:
       - Prerequisites
     task:
@@ -979,9 +996,10 @@ blocks:
             - sudo umount /boot
             - sudo rsync -av /boot2/ /boot/ --exclude "*.new" --exclude "*.dpkg-bak" --delete --inplace
             - sudo rm -rf /boot2/
+            # Set NC_PLUGIN_REPO and NC_PLUGIN_REF so that DevStack will use the networking-calico
+            # code from the current PR or branch.  The following checkout is to make sure of having a
+            # local ref that we can specify.
             - git checkout -b devstack-test
-            - export LIBVIRT_TYPE=qemu
-            - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
             - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
@@ -991,11 +1009,11 @@ blocks:
           commands:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
-            - artifact push job --expire-in 1d logs
+            - artifact push job logs
 
   - name: "OpenStack integration (Caracal)"
     run:
-      when: "true or change_in(['/networking-calico/'])"
+      when: "true or change_in(['/networking-calico/'], {pipeline_file: 'ignore'})"
     dependencies:
       - Prerequisites
     task:
@@ -1017,9 +1035,10 @@ blocks:
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
             # or replace the existing version.  Happily we do know that, so let's do it upfront here.
             - sudo apt-get remove -y python3-wrapt || true
+            # Set NC_PLUGIN_REPO and NC_PLUGIN_REF so that DevStack will use the networking-calico
+            # code from the current PR or branch.  The following checkout is to make sure of having a
+            # local ref that we can specify.
             - git checkout -b devstack-test
-            - export LIBVIRT_TYPE=qemu
-            - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
             - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
@@ -1029,10 +1048,10 @@ blocks:
           commands:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
-            - artifact push job --expire-in 1d logs
+            - artifact push job logs
   - name: Mock node
     run:
-      when: "true or change_in(['/*', '/test-tools/mocknode/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -1045,7 +1064,7 @@ blocks:
             - ../../.semaphore/run-and-monitor make-ci.log make ci
   - name: release tooling
     run:
-      when: "true or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:

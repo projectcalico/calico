@@ -310,7 +310,7 @@ var (
 			// Check slack configuration
 			if b && (c.String(slackTokenFlag.Name) == "" || c.String(slackChannelFlag.Name) == "") {
 				if c.Bool(ciFlag.Name) {
-					return fmt.Errorf("Slack token and channel are required in CI environment")
+					return fmt.Errorf("missing Slack token or channel in CI environment")
 				}
 				logrus.Warnf("This command may require sending Slack notifications, ensure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
 			}
@@ -345,7 +345,7 @@ var (
 		Value:   false,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if !b && (c.String(imageScannerAPIFlag.Name) == "" || c.String(imageScannerTokenFlag.Name) == "") {
-				return fmt.Errorf("Image scanner configuration is required, ensure %s and %s flags are set", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name)
+				return fmt.Errorf("image scanner configuration is required, ensure %s and %s flags are set", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name)
 			}
 			return nil
 		},

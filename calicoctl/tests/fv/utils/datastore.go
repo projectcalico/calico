@@ -16,7 +16,7 @@ package utils
 
 import (
 	"testing"
-
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"

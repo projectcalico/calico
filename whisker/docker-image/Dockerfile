@@ -86,4 +86,4 @@ COPY --from=source / /
 
 USER 10001:10001
 
-CMD ["/usr/bin/nginx-start.sh"]
+ENTRYPOINT ["/usr/bin/nginx-start.sh"]

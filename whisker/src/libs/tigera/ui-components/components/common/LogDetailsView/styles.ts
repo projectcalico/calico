@@ -9,16 +9,16 @@ export default {
             fontWeight: '900',
             letterSpacing: 'normal',
             minWidth: '100%',
-            td: {
+            '& > tbody > tr > td': {
                 borderBottom: 'none',
                 whiteSpace: 'normal',
             },
-            th: {
+            '& > tbody > tr > th': {
                 border: '0px',
                 background: 'unset',
                 textTransform: 'none',
                 fontWeight: 700,
-                fontSize: 'xs',
+                fontSize: 'sm',
                 verticalAlign: 'top',
                 color: 'tigera-color-on-surface',
                 lineHeight: '19px',

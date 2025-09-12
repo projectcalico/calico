@@ -41,12 +41,10 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	containers := []v1.Container{}
 	servicePorts := []v1.ServicePort{}
 	nodeselector := map[string]string{}
-	imagePull := v1.PullAlways
 
 	if windows.ClusterIsWindows() {
 		image = images.Porter
 		nodeselector["kubernetes.io/os"] = "windows"
-		imagePull = v1.PullIfNotPresent
 	} else {
 		image = images.TestWebserver
 		nodeselector["kubernetes.io/os"] = "linux"
@@ -61,7 +59,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 		containers = append(containers, v1.Container{
 			Name:            fmt.Sprintf("%s-container-%d", podName, port),
 			Image:           image,
-			ImagePullPolicy: imagePull,
+			ImagePullPolicy: v1.PullIfNotPresent,
 			Args:            args,
 			Ports: []v1.ContainerPort{
 				{

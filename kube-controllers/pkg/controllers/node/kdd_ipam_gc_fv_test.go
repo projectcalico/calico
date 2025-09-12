@@ -74,7 +74,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		var err error
 		kconfigfile, err = os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kconfigfile.Name())
+		defer func() { _ = os.Remove(kconfigfile.Name()) }()
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
@@ -171,6 +171,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		_, err := calicoClient.IPPools().Delete(context.Background(), "test-ipam-gc-ippool", options.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		controller.Stop()
 		apiserver.Stop()
@@ -605,7 +606,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		var err error
 		kconfigfile, err = os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kconfigfile.Name())
+		defer func() { _ = os.Remove(kconfigfile.Name()) }()
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
@@ -703,6 +704,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		_, err := calicoClient.IPPools().Delete(context.Background(), "test-ipam-gc-ippool", options.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		controller.Stop()
 		apiserver.Stop()

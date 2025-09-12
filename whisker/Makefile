@@ -38,11 +38,13 @@ build:
 	$(DOCKER_RUN_RM) $(BUILD_IMAGE_NAME) yarn install -g
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn build
 
-image: $(IMAGE_BUILD_MARKER)
+image-nginx-test: $(IMAGE_BUILD_MARKER)
+	docker run --rm whisker:latest-$(ARCH) test
 
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
+	$(MAKE) image-nginx-test ARCH=$*
 
 install:
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn install -g
@@ -56,7 +58,9 @@ format: install
 lint: install
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn lint --quiet
 
-ci: install format lint yarn-test
+ci: ut install format lint yarn-test
+
+ut: image-nginx-test
 
 .PHONY: clean
 clean:

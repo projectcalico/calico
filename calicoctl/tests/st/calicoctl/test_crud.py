@@ -190,7 +190,7 @@ class TestCalicoctlCommands(TestBase):
 
         rc = calicoctl("get somekind somename")
         rc.assert_error()
-        rc.assert_output_contains("Failed to get resources: resource type 'somekind' is not supported")
+        rc.assert_output_contains("failed to get resources: resource type 'somekind' is not supported")
 
     def test_empty_name_is_illegal(self):
         """
@@ -365,7 +365,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=bgppeer_invalid, format="json")
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to create 'BGPPeer' resource")
+        rc.assert_output_contains("failed to create 'BGPPeer' resource")
 
     def test_create_all_invalid_resources(self):
         """
@@ -374,7 +374,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=bgppeer_multiple_invalid, format="json")
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to create any 'BGPPeer' resources")
+        rc.assert_output_contains("failed to create any 'BGPPeer' resources")
 
     def test_apply_single_invalid_resource(self):
         """
@@ -383,7 +383,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply", data=bgppeer_invalid)
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to apply 'BGPPeer' resource")
+        rc.assert_output_contains("failed to apply 'BGPPeer' resource")
 
     def test_apply_all_invalid_resources(self):
         """
@@ -392,7 +392,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply", data=bgppeer_multiple_invalid)
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to apply any 'BGPPeer' resources")
+        rc.assert_output_contains("failed to apply any 'BGPPeer' resources")
 
     def test_apply_with_resource_version(self):
         """
@@ -1517,6 +1517,162 @@ class TestCalicoctlCommands(TestBase):
                 "patch stagednetworkpolicy %s -p '{\"http\": {\"exact\": \"path/to/match\"}}'" % name(stagednetworkpolicy_name2_rev1))
         rc.assert_error()
 
+    def test_validate_single_valid_resource(self):
+        """
+        Test that validating a single valid resource succeeds
+        """
+        rc = calicoctl("validate", data=bgppeer_name1_rev1_v4, no_config=True)
+        rc.assert_no_error()
+        rc.assert_output_contains("Successfully validated 1 'BGPPeer' resource(s)")
+
+    def test_validate_single_invalid_resource_syntax(self):
+        """
+        Test that validating a single resource with syntax errors returns an appropriate error
+        """
+        # Create a resource with invalid syntax (negative AS number causes parse error)
+        invalid_bgp = {
+            'apiVersion': API_VERSION,
+            'kind': 'BGPPeer',
+            'metadata': {'name': 'invalid-bgp'},
+            'spec': {'peerIP': '192.168.1.1', 'asNumber': -1}
+        }
+        rc = calicoctl("validate", data=invalid_bgp, no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("failed to execute command")
+
+    def test_validate_malformed_yaml(self):
+        """
+        Test that validating malformed YAML returns an appropriate error
+        """
+        # Create malformed YAML by writing directly to file
+        writeyaml('/tmp/malformed.yaml', "invalid yaml content\n  this: is [broken")
+        rc = calicoctl("validate -f /tmp/malformed.yaml", no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("failed to execute command")
+
+    def test_validate_multiple_valid_resources(self):
+        """
+        Test that validating multiple valid resources succeeds
+        """
+        resources = [bgppeer_name1_rev1_v4, ippool_name1_rev1_v4]
+        rc = calicoctl("validate", data=resources, no_config=True)
+        rc.assert_no_error()
+        rc.assert_output_contains("Successfully validated 2 resource(s)")
+
+    def test_validate_from_stdin(self):
+        """
+        Test that validating from stdin works correctly
+        """
+        rc = calicoctl("validate", data=bgppeer_name1_rev1_v4, load_as_stdin=True, no_config=True)
+        rc.assert_no_error()
+        rc.assert_output_contains("Successfully validated 1 'BGPPeer' resource(s)")
+
+    def test_validate_json_format(self):
+        """
+        Test that validating JSON format resources works correctly
+        """
+        rc = calicoctl("validate", data=bgppeer_name1_rev1_v4, format="json", no_config=True)
+        rc.assert_no_error()
+        rc.assert_output_contains("Successfully validated 1 'BGPPeer' resource(s)")
+
+    def test_validate_empty_file(self):
+        """
+        Test that validating with empty file shows appropriate message
+        """
+        # Create truly empty file
+        with open('/tmp/empty.yaml', 'w') as f:
+            pass  # Create an empty file
+        rc = calicoctl("validate -f /tmp/empty.yaml", no_config=True)
+        # Empty files should result in error with specific message
+        rc.assert_error()
+        rc.assert_output_contains("no resources specified in file")
+
+    def test_validate_skip_empty_flag(self):
+        """
+        Test that --skip-empty flag works correctly with empty files
+        """
+        # Create truly empty file
+        with open('/tmp/empty.yaml', 'w') as f:
+            pass  # Create an empty file
+        rc = calicoctl("validate -f /tmp/empty.yaml --skip-empty", no_config=True)
+        rc.assert_no_error()
+        rc.assert_output_contains("No resources specified")
+
+    def test_validate_rejects_datastore_args(self):
+        """
+        Test that validate command rejects datastore-related arguments
+        """
+        # Test --config argument rejection
+        rc = calicoctl("validate --config=/tmp/config.yaml -f /tmp/test.yaml", no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("Usage:")
+
+        # Test --namespace argument rejection  
+        rc = calicoctl("validate --namespace=test -f /tmp/test.yaml", no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("Usage:")
+
+        # Test --context argument rejection
+        rc = calicoctl("validate --context=test -f /tmp/test.yaml", no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("Usage:")
+
+    def test_validate_different_resource_types(self):
+        """
+        Test that validating different resource types works
+        """
+        # Test with NetworkPolicy
+        rc = calicoctl("validate", data=networkpolicy_name1_rev1, no_config=True)
+        rc.assert_no_error()
+        rc.assert_output_contains("Successfully validated 1 'NetworkPolicy' resource(s)")
+
+        # Test with IPPool
+        rc = calicoctl("validate", data=ippool_name1_rev1_v4, no_config=True)
+        rc.assert_no_error()
+        rc.assert_output_contains("Successfully validated 1 'IPPool' resource(s)")
+
+    def test_validate_calico_specific_validation_failure(self):
+        """
+        Test that validate command catches Calico-specific validation errors like invalid selectors
+        """
+        # Create a NetworkPolicy with an invalid selector that has invalid characters
+        invalid_networkpolicy = {
+            'apiVersion': API_VERSION,
+            'kind': 'NetworkPolicy',
+            'metadata': {
+                'name': 'allow-tcp-6379',
+                'namespace': 'production'
+            },
+            'spec': {
+                'selector': 'ga@rb"ag\'e'  # Invalid selector with invalid characters
+            }
+        }
+        rc = calicoctl("validate", data=invalid_networkpolicy, no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("failed to validate")
+
+    def test_validate_multiple_resources_with_calico_validation_failure(self):
+        """
+        Test that validate command properly handles mixed valid/invalid resources
+        """
+        # Create one valid and one invalid resource
+        valid_ippool = ippool_name1_rev1_v4
+        invalid_networkpolicy = {
+            'apiVersion': API_VERSION,
+            'kind': 'NetworkPolicy', 
+            'metadata': {
+                'name': 'invalid-policy',
+                'namespace': 'test'
+            },
+            'spec': {
+                'selector': 'invalid@selector!'  # Invalid selector
+            }
+        }
+        resources = [valid_ippool, invalid_networkpolicy]
+        rc = calicoctl("validate", data=resources, no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("hit error(s):")
+
 #
 # class TestCreateFromFile(TestBase):
 #     """
@@ -2295,7 +2451,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.250',
                                 }
-                   }, 'Unknown resource type (BGPPeer) and/or version (v7)'),
+                   }, 'unknown resource type (BGPPeer) and/or version (v7)'),
                    ("bgpPeer-invalidIpv6", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',

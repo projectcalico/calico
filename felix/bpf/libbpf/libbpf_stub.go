@@ -61,6 +61,10 @@ func (o *Obj) FirstMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) Filename() string {
+	panic("LIBBPF syscall stub")
+}
+
 func (o *Obj) SetAttachType(progName string, attachType uint32) error {
 	panic("LIBBPF syscall stub")
 }
@@ -170,16 +174,18 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
-	GlobalsRPFOptionEnabled        uint32 = 16
-	GlobalsRPFOptionStrict         uint32 = 32
-	GlobalsNoDSRCidrs              uint32 = 12345
-	GlobalsLoUDPOnly               uint32 = 12345
-	GlobalsRedirectPeer            uint32 = 12345
-	GlobalsFlowLogsEnabled         uint32 = 12345
-	GlobalsNATOutgoingExcludeHosts uint32 = 12345
-	GlobalsSkipEgressRedirect      uint32 = 12345
-	AttachTypeTcxIngress           uint32 = 12345
-	AttachTypeTcxEgress            uint32 = 12345
+	GlobalsRPFOptionEnabled            uint32 = 16
+	GlobalsRPFOptionStrict             uint32 = 32
+	GlobalsNoDSRCidrs                  uint32 = 12345
+	GlobalsLoUDPOnly                   uint32 = 12345
+	GlobalsRedirectPeer                uint32 = 12345
+	GlobalsFlowLogsEnabled             uint32 = 12345
+	GlobalsNATOutgoingExcludeHosts     uint32 = 12345
+	GlobalsSkipEgressRedirect          uint32 = 12345
+	GlobalsIngressPacketRateConfigured uint32 = 12345
+	GlobalsEgressPacketRateConfigured  uint32 = 12345
+	AttachTypeTcxIngress               uint32 = 12345
+	AttachTypeTcxEgress                uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {
@@ -195,6 +201,14 @@ func ObjPin(_ int, _ string) error {
 }
 
 func ObjGet(_ string) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func MapDeleteBatch(fd int, k []byte, count int, flags uint64) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 
@@ -223,5 +237,13 @@ func ProgName(id uint32) (string, error) {
 }
 
 func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func OpenObjectWithLogBuffer(filename string, buf []byte) (*Obj, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, flags int, name string) (int, error) {
 	panic("LIBBPF syscall stub")
 }

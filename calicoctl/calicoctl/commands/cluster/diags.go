@@ -106,7 +106,7 @@ func diagsTestable(args []string, print func(a ...any) (int, error), continuatio
 	parser := &docopt.Parser{HelpHandler: docopt.NoHelpHandler, SkipHelpFlags: true}
 	parsedArgs, err := parser.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'.\n\n%v", strings.Join(args, " "), usage)
+		return fmt.Errorf("invalid option: 'calicoctl %s'.\n\n%v", strings.Join(args, " "), usage)
 	}
 
 	var opts diagOpts
@@ -210,7 +210,7 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 		return
 	}
 	for _, ns := range nsl.Items {
-		if !(strings.Contains(ns.Name, "calico") || strings.Contains(ns.Name, "tigera")) {
+		if !strings.Contains(ns.Name, "calico") && !strings.Contains(ns.Name, "tigera") {
 			continue
 		}
 
@@ -508,7 +508,7 @@ func collectTLSSecrets(kubeClient kubernetes.Interface, dir string) {
 		{"calico-kube-controllers-metrics-tls", "calico-system"},
 		{"calico-node-prometheus-server-tls", "calico-system"},
 		{"node-certs", "calico-system"},
-		{"typa-certs", "calico-system"},
+		{"typha-certs", "calico-system"},
 		{"calico-node-prometheus-client-tls", "tigera-prometheus"},
 		{"calico-node-prometheus-tls", "tigera-prometheus"},
 		{"deep-packet-inspection-tls", "tigera-dpi"},

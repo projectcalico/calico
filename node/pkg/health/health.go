@@ -55,12 +55,19 @@ func init() {
 }
 
 func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thresholdTime time.Duration) {
+	if err := RunOutput(bird, bird6, felixReady, felixLive, birdLive, bird6Live, thresholdTime); err != nil {
+		fmt.Printf("%s\n", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+func RunOutput(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thresholdTime time.Duration) error {
 	livenessChecks := felixLive || birdLive || bird6Live
 	readinessChecks := bird || felixReady || bird6
 
 	if !livenessChecks && !readinessChecks {
-		fmt.Printf("calico/node check error: must specify at least one of -bird-live, -bird6-live, -felix-live, -bird, -bird6, or -felix\n")
-		os.Exit(1)
+		return fmt.Errorf("calico/node check error: must specify at least one of -bird-live, -bird6-live, -felix-live, -bird, -bird6, or -felix")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), thresholdTime)
 	defer cancel()
@@ -82,7 +89,7 @@ func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, threshold
 			}
 
 			// Check that BIRD is actually responding to commands.
-			out, err := exec.Command("/usr/bin/birdcl", "-s", "/var/run/calico/bird.ctl", "show", "status").Output()
+			out, err := exec.Command("/bin/birdcl", "-s", "/var/run/calico/bird.ctl", "show", "status").Output()
 			if err != nil {
 				return fmt.Errorf("calico/node is not ready: bird is not live: %+v", err)
 			}
@@ -101,7 +108,7 @@ func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, threshold
 			}
 
 			// Check that BIRD is actually responding to commands.
-			out, err := exec.Command("/usr/bin/birdcl", "-s", "/var/run/calico/bird6.ctl", "show", "status").Output()
+			out, err := exec.Command("/bin/birdcl", "-s", "/var/run/calico/bird6.ctl", "show", "status").Output()
 			if err != nil {
 				return fmt.Errorf("calico/node is not ready: bird6 is not live: %+v", err)
 			}
@@ -139,10 +146,7 @@ func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, threshold
 			return nil
 		})
 	}
-	if err := g.Wait(); err != nil {
-		fmt.Printf("%s\n", err)
-		os.Exit(1)
-	}
+	return g.Wait()
 }
 
 func checkServiceIsLive(services []string) error {
@@ -164,7 +168,7 @@ func checkService(serviceName string) error {
 
 	cmdOutput := string(out)
 	if !strings.HasPrefix(cmdOutput, "run") {
-		return fmt.Errorf("Service %s is not running. Output << %s >>", serviceName, strings.Trim(cmdOutput, "\n"))
+		return fmt.Errorf("service %s is not running. Output << %s >>", serviceName, strings.Trim(cmdOutput, "\n"))
 	}
 
 	return nil
@@ -177,7 +181,7 @@ func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
 	// Stat nodename file to get the modified time of the file.
 	nodenameFileStat, err := os.Stat("/var/lib/calico/nodename")
 	if err != nil {
-		return fmt.Errorf("Failed to stat() nodename file: %v", err)
+		return fmt.Errorf("failed to stat() nodename file: %v", err)
 	}
 
 	// Check for unestablished peers
@@ -241,7 +245,7 @@ func checkFelixHealth(ctx context.Context, endpoint, probeType string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("%s probe reporting %d", probeType, resp.StatusCode)

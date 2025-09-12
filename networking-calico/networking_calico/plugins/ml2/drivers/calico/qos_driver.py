@@ -15,13 +15,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from networking_calico.compat import log
-
 from neutron_lib import constants
 from neutron_lib.api.definitions import portbindings
 from neutron_lib.db import constants as db_consts
 from neutron_lib.services.qos import base
 from neutron_lib.services.qos import constants as qos_consts
+
+from oslo_log import log
 
 
 LOG = log.getLogger(__name__)
@@ -30,20 +30,14 @@ DRIVER = None
 
 SUPPORTED_RULES = {
     qos_consts.RULE_TYPE_BANDWIDTH_LIMIT: {
-        qos_consts.MAX_KBPS: {
-            'type:range': [0, db_consts.DB_INTEGER_MAX_VALUE]},
-        qos_consts.MAX_BURST: {
-            'type:range': [0, db_consts.DB_INTEGER_MAX_VALUE]},
-        qos_consts.DIRECTION: {
-            'type:values': constants.VALID_DIRECTIONS}
+        qos_consts.MAX_KBPS: {"type:range": [0, db_consts.DB_INTEGER_MAX_VALUE]},
+        qos_consts.MAX_BURST: {"type:range": [0, db_consts.DB_INTEGER_MAX_VALUE]},
+        qos_consts.DIRECTION: {"type:values": constants.VALID_DIRECTIONS},
     },
     qos_consts.RULE_TYPE_PACKET_RATE_LIMIT: {
-        qos_consts.MAX_KPPS: {
-            'type:range': [0, db_consts.DB_INTEGER_MAX_VALUE]},
-        qos_consts.MAX_BURST_KPPS: {
-            'type:range': [0, 0]},
-        qos_consts.DIRECTION: {
-            'type:values': constants.VALID_DIRECTIONS}
+        qos_consts.MAX_KPPS: {"type:range": [0, db_consts.DB_INTEGER_MAX_VALUE]},
+        qos_consts.MAX_BURST_KPPS: {"type:range": [0, 0]},
+        qos_consts.DIRECTION: {"type:values": constants.VALID_DIRECTIONS},
     },
 }
 
@@ -51,18 +45,33 @@ SUPPORTED_RULES = {
 class CalicoQoSDriver(base.DriverBase):
 
     @staticmethod
-    def create():
-        return CalicoQoSDriver(
-            name='calico',
+    def create(mechanism_driver):
+        qd = CalicoQoSDriver(
+            name="calico",
             vif_types=[portbindings.VIF_TYPE_TAP],
             vnic_types=[portbindings.VNIC_NORMAL],
             supported_rules=SUPPORTED_RULES,
-            requires_rpc_notifications=False)
+            requires_rpc_notifications=False,
+        )
+        qd.mechanism_driver = mechanism_driver
+        return qd
+
+    def update_policy(self, context, policy):
+        """Update policy invocation.
+
+        This method can be implemented by the specific driver subclass
+        to update the backend where necessary.
+
+        :param context: current running context information
+        :param policy: a QoSPolicy object being updated.
+        """
+        LOG.info("update_policy: context=%r policy=%r", context, policy)
+        self.mechanism_driver.handle_qos_policy_update(context, policy.id)
 
 
-def register():
+def register(mechanism_driver):
     """Register the driver."""
     global DRIVER
     if not DRIVER:
-        DRIVER = CalicoQoSDriver.create()
-    LOG.debug('Calico QoS driver registered')
+        DRIVER = CalicoQoSDriver.create(mechanism_driver)
+    LOG.debug("Calico QoS driver registered")

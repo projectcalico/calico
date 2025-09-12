@@ -427,7 +427,7 @@ whisker-backend.tar: ../go.mod $(shell find ../whisker-backend -name '*.go')
 
 load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# Load the latest tar files onto the currently running kind cluster.
-	KUBECONFIG=$(KIND_KUBECONFIG) ./tests/k8st/load_images_on_kind_cluster.sh
+	KUBECONFIG=$(KIND_KUBECONFIG) KIND=$(KIND) ./tests/k8st/load_images_on_kind_cluster.sh
 	# Restart the Calico containers so they launch with the newly loaded code.
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	# calicoctl is deployed as a pod on the cluster and needs to be recreated.

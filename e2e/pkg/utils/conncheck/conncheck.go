@@ -376,6 +376,31 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 	}
 }
 
+// Connect runs a one-shot connection attempt from the client pod to the given target, and returns the output of the command.
+func (c *connectionTester) Connect(client *Client, target Target) (string, error) {
+	if c.clients[client.ID()] == nil {
+		return "", fmt.Errorf("Test bug: client %s not registered with connection tester. AddClient()?", client.ID())
+	}
+	if c.clients[client.ID()].pod == nil {
+		return "", fmt.Errorf("Client %s has no running pod. Did you Deploy()?", client.ID())
+	}
+
+	cmd := c.command(target)
+	var out string
+	var err error
+
+	// Ensure the kubectl command executes in the remote cluster if required. Remote framework objects do not control
+	// how kubeconfigs are resolved by the kubectl command, so we must use this wrapper. See NewDefaultFrameworkForRemoteCluster.
+	remotecluster.RemoteFrameworkAwareExec(c.f, func() {
+		if windows.ClusterIsWindows() {
+			out, err = ExecInPod(c.clients[client.ID()].pod, "powershell.exe", "-Command", cmd)
+		} else {
+			out, err = ExecInPod(c.clients[client.ID()].pod, "sh", "-c", cmd)
+		}
+	})
+	return out, err
+}
+
 func (c *connectionTester) command(t Target) string {
 	var cmd string
 
@@ -477,7 +502,6 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	var args []string
 	var command []string
 	nodeselector := map[string]string{}
-	pullPolicy := v1.PullAlways
 
 	// Randomize pod names to avoid clashes with previous tests.
 	podName := GenerateRandomName(baseName)
@@ -487,7 +511,6 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 		command = []string{"powershell.exe"}
 		args = []string{"Start-Sleep", "600"}
 		nodeselector["kubernetes.io/os"] = "windows"
-		pullPolicy = v1.PullIfNotPresent
 	} else {
 		image = images.Alpine
 		command = []string{"/bin/sleep"}
@@ -517,7 +540,7 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 					Image:           image,
 					Command:         command,
 					Args:            args,
-					ImagePullPolicy: pullPolicy,
+					ImagePullPolicy: v1.PullIfNotPresent,
 				},
 			},
 			Tolerations: []v1.Toleration{

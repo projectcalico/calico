@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
-	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
@@ -37,7 +36,7 @@ import (
 
 // rest implements a RESTStorage for API services against etcd
 type REST struct {
-	*genericregistry.Store
+	*registry.Store
 	rbac.CalicoResourceLister
 	authorizer   authorizer.TierAuthorizer
 	watchManager *util.WatchManager
@@ -84,7 +83,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister r
 	if err != nil {
 		return nil, err
 	}
-	store := &genericregistry.Store{
+	store := &registry.Store{
 		NewFunc:     func() runtime.Object { return &calico.NetworkPolicy{} },
 		NewListFunc: func() runtime.Object { return &calico.NetworkPolicyList{} },
 		KeyRootFunc: opts.KeyRootFunc(true),

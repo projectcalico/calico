@@ -81,7 +81,8 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 	})
 
 	AfterEach(func() {
-		os.Remove(kconfigFile.Name())
+		_ = c.Close()
+		_ = os.Remove(kconfigFile.Name())
 		controllerManager.Stop()
 		uut.Stop()
 		apiserver.Stop()

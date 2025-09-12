@@ -72,7 +72,7 @@ func NewBPFProgCleaner(
 	ipVersion int,
 	timeouts timeouts.Timeouts,
 	bpfLogLevel BPFLogLevel,
-) (*BPFProgCleaner, error) {
+) (Cleaner, error) {
 	if ipVersion != 4 && ipVersion != 6 {
 		return nil, fmt.Errorf("invalid IP version: %d", ipVersion)
 	}
@@ -112,7 +112,13 @@ func (s *BPFProgCleaner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 		GenericTimeout:      s.timeouts.GenericTimeout,
 		ICMPTimeout:         s.timeouts.ICMPTimeout}
 
-	obj, err := bpf.LoadObject(binaryToLoad, ctCleanupData)
+	var obj *libbpf.Obj
+	var err error
+	if log.GetLevel() < log.DebugLevel {
+		obj, err = bpf.LoadObjectWithLogBuffer(binaryToLoad, ctCleanupData, make([]byte, 1<<20))
+	} else {
+		obj, err = bpf.LoadObject(binaryToLoad, ctCleanupData)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s: %w", binaryToLoad, err)
 	}

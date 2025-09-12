@@ -86,7 +86,7 @@ func Run() {
 
 		err := os.Chown(path, uid, 0)
 		if err != nil {
-			return fmt.Errorf("Unable to chown %s: %s", path, err)
+			return fmt.Errorf("unable to chown %s: %s", path, err)
 		}
 		return nil
 	})

@@ -32,6 +32,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 type action int
@@ -43,6 +44,7 @@ const (
 	ActionDelete
 	ActionGetOrList
 	ActionPatch
+	ActionValidate
 )
 
 // Convert loaded resources to a slice of resources for easier processing.
@@ -129,9 +131,12 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 	log.Info("Executing config command")
 
-	err := CheckVersionMismatch(args["--config"], args["--allow-version-mismatch"])
-	if err != nil {
-		return CommandResults{Err: err}
+	// Skip version mismatch checking for validation since we don't need datastore access
+	if action != ActionValidate {
+		err := CheckVersionMismatch(args["--config"], args["--allow-version-mismatch"])
+		if err != nil {
+			return CommandResults{Err: err}
+		}
 	}
 
 	errorOnEmpty := !argutils.ArgBoolOrFalse(args, "--skip-empty")
@@ -155,7 +160,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 			if len(converted) == 0 && errorOnEmpty {
 				// We should fail on empty files.
-				return fmt.Errorf("No resources specified in file %s", modifiedFilename)
+				return fmt.Errorf("no resources specified in file %s", modifiedFilename)
 			}
 
 			resources = append(resources, converted...)
@@ -171,7 +176,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 				// Empty files are handled above, so the only way to get here is if --filename pointed to a directory.
 				// We can therefore tweak the error message slightly to be more specific.
 				return CommandResults{
-					Err: fmt.Errorf("No resources specified in directory %s", filename),
+					Err: fmt.Errorf("no resources specified in directory %s", filename),
 				}
 			} else {
 				// No data, but not an error case. Return an empty set of results.
@@ -193,7 +198,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		if len(resources) == 0 {
 			// No resources specified on non-file input is always an error.
 			return CommandResults{
-				Err: fmt.Errorf("No resources specified"),
+				Err: fmt.Errorf("no resources specified"),
 			}
 		}
 	}
@@ -210,14 +215,18 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		log.Debugf("Data: %s", string(d))
 	}
 
-	// Load the client config and connect.
-	cf := args["--config"].(string)
-	cclient, err := clientmgr.NewClient(cf)
-	if err != nil {
-		fmt.Printf("Failed to create Calico API client: %s\n", err)
-		os.Exit(1)
+	// Load the client config and connect (skip for validation as we don't need datastore access).
+	var cclient client.Interface
+	var err error
+	if action != ActionValidate {
+		cf := args["--config"].(string)
+		cclient, err = clientmgr.NewClient(cf)
+		if err != nil {
+			fmt.Printf("Failed to create Calico API client: %s\n", err)
+			os.Exit(1)
+		}
+		log.Infof("Client: %v", cclient)
 	}
-	log.Infof("Client: %v", cclient)
 
 	// Initialise the command results with the number of resources and the name of the
 	// kind of resource (if only dealing with a single resource).
@@ -266,7 +275,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		res, err := ExecuteResourceAction(args, cclient, r, action)
 		if err != nil {
 			switch action {
-			case ActionApply, ActionCreate, ActionDelete, ActionGetOrList:
+			case ActionApply, ActionCreate, ActionDelete, ActionGetOrList, ActionValidate:
 				results.ResErrs = append(results.ResErrs, err)
 				continue
 			default:
@@ -323,6 +332,14 @@ func ExecuteResourceAction(args map[string]interface{}, client client.Interface,
 	case ActionPatch:
 		patch := args["--patch"].(string)
 		resOut, err = rm.Patch(ctx, client, resource, patch)
+	case ActionValidate:
+		// For validation, we validate the resource using Calico-specific validators
+		// This validates both resource structure/schema and Calico-specific validation rules
+		err = validator.Validate(resource)
+		if err != nil {
+			return nil, err
+		}
+		resOut = resource
 	}
 
 	// Skip over some errors depending on command line options.
@@ -402,7 +419,7 @@ func CheckLocked(ctx context.Context, c client.Interface) (bool, error) {
 	// Get the cluster information resource
 	clusterinfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
-		return false, fmt.Errorf("Error retrieving ClusterInformation: %s", err)
+		return false, fmt.Errorf("error retrieving ClusterInformation: %s", err)
 	}
 
 	return !*clusterinfo.Spec.DatastoreReady, nil

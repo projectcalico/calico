@@ -107,11 +107,11 @@ func createKeyCertPair(dir string) (*os.File, *os.File) {
 
 	certFile, err := os.CreateTemp(dir, "cert.pem")
 	Expect(err).ShouldNot(HaveOccurred())
-	defer certFile.Close()
+	defer func() { _ = certFile.Close() }()
 
 	keyFile, err := os.CreateTemp(dir, "key.pem")
 	Expect(err).ShouldNot(HaveOccurred())
-	defer keyFile.Close()
+	defer func() { _ = keyFile.Close() }()
 
 	_, err = certFile.Write(certPEM)
 	Expect(err).ShouldNot(HaveOccurred())

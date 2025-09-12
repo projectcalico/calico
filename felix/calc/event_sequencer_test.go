@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/calc"
@@ -27,6 +28,10 @@ import (
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+)
+
+var (
+	dscp numorstring.DSCP = numorstring.DSCPFromString("AF43")
 )
 
 var _ = DescribeTable("ModelWorkloadEndpointToProto",
@@ -110,6 +115,7 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 			EgressPacketBurst:     12000000,
 			IngressMaxConnections: 13000000,
 			EgressMaxConnections:  14000000,
+			DSCP:                  &dscp,
 		},
 	}, &proto.WorkloadEndpoint{
 		State:      "up",
@@ -142,6 +148,11 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 			EgressPacketBurst:     12000000,
 			IngressMaxConnections: 13000000,
 			EgressMaxConnections:  14000000,
+		},
+		QosPolicies: []*proto.QoSPolicy{
+			&proto.QoSPolicy{
+				Dscp: 38,
+			},
 		},
 		SkipRedir: &proto.WorkloadBpfSkipRedir{Ingress: true, Egress: true},
 	}),
@@ -265,6 +276,37 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 			UntrackedTiers:    []*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
 			ForwardTiers:      []*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
 			ProfileIds:        []string{"prof1"},
+		},
+	),
+	Entry("host endpoint with QoSControls",
+		model.HostEndpoint{
+			Name:              "eth0",
+			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
+			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
+			Labels: uniquelabels.Make(map[string]string{
+				"a": "b",
+			}),
+			ProfileIDs: []string{"prof1"},
+			QoSControls: &model.QoSControls{
+				DSCP: &dscp,
+			},
+		},
+		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},
+		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
+		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
+		&proto.HostEndpoint{
+			Name:              "eth0",
+			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
+			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},
+			Tiers:             []*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},
+			UntrackedTiers:    []*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
+			ForwardTiers:      []*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
+			ProfileIds:        []string{"prof1"},
+			QosPolicies: []*proto.QoSPolicy{
+				&proto.QoSPolicy{
+					Dscp: 38,
+				},
+			},
 		},
 	),
 )

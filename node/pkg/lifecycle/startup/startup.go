@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
+	"github.com/projectcalico/calico/node/pkg/health"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection/ipv4"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
@@ -77,13 +78,32 @@ var (
 	felixNodeConfigNamePrefix = "node."
 )
 
-// This file contains the main startup processing for the calico/node.  This
+type runConf struct {
+	bailOutAfterUpgrade bool
+}
+
+type RunOpt func(*runConf)
+
+// WithBailOutAfterUpgrade is a RunOpt that configures whether to exit after
+// performing any required datastore upgrade.  Useful for tests!
+func WithBailOutAfterUpgrade(bail bool) RunOpt {
+	return func(c *runConf) {
+		c.bailOutAfterUpgrade = bail
+	}
+}
+
+// Run contains the main startup processing for the calico/node.  This
 // includes:
 //   - Detecting IP address and Network to use for BGP
 //   - Configuring the node resource with IP/AS information provided in the
 //     environment, or autodetected.
 //   - Creating default IP Pools for quick-start use
-func Run() {
+func Run(opts ...RunOpt) {
+	var conf runConf
+	for _, opt := range opts {
+		opt(&conf)
+	}
+
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
 	ConfigureLogging()
 
@@ -109,6 +129,23 @@ func Run() {
 			log.WithError(err).Errorf("Unable to ensure datastore is migrated.")
 			utils.Terminate()
 		}
+	}
+
+	// Make sure that this host's BlockAffinity resources are upgraded to add
+	// labels for efficient lookup.  CNI plugin also does this on the first
+	// allocation after upgrade.  Doing it here too handles some corner cases,
+	// such as calico-node being downgraded, doing some allocations and then,
+	// upgrading again.
+	upgradeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	if err := cli.IPAM().UpgradeHost(upgradeCtx, nodeName); err != nil {
+		log.WithError(err).Errorf("Unable to upgrade host's IPAM resources.")
+		utils.Terminate()
+	}
+
+	if conf.bailOutAfterUpgrade {
+		log.Info("Exiting after datastore migration as requested.")
+		return
 	}
 
 	// Query the current Node resources.  We update our node resource with
@@ -215,26 +252,105 @@ func Run() {
 		log.WithError(err).Errorf("Unable to ensure network for os")
 		utils.Terminate()
 	}
+}
+
+// ManageNodeCondition updates the Kubernetes node condition on successful startup and then sleeps forever. It
+// waits for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
+func ManageNodeCondition(done context.Context, timeout time.Duration) error {
+	if err := waitForReady(timeout); err != nil {
+		log.WithError(err).Error("Calico failed to become ready, continuing anyway")
+	}
+	if err := MarkNetworkAvailable(); err != nil {
+		return err
+	}
+	<-done.Done()
+	return nil
+}
+
+func waitForReady(timeout time.Duration) error {
+	// Determine which components should be checked for readiness. We don't do any liveness checking here.
+	// Do this by checking the contents of /etc/service/enabled.
+	checkBIRD := false
+	if _, err := os.Stat("/etc/service/enabled/bird/run"); err == nil {
+		checkBIRD = true
+	}
+	checkBIRD6 := false
+	if _, err := os.Stat("/etc/service/enabled/bird6/run"); err == nil {
+		checkBIRD6 = true
+	}
+
+	// Check Felix health if FELIX_HEALTHENABLED is set to true.
+	checkFelix := os.Getenv("FELIX_HEALTHENABLED") == "true"
+
+	// Wait for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
+	//
+	// If we don't succeed, continue anyway to be extra paranoid. This should handle the mainline use case of ensuring
+	// calico/node is ready before allowing pods to run on the node.
+	log.Info("Waiting for Calico to become ready before continuing...")
+	to := time.After(timeout)
+	for {
+		select {
+		case <-to:
+			return fmt.Errorf("timed out waiting for Calico to become ready")
+		default:
+			if err := health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err != nil {
+				// If we fail to check the health of the components, log the error and continue waiting.
+				log.WithField("reason", err.Error()).Warn("Calico is not ready yet, waiting...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			// success !
+			return nil
+		}
+	}
+}
+
+// MarkNetworkAvailable updates the Kubernetes node condition on successful startup.
+func MarkNetworkAvailable() error {
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		// Calico is not managing networking, so we don't need to set the NetworkUnavailable condition.
+		log.Info("Calico is not managing networking, skipping NetworkUnavailable condition update")
+		return nil
+	}
+
+	k8sNodeName := utils.DetermineNodeName()
+	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
+		k8sNodeName = nodeRef
+	}
+
+	config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	if err != nil {
+		log.WithError(err).Error("Failed to build Kubernetes config")
+		return err
+	}
+	config.Timeout = 2 * time.Second
+
+	// Create the k8s clientset.
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.WithError(err).Error("Failed to create clientset")
+		return err
+	}
 
 	// All done. Set NetworkUnavailable to false if using Calico for networking.
 	// We do it late in the process to avoid node resource update conflict because setting
 	// node condition will trigger node-controller updating node taints.
-	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
-		if clientset != nil {
-			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
-			if err != nil {
-				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
-				utils.Terminate()
-			}
-		}
+	err = utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
+	if err != nil {
+		log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+		return err
 	}
 
 	// Remove shutdownTS file when everything is done.
 	// This indicates Calico node started successfully.
 	if err := utils.RemoveShutdownTimestampFile(); err != nil {
 		log.WithError(err).Errorf("Unable to remove shutdown timestamp file")
-		utils.Terminate()
+		return err
 	}
+
+	log.Info("Calico started successfully")
+	return nil
 }
 
 func getMonitorPollInterval() time.Duration {
@@ -514,7 +630,7 @@ func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces f
 		} else if node.Spec.BGP.IPv4Address == "" {
 			// No IPv4 address is configured, but we always require one, so exit.
 			log.Warn("Couldn't autodetect an IPv4 address. If auto-detecting, choose a different autodetection method. Otherwise provide an explicit address.")
-			return false, fmt.Errorf("Failed to autodetect an IPv4 address")
+			return false, fmt.Errorf("failed to autodetect an IPv4 address")
 		} else {
 			// No IPv4 autodetected, but a previous one was configured.
 			// Tell the user we are leaving the value unchanged.  We
@@ -547,7 +663,7 @@ func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces f
 		} else if node.Spec.BGP.IPv6Address == "" {
 			// No IPv6 address is configured, but we have requested one, so exit.
 			log.Warn("Couldn't autodetect an IPv6 address. If auto-detecting, choose a different autodetection method. Otherwise provide an explicit address.")
-			return false, fmt.Errorf("Failed to autodetect an IPv6 address")
+			return false, fmt.Errorf("failed to autodetect an IPv6 address")
 		} else {
 			// No IPv6 autodetected, but a previous one was configured.
 			// Tell the user we are leaving the value unchanged.  We
@@ -689,17 +805,18 @@ func parseBlockSizeEnvironment(envValue string) int {
 // validateBlockSize check if blockSize is valid
 func validateBlockSize(version int, blockSize int) {
 	// 20 to 32 (inclusive) for IPv4 and 116 to 128 (inclusive) for IPv6
-	if version == 4 {
+	switch version {
+	case 4:
 		if blockSize < 20 || blockSize > 32 {
 			log.Errorf("Invalid blocksize %d for version %d", blockSize, version)
 			utils.Terminate()
 		}
-	} else if version == 6 {
+	case 6:
 		if blockSize < 116 || blockSize > 128 {
 			log.Errorf("Invalid blocksize %d for version %d", blockSize, version)
 			utils.Terminate()
 		}
-	} else {
+	default:
 		log.Errorf("Invalid ip version specified (%d) when validating blocksize", version)
 		utils.Terminate()
 	}
@@ -1072,11 +1189,11 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *l
 		// an indication of multiple nodes using the same name.  This
 		// is not an error condition as the IPs could actually change.
 		if theirNode.Name == node.Name {
-			if theirIPv4.IP != nil && ourIPv4.IP != nil && !theirIPv4.IP.Equal(ourIPv4.IP) {
+			if theirIPv4.IP != nil && ourIPv4.IP != nil && !theirIPv4.Equal(ourIPv4.IP) {
 				fields := log.Fields{"node": theirNode.Name, "original": theirIPv4.String(), "updated": ourIPv4.String()}
 				log.WithFields(fields).Warnf("IPv4 address has changed. This could happen if there are multiple nodes with the same name.")
 			}
-			if theirIPv6.IP != nil && ourIPv6.IP != nil && !theirIPv6.IP.Equal(ourIPv6.IP) {
+			if theirIPv6.IP != nil && ourIPv6.IP != nil && !theirIPv6.Equal(ourIPv6.IP) {
 				fields := log.Fields{"node": theirNode.Name, "original": theirIPv6.String(), "updated": ourIPv6.String()}
 				log.WithFields(fields).Warnf("IPv6 address has changed. This could happen if there are multiple nodes with the same name.")
 			}
@@ -1085,13 +1202,13 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *l
 
 		// Check that other nodes aren't using the same IP addresses.
 		// This is an error condition.
-		if theirIPv4.IP != nil && ourIPv4.IP != nil && theirIPv4.IP.Equal(ourIPv4.IP) {
+		if theirIPv4.IP != nil && ourIPv4.IP != nil && theirIPv4.Equal(ourIPv4.IP) {
 			log.Warnf("Calico node '%s' is already using the IPv4 address %s.", theirNode.Name, ourIPv4.String())
 			retErr = fmt.Errorf("IPv4 address conflict")
 			v4conflict = true
 		}
 
-		if theirIPv6.IP != nil && ourIPv6.IP != nil && theirIPv6.IP.Equal(ourIPv6.IP) {
+		if theirIPv6.IP != nil && ourIPv6.IP != nil && theirIPv6.Equal(ourIPv6.IP) {
 			log.Warnf("Calico node '%s' is already using the IPv6 address %s.", theirNode.Name, ourIPv6.String())
 			retErr = fmt.Errorf("IPv6 address conflict")
 			v6conflict = true
@@ -1252,7 +1369,7 @@ func ensureKDDMigrated(cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) err
 	} else if yes {
 		log.Infof("Running migration")
 		if _, err = m.Migrate(); err != nil {
-			return fmt.Errorf("Migration failed: %v", err)
+			return fmt.Errorf("migration failed: %v", err)
 		}
 		log.Infof("Migration successful")
 	} else {
@@ -1269,7 +1386,7 @@ func extractKubeadmCIDRs(kubeadmConfig *v1.ConfigMap) (string, string, error) {
 	var err error
 
 	if kubeadmConfig == nil {
-		return "", "", fmt.Errorf("Invalid config map.")
+		return "", "", fmt.Errorf("invalid config map")
 	}
 
 	// Look through the config map for lines starting with 'podSubnet', then assign the right variable
