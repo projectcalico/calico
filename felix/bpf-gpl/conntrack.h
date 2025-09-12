@@ -794,11 +794,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			if (result.flags & CALI_CT_FLAG_MAGLEV) {
 				CALI_DEBUG("overwriting tunnel src for Maglev packet");
 				tracking_v->tun_ip = ctx->state->tun_ip;
-				int err = 0;
-				err = cali_ct_update_elem(&v->nat_rev_key, tracking_v, BPF_EXIST);
-				if (err) {
-					CALI_CT_DEBUG("Failed to update tunnel src to " IP_FMT, debug_ip(ctx->state->tun_ip));
-				}
 			}
 		}
 
