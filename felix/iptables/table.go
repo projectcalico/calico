@@ -542,12 +542,22 @@ func (t *Table) UpdateChain(chain *generictables.Chain) {
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
 	// avoid marking a still-referenced chain as dirty.
+	if chain.ForceProgramming {
+		// A force-programmed chain refers to itself.
+		t.logCxt.WithField("chainName", chain.Name).Debug("Chain has force programming flag, incref.")
+		t.increfChain(chain.Name)
+	}
 	t.maybeIncrefReferredChains(chain.Name, chain.Rules)
 	if oldChain := t.chainNameToChain[chain.Name]; oldChain != nil {
 		oldNumRules = len(oldChain.Rules)
+		if oldChain.ForceProgramming {
+			t.logCxt.WithField("chainName", chain.Name).Debug("Old chain has force programming flag, decref.")
+			t.decrefChain(chain.Name)
+		}
 		t.maybeDecrefReferredChains(chain.Name, oldChain.Rules)
 	}
 	t.chainNameToChain[chain.Name] = chain
+
 	if t.chainIsReferenced(chain.Name) {
 		numRulesDelta := len(chain.Rules) - oldNumRules
 		t.gaugeNumRules.Add(float64(numRulesDelta))
@@ -571,6 +581,9 @@ func (t *Table) RemoveChains(chains []*generictables.Chain) {
 func (t *Table) RemoveChainByName(name string) {
 	t.logCxt.WithField("chainName", name).Debug("Removing chain from available set.")
 	if oldChain, known := t.chainNameToChain[name]; known {
+		if oldChain.ForceProgramming {
+			t.decrefChain(name)
+		}
 		t.maybeDecrefReferredChains(name, oldChain.Rules)
 		delete(t.chainNameToChain, name)
 		if t.chainIsReferenced(name) {
