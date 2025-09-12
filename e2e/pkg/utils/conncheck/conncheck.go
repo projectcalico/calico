@@ -345,40 +345,49 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 	// Exec into the client pod and try to connect to the server.
 	cmd := c.command(exp.Target)
 
+	logCtx := logrus.WithFields(logrus.Fields{
+		"cmd":      cmd,
+		"client":   fmt.Sprintf("%s/%s", exp.Client.Namespace, exp.Client.Name),
+		"target":   exp.Target.String(),
+		"expected": exp.ExpectedResult,
+	})
+
 	// First attempt.
 	out, result, err := c.execCommandInPod(exp.Client, cmd)
 
-	// If we didn't get the expected result, retry once after a short delay. This helps to avoid flakes due to transient issues.
-	// We don't want to retry too many times, as that could mask real issues and slow down tests.
-	if result != exp.ExpectedResult {
-		logrus.WithFields(logrus.Fields{
-			"output":   out,
-			"cmd":      cmd,
-			"err":      err,
-			"expected": exp.ExpectedResult,
-			"actual":   result,
-		}).Warn("Connection attempt did not get expected result. Retrying once after a short delay.")
-
-		time.Sleep(2 * time.Second)
-		out, result, err = c.execCommandInPod(exp.Client, cmd)
-		if result != exp.ExpectedResult {
-			logrus.WithFields(logrus.Fields{
-				"output":   out,
-				"cmd":      cmd,
-				"err":      err,
-				"expected": exp.ExpectedResult,
-				"actual":   result,
-			}).Warn("Connection attempt did not get expected result on retry.")
+	// Retry up to 10 seconds if we didn't get the expected result. This helps to avoid flakes due to transient issues.
+	// We don't want to retry too many times, as that could mask real issues and slow down tests. However, we know that
+	// especially on CPU constrained environments such as CI, there can be a delay between making changes (e.g., applying a NetworkPolicy) and
+	// those changes taking effect. So a short retry loop is helpful.
+	timeout := time.After(10 * time.Second)
+	for {
+		if result == exp.ExpectedResult {
+			break
 		}
-	} else {
-		logrus.WithFields(logrus.Fields{
-			"output":   out,
-			"cmd":      cmd,
-			"err":      err,
-			"expected": exp.ExpectedResult,
-			"actual":   result,
-		}).Debug("Output from connection attempt.")
+
+		select {
+		case <-timeout:
+			// Timed out.
+			break
+		default:
+			// Not timed out yet.
+		}
+
+		logCtx.WithFields(logrus.Fields{
+			"output": out,
+			"err":    err,
+			"actual": result,
+		}).Warn("Connection attempt did not get expected result. Retrying...")
+
+		time.Sleep(1 * time.Second)
+		out, result, err = c.execCommandInPod(exp.Client, cmd)
 	}
+
+	logCtx.WithFields(logrus.Fields{
+		"output": out,
+		"err":    err,
+		"actual": result,
+	}).Debug("Final connection attempt result")
 
 	exp.executed = true
 	results <- connectionResult{
