@@ -15,13 +15,31 @@
 
 set -e
 
-. ../../util/utils.sh
+. ../util/utils.sh
 
 . ./vmss.sh info
 
 : ${KUBECTL:=./bin/kubectl}
 : ${GOMPLATE:=./bin/gomplate}
 : ${BACKEND:?Error: BACKEND is not set}
+
+# Reconstruct arrays from exported string variables
+# Bash arrays cannot be exported across shells, so we export them as space-separated strings
+if [[ -n "${LINUX_EIPS_STR}" ]]; then
+  read -ra LINUX_EIPS <<< "${LINUX_EIPS_STR}"
+fi
+
+if [[ -n "${LINUX_PIPS_STR}" ]]; then
+  read -ra LINUX_PIPS <<< "${LINUX_PIPS_STR}"
+fi
+
+if [[ -n "${WINDOWS_EIPS_STR}" ]]; then
+  read -ra WINDOWS_EIPS <<< "${WINDOWS_EIPS_STR}"
+fi
+
+if [[ -n "${WINDOWS_PIPS_STR}" ]]; then
+  read -ra WINDOWS_PIPS <<< "${WINDOWS_PIPS_STR}"
+fi
 
 function setup_minikube_cluster() {
   #https://github.com/kubernetes/minikube/issues/14364
@@ -99,6 +117,7 @@ setup_minikube_cluster
 copy_files_from_linux
 prepare_and_copy_windows_dir
 prepare_windows_node
+exit 0
 
 if [[ "$BACKEND" == "overlay" ]]; then
   create_overlay_network
