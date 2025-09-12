@@ -21,8 +21,6 @@ global_job_config:
 blocks:
   - name: Publish e2e test utility images
     dependencies: []
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch
