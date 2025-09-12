@@ -1018,7 +1018,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			// Activate the connect-time load balancer.
 			err = bpfnat.InstallConnectTimeLoadBalancer(true, config.BPFIpv6Enabled,
-				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP)
+				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP, bpfMaps.CommonMaps.CTLBProgramsMap)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
@@ -1111,7 +1111,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
-	dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+
+	if config.RulesConfig.IPIPEnabled ||
+		config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
+		dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+	}
 
 	if !config.BPFEnabled {
 		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
@@ -1312,7 +1316,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
-		dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+
+		if config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
+			dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+		}
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))

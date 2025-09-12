@@ -29,7 +29,6 @@ import (
 	"github.com/vishvananda/netlink"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -88,7 +87,7 @@ func ensurePodCreated(clientset *kubernetes.Clientset, namespace string, pod *v1
 func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string) {
 	// Check if pod exists first.
 	_, err := clientset.CoreV1().Pods(ns).Get(context.Background(), podName, metav1.GetOptions{})
-	if kerrors.IsNotFound(err) {
+	if errors.IsNotFound(err) {
 		// Pod has been deleted already. Do nothing.
 		return
 	}
@@ -108,7 +107,7 @@ func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string
 	// Wait for pod to disappear.
 	Eventually(func() error {
 		_, err := clientset.CoreV1().Pods(ns).Get(context.Background(), podName, metav1.GetOptions{})
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -122,7 +121,7 @@ func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 	// Wait for node to disappear.
 	Eventually(func() error {
 		_, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -138,7 +137,7 @@ func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 				PropagationPolicy:  &fg,
 				GracePeriodSeconds: &zero,
 			})
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			// That's what we want.
 			return nil
 		}
@@ -551,7 +550,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				err = os.WriteFile(utils.MTUFilePath, []byte("3000"), 0644)
 				Expect(err).NotTo(HaveOccurred())
-				defer os.Remove(utils.MTUFilePath)
+				defer func() { _ = os.Remove(utils.MTUFilePath) }()
 
 				// Create a K8s pod/container
 				name1 := fmt.Sprintf("mtutest%d", rand.Uint32())
@@ -2076,8 +2075,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 	Context("with dual stack IP allocations", func() {
 		var clientset *kubernetes.Clientset
-		var ipPool4 string = "20.0.0.0/24"
-		var ipPool6 string = "fd80:20::/96"
+		ipPool4 := "20.0.0.0/24"
+		ipPool6 := "fd80:20::/96"
 
 		BeforeEach(func() {
 			// Set up clients.
@@ -2213,9 +2212,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	// in a Kubernetes cluster.
 	Context("Kubernetes-specific race condition tests", func() {
 		var clientset *kubernetes.Clientset
-		var cniContainerIDX string = "container-id-00x"
-		var cniContainerIDY string = "container-id-00y"
-		var ipPool string = "10.0.0.0/24"
+		cniContainerIDX := "container-id-00x"
+		cniContainerIDY := "container-id-00y"
+		ipPool := "10.0.0.0/24"
 		var nc types.NetConf
 		var netconf string
 
@@ -2829,7 +2828,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var nc types.NetConf
 		var netconf string
 		var clientset *kubernetes.Clientset
-		var pool string = "172.24.0.0/24"
+		pool := "172.24.0.0/24"
 
 		BeforeEach(func() {
 			// Build the network config for this set of tests.
@@ -2994,7 +2993,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var nc types.NetConf
 		var netconf string
 		var clientset *kubernetes.Clientset
-		var pool string = "172.24.0.0/24"
+		pool := "172.24.0.0/24"
 
 		BeforeEach(func() {
 			// Build the network config for this set of tests.
@@ -3269,7 +3268,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			go func() {
-				defer stdin.Close()
+				defer func() { _ = stdin.Close() }()
 				_, _ = io.WriteString(stdin, netconf)
 			}()
 
@@ -3306,7 +3305,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			go func() {
-				defer stdin.Close()
+				defer func() { _ = stdin.Close() }()
 				_, _ = io.WriteString(stdin, netconf)
 			}()
 
@@ -3588,7 +3587,8 @@ func checkInterfaceConfig(name, ipVersion string) error {
 		return err
 	}
 
-	if ipVersion == "4" {
+	switch ipVersion {
+	case "4":
 		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
 		if err != nil {
 			return err
@@ -3608,7 +3608,7 @@ func checkInterfaceConfig(name, ipVersion string) error {
 		if err != nil {
 			return err
 		}
-	} else if ipVersion == "6" {
+	case "6":
 		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
 		if err != nil {
 			return err
@@ -3618,7 +3618,6 @@ func checkInterfaceConfig(name, ipVersion string) error {
 		if err != nil {
 			return err
 		}
-
 	}
 
 	return nil

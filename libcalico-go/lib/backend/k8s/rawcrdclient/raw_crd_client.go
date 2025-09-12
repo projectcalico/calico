@@ -15,11 +15,11 @@
 package rawcrdclient
 
 import (
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	schemecrdv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 )
 
