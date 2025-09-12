@@ -37,8 +37,8 @@ import (
 // This file contains shared test infrastructure for testing the ipsets package.
 
 var (
-	transientFailure = errors.New("Simulated transient failure")
-	permanentFailure = errors.New("Simulated permanent failure")
+	errTransientFailure = errors.New("simulated transient failure")
+	errPermanentFailure = errors.New("simulated permanent failure")
 )
 
 func newMockDataplane() *mockDataplane {
@@ -179,7 +179,7 @@ func (c *restoreCmd) StdinPipe() (WriteCloserFlusher, error) {
 	log.Info("Restore command asked for a stdin pipe")
 	if c.Dataplane.popRestoreFailure("pipe") {
 		log.Warn("Simulating failure to create pipe")
-		return nil, transientFailure
+		return nil, errTransientFailure
 	}
 	if c.Dataplane.popRestoreFailure("write") {
 		log.Warn("Returning a bad pipe that will fail writes")
@@ -224,7 +224,7 @@ func (c *restoreCmd) StdoutPipe() (io.ReadCloser, error) {
 func (c *restoreCmd) Start() error {
 	log.Info("Restore command started")
 	if c.Dataplane.popRestoreFailure("start") {
-		return transientFailure
+		return errTransientFailure
 	}
 	go c.main()
 	return nil
@@ -254,19 +254,19 @@ func (c *restoreCmd) main() {
 
 	if c.Dataplane.FailAllRestores {
 		log.Warn("Restore command permanent failure")
-		result = permanentFailure
+		result = errPermanentFailure
 		return
 	}
 
 	if c.Dataplane.popRestoreFailure("pre-update") {
 		log.Warn("Restore command simulating pre-update failure")
-		result = transientFailure
+		result = errTransientFailure
 		return
 	}
 
 	if c.Stdin == nil {
 		log.Warn("Restore command has no stdin")
-		result = transientFailure
+		result = errTransientFailure
 		return
 	}
 
@@ -399,7 +399,7 @@ func (c *restoreCmd) main() {
 			}
 			if c.Dataplane.popRestoreFailure("post-del") {
 				log.Warn("Simulating a failure after first deletion.")
-				result = transientFailure
+				result = errTransientFailure
 				return
 			}
 		case "swap":
@@ -440,7 +440,7 @@ func (c *restoreCmd) main() {
 	Expect(commitSeen).To(BeTrue())
 
 	if c.Dataplane.popRestoreFailure("post-update") {
-		result = transientFailure
+		result = errTransientFailure
 		return
 	}
 }
@@ -551,7 +551,7 @@ func (c *listCmd) StdinPipe() (WriteCloserFlusher, error) {
 func (c *listCmd) StdoutPipe() (io.ReadCloser, error) {
 	if c.Dataplane.popListOpFailure("pipe") {
 		// Fail to create the pipe.
-		return nil, transientFailure
+		return nil, errTransientFailure
 	}
 	if c.Dataplane.popListOpFailure("read") {
 		// Fail all reads.
@@ -600,7 +600,7 @@ func (pipe *badPipe) Read(p []byte) (n int, err error) {
 	if pipe.ReadError != nil {
 		return 0, pipe.ReadError
 	}
-	return 0, transientFailure
+	return 0, errTransientFailure
 }
 
 func (p *badPipe) Write(x []byte) (n int, err error) {
@@ -615,12 +615,12 @@ func (p *badPipe) Write(x []byte) (n int, err error) {
 			} else {
 				p.WriteFailRegexp = regexp.MustCompile("SHOULDNOTMATCH")
 			}
-			return 0, transientFailure
+			return 0, errTransientFailure
 		}
 		return len(x), nil
 	}
 	log.Info("Bad pipe returning write error")
-	return 0, transientFailure
+	return 0, errTransientFailure
 }
 
 func (p *badPipe) Flush() error {
@@ -630,14 +630,14 @@ func (p *badPipe) Flush() error {
 
 func (p *badPipe) Close() error {
 	if p.CloseFail {
-		return transientFailure
+		return errTransientFailure
 	}
 	return nil
 }
 
 func (c *listCmd) Start() error {
 	if c.Dataplane.popListOpFailure("start") {
-		return transientFailure
+		return errTransientFailure
 	}
 	go c.main()
 	return nil
@@ -650,7 +650,7 @@ func (c *listCmd) Wait() error {
 
 func (c *listCmd) Output() ([]byte, error) {
 	if c.Dataplane.FailAllLists {
-		return nil, permanentFailure
+		return nil, errPermanentFailure
 	}
 	var buf bytes.Buffer
 	pipe, err := c.StdoutPipe()
@@ -693,7 +693,7 @@ func (c *listCmd) main() {
 
 	if c.Dataplane.FailAllLists {
 		log.Info("Simulating persistent failure of ipset list")
-		result = permanentFailure
+		result = errPermanentFailure
 		return
 	}
 
@@ -704,13 +704,13 @@ func (c *listCmd) main() {
 
 	if c.Stdout == nil {
 		log.Info("stdout is nil, must be testing a failure scenario")
-		result = transientFailure
+		result = errTransientFailure
 		return
 	}
 
 	if c.Dataplane.popListOpFailure("rc") {
 		log.Info("Forcing a bad RC")
-		result = transientFailure
+		result = errTransientFailure
 		return
 	}
 
