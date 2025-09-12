@@ -152,9 +152,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 				binary = "ip6tables-save"
 			}
 			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+			thisHostIPSet := fmt.Sprintf("cali%v0this-host", ipVersion)
 			dscpIPSet := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
-			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -j cali-egress-dscp"
-			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet)
+			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
+			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet, thisHostIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
@@ -169,9 +170,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 				ipFamily = "ip6"
 			}
 			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
+			thisHostIPSet := fmt.Sprintf("@cali%v0this-host", ipVersion)
 			dscpIPSet := fmt.Sprintf("@cali%v0dscp-src-net", ipVersion)
-			tmpl := "%v saddr %v %v daddr != %v .* jump mangle-cali-egress-dscp"
-			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet)
+			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
+			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet, ipFamily, thisHostIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
@@ -189,7 +191,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 	})
 
-	It("applying DSCP annotation should result is adding correct rules", func() {
+	It("applying DSCP annotation should result in correct dataplane state", func() {
 		dscp0 := numorstring.DSCPFromInt(0)   // 0x0
 		dscp20 := numorstring.DSCPFromInt(20) // 0x14
 		dscp32 := numorstring.DSCPFromInt(32) // 0x20
@@ -346,6 +348,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 
 		cc.Expect(connectivity.Some, ep1_2, extWorkload, ccOpts)
 		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
+		cc.CheckConnectivity()
+
+		By("checking DSCP values are applied to return traffic of connections initiated outside cluster")
+		cc.ResetExpectations()
+		cc.ExpectSome(extClient, hostw)
+		cc.ExpectSome(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+
+		cc.Expect(connectivity.Some, extClient, ep1_2, ccOpts)
+		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
 		By("removing host endpoint")
