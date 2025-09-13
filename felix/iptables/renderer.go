@@ -81,10 +81,11 @@ func (i *iptablesRenderer) RuleHashes(c *generictables.Chain, features *environm
 }
 
 func (i *iptablesRenderer) commentFrag(hash string) string {
-	if hash == "HASH" {
+	switch hash {
+	case "HASH":
 		// Special case for generating chain hashes, which don't include the comment fragment.
 		return hash
-	} else if hash == "" {
+	case "":
 		// If the hash is empty, we don't generate a comment.
 		return ""
 	}
