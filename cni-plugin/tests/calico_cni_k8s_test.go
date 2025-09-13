@@ -548,7 +548,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				err = os.MkdirAll("/var/lib/calico", os.ModePerm)
 				Expect(err).NotTo(HaveOccurred())
-				err = os.WriteFile(utils.MTUFilePath, []byte("3000"), 0644)
+				err = os.WriteFile(utils.MTUFilePath, []byte("3000"), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 				defer func() { _ = os.Remove(utils.MTUFilePath) }()
 
@@ -1162,6 +1162,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -1406,6 +1407,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -1493,6 +1495,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -1598,6 +1601,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			netconf.IPAM.Type = "calico-ipam"
 
@@ -1678,6 +1682,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				LogLevel:             "debug",
 				FeatureControl:       types.FeatureControl{FloatingIPs: true},
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			netconf.IPAM.Type = "calico-ipam"
 
@@ -1789,6 +1794,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				LogLevel:             "debug",
 				FeatureControl:       types.FeatureControl{IPAddrsNoIpam: true},
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			Expect(nc.CNIVersion).NotTo(BeEmpty())
@@ -2234,6 +2240,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -2505,6 +2512,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -2843,6 +2851,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -3008,6 +3017,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -3404,10 +3414,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var netconf string
 		var ipPool4CIDR *net.IPNet
 		var ipPool6CIDR *net.IPNet
-		var ipPool4 = "50.80.0.0/16"
-		var ipPool6 = "fd80:50::/96"
+		ipPool4 := "50.80.0.0/16"
+		ipPool6 := "fd80:50::/96"
 		var clientset *kubernetes.Clientset
-		var testNS = testutils.K8S_TEST_NS
+		testNS := testutils.K8S_TEST_NS
 
 		BeforeEach(func() {
 			if version.Compare(cniVersion, "0.3.0", "<") {
@@ -3425,6 +3435,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -3446,7 +3457,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Create a new IP Pool.
 			testutils.MustCreateNewIPPool(calicoClient, ipPool4, false, false, true)
 			testutils.MustCreateNewIPPool(calicoClient, ipPool6, false, false, true)
-
 		})
 
 		AfterEach(func() {

@@ -188,7 +188,7 @@ func (f *FakeCalicoClient) CalicoNodeStatus() clientv3.CalicoNodeStatusInterface
 	panic("not implemented")
 }
 
-func (f *FakeCalicoClient) IPAMConfig() clientv3.IPAMConfigInterface {
+func (f *FakeCalicoClient) IPAMConfiguration() clientv3.IPAMConfigurationInterface {
 	panic("not implemented")
 }
 
