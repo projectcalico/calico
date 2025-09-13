@@ -450,6 +450,22 @@ type FelixConfigurationSpec struct {
 	// set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
 	PrometheusWireGuardMetricsEnabled *bool `json:"prometheusWireGuardMetricsEnabled,omitempty"`
 
+	// PrometheusMetricsCAFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
+	// This certificate must be valid and accessible by the calico-node process.
+	PrometheusMetricsCAFile *string `json:"prometheusMetricsCAFile,omitempty"`
+
+	// PrometheusMetricsCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
+	// This certificate must be valid and accessible by the calico-node process.
+	PrometheusMetricsCertFile *string `json:"prometheusMetricsCertFile,omitempty"`
+
+	// PrometheusMetricsKeyFile defines the absolute path to the private key file corresponding to the TLS certificate
+	// used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
+	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
+
+	// PrometheusMetricsClientAuthType specifies the client authentication type for the /metrics endpoint.
+	// This determines how the server validates client certificates. Default is "NoClientCert".
+	PrometheusMetricsClientAuthType *string `json:"prometheusMetricsClientAuthType,omitempty"`
+
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
 	// allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
 	// cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified,

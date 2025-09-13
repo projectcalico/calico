@@ -429,10 +429,21 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	if t.ConfigParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.  Starting server.")
 		t.configurePrometheusMetrics()
-		go metricsserver.ServePrometheusMetricsForever(
-			t.ConfigParams.PrometheusMetricsHost,
-			t.ConfigParams.PrometheusMetricsPort,
-		)
+		if t.ConfigParams.PrometheusMetricsKeyFile != "" || t.ConfigParams.PrometheusMetricsCertFile != "" {
+			go metricsserver.ServePrometheusMetricsHTTPS(
+				t.ConfigParams.PrometheusMetricsHost,
+				t.ConfigParams.PrometheusMetricsPort,
+				t.ConfigParams.PrometheusMetricsCertFile,
+				t.ConfigParams.PrometheusMetricsKeyFile,
+				t.ConfigParams.PrometheusMetricsClientAuthType,
+				t.ConfigParams.PrometheusMetricsCAFile,
+			)
+		} else {
+			go metricsserver.ServePrometheusMetricsHTTP(
+				t.ConfigParams.PrometheusMetricsHost,
+				t.ConfigParams.PrometheusMetricsPort,
+			)
+		}
 	}
 
 	if t.ConfigParams.HealthEnabled {

@@ -112,6 +112,11 @@ type Config struct {
 	PrometheusGoMetricsEnabled      bool   `config:"bool;true"`
 	PrometheusProcessMetricsEnabled bool   `config:"bool;true"`
 
+	PrometheusMetricsCAFile         string `config:"string;"`
+	PrometheusMetricsCertFile       string `config:"string;"`
+	PrometheusMetricsKeyFile        string `config:"string;"`
+	PrometheusMetricsClientAuthType string `config:"oneof(RequireAndVerifyClientCert,VerifyClientCertIfGiven,NoClientCert);NoClientCert"`
+
 	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
 
 	ServerMaxMessageSize                 int           `config:"int(1,);100"`
