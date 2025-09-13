@@ -531,8 +531,9 @@ var _ = Describe("Calico IPAM Tests", func() {
               "log_level": "debug",
               "ipam": {
                 "type": "%s"
-              }
-            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+              },
+							"calico_api_group": "%s",
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, os.Getenv("CALICO_API_GROUP"))
 		})
 
 		It("upgrades unlabeled block affinities on first call and not on subsequent calls", func() {
