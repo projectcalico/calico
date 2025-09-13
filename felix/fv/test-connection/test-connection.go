@@ -463,7 +463,7 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout, sleep t
 			if err := tc.protocol.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
 				return err
 			}
-			if retryStart == zeroTime {
+			if retryStart.IsZero() {
 				retryStart = time.Now()
 			}
 		}
