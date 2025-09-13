@@ -127,6 +127,11 @@ var nonGoDeps = map[string][]string{
 	"whisker": {
 		"/whisker",
 	},
+
+	// Process is not a go project so we list the whole thing.
+	"process": {
+		"/process",
+	},
 }
 
 var defaultExclusions = []string{
