@@ -25,7 +25,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -233,7 +232,7 @@ type NftablesTable struct {
 	peakNftablesReadTime  time.Duration
 	peakNftablesWriteTime time.Duration
 
-	logCxt               *log.Entry
+	logCxt               *logrus.Entry
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
 	gaugeNumChains prometheus.Gauge
@@ -327,7 +326,7 @@ func NewTable(
 		now = options.NowOverride
 	}
 
-	logFields := log.Fields{
+	logFields := logrus.Fields{
 		"ipVersion": ipVersion,
 		"table":     name,
 	}
@@ -345,9 +344,9 @@ func NewTable(
 	nft, err := options.NewDataplane(nftFamily, name)
 	if err != nil {
 		if required {
-			log.WithError(err).Panic("Failed to create knftables client")
+			logrus.WithError(err).Panic("Failed to create knftables client")
 		} else {
-			log.WithError(err).Info("Failed to create knftables client")
+			logrus.WithError(err).Info("Failed to create knftables client")
 			return nil
 		}
 	}
@@ -368,7 +367,7 @@ func NewTable(
 		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]*knftables.Rule{},
-		logCxt:                 log.WithFields(logFields),
+		logCxt:                 logrus.WithFields(logFields),
 		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
 			logutilslc.OptInterval(30*time.Second),
 			logutilslc.OptBurst(100),
@@ -583,7 +582,7 @@ func (t *NftablesTable) decrefChain(chainName string) {
 
 func (t *NftablesTable) loadDataplaneState() {
 	// Sync maps.
-	if err := t.MapsDataplane.LoadDataplaneState(); err != nil {
+	if err := t.LoadDataplaneState(); err != nil {
 		t.logCxt.WithError(err).Warn("Failed to load maps state")
 	}
 
@@ -617,7 +616,7 @@ func (t *NftablesTable) loadDataplaneState() {
 			// One of our chains, should match exactly.
 			dpHashes := dataplaneHashes[chainName]
 			if !reflect.DeepEqual(dpHashes, expectedHashes) {
-				logCxt.WithFields(log.Fields{
+				logCxt.WithFields(logrus.Fields{
 					"dpHashes":       dpHashes,
 					"expectedHashes": expectedHashes,
 				}).Warn("Detected out-of-sync Calico chain, marking for resync")
@@ -810,7 +809,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 	now := t.timeNow()
 	defer func() {
 		if time.Since(now) > time.Second {
-			t.logCxt.WithFields(log.Fields{
+			t.logCxt.WithFields(logrus.Fields{
 				"applyTime":      time.Since(now),
 				"reasonForApply": t.reason,
 			}).Info("Updating nftables took >1s")
@@ -909,7 +908,7 @@ func (t *NftablesTable) applyUpdates() error {
 	// - Create any new maps.
 	// - Create any new chains / rules.
 	// - Add elements to maps.
-	mapUpdates := t.MapsDataplane.MapUpdates()
+	mapUpdates := t.MapUpdates()
 
 	if !t.disabled && len(t.chainToDataplaneHashes) == 0 {
 		// Table is enabled, but doesn't exist in the dataplane yet.
@@ -1136,7 +1135,7 @@ func (t *NftablesTable) applyUpdates() error {
 		}
 
 		// Update Map implementation after successful nftables transaction.
-		t.MapsDataplane.FinishMapUpdates(mapUpdates)
+		t.FinishMapUpdates(mapUpdates)
 	}
 
 	// Now we've successfully updated nftables, clear the dirty sets.  We do this even if we
@@ -1168,7 +1167,7 @@ func (t *NftablesTable) runTransaction(tx *knftables.Transaction) error {
 		restoreDuration := t.timeNow().Sub(startTime)
 		t.peakNftablesWriteTime = t.peakNftablesWriteTime * 99 / 100
 		if restoreDuration > t.peakNftablesWriteTime {
-			log.WithField("duration", restoreDuration).Debug("Updating nftables write-time peak duration.")
+			logrus.WithField("duration", restoreDuration).Debug("Updating nftables write-time peak duration.")
 			t.peakNftablesWriteTime = restoreDuration
 		}
 	}()

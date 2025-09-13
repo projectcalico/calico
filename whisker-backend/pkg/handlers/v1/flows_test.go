@@ -131,7 +131,7 @@ func TestWatchFlows(t *testing.T) {
 	sc := setupTest(t)
 
 	fsCli := new(climocks.FlowsClient)
-	flowStream := new(protomock.Flows_StreamClient[proto.FlowResult])
+	flowStream := new(protomock.Flows_StreamClient)
 
 	flowStream.On("Recv").Return(&proto.FlowResult{
 		Flow: &proto.Flow{

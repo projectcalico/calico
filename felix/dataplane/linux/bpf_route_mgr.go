@@ -301,9 +301,10 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 
 	if m.blockedCIDRs.Contains(cidr) {
 		log.WithField("cidr", cidr).Debug("CIDR is blocked.")
-		if m.svcLoopPrevention == "Drop" {
+		switch m.svcLoopPrevention {
+		case "Drop":
 			flags |= routes.FlagBlackHoleDrop
-		} else if m.svcLoopPrevention == "Reject" {
+		case "Reject":
 			flags |= routes.FlagBlackHoleReject
 		}
 	}

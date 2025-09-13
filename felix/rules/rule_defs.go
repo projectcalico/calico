@@ -363,11 +363,12 @@ func (r *DefaultRuleRenderer) IptablesFilterDenyAction() generictables.Action {
 }
 
 func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
-	if ipVersion == 4 {
+	switch ipVersion {
+	case 4:
 		return r.IPSetConfigV4
-	} else if ipVersion == 6 {
+	case 6:
 		return r.IPSetConfigV6
-	} else {
+	default:
 		log.WithField("version", ipVersion).Panic("Unknown IP version")
 		return nil
 	}

@@ -79,14 +79,14 @@ func (s *TokenBucketState) Equals(other *TokenBucketState) bool {
 func AddEgressQdisc(tbs *TokenBucketState, intf string) error {
 	mtu, err := GetMTU(intf)
 	if err != nil {
-		return fmt.Errorf("Failed to get MTU for interface %s: %w", intf, err)
+		return fmt.Errorf("failed to get MTU for interface %s: %w", intf, err)
 	}
 
 	ifbDeviceName := GetIfbDeviceName(intf)
 
 	err = CreateIfb(ifbDeviceName, mtu)
 	if err != nil {
-		return fmt.Errorf("Failed to create ifb device %s: %w", ifbDeviceName, err)
+		return fmt.Errorf("failed to create ifb device %s: %w", ifbDeviceName, err)
 	}
 
 	return CreateEgressQdisc(tbs, intf, ifbDeviceName)
@@ -95,12 +95,12 @@ func AddEgressQdisc(tbs *TokenBucketState, intf string) error {
 func RemoveIngressQdisc(intf string) error {
 	link, err := netlink.LinkByName(intf)
 	if err != nil {
-		return fmt.Errorf("Failed to get link: %w", err)
+		return fmt.Errorf("failed to get link: %w", err)
 	}
 
 	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
-		return fmt.Errorf("Failed to list qdiscs: %w", err)
+		return fmt.Errorf("failed to list qdiscs: %w", err)
 	}
 
 	for _, qdisc := range qdiscs {
@@ -108,7 +108,7 @@ func RemoveIngressQdisc(intf string) error {
 		if isTbf {
 			err := netlink.QdiscDel(tbf)
 			if err != nil {
-				return fmt.Errorf("Failed to delete qdisc: %w", err)
+				return fmt.Errorf("failed to delete qdisc: %w", err)
 			}
 		}
 	}
@@ -120,17 +120,17 @@ func RemoveEgressQdisc(intf string) error {
 	ifbDeviceName := GetIfbDeviceName(intf)
 
 	if err := TeardownIfb(ifbDeviceName); err != nil {
-		return fmt.Errorf("Failed to tear down ifb device %s: %w", ifbDeviceName, err)
+		return fmt.Errorf("failed to tear down ifb device %s: %w", ifbDeviceName, err)
 	}
 
 	link, err := netlink.LinkByName(intf)
 	if err != nil {
-		return fmt.Errorf("Failed to get link: %w", err)
+		return fmt.Errorf("failed to get link: %w", err)
 	}
 
 	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
-		return fmt.Errorf("Failed to list qdiscs: %w", err)
+		return fmt.Errorf("failed to list qdiscs: %w", err)
 	}
 
 	for _, qdisc := range qdiscs {
@@ -138,7 +138,7 @@ func RemoveEgressQdisc(intf string) error {
 		if isIngress {
 			err := netlink.QdiscDel(ingress)
 			if err != nil {
-				return fmt.Errorf("Failed to delete qdisc: %w", err)
+				return fmt.Errorf("failed to delete qdisc: %w", err)
 			}
 		}
 	}
@@ -149,12 +149,12 @@ func RemoveEgressQdisc(intf string) error {
 func ReadIngressQdisc(intf string) (*TokenBucketState, error) {
 	link, err := netlink.LinkByName(intf)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get link %s: %w", intf, err)
+		return nil, fmt.Errorf("failed to get link %s: %w", intf, err)
 	}
 
 	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to list qdiscs on link %s: %w", intf, err)
+		return nil, fmt.Errorf("failed to list qdiscs on link %s: %w", intf, err)
 	}
 
 	for _, qdisc := range qdiscs {
@@ -175,12 +175,12 @@ func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
 		if _, ok := err.(netlink.LinkNotFoundError); ok {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("Failed to get link %s: %w", ifbDeviceName, err)
+		return nil, fmt.Errorf("failed to get link %s: %w", ifbDeviceName, err)
 	}
 
 	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to list qdiscs on link %s: %w", ifbDeviceName, err)
+		return nil, fmt.Errorf("failed to list qdiscs on link %s: %w", ifbDeviceName, err)
 	}
 
 	for _, qdisc := range qdiscs {
@@ -272,7 +272,7 @@ func CreateEgressQdisc(tbs *TokenBucketState, workloadDeviceName string, ifbDevi
 	var qdisc *netlink.Ingress
 	qdiscList, err := netlink.QdiscList(workloadDevice)
 	if err != nil {
-		return fmt.Errorf("Failed to list qdiscs on dev %s: %w", workloadDeviceName, err)
+		return fmt.Errorf("failed to list qdiscs on dev %s: %w", workloadDeviceName, err)
 	}
 
 	for _, qd := range qdiscList {

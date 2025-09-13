@@ -3782,7 +3782,7 @@ type testProcSys struct {
 	Fail           bool
 }
 
-var procSysFail = errors.New("mock proc sys failure")
+var errProcSysFail = errors.New("mock proc sys failure")
 
 func (t *testProcSys) write(path, value string) error {
 	t.lock.Lock()
@@ -3792,7 +3792,7 @@ func (t *testProcSys) write(path, value string) error {
 		"value": value,
 	}).Info("testProcSys writer")
 	if t.Fail {
-		return procSysFail
+		return errProcSysFail
 	}
 	t.state[path] = value
 	return nil

@@ -26,12 +26,11 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
-	. "github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var _ = Describe("Maps with empty data plane", func() {
-	var s *Maps
+	var s *nftables.Maps
 	var f *fakeNFT
 
 	var chainRefs map[string]int
@@ -52,13 +51,13 @@ var _ = Describe("Maps with empty data plane", func() {
 		// Reset chain references.
 		chainRefs = make(map[string]int)
 
-		s = NewMaps(ipv, f, increfChain, decrefChain, logutils.NewSummarizer("test loop"))
+		s = nftables.NewMaps(ipv, f, increfChain, decrefChain, logutils.NewSummarizer("test loop"))
 	})
 
 	It("should generate MapUpdates on empty state)", func() {
-		Expect(s.MapUpdates()).To(Equal(&MapUpdates{
-			MapToAddedMembers:   map[string]set.Set[MapMember]{},
-			MapToDeletedMembers: map[string]set.Set[MapMember]{},
+		Expect(s.MapUpdates()).To(Equal(&nftables.MapUpdates{
+			MapToAddedMembers:   map[string]set.Set[nftables.MapMember]{},
+			MapToDeletedMembers: map[string]set.Set[nftables.MapMember]{},
 		}))
 	})
 
@@ -88,9 +87,9 @@ var _ = Describe("Maps with empty data plane", func() {
 		s.FinishMapUpdates(upd)
 
 		// Verify internal state is updated - next update should do nothing.
-		Expect(s.MapUpdates()).To(Equal(&MapUpdates{
-			MapToAddedMembers:   map[string]set.Set[MapMember]{},
-			MapToDeletedMembers: map[string]set.Set[MapMember]{},
+		Expect(s.MapUpdates()).To(Equal(&nftables.MapUpdates{
+			MapToAddedMembers:   map[string]set.Set[nftables.MapMember]{},
+			MapToDeletedMembers: map[string]set.Set[nftables.MapMember]{},
 		}))
 
 		// Send new interfaces to map1, both adding a new member and updating an existing one.
@@ -117,9 +116,9 @@ var _ = Describe("Maps with empty data plane", func() {
 
 		// Simulate a successful apply and verify state is cleared.
 		s.FinishMapUpdates(upd)
-		Expect(s.MapUpdates()).To(Equal(&MapUpdates{
-			MapToAddedMembers:   map[string]set.Set[MapMember]{},
-			MapToDeletedMembers: map[string]set.Set[MapMember]{},
+		Expect(s.MapUpdates()).To(Equal(&nftables.MapUpdates{
+			MapToAddedMembers:   map[string]set.Set[nftables.MapMember]{},
+			MapToDeletedMembers: map[string]set.Set[nftables.MapMember]{},
 		}))
 
 		// Delete a map.
@@ -142,9 +141,9 @@ var _ = Describe("Maps with empty data plane", func() {
 
 		// Simulate a successful apply and verify state is cleared.
 		s.FinishMapUpdates(upd)
-		Expect(s.MapUpdates()).To(Equal(&MapUpdates{
-			MapToAddedMembers:   map[string]set.Set[MapMember]{},
-			MapToDeletedMembers: map[string]set.Set[MapMember]{},
+		Expect(s.MapUpdates()).To(Equal(&nftables.MapUpdates{
+			MapToAddedMembers:   map[string]set.Set[nftables.MapMember]{},
+			MapToDeletedMembers: map[string]set.Set[nftables.MapMember]{},
 		}))
 
 		// Delete a map member.
@@ -180,9 +179,9 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
 
 		// Should be no work to do.
-		Expect(s.MapUpdates()).To(Equal(&MapUpdates{
-			MapToAddedMembers:   map[string]set.Set[MapMember]{},
-			MapToDeletedMembers: map[string]set.Set[MapMember]{},
+		Expect(s.MapUpdates()).To(Equal(&nftables.MapUpdates{
+			MapToAddedMembers:   map[string]set.Set[nftables.MapMember]{},
+			MapToDeletedMembers: map[string]set.Set[nftables.MapMember]{},
 		}))
 
 		// Modify the map in the dataplane to add an additional element.
@@ -312,7 +311,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
 
 		// Create the same IP set via the MapsDataplane object with a supported type.
-		meta := MapMetadata{Name: "unsupported-map", Type: MapTypeInterfaceMatch}
+		meta := nftables.MapMetadata{Name: "unsupported-map", Type: nftables.MapTypeInterfaceMatch}
 		s.AddOrReplaceMap(meta, nil)
 
 		// Load the dataplane state. We should delete the unexpected map.

@@ -424,13 +424,13 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		ServicePort: baseSvc,
 	}
 
-	if v, ok := s.ObjectMeta.Annotations[ExcludeServiceAnnotation]; ok && v == "true" {
+	if v, ok := s.Annotations[ExcludeServiceAnnotation]; ok && v == "true" {
 		svc.excludeService = true
 		goto out
 	}
 
 	if baseSvc.Protocol() == v1.ProtocolUDP {
-		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
+		if v, ok := s.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
 			svc.reapTerminatingUDP = true
 		}
 	}
