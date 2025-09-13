@@ -193,7 +193,7 @@ func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {
 	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 
 	if len(address) == 0 {
-		return nil, "", fmt.Errorf("Address is not set")
+		return nil, "", fmt.Errorf("address is not set")
 	}
 	return ipip, address.String(), nil
 }

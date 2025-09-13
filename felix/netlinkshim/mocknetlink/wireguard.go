@@ -17,8 +17,8 @@ package mocknetlink
 import (
 	"sort"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
@@ -58,16 +58,16 @@ var WireguardFailureScenarios = []FailFlags{
 func (d *MockNetlinkDataplane) NewMockWireguard() (netlinkshim.Wireguard, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	d.NumNewWireguardCalls++
 	if d.PersistentlyFailToConnect || d.shouldFail(FailNextNewWireguard) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 	if d.shouldFail(FailNextNewWireguardNotSupported) {
-		return nil, NotSupportedError
+		return nil, ErrNotSupported
 	}
-	Expect(d.WireguardOpen).To(BeFalse())
+	gomega.Expect(d.WireguardOpen).To(gomega.BeFalse())
 	d.WireguardOpen = true
 
 	return &MockWireguard{d}, nil
@@ -82,12 +82,12 @@ type MockWireguard struct {
 func (d *MockWireguard) Close() error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
-	Expect(d.WireguardOpen).To(BeTrue())
+	gomega.Expect(d.WireguardOpen).To(gomega.BeTrue())
 	d.WireguardOpen = false
 	if d.shouldFail(FailNextWireguardClose) {
-		return SimulatedError
+		return ErrSimulated
 	}
 
 	return nil
@@ -96,18 +96,18 @@ func (d *MockWireguard) Close() error {
 func (d *MockWireguard) DeviceByName(name string) (*wgtypes.Device, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
-	Expect(d.WireguardOpen).To(BeTrue())
+	gomega.Expect(d.WireguardOpen).To(gomega.BeTrue())
 	if d.shouldFail(FailNextWireguardDeviceByName) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 	link, ok := d.NameToLink[name]
 	if !ok {
-		return nil, NotFoundError
+		return nil, ErrNotFound
 	}
 	if link.Type() != "wireguard" {
-		return nil, FileDoesNotExistError
+		return nil, ErrFileDoesNotExist
 	}
 
 	device := &wgtypes.Device{
@@ -128,11 +128,11 @@ func (d *MockWireguard) DeviceByName(name string) (*wgtypes.Device, error) {
 func (d *MockWireguard) Devices() ([]*wgtypes.Device, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
-	Expect(d.WireguardOpen).To(BeTrue())
+	gomega.Expect(d.WireguardOpen).To(gomega.BeTrue())
 	if d.shouldFail(FailNextWireguardDeviceByName) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 
 	links := []*wgtypes.Device{}
@@ -155,7 +155,7 @@ func (d *MockWireguard) Devices() ([]*wgtypes.Device, error) {
 func (d *MockWireguard) ConfigureDevice(name string, cfg wgtypes.Config) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	// Track the last set of wireguard device updates. Note that we should only get each peer appearing at most once in
 	// the update.
@@ -163,15 +163,15 @@ func (d *MockWireguard) ConfigureDevice(name string, cfg wgtypes.Config) error {
 	for _, p := range cfg.Peers {
 		d.LastWireguardUpdates[p.PublicKey] = p
 	}
-	Expect(cfg.Peers).To(HaveLen(len(d.LastWireguardUpdates)))
+	gomega.Expect(cfg.Peers).To(gomega.HaveLen(len(d.LastWireguardUpdates)))
 
-	Expect(d.WireguardOpen).To(BeTrue())
+	gomega.Expect(d.WireguardOpen).To(gomega.BeTrue())
 	if d.shouldFail(FailNextWireguardConfigureDevice) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	link, ok := d.NameToLink[name]
 	if !ok {
-		return NotFoundError
+		return ErrNotFound
 	}
 
 	if cfg.FirewallMark != nil {
@@ -196,14 +196,14 @@ func (d *MockWireguard) ConfigureDevice(name string, cfg wgtypes.Config) error {
 		}
 		for _, peerCfg := range cfg.Peers {
 			d.WireguardConfigUpdated = true
-			Expect(peerCfg.PublicKey).NotTo(Equal(wgtypes.Key{}))
+			gomega.Expect(peerCfg.PublicKey).NotTo(gomega.Equal(wgtypes.Key{}))
 			if peerCfg.UpdateOnly {
 				_, ok := existing[peerCfg.PublicKey]
-				Expect(ok).To(BeTrue())
+				gomega.Expect(ok).To(gomega.BeTrue())
 			}
 			if peerCfg.Remove {
 				_, ok := existing[peerCfg.PublicKey]
-				Expect(ok).To(BeTrue())
+				gomega.Expect(ok).To(gomega.BeTrue())
 				delete(existing, peerCfg.PublicKey)
 				continue
 			}
