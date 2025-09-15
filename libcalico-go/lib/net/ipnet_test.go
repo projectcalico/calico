@@ -48,7 +48,7 @@ func TestIPNet_Covers(t *testing.T) {
 func TestIPNet_NthIP(t *testing.T) {
 	for _, test := range []struct {
 		CIDR       string
-		N          int
+		N          int64
 		ExpectedIP string
 	}{
 		{CIDR: "10.0.0.0/8", N: 0, ExpectedIP: "10.0.0.0"},
@@ -69,7 +69,7 @@ func TestIPNet_NthIP(t *testing.T) {
 			RegisterTestingT(t)
 			cidr := MustParseCIDR(test.CIDR)
 			expected := MustParseIP(test.ExpectedIP)
-			ip := cidr.NthIP(test.N)
+			ip := cidr.nthIP(test.N)
 			Expect(ip.Equal(expected.IP)).To(BeTrue(),
 				fmt.Sprintf("%v != %v", ip.String(), expected.String()))
 		})
