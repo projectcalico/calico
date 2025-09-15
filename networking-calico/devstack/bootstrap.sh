@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copyright 2015 Metaswitch Networks
 # All Rights Reserved.
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -149,6 +150,10 @@ SCENARIO_IMAGE_TYPE=ignore
 # error: RPC failed; curl 56 GnuTLS recv error (-9): A TLS packet with unexpected length was received.
 GIT_BASE=https://github.com
 
+# Disable ongoing resync.  In principle this isn't needed; disable it in order to build evidence to
+# confirm that.
+CALICO_RESYNC_INTERVAL_SECS=0
+
 EOF
 
 if ! ${TEMPEST:-false}; then
@@ -196,10 +201,26 @@ export FORCE=yes
 ./stack.sh
 EOF
 
-# We use a fresh `sudo -u stack -H -E bash ...` invocation here, because with
-# OpenStack Yoga it appears there is something in the stack.sh setup that
-# closes stdin, and that means that bash doesn't read any further commands from
-# stdin after the exit of the ./stack.sh line.
+# We use fresh `sudo -u stack -H -E bash ...` invocations from here on, because with OpenStack Yoga
+# it appears there is something in the stack.sh setup that closes stdin, and that means that bash
+# doesn't read any further commands from stdin after the exit of the ./stack.sh line.
+
+# Run QoS responsiveness tests
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+
+echo "Running QoS responsiveness tests..."
+cd /opt/stack/devstack
+. openrc admin admin
+
+# Install required Python packages for QoS tests
+sudo pip install openstacksdk etcd3
+
+export ETCD_HOST=${SERVICE_HOST}
+python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
+EOF
+
+# Run Tempest tests
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 if ! ${TEMPEST:-false}; then
@@ -211,10 +232,8 @@ if ! ${TEMPEST:-false}; then
         neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
     fi
 else
-    # Run mainline Tempest tests.
     source ../calico/devstack/devstackgaterc
     cd /opt/stack/tempest
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
-
 EOF
