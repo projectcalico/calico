@@ -1070,7 +1070,10 @@ func (r *CalicoManager) publishGitTag() error {
 		return nil
 	}
 	_, err := r.git("push", r.remote, r.calicoVersion)
-	return fmt.Errorf("failed to push git tag: %s", err)
+	if err != nil {
+		return fmt.Errorf("failed to push git tag: %w", err)
+	}
+	return nil
 }
 
 func (r *CalicoManager) publishGithubRelease() error {
@@ -1119,7 +1122,10 @@ Additional links:
 		r.uploadDir(),
 	}
 	_, err := r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)
-	return fmt.Errorf("failed to publish github release: %w", err)
+	if err != nil {
+		return fmt.Errorf("failed to publish github release: %w", err)
+	}
+	return nil
 }
 
 func (r *CalicoManager) publishContainerImages() error {
