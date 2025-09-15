@@ -118,6 +118,11 @@ static CALI_BPF_INLINE bool rt_addr_is_local_tunneled_host(ipv46_addr_t *addr)
 	return cali_rt_flags_local_tunneled_host(cali_rt_lookup_flags(addr));
 }
 
+static CALI_BPF_INLINE bool rt_addr_is_in_pool(ipv46_addr_t *addr)
+{
+	return cali_rt_flags_is_in_pool(cali_rt_lookup_flags(addr));
+}
+
 static CALI_BPF_INLINE bool rt_addr_is_external(ipv46_addr_t *addr)
 {
 	return cali_rt_flags_external(cali_rt_lookup_flags(addr));

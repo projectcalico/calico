@@ -366,9 +366,6 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
-	/*if (ctx->state->ct_result.flags & CALI_CT_FLAG_CLUSTER_EXTERNAL) {
-		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
-	}*/
 
 	if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
 			(ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED ||
@@ -551,7 +548,6 @@ syn_force_policy:
 		// Check if traffic is leaving cluster. We might need to set DSCP later.
 		if (cali_rt_flags_is_in_pool(r->flags) && rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
 			CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
-			//ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 			ctx->state->ct_result.dscp = EGRESS_DSCP;
 		}
 		/* If 3rd party CNI is used and dest is outside cluster. See commit fc711b192f for details. */
@@ -568,13 +564,11 @@ syn_force_policy:
 	if ((CALI_F_TO_HEP) && (rt_addr_is_local_host(&ctx->state->ip_src)) &&
 		(rt_addr_is_external(&ctx->state->post_nat_ip_dst))) {
 		CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
-		//ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 		ctx->state->ct_result.dscp = EGRESS_DSCP;
 	}
 	if ((CALI_F_FROM_HEP) && (rt_addr_is_host_or_in_pool(&ctx->state->post_nat_ip_dst)) &&
 		(rt_addr_is_external(&ctx->state->ip_src))) {
 		CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
-		//ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 		ctx->state->ct_result.dscp = EGRESS_DSCP;
 	}
 
@@ -1350,7 +1344,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) &&
-		(ctx->state->ct_result.dscp >-1) && (!qos_dscp_set(ctx))) {
+		(ctx->state->ct_result.dscp > -1) && (!qos_dscp_set(ctx))) {
 		goto deny;
 	}
 	ctx->fwd = calico_tc_skb_accepted(ctx);
@@ -1432,9 +1426,6 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (state->flags & CALI_ST_NAT_OUTGOING) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_NAT_OUT;
 	}
-	/*if (state->flags & CALI_ST_CLUSTER_EXTERNAL) {
-		ct_ctx_nat->flags |= CALI_CT_FLAG_CLUSTER_EXTERNAL;
-	}*/
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
 	}
@@ -1503,20 +1494,21 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 
 	// If either source or destination is outside cluster, set flag as might need to update DSCP later.
+	/*if ((CALI_F_FROM_WEP) && (rt_addr_is_in_pool(&ctx->state->ip_src)) &&
+		rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
+		CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+		ctx->state->ct_result.dscp = EGRESS_DSCP;
+	}
 	if ((CALI_F_TO_HEP) && (rt_addr_is_local_host(&ctx->state->ip_src)) &&
 		(rt_addr_is_external(&ctx->state->post_nat_ip_dst))) {
 		CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
-		//ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
-		//ctx->state->ct_result.dscp = EGRESS_DSCP;
 		ct_ctx_nat->dscp = EGRESS_DSCP;
 	}
 	if ((CALI_F_FROM_HEP) && (rt_addr_is_host_or_in_pool(&ctx->state->post_nat_ip_dst)) &&
 		(rt_addr_is_external(&ctx->state->ip_src))) {
 		CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
-		//ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
-		//ctx->state->ct_result.dscp = EGRESS_DSCP;
 		ct_ctx_nat->dscp = EGRESS_DSCP;
-	}
+	}*/
 
 
 	// If we get here, we've passed policy.
