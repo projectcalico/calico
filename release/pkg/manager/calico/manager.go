@@ -1103,8 +1103,8 @@ Additional links:
 		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
 		// so we replace anything that needs to be backticked into it here.
 		"{version}", r.calicoVersion,
-		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major, sv.Minor),
-		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major, sv.Minor),
+		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major(), sv.Minor()),
+		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
 		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", r.calicoVersion),
