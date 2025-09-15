@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 	"net"
 	"net/url"
 	"os"
@@ -947,7 +948,7 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 		return
 	}
 
-	tablesTargeted := 0
+	var tablesTargeted uint
 	ranges := make([]idalloc.IndexRange, 0)
 	for _, r := range match {
 		// first match is the whole matching string - we only care about submatches
@@ -973,10 +974,11 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 		}
 
 		// The number of route table IDs in the current range.
-		rangeLen := max - min + 1
+		rangeLen := uint(max - min + 1)
 
-		tablesTargeted += rangeLen
-		if tablesTargeted > routeTableRangeMaxTables {
+		// Overflow-safe addition
+		var carry uint
+		if tablesTargeted, carry = bits.Add(tablesTargeted, rangeLen, 0); carry != 0 || tablesTargeted > routeTableRangeMaxTables {
 			err = p.parseFailed(raw, "targets too many tables")
 			return
 		}
