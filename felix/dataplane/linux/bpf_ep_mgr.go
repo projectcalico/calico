@@ -1147,6 +1147,12 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
+	if update.State == ifacemonitor.StateNotPresent && m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+		// Delete the tcx pins if the interface is gone.
+		if err := m.cleanupOldTcAttach(update.Name); err != nil {
+			log.WithError(err).Warnf("Failed to detach old tc programs from now gone device '%s'", update.Name)
+		}
+	}
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
 	m.ifacesLock.Lock()
