@@ -196,9 +196,10 @@ func intSchema(ranges []MinMax) string {
 }
 
 func formatInt(m int) string {
-	if m == math.MaxInt64 {
+	switch m {
+	case math.MaxInt64:
 		return "2^63-1"
-	} else if m == math.MinInt64 {
+	case math.MinInt64:
 		return "-2^63"
 	}
 	return fmt.Sprint(m)

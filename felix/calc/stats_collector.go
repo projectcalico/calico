@@ -133,7 +133,8 @@ func (s *StatsCollector) OnUpdate(update api.Update) (filterOut bool) {
 		log.WithField("key", update.Key).Warn("Failed to get hostname")
 		return
 	}
-	if update.UpdateType == api.UpdateTypeKVNew {
+	switch update.UpdateType {
+	case api.UpdateTypeKVNew:
 		s.keyCountByHost[hostname] += 1
 		if log.IsLevelEnabled(log.DebugLevel) {
 			log.WithFields(log.Fields{
@@ -145,7 +146,7 @@ func (s *StatsCollector) OnUpdate(update api.Update) (filterOut bool) {
 		if counter != nil {
 			*counter += 1
 		}
-	} else if update.UpdateType == api.UpdateTypeKVDeleted {
+	case api.UpdateTypeKVDeleted:
 		s.keyCountByHost[hostname] -= 1
 		if log.IsLevelEnabled(log.DebugLevel) {
 			log.WithFields(log.Fields{
