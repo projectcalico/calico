@@ -190,6 +190,6 @@ class CalicoNotifier(object):
 
     def __getattr__(self, name):
         def fn(*args, **kwargs):
-            LOG.info("CalicoNotifier no-op: %s %r %r", name, args, kwargs)
+            LOG.debug("CalicoNotifier no-op: %s %r %r", name, args, kwargs)
 
         return fn
