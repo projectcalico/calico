@@ -196,7 +196,7 @@ func intSchema(ranges []MinMax) string {
 }
 
 func formatInt(m int) string {
-	switch m {
+	switch int64(m) {
 	case math.MaxInt64:
 		return "2^63-1"
 	case math.MinInt64:
@@ -901,7 +901,7 @@ func (r *RegionParam) SchemaDescription() string {
 
 // linux can support route-table indices up to 0xFFFFFFFF
 // however, using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
-const routeTableMaxLinux = 0xffffffff
+const routeTableMaxLinux uint32 = 0xffffffff
 const routeTableRangeMaxTables = 0xffff
 
 type RouteTableRangeParam struct {
