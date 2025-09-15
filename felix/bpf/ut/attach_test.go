@@ -1175,25 +1175,46 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
 	Expect(err).NotTo(HaveOccurred())
 
+	// Endpoint managed gets interface deleted but interface still exists.
+	// This can happen if the interface is deleted and recreated quickly.
+	// The BPF endpoint manager gets the update that interface is gone but
+	// the interface is still there. The pinned programs must remain.
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, workload0.Attrs().Index))
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
+	Expect(err).NotTo(HaveOccurred())
+
+	// Now simulate interface being deleted and recreated.
+	deleteLink(workload0)
+	workload0 = nil
+	workload0_new := createVethName("workloadep0")
+	defer func() {
+		if workload0_new != nil {
+			deleteLink(workload0_new)
+		}
+	}()
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
+	Expect(err).NotTo(HaveOccurred())
+
+	// Interface is deleted. BPF endpoint manager gets the update.
+	// The pinned programs must be removed.
+	deleteLink(workload0_new)
+	workload0_new = nil
+
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, 0))
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
 	Expect(err).To(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
 	Expect(err).To(HaveOccurred())
-
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
-	err = bpfEpMgr.CompleteDeferredWork()
-	Expect(err).NotTo(HaveOccurred())
-	// Now simulate interface being deleted and recreated.
-	deleteLink(workload0)
-	workload0 = nil
-	workload0_new := createVethName("workloadep0")
-	defer deleteLink(workload0_new)
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0_new.Attrs().Index))
-	err = bpfEpMgr.CompleteDeferredWork()
-	Expect(err).NotTo(HaveOccurred())
 }
 
 func TestAttachTcx(t *testing.T) {
