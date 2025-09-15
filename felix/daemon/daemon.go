@@ -1244,9 +1244,10 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVe
 		}
 		if storedPublicKey != dpPubKey {
 			updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			if ipVersion == proto.IPVersion_IPV4 {
+			switch ipVersion {
+			case proto.IPVersion_IPV4:
 				node.Status.WireguardPublicKey = dpPubKey
-			} else if ipVersion == proto.IPVersion_IPV6 {
+			case proto.IPVersion_IPV6:
 				node.Status.WireguardPublicKeyV6 = dpPubKey
 			}
 			_, err := fc.datastorev3.Nodes().Update(updateCtx, node, options.SetOptions{})
