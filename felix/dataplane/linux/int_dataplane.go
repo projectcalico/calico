@@ -255,6 +255,7 @@ type Config struct {
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
+	KubeProxyHealtzPort        int
 	SidecarAccelerationEnabled bool
 
 	// Flow logs related fields.
@@ -2830,8 +2831,9 @@ func startBPFDataplaneComponents(
 	ctVal := bpfconntrack.ValueFromBytes
 
 	if config.bpfProxyHealthzServer == nil {
+		healthzAddr := fmt.Sprintf(":%d", config.KubeProxyHealtzPort)
 		config.bpfProxyHealthzServer = k8shealthcheck.NewProxyHealthServer(
-			":10256", config.KubeProxyMinSyncPeriod)
+			healthzAddr, config.KubeProxyMinSyncPeriod)
 
 		// We cannot wait for the healthz server as we cannot stop it.
 		go func() {
