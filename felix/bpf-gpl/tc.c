@@ -555,7 +555,7 @@ syn_force_policy:
 		/* If 3rd party CNI is used and dest is outside cluster. See commit fc711b192f for details. */
 		if (!(cali_rt_flags_is_in_pool(src_flags))) {
 			CALI_DEBUG("Source " IP_FMT " not in IP pool", debug_ip(ctx->state->ip_src));
-			if (!(src_flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
+			if (!(dst_flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
 				CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 				ctx->state->flags |= CALI_ST_SKIP_FIB;
 			}
