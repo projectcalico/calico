@@ -43,6 +43,8 @@ sys.modules['neutron.db'] = m_neutron.db
 sys.modules['neutron.db.models'] = m_neutron.db.models
 sys.modules['neutron.db.models.l3'] = m_neutron.db.models.l3
 sys.modules['neutron.db.qos'] = m_neutron.db.qos
+sys.modules["neutron.objects"] = m_neutron.objects
+sys.modules["neutron.objects.qos"] = m_neutron.objects.qos
 sys.modules['neutron.openstack'] = m_neutron.openstack
 sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
 sys.modules['neutron.openstack.common.db'] = m_neutron.openstack.common.db
@@ -50,6 +52,8 @@ sys.modules['neutron.plugins'] = m_neutron.plugins
 sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
 sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 sys.modules['neutron.plugins.ml2.rpc'] = m_neutron.plugins.ml2.rpc
+sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
+sys.modules["neutron_lib.db"] = m_neutron_lib.db
 sys.modules['sqlalchemy'] = m_sqlalchemy = mock.Mock()
 sys.modules['sqlalchemy.orm'] = m_sqlalchemy.orm
 sys.modules['sqlalchemy.orm.exc'] = m_sqlalchemy.orm.exc

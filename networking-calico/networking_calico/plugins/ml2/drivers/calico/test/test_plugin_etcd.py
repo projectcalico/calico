@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2015 Metaswitch Networks
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -361,6 +361,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.egress_minburst_bytes = 0
         lib.m_compat.cfg.CONF.calico.ingress_burst_packets = 0
         lib.m_compat.cfg.CONF.calico.egress_burst_packets = 0
+        lib.m_compat.cfg.CONF.calico.resync_interval_secs = (
+            mech_calico.DEFAULT_RESYNC_INTERVAL_SECS
+        )
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
@@ -526,7 +529,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Allow it to run again, this time auditing against the etcd data that
         # was written on the first iteration.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -550,7 +553,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Do another resync - expect no changes to the etcd data.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -590,7 +593,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # resync will now discover that.
         _log.info("Resync with existing etcd data")
         self.osdb_ports[0]['binding:host_id'] = 'felix-host-1'
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
 
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
         ep_deadbeef_key_v3 = ep_deadbeef_key_v3.replace('new--host',
@@ -807,7 +810,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Resync with all latest data - expect no etcd writes or deletes.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([]))
 
@@ -859,7 +862,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # cleaned up.
         self.osdb_ports = [context.original]
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([
             ep_deadbeef_key_v3,
@@ -896,7 +899,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
              'ip_address': '10.65.0.188'}
         ]
         _log.info("Resync with edited data")
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
 
         ep_hello_value_v3['spec']['ipNetworks'] = ["10.65.0.188/32"]
         ep_hello_value_v3['spec']['ipv4Gateway'] = "10.65.0.1"
@@ -1011,13 +1014,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.egress_burst_packets = 0
 
         # Set a QoS policy on the network instead of directly on the port.
-        #
-        # Note that the network_id at this point is 'calico-other-network-id'.
         _log.debug("Test getting QoS policy from network object")
         del self.osdb_ports[0]['qos_policy_id']
-        self.assertEqual(context._port['network_id'], 'calico-other-network-id')
-        self.assertEqual(self.osdb_networks[1]['id'], 'calico-other-network-id')
-        self.osdb_networks[1]['qos_policy_id'] = '1'
+        self.osdb_ports[0]["qos_network_policy_id"] = "1"
         self.driver.update_port_postcommit(context)
 
         # Expected changes
@@ -1034,7 +1033,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Remove the QoS policy from the network again.
         _log.debug("Retest after removing all QoS policy")
-        del self.osdb_networks[1]['qos_policy_id']
+        del self.osdb_ports[0]["qos_network_policy_id"]
         self.driver.update_port_postcommit(context)
 
         # Expected changes
@@ -1102,10 +1101,8 @@ class TestPluginEtcd(TestPluginEtcdBase):
         implemented as no-ops (because Calico function does not need
         them).
         """
-        self.driver.update_network_postcommit(None)
         self.driver.delete_network_postcommit(None)
         self.driver.create_network_postcommit(None)
-        self.driver.update_network_postcommit(None)
 
     def test_subnet_hooks(self):
         """Test subnet creation, update and deletion hooks."""
@@ -1179,7 +1176,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Allow the etcd transport's resync thread to run again.  Expect no
         # change in etcd subnet data.
         self.give_way()
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -1209,7 +1206,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         with lib.FixedUUID('uuid-subnet-hooks-2'):
             self.give_way()
             self.etcd_data = {}
-            self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+            self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
 
         expected_writes[
             '/calico/resources/v3/projectcalico.org/clusterinformations/' +
@@ -1230,7 +1227,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         subnet1['enable_dhcp'] = True
         subnet2['enable_dhcp'] = False
         self.give_way()
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({
             '/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24': {
                 'network_id': 'net-id-1',
@@ -1247,7 +1244,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # changed a Calico-relevant property of a DHCP-enabled subnet.
         subnet1['gateway_ip'] = '10.65.0.2'
         self.give_way()
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({
             '/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24': {
                 'network_id': 'net-id-1',
