@@ -972,7 +972,10 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 			return
 		}
 
-		tablesTargeted += max - min
+		// The number of route table IDs in the current range.
+		rangeLen := max - min + 1
+
+		tablesTargeted += rangeLen
 		if tablesTargeted > routeTableRangeMaxTables {
 			err = p.parseFailed(raw, "targets too many tables")
 			return
