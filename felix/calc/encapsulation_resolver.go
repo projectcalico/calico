@@ -155,7 +155,7 @@ func (c *EncapsulationCalculator) handlePool(p model.KVPair) error {
 		return c.handleAPIPool(p)
 	}
 
-	return fmt.Errorf("Not a valid IP pool type")
+	return fmt.Errorf("not a valid IP pool type")
 }
 
 func (c *EncapsulationCalculator) handleModelPool(p model.KVPair) error {

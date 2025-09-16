@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
-	. "github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 )
 
@@ -49,7 +48,7 @@ var expectedBaseChains = []string{
 }
 
 var _ = Describe("Table with an empty dataplane", func() {
-	var table *NftablesTable
+	var table *nftables.NftablesTable
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
 	BeforeEach(func() {
@@ -58,12 +57,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 			return f, nil
 		}
 		featureDetector = environment.NewFeatureDetector(nil)
-		table = NewTable(
+		table = nftables.NewTable(
 			"calico",
 			4,
 			rules.RuleHashPrefix,
 			featureDetector,
-			TableOptions{
+			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
 				OpRecorder:       logutils.NewSummarizer("test loop"),
@@ -99,8 +98,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Name: "filter-FORWARD",
 			Rules: []generictables.Rule{
 				{
-					Match:  Match(),
-					Action: JumpAction{Target: chain.Name},
+					Match:  nftables.Match(),
+					Action: nftables.JumpAction{Target: chain.Name},
 				},
 			},
 		}
@@ -133,7 +132,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 		// Remove a non-existent chain. It should not trigger any new updates.
 		table.RemoveChains([]*generictables.Chain{
-			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.AcceptAction{}}}},
 		})
 		table.Apply()
 		Expect(f.transactions).To(HaveLen(1))
@@ -141,10 +140,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 	It("Should defer updates until Apply is called", func() {
 		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-			{Match: nftables.Match(), Action: DropAction{}},
+			{Match: nftables.Match(), Action: nftables.DropAction{}},
 		})
 		table.UpdateChains([]*generictables.Chain{
-			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.AcceptAction{}}}},
 		})
 		Expect(f.transactions).To(BeEmpty())
 		table.Apply()
@@ -154,7 +153,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	It("Should panic on nft failures", func() {
 		// Insert rules into a non-existent chain.
 		table.InsertOrAppendRules("badchain", []generictables.Rule{
-			{Match: nftables.Match(), Action: DropAction{}},
+			{Match: nftables.Match(), Action: nftables.DropAction{}},
 		})
 		Expect(func() {
 			table.Apply()
@@ -164,7 +163,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	Describe("after inserting a rule", func() {
 		BeforeEach(func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Match: nftables.Match(), Action: DropAction{}},
+				{Match: nftables.Match(), Action: nftables.DropAction{}},
 			})
 			table.Apply()
 			Expect(f.transactions).To(HaveLen(1))
@@ -173,7 +172,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 		It("should be in the dataplane", func() {
 			rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rules).To(ContainRule(knftables.Rule{
+			Expect(rules).To(nftables.ContainRule(knftables.Rule{
 				Chain:   "filter-FORWARD",
 				Rule:    "counter drop",
 				Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
@@ -182,13 +181,13 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 		It("further inserts should be idempotent", func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Match: nftables.Match(), Action: DropAction{}},
+				{Match: nftables.Match(), Action: nftables.DropAction{}},
 			})
 			table.Apply()
 
 			rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rules).To(ContainRule(knftables.Rule{
+			Expect(rules).To(nftables.ContainRule(knftables.Rule{
 				Chain:   "filter-FORWARD",
 				Rule:    "counter drop",
 				Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
@@ -198,10 +197,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Describe("after inserting a rule then updating the insertions", func() {
 			BeforeEach(func() {
 				table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-					{Match: nftables.Match(), Action: DropAction{}},
-					{Match: nftables.Match(), Action: AcceptAction{}},
-					{Match: nftables.Match(), Action: DropAction{}},
-					{Match: nftables.Match(), Action: AcceptAction{}},
+					{Match: nftables.Match(), Action: nftables.DropAction{}},
+					{Match: nftables.Match(), Action: nftables.AcceptAction{}},
+					{Match: nftables.Match(), Action: nftables.DropAction{}},
+					{Match: nftables.Match(), Action: nftables.AcceptAction{}},
 				})
 				table.Apply()
 				Expect(f.transactions).To(HaveLen(2))
@@ -210,7 +209,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			It("should update the dataplane", func() {
 				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(rules).To(EqualRules([]knftables.Rule{
+				Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:DCGauXoHP5A9-AIO;")},
 					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:6tpY0LmXqEPD5dsI;")},
 					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:_Zdh35A6d8kLWs7z;")},
@@ -240,7 +239,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				table.Apply()
 				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(rules).To(EqualRules([]knftables.Rule{
+				Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 					{
 						Chain:   "filter-FORWARD",
 						Rule:    "counter drop",
@@ -254,7 +253,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			BeforeEach(func() {
 				// Append a rule to the filter-FORWARD base chain, and trigger programming.
 				table.AppendRules("filter-FORWARD", []generictables.Rule{
-					{Match: nftables.Match(), Action: AcceptAction{}},
+					{Match: nftables.Match(), Action: nftables.AcceptAction{}},
 				})
 				table.Apply()
 
@@ -282,7 +281,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				table.Apply()
 				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(rules).To(EqualRules([]knftables.Rule{
+				Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 					{
 						Chain:   "filter-FORWARD",
 						Rule:    "counter drop",
@@ -326,7 +325,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				table.Apply()
 				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(rules).To(EqualRules([]knftables.Rule{
+				Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 					{
 						Chain:   "filter-FORWARD",
 						Rule:    "counter drop",
@@ -345,12 +344,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 			BeforeEach(func() {
 				table.UpdateChains([]*generictables.Chain{
 					{Name: "cali-foobar", Rules: []generictables.Rule{
-						{Action: AcceptAction{}},
-						{Action: DropAction{}},
+						{Action: nftables.AcceptAction{}},
+						{Action: nftables.DropAction{}},
 					}},
 					{Name: "cali-bazzbiff", Rules: []generictables.Rule{
-						{Action: AcceptAction{}},
-						{Action: DropAction{}},
+						{Action: nftables.AcceptAction{}},
+						{Action: nftables.DropAction{}},
 					}},
 				})
 				table.Apply()
@@ -367,7 +366,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					table.UpdateChain(&generictables.Chain{
 						Name: "cali-FORWARD",
 						Rules: []generictables.Rule{
-							{Action: JumpAction{Target: "cali-foobar"}},
+							{Action: nftables.JumpAction{Target: "cali-foobar"}},
 						},
 					})
 					table.Apply()
@@ -382,7 +381,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Describe("after adding an indirect reference from a base chain", func() {
 					BeforeEach(func() {
 						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: JumpAction{Target: "cali-FORWARD"}},
+							{Action: nftables.JumpAction{Target: "cali-FORWARD"}},
 						})
 						table.Apply()
 					})
@@ -411,7 +410,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 							table.UpdateChain(&generictables.Chain{
 								Name: "cali-FORWARD",
 								Rules: []generictables.Rule{
-									{Action: JumpAction{Target: "cali-bazzbiff"}},
+									{Action: nftables.JumpAction{Target: "cali-bazzbiff"}},
 								},
 							})
 							table.Apply()
@@ -445,12 +444,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Describe("after adding a reference from another referenced chain", func() {
 				BeforeEach(func() {
 					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-						{Action: JumpAction{Target: "cali-FORWARD"}},
+						{Action: nftables.JumpAction{Target: "cali-FORWARD"}},
 					})
 					table.UpdateChain(&generictables.Chain{
 						Name: "cali-FORWARD",
 						Rules: []generictables.Rule{
-							{Action: JumpAction{Target: "cali-foobar"}},
+							{Action: nftables.JumpAction{Target: "cali-foobar"}},
 						},
 					})
 					table.Apply()
@@ -465,7 +464,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Describe("after adding a reference from an insert", func() {
 					BeforeEach(func() {
 						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: JumpAction{Target: "cali-foobar"}},
+							{Action: nftables.JumpAction{Target: "cali-foobar"}},
 						})
 						table.Apply()
 					})
@@ -506,7 +505,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Describe("after adding a reference from a base chain", func() {
 				BeforeEach(func() {
 					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-						{Action: JumpAction{Target: "cali-foobar"}},
+						{Action: nftables.JumpAction{Target: "cali-foobar"}},
 					})
 					table.Apply()
 					Expect(f.transactions).To(HaveLen(2))
@@ -520,7 +519,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					// Assert the rules are correct.
 					rules, err := f.ListRules(context.TODO(), "cali-foobar")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(rules).To(EqualRules([]knftables.Rule{
+					Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 						{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")},
 						{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:iSw4pE2oK6hZ-s52;")},
 					}))
@@ -545,8 +544,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 						table.UpdateChains([]*generictables.Chain{
 							{Name: "cali-foobar", Rules: []generictables.Rule{
 								// We swap the rules.
-								{Action: DropAction{}},
-								{Action: AcceptAction{}},
+								{Action: nftables.DropAction{}},
+								{Action: nftables.AcceptAction{}},
 							}},
 						})
 						table.Apply()
@@ -556,7 +555,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					It("should be updated", func() {
 						rules, err := f.ListRules(context.TODO(), "cali-foobar")
 						Expect(err).NotTo(HaveOccurred())
-						Expect(rules).To(EqualRules([]knftables.Rule{
+						Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:qEazjD2XdAvzH1n5;")},
 							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:0breZU0oqlsEQH-N;")},
 						}))
@@ -571,8 +570,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 						table.UpdateChains([]*generictables.Chain{
 							{Name: "cali-foobar", Rules: []generictables.Rule{
 								// Same data as above.
-								{Action: DropAction{}},
-								{Action: AcceptAction{}},
+								{Action: nftables.DropAction{}},
+								{Action: nftables.AcceptAction{}},
 							}},
 						})
 						Expect(f.transactions).To(HaveLen(3))
@@ -585,9 +584,9 @@ var _ = Describe("Table with an empty dataplane", func() {
 					BeforeEach(func() {
 						table.UpdateChains([]*generictables.Chain{
 							{Name: "cali-foobar", Rules: []generictables.Rule{
-								{Action: AcceptAction{}},
-								{Action: DropAction{}},
-								{Action: ReturnAction{}},
+								{Action: nftables.AcceptAction{}},
+								{Action: nftables.DropAction{}},
+								{Action: nftables.ReturnAction{}},
 							}},
 						})
 						table.Apply()
@@ -597,7 +596,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					It("should be updated", func() {
 						rules, err := f.ListRules(context.TODO(), "cali-foobar")
 						Expect(err).NotTo(HaveOccurred())
-						Expect(rules).To(EqualRules([]knftables.Rule{
+						Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")},
 							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:iSw4pE2oK6hZ-s52;")},
 							{Chain: "cali-foobar", Rule: "counter return", Comment: ptr("cali:UvIbKv-XqfNkFU3a;")},
@@ -608,7 +607,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 						BeforeEach(func() {
 							table.UpdateChains([]*generictables.Chain{
 								{Name: "cali-foobar", Rules: []generictables.Rule{
-									{Action: AcceptAction{}},
+									{Action: nftables.AcceptAction{}},
 								}},
 							})
 							table.Apply()
@@ -618,7 +617,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 						It("should be updated", func() {
 							rules, err := f.ListRules(context.TODO(), "cali-foobar")
 							Expect(err).NotTo(HaveOccurred())
-							Expect(rules).To(EqualRules([]knftables.Rule{
+							Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 								{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")},
 							}))
 						})
@@ -628,7 +627,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 						BeforeEach(func() {
 							table.UpdateChains([]*generictables.Chain{
 								{Name: "cali-foobar", Rules: []generictables.Rule{
-									{Action: ReturnAction{}},
+									{Action: nftables.ReturnAction{}},
 								}},
 							})
 							table.Apply()
@@ -637,7 +636,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 						It("should be updated", func() {
 							rules, err := f.ListRules(context.TODO(), "cali-foobar")
 							Expect(err).NotTo(HaveOccurred())
-							Expect(rules).To(EqualRulesFuzzy([]knftables.Rule{
+							Expect(rules).To(nftables.EqualRulesFuzzy([]knftables.Rule{
 								{Chain: "cali-foobar", Rule: "counter return"},
 							}))
 						})
@@ -661,8 +660,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 					BeforeEach(func() {
 						table.RemoveChains([]*generictables.Chain{
 							{Name: "cali-foobar", Rules: []generictables.Rule{
-								{Action: AcceptAction{}},
-								{Action: DropAction{}},
+								{Action: nftables.AcceptAction{}},
+								{Action: nftables.DropAction{}},
 							}},
 						})
 						table.Apply()
@@ -678,14 +677,14 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Describe("applying updates when underlying rules have changed in a approved chain", func() {
 			BeforeEach(func() {
 				table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-					{Action: AcceptAction{}},
-					{Action: DropAction{}},
-					{Action: JumpAction{Target: "cali-foobar"}},
+					{Action: nftables.AcceptAction{}},
+					{Action: nftables.DropAction{}},
+					{Action: nftables.JumpAction{Target: "cali-foobar"}},
 				})
 				table.UpdateChains([]*generictables.Chain{
 					{Name: "cali-foobar", Rules: []generictables.Rule{
-						{Action: AcceptAction{}},
-						{Action: DropAction{}},
+						{Action: nftables.AcceptAction{}},
+						{Action: nftables.DropAction{}},
 					}},
 				})
 				table.Apply()
@@ -700,13 +699,13 @@ var _ = Describe("Table with an empty dataplane", func() {
 				// Assert the rules are correct.
 				rules, err := f.ListRules(context.TODO(), "cali-foobar")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(rules).To(EqualRulesFuzzy([]knftables.Rule{
+				Expect(rules).To(nftables.EqualRulesFuzzy([]knftables.Rule{
 					{Chain: "cali-foobar", Rule: "counter accept"},
 					{Chain: "cali-foobar", Rule: "counter drop"},
 				}))
 				rules, err = f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(rules).To(EqualRulesFuzzy([]knftables.Rule{
+				Expect(rules).To(nftables.EqualRulesFuzzy([]knftables.Rule{
 					{Chain: "filter-FORWARD", Rule: "counter accept"},
 					{Chain: "filter-FORWARD", Rule: "counter drop"},
 					{Chain: "filter-FORWARD", Rule: "counter jump cali-foobar"},
@@ -716,12 +715,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Describe("inserting and appending into a base chain results in the expected writes", func() {
 				BeforeEach(func() {
 					table.AppendRules("filter-FORWARD", []generictables.Rule{
-						{Action: DropAction{}, Comment: []string{"append drop rule"}},
-						{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+						{Action: nftables.DropAction{}, Comment: []string{"append drop rule"}},
+						{Action: nftables.AcceptAction{}, Comment: []string{"append accept rule"}},
 					})
 					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-						{Action: DropAction{}, Comment: []string{"insert drop rule"}},
-						{Action: AcceptAction{}, Comment: []string{"insert accept rule"}},
+						{Action: nftables.DropAction{}, Comment: []string{"insert drop rule"}},
+						{Action: nftables.AcceptAction{}, Comment: []string{"insert accept rule"}},
 					})
 
 					table.Apply()
@@ -731,7 +730,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				It("should update the dataplane", func() {
 					rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(rules).To(EqualRules([]knftables.Rule{
+					Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 						{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:DCGauXoHP5A9-AIO; insert drop rule")},
 						{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:6tpY0LmXqEPD5dsI; insert accept rule")},
 						{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:T41ctVF7TLDIehjM; append drop rule")},
@@ -742,8 +741,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Describe("then appending the same rules", func() {
 					BeforeEach(func() {
 						table.AppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: DropAction{}, Comment: []string{"append drop rule"}},
-							{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+							{Action: nftables.DropAction{}, Comment: []string{"append drop rule"}},
+							{Action: nftables.AcceptAction{}, Comment: []string{"append accept rule"}},
 						})
 						table.Apply()
 
@@ -754,7 +753,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					It("should result in no inserts", func() {
 						rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 						Expect(err).NotTo(HaveOccurred())
-						Expect(rules).To(EqualRulesFuzzy([]knftables.Rule{
+						Expect(rules).To(nftables.EqualRulesFuzzy([]knftables.Rule{
 							{Chain: "filter-FORWARD", Rule: "counter drop"},
 							{Chain: "filter-FORWARD", Rule: "counter accept"},
 							{Chain: "filter-FORWARD", Rule: "counter drop"},
@@ -766,14 +765,14 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Describe("then inserting and appending different rules", func() {
 					BeforeEach(func() {
 						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: DropAction{}, Comment: []string{"insert drop rule"}},
-							{Action: AcceptAction{}, Comment: []string{"insert accept rule"}},
-							{Action: DropAction{}, Comment: []string{"second insert drop rule"}},
+							{Action: nftables.DropAction{}, Comment: []string{"insert drop rule"}},
+							{Action: nftables.AcceptAction{}, Comment: []string{"insert accept rule"}},
+							{Action: nftables.DropAction{}, Comment: []string{"second insert drop rule"}},
 						})
 						table.AppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: DropAction{}, Comment: []string{"append drop rule"}},
-							{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
-							{Action: DropAction{}, Comment: []string{"second append drop rule"}},
+							{Action: nftables.DropAction{}, Comment: []string{"append drop rule"}},
+							{Action: nftables.AcceptAction{}, Comment: []string{"append accept rule"}},
+							{Action: nftables.DropAction{}, Comment: []string{"second append drop rule"}},
 						})
 						table.Apply()
 						Expect(f.transactions).To(HaveLen(4))
@@ -782,7 +781,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					It("should result in modifications", func() {
 						rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 						Expect(err).NotTo(HaveOccurred())
-						Expect(rules).To(EqualRules([]knftables.Rule{
+						Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:DCGauXoHP5A9-AIO; insert drop rule")},
 							{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:6tpY0LmXqEPD5dsI; insert accept rule")},
 							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:_Zdh35A6d8kLWs7z; second insert drop rule")},
@@ -802,13 +801,13 @@ var _ = Describe("Table with an empty dataplane", func() {
 			table.UpdateChain(&generictables.Chain{
 				Name: "cali-tw-1234",
 				Rules: []generictables.Rule{
-					{Action: AcceptAction{}},
+					{Action: nftables.AcceptAction{}},
 				},
 			})
 			table.UpdateChain(&generictables.Chain{
 				Name: "cali-tw-5678",
 				Rules: []generictables.Rule{
-					{Action: DropAction{}},
+					{Action: nftables.DropAction{}},
 				},
 			})
 
@@ -866,12 +865,12 @@ var _ = Describe("Insert early rules", func() {
 			return f, nil
 		}
 		featureDetector = environment.NewFeatureDetector(nil)
-		table = NewTable(
+		table = nftables.NewTable(
 			"cali-filter",
 			4,
 			rules.RuleHashPrefix,
 			featureDetector,
-			TableOptions{
+			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
 				OpRecorder:       logutils.NewSummarizer("test loop"),
@@ -882,8 +881,8 @@ var _ = Describe("Insert early rules", func() {
 
 	It("should insert rules immediately without Apply", func() {
 		rls := []generictables.Rule{
-			{Action: DropAction{}, Comment: []string{"my rule"}},
-			{Action: AcceptAction{}, Comment: []string{"my other rule"}},
+			{Action: nftables.DropAction{}, Comment: []string{"my rule"}},
+			{Action: nftables.AcceptAction{}, Comment: []string{"my other rule"}},
 		}
 
 		err := table.InsertRulesNow("filter-FORWARD", rls)
@@ -897,7 +896,7 @@ var _ = Describe("Insert early rules", func() {
 		// Expect rules
 		rules, err := f.ListRules(context.Background(), "filter-FORWARD")
 		Expect(err).NotTo(HaveOccurred())
-		Expect(rules).To(EqualRules([]knftables.Rule{
+		Expect(rules).To(nftables.EqualRules([]knftables.Rule{
 			{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:6tpY0LmXqEPD5dsI; my other rule")},
 			{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:DCGauXoHP5A9-AIO; my rule")},
 		}))
@@ -905,8 +904,8 @@ var _ = Describe("Insert early rules", func() {
 
 	It("should find out if rules already present", func() {
 		rls := []generictables.Rule{
-			{Action: DropAction{}, Comment: []string{"my rule"}},
-			{Action: AcceptAction{}, Comment: []string{"my other rule"}},
+			{Action: nftables.DropAction{}, Comment: []string{"my rule"}},
+			{Action: nftables.AcceptAction{}, Comment: []string{"my other rule"}},
 		}
 
 		// Init chains

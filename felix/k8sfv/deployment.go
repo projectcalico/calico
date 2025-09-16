@@ -120,7 +120,7 @@ func cleanupAllNodes(clientset *kubernetes.Clientset) {
 	}
 	log.WithField("count", len(nodeList.Items)).Info("Nodes present")
 	for _, node := range nodeList.Items {
-		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.ObjectMeta.Name, deleteImmediately)
+		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.Name, deleteImmediately)
 		if err != nil {
 			panic(err)
 		}
