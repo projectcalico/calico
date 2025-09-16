@@ -141,6 +141,7 @@ metadata:
   name: calico-crds
 rules:
 <<<<<<< HEAD
+<<<<<<< HEAD
 - apiGroups:
   - extensions
   - networking.k8s.io
@@ -178,6 +179,7 @@ rules:
   - tiers
   - stagednetworkpolicies
   - stagedglobalnetworkpolicies
+  - stagedkubernetesnetworkpolicies
   verbs:
   - get
   - list
