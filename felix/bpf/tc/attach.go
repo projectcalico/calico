@@ -26,6 +26,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -117,10 +118,17 @@ func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
 		}
 		defer link.Close()
 		if err := link.Update(obj, "cali_tc_preamble"); err != nil {
+			if errors.Is(err, unix.ENOLINK) {
+				// The link was deleted out from under us, so try attaching a new one.
+				logCxt.Debug("Link severed from interface, re-attaching")
+				os.Remove(progPinPath)
+				goto attachNew
+			}
 			return fmt.Errorf("error updating program %s : %w", progPinPath, err)
 		}
 		return nil
 	}
+attachNew:
 	link, err := obj.AttachTCX("cali_tc_preamble", ap.Iface)
 	if err != nil {
 		return err
@@ -177,7 +185,7 @@ func (ap *AttachPoint) AttachProgram() error {
 	}
 	logCxt.Info("Program attached to tc.")
 	// Remove any tcx program.
-	err = ap.detachTcxProgram()
+	err = ap.DetachTcxProgram()
 	if err != nil {
 		logCxt.Warnf("error removing tcx program from %s", err)
 	}
@@ -188,7 +196,7 @@ func (ap *AttachPoint) progPinPath() string {
 	return path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_%s", strings.Replace(ap.Iface, ".", "", -1), ap.Hook))
 }
 
-func (ap *AttachPoint) detachTcxProgram() error {
+func (ap *AttachPoint) DetachTcxProgram() error {
 	progPinPath := ap.progPinPath()
 	if _, err := os.Stat(progPinPath); os.IsNotExist(err) {
 		return nil
@@ -215,7 +223,7 @@ func (ap *AttachPoint) detachTcProgram() error {
 }
 
 func (ap *AttachPoint) DetachProgram() error {
-	err := ap.detachTcxProgram()
+	err := ap.DetachTcxProgram()
 	if err != nil {
 		log.Warnf("error detaching tcx program from %s hook %s : %s", ap.Iface, ap.Hook, err)
 	}
