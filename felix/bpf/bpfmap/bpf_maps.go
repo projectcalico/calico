@@ -194,6 +194,7 @@ func (i *IPMaps) slice() []maps.Map {
 		i.CtCleanupMap,
 		i.SrMsgMap,
 		i.CtNatsMap,
+		i.ConsistentHashMap,
 	}
 }
 

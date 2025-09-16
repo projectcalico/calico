@@ -289,6 +289,7 @@ func (s *Syncer) loadOrigs() error {
 	if err != nil {
 		return err
 	}
+
 	err = s.bpfConsistentHashEps.LoadCacheFromDataplane()
 	if err != nil {
 		return err
