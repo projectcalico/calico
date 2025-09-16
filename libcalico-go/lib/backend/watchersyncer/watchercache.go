@@ -52,6 +52,10 @@ type watcherCache struct {
 	resyncBlockedUntil     time.Time
 	lastSuccessfulConnTime time.Time
 	watchRetryTimeout      time.Duration
+
+	// crdInstalled tracks whether or not we've detected that the backing API for this
+	// resource type is installed in the cluster.
+	crdInstalled bool
 }
 
 const (
@@ -63,6 +67,11 @@ var (
 	ListRetryInterval        = 1000 * time.Millisecond
 	WatchPollInterval        = 5000 * time.Millisecond
 	DefaultWatchRetryTimeout = 600 * time.Second
+
+	// If the backing API is not installed, we consider ourselves in-sync but retry
+	// infrequently. If the API is eventually installed, we will resync after this timer pops.
+	// However, it's good practice to restart Calico when installing a new API to expedite this.
+	MissingAPIRetryTime = 30 * time.Minute
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -85,6 +94,7 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		currentWatchRevision: "0",
 		resyncBlockedUntil:   time.Now(),
 		watchRetryTimeout:    watchTimeout,
+		crdInstalled:         true, // Assume true until we detect otherwise.
 	}
 }
 
@@ -188,6 +198,13 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 	}
 }
 
+func (wc *watcherCache) markInstalled() {
+	if !wc.crdInstalled {
+		wc.logger.Info("Backing API has been installed")
+		wc.crdInstalled = true
+	}
+}
+
 // maybeResyncAndCreateWatcher loops performing resync processing until it successfully
 // completes a resync and starts a watcher.
 func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
@@ -235,8 +252,27 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 			// be 0 at start of day or the latest received revision.
 			l, err := wc.client.List(ctx, wc.resourceType.ListInterface, wc.currentWatchRevision)
 			if err != nil {
+				if kerrors.IsNotFound(err) {
+					// The resource type doesn't exist yet.  This is possible if the CRD backing this API has not been installed.
+					// This is a valid long-term state, so we don't want to keep retrying rapidly.
+					// Consider ourselves in sync, and then sleep for a long time.
+					if !wc.hasSynced {
+						wc.logger.Info("Backing API not installed, marking as in-sync and retrying later.")
+						wc.finishResync()
+					} else {
+						wc.logger.Debug("Backing API still not installed, retrying later.")
+					}
+					wc.resyncBlockedUntil = time.Now().Add(MissingAPIRetryTime)
+					wc.crdInstalled = false
+					continue
+				}
+
+				// If we get this far, we know the API is installed even if we got an error.
+				wc.markInstalled()
+
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
+
 				if kerrors.IsResourceExpired(err) || isTooLargeResourceVersionError(err) {
 					// Our current watch revision is out of sync. Start again without a revision.
 					wc.logger.Info("Resource too old/new error from server, clearing cached watch revision.")
@@ -263,6 +299,7 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 				continue
 			}
 			wc.lastSuccessfulConnTime = time.Now()
+			wc.markInstalled()
 
 			// Once this point is reached, it's important not to drop out if the context is cancelled.
 			// Move the current resources over to the oldResources
