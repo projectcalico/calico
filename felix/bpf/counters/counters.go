@@ -167,7 +167,7 @@ var descriptions DescList = DescList{
 	},
 	{
 		Counter:  SourceCollisionHit,
-		Category: "Other", Caption: "packets hitting NAT source collision",
+		Category: "Other", Caption: "packets hitting  NAT source collision",
 	},
 	{
 		Counter:  ConntrackCreateFailed,
