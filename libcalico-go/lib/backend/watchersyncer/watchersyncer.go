@@ -151,7 +151,6 @@ func (ws *watcherSyncer) Stop() {
 	// the results chan
 	close(ws.results)
 	ws.wgws.Wait()
-
 }
 
 // Send a status update and store the status.
@@ -204,7 +203,6 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 // instead start grouping them together so that we can send a larger single update to
 // Felix.
 func (ws *watcherSyncer) processResult(updates []api.Update, result interface{}) []api.Update {
-
 	// Switch on the result type.
 	switch r := result.(type) {
 	case []api.Update:
@@ -250,6 +248,10 @@ func (ws *watcherSyncer) processResult(updates []api.Update, result interface{})
 
 			// Increment the count of synced events.
 			ws.numSynced++
+			log.WithFields(log.Fields{
+				"NumSynced":     ws.numSynced,
+				"TotalWatchers": len(ws.watcherCaches),
+			}).Info("Watcher cache sync'd")
 
 			// If we have now received synced events from all of our watchers then we are in
 			// sync.  If we have any updates, send them first and then send the status update.
