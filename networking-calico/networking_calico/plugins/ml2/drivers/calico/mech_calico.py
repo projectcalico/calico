@@ -229,6 +229,7 @@ class TaskTracker(object):
         self.task_id = new_green_task_id()
         LOG.debug("%r New task", self)
         return self
+
     def __exit__(self, *args, **kwargs):
         LOG.debug("%r Exit task", self)
 
