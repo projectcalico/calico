@@ -28,6 +28,7 @@ import contextlib
 import inspect
 import os
 import re
+import threading
 import uuid
 from functools import wraps
 
@@ -202,6 +203,37 @@ def requires_state(f):
         return f(self, *args, **kwargs)
 
     return wrapper
+
+
+# The execution model of the Neutron server is evolving.  Currently it runs as multiple
+# OS processes, each of which has only one OS thread, but each process uses eventlet to
+# run multiple green threads in parallel.  In the near-ish future eventlet will be
+# removed and there will be multiple OS threads instead.  For now we still have
+# eventlet, and it can be difficult to follow through logs when the processing for
+# multiple green threads is interleaved in the same OS process; so here we implement
+# something to enable us to track and log eventlet tasks.
+green_context = threading.local()
+
+
+def new_green_task_id():
+    if "last_task_id" not in green_context.__dict__:
+        green_context.last_task_id = 0
+    new_task_id = green_context.last_task_id + 1
+    green_context.last_task_id = new_task_id
+    return new_task_id
+
+
+class TaskTracker(object):
+    def __enter__(self):
+        self.thread_id = threading.get_native_id()
+        self.task_id = new_green_task_id()
+        LOG.debug("%r New task", self)
+
+    def __exit__(self, *args, **kwargs):
+        LOG.debug("%r Exit task", self)
+
+    def __repr__(self):
+        return f"{self.thread_id}/{self.task_id}"
 
 
 class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
@@ -741,8 +773,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # For each port, recompute and emit the WorkloadEndpoint for that port.
         LOG.info("Update %d port(s) for %s", len(ports), reason)
         for p in ports:
-            if _port_is_endpoint_port(p):
-                self.endpoint_syncer.write_endpoint(p, plugin_context, must_update=True)
+            if _port_is_endpoint_port(None, p):
+                self.endpoint_syncer.write_endpoint(
+                    None, p, plugin_context, must_update=True
+                )
 
     @requires_state
     def handle_qos_policy_update(self, context, policy_id):
@@ -836,7 +870,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port = context._port
 
         # Ignore if this is not an endpoint port.
-        if not _port_is_endpoint_port(port):
+        if not _port_is_endpoint_port(None, port):
             return
 
         # Ignore if the port binding VIF type is 'unbound'; then this port
@@ -847,10 +881,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="create-port"):
-            self.endpoint_syncer.write_endpoint(port, plugin_context)
+            self.endpoint_syncer.write_endpoint(None, port, plugin_context)
 
     @requires_state
     def update_port_postcommit(self, context):
+        with TaskTracker() as tt:
+            self._update_port_postcommit(tt, context)
+
+    def _update_port_postcommit(self, tt, context):
         """update_port_postcommit
 
         Called after Neutron has committed a port update event to the
@@ -859,12 +897,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         This is a tricky event, because it can be called in a number of ways
         during VM migration. We farm out to the appropriate method from here.
         """
-        LOG.info("UPDATE_PORT_POSTCOMMIT: %s", context)
+        LOG.info("%r UPDATE_PORT_POSTCOMMIT: %s", tt, context)
         port = context._port
         original = context.original
 
         # Abort early if we're managing non-endpoint ports.
-        if not _port_is_endpoint_port(port):
+        if not _port_is_endpoint_port(tt, port):
             return
 
         # If this port update is purely for a status change, don't do anything:
@@ -877,8 +915,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
             return
 
-        LOG.debug("Old = %r", original)
-        LOG.debug("New = %r", port)
+        LOG.debug("%r Old = %r", tt, original)
+        LOG.debug("%r New = %r", tt, port)
 
         # Re-read the port; we do this to guarantee correctly ordered handling
         # of multiple updates to the same port, when there are multiple Neutron
@@ -906,7 +944,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # WorkloadEndpoint on the old host.
             if original["binding:host_id"] != port["binding:host_id"]:
                 LOG.info(
-                    "Migration, delete WorkloadEndpoint on old host %s",
+                    "%r Migration, delete WorkloadEndpoint on old host %s",
+                    tt,
                     original["binding:host_id"],
                 )
                 self.endpoint_syncer.delete_endpoint(original)
@@ -915,7 +954,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             try:
                 port = self.db.get_port(plugin_context, port["id"])
             except n_exc.PortNotFound:
-                LOG.info("Port no longer exists")
+                LOG.info("%r Port no longer exists", tt)
                 return
 
             # Now, fork execution based on the type of update we're performing.
@@ -930,21 +969,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # - a change to an unbound port (which we don't care about, because
             #   we do nothing with unbound ports).
             if port.get("binding:profile", {}).get("migrating_to") is not None:
-                LOG.debug("Pre-live-migration notification message: no action")
+                LOG.debug("%r Pre-live-migration notification message: no action", tt)
             elif port_bound(port):
                 if endpoint_should_already_exist:
-                    LOG.info("Port update")
+                    LOG.info("%r Port update", tt)
                     self.endpoint_syncer.write_endpoint(
-                        port, plugin_context, must_update=True
+                        tt, port, plugin_context, must_update=True
                     )
                 else:
-                    LOG.info("Port becoming bound: create.")
-                    self.endpoint_syncer.write_endpoint(port, plugin_context)
+                    LOG.info("%r Port becoming bound: create", tt)
+                    self.endpoint_syncer.write_endpoint(tt, port, plugin_context)
             elif endpoint_should_already_exist:
-                LOG.info("Port becoming unbound: destroy.")
+                LOG.info("%r Port becoming unbound: destroy", tt)
                 self.endpoint_syncer.delete_endpoint(original)
             else:
-                LOG.info("Update on unbound port: no action")
+                LOG.info("%r Update on unbound port: no action", tt)
 
     @requires_state
     def update_floatingip(self, plugin_context):
@@ -972,7 +1011,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port = context._port
 
         # Immediately halt processing if this is not an endpoint port.
-        if not _port_is_endpoint_port(port):
+        if not _port_is_endpoint_port(None, port):
             return
 
         self.endpoint_syncer.delete_endpoint(port)
@@ -988,7 +1027,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         LOG.info("Updating security group IDs %s", sgids)
         with self._txn_from_context(context, tag="sg-update"):
-            self.policy_syncer.write_sgs_to_etcd(sgids, context)
+            self.policy_syncer.write_sgs_to_etcd(None, sgids, context)
 
     @contextlib.contextmanager
     def _txn_from_context(self, context, tag="<unset>"):
@@ -1034,7 +1073,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         if port_bound(port):
             LOG.info("Port bound, attempting to update.")
-            self.endpoint_syncer.write_endpoint(port, plugin_context, must_update=True)
+            self.endpoint_syncer.write_endpoint(
+                None, port, plugin_context, must_update=True
+            )
         else:
             LOG.info("Port unbound, attempting delete if needed.")
             self.endpoint_syncer.delete_endpoint(port)
