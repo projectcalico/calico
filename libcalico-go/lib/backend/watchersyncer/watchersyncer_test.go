@@ -173,6 +173,15 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		Eventually(rs.fc.getLatestWatchRevision, 5*time.Second, 100*time.Millisecond).Should(Equal(emptyList.Revision))
 	})
 
+	It("should handle when an API is not installed", func() {
+		// If an API isn't installed, the List will return a NotFound error. We expect the watcher cache to handle this gracefully,
+		// makring itself in sync and not retrying for an extended period.
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, apierrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
+		rs.ExpectStatusUpdate(api.InSync)
+	})
+
 	It("should handle reconnection if watchers fail to be created", func() {
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
