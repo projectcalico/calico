@@ -195,8 +195,12 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 					// The resource type doesn't exist yet.  This is possible if the CRD backing this API has not been installed.
 					// This is a valid long-term state, so we don't want to keep retrying rapidly.
 					// Consider ourselves in sync, and then sleep for a long time.
-					wc.logger.Info("Resource type not found, will not watch until resource exists.")
-					wc.finishResync()
+					if !wc.hasSynced {
+						wc.logger.Info("Backing API not installed, marking as in-sync and retrying later.")
+						wc.finishResync()
+					} else {
+						wc.logger.Debug("Backing API still not installed, retrying later.")
+					}
 					wc.resyncBlockedUntil = time.Now().Add(MissingAPIRetryTime)
 					continue
 				}
