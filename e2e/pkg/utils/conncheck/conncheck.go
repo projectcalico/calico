@@ -360,10 +360,7 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 	// especially on CPU constrained environments such as CI, there can be a delay between making changes (e.g., applying a NetworkPolicy) and
 	// those changes taking effect. So a short retry loop is helpful.
 	timeout := time.After(10 * time.Second)
-	for {
-		if result == exp.ExpectedResult {
-			break
-		}
+	for result != exp.ExpectedResult {
 
 		select {
 		case <-timeout:
