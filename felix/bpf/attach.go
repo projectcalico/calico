@@ -82,13 +82,14 @@ func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 	for _, p := range aTC {
 		if strings.HasPrefix(p.Name, "cali") {
 			info := ai[p.DevName]
-			if p.Kind == "tcx/egress" {
+			switch p.Kind {
+			case "tcx/egress":
 				info.Egress = p.ProgID
-			} else if p.Kind == "tcx/ingress" {
+			case "tcx/ingress":
 				info.Ingress = p.ProgID
-			} else if p.Kind == "clsact/egress" {
+			case "clsact/egress":
 				info.Egress = p.ID
-			} else {
+			default:
 				info.Ingress = p.ID
 			}
 			ai[p.DevName] = info

@@ -1,0 +1,30 @@
+version: v1.0
+name: Publish e2e test images
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  minutes: 30
+
+global_job_config:
+  secrets:
+    - name: k8s-e2e-push
+    - name: quay-tigeradev-hashrelease
+  prologue:
+    commands:
+      # Log into quay.io with the tigeradev credentials (to push to quay.io/tigeradev/rapidclient)
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+      - checkout
+
+blocks:
+  - name: Publish e2e test utility images
+    dependencies: []
+    skip:
+      when: "branch !~ '.+'"
+    task:
+      jobs:
+        - name: Linux multi-arch
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C e2e publish-test-images CONFIRM=true; fi

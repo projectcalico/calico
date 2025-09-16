@@ -34,9 +34,12 @@ done
 grep -o --perl '\$\{CHANGE_IN\(\K[^)]+' --no-filename semaphore.yml | \
   sort --reverse -u | \
   while read -r dep; do
-    sed -i "s&\${CHANGE_IN($dep)}&$(cd .. && go run ./hack/cmd/deps sem-change-in $dep)&g" semaphore.yml
     sed -i "s&\${CHANGE_IN($dep)}&true&g" semaphore-scheduled-builds.yml
   done
+
+pushd ..
+go run ./hack/cmd/deps replace-sem-change-in ./.semaphore/semaphore.yml
+popd
 
 sed -i "s/\${FORCE_RUN}/false/g" semaphore.yml
 sed -i "s/\${FORCE_RUN}/true/g" semaphore-scheduled-builds.yml

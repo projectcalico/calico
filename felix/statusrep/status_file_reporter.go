@@ -263,16 +263,17 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 			return
 		}
 
-		if m.Status.Status == statusDown {
+		switch m.Status.Status {
+		case statusDown:
 			logrus.WithField("update", e).Debug("Skipping WorkloadEndpointStatusUpdate with down status")
 			fr.statusDirDeltaTracker.Desired().Delete(fn)
 			return
-		} else if m.Status.Status == statusUp {
+		case statusUp:
 			// Explicitly checking the opposite case here (rather than fallthrough)
 			// in-case of a terrible failure where status is neither "up" nor "down".
 			logrus.WithField("update", e).Debug("Handling WorkloadEndpointUpdate with up status")
 			fr.statusDirDeltaTracker.Desired().Set(fn, *epStatus)
-		} else {
+		default:
 			logrus.WithField("update", e).Warn("Skipping update with unrecognized status")
 		}
 

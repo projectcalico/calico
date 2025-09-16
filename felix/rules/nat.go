@@ -60,8 +60,7 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, proto
 		SourceIPSet(masqIPsSetName).
 		NotDestIPSet(allIPsSetName)
 
-	check := apiv3.NATOutgoingExclusionsType(r.Config.NATOutgoingExclusions)
-	if check == apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs {
+	if r.Config.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
 		allHostsIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
 		match = match.NotDestIPSet(allHostsIPsSetName)
 	}
