@@ -212,10 +212,6 @@ func (ws *watcherSyncer) processResult(updates []api.Update, result interface{})
 
 			// Increment the count of synced events.
 			ws.numSynced++
-			log.WithFields(log.Fields{
-				"NumSynced":     ws.numSynced,
-				"TotalWatchers": len(ws.watcherCaches),
-			}).Info("Watcher cache sync'd")
 
 			// If we have now received synced events from all of our watchers then we are in
 			// sync.  If we have any updates, send them first and then send the status update.
