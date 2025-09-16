@@ -745,7 +745,7 @@ configRetry:
 				configParams.PrometheusMetricsPort,
 				configParams.PrometheusMetricsCertFile,
 				configParams.PrometheusMetricsKeyFile,
-				configParams.PrometheusMetricsClientAuthType,
+				configParams.PrometheusMetricsClientAuth,
 				configParams.PrometheusMetricsCAFile,
 			)
 		} else {

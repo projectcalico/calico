@@ -52,13 +52,15 @@ func ServePrometheusMetricsHTTPS(host string, port int, certFile, keyFile, clien
 	// Initial TLS config loading to catch errors early.
 	tlsConfig, err := calicotls.NewMutualTLSConfig(certFile, keyFile, caFile)
 	if err != nil {
+		logrus.WithError(err).Error(fmt.Sprintf("Failed to load initial TLS configuration: %v", err))
 		return fmt.Errorf("Failed to load initial TLS configuration: %v", err)
 	}
 
 	// Set the client authentication type if provided.
 	authType, err := calicotls.StringToTLSClientAuthType(clientAuthType)
 	if err != nil {
-		return fmt.Errorf("Invalid client authentication type: %v", err)
+		logrus.WithError(err).Error(fmt.Sprintf("Failed to convert ClientAuthType: %v", err))
+		return fmt.Errorf("Failed to convert ClientAuthType %v", err)
 	}
 	tlsConfig.ClientAuth = authType
 
