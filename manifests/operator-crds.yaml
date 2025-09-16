@@ -30350,10 +30350,10 @@ spec:
                     PrometheusMetricsCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
                     This certificate must be valid and accessible by the calico-node process.
                   type: string
-                prometheusMetricsClientAuthType:
+                prometheusMetricsClientAuth:
                   description: |-
-                    PrometheusMetricsClientAuthType specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "NoClientCert".
+                    PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
+                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:

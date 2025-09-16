@@ -1369,9 +1369,9 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.PrometheusMetricsClientAuthType != nil {
-		in, out := &in.PrometheusMetricsClientAuthType, &out.PrometheusMetricsClientAuthType
-		*out = new(string)
+	if in.PrometheusMetricsClientAuth != nil {
+		in, out := &in.PrometheusMetricsClientAuth, &out.PrometheusMetricsClientAuth
+		*out = new(PrometheusMetricsClientAuthType)
 		**out = **in
 	}
 	if in.FailsafeInboundHostPorts != nil {

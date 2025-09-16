@@ -512,19 +512,19 @@ This certificate must be valid and accessible by the calico-node process.
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
-### `PrometheusMetricsClientAuthType` (config file) / `prometheusMetricsClientAuthType` (YAML)
+### `PrometheusMetricsClientAuth` (config file) / `prometheusMetricsClientAuth` (YAML)
 
 Specifies the client authentication type for the /metrics endpoint.
-This determines how the server validates client certificates. Default is "NoClientCert".
+This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_PrometheusMetricsClientAuthType` |
-| Encoding (env var/config file) | One of: <code>NoClientCert</code>, <code>RequireAndVerifyClientCert</code>, <code>VerifyClientCertIfGiven</code> (case insensitive) |
-| Default value (above encoding) | `NoClientCert` |
-| `FelixConfiguration` field | `prometheusMetricsClientAuthType` (YAML) `PrometheusMetricsClientAuthType` (Go API) |
-| `FelixConfiguration` schema | String. |
-| Default value (YAML) | `NoClientCert` |
+| Environment variable | `FELIX_PrometheusMetricsClientAuth` |
+| Encoding (env var/config file) | One of: <code>NoClientCert</code>, <code>RequireAndVerifyClientCert</code>, <code>RequireAnyClientCert</code>, <code>VerifyClientCertIfGiven</code> (case insensitive) |
+| Default value (above encoding) | `RequireAndVerifyClientCert` |
+| `FelixConfiguration` field | `prometheusMetricsClientAuth` (YAML) `PrometheusMetricsClientAuth` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `RequireAndVerifyClientCert` |
 
 ### `PrometheusMetricsEnabled` (config file) / `prometheusMetricsEnabled` (YAML)
 
