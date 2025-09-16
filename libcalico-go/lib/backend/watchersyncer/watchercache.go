@@ -69,8 +69,8 @@ var (
 	DefaultWatchRetryTimeout = 600 * time.Second
 
 	// If the backing API is not installed, we consider ourselves in-sync but retry
-	// infrequently. If the API is installed, we will eventually resync. However, it's good practice
-	// to restart Calico when installing a new API to expedite this.
+	// infrequently. If the API is eventually installed, we will resync after this timer pops.
+	// However, it's good practice to restart Calico when installing a new API to expedite this.
 	MissingAPIRetryTime = 30 * time.Minute
 )
 
