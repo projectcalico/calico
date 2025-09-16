@@ -3381,7 +3381,7 @@ func (m *bpfEndpointManager) setJITHardening(val int) error {
 	numval := strconv.Itoa(val)
 	err := writeProcSys(jitHardenPath, numval)
 	if err != nil {
-		log.WithField("err", err).Errorf("Failed to  set %s to %s", jitHardenPath, numval)
+		log.WithField("err", err).Errorf("Failed to set %s to %s", jitHardenPath, numval)
 		return err
 	}
 
