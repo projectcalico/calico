@@ -224,10 +224,13 @@ def new_green_task_id():
 
 
 class TaskTracker(object):
-    def __enter__(self):
+    def __init__(self):
         self.thread_id = threading.get_native_id()
         self.task_id = new_green_task_id()
         LOG.debug("%r New task", self)
+
+    def __enter__(self):
+        LOG.debug("%r Enter task", self)
         return self
 
     def __exit__(self, *args, **kwargs):
