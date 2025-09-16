@@ -662,6 +662,13 @@ func NewBPFEndpointManager(
 		m.updatePolicyProgramFn = m.updatePolicyProgram
 	}
 
+	if v, err := m.getJITHardening(); err == nil && v == 2 {
+		err := m.setJITHardening(1)
+		if err != nil {
+			log.WithError(err).Warn("Failed to set jit hardening to 1, conrtinuing with 2 - performance may be degraded")
+		}
+	}
+
 	return m, nil
 }
 
@@ -3366,6 +3373,32 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 
 	log.Infof("%s set to %s", path, numval)
 	return nil
+}
+
+const jitHardenPath = "/proc/sys/net/core/bpf_jit_harden"
+
+func (m *bpfEndpointManager) setJITHardening(val int) error {
+	numval := strconv.Itoa(val)
+	err := writeProcSys(jitHardenPath, numval)
+	if err != nil {
+		log.WithField("err", err).Errorf("Failed to  set %s to %s", jitHardenPath, numval)
+		return err
+	}
+
+	log.Infof("%s set to %s", jitHardenPath, numval)
+	return nil
+}
+
+func (m *bpfEndpointManager) getJITHardening() (int, error) {
+	data, err := os.ReadFile(jitHardenPath)
+	if err != nil {
+		return 0, err
+	}
+	val, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
 }
 
 func (m *bpfEndpointManager) ensureStarted() {
