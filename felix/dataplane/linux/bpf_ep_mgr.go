@@ -1082,6 +1082,20 @@ func (m *bpfEndpointManager) cleanupOldXDPAttach(iface string) error {
 	return nil
 }
 
+func cleanupTcxPins(iface string) {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		ap := tc.AttachPoint{
+			AttachPoint: bpf.AttachPoint{
+				Iface: iface,
+				Hook:  attachHook,
+			},
+		}
+		if err := ap.DetachTcxProgram(); err != nil {
+			log.WithError(err).Warnf("Failed to detach old tcx program from now gone device '%s' hook %s", iface, attachHook)
+		}
+	}
+}
+
 func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
 	ap := tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -1152,9 +1166,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		// Check if the interface still exists, as we might get events out of order.
 		_, err := m.dp.getIfaceLink(update.Name)
 		if err != nil {
-			if err := m.cleanupOldTcAttach(update.Name); err != nil {
-				log.WithError(err).Warnf("Failed to detach old tc programs from now gone device '%s'", update.Name)
-			}
+			cleanupTcxPins(update.Name)
 		}
 	}
 	// Should be safe without the lock since there shouldn't be any active background threads
