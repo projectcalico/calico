@@ -53,9 +53,9 @@ type watcherCache struct {
 	lastSuccessfulConnTime time.Time
 	watchRetryTimeout      time.Duration
 
-	// installed tracks whether or not we've detected that the backing API for this
-	// resource type is installed.
-	installed bool
+	// crdInstalled tracks whether or not we've detected that the backing API for this
+	// resource type is installed in the cluster.
+	crdInstalled bool
 }
 
 const (
@@ -94,7 +94,7 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		currentWatchRevision: "0",
 		resyncBlockedUntil:   time.Now(),
 		watchRetryTimeout:    watchTimeout,
-		installed:            true, // Assume true until we detect otherwise.
+		crdInstalled:         true, // Assume true until we detect otherwise.
 	}
 }
 
@@ -199,9 +199,9 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 }
 
 func (wc *watcherCache) markInstalled() {
-	if !wc.installed {
+	if !wc.crdInstalled {
 		wc.logger.Info("Backing API has been installed")
-		wc.installed = true
+		wc.crdInstalled = true
 	}
 }
 
@@ -263,9 +263,11 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 						wc.logger.Debug("Backing API still not installed, retrying later.")
 					}
 					wc.resyncBlockedUntil = time.Now().Add(MissingAPIRetryTime)
-					wc.installed = false
+					wc.crdInstalled = false
 					continue
 				}
+
+				// If we get this far, we know the API is installed even if we got an error.
 				wc.markInstalled()
 
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
