@@ -32,7 +32,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-// NewKubernetesAdminNetworkPolicyClient returns a new client for interacting with Kubernetes AdminNetworkPolicy objects.
+// NewKubernetesClusterNetworkPolicyClient returns a new client for interacting with Kubernetes ClusterNetworkPolicy objects.
 // Note that this client is only intended for use by the felix syncer in KDD mode, and as such is largely unimplemented
 // except for the functions required by the syncer.
 func NewKubernetesClusterNetworkPolicyClient(

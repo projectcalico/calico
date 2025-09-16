@@ -412,5 +412,5 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.33.3
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.33.3
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.33.3
-	sigs.k8s.io/network-policy-api/conformance => github.com/npinaeva/network-policy-api v0.0.0-20250829140707-07185588057d
+	sigs.k8s.io/network-policy-api/conformance => github.com/npinaeva/network-policy-api v0.0.0-20250915135320-4a1530e0ef60
 )
