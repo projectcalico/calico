@@ -58,7 +58,7 @@ func ServePrometheusMetricsHTTPS(host string, port int, certFile, keyFile, clien
 	// Set the client authentication type if provided.
 	authType, err := calicotls.StringToTLSClientAuthType(clientAuthType)
 	if err != nil {
-		return fmt.Errorf("Invalid client authentication type: %v", err)
+		return fmt.Errorf("Failed to convert ClientAuthType %v", err)
 	}
 	tlsConfig.ClientAuth = authType
 
