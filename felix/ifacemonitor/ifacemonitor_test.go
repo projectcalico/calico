@@ -27,6 +27,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	libnl "github.com/vishvananda/netlink/nl"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
@@ -55,8 +57,9 @@ type netlinkTest struct {
 	// possible after we've read and/or written that data - instead of using defer - because we
 	// don't want to hold the mutex when writing to a channel (which is often what happens next
 	// in the same function).
-	linksMutex  sync.Mutex
-	LinkListErr error
+	linksMutex           sync.Mutex
+	LinkListErr          error
+	LinkListTransientErr error
 }
 
 type addrState struct {
@@ -239,6 +242,10 @@ func (nl *netlinkTest) Subscribe(
 func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
 	if nl.LinkListErr != nil {
 		return nil, nl.LinkListErr
+	}
+	if nl.LinkListTransientErr != nil {
+		nl.LinkListTransientErr = nil
+		return nil, nl.LinkListTransientErr
 	}
 
 	links := []netlink.Link{}
@@ -495,8 +502,30 @@ var _ = Describe("ifacemonitor", func() {
 		})
 	})
 
+	Context("with EINTRY error from LinkList", func() {
+		BeforeEach(func() {
+			nl.LinkListTransientErr = unix.EINTR
+			expectInSync = true
+		})
+
+		It("should retry and succeed", func() {
+			Consistently(fatalErrC).ShouldNot(BeClosed())
+		})
+	})
+
+	Context("with ErrDumpInterrupted error from LinkList", func() {
+		BeforeEach(func() {
+			nl.LinkListTransientErr = libnl.ErrDumpInterrupted
+			expectInSync = true
+		})
+
+		It("should retry and succeed", func() {
+			Consistently(fatalErrC).ShouldNot(BeClosed())
+		})
+	})
+
 	It("should skip netlink address updates for ipvs", func() {
-		var netlinkUpdates = func(iface string) {
+		netlinkUpdates := func(iface string) {
 			// Should not receive any address callbacks.
 			idx := nl.nextIndex
 

@@ -4,7 +4,7 @@ go 1.24.7
 
 require (
 	cloud.google.com/go/storage v1.36.0
-	github.com/BurntSushi/toml v1.3.2
+	github.com/BurntSushi/toml v1.4.0
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Microsoft/hcsshim v0.11.8
 	github.com/apparentlymart/go-cidr v1.1.0
@@ -79,11 +79,11 @@ require (
 	github.com/tchap/go-patricia/v2 v2.3.1
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 	github.com/urfave/cli/v3 v3.3.8
-	github.com/vishvananda/netlink v1.2.1-beta.2.0.20240703200800-b54f85093f4a
-	go.etcd.io/etcd/api/v3 v3.5.12
-	go.etcd.io/etcd/client/pkg/v3 v3.5.12
-	go.etcd.io/etcd/client/v2 v2.305.12
-	go.etcd.io/etcd/client/v3 v3.5.12
+	github.com/vishvananda/netlink v1.3.1-0.20250128002108-7c2350bd140f
+	go.etcd.io/etcd/api/v3 v3.5.17
+	go.etcd.io/etcd/client/pkg/v3 v3.5.17
+	go.etcd.io/etcd/client/v2 v2.305.17
+	go.etcd.io/etcd/client/v3 v3.5.17
 	golang.org/x/crypto v0.42.0
 	golang.org/x/net v0.43.0
 	golang.org/x/sync v0.17.0
@@ -116,6 +116,8 @@ require (
 	sigs.k8s.io/network-policy-api v0.1.5
 	sigs.k8s.io/yaml v1.4.0
 )
+
+require golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 
 require (
 	cloud.google.com/go v0.112.0 // indirect
@@ -157,7 +159,7 @@ require (
 	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/coreos/go-iptables v0.6.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
@@ -263,7 +265,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/mod v0.28.0 // indirect
 	golang.org/x/oauth2 v0.31.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
