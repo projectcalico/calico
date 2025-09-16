@@ -739,17 +739,22 @@ configRetry:
 		prometheus.MustRegister(gaugeHost)
 		dp.ConfigurePrometheusMetrics(configParams)
 		if configParams.PrometheusMetricsKeyFile != "" || configParams.PrometheusMetricsCertFile != "" {
-			log.Info("Starting https server.")
-			go metricsserver.ServePrometheusMetricsHTTPS(
-				configParams.PrometheusMetricsHost,
-				configParams.PrometheusMetricsPort,
-				configParams.PrometheusMetricsCertFile,
-				configParams.PrometheusMetricsKeyFile,
-				configParams.PrometheusMetricsClientAuthType,
-				configParams.PrometheusMetricsCAFile,
-			)
+			log.Info("Trying to start metrics https server.")
+			go func() {
+				err := metricsserver.ServePrometheusMetricsHTTPS(
+					configParams.PrometheusMetricsHost,
+					configParams.PrometheusMetricsPort,
+					configParams.PrometheusMetricsCertFile,
+					configParams.PrometheusMetricsKeyFile,
+					configParams.PrometheusMetricsClientAuth,
+					configParams.PrometheusMetricsCAFile,
+				)
+				if err != nil {
+					log.Info("Error starting metrics https server.", err)
+				}
+			}()
 		} else {
-			log.Info("Starting http server.")
+			log.Info("Starting metrics http server.")
 			go metricsserver.ServePrometheusMetricsHTTP(
 				configParams.PrometheusMetricsHost,
 				configParams.PrometheusMetricsPort,

@@ -146,6 +146,16 @@ const (
 	NATOutgoingExclusionsIPPoolsAndHostIPs NATOutgoingExclusionsType = "IPPoolsAndHostIPs"
 )
 
+// +kubebuilder:validation:enum=RequireAndVerifyClientCert;RequireAnyClientCert;VerifyClientCertIfGiven;NoClientCert
+type PrometheusMetricsClientAuthType string
+
+const (
+	RequireAndVerifyClientCert PrometheusMetricsClientAuthType = "RequireAndVerifyClientCert"
+	RequireAnyClientCert       PrometheusMetricsClientAuthType = "RequireAnyClientCert"
+	VerifyClientCertIfGiven    PrometheusMetricsClientAuthType = "VerifyClientCertIfGiven"
+	NoClientCert               PrometheusMetricsClientAuthType = "NoClientCert"
+)
+
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
@@ -470,9 +480,9 @@ type FelixConfigurationSpec struct {
 	// used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
 	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
 
-	// PrometheusMetricsClientAuthType specifies the client authentication type for the /metrics endpoint.
-	// This determines how the server validates client certificates. Default is "NoClientCert".
-	PrometheusMetricsClientAuthType *string `json:"prometheusMetricsClientAuthType,omitempty"`
+	// PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
+	// This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+	PrometheusMetricsClientAuth *PrometheusMetricsClientAuthType `json:"prometheusMetricsClientAuth,omitempty" validate:"omitempty,oneof=RequireAndVerifyClientCert RequireAnyClientCert VerifyClientCertIfGiven NoClientCert"`
 
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
 	// allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
