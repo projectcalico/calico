@@ -1089,6 +1089,18 @@ func (m *bpfEndpointManager) cleanupOldXDPAttach(iface string) error {
 	return nil
 }
 
+func cleanupTcxPins(iface string) {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		ap := tc.AttachPoint{
+			AttachPoint: bpf.AttachPoint{
+				Iface: iface,
+				Hook:  attachHook,
+			},
+		}
+		os.Remove(ap.ProgPinPath())
+	}
+}
+
 func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
 	ap := tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -1154,6 +1166,14 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
+	if update.State == ifacemonitor.StateNotPresent && m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+		// Delete the tcx pins if the interface is gone.
+		// Check if the interface still exists, as we might get events out of order.
+		_, err := m.dp.getIfaceLink(update.Name)
+		if err != nil {
+			cleanupTcxPins(update.Name)
+		}
+	}
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
 	m.ifacesLock.Lock()
