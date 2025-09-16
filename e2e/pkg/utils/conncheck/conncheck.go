@@ -114,6 +114,7 @@ func (c *connectionTester) deploy() error {
 			server.labels,
 			server.podCustomizer,
 			server.svcCustomizer,
+			server.autoCreateSvc,
 		)
 		server.pod = pod
 		server.service = svc
