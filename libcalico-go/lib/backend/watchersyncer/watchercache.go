@@ -49,9 +49,10 @@ type watcherCache struct {
 }
 
 var (
-	MinResyncInterval = 500 * time.Millisecond
-	ListRetryInterval = 1000 * time.Millisecond
-	WatchPollInterval = 5000 * time.Millisecond
+	MinResyncInterval   = 500 * time.Millisecond
+	ListRetryInterval   = 1000 * time.Millisecond
+	WatchPollInterval   = 5000 * time.Millisecond
+	MissingAPIRetryTime = 10 * time.Minute
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -190,6 +191,16 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			// be 0 at start of day or the latest received revision.
 			l, err := wc.client.List(ctx, wc.resourceType.ListInterface, wc.currentWatchRevision)
 			if err != nil {
+				if errors.IsNotFound(err) {
+					// The resource type doesn't exist yet.  This is possible if the CRD backing this API has not been installed.
+					// This is a valid long-term state, so we don't want to keep retrying rapidly.
+					// Consider ourselves in sync, and then sleep for a long time.
+					wc.logger.Info("Resource type not found, will not watch until resource exists.")
+					wc.finishResync()
+					wc.resyncBlockedUntil = time.Now().Add(MissingAPIRetryTime)
+					continue
+				}
+
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
 				if errors.IsResourceExpired(err) {
