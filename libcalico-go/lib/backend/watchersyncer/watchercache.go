@@ -46,13 +46,21 @@ type watcherCache struct {
 	resourceType         ResourceType
 	currentWatchRevision string
 	resyncBlockedUntil   time.Time
+
+	// installed tracks whether or not we've detected that the backing API for this
+	// resource type is installed.
+	installed bool
 }
 
 var (
-	MinResyncInterval   = 500 * time.Millisecond
-	ListRetryInterval   = 1000 * time.Millisecond
-	WatchPollInterval   = 5000 * time.Millisecond
-	MissingAPIRetryTime = 10 * time.Minute
+	MinResyncInterval = 500 * time.Millisecond
+	ListRetryInterval = 1000 * time.Millisecond
+	WatchPollInterval = 5000 * time.Millisecond
+
+	// If the backing API is not installed, we consider ourselves in-sync but retry
+	// infrequently. If the API is installed, we will eventually resync. However, it's good practice
+	// to restart Calico when installing a new API to expedite this.
+	MissingAPIRetryTime = 30 * time.Minute
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -74,6 +82,7 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		resources:            make(map[string]cacheEntry, 0),
 		currentWatchRevision: "0",
 		resyncBlockedUntil:   time.Now(),
+		installed:            true, // Assume true until we detect otherwise.
 	}
 }
 
@@ -146,6 +155,14 @@ mainLoop:
 }
 
 // resyncAndCreateWatcher loops performing resync processing until it successfully
+func (wc *watcherCache) markInstalled() {
+	if !wc.installed {
+		wc.logger.Info("Backing API has been installed")
+		wc.installed = true
+	}
+}
+
+// resyncAndCreateWatcher loops performing resync processing until it successfully
 // completes a resync and starts a watcher.
 func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 	// The passed in context allows a resync to be stopped mid-resync. The resync should be stopped as quickly as
@@ -202,8 +219,10 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 						wc.logger.Debug("Backing API still not installed, retrying later.")
 					}
 					wc.resyncBlockedUntil = time.Now().Add(MissingAPIRetryTime)
+					wc.installed = false
 					continue
 				}
+				wc.markInstalled()
 
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
@@ -215,6 +234,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				wc.resyncBlockedUntil = time.Now().Add(ListRetryInterval)
 				continue
 			}
+			wc.markInstalled()
 
 			// Once this point is reached, it's important not to drop out if the context is cancelled.
 			// Move the current resources over to the oldResources
