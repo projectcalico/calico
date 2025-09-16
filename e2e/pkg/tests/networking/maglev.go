@@ -587,8 +587,7 @@ func (m *MaglevTests) TestMaglevConsistentHashing(extNode *externalnode.Client, 
 	// Send requests and gather backend response statistics
 	uniqueBackends := m.sendRequestsAndGatherStats(extNode, useIPv6, "Maglev consistent hashing with annotation")
 
-	// HACK: Override the actual results for testing the test flow without real Maglev implementation
-	// TODO: Remove this hack once Maglev is properly implemented in Felix
+	// HACK: Override the actual results for testing the test flow without real Maglev implementation.
 	// This simulates consistent hashing by forcing all requests to go to a single backend
 	// uniqueBackends = map[string]int{"backend-pod-6": 10}
 
