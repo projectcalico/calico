@@ -243,6 +243,97 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 
 }
 
+func test0000SourceRange(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
+	svcs := newMockNATMap()
+	eps := newMockNATBackendMap()
+	aff := newMockAffinityMap()
+
+	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
+	rt := proxy.NewRTCache()
+
+	externalIP := makeIPs([]net.IP{net.IPv4(35, 0, 0, 2)})
+
+	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
+
+	svcKey := k8sp.ServicePortName{
+		NamespacedName: types.NamespacedName{
+			Namespace: "default",
+			Name:      "test-service",
+		},
+	}
+
+	// Configure service with 0.0.0.0/0 source range
+	zeroSourceRange := ip.MustParseCIDROrIP("0.0.0.0/0").ToIPNet()
+
+	state := proxy.DPSyncerState{
+		SvcMap: k8sp.ServicePortMap{
+			svcKey: proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				externalIP,
+				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&zeroSourceRange}),
+			),
+		},
+		EpsMap: k8sp.EndpointsMap{
+			svcKey: []k8sp.Endpoint{proxy.NewEndpointInfo("10.1.0.1", 5555)},
+		},
+	}
+
+	makestep := func(step func()) func() {
+		return func() {
+			defer func() {
+				log("svcs = %+v\n", svcs)
+				log("eps = %+v\n", eps)
+			}()
+
+			step()
+		}
+	}
+
+	extIP := net.IPv4(35, 0, 0, 2)
+	proto := proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)
+	zeroSourceCIDR := ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR)
+	keyWithZeroSrc := nat.NewNATKeySrc(extIP, 2222, proto, zeroSourceCIDR)
+	keyWithExtIP := nat.NewNATKey(extIP, 2222, proto)
+	BlackholeNATVal := nat.NewNATValue(0, nat.BlackHoleCount, 0, 0)
+
+	It("should fail because BlackHoleCount is written for 0.0.0.0/0 source range", func() {
+
+		By("adding service with 0.0.0.0/0 source range", makestep(func() {
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify that NAT backend map has valid entries for the endpoint
+			Expect(eps.m).To(HaveLen(1), "Should have one backend entry for the endpoint")
+
+			// Check that frontend map has the expected entries
+			Expect(svcs.m).To(HaveKey(keyWithZeroSrc), "Should have entry for 0.0.0.0/0 source range")
+			Expect(svcs.m).To(HaveKey(keyWithExtIP), "Should have entry for main service key")
+
+			// Verify that the source-specific key (0.0.0.0/0) has a valid NAT value
+			srcVal, srcOk := svcs.m[keyWithZeroSrc]
+			Expect(srcOk).To(BeTrue(), "Source-specific key should exist")
+			Expect(srcVal.Count()).NotTo(Equal(nat.BlackHoleCount), "Source-specific entry should have valid count")
+
+			// Check that the main service key has blackhole value (this exposes the problem)
+			val, ok := svcs.m[keyWithExtIP]
+			Expect(ok).To(BeTrue(), "Main service key should exist")
+			Expect(val).To(Equal(BlackholeNATVal), "Main service key should have BlackHole value")
+
+			// This test should fail here because BlackHoleCount is 0xffffffff (which is -1 as signed int32).
+			// When a service has LoadBalancer source ranges, the syncer writes BlackHoleCount to the main
+			// service key to drop traffic not matching source ranges. However, for 0.0.0.0/0 (matches all),
+			// this doesn't make sense as it prevents valid backend entries from being used.
+			Expect(val.Count()).NotTo(Equal(nat.BlackHoleCount), "Service with 0.0.0.0/0 source range should have valid backend count, not BlackHoleCount (-1)")
+
+		}))
+
+	})
+
+}
+
 var _ = Describe("BPF Load Balancer source range", func() {
 	Context("With external IP", func() {
 		testfn(proxy.K8sSvcWithExternalIPs)
@@ -250,5 +341,9 @@ var _ = Describe("BPF Load Balancer source range", func() {
 
 	Context("With LoadBalancer IP", func() {
 		testfn(proxy.K8sSvcWithLoadBalancerIPs)
+	})
+
+	Context("With 0.0.0.0/0 source range", func() {
+		test0000SourceRange(proxy.K8sSvcWithExternalIPs)
 	})
 })
