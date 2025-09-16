@@ -675,10 +675,12 @@ func NewBPFEndpointManager(
 		m.updatePolicyProgramFn = m.updatePolicyProgram
 	}
 
-	if v, err := m.getJITHardening(); err == nil && v == 2 {
-		err := m.setJITHardening(1)
-		if err != nil {
-			log.WithError(err).Warn("Failed to set jit hardening to 1, continuing with 2 - performance may be degraded")
+	if config.BPFJITHardening == "Auto" {
+		if v, err := m.getJITHardening(); err == nil && v == 2 {
+			err := m.setJITHardening(1)
+			if err != nil {
+				log.WithError(err).Warn("Failed to set jit hardening to 1, continuing with 2 - performance may be degraded")
+			}
 		}
 	}
 

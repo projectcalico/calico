@@ -114,6 +114,14 @@ const (
 	BPFConntrackModeBPFProgram BPFConntrackMode = "BPFProgram"
 )
 
+// +kubebuilder:validation:Enum=Auto;Strict
+type BPFJITHardeningType string
+
+const (
+	BPFJITHardeningAuto   BPFJITHardeningType = "Auto"
+	BPFJITHardeningStrict BPFJITHardeningType = "Strict"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type WindowsManageFirewallRulesMode string
 
@@ -626,6 +634,12 @@ type FelixConfigurationSpec struct {
 	// unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and
 	// cannot insert their own BPF programs to interfere with Calico's. [Default: true]
 	BPFDisableUnprivileged *bool `json:"bpfDisableUnprivileged,omitempty" validate:"omitempty"`
+
+	// BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+	// if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+	// Felix will not modify the JIT hardening setting. [Default: Auto]
+	// +kubebuilder:validation:Enum=Auto;Strict
+	BPFJITHardening *BPFJITHardeningType `json:"bpfJITHardening,omitempty" validate:"omitempty,oneof=Auto Strict"`
 
 	// BPFLogLevel controls the log level of the BPF programs when in BPF dataplane mode.  One of "Off", "Info", or
 	// "Debug".  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`.
