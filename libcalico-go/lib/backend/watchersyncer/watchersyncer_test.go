@@ -95,7 +95,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	}
 
 	It("should receive a sync event when the watchers have listed current settings", func() {
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
@@ -106,7 +106,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("should not change status if watch returns multiple ErrorOperationNotSupported errors", func() {
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
@@ -124,7 +124,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("should not change status if watch returns multiple ErrorResourceDoesNotExist errors", func() {
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
@@ -150,7 +150,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
 
 		By("Getting to the initial in-sync")
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, k8sTooOldRV)
 		rs.clientListResponse(r1, emptyList)
@@ -185,8 +185,10 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// If an API isn't installed, the List will return a NotFound error. We expect the watcher cache to handle this gracefully,
 		// makring itself in sync and not retrying for an extended period.
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, apierrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
+		rs.watcherSyncer.Start()
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.ExpectStatusUpdate(api.InSync)
 	})
 
@@ -197,7 +199,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
 
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		// All of the events should have been consumed within a time frame dictated by the
@@ -293,7 +295,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
 
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		// All of the events should have been consumed within a time frame dictated by the
@@ -342,7 +344,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
 
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		before := time.Now()
@@ -395,7 +397,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
 
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		rs.clientListResponse(r1, emptyList)
@@ -430,7 +432,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
 
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		rs.clientListResponse(r1, emptyList)
@@ -469,7 +471,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(100*time.Millisecond, 100*time.Millisecond, 500*time.Millisecond)
 
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		eventL1Added1 := addEvent(l1Key1)
 		eventL2Added1 := addEvent(l2Key1)
 		eventL2Added2 := addEvent(l2Key2)
@@ -552,7 +554,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(100*time.Millisecond, 100*time.Millisecond, 500*time.Millisecond)
 
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		eventL1Added1 := addEvent(l1Key1)
 		eventL1Deleted1 := deleteEvent(l1Key1)
 		eventL1Added2 := addEvent(l1Key2)
@@ -665,7 +667,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("Should accumulate updates into a single update when the handler thread is blocked", func() {
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2})
 		eventL1Added1 := addEvent(l1Key1)
 		eventL2Added1 := addEvent(l2Key1)
 		eventL2Added2 := addEvent(l2Key2)
@@ -735,7 +737,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		eventL2Added1 := addEvent(l2Key1)
 		eventL2Added2 := addEvent(l2Key2)
 
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, emptyList)
 		rs.clientListResponse(r2, emptyList)
@@ -794,7 +796,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// Send in another 6 events to cover the different branches of the fake converter.
 		//
 		// See fakeConverter for details on what is returned each invocation.
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{rc1})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{rc1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
@@ -1010,6 +1012,12 @@ func modifiedEvent(key model.Key) api.WatchEvent {
 
 // Create a new watcherSyncerTester - this creates and starts a WatcherSyncer with
 // client and sync consumer interfaces implemented and controlled by the test.
+func newStartedWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester {
+	rst := newWatcherSyncerTester(l)
+	rst.watcherSyncer.Start()
+	return rst
+}
+
 func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester {
 	// Create the required watchers.  This hs methods that we use to drive
 	// responses.
@@ -1039,7 +1047,6 @@ func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester
 		watcherSyncer: watchersyncer.New(fc, l, st),
 		lws:           lws,
 	}
-	rst.watcherSyncer.Start()
 	return rst
 }
 
