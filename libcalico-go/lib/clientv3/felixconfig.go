@@ -126,6 +126,10 @@ func setDefaults(fc *apiv3.FelixConfiguration) {
 		enabled := apiv3.BPFHostNetworkedNATEnabled
 		fc.Spec.BPFHostNetworkedNATWithoutCTLB = &enabled
 	}
+	if fc.Spec.BPFJITHardening == nil {
+		auto := apiv3.BPFJITHardeningAuto
+		fc.Spec.BPFJITHardening = &auto
+	}
 
 	ctlbVal := apiv3.BPFConnectTimeLBDisabled
 	if fc.Spec.BPFConnectTimeLoadBalancingEnabled != nil {

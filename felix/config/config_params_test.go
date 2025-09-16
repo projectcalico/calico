@@ -515,6 +515,10 @@ var _ = DescribeTable("Config parsing",
 	// Not a required parameter so a bad value is translated to nil:
 	Entry("HealthTimeoutOverrides non-duration", "HealthTimeoutOverrides", "foo=bar", map[string]time.Duration(nil), false),
 
+	Entry("BPFJITHardening - default value", "BPFJITHardening", "", "Auto", false),
+	Entry("BPFJITHardening - Auto", "BPFJITHardening", "Auto", "Auto", false),
+	Entry("BPFJITHardening - Strict", "BPFJITHardening", "Strict", "Strict", false),
+
 	Entry("BPFForceTrackPacketsFromIfaces Empty", "BPFForceTrackPacketsFromIfaces", "", []string{"docker+"}),
 	Entry("BPFForceTrackPacketsFromIfaces Single valid entry", "BPFForceTrackPacketsFromIfaces", "docker0", []string{"docker0"}),
 	Entry("BPFForceTrackPacketsFromIfaces Single valid entry", "BPFForceTrackPacketsFromIfaces", "cali-123", []string{"cali-123"}),
