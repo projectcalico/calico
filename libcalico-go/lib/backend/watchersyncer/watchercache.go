@@ -63,6 +63,7 @@ var (
 	ListRetryInterval        = 1000 * time.Millisecond
 	WatchPollInterval        = 5000 * time.Millisecond
 	DefaultWatchRetryTimeout = 600 * time.Second
+	MissingAPIRetryTime      = 10 * time.Minute
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -235,8 +236,23 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 			// be 0 at start of day or the latest received revision.
 			l, err := wc.client.List(ctx, wc.resourceType.ListInterface, wc.currentWatchRevision)
 			if err != nil {
+				if kerrors.IsNotFound(err) {
+					// The resource type doesn't exist yet.  This is possible if the CRD backing this API has not been installed.
+					// This is a valid long-term state, so we don't want to keep retrying rapidly.
+					// Consider ourselves in sync, and then sleep for a long time.
+					if !wc.hasSynced {
+						wc.logger.Info("Backing API not installed, marking as in-sync and retrying later.")
+						wc.finishResync()
+					} else {
+						wc.logger.Debug("Backing API still not installed, retrying later.")
+					}
+					wc.resyncBlockedUntil = time.Now().Add(MissingAPIRetryTime)
+					continue
+				}
+
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
+
 				if kerrors.IsResourceExpired(err) || isTooLargeResourceVersionError(err) {
 					// Our current watch revision is out of sync. Start again without a revision.
 					wc.logger.Info("Resource too old/new error from server, clearing cached watch revision.")
