@@ -1277,6 +1277,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				labels["name"] = w.Name
 				labels["workload"] = "regular"
+				labels["on-node"] = fmt.Sprintf("%d", ii)
 
 				w.WorkloadEndpoint.Labels = labels
 				if run {
@@ -1915,6 +1916,118 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						expectPongs()
 					})
 				}
+
+				Describe("Test external cluster IP with maglev enabled", func() {
+					var (
+						testSvc          *v1.Service
+						testSvcNamespace string
+						ip               []string
+						port             uint16
+					)
+					if numNodes < 3 {
+						panic("need 3 nodes")
+					}
+
+					tgtPort := 8055
+					externalIP := []string{extIP}
+					testSvcName := "test-maglev-service"
+
+					BeforeEach(func() {
+						// Create policy allowing ingress from external client
+						allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
+						allowIngressFromExtClient.Namespace = "fv"
+						allowIngressFromExtClient.Name = "policy-ext-client"
+						allowIngressFromExtClient.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{
+										containerIP(externalClient) + "/" + ipMask(),
+									},
+								},
+							},
+						}
+
+						allowIngressFromExtClientSelector := "all()"
+						allowIngressFromExtClient.Spec.Selector = allowIngressFromExtClientSelector
+						allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
+
+						// Configure routes on external client and Felix nodes
+						ipRoute := []string{"ip"}
+						if testOpts.ipv6 {
+							ipRoute = append(ipRoute, "-6")
+						}
+
+						cmd := append(ipRoute, "route", "add", extIP, "via", felixIP(1))
+						externalClient.Exec(cmd...)
+
+						cmd = append(ipRoute, "route", "add", "local", extIP, "dev", "eth0")
+						tc.Felixes[1].Exec(cmd...)
+						tc.Felixes[2].Exec(cmd...)
+
+						// Create service with maglev annotation
+						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0,
+							testOpts.protocol, externalIP)
+						testSvc.ObjectMeta.Annotations = map[string]string{
+							"lb.projectcalico.org/external-traffic-strategy": "maglev",
+						}
+						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						// Target both WL's on node 0.
+						testSvc.Spec.Selector = map[string]string{"on-node": "0"}
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(2),
+							"Service endpoints didn't get created. Is controller-manager happy?")
+
+						ip = testSvc.Spec.ExternalIPs
+						port = uint16(testSvc.Spec.Ports[0].Port)
+					})
+
+					It("should have connectivity from external client via external IP", func() {
+						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
+						cc.CheckConnectivity()
+
+						ipRoute := []string{"ip"}
+						if testOpts.ipv6 {
+							ipRoute = append(ipRoute, "-6")
+						}
+						cmd := append(ipRoute, "route", "replace", extIP, "via", felixIP(0))
+						externalClient.Exec(cmd...)
+
+						cc.CheckConnectivity()
+					})
+
+					It("should maintain connections across loadbalancer failure using maglev", func() {
+						By("making a connection over a loadbalancer and then switching off routing to it")
+
+						pc := &PersistentConnection{
+							Runtime:             externalClient,
+							RuntimeName:         externalClient.Name,
+							IP:                  ip[0],
+							Port:                int(port),
+							Protocol:            testOpts.protocol,
+							MonitorConnectivity: true,
+						}
+
+						err := pc.Start()
+						Expect(err).NotTo(HaveOccurred())
+						defer pc.Stop()
+
+						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", 0), "Connection failed")
+						// Traffic is flowing over LB 1. Change ExtClient's clusterIP route to go via LB 2.
+						ipRoute := []string{"ip"}
+						if testOpts.ipv6 {
+							ipRoute = append(ipRoute, "-6")
+						}
+
+						cmd := append(ipRoute, "route", "add", extIP, "via", felixIP(2))
+						externalClient.Exec(cmd...)
+
+						lastPongCount := pc.PongCount
+						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
+					})
+				})
 
 				Describe("Test Load balancer service with external IP", func() {
 					if testOpts.connTimeEnabled {
