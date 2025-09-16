@@ -424,17 +424,13 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 			// Add route from external node to the service cluster IPv4 via the specified Kubernetes node
 			routeCmd := fmt.Sprintf("sudo ip route add %s/32 via %s", m.serviceClusterIPv4, targetNodeIPv4)
 			_, err := extNode.Exec("sh", "-c", routeCmd)
-			if err != nil {
-				framework.Logf("Warning: Failed to add IPv4 route (may already exist): %v", err)
-			}
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add IPv4 route to %s via %s", m.serviceClusterIPv4, targetNodeIPv4))
 
 			// Add cleanup to remove the IPv4 route
 			DeferCleanup(func() {
 				deleteRouteCmd := fmt.Sprintf("sudo ip route del %s/32 via %s", m.serviceClusterIPv4, targetNodeIPv4)
 				_, err := extNode.Exec("sh", "-c", deleteRouteCmd)
-				if err != nil {
-					framework.Logf("Warning: Failed to remove IPv4 route: %v", err)
-				}
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to remove IPv4 route to %s via %s", m.serviceClusterIPv4, targetNodeIPv4))
 			})
 
 			framework.Logf("Added IPv4 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv4, targetNodeName, targetNodeIPv4)
@@ -450,17 +446,13 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 			// Add route from external node to the service cluster IPv6 via the specified Kubernetes node
 			routeCmd := fmt.Sprintf("sudo ip -6 route add %s/128 via %s", m.serviceClusterIPv6, targetNodeIPv6)
 			_, err := extNode.Exec("sh", "-c", routeCmd)
-			if err != nil {
-				framework.Logf("Warning: Failed to add IPv6 route (may already exist): %v", err)
-			}
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add IPv6 route to %s via %s", m.serviceClusterIPv6, targetNodeIPv6))
 
 			// Add cleanup to remove the IPv6 route
 			DeferCleanup(func() {
 				deleteRouteCmd := fmt.Sprintf("sudo ip -6 route del %s/128 via %s", m.serviceClusterIPv6, targetNodeIPv6)
 				_, err := extNode.Exec("sh", "-c", deleteRouteCmd)
-				if err != nil {
-					framework.Logf("Warning: Failed to remove IPv6 route: %v", err)
-				}
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to remove IPv6 route to %s via %s", m.serviceClusterIPv6, targetNodeIPv6))
 			})
 
 			framework.Logf("Added IPv6 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv6, targetNodeName, targetNodeIPv6)
