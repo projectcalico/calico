@@ -1090,9 +1090,7 @@ func cleanupTcxPins(iface string) {
 				Hook:  attachHook,
 			},
 		}
-		if err := ap.DetachTcxProgram(); err != nil {
-			log.WithError(err).Warnf("Failed to detach old tcx program from now gone device '%s' hook %s", iface, attachHook)
-		}
+		os.Remove(ap.ProgPinPath())
 	}
 }
 
