@@ -2892,9 +2892,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"prometheusMetricsClientAuthType": {
+					"prometheusMetricsClientAuth": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrometheusMetricsClientAuthType specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"NoClientCert\".",
+							Description: "PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"RequireAndVerifyClientCert\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
