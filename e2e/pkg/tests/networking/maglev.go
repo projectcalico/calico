@@ -25,11 +25,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/utils"
-	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
-	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -37,6 +32,11 @@ import (
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	k8snet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
+
+	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
+	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
 
 // DESCRIPTION: This test verifies the operation of Maglev load balancing algorithm.
