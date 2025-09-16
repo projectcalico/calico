@@ -298,6 +298,7 @@ type bpfEndpointManager struct {
 
 	logFilters              map[string]string
 	bpfLogLevel             string
+	bpfJITHardening         string
 	hostname                string
 	fibLookupEnabled        bool
 	dataIfaceRegex          *regexp.Regexp
@@ -472,6 +473,7 @@ func NewBPFEndpointManager(
 		dirtyIfaceNames:         set.New[string](),
 		hostIfaceTrees:          make(bpfIfaceTrees),
 		bpfLogLevel:             config.BPFLogLevel,
+		bpfJITHardening:         config.BPFJITHardening,
 		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
 		fibLookupEnabled:        fibLookupEnabled,
@@ -675,7 +677,7 @@ func NewBPFEndpointManager(
 		m.updatePolicyProgramFn = m.updatePolicyProgram
 	}
 
-	if v, err := m.getJITHardening(); err == nil && v == 2 {
+	if v, err := m.getJITHardening(); err == nil && v == 2 && m.bpfJITHardening == "Auto" {
 		err := m.setJITHardening(1)
 		if err != nil {
 			log.WithError(err).Warn("Failed to set jit hardening to 1, continuing with 2 - performance may be degraded")
