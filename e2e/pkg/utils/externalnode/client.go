@@ -193,7 +193,7 @@ func (e *Client) TestCannotConnect(target string) {
 func (e *Client) SetupIperf() {
 	shell := "/bin/sh"
 	opt := "-c"
-	cmd := fmt.Sprintf("sudo docker run --rm -d --network host --name iperf %s", images.Iperf)
+	cmd := fmt.Sprintf("sudo docker run --rm -d --network host --name iperf %s", images.Agnhost)
 	_, err := e.Exec(shell, opt, cmd)
 	Expect(err).NotTo(HaveOccurred())
 }

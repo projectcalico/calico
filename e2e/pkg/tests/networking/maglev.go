@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -29,12 +30,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
-	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	k8snet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
@@ -148,11 +149,11 @@ type MaglevTests struct {
 	f                   *framework.Framework
 	serviceClusterIPv4  string
 	serviceClusterIPv6  string
-	backendPods         []*v1.Pod
 	loadBalancerService *v1.Service
 	maglevConfig        *MaglevConfig
 	nodeNameToIPv4      map[string]string
 	nodeNameToIPv6      map[string]string
+	connTester          conncheck.ConnectionTester
 }
 
 type MaglevConfig struct {
@@ -193,14 +194,13 @@ func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	// Remove the trailing newline from the output
 	backendName := strings.TrimSpace(response.Output)
 
-	// Verify this is one of our expected backend pods
-	for _, pod := range m.backendPods {
-		if pod.Name == backendName {
-			return backendName, nil
-		}
+	// Verify this matches our expected backend pod naming pattern (backend-pod-0 to backend-pod-19)
+	backendPodPattern := regexp.MustCompile(`^backend-pod-\d+$`)
+	if !backendPodPattern.MatchString(backendName) {
+		return "", fmt.Errorf("response '%s' does not match expected backend pod naming pattern 'backend-pod-N'", backendName)
 	}
 
-	return "", fmt.Errorf("response '%s' does not match any expected backend pod names", backendName)
+	return backendName, nil
 }
 
 // SetSourcePort updates the source port used for curl requests
@@ -216,79 +216,67 @@ func (m *MaglevTests) SetNumberOfRequests(count int) {
 }
 
 func (m *MaglevTests) DeployBackendPods(numPods int, nodes []string) {
-	By(fmt.Sprintf("deploying %d backend pods for load balancing across %d nodes", numPods, len(nodes)))
+	By(fmt.Sprintf("deploying %d backend pods for load balancing across %d nodes using conncheck package", numPods, len(nodes)))
 
-	// Create all pods first without waiting
-	var createdPods []*v1.Pod
+	// Create connection tester
+	m.connTester = conncheck.NewConnectionTester(m.f)
+
+	// Create individual servers for each backend pod
 	for i := 1; i <= numPods; i++ {
 		podName := fmt.Sprintf("backend-pod-%d", i)
 		// Select node using round-robin: (i-1) % len(nodes) to distribute pods evenly
 		selectedNode := nodes[(i-1)%len(nodes)]
 
-		pod := &v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      podName,
-				Namespace: m.f.Namespace.Name,
-				Labels: map[string]string{
-					"app": "netexec",
-				},
-			},
-			Spec: v1.PodSpec{
-				NodeName: selectedNode, // Schedule pod on specific node
-				SecurityContext: &v1.PodSecurityContext{
+		// Create server with conncheck, disable automatic service creation
+		server := conncheck.NewServer(podName, m.f.Namespace,
+			conncheck.WithServerLabels(map[string]string{
+				"app": "netexec",
+			}),
+			conncheck.WithPorts(8080),
+			conncheck.WithAutoCreateService(false), // Don't create individual services
+			conncheck.WithServerPodCustomizer(func(pod *v1.Pod) {
+				// Schedule pod on specific node
+				pod.Spec.NodeName = selectedNode
+
+				// Update container to use netexec image and configuration
+				pod.Spec.Containers[0].Image = images.Agnhost
+				pod.Spec.Containers[0].Args = []string{"netexec"}
+
+				// Set security context
+				pod.Spec.SecurityContext = &v1.PodSecurityContext{
 					RunAsNonRoot: ptr.To(true),
 					RunAsUser:    ptr.To(int64(1000)),
 					SeccompProfile: &v1.SeccompProfile{
 						Type: v1.SeccompProfileTypeRuntimeDefault,
 					},
-				},
-				Containers: []v1.Container{
-					{
-						Name:  "netexec",
-						Image: "registry.k8s.io/e2e-test-images/agnhost:2.47",
-						Args:  []string{"netexec"},
-						Ports: []v1.ContainerPort{
-							{
-								ContainerPort: 8080,
-								Protocol:      v1.ProtocolTCP,
-							},
-						},
-						SecurityContext: &v1.SecurityContext{
-							AllowPrivilegeEscalation: ptr.To(false),
-							RunAsNonRoot:             ptr.To(true),
-							RunAsUser:                ptr.To(int64(1000)),
-							Capabilities: &v1.Capabilities{
-								Drop: []v1.Capability{"ALL"},
-							},
-						},
+				}
+				pod.Spec.Containers[0].SecurityContext = &v1.SecurityContext{
+					AllowPrivilegeEscalation: ptr.To(false),
+					RunAsNonRoot:             ptr.To(true),
+					RunAsUser:                ptr.To(int64(1000)),
+					Capabilities: &v1.Capabilities{
+						Drop: []v1.Capability{"ALL"},
 					},
-				},
-			},
+				}
+			}),
+		)
+
+		// Add server to connection tester
+		m.connTester.AddServer(server)
+		framework.Logf("Added server %s to be deployed on node %s", podName, selectedNode)
+	}
+
+	// Deploy all servers at once
+	m.connTester.Deploy()
+
+	// Add cleanup using connTester.Stop()
+	DeferCleanup(func() {
+		if m.connTester != nil {
+			m.connTester.Stop()
 		}
+	})
 
-		createdPod, err := m.f.ClientSet.CoreV1().Pods(m.f.Namespace.Name).Create(context.TODO(), pod, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		createdPods = append(createdPods, createdPod)
-
-		framework.Logf("Created backend pod %s on node %s", podName, selectedNode)
-
-		DeferCleanup(func() {
-			m.f.ClientSet.CoreV1().Pods(m.f.Namespace.Name).Delete(context.TODO(), createdPod.Name, metav1.DeleteOptions{})
-		})
-	}
-
-	// Now wait for all pods to be running in parallel
-	By(fmt.Sprintf("waiting for all %d backend pods to become ready", numPods))
-	for _, createdPod := range createdPods {
-		err := e2epod.WaitForPodRunningInNamespace(context.TODO(), m.f.ClientSet, createdPod)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Add to the backend pods list once it's ready
-		m.backendPods = append(m.backendPods, createdPod)
-		framework.Logf("Pod %s is now running", createdPod.Name)
-	}
-
-	framework.Logf("All %d backend pods are now ready", len(m.backendPods))
+	framework.Logf("All %d backend pods are now ready using conncheck", numPods)
 }
 
 func (m *MaglevTests) DeployService() {
