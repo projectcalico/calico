@@ -228,7 +228,7 @@ class TaskTracker(object):
         self.thread_id = threading.get_native_id()
         self.task_id = new_green_task_id()
         LOG.debug("%r New task", self)
-
+        return self
     def __exit__(self, *args, **kwargs):
         LOG.debug("%r Exit task", self)
 
