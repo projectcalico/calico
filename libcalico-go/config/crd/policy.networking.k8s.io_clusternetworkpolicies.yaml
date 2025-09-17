@@ -72,15 +72,22 @@ spec:
                     properties:
                       action:
                         description: |-
-                          Action specifies the effect this rule will have on matching traffic.
-                          Currently the following actions are supported:
-                          Allow: allows the selected traffic (even if it would otherwise have been
-                          denied by NetworkPolicy)
-                          Deny: denies the selected traffic
-                          Pass: instructs the selected traffic to skip any remaining same-tier
-                          rules, and then pass execution to the next tier.
+                          Action specifies the effect this rule will have on matching
+                          traffic.  Currently the following actions are supported:
+
+                          - Accept: Accepts the selected traffic, allowing it to
+                            egress. No further ClusterNetworkPolicy or NetworkPolicy
+                            rules will be processed.
+
+                          - Deny: Drops the selected traffic. No further
+                            ClusterNetworkPolicy or NetworkPolicy rules will be
+                            processed.
+
+                          - Pass: Skips all further ClusterNetworkPolicy rules in the
+                            current tier for the selected traffic, and passes
+                            evaluation to the next tier.
                         enum:
-                          - Allow
+                          - Accept
                           - Deny
                           - Pass
                         type: string
@@ -99,15 +106,15 @@ spec:
                           If Ports is not set then the rule does not filter traffic via port.
                         items:
                           description: |-
-                            ClusterNetworkPolicyPort describes how to select network ports on pod(s).
+                            ClusterNetworkPolicyPort describes how to select destination network ports.
                             Exactly one field must be set.
                           maxProperties: 1
                           minProperties: 1
                           properties:
                             portNumber:
                               description:
-                                Port selects a port on a pod(s) based on
-                                number.
+                                Port selects a destination port based on
+                                protocol and port number.
                               properties:
                                 port:
                                   description: Number defines a network port value.
@@ -127,8 +134,8 @@ spec:
                               type: object
                             portRange:
                               description: |-
-                                PortRange selects a port range on a pod(s) based on provided
-                                start and end values.
+                                PortRange selects a destination port range based on protocol and
+                                start and end port numbers.
                               properties:
                                 end:
                                   description: |-
@@ -156,6 +163,9 @@ spec:
                                 - end
                                 - start
                               type: object
+                              x-kubernetes-validations:
+                                - message: Start port must be less than End port
+                                  rule: self.start < self.end
                           type: object
                         maxItems: 100
                         minItems: 1
@@ -175,7 +185,7 @@ spec:
                             set then it can infer that the deployed CRD is of an incompatible version
                             with an unknown field.  In that case it should fail closed.
 
-                            For "Allow" rules, "fail closed" means: "treat the rule as matching no
+                            For "Accept" rules, "fail closed" means: "treat the rule as matching no
                             traffic". For "Deny" and "Pass" rules, "fail closed" means: "treat the rule
                             as a 'Deny all' rule".
                           maxProperties: 1
@@ -237,7 +247,7 @@ spec:
                                 This is intended for representing entities that live outside the cluster,
                                 which can't be selected by pods, namespaces and nodes peers, but note
                                 that cluster-internal traffic will be checked against the rule as
-                                well. So if you Allow or Deny traffic to `"0.0.0.0/0"`, that will allow
+                                well. So if you Accept or Deny traffic to `"0.0.0.0/0"`, that will allow
                                 or deny all IPv4 pod-to-pod traffic as well. If you don't want that,
                                 add a rule that Passes all pod traffic before the Networks rule.
 
@@ -267,7 +277,6 @@ spec:
                                 namespaceSelector:
                                   description: |-
                                     NamespaceSelector follows standard label selector semantics; if empty,
-                                    it selects all Namespaces.
                                     it selects all Namespaces.
                                   properties:
                                     matchExpressions:
@@ -394,20 +403,32 @@ spec:
                   items:
                     description: |-
                       ClusterNetworkPolicyIngressRule describes an action to take on a particular
-                      set of traffic destined for pods selected by an ClusterNetworkPolicy's
+                      set of traffic destined for pods selected by a ClusterNetworkPolicy's
                       Subject field.
                     properties:
                       action:
                         description: |-
-                          Action specifies the effect this rule will have on matching traffic.
-                          Currently the following actions are supported:
-                          Allow: allows the selected traffic (even if it would otherwise have been
-                          denied by NetworkPolicy)
-                          Deny: denies the selected traffic
-                          Pass: instructs the selected traffic to skip any remaining same-tier
-                          rules, and then pass execution to the next tier.
+                          Action specifies the effect this rule will have on matching
+                          traffic. Currently the following actions are supported:
+
+                          - Accept: Accepts the selected traffic, allowing it into
+                            the destination. No further ClusterNetworkPolicy or
+                            NetworkPolicy rules will be processed.
+
+                            Note: while Accept ensures traffic is accepted by
+                            Kubernetes network policy, it is still possible that the
+                            packet is blocked in other ways: custom nftable rules,
+                            high-layers e.g. service mesh.
+
+                          - Deny: Drops the selected traffic. No further
+                            ClusterNetworkPolicy or NetworkPolicy rules will be
+                            processed.
+
+                          - Pass: Skips all further ClusterNetworkPolicy rules in the
+                            current tier for the selected traffic, and passes
+                            evaluation to the next tier.
                         enum:
-                          - Allow
+                          - Accept
                           - Deny
                           - Pass
                         type: string
@@ -426,7 +447,7 @@ spec:
                             set then it can infer that the deployed CRD is of an incompatible version
                             with an unknown field.  In that case it should fail closed.
 
-                            For "Allow" rules, "fail closed" means: "treat the rule as matching no
+                            For "Accept" rules, "fail closed" means: "treat the rule as matching no
                             traffic". For "Deny" and "Pass" rules, "fail closed" means: "treat the rule
                             as a 'Deny all' rule".
                           maxProperties: 1
@@ -491,7 +512,6 @@ spec:
                                 namespaceSelector:
                                   description: |-
                                     NamespaceSelector follows standard label selector semantics; if empty,
-                                    it selects all Namespaces.
                                     it selects all Namespaces.
                                   properties:
                                     matchExpressions:
@@ -616,15 +636,15 @@ spec:
                           If Ports is not set then the rule does not filter traffic via port.
                         items:
                           description: |-
-                            ClusterNetworkPolicyPort describes how to select network ports on pod(s).
+                            ClusterNetworkPolicyPort describes how to select destination network ports.
                             Exactly one field must be set.
                           maxProperties: 1
                           minProperties: 1
                           properties:
                             portNumber:
                               description:
-                                Port selects a port on a pod(s) based on
-                                number.
+                                Port selects a destination port based on
+                                protocol and port number.
                               properties:
                                 port:
                                   description: Number defines a network port value.
@@ -644,8 +664,8 @@ spec:
                               type: object
                             portRange:
                               description: |-
-                                PortRange selects a port range on a pod(s) based on provided
-                                start and end values.
+                                PortRange selects a destination port range based on protocol and
+                                start and end port numbers.
                               properties:
                                 end:
                                   description: |-
@@ -673,6 +693,9 @@ spec:
                                 - end
                                 - start
                               type: object
+                              x-kubernetes-validations:
+                                - message: Start port must be less than End port
+                                  rule: self.start < self.end
                           type: object
                         maxItems: 100
                         minItems: 1
@@ -685,26 +708,26 @@ spec:
                   type: array
                 priority:
                   description: |-
-                    Priority is a value from 0 to 1000.
-                    Policies with lower priority values have higher precedence,
-                    and are checked before policies with higher priority values.
-                    All Admin tier rules have higher precedence than NetworkPolicy or
-                    Baseline tier rules.
-                    If two (or more) policies with the same priority could match a connection,
-                    then the implementation can apply any of the matching policies to the
-                    connection, and there is no way for the user to reliably determine
-                    which one it will choose. Administrators must be careful about assigning
-                    the priorities for policies with rules that will match many connections,
-                    and ensure that policies have unique priority values in cases where
-                    ambiguity would be unacceptable.
+                    Priority is a value from 0 to 1000 indicating the precedence of
+                    the policy within its tier. Policies with lower priority values have
+                    higher precedence, and are checked before policies with higher priority
+                    values in the same tier. All Admin tier rules have higher precedence than
+                    NetworkPolicy or Baseline tier rules.
+                    If two (or more) policies in the same tier with the same priority
+                    could match a connection, then the implementation can apply any of the
+                    matching policies to the connection, and there is no way for the user to
+                    reliably determine which one it will choose. Administrators must be
+                    careful about assigning the priorities for policies with rules that will
+                    match many connections, and ensure that policies have unique priority
+                    values in cases where ambiguity would be unacceptable.
                   format: int32
                   maximum: 1000
                   minimum: 0
                   type: integer
                 subject:
-                  description: |-
-                    Subject defines the pods to which this ClusterNetworkPolicy applies.
-                    Note that host-networked pods are not included in subject selection.
+                  description:
+                    Subject defines the pods to which this ClusterNetworkPolicy
+                    applies.
                   maxProperties: 1
                   minProperties: 1
                   properties:
@@ -764,7 +787,6 @@ spec:
                         namespaceSelector:
                           description: |-
                             NamespaceSelector follows standard label selector semantics; if empty,
-                            it selects all Namespaces.
                             it selects all Namespaces.
                           properties:
                             matchExpressions:
@@ -880,16 +902,20 @@ spec:
 
                     The Admin tier takes precedence over all other policies. Policies
                     defined in this tier are used to set cluster-wide security rules
-                    that cannot be overridden in the other tiers.
+                    that cannot be overridden in the other tiers. If Admin tier has
+                    made a final decision (Accept or Deny) on a connection, then no
+                    further evaluation is done.
 
                     NetworkPolicy tier is the tier for the namespaced v1.NetworkPolicy.
                     These policies are intended for the application developer to describe
                     the security policy associated with their deployments inside their
-                    namespace.
+                    namespace. v1.NetworkPolicy always makes a final decision for selected
+                    pods. Further evaluation only happens for Pods not selected by a
+                    v1.NetworkPolicy.
 
                     Baseline tier is a cluster-wide policy that can be overridden by the
-                    v1.NetworkPolicy. It will only be evaluated for Pods not selected by a
-                    namespaced v1.NetworkPolicy.
+                    v1.NetworkPolicy. If Baseline tier has made a final decision (Accept or
+                    Deny) on a connection, then no further evaluation is done.
 
                     If a given connection wasn't allowed or denied by any of the tiers,
                     the default kubernetes policy is applied, which says that

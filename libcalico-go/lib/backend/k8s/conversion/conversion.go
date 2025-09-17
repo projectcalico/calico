@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -994,8 +994,9 @@ func k8sClusterNetPolEgressRuleToCalico(rule clusternetpol.ClusterNetworkPolicyE
 
 func K8sClusterNetworkPolicyActionToCalico(action clusternetpol.ClusterNetworkPolicyRuleAction) (apiv3.Action, error) {
 	switch action {
-	case clusternetpol.ClusterNetworkPolicyRuleActionAllow,
-		clusternetpol.ClusterNetworkPolicyRuleActionDeny,
+	case clusternetpol.ClusterNetworkPolicyRuleActionAccept:
+		return apiv3.Allow, nil
+	case clusternetpol.ClusterNetworkPolicyRuleActionDeny,
 		clusternetpol.ClusterNetworkPolicyRuleActionPass:
 		return apiv3.Action(action), nil
 	default:
