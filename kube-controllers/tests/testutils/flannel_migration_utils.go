@@ -40,6 +40,7 @@ func RunFlannelMigrationController(kconfigfile string, nodeName, subnetEnv strin
 	return containers.Run("flannel-migration-controller",
 		containers.RunOpts{AutoRemove: true},
 		"--privileged",
+		"-e", fmt.Sprintf("CALICO_API_GROUP=%s", os.Getenv("CALICO_API_GROUP")),
 		"-e", "DATASTORE_TYPE=kubernetes",
 		"-e", "ENABLED_CONTROLLERS=flannelmigration",
 		"-e", "LOG_LEVEL=debug",
