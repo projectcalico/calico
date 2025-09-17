@@ -143,7 +143,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				Spec:       spec1_2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: WorkloadEndpoint(" + namespace1 + "/" + name1 + ") with error:"))
 
 			By("Getting WorkloadEndpoint (name1) and comparing the output against spec1_1")
 			res, outError := c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{})

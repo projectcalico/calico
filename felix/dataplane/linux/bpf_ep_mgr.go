@@ -675,6 +675,13 @@ func NewBPFEndpointManager(
 		m.updatePolicyProgramFn = m.updatePolicyProgram
 	}
 
+	if v, err := m.getJITHardening(); err == nil && v == 2 {
+		err := m.setJITHardening(1)
+		if err != nil {
+			log.WithError(err).Warn("Failed to set jit hardening to 1, continuing with 2 - performance may be degraded")
+		}
+	}
+
 	return m, nil
 }
 
@@ -1082,6 +1089,18 @@ func (m *bpfEndpointManager) cleanupOldXDPAttach(iface string) error {
 	return nil
 }
 
+func cleanupTcxPins(iface string) {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		ap := tc.AttachPoint{
+			AttachPoint: bpf.AttachPoint{
+				Iface: iface,
+				Hook:  attachHook,
+			},
+		}
+		os.Remove(ap.ProgPinPath())
+	}
+}
+
 func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
 	ap := tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -1147,6 +1166,14 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
+	if update.State == ifacemonitor.StateNotPresent && m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+		// Delete the tcx pins if the interface is gone.
+		// Check if the interface still exists, as we might get events out of order.
+		_, err := m.dp.getIfaceLink(update.Name)
+		if err != nil {
+			cleanupTcxPins(update.Name)
+		}
+	}
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
 	m.ifacesLock.Lock()
@@ -3488,6 +3515,32 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 
 	log.Infof("%s set to %s", path, numval)
 	return nil
+}
+
+const jitHardenPath = "/proc/sys/net/core/bpf_jit_harden"
+
+func (m *bpfEndpointManager) setJITHardening(val int) error {
+	numval := strconv.Itoa(val)
+	err := writeProcSys(jitHardenPath, numval)
+	if err != nil {
+		log.WithField("err", err).Errorf("Failed to set %s to %s", jitHardenPath, numval)
+		return err
+	}
+
+	log.Infof("%s set to %s", jitHardenPath, numval)
+	return nil
+}
+
+func (m *bpfEndpointManager) getJITHardening() (int, error) {
+	data, err := os.ReadFile(jitHardenPath)
+	if err != nil {
+		return 0, err
+	}
+	val, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
 }
 
 func (m *bpfEndpointManager) ensureStarted() {

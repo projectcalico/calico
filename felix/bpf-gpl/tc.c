@@ -510,9 +510,19 @@ syn_force_policy:
 		}
 	}
 
+	struct cali_rt *src_rt = cali_rt_lookup(&ctx->state->ip_src);
+	struct cali_rt *dst_rt = NULL;
+
+	if (CALI_F_TO_HEP || CALI_F_FROM_WEP) {
+		dst_rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
+	}
+
+	__u32 src_flags = src_rt ? src_rt->flags : CALI_RT_UNKNOWN;
+	__u32 dst_flags = dst_rt ? dst_rt->flags : CALI_RT_UNKNOWN;
+
 	if (CALI_F_TO_WEP && (!skb_seen(ctx->skb) ||
 			skb_mark_equals(ctx->skb, CALI_SKB_MARK_FROM_NAT_IFACE_OUT, CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) &&
-			cali_rt_flags_local_host(cali_rt_lookup_flags(&ctx->state->ip_src))) {
+			cali_rt_flags_local_host(src_flags)) {
 		/* Host to workload traffic always allowed.  We discount traffic that was
 		 * seen by another program since it must have come in via another interface.
 		 */
@@ -525,53 +535,45 @@ syn_force_policy:
 			&& !(ctx->state->ip_proto == IPPROTO_ICMPV6 && ip_link_local(ctx->state->ip_src))
 #endif
 		) {
-		struct cali_rt *r = cali_rt_lookup(&ctx->state->ip_src);
 		/* Do RPF check since it's our responsibility to police that. */
-		if (wep_rpf_check(ctx, r) == RPF_RES_FAIL) {
+		if (wep_rpf_check(ctx, src_rt) == RPF_RES_FAIL) {
 			goto deny;
 		}
 
-		if (cali_rt_flags_skip_ingress_redirect(r->flags)) {
+		if (cali_rt_flags_skip_ingress_redirect(src_flags)) {
 			ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
 		}
 
 		// Check whether the workload needs outgoing NAT to this address.
-		if (r->flags & CALI_RT_NAT_OUT) {
-			struct cali_rt *rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-			enum cali_rt_flags flags = CALI_RT_UNKNOWN;
-			if (rt) {
-				flags = rt->flags;
-			}
+		if (src_flags & CALI_RT_NAT_OUT) {
 			bool exclude_hosts = (GLOBAL_FLAGS & CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS);
-			if (rt_flags_should_perform_nat_outgoing(flags, exclude_hosts)) {
+			if (cali_rt_flags_should_perform_nat_outgoing(dst_flags, exclude_hosts)) {
 				CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.");
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
-		// Check if traffic is leaving cluster. We might need to set DSCP later.
-		if (cali_rt_flags_is_in_pool(r->flags) && rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
-			CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
-			ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
-		}
 		/* If 3rd party CNI is used and dest is outside cluster. See commit fc711b192f for details. */
-		if (!(cali_rt_flags_is_in_pool(r->flags))) {
+		if (!(cali_rt_flags_is_in_pool(src_flags))) {
 			CALI_DEBUG("Source " IP_FMT " not in IP pool", debug_ip(ctx->state->ip_src));
-			if (rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
+			if (!(dst_flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
 				CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 				ctx->state->flags |= CALI_ST_SKIP_FIB;
+			}
+		} else {
+			if (cali_rt_flags_should_set_dscp(dst_flags)) {
+				CALI_DEBUG("Remote host or outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+				ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 			}
 		}
 	}
 
-	// If either source or destination is outside cluster, set flag as might need to update DSCP later.
-	if ((CALI_F_TO_HEP) && (rt_addr_is_local_host(&ctx->state->ip_src)) &&
-		(rt_addr_is_external(&ctx->state->post_nat_ip_dst))) {
-		CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+	/* If either source or destination is outside cluster, set flag as might need to update DSCP later. */
+	if ((CALI_F_TO_HEP) && (cali_rt_flags_local_host(src_flags)) && cali_rt_flags_should_set_dscp(dst_flags)) {
+		CALI_DEBUG("Remote host or outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 	}
-	if ((CALI_F_FROM_HEP) && (rt_addr_is_host_or_in_pool(&ctx->state->post_nat_ip_dst)) &&
-		(rt_addr_is_external(&ctx->state->ip_src))) {
-		CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
+	if ((CALI_F_FROM_HEP) && cali_rt_flags_should_set_dscp(src_flags)) {
+		CALI_DEBUG("Remote host or outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
 		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 	}
 

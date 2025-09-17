@@ -106,7 +106,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: BlockAffinity(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: BlockAffinity(" + name1 + ") with error:"))
 
 			By("Getting BlockAffinity (name1) and comparing the output against spec1")
 			res, outError := c.BlockAffinities().Get(ctx, name1, options.GetOptions{})
