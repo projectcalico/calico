@@ -16,6 +16,7 @@ package client
 
 import (
 	"context"
+	"errors"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -39,7 +40,7 @@ func New(cfg *rest.Config) (client.Client, error) {
 		return nil, err
 	}
 
-	// Cheks to see if the projectcalico.org/v3 API is available.
+	// Checks to see if the projectcalico.org/v3 API is available.
 	available, err := calicoV3APIAvailable(discoveryClient)
 	if err != nil {
 		return nil, err
@@ -54,13 +55,16 @@ func New(cfg *rest.Config) (client.Client, error) {
 	// Check to see if an APIServer is available.
 	l := &operatorv1.APIServerList{}
 	err = c.List(context.TODO(), l)
-	if err == nil && len(l.Items) > 0 {
+	if err != nil {
+		return nil, err
+	}
+	if len(l.Items) > 0 {
 		logrus.Infof("Using API server client for projectcalico.org/v3 API")
 		return c, nil
 	}
 
 	// If we reached here, the projectcalico.org/v3 API is available, but the APIServer resource is not found.
-	return nil, err
+	return nil, errors.New("no APIServer resource found, cannot use API client")
 }
 
 // NewAPIClient returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
