@@ -15,9 +15,6 @@
 package client
 
 import (
-	"context"
-	"errors"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
@@ -45,26 +42,17 @@ func New(cfg *rest.Config) (client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !available {
-		// If the projectcalico.org/v3 apigroup is not found,
-		// then we can assume that the API server is not present and default to calicoctl.
-		logrus.Infof("projectcalico.org/v3 API not available, falling back to calicoctl exec client")
-		return NewCalicoctlExecClient(c)
-	}
 
-	// Check to see if an APIServer is available.
-	l := &operatorv1.APIServerList{}
-	err = c.List(context.TODO(), l)
-	if err != nil {
-		return nil, err
-	}
-	if len(l.Items) > 0 {
+	if available {
+		// API is available, we can return the calicoclient
 		logrus.Infof("Using API server client for projectcalico.org/v3 API")
 		return c, nil
 	}
 
-	// If we reached here, the projectcalico.org/v3 API is available, but the APIServer resource is not found.
-	return nil, errors.New("no APIServer resource found, cannot use API client")
+	// If the projectcalico.org/v3 apigroup is not found,
+	// then we can assume that the API server is not present and default to calicoctl.
+	logrus.Infof("projectcalico.org/v3 API not available, falling back to calicoctl exec client")
+	return NewCalicoctlExecClient(c)
 }
 
 // NewAPIClient returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
