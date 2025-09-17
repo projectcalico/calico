@@ -1921,7 +1921,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
-						ip               []string
 						port             uint16
 					)
 					if numNodes < 3 {
@@ -1929,7 +1928,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					}
 
 					tgtPort := 8055
-					externalIP := []string{extIP}
+					externalIP := extIP
 					testSvcName := "test-maglev-service"
 
 					BeforeEach(func() {
@@ -1952,22 +1951,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						allowIngressFromExtClient.Spec.Selector = allowIngressFromExtClientSelector
 						allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
 
-						// Configure routes on external client and Felix nodes
-						ipRoute := []string{"ip"}
-						if testOpts.ipv6 {
-							ipRoute = append(ipRoute, "-6")
-						}
-
-						cmd := append(ipRoute, "route", "add", extIP, "via", felixIP(1))
-						externalClient.Exec(cmd...)
-
-						cmd = append(ipRoute, "route", "add", "local", extIP, "dev", "eth0")
-						tc.Felixes[1].Exec(cmd...)
-						tc.Felixes[2].Exec(cmd...)
+						// cmd = append(ipRoute, "route", "add", "local", extIP, "dev", "eth0")
+						// tc.Felixes[1].Exec(cmd...)
+						// tc.Felixes[2].Exec(cmd...)
 
 						// Create service with maglev annotation
 						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0,
-							testOpts.protocol, externalIP)
+							testOpts.protocol, []string{externalIP})
 						testSvc.ObjectMeta.Annotations = map[string]string{
 							"lb.projectcalico.org/external-traffic-strategy": "maglev",
 						}
@@ -1977,15 +1967,29 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
-						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(2),
-							"Service endpoints didn't get created. Is controller-manager happy?")
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							"Service endpoint didn't get created. Is controller-manager happy?")
 
-						ip = testSvc.Spec.ExternalIPs
+						Expect(k8sGetEpsForService(k8sClient, testSvc)[0].Addresses).Should(HaveLen(2),
+							"Service endpoint didn't have the expected number of addresses.")
+
+						Expect(testSvc.Spec.ExternalIPs).To(HaveLen(1))
+						Expect(testSvc.Spec.ExternalIPs[0]).To(Equal(externalIP))
+						Expect(testSvc.Spec.Ports).To(HaveLen(1))
 						port = uint16(testSvc.Spec.Ports[0].Port)
+
+						// Configure routes on external client and Felix nodes.
+						// Use Felix[1] as a middlebox initially.
+						ipRoute := []string{"ip"}
+						if testOpts.ipv6 {
+							ipRoute = append(ipRoute, "-6")
+						}
+						cmd := append(ipRoute, "route", "add", externalIP, "via", felixIP(1))
+						externalClient.Exec(cmd...)
 					})
 
 					It("should have connectivity from external client via external IP", func() {
-						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
+						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
 
 						ipRoute := []string{"ip"}
@@ -2004,7 +2008,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						pc := &PersistentConnection{
 							Runtime:             externalClient,
 							RuntimeName:         externalClient.Name,
-							IP:                  ip[0],
+							IP:                  externalIP,
 							Port:                int(port),
 							Protocol:            testOpts.protocol,
 							MonitorConnectivity: true,
