@@ -235,21 +235,14 @@ stop-kubernetes-master:
 ci: mod-download build-all static-checks test
 
 ###############################################################################
-# CD
-###############################################################################
-.PHONY: cd
-## Deploys images to registry
-cd: image-all cd-common
-
-###############################################################################
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean build-all image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
+	$(MAKE) clean build-all image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=$(RELEASE)
 	touch $@
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
