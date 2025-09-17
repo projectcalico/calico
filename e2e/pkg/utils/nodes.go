@@ -30,15 +30,46 @@ const (
 	nodeBgpIpv4VXLANTunnelAddrAnnotation = "projectcalico.org/IPv4VXLANTunnelAddr"
 )
 
-// GetNodesInfo extracts node information from a Kubernetes NodeList.
-//
-// Returns:
-//   - nodeNames: Kubernetes node names (e.g., "ip-10-0-0-108.us-west-2.compute.internal")
-//   - nodeIPv4s: IPv4 internal IP addresses of the nodes
-//   - nodeIPv6s: IPv6 internal IP addresses of the nodes
-//   - calicoNodeNames: Calico node names
-//   - tunnelIPs: Tunnel IP addresses for IPIP or VXLAN if configured
-func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool) ([]string, []string, []string, []string, []string) {
+type NodesInfoGetter interface {
+	GetNames() []string
+	GetIPv4s() []string
+	GetIPv6s() []string
+	GetCalicoNames() []string
+	GetTunnelIPs() []string
+}
+
+// nodesInfo implements the NodesInfoGetter interface
+type nodesInfo struct {
+	nodeNames       []string
+	nodeIPv4s       []string
+	nodeIPv6s       []string
+	calicoNodeNames []string
+	tunnelIPs       []string
+}
+
+func (n *nodesInfo) GetNames() []string {
+	return n.nodeNames
+}
+
+func (n *nodesInfo) GetIPv4s() []string {
+	return n.nodeIPv4s
+}
+
+func (n *nodesInfo) GetIPv6s() []string {
+	return n.nodeIPv6s
+}
+
+func (n *nodesInfo) GetCalicoNames() []string {
+	return n.calicoNodeNames
+}
+
+func (n *nodesInfo) GetTunnelIPs() []string {
+	return n.tunnelIPs
+}
+
+// GetNodesInfo extracts node information from a Kubernetes NodeList and returns
+// a NodesInfoGetter interface that provides access to node details.
+func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool) NodesInfoGetter {
 	// By default, Calico node name is host name, e.g. ip-10-0-0-108.
 	// Kubernetes node name could be different (ip-10-0-0-108.us-west-2.compute.internal) if cloud provider is aws.
 	var nodeNames, nodeIPv4s, nodeIPv6s, calicoNodeNames, tunnelIPs []string
@@ -72,7 +103,13 @@ func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool)
 		calicoNodeNames = append(calicoNodeNames, hostNames[0])
 		tunnelIPs = append(tunnelIPs, getNodeTunnelIP(&node))
 	}
-	return nodeNames, nodeIPv4s, nodeIPv6s, calicoNodeNames, tunnelIPs
+	return &nodesInfo{
+		nodeNames:       nodeNames,
+		nodeIPv4s:       nodeIPv4s,
+		nodeIPv6s:       nodeIPv6s,
+		calicoNodeNames: calicoNodeNames,
+		tunnelIPs:       tunnelIPs,
+	}
 }
 
 func getNodeTunnelIP(node *corev1.Node) string {

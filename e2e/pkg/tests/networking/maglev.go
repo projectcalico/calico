@@ -76,8 +76,10 @@ var _ = describe.CalicoDescribe(
 				Skip("No schedulable nodes exist, can't continue test.")
 			}
 
-			var nodeIPv4s, nodeIPv6s []string
-			nodeNames, nodeIPv4s, nodeIPv6s, _, _ = utils.GetNodesInfo(f, nodes, false)
+			nodesInfo := utils.GetNodesInfo(f, nodes, false)
+			nodeNames := nodesInfo.GetNames()
+			nodeIPv4s := nodesInfo.GetIPv4s()
+			nodeIPv6s := nodesInfo.GetIPv6s()
 			Expect(len(nodeNames)).Should(BeNumerically(">", 0))
 			framework.Logf("Found %d nodes for testing: %v", len(nodeNames), nodeNames)
 
@@ -201,18 +203,6 @@ func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	}
 
 	return backendName, nil
-}
-
-// SetSourcePort updates the source port used for curl requests
-func (m *MaglevTests) SetSourcePort(port int) {
-	m.maglevConfig.SourcePort = port
-	framework.Logf("Updated source port to %d for Maglev testing", port)
-}
-
-// SetNumberOfRequests updates the number of requests sent to the cluster IP for testing
-func (m *MaglevTests) SetNumberOfRequests(count int) {
-	m.maglevConfig.NumberOfRequests = count
-	framework.Logf("Updated number of requests to %d for Maglev testing", count)
 }
 
 func (m *MaglevTests) DeployBackendPods(numPods int, nodes []string) {
@@ -566,10 +556,6 @@ func (m *MaglevTests) TestMaglevConsistentHashing(extNode *externalnode.Client, 
 
 	// Send requests and gather backend response statistics
 	uniqueBackends := m.sendRequestsAndGatherStats(extNode, useIPv6, "Maglev consistent hashing with annotation")
-
-	// HACK: Override the actual results for testing the test flow without real Maglev implementation.
-	// This simulates consistent hashing by forcing all requests to go to a single backend
-	// uniqueBackends = map[string]int{"backend-pod-6": 10}
 
 	// Assert that all requests went to exactly one backend (consistent hashing)
 	Expect(len(uniqueBackends)).Should(Equal(1),
