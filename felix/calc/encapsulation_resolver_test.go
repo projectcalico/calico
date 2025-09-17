@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -506,6 +505,6 @@ func (e *encapResolverCallbackRecorder) OnNamespaceRemove(id types.NamespaceID) 
 	Fail("NamespaceRemove received")
 }
 
-func (e *encapResolverCallbackRecorder) OnGlobalBGPConfigUpdate(*v3.BGPConfiguration) {
+func (e *encapResolverCallbackRecorder) OnGlobalBGPConfigUpdate(*apiv3.BGPConfiguration) {
 	Fail("OnGlobalBGPConfigUpdate received")
 }
