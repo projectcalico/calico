@@ -36,6 +36,7 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
+	k8shealthcheck "k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -200,10 +201,11 @@ type Config struct {
 	ConfigChangedRestartCallback func()
 	FatalErrorRestartCallback    func(error)
 
-	PostInSyncCallback func()
-	HealthAggregator   *health.HealthAggregator
-	WatchdogTimeout    time.Duration
-	RouteTableManager  *idalloc.IndexAllocator
+	PostInSyncCallback    func()
+	HealthAggregator      *health.HealthAggregator
+	WatchdogTimeout       time.Duration
+	RouteTableManager     *idalloc.IndexAllocator
+	bpfProxyHealthzServer *k8shealthcheck.ProxyHealthServer
 
 	DebugSimulateDataplaneHangAfter  time.Duration
 	DebugSimulateDataplaneApplyDelay time.Duration
@@ -1111,7 +1113,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
-	dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+
+	if config.RulesConfig.IPIPEnabled ||
+		config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
+		dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+	}
 
 	if !config.BPFEnabled {
 		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
@@ -1312,7 +1318,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
-		dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+
+		if config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
+			dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+		}
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
@@ -2820,7 +2829,23 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
+	if config.bpfProxyHealthzServer == nil {
+		config.bpfProxyHealthzServer = k8shealthcheck.NewProxyHealthServer(
+			":10256", config.KubeProxyMinSyncPeriod)
+
+		// We cannot wait for the healthz server as we cannot stop it.
+		go func() {
+			for {
+				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
+				if err != nil {
+					log.WithError(err).Error("BPF Proxy Healthz server failed, restarting")
+				}
+			}
+		}()
+	}
+
 	bpfproxyOpts := []bpfproxy.Option{
+		bpfproxy.WithHealthzServer(config.bpfProxyHealthzServer),
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 	}
 

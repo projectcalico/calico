@@ -237,7 +237,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 				Status:     status2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: CalicoNodeStatus(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: CalicoNodeStatus(" + name1 + ") with error:"))
 
 			By("Getting CalicoNodeStatus (name1) and comparing the output against spec1/status1")
 			res, outError := c.CalicoNodeStatus().Get(ctx, name1, options.GetOptions{})
