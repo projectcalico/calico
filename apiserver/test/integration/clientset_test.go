@@ -36,7 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	libclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -2026,14 +2025,14 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 			State: "pending",
 		},
 	}
-	libV3BlockAffinity := &libapiv3.BlockAffinity{
+	v3BlockAff := &v3.BlockAffinity{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 
-		Spec: libapiv3.BlockAffinitySpec{
+		Spec: v3.BlockAffinitySpec{
 			CIDR:    "10.0.0.0/24",
 			Node:    "node1",
 			State:   "pending",
-			Deleted: "false",
+			Deleted: false,
 		},
 	}
 	ctx := context.Background()
@@ -2063,9 +2062,9 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	}
 
 	// Create the block affinity using the libv3 client.
-	_, err = apiClient.BlockAffinities().Create(ctx, libV3BlockAffinity, options.SetOptions{})
+	_, err = apiClient.BlockAffinities().Create(ctx, v3BlockAff, options.SetOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating the object through the Calico v3 API '%v' (%v)", libV3BlockAffinity, err)
+		return fmt.Errorf("error creating the object through the Calico v3 API '%v' (%v)", v3BlockAff, err)
 	}
 
 	blockAffinityNew, err := blockAffinityClient.Get(ctx, name, metav1.GetOptions{})
