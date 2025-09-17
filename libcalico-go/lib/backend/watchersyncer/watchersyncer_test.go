@@ -178,7 +178,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// If an API isn't installed, the List will return a NotFound error. We expect the watcher cache to handle this gracefully,
 		// makring itself in sync and not retrying for an extended period.
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
-		rs.clientListResponse(r1, apierrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
+		rs.clientListResponse(r1, kerrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
 		rs.watcherSyncer.Start()
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
@@ -186,7 +186,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("should handle reconnection if watchers fail to be created", func() {
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		// Temporarily reduce the watch and list poll interval to make the tests faster.
@@ -194,9 +194,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// large to make the measurements more accurate.
 		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(500*time.Millisecond, 2000*time.Millisecond)
-
-		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		// All of the events should have been consumed within a time frame dictated by the
 		// list retry and poll timers.
