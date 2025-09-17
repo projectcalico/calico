@@ -1248,8 +1248,11 @@ func (r *CalicoManager) determineBranch() (string, error) {
 // Uses docker to build a tgz archive of the specified container image.
 func (r *CalicoManager) archiveContainerImage(out, image string) error {
 	if !r.buildImages {
-		if _, err := r.runner.Run("docker", []string{"pull", image}, nil); err != nil {
-			return fmt.Errorf("failed to pull image %s: %w", image, err)
+		if _, err := r.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
+			logrus.WithError(err).WithField("image", image).Error("Image not found locally, will attempt to pull")
+			if _, err := r.runner.Run("docker", []string{"pull", image}, nil); err != nil {
+				return fmt.Errorf("failed to pull image %s: %w", image, err)
+			}
 		}
 	}
 	_, err := r.runner.Run("docker", []string{"save", "--output", out, image}, nil)
