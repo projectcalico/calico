@@ -124,6 +124,8 @@ EOF
                         iniset $NEUTRON_CONF calico resync_interval_secs $CALICO_RESYNC_INTERVAL_SECS
                     fi
 
+                    iniset $NEUTRON_CONF DEFAULT logging_debug_format_suffix "[00;33m{{%(logString)s %(funcName)s %(pathname)s:%(lineno)d}}[00m"
+
                     # Give Neutron the admin role so that it can look up
                     # project name and parent_id fields in the Keystone DB.
                     openstack role add admin --user neutron --project service --user-domain Default --project-domain Default
