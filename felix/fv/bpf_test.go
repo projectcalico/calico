@@ -1277,7 +1277,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				labels["name"] = w.Name
 				labels["workload"] = "regular"
-				labels["on-node"] = fmt.Sprintf("%d", ii)
 
 				w.WorkloadEndpoint.Labels = labels
 				if run {
@@ -1917,7 +1916,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				}
 
-				Describe("Test external cluster IP with maglev enabled", func() {
+				Describe("Test advertised cluster IP with maglev enabled", func() {
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
@@ -1962,15 +1961,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							"lb.projectcalico.org/external-traffic-strategy": "maglev",
 						}
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
-						// Target both WL's on node 0.
-						testSvc.Spec.Selector = map[string]string{"on-node": "0"}
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoint didn't get created. Is controller-manager happy?")
 
-						Expect(k8sGetEpsForService(k8sClient, testSvc)[0].Addresses).Should(HaveLen(2),
+						Expect(k8sGetEpsForService(k8sClient, testSvc)[0].Addresses).Should(HaveLen(1),
 							"Service endpoint didn't have the expected number of addresses.")
 
 						Expect(testSvc.Spec.ExternalIPs).To(HaveLen(1))
@@ -1978,18 +1975,66 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(testSvc.Spec.Ports).To(HaveLen(1))
 						port = uint16(testSvc.Spec.Ports[0].Port)
 
+						log.Info("Waiting for Maglev map to converge...")
+						maglevMapAnySearch := func(key nat.ConsistentHashBackendKeyInterface, family string, felix *infrastructure.Felix) nat.BackendValueInterface {
+							Expect(family).To(Or(Equal("ipv4"), Equal("ipv6")))
+
+							var v nat.BackendValueInterface
+							var ok bool
+							switch family {
+							case "ipv4":
+								mm := dumpMaglevMap(felix)
+								kp := nat.ConsistentHashBackendKey{}
+								Expect(key).To(BeAssignableToTypeOf(kp))
+								kp, _ = key.(nat.ConsistentHashBackendKey)
+
+								if v, ok = mm[kp]; !ok {
+									return nil
+								}
+
+							case "ipv6":
+								mm := dumpMaglevMapV6(felix)
+								kp := nat.ConsistentHashBackendKeyV6{}
+								Expect(key).To(BeAssignableToTypeOf(kp))
+								kp, _ = key.(nat.ConsistentHashBackendKeyV6)
+
+								if v, ok = mm[kp]; !ok {
+									return nil
+								}
+							}
+							return v
+						}
+						maglevMapAnySearchFunc := func(key nat.ConsistentHashBackendKeyInterface, family string, felix *infrastructure.Felix) func() nat.BackendValueInterface {
+							return func() nat.BackendValueInterface {
+								return maglevMapAnySearch(key, family, felix)
+							}
+						}
+
+						var testMaglevMapKey nat.ConsistentHashBackendKeyInterface
+						switch family {
+						case "ipv4":
+							testMaglevMapKey = nat.NewConsistentHashBackendKey(net.ParseIP(clusterIP), port, 6, 0)
+						case "ipv6":
+							testMaglevMapKey = nat.NewConsistentHashBackendKeyV6(net.ParseIP(clusterIP), port, 6, 0)
+						default:
+							log.Panicf("Unexpected IP family %s", family)
+						}
+
+						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[1]), "10s").ShouldNot(BeNil())
+						Expect(maglevMapAnySearch(testMaglevMapKey, family, tc.Felixes[1]).Addr().String()).Should(Or(Equal(w[0][0].IP), Equal(w[0][1])))
+
 						// Configure routes on external client and Felix nodes.
 						// Use Felix[1] as a middlebox initially.
 						ipRoute := []string{"ip"}
 						if testOpts.ipv6 {
 							ipRoute = append(ipRoute, "-6")
 						}
-						cmd := append(ipRoute, "route", "add", externalIP, "via", felixIP(1))
+						cmd := append(ipRoute, "route", "add", clusterIP, "via", felixIP(1))
 						externalClient.Exec(cmd...)
 					})
 
 					It("should have connectivity from external client via external IP", func() {
-						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
+						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
 						cc.CheckConnectivity()
 
 						ipRoute := []string{"ip"}
@@ -2004,16 +2049,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					It("should maintain connections across loadbalancer failure using maglev", func() {
 						By("making a connection over a loadbalancer and then switching off routing to it")
-
 						pc := &PersistentConnection{
 							Runtime:             externalClient,
 							RuntimeName:         externalClient.Name,
-							IP:                  externalIP,
+							IP:                  clusterIP,
 							Port:                int(port),
+							SourcePort:          30000,
 							Protocol:            testOpts.protocol,
 							MonitorConnectivity: true,
 						}
-
 						err := pc.Start()
 						Expect(err).NotTo(HaveOccurred())
 						defer pc.Stop()
@@ -2028,7 +2072,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cmd := append(ipRoute, "route", "add", extIP, "via", felixIP(2))
 						externalClient.Exec(cmd...)
 
-						lastPongCount := pc.PongCount
+						lastPongCount := pc.PongCount()
 						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
 					})
 				})
@@ -5487,11 +5531,11 @@ func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.Backe
 }
 
 func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem, nat.ConsistentHashMapMem) {
-	return dumpNATMap(felix), dumpEPMap(felix), dumpConsistentHashEPMap(felix)
+	return dumpNATMap(felix), dumpEPMap(felix), dumpMaglevMap(felix)
 }
 
 func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6, nat.ConsistentHashMapMemV6) {
-	return dumpNATMapV6(felix), dumpEPMapV6(felix), dumpConsistentHashEPMapV6(felix)
+	return dumpNATMapV6(felix), dumpEPMapV6(felix), dumpMaglevMapV6(felix)
 }
 
 func dumpNATMapsAny(family int, felix *infrastructure.Felix) (
@@ -5580,14 +5624,14 @@ func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
 	return m
 }
 
-func dumpConsistentHashEPMap(felix *infrastructure.Felix) nat.ConsistentHashMapMem {
+func dumpMaglevMap(felix *infrastructure.Felix) nat.ConsistentHashMapMem {
 	bm := nat.ConsistentHashMap()
 	m := make(nat.ConsistentHashMapMem)
 	dumpBPFMap(felix, bm, nat.ConsistentHashMapMemIter(m))
 	return m
 }
 
-func dumpConsistentHashEPMapV6(felix *infrastructure.Felix) nat.ConsistentHashMapMemV6 {
+func dumpMaglevMapV6(felix *infrastructure.Felix) nat.ConsistentHashMapMemV6 {
 	bm := nat.ConsistentHashMapV6()
 	m := make(nat.ConsistentHashMapMemV6)
 	dumpBPFMap(felix, bm, nat.ConsistentHashMapMemV6Iter(m))
