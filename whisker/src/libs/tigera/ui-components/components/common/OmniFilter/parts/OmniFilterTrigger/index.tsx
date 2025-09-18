@@ -3,6 +3,7 @@ import {
     Badge,
     Button,
     ButtonProps,
+    Flex,
     PopoverTrigger,
     SystemStyleObject,
     Text,
@@ -24,6 +25,7 @@ type OmniFilterTriggerProps = Partial<{
     isDisabled: boolean;
     testId: string;
     onClick: () => void;
+    customContent?: React.ReactNode;
 }>;
 
 export const OmniFilterTrigger = ({
@@ -40,6 +42,7 @@ export const OmniFilterTrigger = ({
     testId,
     onClick,
     isDisabled = false,
+    customContent,
 }: OmniFilterTriggerProps) => {
     const styles = useStyles();
 
@@ -61,26 +64,28 @@ export const OmniFilterTrigger = ({
                 {...(isActive && (styles.triggerActive as ButtonProps))}
                 isDisabled={isDisabled}
             >
-                {label}{' '}
-                {isActive && showSelectedValueLabel && (
-                    <>
-                        <Text
-                            isTruncated
-                            data-testid={`${testId}-button-text`}
-                            title={selectedValueTitle}
-                            sx={{
-                                ...styles.triggerText,
-                                ...valueSx,
-                            }}
-                        >
-                            {operator} {selectedValueLabel}
-                        </Text>
+                {customContent ?? (
+                    <Flex>
+                        {label}{' '}
+                        {isActive && showSelectedValueLabel && (
+                            <Text
+                                isTruncated
+                                data-testid={`${testId}-button-text`}
+                                title={selectedValueTitle}
+                                sx={{
+                                    ...styles.triggerText,
+                                    ...valueSx,
+                                }}
+                            >
+                                {operator} {selectedValueLabel}
+                            </Text>
+                        )}
                         {badgeLabel && (
                             <Badge variant='rounded' ml={1}>
                                 +{badgeLabel}
                             </Badge>
                         )}
-                    </>
+                    </Flex>
                 )}
             </Button>
         </PopoverTrigger>
