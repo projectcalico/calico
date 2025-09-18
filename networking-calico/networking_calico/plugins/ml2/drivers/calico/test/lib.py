@@ -66,7 +66,6 @@ sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
 sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
 sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
-m_oslo_context.context.RequestContext.return_value = None
 sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
 sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
 sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
