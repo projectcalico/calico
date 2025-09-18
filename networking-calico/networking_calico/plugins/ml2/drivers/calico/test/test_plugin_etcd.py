@@ -1587,7 +1587,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
             self.assertEtcdWrites({})
 
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
-        etcd_rule = policy._neutron_rule_to_etcd_rule(None, neutron_rule)
+        etcd_rule = policy._neutron_rule_to_etcd_rule(neutron_rule)
         self.assertEqual(exp_etcd_rule, etcd_rule)
 
     def test_profile_prefixing(self):

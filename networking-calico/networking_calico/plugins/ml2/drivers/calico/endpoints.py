@@ -143,7 +143,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         return dict(
             (endpoint_name(port), port)
             for port in self.db.get_ports(context)
-            if _port_is_endpoint_port(None, port)
+            if _port_is_endpoint_port(port)
         )
 
     def neutron_to_etcd_write_data(self, port, context, reread=False):
@@ -152,23 +152,23 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 port = self.db.get_port(context, port["id"])
             except n_exc.PortNotFound:
                 raise ResourceGone()
-        port_extra = self.get_extra_port_information(None, context, port)
+        port_extra = self.get_extra_port_information(context, port)
         return (
             endpoint_spec(port, port_extra),
             endpoint_labels(port, self.namespace, port_extra),
             endpoint_annotations(port),
         )
 
-    def write_endpoint(self, tt, port, context, must_update=False):
+    def write_endpoint(self, port, context, must_update=False):
         # Reread the current port. This protects against concurrent writes
         # breaking our state.
         port = self.db.get_port(context, port["id"])
 
         # Fill out other information we need on the port.
-        port_extra = self.get_extra_port_information(tt, context, port)
+        port_extra = self.get_extra_port_information(context, port)
 
         # Write the security policies for this port.
-        self.policy_syncer.write_sgs_to_etcd(tt, port_extra.security_groups, context)
+        self.policy_syncer.write_sgs_to_etcd(port_extra.security_groups, context)
 
         # Implementation note: we could arguably avoid holding the transaction
         # for this length and instead release it here, then use atomic CAS. The
@@ -229,7 +229,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             )
         ]
 
-    def get_network_properties_for_port(self, tt, context, port, port_extra):
+    def get_network_properties_for_port(self, context, port, port_extra):
         network = (
             context.session.query(models_v2.Network)
             .filter_by(id=port["network_id"])
@@ -242,26 +242,26 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 NETWORK_NAME_MAX_LENGTH,
             )
         except Exception:
-            LOG.warning(f"{tt} Failed to find network name for port {port['id']}")
+            LOG.warning(f"Failed to find network name for port {port['id']}")
 
-    def get_extra_port_information(self, tt, context, port):
+    def get_extra_port_information(self, context, port):
         """get_extra_port_information
 
         Gets extra information for a port that is needed before sending it to
         etcd.
         """
-        LOG.debug("%r port = %r", tt, port)
+        LOG.debug("port = %r", port)
         port_extra = PortExtra()
         port_extra.fixed_ips = self.get_fixed_ips_for_port(context, port)
         port_extra.floating_ips = self.get_floating_ips_for_port(context, port)
         port_extra.security_groups = self.get_security_groups_for_port(context, port)
-        self.get_network_properties_for_port(tt, context, port, port_extra)
+        self.get_network_properties_for_port(context, port, port_extra)
 
         self.add_port_gateways(context, port_extra)
         self.add_port_interface_name(port, port_extra)
-        self.add_port_project_data(tt, port, context, port_extra)
+        self.add_port_project_data(port, context, port_extra)
         self.add_port_sg_names(context, port_extra)
-        self.add_port_qos(tt, port, context, port_extra)
+        self.add_port_qos(port, context, port_extra)
 
         return port_extra
 
@@ -301,7 +301,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             )
             port_extra.security_group_names[sg["id"]] = sg_name
 
-    def add_port_qos(self, tt, port, context, port_extra):
+    def add_port_qos(self, port, context, port_extra):
         """add_port_qos
 
         Determine and store QoS parameters for a port.
@@ -333,13 +333,13 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             return setting
 
         qos_policy_id = port.get("qos_policy_id") or port.get("qos_network_policy_id")
-        LOG.debug("%r QoS Policy ID = %r", tt, qos_policy_id)
+        LOG.debug("QoS Policy ID = %r", qos_policy_id)
         if qos_policy_id:
             rules = context.session.query(qos_models.QosBandwidthLimitRule).filter_by(
                 qos_policy_id=qos_policy_id
             )
             for r in rules:
-                LOG.debug("%r BW rule = %r", tt, r)
+                LOG.debug("BW rule = %r", r)
                 direction = r.get("direction", "egress")
                 if r["max_kbps"] != 0:
                     qos[direction + "Bandwidth"] = cap(
@@ -354,7 +354,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 qos_policy_id=qos_policy_id
             )
             for r in rules:
-                LOG.debug("%r PR rule = %r", tt, r)
+                LOG.debug("PR rule = %r", r)
                 direction = r.get("direction", "egress")
                 if r["max_kpps"] != 0:
                     qos[direction + "PacketRate"] = cap(
@@ -412,7 +412,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         port_extra.qos = qos
 
-    def add_port_project_data(self, tt, port, context, port_extra):
+    def add_port_project_data(self, port, context, port_extra):
         """add_port_project_data
 
         Determine the OpenStack project name and parent ID for a given
@@ -420,13 +420,13 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         """
         proj_id = port.get("project_id", port.get("tenant_id"))
         if proj_id is None:
-            LOG.warning("%r Port with no project ID: %r", tt, port)
+            LOG.warning("Port with no project ID: %r", port)
             return
 
         # If we've already cached the corresponding project data, we're done.
         proj_data = self.proj_data_cache.get(proj_id)
         if proj_data is not None:
-            LOG.debug("%r Project data %r was cached", tt, proj_data)
+            LOG.debug("Project data %r was cached", proj_data)
             port_extra.project_data = proj_data
             return
 
@@ -434,7 +434,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         self.cache_port_project_data()
         proj_data = self.proj_data_cache.get(proj_id)
         if proj_data is None:
-            LOG.warning("%r Unable to find project data for port: %r", tt, port)
+            LOG.warning("Unable to find project data for port: %r", port)
             return
 
         port_extra.project_data = proj_data
@@ -575,7 +575,7 @@ def endpoint_annotations(port):
     return annotations
 
 
-def _port_is_endpoint_port(tt, port):
+def _port_is_endpoint_port(port):
     # Return True if port is a VM port.
     if port["device_owner"].startswith("compute:"):
         return True
@@ -585,5 +585,5 @@ def _port_is_endpoint_port(tt, port):
         return True
 
     # Otherwise log and return False.
-    LOG.debug("%r Not a VM port: %s", tt, port)
+    LOG.debug("Not a VM port: %s" % port)
     return False

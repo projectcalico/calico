@@ -87,17 +87,17 @@ class PolicySyncer(ResourceSyncer):
         rules = self.db.get_security_group_rules(
             context, filters={"security_group_id": [sg["id"]]}
         )
-        return policy_spec(None, sg["id"], rules)
+        return policy_spec(sg["id"], rules)
 
-    def write_sgs_to_etcd(self, tt, sgids, context):
+    def write_sgs_to_etcd(self, sgids, context):
         rules = self.db.get_security_group_rules(
             context, filters={"security_group_id": sgids}
         )
         for sgid in sgids:
-            self.update_in_etcd(SG_NAME_PREFIX + sgid, policy_spec(tt, sgid, rules))
+            self.update_in_etcd(SG_NAME_PREFIX + sgid, policy_spec(sgid, rules))
 
 
-def policy_spec(tt, sgid, rules):
+def policy_spec(sgid, rules):
     """Generate JSON NetworkPolicySpec for the given security group."""
 
     # <rules> can include those for several security groups.  Pick out the
@@ -109,9 +109,9 @@ def policy_spec(tt, sgid, rules):
     outbound_rules = []
     for rule in sg_rules:
         if rule["direction"] == "ingress":
-            inbound_rules.append(_neutron_rule_to_etcd_rule(tt, rule))
+            inbound_rules.append(_neutron_rule_to_etcd_rule(rule))
         else:
-            outbound_rules.append(_neutron_rule_to_etcd_rule(tt, rule))
+            outbound_rules.append(_neutron_rule_to_etcd_rule(rule))
 
     return {
         "ingress": inbound_rules,
@@ -120,7 +120,7 @@ def policy_spec(tt, sgid, rules):
     }
 
 
-def _neutron_rule_to_etcd_rule(tt, rule):
+def _neutron_rule_to_etcd_rule(rule):
     """_neutron_rule_to_etcd_rule
 
     Translate a single Neutron rule dict to a single dict in our
@@ -213,6 +213,6 @@ def _neutron_rule_to_etcd_rule(tt, rule):
         else:
             etcd_rule["destination"] = entity_rule
 
-    LOG.debug("%r => %s Calico rule %s" % (rule["direction"], tt, etcd_rule))
+    LOG.debug("=> %s Calico rule %s" % (rule["direction"], etcd_rule))
 
     return etcd_rule
