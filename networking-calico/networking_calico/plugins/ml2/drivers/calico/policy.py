@@ -199,7 +199,6 @@ def _neutron_rule_to_etcd_rule(rule):
         )
     if rule["remote_ip_prefix"] is not None:
         entity_rule["nets"] = [rule["remote_ip_prefix"]]
-    LOG.debug("=> Entity rule %s" % entity_rule)
 
     if port_spec is not None:
         if rule["direction"] == "ingress":
