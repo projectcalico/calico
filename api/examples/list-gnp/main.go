@@ -26,8 +26,7 @@ import (
 
 func main() {
 	// Create a new config based on kubeconfig file.
-	var kubeconfig *string
-	kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	kubeconfig := flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	flag.Parse()
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {

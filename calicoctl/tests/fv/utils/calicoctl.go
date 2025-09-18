@@ -21,7 +21,7 @@ import (
 	"runtime"
 	"strings"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -46,7 +46,7 @@ func getEnv(kdd bool) []string {
 
 func Calicoctl(kdd bool, args ...string) string {
 	out, err := CalicoctlMayFail(kdd, args...)
-	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to run calicoctl (kdd:%v) %v", kdd, args))
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to run calicoctl (kdd:%v) %v", kdd, args))
 	return out
 }
 

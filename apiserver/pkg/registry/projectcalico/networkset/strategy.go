@@ -80,7 +80,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("given object is not a Network Set")
 	}
-	return labels.Set(apiserver.ObjectMeta.Labels), NetworkSetToSelectableFields(apiserver), nil
+	return labels.Set(apiserver.Labels), NetworkSetToSelectableFields(apiserver), nil
 }
 
 // MatchNetworkSet is the filter used by the generic etcd backend to watch events

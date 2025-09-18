@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package v3
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -25,6 +26,14 @@ var (
 	SchemeBuilder      runtime.SchemeBuilder
 	localSchemeBuilder = &SchemeBuilder
 	AddToScheme        = localSchemeBuilder.AddToScheme
+	AllKnownTypes      = []runtime.Object{
+		&BlockAffinity{},
+		&BlockAffinityList{},
+		&IPAMBlock{},
+		&IPAMBlockList{},
+		&IPAMHandle{},
+		&IPAMHandleList{},
+	}
 )
 
 func init() {
@@ -41,5 +50,7 @@ func Resource(resource string) schema.GroupResource {
 
 // Adds the list of known types to api.Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(SchemeGroupVersion, AllKnownTypes...)
+	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
 }

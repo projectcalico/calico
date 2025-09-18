@@ -102,7 +102,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: Profile(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: Profile(" + name1 + ") with error:"))
 
 			By("Getting Profile (name1) and comparing the output against spec1")
 			res, outError := c.Profiles().Get(ctx, name1, options.GetOptions{})
@@ -509,7 +509,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
 			be.Clean()
-			testWatcher4.ExpectEvents(apiv3.KindProfile, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(apiv3.KindProfile, []watch.Event{
 				{
 					Type:     watch.Deleted,
 					Previous: outRes1,

@@ -34,7 +34,6 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -75,7 +74,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -126,13 +125,13 @@ Description:
 	if ip := parsedArgs["--ip"]; ip != nil {
 		passedIP := parsedArgs["--ip"].(string)
 		ip := argutils.ValidateIP(passedIP)
-		opt := libipam.ReleaseOptions{Address: ip.IP.String()}
+		opt := libipam.ReleaseOptions{Address: ip.String()}
 
 		// Call ReleaseIPs releases the IP and returns an empty slice as unallocatedIPs if
 		// release was successful else it returns back the slice with the IP passed in.
 		unallocatedIPs, _, err := ipamClient.ReleaseIPs(ctx, opt)
 		if err != nil {
-			return fmt.Errorf("Error: %v", err)
+			return fmt.Errorf("error: %v", err)
 		}
 
 		// Couldn't release the IP if the slice is not empty or IP might already be released/unassigned.
@@ -148,7 +147,7 @@ Description:
 	return nil
 }
 
-func releaseFromReports(ctx context.Context, c client.Interface, force bool, reportFiles []string, version string) error {
+func releaseFromReports(ctx context.Context, c clientv3.Interface, force bool, reportFiles []string, version string) error {
 	// Grab the cluster info for checking against the report metadata.
 	clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
@@ -172,11 +171,11 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 		// Make sure the metadata from the report matches the cluster.
 		if clusterInfo.Spec.ClusterGUID != r.ClusterGUID {
 			// This check cannot be overridden using the --force option, because it is critical.
-			return fmt.Errorf("Cluster does not match the provided report (%s): mismatched cluster GUID. Refusing to release.", reportFile)
+			return fmt.Errorf("cluster does not match the provided report (%s): mismatched cluster GUID. Refusing to release", reportFile)
 		}
 		if version != r.Version {
 			if !force {
-				return fmt.Errorf("The provided report (%s) was produced using a different version (%s) of calicoctl. Refusing to release.", reportFile, r.Version)
+				return fmt.Errorf("the provided report (%s) was produced using a different version (%s) of calicoctl. Refusing to release", reportFile, r.Version)
 			} else {
 				fmt.Println("WARNING: Report was produced using a different version of calicoctl. Ignoring due to --force option")
 			}
@@ -192,13 +191,13 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 
 	// At least one of the reports should match the current cluster info revision.
 	if !foundCurrent {
-		return fmt.Errorf("The provided reports are all stale - at least one should be up-to-date. Please generate a new report while the data store is locked and try again.")
+		return fmt.Errorf("the provided reports are all stale - at least one should be up-to-date. Please generate a new report while the data store is locked and try again")
 	}
 
 	// Datastore should be locked unless forcing.
 	if clusterInfo.Spec.DatastoreReady == nil || *clusterInfo.Spec.DatastoreReady {
 		if !force {
-			return fmt.Errorf("Data store is not locked. Either lock the data store, or re-run with --force.")
+			return fmt.Errorf("data store is not locked. Either lock the data store, or re-run with --force")
 		} else {
 			fmt.Println("WARNING: Data store is not locked. Ignoring due to --force option")
 		}

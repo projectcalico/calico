@@ -79,9 +79,9 @@ func (policyStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Objec
 func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	policy, ok := obj.(*calico.NetworkPolicy)
 	if !ok {
-		return nil, nil, fmt.Errorf("given object is not a Policy.")
+		return nil, nil, fmt.Errorf("given object is not a Policy")
 	}
-	return labels.Set(policy.ObjectMeta.Labels), PolicyToSelectableFields(policy), nil
+	return labels.Set(policy.Labels), PolicyToSelectableFields(policy), nil
 }
 
 // MatchPolicy is the filter used by the generic etcd backend to watch events

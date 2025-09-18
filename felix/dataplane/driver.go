@@ -363,6 +363,7 @@ func StartDataplaneDriver(
 			BPFEnabled:                         configParams.BPFEnabled,
 			BPFPolicyDebugEnabled:              configParams.BPFPolicyDebugEnabled,
 			BPFDisableUnprivileged:             configParams.BPFDisableUnprivileged,
+			BPFJITHardening:                    configParams.BPFJITHardening,
 			BPFConnTimeLBEnabled:               configParams.BPFConnectTimeLoadBalancingEnabled,
 			BPFConnTimeLB:                      configParams.BPFConnectTimeLoadBalancing,
 			BPFHostNetworkedNAT:                configParams.BPFHostNetworkedNATWithoutCTLB,
@@ -448,8 +449,8 @@ func SupportsBPF() error {
 }
 
 func ConfigurePrometheusMetrics(configParams *config.Config) {
-	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled && configParams.PrometheusWireGuardMetricsEnabled {
-		log.Info("Including Golang, Process and WireGuard metrics")
+	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled {
+		log.Info("Including Golang and Process metrics")
 	} else {
 		if !configParams.PrometheusGoMetricsEnabled {
 			log.Info("Discarding Golang metrics")
@@ -459,10 +460,14 @@ func ConfigurePrometheusMetrics(configParams *config.Config) {
 			log.Info("Discarding process metrics")
 			prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		}
-		if !configParams.PrometheusWireGuardMetricsEnabled || (!configParams.WireguardEnabled && !configParams.WireguardEnabledV6) {
-			log.Info("Discarding WireGuard metrics")
-			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
-		}
+	}
+
+	if configParams.PrometheusWireGuardMetricsEnabled && (configParams.WireguardEnabled || configParams.WireguardEnabledV6) {
+		log.Info("Including Wireguard metrics")
+		prometheus.MustRegister(wireguard.MustNewWireguardMetrics())
+	} else {
+		log.Info("Discarding WireGuard metrics")
+		prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 	}
 }
 

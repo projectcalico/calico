@@ -26,6 +26,9 @@ calico-node -allocate-tunnel-addrs -allocate-tunnel-addrs-run-once || exit 1
 # Create a directly to put enabled service files
 mkdir /etc/service/enabled
 
+# Enable the startup service.
+cp -a /etc/service/available/complete-startup /etc/service/enabled/
+
 # XXX: Here and below we do all manipulations on /etc/service avoiding rm'ing
 # dirs contained in Docker image. This is due to bug in Docker with graphdriver
 # overlay on CentOS 7.X kernels (https://github.com/docker/docker/issues/15314)

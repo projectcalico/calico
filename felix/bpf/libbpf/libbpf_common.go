@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,10 +47,7 @@ type TcGlobalData struct {
 	HostTunnelIPv6 [16]byte
 	JumpsV6        [40]uint32
 
-	IngressPacketRate  uint16
-	IngressPacketBurst uint16
-	EgressPacketRate   uint16
-	EgressPacketBurst  uint16
+	DSCP int8
 }
 
 type XDPGlobalData struct {

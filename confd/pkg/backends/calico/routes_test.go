@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 
@@ -32,18 +33,15 @@ const (
 	externalIP3 = "45.12.70.7"
 )
 
-func addEndpointSubset(ep *v1.Endpoints, nodename string) {
-	ep.Subsets = append(ep.Subsets, v1.EndpointSubset{
-		Addresses: []v1.EndpointAddress{
-			{
-				NodeName: &nodename,
-			},
-		},
+func addEndpointSubset(ep *discoveryv1.EndpointSlice, nodename string, address string) {
+	ep.Endpoints = append(ep.Endpoints, discoveryv1.Endpoint{
+		NodeName:  &nodename,
+		Addresses: []string{address},
 	})
 }
 
-func buildSimpleService() (svc *v1.Service, ep *v1.Endpoints) {
-	meta := metav1.ObjectMeta{Namespace: "foo", Name: "bar"}
+func buildSimpleService() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "bar", Labels: map[string]string{"kubernetes.io/service-name": "bar"}}
 	svc = &v1.Service{
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
@@ -54,14 +52,14 @@ func buildSimpleService() (svc *v1.Service, ep *v1.Endpoints) {
 			ExternalIPs:           []string{externalIP1, externalIP2},
 		},
 	}
-	ep = &v1.Endpoints{
+	ep = &discoveryv1.EndpointSlice{
 		ObjectMeta: meta,
 	}
 	return
 }
 
-func buildSimpleService2() (svc *v1.Service, ep *v1.Endpoints) {
-	meta := metav1.ObjectMeta{Namespace: "foo", Name: "rem"}
+func buildSimpleService2() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "rem", Labels: map[string]string{"kubernetes.io/service-name": "rem"}}
 	svc = &v1.Service{
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
@@ -72,14 +70,14 @@ func buildSimpleService2() (svc *v1.Service, ep *v1.Endpoints) {
 			ExternalIPs:           []string{externalIP1, externalIP2},
 		},
 	}
-	ep = &v1.Endpoints{
+	ep = &discoveryv1.EndpointSlice{
 		ObjectMeta: meta,
 	}
 	return
 }
 
-func buildSimpleService3() (svc *v1.Service, ep *v1.Endpoints) {
-	meta := metav1.ObjectMeta{Namespace: "foo", Name: "lb"}
+func buildSimpleService3() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "lb", Labels: map[string]string{"kubernetes.io/service-name": "lb"}}
 	svc = &v1.Service{
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
@@ -95,14 +93,14 @@ func buildSimpleService3() (svc *v1.Service, ep *v1.Endpoints) {
 			},
 		},
 	}
-	ep = &v1.Endpoints{
+	ep = &discoveryv1.EndpointSlice{
 		ObjectMeta: meta,
 	}
 	return
 }
 
-func buildSimpleService4() (svc *v1.Service, ep *v1.Endpoints) {
-	meta := metav1.ObjectMeta{Namespace: "foo", Name: "ext"}
+func buildSimpleService4() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "ext", Labels: map[string]string{"kubernetes.io/service-name": "ext"}}
 	svc = &v1.Service{
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
@@ -113,7 +111,7 @@ func buildSimpleService4() (svc *v1.Service, ep *v1.Endpoints) {
 			ExternalIPs:           []string{externalIP3},
 		},
 	}
-	ep = &v1.Endpoints{
+	ep = &discoveryv1.EndpointSlice{
 		ObjectMeta: meta,
 	}
 	return
@@ -183,7 +181,7 @@ var _ = Describe("RouteGenerator", func() {
 			err := rg.epIndexer.Add(ep)
 			Expect(err).NotTo(HaveOccurred())
 			fetchedEp, key := rg.getEndpointsForService(svc)
-			Expect(fetchedEp.ObjectMeta).To(Equal(ep.ObjectMeta))
+			Expect(fetchedEp[0].ObjectMeta).To(Equal(ep.ObjectMeta))
 			Expect(key).To(Equal("foo/bar"))
 		})
 	})
@@ -228,12 +226,13 @@ var _ = Describe("RouteGenerator", func() {
 		Context("svc = svc, ep = nil", func() {
 			It("should set and unset routes for a service", func() {
 				svc, ep := buildSimpleService()
-				addEndpointSubset(ep, rg.nodeName)
+				addEndpointSubset(ep, rg.nodeName, "1.1.1.1")
 
 				err := rg.epIndexer.Add(ep)
 				Expect(err).NotTo(HaveOccurred())
 				rg.setRouteForSvc(svc, nil)
-				fmt.Fprintln(GinkgoWriter, rg.svcRouteMap)
+				_, err = fmt.Fprintln(GinkgoWriter, rg.svcRouteMap)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal(expectedSvcRouteMap))
 				rg.unsetRouteForSvc(ep)
 				Expect(rg.svcRouteMap["foo/bar"]).To(BeEmpty())
@@ -242,7 +241,7 @@ var _ = Describe("RouteGenerator", func() {
 		Context("svc = nil, ep = ep", func() {
 			It("should set an unset routes for a service", func() {
 				svc, ep := buildSimpleService()
-				addEndpointSubset(ep, rg.nodeName)
+				addEndpointSubset(ep, rg.nodeName, "1.1.1.111")
 
 				err := rg.svcIndexer.Add(svc)
 				Expect(err).NotTo(HaveOccurred())
@@ -257,7 +256,7 @@ var _ = Describe("RouteGenerator", func() {
 	Describe("resourceInformerHandlers", func() {
 		var (
 			svc, svc2, svc3, svc4 *v1.Service
-			ep, ep2, ep3, ep4     *v1.Endpoints
+			ep, ep2, ep3, ep4     *discoveryv1.EndpointSlice
 		)
 
 		BeforeEach(func() {
@@ -266,10 +265,10 @@ var _ = Describe("RouteGenerator", func() {
 			svc3, ep3 = buildSimpleService3()
 			svc4, ep4 = buildSimpleService4()
 
-			addEndpointSubset(ep, rg.nodeName)
-			addEndpointSubset(ep2, rg.nodeName)
-			addEndpointSubset(ep3, rg.nodeName)
-			addEndpointSubset(ep4, rg.nodeName)
+			addEndpointSubset(ep, rg.nodeName, "1.1.1.1")
+			addEndpointSubset(ep2, rg.nodeName, "1.1.1.1")
+			addEndpointSubset(ep3, rg.nodeName, "1.1.1.1")
+			addEndpointSubset(ep4, rg.nodeName, "1.1.1.1")
 			err := rg.epIndexer.Add(ep)
 			Expect(err).NotTo(HaveOccurred())
 			err = rg.epIndexer.Add(ep2)
@@ -302,7 +301,7 @@ var _ = Describe("RouteGenerator", func() {
 			Expect(rg.client.cache["/calico/staticroutes/172.217.3.5-32"]).To(Equal("172.217.3.5/32"))
 
 			// Simulate the remove of the local endpoint. It should withdraw the routes.
-			ep.Subsets = []v1.EndpointSubset{}
+			ep.Endpoints = []discoveryv1.Endpoint{}
 			err := rg.epIndexer.Add(ep)
 			Expect(err).NotTo(HaveOccurred())
 			rg.onEPAdd(ep)
@@ -318,11 +317,9 @@ var _ = Describe("RouteGenerator", func() {
 
 			// Add the endpoint back with an IPv6 address.  The service's cluster IPs
 			// should remain non-advertised.
-			ep.Subsets = []v1.EndpointSubset{{
-				Addresses: []v1.EndpointAddress{{
-					IP:       "fd5f:1234::3",
-					NodeName: &rg.nodeName,
-				}},
+			ep.Endpoints = []discoveryv1.Endpoint{{
+				Addresses: []string{"fd5f:1234::3"},
+				NodeName:  &rg.nodeName,
 			}}
 			err = rg.epIndexer.Add(ep)
 			Expect(err).NotTo(HaveOccurred())
@@ -339,11 +336,9 @@ var _ = Describe("RouteGenerator", func() {
 
 			// Add the endpoint again with an IPv4 address.  The service's cluster IPs
 			// should now be advertised.
-			ep.Subsets = []v1.EndpointSubset{{
-				Addresses: []v1.EndpointAddress{{
-					IP:       "10.96.0.45",
-					NodeName: &rg.nodeName,
-				}},
+			ep.Endpoints = []discoveryv1.Endpoint{{
+				Addresses: []string{"10.96.0.45"},
+				NodeName:  &rg.nodeName,
 			}}
 			err = rg.epIndexer.Add(ep)
 			Expect(err).NotTo(HaveOccurred())
@@ -555,7 +550,7 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.cache["/calico/staticroutes/"+externalIP2+"-32"]).To(BeEmpty())
 
 				// It should also reject the full range into the data plane.
-				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.Replace(externalIPRange1, "/", "-", -1)]).To(Equal(externalIPRange1))
+				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.ReplaceAll(externalIPRange1, "/", "-")]).To(Equal(externalIPRange1))
 
 				// Simulate an event from the syncer which updates to use the second range (removing the first)
 				rg.client.onExternalIPsUpdate([]string{externalIPRange2})
@@ -566,7 +561,7 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.cache["/calico/staticroutes/"+externalIP2+"-32"]).To(Equal(externalIP2 + "/32"))
 
 				// It should now allow the range in the data plane.
-				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.Replace(externalIPRange1, "/", "-", -1)]).To(BeEmpty())
+				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.ReplaceAll(externalIPRange1, "/", "-")]).To(BeEmpty())
 			})
 
 			It("should not advertise cluster IPs unless a range is specified", func() {
@@ -814,18 +809,16 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
+				ep := &discoveryv1.EndpointSlice{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "10.0.0.2"},
-							},
+							Addresses: []string{"10.0.0.2"},
 						},
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeFalse())
 			})
 
@@ -838,18 +831,17 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 					},
 				}
-				ep := &v1.Endpoints{
+				ep := &discoveryv1.EndpointSlice{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "10.0.0.2", NodeName: &rg.nodeName},
-							},
+							Addresses: []string{"10.0.0.2"},
+							NodeName:  &rg.nodeName,
 						},
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeTrue())
 			})
 		})
@@ -868,18 +860,16 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "10.0.0.2"},
-							},
+							Addresses: []string{"10.0.0.2"},
 						},
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeTrue())
 			})
 
@@ -892,12 +882,12 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets:    []v1.EndpointSubset{},
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					Endpoints:  []discoveryv1.Endpoint{},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeFalse())
 			})
 		})
@@ -916,18 +906,16 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "2001:db8::1"}, // IPv6
-							},
+							Addresses: []string{"2001:db8::1"}, // IPv6
 						},
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeFalse())
 			})
 
@@ -940,18 +928,20 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-svc",
+						Namespace: "default",
+						Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+					},
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "2001:db8::2"}, // IPv6
-							},
+							Addresses: []string{"2001:db8::2"}, // IPv6
 						},
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeTrue())
 			})
 		})

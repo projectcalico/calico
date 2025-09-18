@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -32,8 +33,11 @@ import (
 	"github.com/gofrs/flock"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -185,6 +189,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
 
+			if err := maybeUpgradeIPAM(ctx, calicoClient.IPAM(), nodename); err != nil {
+				return fmt.Errorf("failed to upgrade IPAM database: %w", err)
+			}
+
 			return calicoClient.IPAM().AssignIP(ctx, assignArgs)
 		}
 		err := assignIPWithLock()
@@ -252,6 +260,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 			logrus.Info("Running in single-HNS-network mode, limiting number of IPAM blocks to 1.")
 			maxBlocks = 1
 		}
+		// Get namespace information for namespaceSelector support
+		namespace := epIDs.Namespace
+		var namespaceObj *corev1.Namespace
+
+		// Only attempt to fetch namespace if we have Kubernetes configuration and a valid namespace
+		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
+			logger.Debugf("Getting namespace for: %s", namespace)
+
+			namespaceObj, err = getNamespace(conf, namespace, logger)
+			if err != nil {
+				logger.WithError(err).Errorf("Failed to get namespace for %s", namespace)
+				return fmt.Errorf("failed to get namespace %s: %w", namespace, err)
+			}
+			logger.Debugf("Got namespace for %s: %v", namespace, namespaceObj.Labels)
+		}
+
 		assignArgs := ipam.AutoAssignArgs{
 			Num4:             num4,
 			Num6:             num6,
@@ -262,7 +286,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			MaxBlocksPerHost: maxBlocks,
 			Attrs:            attrs,
 			IntendedUse:      v3.IPPoolAllowedUseWorkload,
+			Namespace:        namespaceObj,
 		}
+
 		if runtime.GOOS == "windows" {
 			rsvdAttrWindows := &ipam.HostReservedAttr{
 				StartOfBlock: 3,
@@ -366,6 +392,41 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Print result to stdout, in the format defined by the requested cniVersion.
 	return cnitypes.PrintResult(r, conf.CNIVersion)
+}
+
+const ipamUpgradedFilePath = "/var/run/calico/cni/ipam_upgraded"
+
+func maybeUpgradeIPAM(ctx context.Context, ipamClient ipam.Interface, nodename string) error {
+	if _, err := os.Stat(ipamUpgradedFilePath); err == nil {
+		return nil
+	}
+
+	err := ipamClient.UpgradeHost(ctx, nodename)
+	if err != nil {
+		return fmt.Errorf("failed to upgrade IPAM database: %w", err)
+	}
+
+	if err := touchFile(ipamUpgradedFilePath); err != nil {
+		return fmt.Errorf("failed to create IPAM upgrade marker file %s: %w", ipamUpgradedFilePath, err)
+	}
+	return nil
+}
+
+func touchFile(filePath string) error {
+	dirPath, _ := path.Split(filePath)
+	err := os.MkdirAll(dirPath, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create directory for file %s: %w", filePath, err)
+	}
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", filePath, err)
+	}
+	err = file.Close()
+	if err != nil {
+		return fmt.Errorf("failure when closing file %s: %w", filePath, err)
+	}
+	return nil
 }
 
 type unlockFn func()
@@ -473,4 +534,25 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	return nil
+}
+
+// getNamespace retrieves namespace object using Kubernetes clientset
+func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*corev1.Namespace, error) {
+	if namespace == "" {
+		return nil, nil
+	}
+
+	// Create Kubernetes clientset
+	k8sClient, err := k8s.NewK8sClient(conf, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get namespace directly from Kubernetes API
+	ns, err := k8sClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return ns, nil
 }

@@ -303,7 +303,7 @@ func (c *flannelMigrationController) readAndUpdateFlannelEnvConfig() error {
 
 	// Convert subnet.env content to json string and update flannel-migration-config ConfigMap.
 	// So that it could be populated into migration controller pod next time it starts.
-	val := strings.Replace(data, "\n", ";", -1)
+	val := strings.ReplaceAll(data, "\n", ";")
 	err = updateConfigMapValue(c.k8sClientset, c.config.CalicoDaemonsetNamespace, migrationConfigMapName, migrationConfigMapEnvKey, val)
 	if err != nil {
 		return err

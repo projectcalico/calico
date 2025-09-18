@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -278,10 +278,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint log_filter_jmp,
 			uint *jumps,
 			uint *jumps6,
-			ushort ingress_packet_rate,
-			ushort ingress_packet_burst,
-			ushort egress_packet_rate,
-			ushort egress_packet_burst)
+			short dscp)
 {
 	struct cali_tc_global_data v4 = {
 		.tunnel_mtu = tmtu,
@@ -296,10 +293,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.natout_idx = natout,
 		.overlay_tunnel_id = overlay_tunnel_id,
 		.log_filter_jmp = log_filter_jmp,
-		.ingress_packet_rate = ingress_packet_rate,
-		.ingress_packet_burst = ingress_packet_burst,
-		.egress_packet_rate = egress_packet_rate,
-		.egress_packet_burst = egress_packet_burst,
+		.dscp = dscp,
 	};
 
 	strncpy(v4.iface_name, iface_name, sizeof(v4.iface_name));

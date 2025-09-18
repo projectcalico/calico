@@ -52,7 +52,7 @@ var ProgramsMapParameters = maps.MapParameters{
 	Name:       "cali_ctlb_progs",
 }
 
-func newProgramsMap() maps.Map {
+func ProgramsMap() maps.Map {
 	return maps.NewPinnedMap(ProgramsMapParameters)
 }
 
@@ -69,7 +69,7 @@ func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
 
 	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
 	defer bpf.CleanUpCalicoPins(pinDir)
-	ctlbProgsMap := newProgramsMap()
+	ctlbProgsMap := ProgramsMap()
 	if err := ctlbProgsMap.EnsureExists(); err != nil {
 		return fmt.Errorf("failed to create ctlb jump map: %w", err)
 	}
@@ -79,8 +79,8 @@ func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
 			log.Errorf("failed to delete the ctlb jump map entry: %s", err)
 		}
 	}
-	ctlbProgsMap.Close()
-	os.Remove(ctlbProgsMap.Path())
+	defer ctlbProgsMap.Close()
+	defer os.Remove(ctlbProgsMap.Path())
 
 	if err := detachCtlbPrograms(ipv4Enabled, pinDir, cgroupv2); err != nil {
 		return err
@@ -198,7 +198,7 @@ func updateCTLBJumpMap(jumpMap maps.Map, obj *libbpf.Obj) error {
 	return nil
 }
 
-func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP, legacy bool) error {
+func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool, ctlbProgsMap maps.Map, legacy bool) error {
 	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
@@ -216,7 +216,6 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 		return fmt.Errorf("failed to set-up cgroupv2: %w", err)
 	}
 
-	ctlbProgsMap := newProgramsMap()
 	var v4Obj, v46Obj, v6Obj *libbpf.Obj
 
 	// Load and attach v4, v46 CTLB program.
@@ -262,10 +261,6 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 				return err
 			}
 		}
-		if !ipv6Enabled {
-			//delete the jump map
-			os.Remove(ctlbProgsMap.Path())
-		}
 	}
 	// Load the v6 CTLB program.
 	if ipv6Enabled {
@@ -276,10 +271,6 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 		defer v6Obj.Close()
 		// If dual-stack, populate the jump maps with v6 ctlb programs.
 		if ipv4Enabled {
-			if err := ctlbProgsMap.EnsureExists(); err != nil {
-				log.WithError(err).Error("Failed to create CTLB programs maps")
-				return err
-			}
 			err = updateCTLBJumpMap(ctlbProgsMap, v6Obj)
 			if err != nil {
 				return err
@@ -306,12 +297,12 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
-	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, false)
+func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool, ctlbProgramsMap maps.Map) error {
+	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, ctlbProgramsMap, false)
 }
 
-func InstallConnectTimeLoadBalancerLegacy(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
-	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, true)
+func InstallConnectTimeLoadBalancerLegacy(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool, ctlbProgramsMap maps.Map) error {
+	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, ctlbProgramsMap, true)
 }
 
 func ProgFileName(logLevel string, ipver string) string {

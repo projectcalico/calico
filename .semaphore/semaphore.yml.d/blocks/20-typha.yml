@@ -1,6 +1,6 @@
 - name: Typha
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(typha)}"
   dependencies:
     - Prerequisites
   task:

@@ -219,7 +219,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						applyNode(bc, kc, testhost, nil)
 						defer deleteNode(bc, kc, testhost)
 
-						ia, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload)
+						ia, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -307,7 +307,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer GinkgoRecover()
 						defer wg.Done()
 
-						ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload)
+						ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -727,7 +727,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			}
 
 			By("attempting to claim the block on multiple hosts at the same time", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -757,7 +757,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to claim another address", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -1102,7 +1102,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				blockReaderWriter: rw,
 				reservations:      &fakeReservations{},
 			}
-			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel /* for variety */)
+			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel, nil)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(len(ia.IPs)).To(Equal(1))
 			Expect(ia.IPs[0].String()).To(Equal("10.0.0.2/30"))
