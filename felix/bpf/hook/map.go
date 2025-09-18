@@ -246,6 +246,10 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, e
 			continue
 		}
 
+		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
+			continue
+		}
+
 		pmIdx := pm.allocIdx()
 		err := obj.UpdateJumpMap(mapName, subprog, pmIdx)
 		if err != nil {
