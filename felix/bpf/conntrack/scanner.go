@@ -74,6 +74,7 @@ const (
 	ScanVerdictOK ScanVerdict = iota
 	// ScanVerdictDelete means entry should be deleted
 	ScanVerdictDelete
+	ScanVerdictDeleteImmediate // Delete without adding to cleanup map
 )
 
 const cleanupBatchSize int = 1000
@@ -242,7 +243,7 @@ func (s *Scanner) Scan() {
 		}
 
 		for _, scanner := range s.scanners {
-			if verdict, ts := scanner.Check(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
+			if verdict, ts := scanner.Check(ctKey, ctVal, s.get); verdict == ScanVerdictDelete || verdict == ScanVerdictDeleteImmediate {
 				numExpired++
 				if debug {
 					log.Debug("Deleting conntrack entry.")
@@ -251,6 +252,17 @@ func (s *Scanner) Scan() {
 				// fails to load.
 				if s.bpfCleaner == nil {
 					cleaned++
+					return maps.IterDelete
+				}
+				if verdict == ScanVerdictDeleteImmediate {
+					cleaned++
+					if debug {
+						log.WithFields(log.Fields{
+							"key":   ctKey,
+							"entry": ctVal,
+						}).Debug("Deleting conntrack entry immediately.")
+					}
+					// Delete without adding to cleanup map.
 					return maps.IterDelete
 				}
 				// NAT entry has expired.
