@@ -448,7 +448,6 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout, sleep t
 	var lastResponse connectivity.Response
 
 	var retryStart time.Time
-	var zeroTime time.Time
 
 	for {
 		err = tc.protocol.Send(msg)
@@ -463,7 +462,7 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout, sleep t
 			if err := tc.protocol.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
 				return err
 			}
-			if retryStart == zeroTime {
+			if retryStart.IsZero() {
 				retryStart = time.Now()
 			}
 		}
@@ -473,7 +472,7 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout, sleep t
 			if logPongs {
 				fmt.Println("PONG")
 			}
-			retryStart = zeroTime
+			retryStart = time.Time{}
 		} else if os.IsTimeout(err) {
 			fmt.Printf("receive timeout\n")
 			if timeout > 0 {
