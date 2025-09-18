@@ -583,6 +583,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						if BPFMode() {
 							// one host and one host tunnel routes per node
 							expectedNumRoutes := len(felixes) * 2
+							if ipipMode == api.IPIPModeNever {
+								// one host routes per node
+								expectedNumRoutes = len(felixes)
+							}
 							Eventually(func() int {
 								return strings.Count(f.BPFRoutes(), "host")
 							}).Should(Equal(expectedNumRoutes),

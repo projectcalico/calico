@@ -196,11 +196,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Checking host to workload connectivity
 				// Skipping due to known issue with tunnel IPs not being programmed in WEP mode
 				if vxlanTunnelSupported(vxlanMode, routeSource) {
-					cc.ExpectSome(tc.Felixes[0], w[0])
-					cc.ExpectSome(tc.Felixes[0], w[1])
-					if enableIPv6 {
-						cc.ExpectSome(tc.Felixes[0], w6[0])
-						cc.ExpectSome(tc.Felixes[0], w6[1])
+					for i := 0; i < 3; i++ {
+						f := felixes[i]
+						cc.ExpectSome(f, w[0])
+						cc.ExpectSome(f, w[1])
+						cc.ExpectSome(f, w[2])
+
+						if enableIPv6 {
+							cc.ExpectSome(f, w6[0])
+							cc.ExpectSome(f, w6[1])
+							cc.ExpectSome(f, w6[2])
+						}
 					}
 				}
 
