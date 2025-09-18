@@ -200,7 +200,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 
 				// Checking host to workload connectivity
 				// Skipping due to known issue with tunnel IPs not being programmed in WEP mode
-				if !(ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs") {
+				if ipipTunnelSupported(ipipMode, routeSource) {
 					cc.ExpectSome(tc.Felixes[0], w[0])
 					cc.ExpectSome(tc.Felixes[0], w[1])
 					if enableIPv6 {
@@ -213,9 +213,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 
 			It("should have some blackhole routes installed", func() {
-				if routeSource == "WorkloadIPs" {
+				if !ipipTunnelSupported(ipipMode, routeSource) {
 					Skip("not applicable for workload ips")
-					return
 				}
 
 				nodes := []string{
@@ -532,7 +531,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					// avoid those other checks setting up conntrack state that allows the
 					// existing case to pass for a different reason.
 					It("allows host0 to remote Calico-networked workload via service IP", func() {
-						if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
+						if !ipipTunnelSupported(ipipMode, routeSource) {
 							Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 						}
 						// Allocate a service IP.
@@ -958,7 +957,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 
 			It("should have host to workload connectivity", func() {
-				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
+				if !ipipTunnelSupported(ipipMode, routeSource) {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
@@ -1087,7 +1086,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 
 			It("should have host to workload connectivity", func() {
-				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
+				if !ipipTunnelSupported(ipipMode, routeSource) {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
@@ -1204,4 +1203,8 @@ func allHostsIPSetSize(felixes []*infrastructure.Felix, ipipMode api.IPIPMode) i
 		return 0
 	}
 	return len(felixes)
+}
+
+func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
+	return !(ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs")
 }

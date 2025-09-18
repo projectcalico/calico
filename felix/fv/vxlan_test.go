@@ -195,7 +195,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 				// Checking host to workload connectivity
 				// Skipping due to known issue with tunnel IPs not being programmed in WEP mode
-				if !(vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs") {
+				if vxlanTunnelSupported(vxlanMode, routeSource) {
 					cc.ExpectSome(tc.Felixes[0], w[0])
 					cc.ExpectSome(tc.Felixes[0], w[1])
 					if enableIPv6 {
@@ -208,9 +208,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			It("should have some blackhole routes installed", func() {
-				if routeSource == "WorkloadIPs" {
+				if !vxlanTunnelSupported(vxlanMode, routeSource) {
 					Skip("not applicable for workload ips")
-					return
 				}
 
 				nodes := []string{
@@ -530,7 +529,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// avoid those other checks setting up conntrack state that allows the
 					// existing case to pass for a different reason.
 					It("allows host0 to remote Calico-networked workload via service IP", func() {
-						if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
+						if !vxlanTunnelSupported(vxlanMode, routeSource) {
 							Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 						}
 						// Allocate a service IP.
@@ -972,7 +971,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			It("should have host to workload connectivity", func() {
-				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
+				if !vxlanTunnelSupported(vxlanMode, routeSource) {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
@@ -1097,7 +1096,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			It("should have host to workload connectivity", func() {
-				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
+				if !vxlanTunnelSupported(vxlanMode, routeSource) {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
@@ -1291,4 +1290,8 @@ func waitForVXLANDevice(tc infrastructure.TopologyContainers, enableIPv6 bool) {
 			return nil
 		}, "10s", "100ms").ShouldNot(HaveOccurred())
 	}
+}
+
+func vxlanTunnelSupported(vxlanMode api.VXLANMode, routeSource string) bool {
+	return !(vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs")
 }
