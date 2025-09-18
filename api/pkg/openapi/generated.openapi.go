@@ -1135,11 +1135,6 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"exportV4": {
-						VendorExtensible: spec.VendorExtensible{
-							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
-							},
-						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -1154,11 +1149,6 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"importV4": {
-						VendorExtensible: spec.VendorExtensible{
-							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
-							},
-						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -1173,11 +1163,6 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"exportV6": {
-						VendorExtensible: spec.VendorExtensible{
-							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
-							},
-						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -1192,11 +1177,6 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"importV6": {
-						VendorExtensible: spec.VendorExtensible{
-							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
-							},
-						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -5413,7 +5393,6 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref com
 					"runningConfig": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RunningConfig contains the effective config that is running in the kube-controllers pod, after merging the API resource with any environment variables.",
-							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec"),
 						},
 					},

@@ -48,19 +48,15 @@ type BGPFilter struct {
 // BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.
 type BGPFilterSpec struct {
 	// The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.
-	// +listType=set
 	ExportV4 []BGPFilterRuleV4 `json:"exportV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
-	// +listType=set
 	ImportV4 []BGPFilterRuleV4 `json:"importV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
-	// +listType=set
 	ExportV6 []BGPFilterRuleV6 `json:"exportV6,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
-	// +listType=set
 	ImportV6 []BGPFilterRuleV6 `json:"importV6,omitempty" validate:"omitempty,dive"`
 }
 

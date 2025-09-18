@@ -306,7 +306,6 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
                 exportV6:
                   items:
                     properties:
@@ -350,7 +349,6 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
                 importV4:
                   items:
                     properties:
@@ -394,7 +392,6 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
                 importV6:
                   items:
                     properties:
@@ -438,7 +435,6 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true

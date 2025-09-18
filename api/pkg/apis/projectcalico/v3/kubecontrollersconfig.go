@@ -212,7 +212,8 @@ const (
 type KubeControllersConfigurationStatus struct {
 	// RunningConfig contains the effective config that is running in the kube-controllers pod, after
 	// merging the API resource with any environment variables.
-	RunningConfig KubeControllersConfigurationSpec `json:"runningConfig,omitempty"`
+	// +optional
+	RunningConfig *KubeControllersConfigurationSpec `json:"runningConfig,omitempty"`
 
 	// EnvironmentVars contains the environment variables on the kube-controllers that influenced
 	// the RunningConfig.

@@ -51,7 +51,8 @@ type IPAMConfiguration struct {
 // IPAMConfigurationSpec contains the specification for an IPAMConfiguration resource.
 type IPAMConfigurationSpec struct {
 	// When StrictAffinity is true, borrowing IP addresses is not allowed.
-	StrictAffinity bool `json:"strictAffinity" validate:"required"`
+	// +kubebuilder:default=false
+	StrictAffinity bool `json:"strictAffinity"`
 
 	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
 	// affine to each host.
@@ -63,6 +64,7 @@ type IPAMConfigurationSpec struct {
 	MaxBlocksPerHost int32 `json:"maxBlocksPerHost,omitempty"`
 
 	// Whether or not to auto allocate blocks to hosts.
+	// +kubebuilder:default=true
 	AutoAllocateBlocks bool `json:"autoAllocateBlocks"`
 }
 

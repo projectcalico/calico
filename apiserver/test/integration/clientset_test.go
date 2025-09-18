@@ -1653,7 +1653,7 @@ func testKubeControllersConfigurationClient(client calicoclient.Interface) error
 	kubeControllersConfig := &v3.KubeControllersConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
 		Status: v3.KubeControllersConfigurationStatus{
-			RunningConfig: v3.KubeControllersConfigurationSpec{
+			RunningConfig: &v3.KubeControllersConfigurationSpec{
 				Controllers: v3.ControllersConfig{
 					Node: &v3.NodeControllerConfig{
 						SyncLabels: v3.Enabled,
@@ -2038,9 +2038,6 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	ctx := context.Background()
 
 	// Calico libv3 client instantiation in order to get around the API create restrictions
-	// TODO: Currently these tests only run on a Kubernetes datastore since profile creation
-	// does not work in etcd. Figure out how to divide this configuration to etcd once that
-	// is fixed.
 	config := apiconfig.NewCalicoAPIConfig()
 	config.Spec = apiconfig.CalicoAPIConfigSpec{
 		DatastoreType: apiconfig.Kubernetes,
@@ -2048,7 +2045,8 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 			EtcdEndpoints: "http://localhost:2379",
 		},
 		KubeConfig: apiconfig.KubeConfig{
-			Kubeconfig: os.Getenv("KUBECONFIG"),
+			Kubeconfig:     os.Getenv("KUBECONFIG"),
+			CalicoAPIGroup: os.Getenv("CALICO_API_GROUP"),
 		},
 	}
 	apiClient, err := libclient.New(*config)
@@ -2088,7 +2086,7 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	}
 
 	err = blockAffinityClient.Delete(ctx, name, metav1.DeleteOptions{})
-	if nil == err {
+	if err == nil {
 		return fmt.Errorf("should not be able to delete block affinity %s", blockAffinity.Name)
 	}
 
@@ -2106,25 +2104,20 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	// Verify watch
 	var events []watch.Event
 	timeout := time.After(500 * time.Millisecond)
-	var timeoutErr error
+
 	// watch for 2 events
-loop:
 	for range 2 {
 		select {
 		case e := <-w.ResultChan():
 			events = append(events, e)
 		case <-timeout:
-			timeoutErr = fmt.Errorf("timed out waiting for events")
-			break loop
+			return fmt.Errorf("timed out waiting for events")
 		}
 	}
-	if timeoutErr != nil {
-		return timeoutErr
-	}
+
 	if len(events) != 2 {
 		return fmt.Errorf("expected 2 watch events got %d", len(events))
 	}
-
 	return nil
 }
 

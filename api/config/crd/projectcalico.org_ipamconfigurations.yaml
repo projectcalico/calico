@@ -27,6 +27,7 @@ spec:
             spec:
               properties:
                 autoAllocateBlocks:
+                  default: true
                   type: boolean
                 maxBlocksPerHost:
                   default: 0
@@ -35,6 +36,7 @@ spec:
                   minimum: 0
                   type: integer
                 strictAffinity:
+                  default: false
                   type: boolean
               required:
                 - autoAllocateBlocks
