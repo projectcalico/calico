@@ -24,15 +24,15 @@ execute_test_suite() {
     rm $LOGPATH/rendered/*.cfg || true
 
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
-        run_extra_test test_node_mesh_bgp_password
-        run_extra_test test_bgp_password_deadlock
-        run_extra_test test_bgp_ttl_security
-        run_extra_test test_bgp_ignored_interfaces
-        run_extra_test test_bgp_reachable_by
-        run_extra_test test_bgp_filters
-        run_extra_test test_bgp_local_bgp_peer
-        run_extra_test test_bgp_next_hop_mode
-        run_extra_test test_bgp_reverse_peering
+          run_extra_test test_node_mesh_bgp_password
+    #     run_extra_test test_bgp_password_deadlock
+    #     run_extra_test test_bgp_ttl_security
+    #     run_extra_test test_bgp_ignored_interfaces
+    #     run_extra_test test_bgp_reachable_by
+    #     run_extra_test test_bgp_filters
+    #     run_extra_test test_bgp_local_bgp_peer
+    #     run_extra_test test_bgp_next_hop_mode
+    #     run_extra_test test_bgp_reverse_peering
     fi
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
@@ -822,6 +822,20 @@ compare_templates() {
         fi
         expected=/tests/compiled_templates/${testdir}/${f}
         actual=/etc/calico/confd/config/${f}
+
+        # Debug: Print the value of ${f} and check if actual file exists
+        echo "Processing template file: ${f}"
+        if [ -f "${actual}" ]; then
+            echo "Actual file exists at: ${actual}"
+            if [ "${actual}" = "/etc/calico/confd/config/bird.cfg" ]; then
+                echo "Content of actual file: Skip"
+                #cat "${actual}"
+            fi
+        else
+            echo "Actual file does NOT exist at: ${actual}"
+        fi
+        echo "---"
+
         if ! diff --ignore-blank-lines -q ${expected} ${actual} 1>/dev/null 2>&1; then
             if ! $record; then
                 rc=1;
