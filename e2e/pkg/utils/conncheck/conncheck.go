@@ -345,26 +345,46 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 	// Exec into the client pod and try to connect to the server.
 	cmd := c.command(exp.Target)
 
-	var out string
-	var err error
-	// Ensure the kubectl command executes in the remote cluster if required. Remote framework objects do not control
-	// how kubeconfigs are resolved by the kubectl command, so we must use this wrapper. See NewDefaultFrameworkForRemoteCluster.
-	remotecluster.RemoteFrameworkAwareExec(c.f, func() {
-		if windows.ClusterIsWindows() {
-			out, err = ExecInPod(exp.Client, "powershell.exe", "-Command", cmd)
-		} else {
-			out, err = ExecInPod(exp.Client, "sh", "-c", cmd)
-		}
+	logCtx := logrus.WithFields(logrus.Fields{
+		"cmd":      cmd,
+		"client":   fmt.Sprintf("%s/%s", exp.Client.Namespace, exp.Client.Name),
+		"target":   exp.Target.String(),
+		"expected": exp.ExpectedResult,
 	})
-	logrus.WithFields(logrus.Fields{
-		"output": out,
-		"cmd":    cmd,
-		"err":    err,
-	}).Debug("Output from connection attempt.")
-	result := Success
-	if err != nil {
-		result = Failure
+
+	// First attempt.
+	out, result, err := c.execCommandInPod(exp.Client, cmd)
+
+	// Retry up to 10 seconds if we didn't get the expected result. This helps to avoid flakes due to transient issues.
+	// We don't want to retry too many times, as that could mask real issues and slow down tests. However, we know that
+	// especially on CPU constrained environments such as CI, there can be a delay between making changes (e.g., applying a NetworkPolicy) and
+	// those changes taking effect. So a short retry loop is helpful.
+	timeout := time.After(10 * time.Second)
+	for result != exp.ExpectedResult {
+
+		select {
+		case <-timeout:
+			// Timed out.
+			break
+		default:
+			// Not timed out yet.
+		}
+
+		logCtx.WithFields(logrus.Fields{
+			"output": out,
+			"err":    err,
+			"actual": result,
+		}).Warn("Connection attempt did not get expected result. Retrying...")
+
+		time.Sleep(1 * time.Second)
+		out, result, err = c.execCommandInPod(exp.Client, cmd)
 	}
+
+	logCtx.WithFields(logrus.Fields{
+		"output": out,
+		"err":    err,
+		"actual": result,
+	}).Debug("Final connection attempt result")
 
 	exp.executed = true
 	results <- connectionResult{
@@ -386,6 +406,11 @@ func (c *connectionTester) Connect(client *Client, target Target) (string, error
 	}
 
 	cmd := c.command(target)
+	out, _, err := c.execCommandInPod(c.clients[client.ID()].pod, cmd)
+	return out, err
+}
+
+func (c *connectionTester) execCommandInPod(pod *v1.Pod, cmd string) (string, ResultStatus, error) {
 	var out string
 	var err error
 
@@ -393,12 +418,17 @@ func (c *connectionTester) Connect(client *Client, target Target) (string, error
 	// how kubeconfigs are resolved by the kubectl command, so we must use this wrapper. See NewDefaultFrameworkForRemoteCluster.
 	remotecluster.RemoteFrameworkAwareExec(c.f, func() {
 		if windows.ClusterIsWindows() {
-			out, err = ExecInPod(c.clients[client.ID()].pod, "powershell.exe", "-Command", cmd)
+			out, err = ExecInPod(pod, "powershell.exe", "-Command", cmd)
 		} else {
-			out, err = ExecInPod(c.clients[client.ID()].pod, "sh", "-c", cmd)
+			out, err = ExecInPod(pod, "sh", "-c", cmd)
 		}
 	})
-	return out, err
+	result := Success
+	if err != nil {
+		result = Failure
+	}
+
+	return out, result, err
 }
 
 func (c *connectionTester) command(t Target) string {
