@@ -37,18 +37,18 @@ import (
 )
 
 type IPMaps struct {
-	IpsetsMap         maps.Map
-	ArpMap            maps.Map
-	FailsafesMap      maps.Map
-	FrontendMap       maps.Map
-	BackendMap        maps.Map
-	AffinityMap       maps.Map
-	RouteMap          maps.Map
-	CtMap             maps.Map
-	SrMsgMap          maps.Map
-	CtNatsMap         maps.Map
-	CtCleanupMap      maps.Map
-	ConsistentHashMap maps.Map
+	IpsetsMap    maps.Map
+	ArpMap       maps.Map
+	FailsafesMap maps.Map
+	FrontendMap  maps.Map
+	BackendMap   maps.Map
+	AffinityMap  maps.Map
+	RouteMap     maps.Map
+	CtMap        maps.Map
+	SrMsgMap     maps.Map
+	CtNatsMap    maps.Map
+	CtCleanupMap maps.Map
+	MaglevMap    maps.Map
 }
 
 type CommonMaps struct {
@@ -114,18 +114,18 @@ func getIPMaps(ipFamily int) *IPMaps {
 	}
 
 	return &IPMaps{
-		IpsetsMap:         getmap(ipsets.Map, ipsets.MapV6),
-		ArpMap:            getmap(arp.Map, arp.MapV6),
-		FailsafesMap:      getmap(failsafes.Map, failsafes.MapV6),
-		FrontendMap:       getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6),
-		BackendMap:        getmapWithExistsCheck(nat.BackendMap, nat.BackendMapV6),
-		AffinityMap:       getmap(nat.AffinityMap, nat.AffinityMapV6),
-		RouteMap:          getmap(routes.Map, routes.MapV6),
-		CtMap:             getmap(conntrack.Map, conntrack.MapV6),
-		CtCleanupMap:      getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
-		SrMsgMap:          getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
-		CtNatsMap:         getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
-		ConsistentHashMap: getmapWithExistsCheck(nat.ConsistentHashMap, nat.ConsistentHashMapV6)}
+		IpsetsMap:    getmap(ipsets.Map, ipsets.MapV6),
+		ArpMap:       getmap(arp.Map, arp.MapV6),
+		FailsafesMap: getmap(failsafes.Map, failsafes.MapV6),
+		FrontendMap:  getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6),
+		BackendMap:   getmapWithExistsCheck(nat.BackendMap, nat.BackendMapV6),
+		AffinityMap:  getmap(nat.AffinityMap, nat.AffinityMapV6),
+		RouteMap:     getmap(routes.Map, routes.MapV6),
+		CtMap:        getmap(conntrack.Map, conntrack.MapV6),
+		CtCleanupMap: getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
+		SrMsgMap:     getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
+		CtNatsMap:    getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
+		MaglevMap:    getmapWithExistsCheck(nat.MaglevMap, nat.MaglevMapV6)}
 }
 
 func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
@@ -194,7 +194,7 @@ func (i *IPMaps) slice() []maps.Map {
 		i.CtCleanupMap,
 		i.SrMsgMap,
 		i.CtNatsMap,
-		i.ConsistentHashMap,
+		i.MaglevMap,
 	}
 }
 

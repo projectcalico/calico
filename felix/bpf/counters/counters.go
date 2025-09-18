@@ -207,7 +207,7 @@ var descriptions DescList = DescList{
 		Category: "Dropped", Caption: "QoS control limit",
 	},
 	{
-		Counter: DroppedMaglevNoBackend,
+		Counter:  DroppedMaglevNoBackend,
 		Category: "Dropped", Caption: "Maglev lookup found no backends for service IP",
 	},
 }

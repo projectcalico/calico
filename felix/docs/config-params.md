@@ -1912,21 +1912,6 @@ after cleanups.
 | Default value (YAML) | `DoubleIfFull` |
 | Notes | Required. | 
 
-### `BPFMapSizeConsistentHash` (config file) / `bpfMapSizeConsistentHash` (YAML)
-
-Sets the size of the ConsistentHash map. The map must be large enough to hold
-1009 entries for each ConsistentHash-enabled service address.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_BPFMapSizeConsistentHash` |
-| Encoding (env var/config file) | Integer |
-| Default value (above encoding) | `1009000` |
-| `FelixConfiguration` field | `bpfMapSizeConsistentHash` (YAML) `BPFMapSizeConsistentHash` (Go API) |
-| `FelixConfiguration` schema | Integer |
-| Default value (YAML) | `1009000` |
-| Notes | Required. | 
-
 ### `BPFMapSizeIPSets` (config file) / `bpfMapSizeIPSets` (YAML)
 
 Sets the size for ipsets map. The IP sets map must be large enough to hold an entry
@@ -1956,6 +1941,21 @@ for each device (host + workloads) on a host.
 | `FelixConfiguration` field | `bpfMapSizeIfState` (YAML) `BPFMapSizeIfState` (Go API) |
 | `FelixConfiguration` schema | Integer |
 | Default value (YAML) | `1000` |
+| Notes | Required. | 
+
+### `BPFMapSizeMaglev` (config file) / `bpfMapSizeMaglev` (YAML)
+
+Sets the size of the Maglev backend-lookup map. The map must be large enough to hold
+1009 entries for each Maglev-enabled service address.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFMapSizeMaglev` |
+| Encoding (env var/config file) | Integer |
+| Default value (above encoding) | `1009000` |
+| `FelixConfiguration` field | `bpfMapSizeMaglev` (YAML) `BPFMapSizeMaglev` (Go API) |
+| `FelixConfiguration` schema | Integer |
+| Default value (YAML) | `1009000` |
 | Notes | Required. | 
 
 ### `BPFMapSizeNATAffinity` (config file) / `bpfMapSizeNATAffinity` (YAML)

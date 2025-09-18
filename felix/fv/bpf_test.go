@@ -1976,7 +1976,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						port = uint16(testSvc.Spec.Ports[0].Port)
 
 						log.Info("Waiting for Maglev map to converge...")
-						maglevMapAnySearch := func(key nat.ConsistentHashBackendKeyInterface, family string, felix *infrastructure.Felix) nat.BackendValueInterface {
+						maglevMapAnySearch := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) nat.BackendValueInterface {
 							Expect(family).To(Or(Equal("ipv4"), Equal("ipv6")))
 
 							var v nat.BackendValueInterface
@@ -1984,9 +1984,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							switch family {
 							case "ipv4":
 								mm := dumpMaglevMap(felix)
-								kp := nat.ConsistentHashBackendKey{}
+								kp := nat.MaglevBackendKey{}
 								Expect(key).To(BeAssignableToTypeOf(kp))
-								kp, _ = key.(nat.ConsistentHashBackendKey)
+								kp, _ = key.(nat.MaglevBackendKey)
 
 								if v, ok = mm[kp]; !ok {
 									return nil
@@ -1994,9 +1994,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							case "ipv6":
 								mm := dumpMaglevMapV6(felix)
-								kp := nat.ConsistentHashBackendKeyV6{}
+								kp := nat.MaglevBackendKeyV6{}
 								Expect(key).To(BeAssignableToTypeOf(kp))
-								kp, _ = key.(nat.ConsistentHashBackendKeyV6)
+								kp, _ = key.(nat.MaglevBackendKeyV6)
 
 								if v, ok = mm[kp]; !ok {
 									return nil
@@ -2004,18 +2004,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}
 							return v
 						}
-						maglevMapAnySearchFunc := func(key nat.ConsistentHashBackendKeyInterface, family string, felix *infrastructure.Felix) func() nat.BackendValueInterface {
+						maglevMapAnySearchFunc := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) func() nat.BackendValueInterface {
 							return func() nat.BackendValueInterface {
 								return maglevMapAnySearch(key, family, felix)
 							}
 						}
 
-						var testMaglevMapKey nat.ConsistentHashBackendKeyInterface
+						var testMaglevMapKey nat.MaglevBackendKeyInterface
 						switch family {
 						case "ipv4":
-							testMaglevMapKey = nat.NewConsistentHashBackendKey(net.ParseIP(clusterIP), port, 6, 0)
+							testMaglevMapKey = nat.NewMaglevBackendKey(net.ParseIP(clusterIP), port, 6, 0)
 						case "ipv6":
-							testMaglevMapKey = nat.NewConsistentHashBackendKeyV6(net.ParseIP(clusterIP), port, 6, 0)
+							testMaglevMapKey = nat.NewMaglevBackendKeyV6(net.ParseIP(clusterIP), port, 6, 0)
 						default:
 							log.Panicf("Unexpected IP family %s", family)
 						}
@@ -5460,10 +5460,10 @@ func objectMetaV1(name string) metav1.ObjectMeta {
 	}
 }
 
-func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem, []nat.ConsistentHashMapMem) {
+func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem, []nat.MaglevMapMem) {
 	bpfsvcs := make([]nat.MapMem, len(felixes))
 	bpfeps := make([]nat.BackendMapMem, len(felixes))
-	bpfcheps := make([]nat.ConsistentHashMapMem, len(felixes))
+	bpfcheps := make([]nat.MaglevMapMem, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5485,11 +5485,11 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMa
 func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
 	[]map[nat.FrontendKeyInterface]nat.FrontendValue,
 	[]map[nat.BackendKey]nat.BackendValueInterface,
-	[]map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface,
+	[]map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface,
 ) {
 	bpfsvcs := make([]map[nat.FrontendKeyInterface]nat.FrontendValue, len(felixes))
 	bpfeps := make([]map[nat.BackendKey]nat.BackendValueInterface, len(felixes))
-	bpfcheps := make([]map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface, len(felixes))
+	bpfcheps := make([]map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5508,10 +5508,10 @@ func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
 	return bpfsvcs, bpfeps, bpfcheps
 }
 
-func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6, []nat.ConsistentHashMapMemV6) {
+func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6, []nat.MaglevMapMemV6) {
 	bpfsvcs := make([]nat.MapMemV6, len(felixes))
 	bpfeps := make([]nat.BackendMapMemV6, len(felixes))
-	cheps := make([]nat.ConsistentHashMapMemV6, len(felixes))
+	cheps := make([]nat.MaglevMapMemV6, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5530,22 +5530,22 @@ func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.Backe
 	return bpfsvcs, bpfeps, cheps
 }
 
-func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem, nat.ConsistentHashMapMem) {
+func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem, nat.MaglevMapMem) {
 	return dumpNATMap(felix), dumpEPMap(felix), dumpMaglevMap(felix)
 }
 
-func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6, nat.ConsistentHashMapMemV6) {
+func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6, nat.MaglevMapMemV6) {
 	return dumpNATMapV6(felix), dumpEPMapV6(felix), dumpMaglevMapV6(felix)
 }
 
 func dumpNATMapsAny(family int, felix *infrastructure.Felix) (
 	map[nat.FrontendKeyInterface]nat.FrontendValue,
 	map[nat.BackendKey]nat.BackendValueInterface,
-	map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface,
+	map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface,
 ) {
 	f := make(map[nat.FrontendKeyInterface]nat.FrontendValue)
 	b := make(map[nat.BackendKey]nat.BackendValueInterface)
-	m := make(map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface)
+	m := make(map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface)
 
 	if family == 6 {
 		f6, b6, m6 := dumpNATMapsV6(felix)
@@ -5624,17 +5624,17 @@ func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
 	return m
 }
 
-func dumpMaglevMap(felix *infrastructure.Felix) nat.ConsistentHashMapMem {
-	bm := nat.ConsistentHashMap()
-	m := make(nat.ConsistentHashMapMem)
-	dumpBPFMap(felix, bm, nat.ConsistentHashMapMemIter(m))
+func dumpMaglevMap(felix *infrastructure.Felix) nat.MaglevMapMem {
+	bm := nat.MaglevMap()
+	m := make(nat.MaglevMapMem)
+	dumpBPFMap(felix, bm, nat.MaglevMapMemIter(m))
 	return m
 }
 
-func dumpMaglevMapV6(felix *infrastructure.Felix) nat.ConsistentHashMapMemV6 {
-	bm := nat.ConsistentHashMapV6()
-	m := make(nat.ConsistentHashMapMemV6)
-	dumpBPFMap(felix, bm, nat.ConsistentHashMapMemV6Iter(m))
+func dumpMaglevMapV6(felix *infrastructure.Felix) nat.MaglevMapMemV6 {
+	bm := nat.MaglevMapV6()
+	m := make(nat.MaglevMapMemV6)
+	dumpBPFMap(felix, bm, nat.MaglevMapMemV6Iter(m))
 	return m
 }
 
