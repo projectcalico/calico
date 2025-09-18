@@ -2429,6 +2429,22 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 				continue
 			}
 			numUpgraded++
+		} else if val, ok := kv.Value.(*v3.BlockAffinity); ok {
+			if val.Spec.Node != nodeName {
+				// Only do _our_ affinities to avoid n x n conflicts with other
+				// nodes also doing this operation.
+				continue
+			}
+			model.EnsureBlockAffinityLabelsV3(val)
+			_, err := c.client.Update(ctx, kv)
+			if err != nil {
+				errs = append(errs, err)
+				if errors.Is(err, context.DeadlineExceeded) {
+					break
+				}
+				continue
+			}
+			numUpgraded++
 		}
 	}
 	if numUpgraded == 0 && len(errs) == 0 {

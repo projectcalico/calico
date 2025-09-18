@@ -566,7 +566,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 							break
 						}
 					}
-					Expect(found1).NotTo(BeNil())
+					ExpectWithOffset(1, found1).NotTo(BeNil())
 					return found1.Labels
 				} else {
 					var list libapiv3.BlockAffinityList
@@ -578,7 +578,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 							break
 						}
 					}
-					Expect(found1).NotTo(BeNil())
+					ExpectWithOffset(1, found1).NotTo(BeNil())
 					return found1.Labels
 				}
 			}
@@ -598,24 +598,16 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(statErr).NotTo(HaveOccurred())
 
 			// 4) Verify the previously unlabeled BA is now labeled.
-			foundLabels = getLabels("10.11.0.0./26")
+			foundLabels = getLabels("10.11.0.0/26")
 			Expect(foundLabels).To(HaveKey(apiv3.LabelAffinityType))
 			Expect(foundLabels).To(HaveKey(apiv3.LabelIPVersion))
 			Expect(foundLabels).To(HaveKey(apiv3.LabelHostnameHash))
 
 			// 5) Create a second unlabeled BA for this host.
 			Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, host, "10.11.0.64/26")).To(Succeed())
-			list := libapiv3.BlockAffinityList{}
-			Expect(crdClient.List(ctx, &list)).To(Succeed())
-			var found2 *libapiv3.BlockAffinity
-			for i := range list.Items {
-				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
-					found2 = &list.Items[i]
-					break
-				}
-			}
-			Expect(found2).NotTo(BeNil())
-			Expect(found2.Labels).To(HaveLen(0))
+
+			labels2 := getLabels("10.11.0.64/26")
+			Expect(labels2).To(HaveLen(0))
 
 			// 6) Run the plugin again; since touchfile exists, no upgrade should occur.
 			cid2 := uuid.NewString()
@@ -624,7 +616,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(result2.IPs).To(HaveLen(1))
 
 			// Re-list and ensure the second BA remains unlabeled.
-			labels2 := getLabels("10.11.0.64/26")
+			labels2 = getLabels("10.11.0.64/26")
 			Expect(labels2).To(HaveLen(0))
 
 			// Cleanup: release explicit IPs.
