@@ -154,7 +154,6 @@ mainLoop:
 	}
 }
 
-// resyncAndCreateWatcher loops performing resync processing until it successfully
 func (wc *watcherCache) markInstalled() {
 	if !wc.crdInstalled {
 		wc.logger.Info("Backing API has been installed")
