@@ -15,18 +15,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
+// Config contains overall configuration for the release tool inputs and outputs
 type Config struct {
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string
@@ -53,6 +55,7 @@ func loadConfig() (*Config, error) {
 	return config, nil
 }
 
+// Commands returns the list of top-level program commands
 func Commands(cfg *Config) []*cli.Command {
 	return []*cli.Command{
 		hashreleaseCommand(cfg),
@@ -69,16 +72,16 @@ func main() {
 
 	logutils.ConfigureFormatter("release")
 
-	app := &cli.App{
-		Name:                 "release",
-		Usage:                fmt.Sprintf("release tool for %s", utils.ProductName),
-		Flags:                globalFlags,
-		Commands:             Commands(cfg),
-		EnableBashCompletion: true,
+	app := &cli.Command{
+		Name:                  "release",
+		Usage:                 fmt.Sprintf("release tool for %s", utils.ProductName),
+		Flags:                 globalFlags,
+		Commands:              Commands(cfg),
+		EnableShellCompletion: true,
 	}
 
 	// Run the app.
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		logrus.WithError(err).Fatal("Error running app")
 	}
 }
