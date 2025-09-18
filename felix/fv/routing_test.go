@@ -213,7 +213,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 
 			It("should have some blackhole routes installed", func() {
-				if !ipipTunnelSupported(ipipMode, routeSource) {
+				if routeSource == "WorkloadIPs" {
 					Skip("not applicable for workload ips")
 				}
 

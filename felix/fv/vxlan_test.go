@@ -214,7 +214,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			It("should have some blackhole routes installed", func() {
-				if !vxlanTunnelSupported(vxlanMode, routeSource) {
+				if routeSource == "WorkloadIPs" {
 					Skip("not applicable for workload ips")
 				}
 
