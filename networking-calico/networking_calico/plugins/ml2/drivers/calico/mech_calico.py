@@ -227,6 +227,7 @@ class TaskTracker(oslo_context.context.RequestContext):
     def get_logging_values(self):
         d = super(TaskTracker, self).get_logging_values()
         d["log_string"] = self.log_string
+        return d
 
 
 class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
