@@ -80,6 +80,8 @@ const consistentHashBackendValueV6Size = backendValueV6Size
 
 type ConsistentHashBackendKeyV6 [consistentHashBackendKeyV6Size]byte
 
+var _ ConsistentHashBackendKeyInterface = ConsistentHashBackendKeyV6{}
+
 func NewConsistentHashBackendKeyV6(addr net.IP, port uint16, proto uint8, ordinal uint32) ConsistentHashBackendKeyV6 {
 	// TODO ADAPT TO V6
 	var k ConsistentHashBackendKeyV6
