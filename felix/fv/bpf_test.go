@@ -2020,7 +2020,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							log.Panicf("Unexpected IP family %s", family)
 						}
 
-						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[1]), "10s").ShouldNot(BeNil())
+						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[1]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up")
 						Expect(maglevMapAnySearch(testMaglevMapKey, family, tc.Felixes[1]).Addr().String()).Should(Or(Equal(w[0][0].IP), Equal(w[0][1])))
 
 						// Configure routes on external client and Felix nodes.
@@ -2029,21 +2029,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if testOpts.ipv6 {
 							ipRoute = append(ipRoute, "-6")
 						}
-						cmd := append(ipRoute, "route", "add", clusterIP, "via", felixIP(1))
-						externalClient.Exec(cmd...)
+						cmdCIP := append(ipRoute, "route", "add", clusterIP, "via", felixIP(1))
+						externalClient.Exec(cmdCIP...)
+
+						cmdEIP := append(ipRoute, "route", "add", externalIP, "via", felixIP(1))
+						externalClient.Exec(cmdEIP...)
 					})
 
-					It("should have connectivity from external client via external IP", func() {
+					It("should have connectivity from external client to maglev backend via cluster IP", func() {
 						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
-						cc.CheckConnectivity()
-
-						ipRoute := []string{"ip"}
-						if testOpts.ipv6 {
-							ipRoute = append(ipRoute, "-6")
-						}
-						cmd := append(ipRoute, "route", "replace", extIP, "via", felixIP(0))
-						externalClient.Exec(cmd...)
-
+						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
 					})
 
