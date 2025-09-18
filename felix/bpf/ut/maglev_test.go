@@ -56,7 +56,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	err = natMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	mgMap = nat.ConsistentHashMap()
+	mgMap = nat.MaglevMap()
 	err = mgMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -112,7 +112,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	// Node 3: Flagging frontend map item with the consistent-hash flag.
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueWithFlags(0, 1, 0, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueWithFlags(0, 1, 0, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -125,7 +125,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	lut := mglv.Generate()
 	for ordinal, ep := range lut {
 		err = mgMap.Update(
-			nat.NewConsistentHashBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
+			nat.NewMaglevBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
 			nat.NewNATBackendValue(net.ParseIP(ep.IP()), uint16(ep.Port())).AsBytes(),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -250,7 +250,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	// Node 2: now we are at the node with local workload
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueWithFlags(0 /* id */, 1 /* count */, 1 /* local */, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueWithFlags(0 /* id */, 1 /* count */, 1 /* local */, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -263,7 +263,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	lut = mglv.Generate()
 	for ordinal, ep := range lut {
 		err = mgMap.Update(
-			nat.NewConsistentHashBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
+			nat.NewMaglevBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
 			nat.NewNATBackendValue(net.ParseIP(ep.IP()), uint16(ep.Port())).AsBytes(),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -471,7 +471,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	// Node 1: Flagging frontend map item with the consistent-hash flag.
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueWithFlags(0, 1, 0, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueWithFlags(0, 1, 0, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -484,7 +484,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	lut = mglv.Generate()
 	for ordinal, ep := range lut {
 		err = mgMap.Update(
-			nat.NewConsistentHashBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
+			nat.NewMaglevBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
 			nat.NewNATBackendValue(net.ParseIP(ep.IP()), uint16(ep.Port())).AsBytes(),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -596,7 +596,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	// now we are at the node with local workload
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueWithFlags(0 /* id */, 1 /* count */, 1 /* local */, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueWithFlags(0 /* id */, 1 /* count */, 1 /* local */, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -609,7 +609,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	lut = mglv.Generate()
 	for ordinal, ep := range lut {
 		err = mgMap.Update(
-			nat.NewConsistentHashBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
+			nat.NewMaglevBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
 			nat.NewNATBackendValue(net.ParseIP(ep.IP()), uint16(ep.Port())).AsBytes(),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -805,7 +805,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueWithFlags(0, 1, 0, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueWithFlags(0, 1, 0, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 	mglv = consistenthash.New(consistenthash.WithHash(fnv.New32(), fnv.New32()), consistenthash.WithPreferenceLength(31))
@@ -816,7 +816,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	lut = mglv.Generate()
 	for ordinal, ep := range lut {
 		err = mgMap.Update(
-			nat.NewConsistentHashBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
+			nat.NewMaglevBackendKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
 			nat.NewNATBackendValue(net.ParseIP(ep.IP()), uint16(ep.Port())).AsBytes(),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -922,14 +922,14 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 
 	err = natMapV6.Update(
 		nat.NewNATKeyV6(ipv6.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueV6WithFlags(0, 1, 0, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueV6WithFlags(0, 1, 0, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
 	natIP := net.ParseIP("abcd::ffff:0808:0808")
 	natPort := uint16(666)
 
-	mgMap6 := nat.ConsistentHashMapV6()
+	mgMap6 := nat.MaglevMapV6()
 	err = mgMap6.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -942,7 +942,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	lut := mglv.Generate()
 	for ordinal, ep := range lut {
 		err = mgMap6.Update(
-			nat.NewConsistentHashBackendKeyV6(ipv6.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
+			nat.NewMaglevBackendKeyV6(ipv6.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
 			nat.NewNATBackendValueV6(net.ParseIP(ep.IP()), uint16(ep.Port())).AsBytes(),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -1083,7 +1083,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	// now we are at the node with local workload
 	err = natMapV6.Update(
 		nat.NewNATKeyV6(ipv6.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueV6WithFlags(0 /* id */, 1 /* count */, 1 /* local */, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueV6WithFlags(0 /* id */, 1 /* count */, 1 /* local */, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1401,11 +1401,11 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 
 	err = natMapV6.Update(
 		nat.NewNATKeyV6(ipv6.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueV6WithFlags(0, 1, 0, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueV6WithFlags(0, 1, 0, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	mgMap6 = nat.ConsistentHashMapV6()
+	mgMap6 = nat.MaglevMapV6()
 	err = mgMap6.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1418,7 +1418,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	lut = mglv.Generate()
 	for ordinal, ep := range lut {
 		err = mgMap6.Update(
-			nat.NewConsistentHashBackendKeyV6(ipv6.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
+			nat.NewMaglevBackendKeyV6(ipv6.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP), uint32(ordinal)).AsBytes(),
 			nat.NewNATBackendValueV6(net.ParseIP(ep.IP()), uint16(ep.Port())).AsBytes(),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -1559,7 +1559,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	// now we are at the node with local workload
 	err = natMapV6.Update(
 		nat.NewNATKeyV6(ipv6.DstIP, uint16(tcp.DstPort), uint8(layers.IPProtocolTCP)).AsBytes(),
-		nat.NewNATValueV6WithFlags(0 /* id */, 1 /* count */, 1 /* local */, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueV6WithFlags(0 /* id */, 1 /* count */, 1 /* local */, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1887,14 +1887,14 @@ func TestMaglevNATNodePortNoFWD(t *testing.T) {
 	err = natMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	mgMap := nat.ConsistentHashMap()
+	mgMap := nat.MaglevMap()
 	err = mgMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
 	// local workload
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValueWithFlags(0 /* count */, 1 /* local */, 1, 0, nat.NATFlgConsistentHash).AsBytes(),
+		nat.NewNATValueWithFlags(0 /* count */, 1 /* local */, 1, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1910,7 +1910,7 @@ func TestMaglevNATNodePortNoFWD(t *testing.T) {
 	lut := mglv.Generate()
 	for ordinal, ep := range lut {
 		err = mgMap.Update(
-			nat.NewConsistentHashBackendKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol), uint32(ordinal)).AsBytes(),
+			nat.NewMaglevBackendKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol), uint32(ordinal)).AsBytes(),
 			nat.NewNATBackendValue(net.ParseIP(ep.IP()), uint16(ep.Port())).AsBytes(),
 		)
 		Expect(err).NotTo(HaveOccurred())
