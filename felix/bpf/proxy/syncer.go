@@ -555,6 +555,11 @@ func (s *Syncer) applyDerived(
 		return fmt.Errorf("no ClusterIP for derived service type %d", t)
 	}
 
+	// Instead of configuring a new CH module for the derived service,
+	// we'll just copy the original. This assumes the backend lists for
+	// the service and derived service are the same.
+	// TO THE REVIEWER: PLEASE SUGGEST REMOVING THIS LINE IF THE ABOVE IS SATISFACTORY!
+	var origCH *consistenthash.ConsistentHash
 	var skey svcKey
 	count := svc.count
 	local := svc.localCount
@@ -562,8 +567,23 @@ func (s *Syncer) applyDerived(
 	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP()))
 	flags := uint32(0)
 	if sinfo.UseMaglev() {
-		flags |= nat.NATFlgMaglev
+		switch t {
+		case svcTypeNodePort, svcTypeNodePortRemote:
+			log.WithField("service", sname).Warn("Ignoring Maglev directive for unsupported service type: NodePort")
+		default:
+			flags |= nat.NATFlgMaglev
+			origSKey := getSvcKey(sname, "")
+			ch, ok := s.consistentHashMap[origSKey]
+			if !ok {
+				// This shouldn't happen.
+				log.WithField("name", sname).Warn("No Maglev LUT was originally written for this service. Cannot program derived service LUT")
+			} else {
+				origCH = ch
+				log.WithField("service", sname).Debug("Found pre-existing CH for Maglev service.")
+			}
+		}
 	}
+
 	switch t {
 	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:
 		if sinfo.ExternalPolicyLocal() {
@@ -584,6 +604,11 @@ func (s *Syncer) applyDerived(
 	if err := s.writeSvc(sinfo, svc.id, count, local, flags); err != nil {
 		return err
 	}
+
+	if origCH != nil {
+		s.writeMaglevSvcBackends(skey, sinfo, origCH)
+	}
+
 	if svcTypeLoadBalancer == t || svcTypeExternalIP == t {
 		err := s.writeLBSrcRangeSvcNATKeys(sinfo, svc.id, count, local, flags)
 		if err != nil {
@@ -777,6 +802,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	cpEps := make([]k8sp.Endpoint, 0, len(eps))
 	cnt := 0
 	local := 0
+	var ch *consistenthash.ConsistentHash
 
 	if sinfo.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		// since we write the backend before we write the frontend, we need to
@@ -824,7 +850,13 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 
 	if sinfo.UseMaglev() {
 		flags |= nat.NATFlgMaglev
-		s.writeMaglevBackends(skey, sinfo, eps)
+		ch = newDefaultConsistentHash()
+		for _, ep := range eps {
+			if ep.IsReady() {
+				ch.AddBackend(ep)
+			}
+		}
+		s.writeMaglevSvcBackends(skey, sinfo, ch)
 	}
 
 	if err := s.writeSvc(sinfo, id, cnt, local, flags); err != nil {
@@ -850,37 +882,28 @@ func newDefaultConsistentHash() *consistenthash.ConsistentHash {
 	return consistenthash.New(consistenthash.WithHash(fnv.New32(), fnv.New32()))
 }
 
-func (s *Syncer) writeMaglevBackends(skey svcKey, sinfo Service, eps []k8sp.Endpoint) {
-	if len(eps) == 0 || eps == nil {
+// writeMaglevBackends takes frontend info, and a pre-populated CH module (backends already programmed).
+func (s *Syncer) writeMaglevSvcBackends(skey svcKey, sinfo Service, ch *consistenthash.ConsistentHash) {
+	if ch == nil {
 		log.WithFields(log.Fields{"service": skey, "name": sinfo.String()}).Info("Skipping ConsistentHash-enabled service update for empty endpoint list")
 		return
 	}
 
-	// ALEX TODO loadbalancer IP awareness.
 	vip := sinfo.ClusterIP()
 	port := uint16(sinfo.Port())
 	proto := ProtoV1ToIntPanic(sinfo.Protocol())
-	consistentHash := newDefaultConsistentHash()
-	for _, ep := range eps {
-		if ep.IsReady() {
-			consistentHash.AddBackend(ep)
-		}
-	}
-	s.consistentHashMap[skey] = consistentHash
+
+	s.consistentHashMap[skey] = ch
 
 	n := time.Now()
-	lut := consistentHash.Generate()
-	s.writeMaglevSvcBackends(vip, port, proto, lut)
-	dt := time.Since(n)
-	log.Infof("Wrote Maglev service '%s' backends (%d) in %fs", skey.sname, len(eps), dt.Seconds())
-}
-
-func (s *Syncer) writeMaglevSvcBackends(vip net.IP, port uint16, protocol uint8, lut []k8sp.Endpoint) {
+	lut := ch.Generate()
 	for i, b := range lut {
-		mKey := s.newMaglevKey(vip, port, protocol, uint32(i))
+		mKey := s.newMaglevKey(vip, port, proto, uint32(i))
 		mVal := s.newBackendValue(net.ParseIP(b.IP()), uint16(b.Port()))
 		s.bpfMaglevEps.Desired().Set(mKey, mVal)
 	}
+	dt := time.Since(n)
+	log.Infof("Wrote Maglev service '%s' backends in %fs", skey.sname, dt.Seconds())
 }
 
 func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) error {
