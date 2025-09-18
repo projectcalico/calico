@@ -1495,6 +1495,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFJITHardening != nil {
+		in, out := &in.BPFJITHardening, &out.BPFJITHardening
+		*out = new(BPFJITHardeningType)
+		**out = **in
+	}
 	if in.BPFConntrackCleanupMode != nil {
 		in, out := &in.BPFConntrackCleanupMode, &out.BPFConntrackCleanupMode
 		*out = new(BPFConntrackMode)
