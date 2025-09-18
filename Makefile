@@ -68,7 +68,7 @@ check-go-mod:
 go-vet:
 	# Go vet will check that libbpf headers can be found; make sure they're available.
 	$(MAKE) -C felix clone-libbpf
-	$(DOCKER_GO_BUILD) go vet ./...
+	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
