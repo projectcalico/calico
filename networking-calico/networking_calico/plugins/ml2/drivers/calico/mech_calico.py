@@ -237,7 +237,7 @@ class TrackTask(oslo_context.context.RequestContext):
 
     def get_logging_values(self):
         d = super(TrackTask, self).get_logging_values()
-        d["log_string"] = self.log_string
+        d["logString"] = self.log_string
         return d
 
 
