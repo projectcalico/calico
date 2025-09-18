@@ -251,8 +251,8 @@ keystone_client = mock.Mock()
 keystone_client.projects.list.side_effect = mock_projects_list
 mech_calico.KeystoneClient = mock.Mock()
 mech_calico.KeystoneClient.return_value = keystone_client
-mech_calico.TaskTracker = mock.Mock()
-mech_calico.TaskTracker.return_value = None
+mech_calico.TrackTask = mock.Mock()
+mech_calico.TrackTask.return_value = None
 
 REAL_EVENTLET_SLEEP_TIME = 0.01
 

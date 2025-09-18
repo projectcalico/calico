@@ -206,26 +206,28 @@ def requires_state(f):
     return wrapper
 
 
-# The execution model of the Neutron server is complex.  Currently it
-# runs as multiple OS processes, each of which has only one OS thread, but each process
-# uses eventlet to run multiple green threads in parallel.  In the near-ish future
-# eventlet will be removed and there will be multiple OS threads instead.  So the calls
-# into our driver code can be from multiple OS processes, or from multiple threads
-# within the same OS process, or from multiple green threads within the same OS
-# process/thread.  And the processing for such calls can be interleaved - e.g. one
-# thread or green thread yields for a while and allows others to run.
+# The execution model of the Neutron server is complex.  It runs as multiple OS
+# processes, each of which has only one OS thread, but each process uses eventlet to run
+# multiple green threads in parallel.  In the near-ish future eventlet will be removed
+# and there will be multiple OS threads instead.  So the calls into our driver code can
+# be from multiple OS processes, or from multiple threads within the same OS process, or
+# from multiple green threads within the same OS process/thread.  And the processing for
+# such calls can be interleaved - e.g. one thread or green thread yields for a while and
+# allows others to run.  That makes it difficult to follow through logs - for example,
+# to tell if a given log line is part of an UPDATE_PORT_POSTCOMMIT for port A or an
+# earlier UPDATE_PORT_POSTCOMMIT for port B, or some other trigger into our code.
 #
-# That makes it difficult to follow through logs - for example, to tell if a given log
-# line is part of an UPDATE_PORT_POSTCOMMIT for port A or an earlier
-# UPDATE_PORT_POSTCOMMIT for port B.  To help with that we aim to create a unique ID for
-# each top level entry point into our driver, and consistently log that.
-class TaskTracker(oslo_context.context.RequestContext):
+# Happily OpenStack upstream has solved this problem with oslo_log and oslo_context.  We
+# just need to create an instance of RequestContext (or subclass) at the start of each
+# of our entry points, and arrange for that to return whatever context values we want to
+# appear in each log.
+class TrackTask(oslo_context.context.RequestContext):
     def __init__(self, log_string):
-        super(TaskTracker, self).__init__(overwrite=True)
+        super(TrackTask, self).__init__(overwrite=True)
         self.log_string = log_string
 
     def get_logging_values(self):
-        d = super(TaskTracker, self).get_logging_values()
+        d = super(TrackTask, self).get_logging_values()
         d["log_string"] = self.log_string
         return d
 
@@ -772,7 +774,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @requires_state
     def handle_qos_policy_update(self, context, policy_id):
-        TaskTracker("HANDLE_QOS_POLICY_UPDATE:" + policy_id)
+        TrackTask("HANDLE_QOS_POLICY_UPDATE:" + policy_id)
         LOG.info("HANDLE_QOS_POLICY_UPDATE: %s %s", context, policy_id)
 
         with db_api.CONTEXT_READER.using(context):
@@ -886,7 +888,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         This is a tricky event, because it can be called in a number of ways
         during VM migration. We farm out to the appropriate method from here.
         """
-        TaskTracker("UPDATE_PORT_POSTCOMMIT:" + context._port["id"])
+        TrackTask("UPDATE_PORT_POSTCOMMIT:" + context._port["id"])
         LOG.info("UPDATE_PORT_POSTCOMMIT: %s", context)
         port = context._port
         original = context.original
@@ -1074,7 +1076,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         reconcile them with etcd, ensuring that the etcd database and Neutron
         are in synchronization with each other.
         """
-        TaskTracker("RESYNC")
+        TrackTask("RESYNC")
         try:
             LOG.info("Periodic resync thread started")
             while self._epoch == launch_epoch:
