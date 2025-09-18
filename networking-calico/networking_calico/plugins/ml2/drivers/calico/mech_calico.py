@@ -28,6 +28,7 @@ import contextlib
 import inspect
 import os
 import re
+import threading
 import uuid
 from functools import wraps
 
@@ -221,10 +222,18 @@ def requires_state(f):
 # just need to create an instance of RequestContext (or subclass) at the start of each
 # of our entry points, and arrange for that to return whatever context values we want to
 # appear in each log.
+task_id_lock = threading.Lock()
+last_task_id = 0
+
+
 class TrackTask(oslo_context.context.RequestContext):
     def __init__(self, log_string):
         super(TrackTask, self).__init__(overwrite=True)
-        self.log_string = log_string
+        with task_id_lock:
+            global last_task_id
+            last_task_id += 1
+            task_id = last_task_id
+        self.log_string = f"{task_id}:{log_string}"
 
     def get_logging_values(self):
         d = super(TrackTask, self).get_logging_values()
