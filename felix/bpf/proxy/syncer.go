@@ -557,13 +557,17 @@ func (s *Syncer) applyDerived(
 		svc:        sinfo,
 	}
 
-	if err := s.writeSvc(sinfo, svc.id, count, local, flags); err != nil {
-		return err
-	}
-	if svcTypeLoadBalancer == t || svcTypeExternalIP == t {
+	if (svcTypeLoadBalancer == t || svcTypeExternalIP == t) && len(sinfo.LoadBalancerSourceRanges()) != 0 {
+		// Only write the LB source range keys if there are source ranges
+		// configured. Otherwise fall back to writing a normal service, that is,
+		// with zero src range cidr.
 		err := s.writeLBSrcRangeSvcNATKeys(sinfo, svc.id, count, local, flags)
 		if err != nil {
 			log.Debug("Failed to write LB source range NAT keys")
+		}
+	} else {
+		if err := s.writeSvc(sinfo, svc.id, count, local, flags); err != nil {
+			return err
 		}
 	}
 
@@ -900,8 +904,18 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 	if err != nil {
 		return err
 	}
-	val = nat.NewNATValue(svcID, nat.BlackHoleCount, uint32(0), uint32(0))
-	s.bpfSvcs.Desired().Set(key, val)
+
+	if _, ok := s.bpfSvcs.Desired().Get(key); !ok {
+		// There is no zero cidr source range entry, we need to add a blackhole
+		// entry to make sure that packets not matching any of the source ranges
+		// get dropped.
+		if log.GetLevel() >= log.DebugLevel {
+			log.Debugf("bpf map writing blackhole %s", key)
+		}
+		val = nat.NewNATValue(svcID, nat.BlackHoleCount, uint32(0), uint32(0))
+		s.bpfSvcs.Desired().Set(key, val)
+	}
+
 	return nil
 }
 

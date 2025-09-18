@@ -140,8 +140,13 @@ func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf
 		if flags != "" {
 			flags = " flags " + flags
 		}
-		printf("%s port %d proto %d id %d count %d local %d%s\n",
+		printf("%s port %d proto %d id %d count %d local %d%s",
 			nk.Addr(), nk.Port(), nk.Proto(), id, count, local, flags)
+		srcCIDR := nk.SrcCIDR()
+		if srcCIDR.Prefix() != 0 {
+			printf(" src %s", srcCIDR)
+		}
+		printf("\n")
 		for i := 0; i < count; i++ {
 			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv, ok := back[bk]
