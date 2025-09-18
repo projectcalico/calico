@@ -16,6 +16,8 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/confd/pkg/backends/types"
 )
 
 func newFuncMap() map[string]interface{} {
@@ -31,6 +33,7 @@ func newFuncMap() map[string]interface{} {
 	m["datetime"] = time.Now
 	m["toUpper"] = strings.ToUpper
 	m["toLower"] = strings.ToLower
+	m["title"] = strings.Title
 	m["contains"] = strings.Contains
 	m["replace"] = strings.Replace
 	m["hasSuffix"] = strings.HasSuffix
@@ -48,6 +51,24 @@ func newFuncMap() map[string]interface{} {
 func addFuncs(out, in map[string]interface{}) {
 	for name, fn := range in {
 		out[name] = fn
+	}
+}
+
+// addCalicoFuncs adds Calico-specific template functions
+func addCalicoFuncs(funcMap map[string]interface{}, storeClient interface{}) {
+	// Add getBGPConfig function that takes the client as parameter
+	funcMap["getBGPConfig"] = func(client interface{}) (interface{}, error) {
+		if calicoClient, ok := client.(interface {
+			GetBirdBGPConfig() (*types.BirdBGPConfig, error)
+		}); ok {
+			config, err := calicoClient.GetBirdBGPConfig()
+			if err != nil {
+				// Return error to fail template execution and prevent broken config
+				return nil, err
+			}
+			return config, nil
+		}
+		return nil, errors.New("client does not support GetBirdBGPConfig")
 	}
 }
 
