@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	KindIPAMConfig       = "IPAMConfig"
-	KindIPAMConfigList   = "IPAMConfigList"
-	GlobalIPAMConfigName = "default"
+	// For historical reasons, crd.projectcalico.org/v1 internal API uses IPAMConfig as the kind for the backing CRD, as well
+	// as for the clientv3 API, whereas the projectcalico.org/v3 API uses IPAMConfiguration.
+	KindIPAMConfig     = "IPAMConfig"
+	KindIPAMConfigList = "IPAMConfigList"
 )
 
 // +genclient

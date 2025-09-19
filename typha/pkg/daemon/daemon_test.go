@@ -397,7 +397,7 @@ func (b *mockDatastore) CalicoNodeStatus() clientv3.CalicoNodeStatusInterface {
 }
 
 // IPAMConfig returns an interface for managing the IPAMConfig resources.
-func (b *mockDatastore) IPAMConfig() clientv3.IPAMConfigInterface {
+func (c *mockDatastore) IPAMConfiguration() clientv3.IPAMConfigurationInterface {
 	panic("not implemented")
 }
 
@@ -422,13 +422,10 @@ func (b *mockDatastore) getNumInitCalls() int {
 
 var _ RealClientV3 = (*mockDatastore)(nil)
 
-type dummySyncer struct {
-}
+type dummySyncer struct{}
 
 func (*dummySyncer) Start() {
-
 }
 
 func (*dummySyncer) Stop() {
-
 }
