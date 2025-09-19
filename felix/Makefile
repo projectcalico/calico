@@ -371,6 +371,7 @@ fv-no-prereqs:
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
+		CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	  FELIX_FV_WIREGUARD_AVAILABLE=`./wireguard-available >/dev/null && echo true || echo false` \
 	  ./run-batches
 	@if [ -e fv/latency.log ]; then \

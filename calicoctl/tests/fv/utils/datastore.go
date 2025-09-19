@@ -17,6 +17,7 @@ package utils
 import (
 	"os"
 	"testing"
+
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 
