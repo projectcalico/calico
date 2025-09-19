@@ -142,6 +142,7 @@ type RouteTable struct {
 	// Interface update tracking.
 	fullResyncNeeded    bool
 	ifacesToRescan      set.Set[string]
+	ifacesToARP         set.Set[string]
 	makeARPEntries      bool
 	haveMultiPathRoutes bool
 
@@ -303,6 +304,7 @@ func New(
 
 		fullResyncNeeded: true,
 		ifacesToRescan:   set.New[string](),
+		ifacesToARP:      set.New[string](),
 		ownershipPolicy:  ownershipPolicy,
 
 		ifaceToRoutes: map[RouteClass]map[string]map[ip.CIDR]Target{},
@@ -915,6 +917,12 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 
 	if r.fullResyncNeeded {
 		return r.doFullResync(nl)
+
+		// Mark to reprogram static ARP for all interfaces.
+		for ifaceName := range r.pendingARPs {
+			r.ifacesToARP.Add(ifaceName)
+		}
+
 	}
 
 	// Do any partial per-interface resyncs.
@@ -1042,6 +1050,9 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 		r.logCxt.Debug("Ignoring rescan of unknown interface.")
 		return nil
 	}
+
+	// Mark to reprogram static ARP for this interface.
+	r.ifacesToARP.Add(ifaceName)
 
 	routeFilter := &netlink.Route{
 		Table:     r.tableIndex,
@@ -1470,11 +1481,25 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 
 	arpErrs := map[string]error{}
 	for ifaceName, addrToMAC := range r.pendingARPs {
-		// Add static ARP entries (for workload endpoints).  This may have been
-		// needed at one point but it no longer seems to be required.  Leaving
-		// it here for two reasons: (1) there may be an obscure scenario where
-		// it is needed. (2) we have tests that monitor netlink, and they break
-		// if it is removed because they see the ARP traffic.
+		if !r.ifacesToARP.Contains(ifaceName) {
+			continue
+		}
+		// Add static ARP entries (for workload endpoints).  As far as we're aware, this
+		// helps in two ways.
+		//
+		// 1. It slightly reduces the TTFP (time to first ping) for a new endpoint, by
+		// removing the need for the host kernel to send an ARP request to the endpoint and
+		// to wait for its response.
+		//
+		// 2. It supports VMs with a restrictive arp_ignore setting.  For example, we are
+		// aware of OpenStack VMs with arp_ignore set to 2, which means "reply only if the
+		// target IP address is local address configured on the incoming interface and both
+		// with the sender's IP address are part from same subnet on this interface" - which
+		// will never be True for the way that Calico provisions VM IPs.
+		//
+		// For (2) it is important that Felix maintains the ARP programming for an interface
+		// beyond the point when that interface is first configured.  For example, interface
+		// flaps can lose the ARP programming, and it then needs to be reinstated.
 		ifaceIdx, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			// Asked to add ARP entries but the interface isn't known (yet).
@@ -1482,6 +1507,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			// datastore stops asking us to add ARP entries for this interface.
 			continue
 		}
+		ifaceARPDone := true
 		for addr, mac := range addrToMAC {
 			r.livenessCallback()
 			err := r.addStaticARPEntry(nl, addr, mac, ifaceIdx)
@@ -1506,12 +1532,13 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			if err != nil {
 				log.WithError(err).Debug("Failed to add neighbor entry.")
 				arpErrs[fmt.Sprintf("%s/%s", ifaceName, addr)] = err
-			} else {
-				delete(addrToMAC, addr)
+				ifaceARPDone = false
 			}
 		}
-		if len(addrToMAC) == 0 {
-			delete(r.pendingARPs, ifaceName)
+		if ifaceARPDone {
+			// Don't need to program ARP again for this interface until its state
+			// changes or we're asked to do a full resync.
+			r.ifacesToARP.Discard(ifaceName)
 		}
 	}
 
