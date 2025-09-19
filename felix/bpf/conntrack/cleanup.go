@@ -273,7 +273,7 @@ again:
 			}
 			sns.cleaned++
 			conntrackCounterStaleNAT.Inc()
-			return ScanVerdictDelete, lastSeen
+			return ScanVerdictDeleteImmediate, lastSeen
 		}
 		if debug {
 			log.WithField("key", k).Debugf("TypeNATReverse still active")
@@ -408,7 +408,7 @@ again:
 			}
 			sns.cleaned++
 			conntrackCounterStaleNAT.Inc()
-			return ScanVerdictDelete, lastSeen
+			return ScanVerdictDeleteImmediate, lastSeen
 		}
 		if debug {
 			log.WithField("key", k).Debugf("TypeNATForward still active")
