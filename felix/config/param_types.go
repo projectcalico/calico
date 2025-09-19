@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 	"net"
 	"net/url"
 	"os"
@@ -196,7 +197,7 @@ func intSchema(ranges []MinMax) string {
 }
 
 func formatInt(m int) string {
-	switch m {
+	switch int64(m) {
 	case math.MaxInt64:
 		return "2^63-1"
 	case math.MinInt64:
@@ -901,7 +902,7 @@ func (r *RegionParam) SchemaDescription() string {
 
 // linux can support route-table indices up to 0xFFFFFFFF
 // however, using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
-const routeTableMaxLinux = 0xffffffff
+const routeTableMaxLinux uint32 = 0xffffffff
 const routeTableRangeMaxTables = 0xffff
 
 type RouteTableRangeParam struct {
@@ -947,7 +948,7 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 		return
 	}
 
-	tablesTargeted := 0
+	var tablesTargeted uint
 	ranges := make([]idalloc.IndexRange, 0)
 	for _, r := range match {
 		// first match is the whole matching string - we only care about submatches
@@ -972,8 +973,12 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 			return
 		}
 
-		tablesTargeted += max - min
-		if tablesTargeted > routeTableRangeMaxTables {
+		// The number of route table IDs in the current range.
+		rangeLen := uint(max - min + 1)
+
+		// Overflow-safe addition
+		var carry uint
+		if tablesTargeted, carry = bits.Add(tablesTargeted, rangeLen, 0); carry != 0 || tablesTargeted > routeTableRangeMaxTables {
 			err = p.parseFailed(raw, "targets too many tables")
 			return
 		}
