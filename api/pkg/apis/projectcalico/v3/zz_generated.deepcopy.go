@@ -1354,6 +1354,26 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.PrometheusMetricsCAFile != nil {
+		in, out := &in.PrometheusMetricsCAFile, &out.PrometheusMetricsCAFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsCertFile != nil {
+		in, out := &in.PrometheusMetricsCertFile, &out.PrometheusMetricsCertFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsKeyFile != nil {
+		in, out := &in.PrometheusMetricsKeyFile, &out.PrometheusMetricsKeyFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsClientAuth != nil {
+		in, out := &in.PrometheusMetricsClientAuth, &out.PrometheusMetricsClientAuth
+		*out = new(PrometheusMetricsClientAuthType)
+		**out = **in
+	}
 	if in.FailsafeInboundHostPorts != nil {
 		in, out := &in.FailsafeInboundHostPorts, &out.FailsafeInboundHostPorts
 		*out = new([]ProtoPort)

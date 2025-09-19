@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -138,4 +139,19 @@ func NewMutualTLSConfig(cert, key, ca string) (*tls.Config, error) {
 	tlsCfg.ClientCAs = certPool
 
 	return tlsCfg, nil
+}
+
+func StringToTLSClientAuthType(clientAuthType string) (tls.ClientAuthType, error) {
+	switch clientAuthType {
+	case string(apiv3.RequireAndVerifyClientCert), "":
+		return tls.RequireAndVerifyClientCert, nil
+	case string(apiv3.RequireAnyClientCert):
+		return tls.RequireAnyClientCert, nil
+	case string(apiv3.VerifyClientCertIfGiven):
+		return tls.VerifyClientCertIfGiven, nil
+	case string(apiv3.NoClientCert):
+		return tls.NoClientCert, nil
+	default:
+		return tls.RequireAndVerifyClientCert, fmt.Errorf("invalid client authentication type: %s. Defaulting to RequireAndVerifyClientCert", clientAuthType)
+	}
 }

@@ -285,7 +285,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: crypto
     run:
-      when: "change_in(['/crypto/**','/hack/test/certs/','/lib.Makefile','/metadata.mk'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md']})"
+      when: "change_in(['/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/crypto/**','/hack/test/certs/','/lib.Makefile','/metadata.mk'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go']})"
     dependencies:
       - Prerequisites
     task:
@@ -663,7 +663,7 @@ blocks:
         - name: google-service-account-for-gce
   - name: goldmane
     run:
-      when: "change_in(['/crypto/pkg/tls/*.go','/goldmane/**','/hack/test/certs/','/lib.Makefile','/lib/std/chanutil/*.go','/lib/std/time/*.go','/libcalico-go/lib/debugserver/*.go','/libcalico-go/lib/health/*.go','/libcalico-go/lib/logutils/*.go','/libcalico-go/lib/prometheus/*.go','/libcalico-go/lib/set/*.go','/metadata.mk'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/crypto/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go']})"
+      when: "change_in(['/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/crypto/pkg/tls/*.go','/goldmane/**','/hack/test/certs/','/lib.Makefile','/lib/std/chanutil/*.go','/lib/std/time/*.go','/libcalico-go/lib/debugserver/*.go','/libcalico-go/lib/health/*.go','/libcalico-go/lib/logutils/*.go','/libcalico-go/lib/prometheus/*.go','/libcalico-go/lib/set/*.go','/metadata.mk'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -691,7 +691,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: guardian
     run:
-      when: "change_in(['/crypto/pkg/tls/*.go','/guardian/**','/hack/test/certs/','/lib.Makefile','/lib/std/chanutil/*.go','/lib/std/cryptoutils/*.go','/lib/std/time/*.go','/libcalico-go/lib/logutils/*.go','/metadata.mk','/pkg/buildinfo/*.go'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/crypto/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go','/pkg/**/*_test.go']})"
+      when: "change_in(['/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/crypto/pkg/tls/*.go','/guardian/**','/hack/test/certs/','/lib.Makefile','/lib/std/chanutil/*.go','/lib/std/cryptoutils/*.go','/lib/std/time/*.go','/libcalico-go/lib/logutils/*.go','/metadata.mk','/pkg/buildinfo/*.go'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go','/pkg/**/*_test.go']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -908,7 +908,7 @@ blocks:
             - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true
   - name: whisker-backend
     run:
-      when: "change_in(['/crypto/pkg/tls/*.go','/goldmane/pkg/client/*.go','/goldmane/pkg/internal/flowcache/*.go','/goldmane/pkg/types/*.go','/goldmane/proto/*.go','/hack/test/certs/','/lib.Makefile','/lib/httpmachinery/pkg/apiutil/*.go','/lib/httpmachinery/pkg/codec/*.go','/lib/httpmachinery/pkg/context/*.go','/lib/httpmachinery/pkg/header/*.go','/lib/httpmachinery/pkg/server/*.go','/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go','/lib/std/cryptoutils/*.go','/lib/std/testutils/json/*.go','/lib/std/time/*.go','/libcalico-go/lib/logutils/*.go','/metadata.mk','/whisker-backend/**'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/crypto/**/*_test.go','/goldmane/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go']})"
+      when: "change_in(['/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/crypto/pkg/tls/*.go','/goldmane/pkg/client/*.go','/goldmane/pkg/internal/flowcache/*.go','/goldmane/pkg/types/*.go','/goldmane/proto/*.go','/hack/test/certs/','/lib.Makefile','/lib/httpmachinery/pkg/apiutil/*.go','/lib/httpmachinery/pkg/codec/*.go','/lib/httpmachinery/pkg/context/*.go','/lib/httpmachinery/pkg/header/*.go','/lib/httpmachinery/pkg/server/*.go','/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go','/lib/std/cryptoutils/*.go','/lib/std/testutils/json/*.go','/lib/std/time/*.go','/libcalico-go/lib/logutils/*.go','/metadata.mk','/whisker-backend/**'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/goldmane/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go']})"
     execution_time_limit:
       minutes: 30
     dependencies:
