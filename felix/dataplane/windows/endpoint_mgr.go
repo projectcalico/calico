@@ -52,8 +52,8 @@ const (
 )
 
 var (
-	ErrorUnknownEndpoint = errors.New("Endpoint could not be found")
-	ErrorUpdateFailed    = errors.New("Endpoint update failed")
+	ErrUnknownEndpoint = errors.New("endpoint could not be found")
+	ErrUpdateFailed    = errors.New("endpoint update failed")
 )
 
 // endpointManager processes WorkloadEndpoint* updates from the datastore. Updates are
@@ -462,7 +462,7 @@ func (m *endpointManager) CompleteDeferredWork() error {
 
 	if missingEndpoints {
 		log.Warn("Failed to look up one or more HNS endpoints; will schedule a retry")
-		return ErrorUnknownEndpoint
+		return ErrUnknownEndpoint
 	}
 
 	return nil
@@ -543,7 +543,7 @@ func (m *endpointManager) applyRules(workloadId types.WorkloadEndpointID, endpoi
 
 	if err := endpoint.ApplyACLPolicy(rules...); err != nil {
 		logCxt.WithError(err).Warning("Failed to apply rules. This operation will be retried.")
-		return ErrorUpdateFailed
+		return ErrUpdateFailed
 	}
 
 	return nil
@@ -586,7 +586,7 @@ func (m *endpointManager) getHnsEndpointId(ip string) (string, error) {
 	}
 
 	log.WithField("ip", ip).Info("Could not resolve hns endpoint id")
-	return "", ErrorUnknownEndpoint
+	return "", ErrUnknownEndpoint
 }
 
 // prependAll prepends a string to all of the provided input strings

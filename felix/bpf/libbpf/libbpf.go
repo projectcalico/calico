@@ -662,7 +662,7 @@ func (x *XDPGlobalData) Set(m *Map) error {
 func NumPossibleCPUs() (int, error) {
 	ncpus := int(C.num_possible_cpu())
 	if ncpus < 0 {
-		return ncpus, fmt.Errorf("Invalid number of CPUs: %d", ncpus)
+		return ncpus, fmt.Errorf("invalid number of CPUs: %d", ncpus)
 	}
 	return ncpus, nil
 }

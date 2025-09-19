@@ -206,7 +206,7 @@ func (ap *AttachPoint) DetachProgram() error {
 func (ap *AttachPoint) ProgramID() (int, error) {
 	progID, err := libbpf.GetXDPProgramID(ap.Iface)
 	if err != nil {
-		return -1, fmt.Errorf("Couldn't check for XDP program on iface %v: %w", ap.Iface, err)
+		return -1, fmt.Errorf("couldn't check for XDP program on iface %v: %w", ap.Iface, err)
 	}
 	return progID, nil
 }
