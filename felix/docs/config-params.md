@@ -1771,6 +1771,22 @@ determines the CTLB behavior.
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
+### `BPFJITHardening` (config file) / `bpfJITHardening` (YAML)
+
+Controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+Felix will not modify the JIT hardening setting.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFJITHardening` |
+| Encoding (env var/config file) | One of: <code>Auto</code>, <code>Strict</code> (case insensitive) |
+| Default value (above encoding) | `Auto` |
+| `FelixConfiguration` field | `bpfJITHardening` (YAML) `BPFJITHardening` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `Auto` |
+| Notes | Required. | 
+
 ### `BPFKubeProxyEndpointSlicesEnabled` (config file) / `bpfKubeProxyEndpointSlicesEnabled` (YAML)
 
 Deprecated and has no effect. BPF

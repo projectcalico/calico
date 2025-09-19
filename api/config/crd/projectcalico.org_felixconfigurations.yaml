@@ -126,6 +126,15 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfJITHardening:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Strict
+                    - enum:
+                        - Auto
+                        - Strict
+                  type: string
                 bpfKubeProxyEndpointSlicesEnabled:
                   type: boolean
                 bpfKubeProxyIptablesCleanupEnabled:
