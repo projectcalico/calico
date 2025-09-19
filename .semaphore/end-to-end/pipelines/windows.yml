@@ -66,6 +66,8 @@ blocks:
               value: CalicoIptables
             - name: ENCAPSULATION_TYPE
               value: None
+            - name: VPC_SUBNETS
+              value: '["172.16.101.0/24"]' # single subnet because no encapsulation is being used
 
         - name: gcp-kubeadm, 2022, stable, bpf, vxlan
           execution_time_limit:
@@ -84,7 +86,7 @@ blocks:
             - name: ENCAPSULATION_TYPE
               value: VXLAN
 
-        - name: gcp-rancher, 2022, stable-1, nftables, none
+        - name: gcp-rancher, 2022, stable-1, nftables, vxlan
           execution_time_limit:
             hours: 5
           commands:
@@ -99,7 +101,7 @@ blocks:
             - name: DATAPLANE
               value: CalicoNftables
             - name: ENCAPSULATION_TYPE
-              value: None
+              value: VXLAN
             - name: RKE_VERSION # Don't just update these versions, need k8s and rke versions to match.
               value: "v1.8.6" # https://github.com/rancher/rke/releases/tag/v1.8.6
             - name: K8S_VERSION

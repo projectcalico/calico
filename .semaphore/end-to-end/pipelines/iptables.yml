@@ -690,6 +690,8 @@ blocks:
             - env_var: WINDOWS_OS_VERSION
               values: ["2004"]
           env_vars:
+            - name: VPC_SUBNETS
+              value: '["172.16.101.0/24"]' # single subnet because no encapsulation may be being used
             - name: USE_HASH_RELEASE
               value: "true"
             - name: INSTALL_ETCD_POD
@@ -718,6 +720,8 @@ blocks:
             - env_var: WINDOWS_OS_VERSION
               values: ["2004"]
           env_vars:
+            - name: VPC_SUBNETS
+              value: '["172.16.101.0/24"]' # single subnet because no encapsulation may be being used
             - name: USE_HASH_RELEASE
               value: "true"
             - name: INSTALL_ETCD_POD
