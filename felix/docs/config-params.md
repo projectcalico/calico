@@ -1802,6 +1802,21 @@ the next release.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
 
+### `BPFKubeProxyHealtzPort` (config file) / `bpfKubeProxyHealtzPort` (YAML)
+
+In BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+The health check server is used by external load balancers to determine if this node should receive traffic.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFKubeProxyHealtzPort` |
+| Encoding (env var/config file) | Integer |
+| Default value (above encoding) | `10256` |
+| `FelixConfiguration` field | `bpfKubeProxyHealtzPort` (YAML) `BPFKubeProxyHealtzPort` (Go API) |
+| `FelixConfiguration` schema | Integer |
+| Default value (YAML) | `10256` |
+| Notes | Required. | 
+
 ### `BPFKubeProxyIptablesCleanupEnabled` (config file) / `bpfKubeProxyIptablesCleanupEnabled` (YAML)
 
 If enabled in BPF mode, Felix will proactively clean up the upstream
