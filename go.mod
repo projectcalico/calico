@@ -115,7 +115,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.33.3
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
-	k8s.io/kubernetes v1.33.3
+	k8s.io/kubernetes v1.33.4
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	modernc.org/memory v1.10.0
 	sigs.k8s.io/controller-runtime v0.20.4
