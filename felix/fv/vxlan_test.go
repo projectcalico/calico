@@ -1101,34 +1101,30 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				infra.Stop()
 			})
 
-			It("should have host to workload connectivity", func() {
-				if !vxlanTunnelSupported(vxlanMode, routeSource) {
-					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
-				}
-
-				for i := 0; i < 3; i++ {
-					f := felixes[i]
-					cc.ExpectSome(f, w[0])
-					cc.ExpectSome(f, w[1])
-					cc.ExpectSome(f, w[2])
-
-					if enableIPv6 {
-						cc.ExpectSome(f, w6[0])
-						cc.ExpectSome(f, w6[1])
-						cc.ExpectSome(f, w6[2])
-					}
-				}
-				cc.CheckConnectivity()
-			})
-
-			It("should have workload to workload connectivity", func() {
+			It("should have correct connectivity", func() {
+				// Workload to workload connectivity.
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
-
 				if enableIPv6 {
 					cc.ExpectSome(w6[0], w6[1])
 					cc.ExpectSome(w6[1], w6[0])
 				}
+
+				// Host to workload connectivity.
+				if vxlanTunnelSupported(vxlanMode, routeSource) {
+					for i := 0; i < 3; i++ {
+						f := felixes[i]
+						cc.ExpectSome(f, w[0])
+						cc.ExpectSome(f, w[1])
+						cc.ExpectSome(f, w[2])
+						if enableIPv6 {
+							cc.ExpectSome(f, w6[0])
+							cc.ExpectSome(f, w6[1])
+							cc.ExpectSome(f, w6[2])
+						}
+					}
+				}
+
 				cc.CheckConnectivity()
 			})
 		})

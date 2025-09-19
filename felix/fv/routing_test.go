@@ -1089,30 +1089,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				infra.Stop()
 			})
 
-			It("should have host to workload connectivity", func() {
-				if !ipipTunnelSupported(ipipMode, routeSource) {
-					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
-				}
-
-				cc.ExpectSome(tc.Felixes[0], w[0])
-				cc.ExpectSome(tc.Felixes[0], w[1])
-				cc.ExpectSome(tc.Felixes[0], w[2])
-				if enableIPv6 {
-					cc.ExpectSome(tc.Felixes[0], w6[0])
-					cc.ExpectSome(tc.Felixes[0], w6[1])
-					cc.ExpectSome(tc.Felixes[0], w6[2])
-				}
-
-				cc.CheckConnectivityWithTimeout(timeout)
-			})
-
-			It("should have workload to workload connectivity", func() {
+			It("should have correct connectivity", func() {
+				// Workload to workload connectivity.
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 				if enableIPv6 {
 					cc.ExpectSome(w6[0], w6[1])
 					cc.ExpectSome(w6[1], w6[0])
 				}
+
+				// Host to workload connectivity.
+				if ipipTunnelSupported(ipipMode, routeSource) {
+					cc.ExpectSome(tc.Felixes[0], w[0])
+					cc.ExpectSome(tc.Felixes[0], w[1])
+					cc.ExpectSome(tc.Felixes[0], w[2])
+					if enableIPv6 {
+						cc.ExpectSome(tc.Felixes[0], w6[0])
+						cc.ExpectSome(tc.Felixes[0], w6[1])
+						cc.ExpectSome(tc.Felixes[0], w6[2])
+					}
+				}
+
 				cc.CheckConnectivityWithTimeout(timeout)
 			})
 		})
