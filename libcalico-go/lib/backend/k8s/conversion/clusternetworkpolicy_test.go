@@ -54,7 +54,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "The first ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &ports,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
@@ -137,7 +137,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 					},
 					{
 						Name:   "A random ingress rule 2",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &ports,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
@@ -185,9 +185,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
@@ -203,7 +203,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: unsupported admin network policy action Log",
+					Reason: "k8s rule couldn't be converted: unsupported cluster network policy action Log",
 				},
 				{
 					IngressRule: nil,
@@ -220,7 +220,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: unsupported admin network policy action Drop",
+					Reason: "k8s rule couldn't be converted: unsupported cluster network policy action Drop",
 				},
 			},
 		}
@@ -372,7 +372,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &badPorts,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
@@ -419,7 +419,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 					},
 					{
 						Name:   "A random egress rule 2",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &badPorts,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
@@ -436,14 +436,14 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Name:   "A random ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &badPorts,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
@@ -461,7 +461,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 					IngressRule: nil,
 					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
 						Name:   "A random egress rule 2",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &badPorts,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
@@ -766,7 +766,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &ports,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
@@ -1007,7 +1007,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1061,7 +1061,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
-						Action: "Accept",
+						Action: "Allow",
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Pods: &clusternetpol.NamespacedPod{
@@ -1117,7 +1117,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: nil,
@@ -1141,14 +1141,14 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Name:   "A random ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: nil,
@@ -1209,7 +1209,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1436,7 +1436,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 					},
 					{
 						Name:   "A random ingress rule 2",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &badPorts,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
@@ -1482,9 +1482,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
@@ -1507,7 +1507,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 					EgressRule: nil,
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Name:   "A random ingress rule 2",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &badPorts,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
@@ -1895,9 +1895,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					IngressRule: nil,
 					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
@@ -1980,7 +1980,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "The first ingress rule",
-						Action: "Accept",
+						Action: "Allow",
 						Ports:  &ports,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
@@ -2005,7 +2005,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 						},
 					},
 					{
-						Action: "Accept",
+						Action: "Allow",
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Networks: []clusternetpol.CIDR{"0.0.0.0/0"},
@@ -2107,9 +2107,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "default",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Action: "Deny",
@@ -2160,7 +2160,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 
 func convertToGNP(
 	cnp *clusternetpol.ClusterNetworkPolicy,
-	expectedErr *cerrors.ErrorAdminPolicyConversion,
+	expectedErr *cerrors.ErrorClusterNetworkPolicyConversion,
 ) *apiv3.GlobalNetworkPolicy {
 	// Use a single instance of the Converter for these tests.
 	c := NewConverter()

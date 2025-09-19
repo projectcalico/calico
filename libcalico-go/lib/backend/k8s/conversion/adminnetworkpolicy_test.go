@@ -38,7 +38,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 	convertToGNP := func(
 		anp *adminpolicy.AdminNetworkPolicy,
 		order float64,
-		expectedErr *cerrors.ErrorAdminPolicyConversion,
+		expectedErr *cerrors.ErrorClusterNetworkPolicyConversion,
 	) *apiv3.GlobalNetworkPolicy {
 		// Parse the policy.
 		pol, err := c.K8sAdminNetworkPolicyToCalico(anp)
@@ -221,9 +221,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
@@ -470,9 +470,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
@@ -1165,9 +1165,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
@@ -1501,9 +1501,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
@@ -1910,9 +1910,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "test.policy",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					IngressRule: nil,
 					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
@@ -1969,7 +1969,7 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 
 	convertToGNP := func(
 		banp *adminpolicy.BaselineAdminNetworkPolicy,
-		expectedErr *cerrors.ErrorAdminPolicyConversion,
+		expectedErr *cerrors.ErrorClusterNetworkPolicyConversion,
 	) *apiv3.GlobalNetworkPolicy {
 		// Parse the policy.
 		pol, err := c.K8sBaselineAdminNetworkPolicyToCalico(banp)
@@ -2154,9 +2154,9 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		expectedErr := cerrors.ErrorAdminPolicyConversion{
+		expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
 			PolicyName: "default",
-			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					IngressRule: &adminpolicy.BaselineAdminNetworkPolicyIngressRule{
 						Action: "Deny",
