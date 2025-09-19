@@ -102,7 +102,7 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut: bin/calicoctl-linux-$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r $(GINKGO_ARGS) calicoctl/*'
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r $(GINKGO_ARGS) calicoctl/*'
 
 ###############################################################################
 # FVs
@@ -120,7 +120,7 @@ fv: bin/calicoctl-linux-$(ARCH) version-helper
 	while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
 
 	# Run the tests
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test $(GO_TEST_ARGS) -count=1 ./tests/fv'
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test $(GO_TEST_ARGS) -count=1 ./tests/fv'
 	# Cleanup
 	$(MAKE) stop-etcd
 	$(MAKE) stop-kubernetes-control-plane KUBE_APISERVER_PORT=6443
