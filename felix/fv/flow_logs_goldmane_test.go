@@ -271,8 +271,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 			}, "15s", "200ms").Should(BeTrue())
 		}
 
-		time.Sleep(time.Minute * 50)
-
 		// Describe the connectivity that we now expect.
 		cc = &connectivity.Checker{}
 		for _, source := range wlHost1 {

@@ -117,7 +117,7 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithTypha:             false,
 		WithFelixTyphaTLS:     false,
 		TyphaLogSeverity:      "info",
-		IPIPMode:              api.IPIPModeNever,
+		IPIPMode:              api.IPIPModeAlways,
 		IPIPStrategy:          NewDefaultTunnelStrategy(DefaultIPPoolCIDR, DefaultIPv6PoolCIDR),
 		IPPoolCIDR:            DefaultIPPoolCIDR,
 		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
