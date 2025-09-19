@@ -70,7 +70,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -96,13 +96,13 @@ Description:
 	// of resources for easier handling.
 	convRes, err := resourceloader.CreateResourcesFromFile(filename)
 	if err != nil {
-		return fmt.Errorf("Failed to create resources from file: %w", err)
+		return fmt.Errorf("failed to create resources from file: %w", err)
 	}
 
 	// Unpack list resources (if any) into the slice
 	convRes, err = unpackResourceLists(convRes)
 	if err != nil {
-		return fmt.Errorf("Failed to unpack lists: %w", err)
+		return fmt.Errorf("failed to unpack lists: %w", err)
 	}
 
 	var results []runtime.Object
@@ -110,7 +110,7 @@ Description:
 	for _, convResource := range convRes {
 		v3Resource, err := convertResource(convResource)
 		if err != nil {
-			return fmt.Errorf("Failed to convert resource: %w", err)
+			return fmt.Errorf("failed to convert resource: %w", err)
 		}
 
 		// Remove any extra metadata the object might have.
@@ -124,8 +124,8 @@ Description:
 		ignoreValidation := argutils.ArgBoolOrFalse(parsedArgs, "--ignore-validation")
 		if !ignoreValidation {
 			if err := validator.Validate(v3Resource); err != nil {
-				return fmt.Errorf("Converted manifest resource(s) failed validation: %s"+
-					"Re-run the command with '--ignore-validation' flag to see the converted output.\n", err)
+				return fmt.Errorf("converted manifest resource(s) failed validation: %s"+
+					"Re-run the command with '--ignore-validation' flag to see the converted output", err)
 			}
 		}
 
@@ -137,13 +137,13 @@ Description:
 	if len(results) > 1 {
 		results, err = createV1List(results)
 		if err != nil {
-			return fmt.Errorf("Failed to create v1.List: %w", err)
+			return fmt.Errorf("failed to create v1.List: %w", err)
 		}
 	}
 
 	err = rp.Print(nil, results)
 	if err != nil {
-		return fmt.Errorf("Failed to print results: %w", err)
+		return fmt.Errorf("failed to print results: %w", err)
 	}
 
 	return nil
@@ -285,7 +285,7 @@ func createV1List(results []runtime.Object) ([]runtime.Object, error) {
 
 		err := runtime.Convert_runtime_Object_To_runtime_RawExtension(&item, &rawExt, nil)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to convert runtime.Object to runtime.RawExtension: %w", err)
+			return nil, fmt.Errorf("failed to convert runtime.Object to runtime.RawExtension: %w", err)
 		}
 
 		list.Items = append(list.Items, rawExt)

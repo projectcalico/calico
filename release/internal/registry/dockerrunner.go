@@ -85,7 +85,7 @@ func (d *DockerRunner) PullImage(img string) error {
 			logrus.WithError(err).Error("failed to pull image")
 			return err
 		}
-		defer reader.Close()
+		defer func() { _ = reader.Close() }()
 		if _, err := io.Copy(os.Stdout, reader); err != nil {
 			logrus.WithError(err).Error("failed to copy image pull output")
 			return err

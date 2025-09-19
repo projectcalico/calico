@@ -284,6 +284,19 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfJITHardening:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Strict
+                    - enum:
+                        - Auto
+                        - Strict
+                  description: |-
+                    BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+                    if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+                    Felix will not modify the JIT hardening setting. [Default: Auto]
+                  type: string
                 bpfKubeProxyEndpointSlicesEnabled:
                   description: |-
                     BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
@@ -427,6 +440,11 @@ spec:
                     - Enabled
                     - Disabled
                     - L2Only
+                  type: string
+                cgroupV2Path:
+                  description:
+                    CgroupV2Path overrides the default location where to
+                    find the cgroup hierarchy.
                   type: string
                 chainInsertMode:
                   description: |-

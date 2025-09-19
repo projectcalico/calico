@@ -55,9 +55,6 @@ func TestMapResize(t *testing.T) {
 	conntrack.SetMapSize(600)
 	defer bpfmaps.ResetSizes()
 
-	bpfmaps.EnableRepin()
-	defer bpfmaps.DisableRepin()
-
 	maps, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
 

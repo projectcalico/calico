@@ -61,7 +61,8 @@ const (
 	ChainManglePrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainManglePostrouting = ChainNamePrefix + "POSTROUTING"
 
-	ChainQoSPolicy = ChainNamePrefix + "qos-policy"
+	ChainEgressDSCP      = ChainNamePrefix + "egress-dscp"
+	IPSetIDDSCPEndpoints = "dscp-src-net"
 
 	IPSetIDAllPools             = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
@@ -322,7 +323,7 @@ type RuleRenderer interface {
 
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
 
-	EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain
+	EgressDSCPChain(policies []*DSCPRule) *generictables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain
@@ -362,11 +363,12 @@ func (r *DefaultRuleRenderer) IptablesFilterDenyAction() generictables.Action {
 }
 
 func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
-	if ipVersion == 4 {
+	switch ipVersion {
+	case 4:
 		return r.IPSetConfigV4
-	} else if ipVersion == 6 {
+	case 6:
 		return r.IPSetConfigV6
-	} else {
+	default:
 		log.WithField("version", ipVersion).Panic("Unknown IP version")
 		return nil
 	}

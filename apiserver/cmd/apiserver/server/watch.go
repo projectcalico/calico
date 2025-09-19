@@ -49,7 +49,7 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		cancel()
-		return false, fmt.Errorf("Failed to get client to watch extension auth ConfigMap: %v", err)
+		return false, fmt.Errorf("failed to get client to watch extension auth ConfigMap: %v", err)
 	}
 
 	changed := false

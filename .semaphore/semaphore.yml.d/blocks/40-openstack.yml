@@ -1,6 +1,6 @@
 - name: "OpenStack integration (Yoga)"
   run:
-    when: "${FORCE_RUN} or change_in(['/networking-calico/'])"
+    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'], {pipeline_file: 'ignore'})"
   dependencies:
     - Prerequisites
   task:
@@ -44,11 +44,11 @@
         commands:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
-          - artifact push job --expire-in 1d logs
+          - artifact push job logs
 
 - name: "OpenStack integration (Caracal)"
   run:
-    when: "${FORCE_RUN} or change_in(['/networking-calico/'])"
+    when: "${FORCE_RUN} or change_in(['/networking-calico/'], {pipeline_file: 'ignore'})"
   dependencies:
     - Prerequisites
   task:
@@ -83,4 +83,4 @@
         commands:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
-          - artifact push job --expire-in 1d logs
+          - artifact push job logs

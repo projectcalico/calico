@@ -345,26 +345,47 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 	// Exec into the client pod and try to connect to the server.
 	cmd := c.command(exp.Target)
 
-	var out string
-	var err error
-	// Ensure the kubectl command executes in the remote cluster if required. Remote framework objects do not control
-	// how kubeconfigs are resolved by the kubectl command, so we must use this wrapper. See NewDefaultFrameworkForRemoteCluster.
-	remotecluster.RemoteFrameworkAwareExec(c.f, func() {
-		if windows.ClusterIsWindows() {
-			out, err = ExecInPod(exp.Client, "powershell.exe", "-Command", cmd)
-		} else {
-			out, err = ExecInPod(exp.Client, "sh", "-c", cmd)
-		}
+	logCtx := logrus.WithFields(logrus.Fields{
+		"cmd":      cmd,
+		"client":   fmt.Sprintf("%s/%s", exp.Client.Namespace, exp.Client.Name),
+		"target":   exp.Target.String(),
+		"expected": exp.ExpectedResult,
 	})
-	logrus.WithFields(logrus.Fields{
-		"output": out,
-		"cmd":    cmd,
-		"err":    err,
-	}).Debug("Output from connection attempt.")
-	result := Success
-	if err != nil {
-		result = Failure
+
+	// First attempt.
+	out, result, err := c.execCommandInPod(exp.Client, cmd)
+
+	// Retry up to 10 seconds if we didn't get the expected result. This helps to avoid flakes due to transient issues.
+	// We don't want to retry too many times, as that could mask real issues and slow down tests. However, we know that
+	// especially on CPU constrained environments such as CI, there can be a delay between making changes (e.g., applying a NetworkPolicy) and
+	// those changes taking effect. So a short retry loop is helpful.
+	timeout := time.After(10 * time.Second)
+loop:
+	for result != exp.ExpectedResult {
+
+		select {
+		case <-timeout:
+			// Timed out.
+			break loop
+		default:
+			// Not timed out yet.
+		}
+
+		logCtx.WithFields(logrus.Fields{
+			"output": out,
+			"err":    err,
+			"actual": result,
+		}).Warn("Connection attempt did not get expected result. Retrying...")
+
+		time.Sleep(1 * time.Second)
+		out, result, err = c.execCommandInPod(exp.Client, cmd)
 	}
+
+	logCtx.WithFields(logrus.Fields{
+		"output": out,
+		"err":    err,
+		"actual": result,
+	}).Debug("Final connection attempt result")
 
 	exp.executed = true
 	results <- connectionResult{
@@ -374,6 +395,41 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 		actual:    result,
 		err:       err,
 	}
+}
+
+// Connect runs a one-shot connection attempt from the client pod to the given target, and returns the output of the command.
+func (c *connectionTester) Connect(client *Client, target Target) (string, error) {
+	if c.clients[client.ID()] == nil {
+		return "", fmt.Errorf("Test bug: client %s not registered with connection tester. AddClient()?", client.ID())
+	}
+	if c.clients[client.ID()].pod == nil {
+		return "", fmt.Errorf("Client %s has no running pod. Did you Deploy()?", client.ID())
+	}
+
+	cmd := c.command(target)
+	out, _, err := c.execCommandInPod(c.clients[client.ID()].pod, cmd)
+	return out, err
+}
+
+func (c *connectionTester) execCommandInPod(pod *v1.Pod, cmd string) (string, ResultStatus, error) {
+	var out string
+	var err error
+
+	// Ensure the kubectl command executes in the remote cluster if required. Remote framework objects do not control
+	// how kubeconfigs are resolved by the kubectl command, so we must use this wrapper. See NewDefaultFrameworkForRemoteCluster.
+	remotecluster.RemoteFrameworkAwareExec(c.f, func() {
+		if windows.ClusterIsWindows() {
+			out, err = ExecInPod(pod, "powershell.exe", "-Command", cmd)
+		} else {
+			out, err = ExecInPod(pod, "sh", "-c", cmd)
+		}
+	})
+	result := Success
+	if err != nil {
+		result = Failure
+	}
+
+	return out, result, err
 }
 
 func (c *connectionTester) command(t Target) string {
@@ -477,7 +533,6 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	var args []string
 	var command []string
 	nodeselector := map[string]string{}
-	pullPolicy := v1.PullAlways
 
 	// Randomize pod names to avoid clashes with previous tests.
 	podName := GenerateRandomName(baseName)
@@ -487,7 +542,6 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 		command = []string{"powershell.exe"}
 		args = []string{"Start-Sleep", "600"}
 		nodeselector["kubernetes.io/os"] = "windows"
-		pullPolicy = v1.PullIfNotPresent
 	} else {
 		image = images.Alpine
 		command = []string{"/bin/sleep"}
@@ -517,7 +571,7 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 					Image:           image,
 					Command:         command,
 					Args:            args,
-					ImagePullPolicy: pullPolicy,
+					ImagePullPolicy: v1.PullIfNotPresent,
 				},
 			},
 			Tolerations: []v1.Toleration{

@@ -35,7 +35,7 @@ import (
 
 func init() {
 	// Need to set up the scheme in order to use the fake REST client.
-	calischeme.AddCalicoResourcesToScheme()
+	calischeme.AddCalicoResourcesToGlobalScheme()
 }
 
 var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", func() {

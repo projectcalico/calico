@@ -16,7 +16,9 @@ package describe
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/onsi/ginkgo/v2"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -44,6 +46,7 @@ const (
 	Policy        Category = "Policy"
 	Configuration Category = "Configuration"
 	Operator      Category = "Operator"
+	Networking    Category = "Networking"
 )
 
 func WithCategory(cat Category) any {
@@ -55,9 +58,14 @@ func WithCategory(cat Category) any {
 //
 // If you are unsure which feature to use, please ask!
 var features = map[string]bool{
-	"NetworkPolicy": true,
-	"IPPool":        true,
-	"AutoHEPs":      true,
+	"NetworkPolicy":   true,
+	"Tiered-Policy":   true,
+	"IPPool":          true,
+	"AutoHEPs":        true,
+	"Host-Protection": true,
+	"HostPorts":       true,
+	"OwnerReferences": true,
+	"MTU":             true,
 }
 
 // WithFeature marks tests as verifying a specific feature.
@@ -134,3 +142,16 @@ var (
 	WithSerial     = framework.WithSerial
 	WithDisruptive = framework.WithDisruptive
 )
+
+// IncludesFocus returns true if the focus string used to run the tests includes the given substring.
+// This is useful to allow tests to modify their behavior based on whether or not they are being focused. For example,
+// tests should not self-skip if they are actively focused.
+func IncludesFocus(s string) bool {
+	suiteConfig, _ := ginkgo.GinkgoConfiguration()
+	for _, focus := range suiteConfig.FocusStrings {
+		if strings.Contains(focus, s) {
+			return true
+		}
+	}
+	return false
+}

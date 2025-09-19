@@ -164,7 +164,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: IPPool(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: IPPool(" + name1 + ") with error:"))
 
 			By("Getting IPPool (name1) and comparing the output against spec1")
 			res, outError := c.IPPools().Get(ctx, name1, options.GetOptions{})

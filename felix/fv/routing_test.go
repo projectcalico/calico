@@ -181,13 +181,32 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 			}
 
-			It("should have workload to workload connectivity", func() {
+			It("should have correct connectivity", func() {
+				// Checking workload to workload connectivity
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
-
 				if enableIPv6 {
 					cc.ExpectSome(w6[0], w6[1])
 					cc.ExpectSome(w6[1], w6[0])
+				}
+
+				// Checking host to host connectivity
+				cc.ExpectSome(tc.Felixes[0], hostW[1])
+				cc.ExpectSome(tc.Felixes[1], hostW[0])
+				if enableIPv6 {
+					cc.ExpectSome(felixes[0], hostW6[1])
+					cc.ExpectSome(felixes[1], hostW6[0])
+				}
+
+				// Checking host to workload connectivity
+				// Skipping due to known issue with tunnel IPs not being programmed in WEP mode
+				if ipipTunnelSupported(ipipMode, routeSource) {
+					cc.ExpectSome(tc.Felixes[0], w[0])
+					cc.ExpectSome(tc.Felixes[0], w[1])
+					if enableIPv6 {
+						cc.ExpectSome(tc.Felixes[0], w6[0])
+						cc.ExpectSome(tc.Felixes[0], w6[1])
+					}
 				}
 
 				cc.CheckConnectivityWithTimeout(timeout)
@@ -196,7 +215,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			It("should have some blackhole routes installed", func() {
 				if routeSource == "WorkloadIPs" {
 					Skip("not applicable for workload ips")
-					return
 				}
 
 				nodes := []string{
@@ -290,34 +308,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					)
 				})
 			}
-
-			It("should have host to workload connectivity", func() {
-				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
-					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
-				}
-
-				cc.ExpectSome(tc.Felixes[0], w[0])
-				cc.ExpectSome(tc.Felixes[0], w[1])
-
-				if enableIPv6 {
-					cc.ExpectSome(tc.Felixes[0], w6[0])
-					cc.ExpectSome(tc.Felixes[0], w6[1])
-				}
-
-				cc.CheckConnectivityWithTimeout(timeout)
-			})
-
-			It("should have host to host connectivity", func() {
-				cc.ExpectSome(tc.Felixes[0], hostW[1])
-				cc.ExpectSome(tc.Felixes[1], hostW[0])
-
-				if enableIPv6 {
-					cc.ExpectSome(felixes[0], hostW6[1])
-					cc.ExpectSome(felixes[1], hostW6[0])
-				}
-
-				cc.CheckConnectivityWithTimeout(timeout)
-			})
 
 			Context("with host protection policy in place", func() {
 				BeforeEach(func() {
@@ -541,7 +531,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					// avoid those other checks setting up conntrack state that allows the
 					// existing case to pass for a different reason.
 					It("allows host0 to remote Calico-networked workload via service IP", func() {
-						if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
+						if !ipipTunnelSupported(ipipMode, routeSource) {
 							Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 						}
 						// Allocate a service IP.
@@ -586,8 +576,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 
 			Context("after removing BGP address from third node", func() {
-				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
+				// Simulate having a host send IPIP traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
+					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
 					for _, f := range felixes {
 						if BPFMode() {
 							// one host and one host tunnel routes per node
@@ -601,9 +592,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							}).Should(Equal(expectedNumRoutes),
 								fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, f.BPFRoutes()))
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 						}
 					}
 
@@ -623,6 +614,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
+					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
 					if BPFMode() {
 						// one host and one host tunnel routes per node
 						expectedNumRoutes := (len(felixes) - 1) * 2
@@ -635,9 +627,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						}).Should(Equal(expectedNumRoutes),
 							fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
 					} else if NFTMode() {
-						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 					} else {
-						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 					}
 
 					cc.ExpectSome(w[0], w[1])
@@ -969,7 +961,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 
 			It("should have host to workload connectivity", func() {
-				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
+				if !ipipTunnelSupported(ipipMode, routeSource) {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
@@ -1097,30 +1089,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				infra.Stop()
 			})
 
-			It("should have host to workload connectivity", func() {
-				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
-					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
-				}
-
-				cc.ExpectSome(tc.Felixes[0], w[0])
-				cc.ExpectSome(tc.Felixes[0], w[1])
-				cc.ExpectSome(tc.Felixes[0], w[2])
-				if enableIPv6 {
-					cc.ExpectSome(tc.Felixes[0], w6[0])
-					cc.ExpectSome(tc.Felixes[0], w6[1])
-					cc.ExpectSome(tc.Felixes[0], w6[2])
-				}
-
-				cc.CheckConnectivityWithTimeout(timeout)
-			})
-
-			It("should have workload to workload connectivity", func() {
+			It("should have correct connectivity", func() {
+				// Workload to workload connectivity.
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 				if enableIPv6 {
 					cc.ExpectSome(w6[0], w6[1])
 					cc.ExpectSome(w6[1], w6[0])
 				}
+
+				// Host to workload connectivity.
+				if ipipTunnelSupported(ipipMode, routeSource) {
+					cc.ExpectSome(tc.Felixes[0], w[0])
+					cc.ExpectSome(tc.Felixes[0], w[1])
+					cc.ExpectSome(tc.Felixes[0], w[2])
+					if enableIPv6 {
+						cc.ExpectSome(tc.Felixes[0], w6[0])
+						cc.ExpectSome(tc.Felixes[0], w6[1])
+						cc.ExpectSome(tc.Felixes[0], w6[2])
+					}
+				}
+
 				cc.CheckConnectivityWithTimeout(timeout)
 			})
 		})
@@ -1206,4 +1195,16 @@ func waitForIPIPDevice() {
 		}
 		return errors.New("tunl0 wasn't auto-created")
 	}).Should(BeNil())
+}
+
+func allHostsIPSetSize(felixes []*infrastructure.Felix, ipipMode api.IPIPMode) int {
+	if ipipMode == api.IPIPModeNever {
+		// All Hosts IPSet Manager is not enabled in IPIP encapsulation.
+		return 0
+	}
+	return len(felixes)
+}
+
+func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
+	return !(ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs")
 }

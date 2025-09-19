@@ -185,6 +185,7 @@ type Config struct {
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
+	BPFJITHardening                    string            `config:"oneof(Auto,Strict);Auto;non-zero"`
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
@@ -224,13 +225,13 @@ type Config struct {
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
 
+	// CgroupV2Path is not used by Felix, but its init container
+	CgroupV2Path string `config:"string;;"`
+
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
 	// for development right now.
 	DebugBPFCgroupV2 string `config:"string;;local"`
-	// DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
-	// testing with multiple Felix instances running on one host.
-	DebugBPFMapRepinEnabled bool `config:"bool;false;local"`
 
 	// DatastoreType controls which datastore driver Felix will use.  Typically, this is detected from the environment
 	// and it does not need to be set manually. (For example, if `KUBECONFIG` is set, the kubernetes datastore driver

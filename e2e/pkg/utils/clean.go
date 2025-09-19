@@ -24,6 +24,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	// TestResourceLabel is a label that is applied to any Calico resource created by the e2e tests.
+	// It's used to identify resources that should be cleaned up.
+	TestResourceLabel = "projectcalico.org/e2e"
+)
+
 // CleanDatastore removes any resources that a previous test may have created.
 // It's intended to be called in the BeforeEach of a test in order to ensure a
 // clean starting environment.
@@ -86,6 +92,23 @@ func CleanDatastore(cli client.Client) error {
 		for _, gnp := range gnps.Items {
 			if gnp.Spec.Tier != "allow-tigera" {
 				err = cli.Delete(ctx, &gnp)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// Clean up tiers.
+		tiers := &v3.TierList{}
+		err = cli.List(ctx, tiers)
+		if err != nil {
+			return err
+		}
+		logrus.Info("Cleaning left-over tiers")
+		for _, tier := range tiers.Items {
+			// Only clean up tiers that have the projectcalico.org/e2e label.
+			if _, ok := tier.Labels[TestResourceLabel]; ok {
+				err = cli.Delete(ctx, &tier)
 				if err != nil {
 					return err
 				}

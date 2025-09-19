@@ -12,29 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rules
+// Package model to access unexported hashHostnameForLabel for a golden test.
+package model
 
-import (
-	"github.com/projectcalico/calico/felix/generictables"
-)
+import "testing"
 
-type QoSPolicy struct {
-	SrcAddrs string
-	DSCP     uint8
-}
-
-func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain {
-	var rules []generictables.Rule
-	// Policies is sorted and validated by QoS policy manager.
-	for _, p := range policies {
-		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
-			Action: r.DSCP(p.DSCP),
-		})
-	}
-
-	return &generictables.Chain{
-		Name:  ChainQoSPolicy,
-		Rules: rules,
+// TestHashHostnameForLabelGolden verifies the exact hash output for a stable input.
+// This protects against accidental changes to the hash algorithm or encoding.
+func TestHashHostnameForLabelGolden(t *testing.T) {
+	got := hashHostnameForLabel("node-a")
+	want := "PY3TQE2E3XMTETLM2MJO3UITKPFB27YUJ4T4E5XGPEJON3SM4QAA"
+	if got != want {
+		t.Fatalf("hashHostnameForLabel(\"node-a\") = %q, want %q", got, want)
 	}
 }

@@ -5,7 +5,12 @@
 #ifndef __CALI_IP_V4_FRAGMENT_H__
 #define __CALI_IP_V4_FRAGMENT_H__
 
+#include "bpf.h"
 #include "ip_addr.h"
+#include "log.h"
+#include "parsing.h"
+#include "skb.h"
+#include "types.h"
 
 struct frags4_key {
 	ipv4_addr_t src;
@@ -44,6 +49,54 @@ static CALI_BPF_INLINE struct frags4_value *frags4_get_scratch()
 {
 	__u32 key = 0;
 	return cali_v4_frgtmp_lookup_elem(&key);
+}
+
+struct f2skb_ctx {
+	struct cali_tc_ctx *ctx;
+	struct frags4_key *k;
+	int iphdr_off;
+};
+
+static long frag_to_skb(__u64 i, void *_ctx)
+{
+	struct f2skb_ctx *ictx = (struct f2skb_ctx *)_ctx;
+	struct cali_tc_ctx *ctx = ictx->ctx;
+
+	struct frags4_value *v = cali_v4_frags_lookup_elem(ictx->k);
+
+	if (!v) {
+		CALI_DEBUG("IP FRAG: Missing IP fragment at offset %d", ictx->k->offset);
+		return 1;
+	}
+
+	__u16 len = v->len;
+
+	if (len == 0) {
+		len = 1; /* prevent verifier from complaining about zero-length copy */
+	}
+
+	barrier(); /* verifier needs some help with recognizing that len is non-zero */
+
+	if (len > MAX_FRAG) {
+		return 1;
+	}
+
+	CALI_DEBUG("IP FRAG: copy %d bytes to %d", len, ictx->iphdr_off + ictx->k->offset);
+	if (bpf_skb_store_bytes(ctx->skb, ictx->iphdr_off + ictx->k->offset, v->data, len, 0)) {
+		CALI_DEBUG("IP FRAG: Failed to copy bytes");
+		return 1;
+	}
+
+	bool last = !v->more_frags;
+	cali_v4_frags_delete_elem(ictx->k);
+
+	if(last) {
+		return 1;
+	}
+
+	ictx->k->offset += v->len;
+
+	return 0;
 }
 
 static CALI_BPF_INLINE bool frags4_try_assemble(struct cali_tc_ctx *ctx)
@@ -87,34 +140,13 @@ assemble:
 
 	k.offset = 0;
 
-	for (i = 0; i < 10; i++) {
-		struct frags4_value *v = cali_v4_frags_lookup_elem(&k);
+	struct f2skb_ctx f2sctx = {
+		.ctx = ctx,
+		.k = &k,
+		.iphdr_off = off,
+	};
 
-		if (!v) {
-			CALI_DEBUG("IP FRAG: Missing IP fragment at offset %d", k.offset);
-			goto out;
-		}
-
-		__u16 len = v->len;
-		if (len == 0 || len > MAX_FRAG) {
-			goto out;
-		}
-		CALI_DEBUG("IP FRAG: copy %d bytes to %d", len, off);
-		if (bpf_skb_store_bytes(ctx->skb, off, v->data, len, 0)) {
-			CALI_DEBUG("IP FRAG: Failed to copy bytes");
-			goto out;
-		}
-
-		bool last = !v->more_frags;
-		cali_v4_frags_delete_elem(&k);
-
-		if(last) {
-			break;
-		}
-
-		k.offset += v->len;
-		off += v->len;
-	}
+	bpf_loop(10, frag_to_skb, &f2sctx, 0);
 
 	if (parse_packet_ip(ctx) != PARSING_OK) {
 		goto out;
@@ -148,6 +180,18 @@ out:
 
 static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 {
+#ifndef BPF_CORE_SUPPORTED
+	return false;
+#else
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return false;
+	}
+
 	struct frags4_value *v = frags4_get_scratch();
 
 	if (!v) {
@@ -212,10 +256,21 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 
 out:
 	return false;
+#endif /* BPF_CORE_SUPPORTED */
 }
 
 static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 {
+#ifdef BPF_CORE_SUPPORTED
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -228,10 +283,21 @@ static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 	cali_v4_frgfwd_update_elem(&k, &v, 0);
 	CALI_DEBUG("IP FRAG: created ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
+#endif
 }
 
 static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 {
+#ifdef BPF_CORE_SUPPORTED
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -242,10 +308,23 @@ static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 	cali_v4_frgfwd_delete_elem(&k);
 	CALI_DEBUG("IP FRAG: killed ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
+#endif /* BPF_CORE_SUPPORTED */
 }
 
 static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 {
+#ifndef BPF_CORE_SUPPORTED
+	return false;
+#else
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return false;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -256,6 +335,7 @@ static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 	CALI_DEBUG("IP FRAG: lookup ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
 	return cali_v4_frgfwd_lookup_elem(&k) != NULL;
+#endif /* BPF_CORE_SUPPORTED */
 }
 
 #endif /* __CALI_IP_V4_FRAGMENT_H__ */

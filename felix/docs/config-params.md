@@ -581,6 +581,19 @@ from workloads.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
+### `CgroupV2Path` (config file) / `cgroupV2Path` (YAML)
+
+Overrides the default location where to find the cgroup hierarchy.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_CgroupV2Path` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `cgroupV2Path` (YAML) `CgroupV2Path` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `ChainInsertMode` (config file) / `chainInsertMode` (YAML)
 
 Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule
@@ -1758,6 +1771,22 @@ determines the CTLB behavior.
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
+### `BPFJITHardening` (config file) / `bpfJITHardening` (YAML)
+
+Controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+Felix will not modify the JIT hardening setting.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFJITHardening` |
+| Encoding (env var/config file) | One of: <code>Auto</code>, <code>Strict</code> (case insensitive) |
+| Default value (above encoding) | `Auto` |
+| `FelixConfiguration` field | `bpfJITHardening` (YAML) `BPFJITHardening` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `Auto` |
+| Notes | Required. | 
+
 ### `BPFKubeProxyEndpointSlicesEnabled` (config file) / `bpfKubeProxyEndpointSlicesEnabled` (YAML)
 
 Deprecated and has no effect. BPF
@@ -2611,18 +2640,6 @@ for development right now.
 | Environment variable | `FELIX_DebugBPFCgroupV2` |
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | none |
-| Notes | Config file / env var only. | 
-
-### `DebugBPFMapRepinEnabled` (config file / env var only)
-
-Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for
-testing with multiple Felix instances running on one host.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_DebugBPFMapRepinEnabled` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `false` |
 | Notes | Config file / env var only. | 
 
 ### `DebugCPUProfilePath` (config file / env var only)

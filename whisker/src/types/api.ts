@@ -2,15 +2,19 @@ import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-compo
 import { ListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
 import { FlowLogAction } from './render';
 
-type Policy = {
+export type Policy = {
     kind: string;
     name: string;
     namespace: string;
     tier: string;
     action: string;
-    policy_index: number;
-    rule_index: number;
-    trigger: null;
+    policy_index: number | null;
+    rule_index: number | null;
+    trigger?: Policy | null;
+};
+
+export type PoliciesLogEntries = {
+    [key: string]: Policy[];
 };
 
 export type FlowLog = {
@@ -30,10 +34,7 @@ export type FlowLog = {
     packets_out: string;
     bytes_in: string;
     bytes_out: string;
-    policies: {
-        enforced: Policy[];
-        pending: Policy[];
-    };
+    policies: PoliciesLogEntries;
 };
 
 export type ApiError = {

@@ -46,11 +46,11 @@ var _ = Describe("MTUFromFile", func() {
 		// Create a temporary file with a valid MTU value
 		file, err := os.CreateTemp("", "mtu_test")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(file.Name())
+		defer func() { _ = os.Remove(file.Name()) }()
 
 		_, err = file.WriteString("1500")
 		Expect(err).NotTo(HaveOccurred())
-		file.Close()
+		_ = file.Close()
 
 		// Call the function and check the result
 		mtu, err := utils.MTUFromFile(file.Name(), types.NetConf{})
@@ -73,11 +73,11 @@ var _ = Describe("MTUFromFile", func() {
 			// Create a temporary file with invalid permissions
 			file, err := os.CreateTemp("", "mtu_test")
 			Expect(err).NotTo(HaveOccurred())
-			defer os.Remove(file.Name())
+			defer func() { _ = os.Remove(file.Name()) }()
 
 			err = os.Chmod(file.Name(), 0o000) // Remove all permissions
 			Expect(err).NotTo(HaveOccurred())
-			file.Close()
+			_ = file.Close()
 
 			// Call the function and check the result
 			_, err = utils.MTUFromFile(file.Name(), types.NetConf{})

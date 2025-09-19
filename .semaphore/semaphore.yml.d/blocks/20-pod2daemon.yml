@@ -1,6 +1,6 @@
 - name: pod2daemon
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/pod2daemon/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(pod2daemon)}"
   dependencies:
     - Prerequisites
   task:

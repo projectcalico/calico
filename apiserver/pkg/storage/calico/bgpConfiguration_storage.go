@@ -6,7 +6,6 @@ import (
 	"context"
 	"reflect"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -51,8 +50,8 @@ func NewBGPConfigurationStorage(opts Options) (registry.DryRunnableStorage, fact
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.BGPConfiguration{}),
-		aapiListType:      reflect.TypeOf(aapi.BGPConfigurationList{}),
+		aapiType:          reflect.TypeOf(api.BGPConfiguration{}),
+		aapiListType:      reflect.TypeOf(api.BGPConfigurationList{}),
 		libCalicoType:     reflect.TypeOf(api.BGPConfiguration{}),
 		libCalicoListType: reflect.TypeOf(api.BGPConfigurationList{}),
 		isNamespaced:      false,
@@ -72,7 +71,7 @@ type BGPConfigurationConverter struct {
 }
 
 func (gc BGPConfigurationConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	aapiBGPConfiguration := aapiObj.(*aapi.BGPConfiguration)
+	aapiBGPConfiguration := aapiObj.(*api.BGPConfiguration)
 	lcgBGPConfiguration := &api.BGPConfiguration{}
 	lcgBGPConfiguration.TypeMeta = aapiBGPConfiguration.TypeMeta
 	lcgBGPConfiguration.ObjectMeta = aapiBGPConfiguration.ObjectMeta
@@ -84,7 +83,7 @@ func (gc BGPConfigurationConverter) convertToLibcalico(aapiObj runtime.Object) r
 
 func (gc BGPConfigurationConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgBGPConfiguration := libcalicoObject.(*api.BGPConfiguration)
-	aapiBGPConfiguration := aapiObj.(*aapi.BGPConfiguration)
+	aapiBGPConfiguration := aapiObj.(*api.BGPConfiguration)
 	aapiBGPConfiguration.Spec = lcgBGPConfiguration.Spec
 	aapiBGPConfiguration.TypeMeta = lcgBGPConfiguration.TypeMeta
 	aapiBGPConfiguration.ObjectMeta = lcgBGPConfiguration.ObjectMeta
@@ -92,15 +91,15 @@ func (gc BGPConfigurationConverter) convertToAAPI(libcalicoObject resourceObject
 
 func (gc BGPConfigurationConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
 	lcgBGPConfigurationList := libcalicoListObject.(*api.BGPConfigurationList)
-	aapiBGPConfigurationList := aapiListObj.(*aapi.BGPConfigurationList)
+	aapiBGPConfigurationList := aapiListObj.(*api.BGPConfigurationList)
 	if libcalicoListObject == nil {
-		aapiBGPConfigurationList.Items = []aapi.BGPConfiguration{}
+		aapiBGPConfigurationList.Items = []api.BGPConfiguration{}
 		return
 	}
 	aapiBGPConfigurationList.TypeMeta = lcgBGPConfigurationList.TypeMeta
 	aapiBGPConfigurationList.ListMeta = lcgBGPConfigurationList.ListMeta
 	for _, item := range lcgBGPConfigurationList.Items {
-		aapiBGPConfiguration := aapi.BGPConfiguration{}
+		aapiBGPConfiguration := api.BGPConfiguration{}
 		gc.convertToAAPI(&item, &aapiBGPConfiguration)
 		if matched, err := pred.Matches(&aapiBGPConfiguration); err == nil && matched {
 			aapiBGPConfigurationList.Items = append(aapiBGPConfigurationList.Items, aapiBGPConfiguration)

@@ -50,7 +50,7 @@ func (p *CalicoReleaseVersions) GenerateFile() (version.Versions, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer pinnedVersionFile.Close()
+	defer func() { _ = pinnedVersionFile.Close() }()
 	if err := tmpl.Execute(pinnedVersionFile, tmplData); err != nil {
 		return nil, err
 	}

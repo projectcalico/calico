@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,10 @@
 #include <errno.h>
 #include "globals.h"
 #include "ip_addr.h"
+#include "str_error.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
 
 static void set_errno(int ret) {
 	errno = ret >= 0 ? ret : -ret;
@@ -274,10 +278,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint log_filter_jmp,
 			uint *jumps,
 			uint *jumps6,
-			ushort ingress_packet_rate,
-			ushort ingress_packet_burst,
-			ushort egress_packet_rate,
-			ushort egress_packet_burst)
+			short dscp)
 {
 	struct cali_tc_global_data v4 = {
 		.tunnel_mtu = tmtu,
@@ -292,10 +293,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.natout_idx = natout,
 		.overlay_tunnel_id = overlay_tunnel_id,
 		.log_filter_jmp = log_filter_jmp,
-		.ingress_packet_rate = ingress_packet_rate,
-		.ingress_packet_burst = ingress_packet_burst,
-		.egress_packet_rate = egress_packet_rate,
-		.egress_packet_burst = egress_packet_burst,
+		.dscp = dscp,
 	};
 
 	strncpy(v4.iface_name, iface_name, sizeof(v4.iface_name));
@@ -485,7 +483,35 @@ void bpf_map_batch_update(int fd, const void *keys, const void *values, __u32 *c
 	set_errno(bpf_map_update_batch(fd, keys, values, count, &opts));
 }
 
+void bpf_map_batch_delete(int fd, const void *keys, __u32 *count, __u64 flags)
+{
+	DECLARE_LIBBPF_OPTS(bpf_map_batch_opts, opts,
+		.flags = flags);
+
+	set_errno(bpf_map_delete_batch(fd, keys, count, &opts));
+}
+
 int num_possible_cpu()
 {
     return libbpf_num_possible_cpus();
+}
+
+int create_bpf_map(enum bpf_map_type type, unsigned int key_size, unsigned int value_size,
+                   unsigned int max_entries, unsigned int flags, const char *name)
+{
+	LIBBPF_OPTS(bpf_map_create_opts, create_attr);
+
+	create_attr.map_flags = flags;
+
+	int fd;
+	int err;
+	fd = bpf_map_create(type, name, key_size, value_size, max_entries, &create_attr);
+	if (fd < 0) {
+		char *cp, errmsg[STRERR_BUFSIZE];
+
+		err = -errno;
+		cp = libbpf_strerror_r(err, errmsg, sizeof(errmsg));
+		printf("libbpf warn: Error in bpf_map_create(%s):%s(%d).\n", name, cp, err);
+	}
+	return fd;
 }
