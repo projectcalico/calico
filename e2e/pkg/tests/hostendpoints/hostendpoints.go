@@ -356,7 +356,7 @@ var _ = describe.CalicoDescribe(
 			})
 
 			It("should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation) [ExternalNode]", func() {
-				extClient := externalnode.NewExternalNodeClient()
+				extClient := externalnode.NewClient()
 				if extClient == nil {
 					if describe.IncludesFocus("ExternalNode") {
 						framework.Failf("External node client not available")

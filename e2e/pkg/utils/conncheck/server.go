@@ -31,9 +31,10 @@ func NewServer(name string, ns *v1.Namespace, opts ...ServerOption) *Server {
 		framework.Fail(msg, 1)
 	}
 	s := &Server{
-		name:      name,
-		namespace: ns,
-		ports:     []int{80},
+		name:          name,
+		namespace:     ns,
+		ports:         []int{80},
+		autoCreateSvc: true,
 	}
 	for _, opt := range opts {
 		_ = opt(s)
@@ -50,6 +51,7 @@ type Server struct {
 	service       *v1.Service
 	podCustomizer func(*v1.Pod)
 	svcCustomizer func(*v1.Service)
+	autoCreateSvc bool
 }
 
 func (s *Server) ID() string {
@@ -224,6 +226,13 @@ func WithServerSvcCustomizer(customizer func(*v1.Service)) ServerOption {
 func WithPorts(ports ...int) ServerOption {
 	return func(c *Server) error {
 		c.ports = ports
+		return nil
+	}
+}
+
+func WithAutoCreateService(autoCreate bool) ServerOption {
+	return func(c *Server) error {
+		c.autoCreateSvc = autoCreate
 		return nil
 	}
 }
