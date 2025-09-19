@@ -2688,7 +2688,8 @@ func startBPFDataplaneComponents(
 			for {
 				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
 				if err != nil {
-					log.WithError(err).Error("BPF Proxy Healthz server failed, restarting")
+					log.WithError(err).Error("BPF Proxy Healthz server failed, restarting in 1s")
+					time.Sleep(time.Second)
 				}
 			}
 		}()
