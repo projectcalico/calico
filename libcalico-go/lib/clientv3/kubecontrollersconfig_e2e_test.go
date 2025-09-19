@@ -91,7 +91,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 		},
 	}
 	status2 := apiv3.KubeControllersConfigurationStatus{
-		RunningConfig: apiv3.KubeControllersConfigurationSpec{
+		RunningConfig: &apiv3.KubeControllersConfigurationSpec{
 			HealthChecks: apiv3.Disabled,
 			Controllers: apiv3.ControllersConfig{
 				Node: &apiv3.NodeControllerConfig{
