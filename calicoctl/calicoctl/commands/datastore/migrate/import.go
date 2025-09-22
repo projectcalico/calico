@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -264,7 +264,9 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 						}
 
 						// Make sure that the global network policy is a K8s admin network policy
-						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) {
+						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) ||
+							!strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
+							!strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) {
 							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
 						}
 					}
