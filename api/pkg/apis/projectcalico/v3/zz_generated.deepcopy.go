@@ -1565,6 +1565,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.BPFKubeProxyHealtzPort != nil {
+		in, out := &in.BPFKubeProxyHealtzPort, &out.BPFKubeProxyHealtzPort
+		*out = new(int)
+		**out = **in
+	}
 	if in.BPFKubeProxyEndpointSlicesEnabled != nil {
 		in, out := &in.BPFKubeProxyEndpointSlicesEnabled, &out.BPFKubeProxyEndpointSlicesEnabled
 		*out = new(bool)

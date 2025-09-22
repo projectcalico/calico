@@ -3286,6 +3286,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"bpfKubeProxyHealtzPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFKubeProxyHealtzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"bpfKubeProxyEndpointSlicesEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF kube-proxy always accepts endpoint slices. This option will be removed in the next release.",
