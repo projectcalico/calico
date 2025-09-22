@@ -3096,16 +3096,15 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 		}
 		BeforeEach(func() {
-			createTestClusterNetworkPolicy("test-admin-net-policy-1")
-			createTestClusterNetworkPolicy("test-admin-net-policy-2")
+			createTestClusterNetworkPolicy("test-cluster-net-policy-1")
+			createTestClusterNetworkPolicy("test-cluster-net-policy-2")
 		})
 		AfterEach(func() {
 			deleteAllClusterNetworkPolicies()
 		})
-		It("supports watching all clusternetworkpolicies", func() {
+		It("supports watching all k8s cluster network policies", func() {
 			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(err).To(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
 		})
@@ -3121,7 +3120,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 		It("should handle a list for many network policies with a revision", func() {
 			for i := 3; i < 1000; i++ {
-				createTestClusterNetworkPolicy(fmt.Sprintf("test-admin-net-policy-%d", i))
+				createTestClusterNetworkPolicy(fmt.Sprintf("test-cluster-net-policy-%d", i))
 			}
 			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, "")
 			Expect(err).NotTo(HaveOccurred())
