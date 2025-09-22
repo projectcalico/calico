@@ -28694,7 +28694,6 @@ spec:
             spec:
               properties:
                 asNumber:
-                  default: 64512
                   format: int32
                   type: integer
                 bindMode:
@@ -28750,7 +28749,6 @@ spec:
                       x-kubernetes-map-type: atomic
                   type: object
                 nodeToNodeMeshEnabled:
-                  default: true
                   type: boolean
                 prefixAdvertisements:
                   items:
