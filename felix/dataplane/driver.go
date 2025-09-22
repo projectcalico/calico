@@ -375,6 +375,7 @@ func StartDataplaneDriver(
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			BPFMapRepin:                        configParams.DebugBPFMapRepinEnabled,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
+			KubeProxyHealtzPort:                configParams.BPFKubeProxyHealtzPort,
 			BPFPSNATPorts:                      configParams.BPFPSNATPorts,
 			BPFMapSizeRoute:                    configParams.BPFMapSizeRoute,
 			BPFMapSizeNATFrontend:              configParams.BPFMapSizeNATFrontend,
