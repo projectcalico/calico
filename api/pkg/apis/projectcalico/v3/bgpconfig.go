@@ -73,12 +73,10 @@ type BGPConfigurationSpec struct {
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel" confignamev1:"loglevel"`
 
 	// NodeToNodeMeshEnabled sets whether full node to node BGP mesh is enabled. [Default: true]
-	// +kubebuilder:default=true
 	// +optional
 	NodeToNodeMeshEnabled *bool `json:"nodeToNodeMeshEnabled,omitempty" validate:"omitempty" confignamev1:"node_mesh"`
 
 	// ASNumber is the default AS number used by a node. [Default: 64512]
-	// +kubebuilder:default=64512
 	// +optional
 	ASNumber *numorstring.ASNumber `json:"asNumber,omitempty" validate:"omitempty" confignamev1:"as_num"`
 

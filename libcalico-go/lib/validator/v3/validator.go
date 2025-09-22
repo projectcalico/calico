@@ -249,7 +249,7 @@ func init() {
 	registerStructValidator(validate, validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validate, validateIPPoolSpec, api.IPPoolSpec{})
 	registerStructValidator(validate, validateNodeSpec, libapi.NodeSpec{})
-	registerStructValidator(validate, validateIPAMConfigSpec, libapi.IPAMConfigSpec{})
+	registerStructValidator(validate, validateIPAMConfigSpec, api.IPAMConfigurationSpec{})
 	registerStructValidator(validate, validateObjectMeta, metav1.ObjectMeta{})
 	registerStructValidator(validate, validateTier, api.Tier{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
@@ -1261,7 +1261,6 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 
 	// Enhanced validation for NodeSelector based on Calico selector reference
 	if pool.NodeSelector != "" {
-
 		// Check for invalid global() selector in nodeSelector context
 		if strings.Contains(pool.NodeSelector, "global(") {
 			structLevel.ReportError(reflect.ValueOf(pool.NodeSelector),
@@ -1271,13 +1270,11 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 
 	// Enhanced validation for NamespaceSelector based on Calico selector reference
 	if pool.NamespaceSelector != "" {
-
 		// Check for invalid global() selector in namespaceSelector context
 		if strings.Contains(pool.NamespaceSelector, "global(") {
 			structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
 				"IPpool.NamespaceSelector", "", reason("global() selector is not valid for IPPool namespaceSelector - use all() instead"), "")
 		}
-
 	}
 }
 
@@ -1460,7 +1457,7 @@ func validateEntityRule(structLevel validator.StructLevel) {
 }
 
 func validateIPAMConfigSpec(structLevel validator.StructLevel) {
-	ics := structLevel.Current().Interface().(libapi.IPAMConfigSpec)
+	ics := structLevel.Current().Interface().(api.IPAMConfigurationSpec)
 
 	if ics.MaxBlocksPerHost < 0 {
 		structLevel.ReportError(reflect.ValueOf(ics.MaxBlocksPerHost), "MaxBlocksPerHost", "",

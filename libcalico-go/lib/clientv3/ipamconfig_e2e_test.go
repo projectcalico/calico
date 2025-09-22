@@ -89,7 +89,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfiguration tests", testutils.Data
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("Cannot create a IPAMConfigurationuration resource with a name other than \"default\""))
+			Expect(outError.Error()).To(Equal("Cannot create an IPAMConfiguration resource with a name other than \"default\""))
 
 			By("Creating a new IPAMConfiguration with spec1")
 			res1, outError := c.IPAMConfiguration().Create(ctx, &v3.IPAMConfiguration{
@@ -164,6 +164,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfiguration tests", testutils.Data
 			},
 		}, options.SetOptions{})
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal("error with field MaxBlocksPerHost = '-1' (must be greater than or equal to 0)"))
+		Expect(err.Error()).To(Equal("error with field MaxBlocksPerHost = '-1' (must be greater than or equal to 0)"), err.Error())
 	})
 })

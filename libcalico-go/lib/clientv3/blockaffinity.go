@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
-// TODO: Configure this to work with the public facing API instead of the lib v3 API.
 // BlockAffinityInterface has methods to work with BlockAffinity resources.
 type BlockAffinityInterface interface {
 	Create(ctx context.Context, res *v3.BlockAffinity, opts options.SetOptions) (*v3.BlockAffinity, error)

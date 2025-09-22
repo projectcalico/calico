@@ -25,6 +25,7 @@ import (
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
@@ -164,6 +165,10 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 		return nil, err
 	}
 
+	if err = prepForWrite(d); err != nil {
+		return nil, err
+	}
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -209,6 +214,10 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	d.Value = v
 	d.Revision = strconv.FormatInt(txnResp.Header.Revision, 10)
 
+	if err = prepForReturn(d); err != nil {
+		return nil, err
+	}
+
 	return d, nil
 }
 
@@ -224,6 +233,9 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 
 	err := defaultPolicyName(d)
 	if err != nil {
+		return nil, err
+	}
+	if err = prepForWrite(d); err != nil {
 		return nil, err
 	}
 
@@ -253,7 +265,6 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	).Else(
 		clientv3.OpGet(key),
 	).Commit()
-
 	if err != nil {
 		logCxt.WithError(err).Warning("Update failed")
 		return nil, cerrors.ErrorDatastoreError{Err: err}
@@ -279,6 +290,10 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	d.Value = v
 	d.Revision = strconv.FormatInt(txnResp.Header.Revision, 10)
 
+	if err = prepForReturn(d); err != nil {
+		return nil, err
+	}
+
 	return d, nil
 }
 
@@ -293,6 +308,9 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 
 	err := defaultPolicyName(d)
 	if err != nil {
+		return nil, err
+	}
+	if err = prepForWrite(d); err != nil {
 		return nil, err
 	}
 
@@ -317,6 +335,10 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 	cerrors.PanicIfErrored(err, "Unexpected error parsing stored datastore entry: %v", value)
 	d.Value = v
 	d.Revision = strconv.FormatInt(resp.Header.Revision, 10)
+
+	if err = prepForReturn(d); err != nil {
+		return nil, err
+	}
 
 	return d, nil
 }
@@ -537,7 +559,7 @@ func calculateListKeyAndOptions(logCxt *log.Entry, l model.ListInterface) (strin
 // EnsureInitialized makes sure that the etcd data is initialized for use by
 // Calico.
 func (c *etcdV3Client) EnsureInitialized() error {
-	//TODO - still need to worry about ready flag.
+	// TODO - still need to worry about ready flag.
 	return nil
 }
 
@@ -547,7 +569,6 @@ func (c *etcdV3Client) Clean() error {
 	_, err := c.etcdClient.Txn(context.Background()).If().Then(
 		clientv3.OpDelete("/calico/", clientv3.WithPrefix()),
 	).Commit()
-
 	if err != nil {
 		return cerrors.ErrorDatastoreError{Err: err}
 	}
@@ -649,6 +670,52 @@ func storePolicyName(name string, annotations map[string]string) (map[string]str
 	annotations[metadataAnnotation] = string(metadataBytes)
 
 	return annotations, nil
+}
+
+func prepForWrite(d *model.KVPair) error {
+	// We recieve v3 block affinity objects from the client, but they are stored as libapiv3 objects
+	// for historical reasons.
+	if _, ok := d.Value.(*apiv3.BlockAffinity); ok {
+		value := d.Value.(*apiv3.BlockAffinity)
+
+		// Convert the v3 object to a v1 object for storage.
+		v1Obj := libapiv3.NewBlockAffinity()
+		v1Obj.ObjectMeta = value.ObjectMeta
+		v1Obj.Spec = libapiv3.BlockAffinitySpec{
+			State:   string(value.Spec.State),
+			Node:    value.Spec.Node,
+			Type:    value.Spec.Type,
+			CIDR:    value.Spec.CIDR,
+			Deleted: fmt.Sprintf("%t", value.Spec.Deleted),
+		}
+		d.Value = v1Obj
+	}
+	return nil
+}
+
+func prepForReturn(d *model.KVPair) error {
+	// We store libapiv3 block affinity objects, but we return v3 objects to the client.
+	// So convert them here.
+	if _, ok := d.Value.(*libapiv3.BlockAffinity); ok {
+		value := d.Value.(*libapiv3.BlockAffinity)
+
+		// Convert the v1 object to a v3 object for return.
+		v3Obj := apiv3.NewBlockAffinity()
+		v3Obj.ObjectMeta = value.ObjectMeta
+		deleted, err := strconv.ParseBool(value.Spec.Deleted)
+		if err != nil {
+			return fmt.Errorf("error parsing BlockAffinity.Spec.Deleted field: %w", err)
+		}
+		v3Obj.Spec = apiv3.BlockAffinitySpec{
+			State:   apiv3.BlockAffinityState(value.Spec.State),
+			Node:    value.Spec.Node,
+			Type:    value.Spec.Type,
+			CIDR:    value.Spec.CIDR,
+			Deleted: deleted,
+		}
+		d.Value = v3Obj
+	}
+	return nil
 }
 
 func defaultPolicyName(d *model.KVPair) error {
