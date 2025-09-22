@@ -15659,7 +15659,6 @@ spec:
                     - DockerEnterprise
                     - RKE2
                     - TKG
-                    - Kind
                   type: string
                 logging:
                   description: Logging Configuration for Components
@@ -24617,7 +24616,6 @@ spec:
                         - DockerEnterprise
                         - RKE2
                         - TKG
-                        - Kind
                       type: string
                     logging:
                       description: Logging Configuration for Components
@@ -26915,6 +26913,34 @@ spec:
                           type: object
                       type: object
                   type: object
+                impersonation:
+                  description: |-
+                    Impersonation configures the RBAC impersonation permissions for the guardian deployment. This field is not
+                    applicable to installation variant Calico as no impersonation is ever used. Otherwise, if this field is left nil,
+                    a default set of permissions will be applied.
+                    WARNING: If this field is specified, it completely replaces the default permissions.
+                    For example, providing an empty `impersonation: {}` block will result in guardian
+                    having NO impersonation permissions. Similarly, if you specify `users` but omit `groups`,
+                    guardian will lose its default permissions to impersonate groups.
+                  properties:
+                    groups:
+                      description: Groups is a list of group names that can be impersonated.
+                      items:
+                        type: string
+                      type: array
+                    serviceAccounts:
+                      description:
+                        ServiceAccounts is a list of service account names
+                        that can be impersonated.
+                      items:
+                        type: string
+                      type: array
+                    users:
+                      description: Users is a list of users that can be impersonated.
+                      items:
+                        type: string
+                      type: array
+                  type: object
                 managementClusterAddr:
                   description: |-
                     Specify where the managed cluster can reach the management cluster. Ex.: "10.128.0.10:30449". A managed cluster
@@ -28977,6 +29003,8 @@ spec:
                   type: array
                 keepOriginalNextHop:
                   type: boolean
+                keepaliveTime:
+                  type: string
                 localASNumber:
                   format: int32
                   type: integer
@@ -29582,12 +29610,30 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfJITHardening:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Strict
+                    - enum:
+                        - Auto
+                        - Strict
+                  description: |-
+                    BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+                    if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+                    Felix will not modify the JIT hardening setting. [Default: Auto]
+                  type: string
                 bpfKubeProxyEndpointSlicesEnabled:
                   description: |-
                     BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
                     kube-proxy always accepts endpoint slices. This option will be removed in
                     the next release.
                   type: boolean
+                bpfKubeProxyHealtzPort:
+                  description: |-
+                    BPFKubeProxyHealtzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+                    The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
+                  type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   description: |-
                     BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF mode, Felix will proactively clean up the upstream
