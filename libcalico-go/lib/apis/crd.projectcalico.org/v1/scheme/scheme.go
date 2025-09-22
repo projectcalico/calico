@@ -30,9 +30,9 @@ import (
 var addToSchemeOnce sync.Once
 
 const (
-	Group        = "crd.projectcalico.org"
+	GroupName    = "crd.projectcalico.org"
 	Version      = "v1"
-	GroupVersion = Group + "/" + Version
+	GroupVersion = GroupName + "/" + Version
 )
 
 func BuilderCRDv1() *runtime.SchemeBuilder {

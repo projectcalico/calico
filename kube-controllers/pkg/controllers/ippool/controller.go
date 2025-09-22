@@ -83,7 +83,9 @@ func NewController(ctx context.Context,
 			}
 		},
 	}
-	poolInformer.AddEventHandler(poolHandlers)
+	if _, err := poolInformer.AddEventHandler(poolHandlers); err != nil {
+		logrus.WithError(err).Fatal("Failed to register event handler for IPPool")
+	}
 
 	// Configure handlers for IPAM block updates. We need to trigger a reconcile for any
 	// deleting IP pools when blocks are deleted, to ensure we can finalize the pool.
@@ -117,7 +119,9 @@ func NewController(ctx context.Context,
 			}
 		},
 	}
-	blockInformer.AddEventHandler(blockHandlers)
+	if _, err := blockInformer.AddEventHandler(blockHandlers); err != nil {
+		logrus.WithError(err).Fatal("Failed to register event handler for IPAMBlock")
+	}
 
 	return c
 }
@@ -159,7 +163,7 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 		if !HasFinalizer(p) {
 			logCtx.Info("Adding finalizer to IPPool")
 			p.SetFinalizers(append(p.Finalizers, IPPoolFinalizer))
-			if p, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
+			if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
 				logCtx.WithError(err).Error("Failed to add finalizer to IPPool")
 				return err
 			}

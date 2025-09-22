@@ -217,7 +217,6 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	if err = prepForReturn(d); err != nil {
 		return nil, err
 	}
-
 	return d, nil
 }
 
@@ -293,7 +292,6 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	if err = prepForReturn(d); err != nil {
 		return nil, err
 	}
-
 	return d, nil
 }
 
@@ -339,7 +337,6 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 	if err = prepForReturn(d); err != nil {
 		return nil, err
 	}
-
 	return d, nil
 }
 
@@ -491,6 +488,9 @@ func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision
 	list := []*model.KVPair{}
 	for _, p := range resp.Kvs {
 		if kv := convertListResponse(p, l); kv != nil {
+			if err = prepForReturn(kv); err != nil {
+				return nil, err
+			}
 			list = append(list, kv)
 		}
 	}
