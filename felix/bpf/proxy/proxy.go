@@ -122,6 +122,12 @@ type healthcheckIntf interface {
 	Updated(v1.IPFamily)
 }
 
+type healthcheckIntf interface {
+	Health() healthcheck.ProxyHealth
+	QueuedUpdate(v1.IPFamily)
+	Updated(v1.IPFamily)
+}
+
 type stoppableRunner interface {
 	Run(stopCh <-chan struct{})
 }
