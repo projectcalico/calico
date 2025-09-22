@@ -64,19 +64,29 @@ type pool struct {
 	assignmentMode    v3.AssignmentMode
 }
 
+func (i *ipPoolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
+	poolNames := make([]string, 0)
+	// Get a sorted list of pool CIDR strings.
+	for p := range i.pools {
+		poolNames = append(poolNames, p)
+	}
+	return i.getPools(poolNames, 0, "GetAllPools"), nil
+}
+
 func (i *ipPoolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
-	sorted := make([]string, 0)
+	poolNames := make([]string, 0)
 	// Get a sorted list of enabled pool CIDR strings.
 	for p, e := range i.pools {
 		if e.enabled {
-			sorted = append(sorted, p)
+			poolNames = append(poolNames, p)
 		}
 	}
-	return i.getPools(sorted, ipVersion, "GetEnabledPools"), nil
+	return i.getPools(poolNames, ipVersion, "GetEnabledPools"), nil
 }
 
-func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string) []v3.IPPool {
-	sort.Strings(sorted)
+func (i *ipPoolAccessor) getPools(poolNames []string, ipVersion int, caller string) []v3.IPPool {
+	// Return in sorted order for deterministic tests.
+	sort.Strings(poolNames)
 
 	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
 	// mimics more closely the behavior of etcd and allows the tests to be
@@ -84,7 +94,7 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 	pools := make([]v3.IPPool, 0)
 	automatic := v3.Automatic
 	var poolsToPrint []string
-	for _, p := range sorted {
+	for _, p := range poolNames {
 		c := cnet.MustParseCIDR(p)
 		if (ipVersion == 0) || (c.Version() == ipVersion) {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{
@@ -98,7 +108,7 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 				pool.Spec.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}
 			}
 			if i.pools[p].blockSize == 0 {
-				if ipVersion == 4 {
+				if c.Version() == 4 {
 					pool.Spec.BlockSize = 26
 				} else {
 					pool.Spec.BlockSize = 122
@@ -114,18 +124,9 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 		}
 	}
 
-	log.Debugf("%v returns: %v", caller, poolsToPrint)
+	log.Debugf("Mock %v returns: %v", caller, poolsToPrint)
 
 	return pools
-}
-
-func (i *ipPoolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
-	sorted := make([]string, 0)
-	// Get a sorted list of pool CIDR strings.
-	for p := range i.pools {
-		sorted = append(sorted, p)
-	}
-	return i.getPools(sorted, 0, "GetAllPools"), nil
 }
 
 var ipPools = &ipPoolAccessor{pools: map[string]pool{}}
@@ -572,14 +573,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		It("should release a multitude of IPs in different blocks", func() {
 			// Create an IP pool with a blocksize such that we'll get multiple blocks per-node.
-			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+			applyPoolWithBlockSize("10.0.0.0/24", true, "name in {'node1', 'node2'}", 30)
+			applyPoolWithBlockSize("11.0.0.0/24", true, "name in {'node3', 'node4'}", 30)
 			applyPool("fe80:ba:ad:beef::00/120", true, "all()")
 
 			// Assign a number of IPs in different blocks on different nodes.
 			ips := []cnet.IP{}
 			for _, node := range []string{"node1", "node2", "node3", "node4"} {
 				// 4 nodes
-				applyNode(bc, kc, node, map[string]string{"foo": "bar"})
+				applyNode(bc, kc, node, map[string]string{"foo": "bar", "name": node})
 				for i := 0; i < 6; i++ {
 					// 6 addresses of each family per-node.
 					v4ia, v6ia, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 1, Hostname: node, IntendedUse: v3.IPPoolAllowedUseWorkload})
@@ -616,6 +618,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// - 13 IPv4 addresses with the same handle.
 			// for a total of 25 per-node, 100 in all.
 			Expect(len(ips)).To(Equal(100))
+
+			// Disable a pool to ensure we test releasing from a disabled pool.
+			applyPoolWithBlockSize("11.0.0.0/24", false, "name in {'node3', 'node4'}", 30)
 
 			// Release them all. This should complete within a minute easily.
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
