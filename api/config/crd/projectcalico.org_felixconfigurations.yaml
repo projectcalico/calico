@@ -137,6 +137,8 @@ spec:
                   type: string
                 bpfKubeProxyEndpointSlicesEnabled:
                   type: boolean
+                bpfKubeProxyHealtzPort:
+                  type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   type: boolean
                 bpfKubeProxyMinSyncPeriod:
