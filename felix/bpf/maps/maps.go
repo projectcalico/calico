@@ -391,7 +391,7 @@ func (b *PinnedMap) Update(k, v []byte) error {
 	if b.perCPU {
 		// Per-CPU maps need a buffer of value-size * num-CPUs.
 		if len(v) < b.ValueSize*NumPossibleCPUs() {
-			return fmt.Errorf("Not enough data for per-cpu map entry")
+			return fmt.Errorf("not enough data for per-cpu map entry")
 		}
 	}
 	return UpdateMapEntry(b.fd, k, v)
@@ -401,7 +401,7 @@ func (b *PinnedMap) UpdateWithFlags(k, v []byte, flags int) error {
 	if b.perCPU {
 		// Per-CPU maps need a buffer of value-size * num-CPUs.
 		if len(v) < b.ValueSize*NumPossibleCPUs() {
-			return fmt.Errorf("Not enough data for per-cpu map entry")
+			return fmt.Errorf("not enough data for per-cpu map entry")
 		}
 	}
 	return UpdateMapEntryWithFlags(b.fd, k, v, flags)
@@ -502,7 +502,7 @@ func (b *PinnedMap) updateDeltaEntries() error {
 			return fmt.Errorf("iterating the old map failed: %s", err)
 		}
 		if numEntriesCopied == b.MaxEntries {
-			return fmt.Errorf("new map cannot hold all the data from the old map %s.", b.GetName())
+			return fmt.Errorf("new map cannot hold all the data from the old map %s", b.GetName())
 		}
 
 		if _, ok := mapMem[string(k)]; ok {
@@ -832,7 +832,7 @@ func (b *PinnedMap) EnsureExists() error {
 }
 
 func (b *PinnedMap) Size() int {
-	return b.MapParameters.MaxEntries
+	return b.MaxEntries
 }
 
 func GetMapIdFromPin(pinPath string) (int, error) {

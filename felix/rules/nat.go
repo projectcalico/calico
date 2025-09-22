@@ -22,36 +22,36 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-	. "github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/generictables"
 )
 
-func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action Action, ipVersion uint8) Rule {
-	if r.Config.BPFEnabled {
+func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule {
+	if r.BPFEnabled {
 		return r.makeNATOutgoingRuleBPF(ipVersion, protocol, action)
 	} else {
 		return r.makeNATOutgoingRuleIPTables(ipVersion, protocol, action)
 	}
 }
 
-func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol string, action Action) Rule {
+func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol string, action generictables.Action) generictables.Rule {
 	match := r.NewMatch().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask)
 
 	if protocol != "" {
 		match = match.Protocol(protocol)
 	}
 
-	if r.Config.IptablesNATOutgoingInterfaceFilter != "" {
-		match = match.OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
+	if r.IptablesNATOutgoingInterfaceFilter != "" {
+		match = match.OutInterface(r.IptablesNATOutgoingInterfaceFilter)
 	}
 
-	rule := Rule{
+	rule := generictables.Rule{
 		Action: action,
 		Match:  match,
 	}
 	return rule
 }
 
-func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action Action) Rule {
+func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action generictables.Action) generictables.Rule {
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
@@ -60,7 +60,7 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, proto
 		SourceIPSet(masqIPsSetName).
 		NotDestIPSet(allIPsSetName)
 
-	if r.Config.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
+	if r.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
 		allHostsIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
 		match = match.NotDestIPSet(allHostsIPsSetName)
 	}
@@ -69,33 +69,33 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, proto
 		match = match.Protocol(protocol)
 	}
 
-	if r.Config.IptablesNATOutgoingInterfaceFilter != "" {
-		match = match.OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
+	if r.IptablesNATOutgoingInterfaceFilter != "" {
+		match = match.OutInterface(r.IptablesNATOutgoingInterfaceFilter)
 	}
 
-	rule := Rule{
+	rule := generictables.Rule{
 		Action: action,
 		Match:  match,
 	}
 	return rule
 }
 
-func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *Chain {
-	var rules []Rule
+func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *generictables.Chain {
+	var rules []generictables.Rule
 	if natOutgoingActive {
-		var defaultSnatRule Action = r.Masq("")
-		if r.Config.NATOutgoingAddress != nil {
-			defaultSnatRule = r.SNAT(r.Config.NATOutgoingAddress.String())
+		defaultSnatRule := r.Masq("")
+		if r.NATOutgoingAddress != nil {
+			defaultSnatRule = r.SNAT(r.NATOutgoingAddress.String())
 		}
 
-		if r.Config.NATPortRange.MaxPort > 0 {
-			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
-			var portRangeSnatRule Action = r.Masq(toPorts)
-			if r.Config.NATOutgoingAddress != nil {
-				toAddress := fmt.Sprintf("%s:%s", r.Config.NATOutgoingAddress.String(), toPorts)
+		if r.NATPortRange.MaxPort > 0 {
+			toPorts := fmt.Sprintf("%d-%d", r.NATPortRange.MinPort, r.NATPortRange.MaxPort)
+			portRangeSnatRule := r.Masq(toPorts)
+			if r.NATOutgoingAddress != nil {
+				toAddress := fmt.Sprintf("%s:%s", r.NATOutgoingAddress.String(), toPorts)
 				portRangeSnatRule = r.SNAT(toAddress)
 			}
-			rules = []Rule{
+			rules = []generictables.Rule{
 				r.MakeNatOutgoingRule("tcp", portRangeSnatRule, ipVersion),
 				r.MakeNatOutgoingRule("tcp", r.Return(), ipVersion),
 				r.MakeNatOutgoingRule("udp", portRangeSnatRule, ipVersion),
@@ -103,18 +103,18 @@ func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion
 				r.MakeNatOutgoingRule("", defaultSnatRule, ipVersion),
 			}
 		} else {
-			rules = []Rule{
+			rules = []generictables.Rule{
 				r.MakeNatOutgoingRule("", defaultSnatRule, ipVersion),
 			}
 		}
 	}
-	return &Chain{
+	return &generictables.Chain{
 		Name:  ChainNATOutgoing,
 		Rules: rules,
 	}
 }
 
-func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*Chain {
+func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain {
 	// Extract and sort map keys so we can program rules in a determined order.
 	sortedExtIps := make([]string, 0, len(dnats))
 	for extIp := range dnats {
@@ -122,21 +122,21 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 	}
 	sort.Strings(sortedExtIps)
 
-	rules := []Rule{}
+	rules := []generictables.Rule{}
 	for _, extIp := range sortedExtIps {
 		intIp := dnats[extIp]
-		rules = append(rules, Rule{
+		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().DestNet(extIp),
 			Action: r.DNAT(intIp, 0),
 		})
 	}
-	return []*Chain{{
+	return []*generictables.Chain{{
 		Name:  ChainFIPDnat,
 		Rules: rules,
 	}}
 }
 
-func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*Chain {
+func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*generictables.Chain {
 	// Extract and sort map keys so we can program rules in a determined order.
 	sortedIntIps := make([]string, 0, len(snats))
 	for intIp := range snats {
@@ -144,35 +144,35 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 	}
 	sort.Strings(sortedIntIps)
 
-	rules := []Rule{}
+	rules := []generictables.Rule{}
 	for _, intIp := range sortedIntIps {
 		extIp := snats[intIp]
-		rules = append(rules, Rule{
+		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().DestNet(intIp).SourceNet(intIp),
 			Action: r.SNAT(extIp),
 		})
 	}
-	return []*Chain{{
+	return []*generictables.Chain{{
 		Name:  ChainFIPSnat,
 		Rules: rules,
 	}}
 }
 
-func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*Chain {
-	rules := []Rule{}
+func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*generictables.Chain {
+	rules := []generictables.Rule{}
 	if r.blockCIDRAction != nil {
 		// Sort CIDRs so we can program rules in a determined order.
 		sort.Strings(cidrs)
 		for _, cidr := range cidrs {
 			if strings.Contains(cidr, ":") == (ipVersion == 6) {
-				rules = append(rules, Rule{
+				rules = append(rules, generictables.Rule{
 					Match:  r.NewMatch().DestNet(cidr),
 					Action: r.blockCIDRAction,
 				})
 			}
 		}
 	}
-	return []*Chain{{
+	return []*generictables.Chain{{
 		Name:  ChainCIDRBlock,
 		Rules: rules,
 	}}
