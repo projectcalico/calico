@@ -359,13 +359,11 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	}
 
 	/* Check if someone is trying to spoof a tunnel packet */
-	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(ctx->state->ct_result.rc)) {
-		if (!(ctx->state->ct_result.flags & CALI_CT_FLAG_MAGLEV)){
-			CALI_DEBUG("dropping tunnel pkt with changed source node");
-			goto deny;
-		} else {
-			CALI_DEBUG("Maglev: tunnel source node changed to " IP_FMT, ctx->state->tun_ip);
-		}
+	if (CALI_F_FROM_HEP
+			&& ct_result_tun_src_changed(ctx->state->ct_result.rc)
+			&& !(ctx->state->ct_result.flags & CALI_CT_FLAG_MAGLEV)) {
+		CALI_DEBUG("dropping non-maglev tunnel pkt with changed source node");
+		goto deny;
 	}
 
 
