@@ -17,13 +17,14 @@ package ipamtestutils
 import (
 	"context"
 	"fmt"
-	"os"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -38,7 +39,13 @@ func CreateUnlabeledBlockAffinity(ctx context.Context, cclient crclient.Client, 
 	}
 	name := fmt.Sprintf("%s-%s", host, names.CIDRToName(*ipn))
 
-	v3CRD := os.Getenv("CALICO_API_GROUP") == "projectcalico.org/v3"
+	// Determine which API group to use.
+	cfg, err := apiconfig.LoadClientConfig("")
+	if err != nil {
+		return err
+	}
+	v3CRD := k8s.UsingV3CRDs(&cfg.Spec)
+
 	if !v3CRD {
 		// Use the crd.projectcalico.org/v1 API group.
 		ba := &libapiv3.BlockAffinity{
