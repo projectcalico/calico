@@ -201,3 +201,10 @@ func WithGithubToken(token string) Option {
 		return nil
 	}
 }
+
+func WithArchiveImages(archive bool) Option {
+	return func(r *CalicoManager) error {
+		r.archiveImages = archive
+		return nil
+	}
+}
