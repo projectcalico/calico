@@ -1916,11 +1916,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				}
 
-				Describe("Test advertised cluster IP with maglev enabled", func() {
+				Describe("Test advertised IP's with maglev enabled", func() {
+					if testOpts.connTimeEnabled {
+						// FIXME externalClient also does conntime balancing
+						return
+					}
+
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
 						port             uint16
+						proto            uint8
 					)
 					if numNodes < 3 {
 						panic("need 3 nodes")
@@ -1930,7 +1936,98 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					externalIP := extIP
 					testSvcName := "test-maglev-service"
 
+					familyInt := 4
+					if family == "ipv6" {
+						familyInt = 6
+					}
+
+					newConntrackKey := func(family string, srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16) conntrack.KeyInterface {
+						var key conntrack.KeyInterface
+						// cmp := bytes.Compare(srcIP, dstIP)
+						// srcLTDst := cmp < 0 || (cmp == 0 && srcPort < dstPort)
+
+						ipA, ipB := srcIP, dstIP
+						portA, portB := uint16(srcPort), dstPort
+						// if !srcLTDst {
+						// 	ipB, ipA = srcIP, dstIP
+						// 	portB, portA = uint16(srcPort), port
+						// }
+						switch family {
+						case "ipv4":
+							key = conntrack.NewKey(proto, ipA, portA, ipB, portB)
+						case "ipv6":
+							key = conntrack.NewKeyV6(proto, ipA, portA, ipB, portB)
+						}
+						return key
+					}
+					checkConntrackExists := func(ctK conntrack.KeyInterface, f *infrastructure.Felix) (conntrack.ValueInterface, bool) {
+						ctMap := dumpCTMapsAny(familyInt, f)
+						log.Infof("Dumping CT map for felix %s, searching for key: %s", f.Name, ctK.String())
+
+						for k, v := range ctMap {
+							log.Infof("key: %s\n\tval: %s", k.String(), v.String())
+						}
+						v, ok := ctMap[ctK]
+						return v, ok
+					}
+					checkConntrackExistsAnyDirection := func(family string, ipA net.IP, portA uint16, ipB net.IP, portB uint16, f *infrastructure.Felix) (conntrack.ValueInterface, bool) {
+						keyAB := newConntrackKey(family, ipA, portA, ipB, portB)
+						keyBA := newConntrackKey(family, ipB, portB, ipA, portA)
+
+						val, exists := checkConntrackExists(keyAB, f)
+						if !exists {
+							val, exists = checkConntrackExists(keyBA, f)
+						}
+
+						return val, exists
+					}
+					maglevMapAnySearch := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) nat.BackendValueInterface {
+						Expect(family).To(Or(Equal("ipv4"), Equal("ipv6")))
+
+						var v nat.BackendValueInterface
+						var ok bool
+						switch family {
+						case "ipv4":
+							mm := dumpMaglevMap(felix)
+							kp := nat.MaglevBackendKey{}
+							Expect(key).To(BeAssignableToTypeOf(kp))
+							kp, _ = key.(nat.MaglevBackendKey)
+
+							if v, ok = mm[kp]; !ok {
+								return nil
+							}
+
+						case "ipv6":
+							mm := dumpMaglevMapV6(felix)
+							kp := nat.MaglevBackendKeyV6{}
+							Expect(key).To(BeAssignableToTypeOf(kp))
+							kp, _ = key.(nat.MaglevBackendKeyV6)
+
+							if v, ok = mm[kp]; !ok {
+								return nil
+							}
+						}
+						return v
+					}
+					maglevMapAnySearchFunc := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) func() nat.BackendValueInterface {
+						return func() nat.BackendValueInterface {
+							return maglevMapAnySearch(key, family, felix)
+						}
+					}
+
 					BeforeEach(func() {
+						switch testOpts.protocol {
+						case "udp":
+							proto = 17
+						case "tcp":
+							proto = 6
+						case "sctp":
+							proto = 132
+						default:
+							log.WithField("protocol", testOpts.protocol).Panic("unknown test protocol")
+						}
+						log.WithFields(log.Fields{"number": proto, "name": testOpts.protocol}).Info("parsed protocol")
+
 						// Create policy allowing ingress from external client
 						allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
 						allowIngressFromExtClient.Namespace = "fv"
@@ -1975,51 +2072,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(testSvc.Spec.Ports).To(HaveLen(1))
 						port = uint16(testSvc.Spec.Ports[0].Port)
 
-						log.Info("Waiting for Maglev map to converge...")
-						maglevMapAnySearch := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) nat.BackendValueInterface {
-							Expect(family).To(Or(Equal("ipv4"), Equal("ipv6")))
-
-							var v nat.BackendValueInterface
-							var ok bool
-							switch family {
-							case "ipv4":
-								mm := dumpMaglevMap(felix)
-								kp := nat.MaglevBackendKey{}
-								Expect(key).To(BeAssignableToTypeOf(kp))
-								kp, _ = key.(nat.MaglevBackendKey)
-
-								if v, ok = mm[kp]; !ok {
-									return nil
-								}
-
-							case "ipv6":
-								mm := dumpMaglevMapV6(felix)
-								kp := nat.MaglevBackendKeyV6{}
-								Expect(key).To(BeAssignableToTypeOf(kp))
-								kp, _ = key.(nat.MaglevBackendKeyV6)
-
-								if v, ok = mm[kp]; !ok {
-									return nil
-								}
-							}
-							return v
-						}
-						maglevMapAnySearchFunc := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) func() nat.BackendValueInterface {
-							return func() nat.BackendValueInterface {
-								return maglevMapAnySearch(key, family, felix)
-							}
-						}
+						conntrackFlushWorkloadEntries(tc.Felixes)
 
 						var testMaglevMapKey nat.MaglevBackendKeyInterface
 						switch family {
 						case "ipv4":
-							testMaglevMapKey = nat.NewMaglevBackendKey(net.ParseIP(clusterIP), port, 6, 0)
+							testMaglevMapKey = nat.NewMaglevBackendKey(net.ParseIP(clusterIP), port, proto, 0)
 						case "ipv6":
-							testMaglevMapKey = nat.NewMaglevBackendKeyV6(net.ParseIP(clusterIP), port, 6, 0)
+							testMaglevMapKey = nat.NewMaglevBackendKeyV6(net.ParseIP(clusterIP), port, proto, 0)
 						default:
 							log.Panicf("Unexpected IP family %s", family)
 						}
 
+						log.Info("Waiting for Maglev map to converge...")
 						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[1]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up")
 						Expect(maglevMapAnySearch(testMaglevMapKey, family, tc.Felixes[1]).Addr().String()).Should(Or(Equal(w[0][0].IP), Equal(w[0][1])))
 
@@ -2029,27 +2094,32 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if testOpts.ipv6 {
 							ipRoute = append(ipRoute, "-6")
 						}
+
+						cmdCleanRt := append(ipRoute, "route", "del", clusterIP)
+						_ = externalClient.ExecMayFail(strings.Join(cmdCleanRt, ""))
+						cmdCleanRt = append(ipRoute, "route", "del", externalIP)
+						_ = externalClient.ExecMayFail(strings.Join(cmdCleanRt, ""))
+
 						cmdCIP := append(ipRoute, "route", "add", clusterIP, "via", felixIP(1))
 						externalClient.Exec(cmdCIP...)
-
 						cmdEIP := append(ipRoute, "route", "add", externalIP, "via", felixIP(1))
 						externalClient.Exec(cmdEIP...)
 					})
 
-					It("should have connectivity from external client to maglev backend via cluster IP", func() {
+					It("should have connectivity from external client to maglev backend via cluster IP and external IP", func() {
 						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
 						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
 					})
 
-					It("should maintain connections across loadbalancer failure using maglev", func() {
+					It("should maintain connections to a ClusterIP across loadbalancer failure using maglev", func() {
 						By("making a connection over a loadbalancer and then switching off routing to it")
 						pc := &PersistentConnection{
 							Runtime:             externalClient,
 							RuntimeName:         externalClient.Name,
 							IP:                  clusterIP,
 							Port:                int(port),
-							SourcePort:          30000,
+							SourcePort:          50000,
 							Protocol:            testOpts.protocol,
 							MonitorConnectivity: true,
 						}
@@ -2058,17 +2128,82 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						defer pc.Stop()
 
 						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", 0), "Connection failed")
+
+						backingPodIPAddr := net.ParseIP(w[0][0].IP)
+						clientIPAddr := net.ParseIP(containerIP(externalClient))
+
+						ctVal, ctExists := checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[1])
+						Expect(ctExists).To(BeTrue(), "No conntrack (src->dst / dst->src) existed for the connection on Felix[1]")
+						Expect(ctVal.OrigIP().String()).To(Equal(clusterIP), "Unexpected OrigIP on loadbalancer Felix service connection")
+
+						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[2])
+						Expect(ctExists).To(BeFalse(), "Conntrack existed for the connection on Felix[2] before Felix[2] should have handled the connection: %v", ctVal)
+
 						// Traffic is flowing over LB 1. Change ExtClient's clusterIP route to go via LB 2.
 						ipRoute := []string{"ip"}
 						if testOpts.ipv6 {
 							ipRoute = append(ipRoute, "-6")
 						}
-
-						cmd := append(ipRoute, "route", "add", extIP, "via", felixIP(2))
-						externalClient.Exec(cmd...)
+						ipRouteReplace := append(ipRoute, "route", "replace", clusterIP, "via", felixIP(2))
+						externalClient.Exec(ipRouteReplace...)
 
 						lastPongCount := pc.PongCount()
 						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
+
+						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[2])
+						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on Felix[2] for failover traffic. Did the failover actually occur?")
+
+						// Check the backing node updated conntrack tun_ip to the new loadbalancer node.
+						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[0])
+						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on backing Felix[0].")
+						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
+					})
+
+					It("should maintain connections to an external IP across loadbalancer failure using maglev", func() {
+						By("making a connection over a loadbalancer and then switching off routing to it")
+						pc := &PersistentConnection{
+							Runtime:             externalClient,
+							RuntimeName:         externalClient.Name,
+							IP:                  externalIP,
+							Port:                int(port),
+							SourcePort:          50000,
+							Protocol:            testOpts.protocol,
+							MonitorConnectivity: true,
+						}
+						err := pc.Start()
+						Expect(err).NotTo(HaveOccurred())
+						defer pc.Stop()
+
+						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", 0), "Connection failed")
+
+						backingPodIPAddr := net.ParseIP(w[0][0].IP)
+						clientIPAddr := net.ParseIP(containerIP(externalClient))
+
+						ctVal, ctExists := checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[1])
+						Expect(ctExists).To(BeTrue(), "No conntrack (src->dst / dst->src) existed for the connection on Felix[1]")
+						Expect(ctVal.OrigIP().String()).To(Equal(externalIP), "Unexpected OrigIP on loadbalancer Felix service connection")
+
+						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[2])
+						Expect(ctExists).To(BeFalse(), "Conntrack existed for the connection on Felix[2] before Felix[2] should have handled the connection: %v", ctVal)
+
+						// Traffic is flowing over LB 1. Change ExtClient's clusterIP route to go via LB 2.
+						ipRoute := []string{"ip"}
+						if testOpts.ipv6 {
+							ipRoute = append(ipRoute, "-6")
+						}
+						ipRouteReplace := append(ipRoute, "route", "replace", externalIP, "via", felixIP(2))
+						externalClient.Exec(ipRouteReplace...)
+
+						lastPongCount := pc.PongCount()
+						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
+
+						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[2])
+						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on Felix[2] for failover traffic. Did the failover actually occur?")
+
+						// Check the backing node updated conntrack tun_ip to the new loadbalancer node.
+						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[0])
+						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on backing Felix[0].")
+						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
 					})
 				})
 
