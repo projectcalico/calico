@@ -550,8 +550,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.EnableIPv6 = true
-		opts.IPIPMode = api.IPIPModeNever
-		opts.SimulateBIRDRoutes = true
+		opts.IPIPMode = api.IPIPModeAlways
 		opts.NATOutgoingEnabled = true
 		opts.AutoHEPsEnabled = false
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
