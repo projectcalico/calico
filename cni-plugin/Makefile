@@ -218,6 +218,7 @@ ut-datastore:
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	-e KUBECONFIG=/home/user/certs/kubeconfig \
 	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 	-v $(CERTS_PATH):/home/user/certs \
