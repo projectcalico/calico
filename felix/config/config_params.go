@@ -185,6 +185,7 @@ type Config struct {
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
+	BPFJITHardening                    string            `config:"oneof(Auto,Strict);Auto;non-zero"`
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
@@ -200,6 +201,7 @@ type Config struct {
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool              `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration     `config:"seconds;1"`
+	BPFKubeProxyHealtzPort             int               `config:"int;10256;non-zero"`
 	BPFKubeProxyEndpointSlicesEnabled  bool              `config:"bool;true"`
 	BPFExtToServiceConnmark            int               `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port  `config:"portrange;20000:29999"`
