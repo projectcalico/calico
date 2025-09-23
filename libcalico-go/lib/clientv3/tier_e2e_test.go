@@ -63,6 +63,16 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 		Order:         &defaultOrder,
 		DefaultAction: &actionDeny,
 	}
+	kcnpAdminTierOrder := apiv3.AdminTierOrder
+	kcnpAdminSpec := apiv3.TierSpec{
+		Order:         &kcnpAdminTierOrder,
+		DefaultAction: &actionPass,
+	}
+	kcnpBaselineTierOrder := apiv3.BaselineTierOrder
+	kcnpBaselineSpec := apiv3.TierSpec{
+		Order:         &kcnpBaselineTierOrder,
+		DefaultAction: &actionPass,
+	}
 	anpOrder := apiv3.AdminNetworkPolicyTierOrder
 	anpSpec := apiv3.TierSpec{
 		Order:         &anpOrder,
@@ -277,10 +287,12 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			checkAndFilterDefaultTiers := func(outList *apiv3.TierList) []apiv3.Tier {
 				// Tiers are returned in name order, and the default ones happen
 				// to sort first in these tests.
-				Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
-				Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.BaselineAdminNetworkPolicyTierName, banpSpec))
-				Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
-				return outList.Items[3:]
+				Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminTierName, kcnpAdminSpec))
+				Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
+				Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.BaselineTierName, kcnpBaselineSpec))
+				Expect(&outList.Items[3]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.BaselineAdminNetworkPolicyTierName, banpSpec))
+				Expect(&outList.Items[4]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
+				return outList.Items[5:]
 			}
 			outList, outError := c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
