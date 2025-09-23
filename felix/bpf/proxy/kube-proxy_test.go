@@ -37,7 +37,7 @@ var _ = Describe("BPF kube-proxy", func() {
 	maps.FrontendMap = newMockNATMap()
 	maps.BackendMap = newMockNATBackendMap()
 	maps.AffinityMap = newMockAffinityMap()
-	maps.ConsistentHashMap = newMockConsistentHashMap()
+	maps.MaglevMap = newMockMaglevMap()
 	maps.CtMap = mock.NewMockMap(conntrack.MapParams)
 	front := maps.FrontendMap.(*mockNATMap)
 
