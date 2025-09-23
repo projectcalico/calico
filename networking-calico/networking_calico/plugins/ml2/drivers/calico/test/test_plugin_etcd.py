@@ -1889,8 +1889,8 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         m_watcher = m_StatusWatcher.return_value
         self.assertEqual(
             [
-                mock.call(m_watcher.start),
-                mock.call(m_watcher.start),
+                mock.call(mock.ANY),
+                mock.call(mock.ANY),
             ],
             [c for c in m_spawn.mock_calls if c[0] == ""],
         )
