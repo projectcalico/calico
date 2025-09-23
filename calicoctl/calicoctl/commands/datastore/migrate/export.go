@@ -249,7 +249,9 @@ Description:
 					if !ok {
 						return fmt.Errorf("unable to convert Calico global network policy for inspection")
 					}
-					if strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) ||
+					if strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
+						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) ||
+						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) ||
 						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sBaselineAdminNetworkPolicyNamePrefix) {
 						continue
 					}
