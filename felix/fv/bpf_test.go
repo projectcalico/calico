@@ -1238,7 +1238,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					// maps have only cali_ prefix.
 					Eventually(func() string {
 						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "map", "show")
-						return out
+						return filterLinesByPrefixes(out, "cali_", "calico_", "xdp_cali_")
 					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
 
 					out, _ := tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
@@ -6032,4 +6032,27 @@ func bpfDumpRoutesV6(felix *infrastructure.Felix) string {
 	out, err := felix.ExecOutput("calico-bpf", "-6", "routes", "dump")
 	Expect(err).NotTo(HaveOccurred())
 	return out
+}
+
+func filterLinesByPrefixes(content string, prefixes ...string) string {
+	lines := strings.Split(content, "\n")
+
+	var resultLines []string
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if line == "" {
+			continue
+		}
+
+		for _, prefix := range prefixes {
+			if strings.Contains(line, prefix) {
+				resultLines = append(resultLines, line)
+				break
+			}
+		}
+	}
+
+	return strings.Join(resultLines, "\n")
 }
