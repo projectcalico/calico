@@ -1011,7 +1011,7 @@ func (r *CalicoManager) buildBinaries() error {
 	}
 	m := map[string]string{
 		"calicoctl":  "build-all",
-		"cni-plugin": "build-bins",
+		"cni-plugin": "build-all",
 		"felix":      "release-build",
 	}
 	env := append(os.Environ(),
