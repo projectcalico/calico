@@ -36,7 +36,7 @@ func MaybeMoveToFelixCgroupv2() {
 				if err != nil {
 					log.WithError(err).Panic("Failed to open cgroup.procs")
 				}
-				_, err = file.WriteString(fmt.Sprint(myPid, "\n"))
+				_, err = fmt.Fprintln(file, myPid)
 				if err != nil {
 					log.WithError(err).Panic("Failed to write cgroup")
 				}
