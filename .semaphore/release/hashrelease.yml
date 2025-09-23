@@ -48,7 +48,7 @@ global_job_config:
             --credential-source-file="${SEMAPHORE_TOKEN_FILE_PATH}" \
             --credential-source-type="text"
       - gcloud auth login --quiet --cred-file="${GOOGLE_APPLICATION_CREDENTIALS_PATH}"
-      - gcloud config set project --quiet unique-caldron-775
+      - gcloud config set project --quiet "${OIDC_GCP_PROJECT_NAME}"
       # Configure docker to use the gcloud credential helper
       - gcloud auth configure-docker --quiet
 
