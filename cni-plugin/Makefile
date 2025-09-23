@@ -197,6 +197,7 @@ $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
 .PHONY: build-cni-bins build-win-cni-bins
 build-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning
 build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
+build-bins: build-cni-bins build-win-cni-bins
 
 ###############################################################################
 # Unit Tests
