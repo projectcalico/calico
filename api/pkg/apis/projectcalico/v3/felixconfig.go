@@ -114,6 +114,14 @@ const (
 	BPFConntrackModeBPFProgram BPFConntrackMode = "BPFProgram"
 )
 
+// +kubebuilder:validation:Enum=Auto;Strict
+type BPFJITHardeningType string
+
+const (
+	BPFJITHardeningAuto   BPFJITHardeningType = "Auto"
+	BPFJITHardeningStrict BPFJITHardeningType = "Strict"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type WindowsManageFirewallRulesMode string
 
@@ -627,6 +635,12 @@ type FelixConfigurationSpec struct {
 	// cannot insert their own BPF programs to interfere with Calico's. [Default: true]
 	BPFDisableUnprivileged *bool `json:"bpfDisableUnprivileged,omitempty" validate:"omitempty"`
 
+	// BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+	// if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+	// Felix will not modify the JIT hardening setting. [Default: Auto]
+	// +kubebuilder:validation:Enum=Auto;Strict
+	BPFJITHardening *BPFJITHardeningType `json:"bpfJITHardening,omitempty" validate:"omitempty,oneof=Auto Strict"`
+
 	// BPFLogLevel controls the log level of the BPF programs when in BPF dataplane mode.  One of "Off", "Info", or
 	// "Debug".  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`.
 	// [Default: Off].
@@ -739,6 +753,10 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	BPFKubeProxyMinSyncPeriod *metav1.Duration `json:"bpfKubeProxyMinSyncPeriod,omitempty" validate:"omitempty" configv1timescale:"seconds"`
+
+	// BPFKubeProxyHealtzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+	// The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
+	BPFKubeProxyHealtzPort *int `json:"bpfKubeProxyHealtzPort,omitempty" validate:"omitempty,gte=1,lte=65535" confignamev1:"BPFKubeProxyHealtzPort"`
 
 	// BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
 	// kube-proxy always accepts endpoint slices. This option will be removed in

@@ -16,8 +16,9 @@ include ../lib.Makefile
 
 ###############################################################################
 
-# All Typha go files.
+# All Typha go files and those in libcalico-go.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print)
+SRC_FILES += $(shell find ../libcalico-go/ -type f -name '*.go' -print)
 
 # Touchfile created when we make the typha image.
 TYPHA_CONTAINER_CREATED=.calico_typha.created-$(ARCH)

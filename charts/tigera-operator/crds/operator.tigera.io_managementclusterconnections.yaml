@@ -225,6 +225,39 @@ spec:
                           type: object
                       type: object
                   type: object
+                impersonation:
+                  description: |-
+                    Impersonation configures the RBAC impersonation permissions for the guardian deployment. This field is not
+                    applicable to installation variant Calico as no impersonation is ever used. Otherwise, if this field is left nil,
+                    a default set of permissions will be applied.
+                    WARNING: If this field is specified, it completely replaces the default permissions.
+                    For example, providing an empty `impersonation: {}` block will result in guardian
+                    having NO impersonation permissions. Similarly, if you specify `users` but omit `groups`,
+                    guardian will lose its default permissions to impersonate groups.
+                  properties:
+                    groups:
+                      description:
+                        "Groups is a list of group names that can be impersonated.
+                        An empty list infers all groups can be impersonated,\n\t// a
+                        null values means none."
+                      items:
+                        type: string
+                      type: array
+                    serviceAccounts:
+                      description: |-
+                        ServiceAccounts is a list of service account names that can be impersonated. An empty list infers all service accounts can
+                        be impersonated, a null values means none.
+                      items:
+                        type: string
+                      type: array
+                    users:
+                      description: |-
+                        Users is a list of users that can be impersonated. An empty list infers all users can be impersonated, a null
+                        value means none.
+                      items:
+                        type: string
+                      type: array
+                  type: object
                 managementClusterAddr:
                   description: |-
                     Specify where the managed cluster can reach the management cluster. Ex.: "10.128.0.10:30449". A managed cluster
