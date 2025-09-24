@@ -23,7 +23,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
-	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 )
 
 //	struct calico_ct_key {
@@ -147,7 +146,7 @@ type ValueInterface interface {
 	RSTSeen() int64
 	LastSeen() int64
 	Type() uint8
-	Flags() uint16
+	Flags() uint32
 	OrigIP() net.IP
 	OrigPort() uint16
 	OrigSPort() uint16
@@ -172,8 +171,8 @@ func (e Value) Type() uint8 {
 	return e[VoType]
 }
 
-func (e Value) Flags() uint16 {
-	return uint16(e[VoFlags]) | (uint16(e[VoFlags2]) << 8)
+func (e Value) Flags() uint32 {
+	return uint32(e[VoFlags])
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -207,22 +206,23 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut          uint16 = (1 << 0)
-	FlagNATFwdDsr       uint16 = (1 << 1)
-	FlagNATNPFwd        uint16 = (1 << 2)
-	FlagSkipFIB         uint16 = (1 << 3)
-	FlagReserved4       uint16 = (1 << 4)
-	FlagReserved5       uint16 = (1 << 5)
-	FlagExtLocal        uint16 = (1 << 6)
-	FlagViaNATIf        uint16 = (1 << 7)
-	FlagSrcDstBA        uint16 = (1 << 8)
-	FlagHostPSNAT       uint16 = (1 << 9)
-	FlagSvcSelf         uint16 = (1 << 10)
-	FlagNPLoop          uint16 = (1 << 11)
-	FlagNPRemote        uint16 = (1 << 12)
-	FlagNoDSR           uint16 = (1 << 13)
-	FlagNoRedirPeer     uint16 = (1 << 14)
-	FlagClusterExternal uint16 = (1 << 15)
+	FlagNATOut          uint32 = (1 << 0)
+	FlagNATFwdDsr       uint32 = (1 << 1)
+	FlagNATNPFwd        uint32 = (1 << 2)
+	FlagSkipFIB         uint32 = (1 << 3)
+	FlagReserved4       uint32 = (1 << 4)
+	FlagReserved5       uint32 = (1 << 5)
+	FlagExtLocal        uint32 = (1 << 6)
+	FlagViaNATIf        uint32 = (1 << 7)
+	FlagSrcDstBA        uint32 = (1 << 8)
+	FlagHostPSNAT       uint32 = (1 << 9)
+	FlagSvcSelf         uint32 = (1 << 10)
+	FlagNPLoop          uint32 = (1 << 11)
+	FlagNPRemote        uint32 = (1 << 12)
+	FlagNoDSR           uint32 = (1 << 13)
+	FlagNoRedirPeer     uint32 = (1 << 14)
+	FlagClusterExternal uint32 = (1 << 15)
+	FlagMaglev          uint32 = (1 << 16)
 )
 
 func (e Value) ReverseNATKey() KeyInterface {
@@ -526,21 +526,7 @@ func (e Value) IsForwardDSR() bool {
 }
 
 func (e Value) Upgrade() maps.Upgradable {
-	// Flags have been reworked in v5 to be a contiguous 32bit.
-	// Padding now PREceeds the flags (as opposed to following them).
-	// Overall struct size remains the same.
-	var val5 v5.Value
-	copy(val5[:], e[:])
-	// Zero the 3 padding bytes.
-	cpd := copy(val5[17:20], []byte{0, 0, 0})
-	if cpd != 3 {
-		panic("Oops, Alex needs to learn how to count!")
-	}
-
-	flags5 := uint32(e.Flags())
-	binary.BigEndian.PutUint32(val5[20:25], flags5)
-
-	return val5
+	panic("conntrack map value already at its latest version")
 }
 
 var MapParams = maps.MapParameters{
