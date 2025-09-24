@@ -470,6 +470,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 					K8sAPIEndpoint:           kds.Endpoint,
 					K8sInsecureSkipTLSVerify: true,
 					K8sClientQPS:             100,
+					CalicoAPIGroup:           os.Getenv("CALICO_API_GROUP"),
 				},
 			},
 		})
