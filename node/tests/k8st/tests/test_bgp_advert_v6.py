@@ -501,7 +501,7 @@ spec:
     action: Reject
 EOF
 """)
-        kubectl("patch bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
+        kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
         self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": []}}'"))
         self.add_cleanup(lambda: kubectl("delete bgpfilter test-filter-export-1"))
 
