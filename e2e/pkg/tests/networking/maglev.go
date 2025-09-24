@@ -57,15 +57,15 @@ var _ = describe.CalicoDescribe(
 			f           = utils.NewDefaultFramework("calico-maglev")
 			maglevTests *MaglevTests
 			nodeNames   []string
+			extNode     *externalnode.Client
 		)
 
-		// Initialize external node for testing
-		extNode := externalnode.NewClient()
-		if extNode == nil {
-			Skip("External node not available - required for Maglev testing")
-		}
-
 		BeforeEach(func() {
+			// Initialize external node for testing
+			extNode = externalnode.NewClient()
+			if extNode == nil {
+				Fail("External node not available - required for Maglev testing")
+			}
 
 			// Get available nodes for pod distribution
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -73,7 +73,7 @@ var _ = describe.CalicoDescribe(
 			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 10) // Get up to 10 nodes
 			Expect(err).ShouldNot(HaveOccurred())
 			if len(nodes.Items) == 0 {
-				Skip("No schedulable nodes exist, can't continue test.")
+				Fail("No schedulable nodes exist, can't continue test.")
 			}
 
 			nodesInfo := utils.GetNodesInfo(f, nodes, false)
