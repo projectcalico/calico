@@ -219,7 +219,7 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 		namespace = parts[0]
 		name = parts[1]
 	default:
-		return "", "", "", fmt.Errorf("could not parse policy %s", name)
+		return "", "", "", fmt.Errorf("could not parse policy %s (wrong # parts)", name)
 	}
 
 	// Remove the staged prefix if present so we can extract the tier.
