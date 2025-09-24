@@ -327,9 +327,11 @@ try_fib_external:
 		CALI_DEBUG("FIB sport=%d", bpf_ntohs(fib_params(ctx)->sport));
 		CALI_DEBUG("FIB dport=%d", bpf_ntohs(fib_params(ctx)->dport));
 #ifdef IPVER6
+		CALI_DEBUG("FIB ipv6_src=" IP_FMT, &fib_params(ctx)->ipv6_src);
+		CALI_DEBUG("FIB ipv6_dst=" IP_FMT, &fib_params(ctx)->ipv6_dst);
 #else
-		CALI_DEBUG("FIB ipv4_src=%x", bpf_ntohl(fib_params(ctx)->ipv4_src));
-		CALI_DEBUG("FIB ipv4_dst=%x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+		CALI_DEBUG("FIB ipv4_src=" IP_FMT, &fib_params(ctx)->ipv4_src);
+		CALI_DEBUG("FIB ipv4_dst=" IP_FMT, &fib_params(ctx)->ipv4_dst);
 #endif
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");
