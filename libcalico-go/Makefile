@@ -115,7 +115,7 @@ gen-crds:
 # Static checks
 ###############################################################################
 # TODO: re-enable all linters
-LINT_ARGS += --disable gosimple,unused,errcheck,ineffassign,staticcheck
+LINT_ARGS += --disable unused,errcheck,ineffassign,staticcheck
 
 .PHONY: check-gen-files
 check-gen-files: $(GENERATED_FILES) fix-changed gen-crds
