@@ -65,7 +65,7 @@ type KubeClient struct {
 	// Client for interacting with CustomResourceDefinition.
 	crdClientV1 *rest.RESTClient
 
-	// Client for interacting with K8S Admin Network Policy, and BaselineAdminNetworkPolicy.
+	// Client for interacting with K8S Cluster Network Policy.
 	k8sAdminPolicyClient   *adminpolicyclient.PolicyV1alpha1Client
 	k8sClusterPolicyClient *netpolicyclient.PolicyV1alpha2Client
 

@@ -70,7 +70,7 @@ func TierFromPolicyName(name string) (string, error) {
 	if strings.HasPrefix(name, K8sCNPAdminTierNamePrefix) {
 		return AdminTierName, nil
 	}
-	if strings.HasPrefix(name, K8sCNPAdminTierNamePrefix) {
+	if strings.HasPrefix(name, K8sCNPBaselineTierNamePrefix) {
 		return BaselineTierName, nil
 	}
 	// Policy derived from OpenStack security groups is named as "ossg.default.<security group

@@ -32,9 +32,9 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-// NewKubernetesClusterNetworkPolicyClient returns a new client for interacting with Kubernetes ClusterNetworkPolicy objects.
-// Note that this client is only intended for use by the felix syncer in KDD mode, and as such is largely unimplemented
-// except for the functions required by the syncer.
+// NewKubernetesClusterNetworkPolicyClient returns a new client for interacting with k8s ClusterNetworkPolicy objects.
+// Note that this client is only intended for use by the felix syncer in KDD mode,
+// and as such is largely unimplemented except for the functions required by the syncer.
 func NewKubernetesClusterNetworkPolicyClient(
 	client *client.PolicyV1alpha2Client,
 ) K8sResourceClient {

@@ -236,7 +236,7 @@ Description:
 				results.Resources[i] = resource
 			}
 
-			// Skip exporting Kubernetes admin network policies.
+			// Skip exporting Kubernetes cluster network policies.
 			if r == "globalnetworkpolicies" {
 				objs, err := meta.ExtractList(resource)
 				if err != nil {
@@ -261,7 +261,7 @@ Description:
 
 				err = meta.SetList(resource, filtered)
 				if err != nil {
-					return fmt.Errorf("unable to remove Kubernetes admin network policies for export: %s", err)
+					return fmt.Errorf("unable to remove Kubernetes cluster network policies for export: %s", err)
 				}
 				results.Resources[i] = resource
 			}
