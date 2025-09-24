@@ -12,6 +12,7 @@ LOCAL_CHECKS     = lint-cache-dir check-copyright
 BINDIR ?= bin
 BUILD_DIR ?= build
 TOP_SRC_DIRS = pkg
+KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -142,8 +143,12 @@ WHAT?=.
 GINKGO_FOCUS?=.*
 
 .PHONY:ut
-ut:
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
+ut: kind-cluster-create
+	$(DOCKER_RUN) \
+		--privileged \
+		-e KUBECONFIG=/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
+		$(CALICO_BUILD) \
 		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus="$(GINKGO_FOCUS)" $(WHAT)'
 
 ## Check if generated files are out of date
