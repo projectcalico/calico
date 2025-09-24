@@ -25,7 +25,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/nat"
@@ -2800,7 +2799,7 @@ func TestNATHostRemoteNPLocalPod(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(v3.FlagNPLoop))
+	Expect(v.Flags()).To(Equal(v4.FlagNPLoop))
 
 	// Arriving at workload
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
