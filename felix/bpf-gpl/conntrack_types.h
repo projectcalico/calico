@@ -67,16 +67,16 @@ struct calico_ct_leg {
 #define CT_INVALID_IFINDEX	0
 struct calico_ct_value {
 	__u64 rst_seen;
-	__u64 last_seen; // 8
-	__u8 type;		 // 16
-	__u8 flags;
-
+	__u64 last_seen;	// 8
+	__u8 type;		// 16
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
 	// failures when debug logging is compiled out only :-).
-	__u8 pad0[5];
-	__u8 flags2;
+	__u8 pad0[3];		// 17
+
+	__u32 flags;		// 20 - 24
+
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
@@ -117,15 +117,13 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 #pragma clang diagnostic pop
 }
 
-#define ct_value_set_flags(v, f) do {		\
-	(v)->flags |= ((f) & 0xff);		\
-	(v)->flags2 |= (((f) >> 8) & 0xff);	\
+#define ct_value_set_flags(v, f) do {	\
+	(v)->flags |= ((f) & 0xffff);	\
 } while(0)
 
-#define ct_value_get_flags(v) ({			\
-	__u16 ret = (v)->flags | ((v)->flags2 << 8);	\
-							\
-	ret;						\
+#define ct_value_get_flags(v) ({	\
+	__u32 ret = (v)->flags;		\
+	ret;				\
 })
 
 struct ct_lookup_ctx {
@@ -150,7 +148,7 @@ struct ct_create_ctx {
 	ipv46_addr_t tun_ip; /* is set when the packet arrive through the NP tunnel.
 			* It is also set on the first node when we create the
 			* initial CT entry for the tunneled traffic. */
-	__u16 flags;
+	__u32 flags;
 	__u8 proto;
 	__u8 __pad;
 	enum cali_ct_type type;
@@ -224,7 +222,7 @@ enum calico_ct_result_type {
 
 struct calico_ct_result {
 	__s16 rc;
-	__u16 flags;
+	__u32 flags;
 	ipv46_addr_t nat_ip;
 	ipv46_addr_t nat_sip;
 	__u16 nat_port;
@@ -236,6 +234,7 @@ struct calico_ct_result {
 				* ingress interface index.  For a CT state created by a
 				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
 				*/
+	__u8 pad[2]; /* 32-bit alignment */
 };
 
 #endif /* __CALI_CONNTRAC_TYPESK_H__ */
