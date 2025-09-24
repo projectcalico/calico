@@ -25,7 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
+	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -59,8 +59,8 @@ func scannerBenchmark(b *testing.B, entries, batchSize int) {
 	c := 0
 
 	for i := 0; i < entries; i += 2 {
-		k1 := v4.NewKey(6, ipA, uint16(i/(1<<16)), ipB, uint16(i%(1<<16)))
-		k2 := v4.NewKey(6, ipC, uint16(i/(1<<16)), ipB, uint16(i%(1<<16)))
+		k1 := v5.NewKey(6, ipA, uint16(i/(1<<16)), ipB, uint16(i%(1<<16)))
+		k2 := v5.NewKey(6, ipC, uint16(i/(1<<16)), ipB, uint16(i%(1<<16)))
 
 		v1 := conntrack.NewValueNATReverse(time.Duration(now), 0,
 			conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
@@ -137,8 +137,8 @@ func TestScannerBatchIteration(t *testing.T) {
 	mx := make(map[conntrack.KeyInterface]conntrack.ValueInterface)
 
 	for i := 0; i < entries; i += 2 {
-		k1 := v4.NewKey(6, ipA, uint16(i/(1<<16)), ipB, uint16(i%(1<<16)))
-		k2 := v4.NewKey(6, ipC, uint16(i/(1<<16)), ipB, uint16(i%(1<<16)))
+		k1 := v5.NewKey(6, ipA, uint16(i/(1<<16)), ipB, uint16(i%(1<<16)))
+		k2 := v5.NewKey(6, ipC, uint16(i/(1<<16)), ipB, uint16(i%(1<<16)))
 
 		v1 := conntrack.NewValueNATReverse(time.Duration(now), 0,
 			conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
