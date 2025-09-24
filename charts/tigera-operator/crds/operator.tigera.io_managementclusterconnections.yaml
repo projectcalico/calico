@@ -236,10 +236,9 @@ spec:
                     guardian will lose its default permissions to impersonate groups.
                   properties:
                     groups:
-                      description:
-                        "Groups is a list of group names that can be impersonated.
-                        An empty list infers all groups can be impersonated,\n\t// a
-                        null values means none."
+                      description: |-
+                        Groups is a list of group names that can be impersonated. An empty list infers all groups can be impersonated,
+                        a null values means none.
                       items:
                         type: string
                       type: array
