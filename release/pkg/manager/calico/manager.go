@@ -1021,7 +1021,7 @@ func (r *CalicoManager) buildBinaries() error {
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
 		if err != nil {
 			logrus.Error(out)
-			return fmt.Errorf("Failed to build %s: %w", dir, err)
+			return fmt.Errorf("failed to build %s: %w", dir, err)
 		}
 	}
 	return nil
