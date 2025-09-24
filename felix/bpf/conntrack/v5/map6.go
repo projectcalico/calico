@@ -22,7 +22,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -144,8 +143,8 @@ func (e ValueV6) Type() uint8 {
 	return e[VoTypeV6]
 }
 
-func (e ValueV6) Flags() uint16 {
-	return uint16(e[VoFlagsV6]) | (uint16(e[VoFlags2]) << 8)
+func (e ValueV6) Flags() uint32 {
+	return uint32(e[VoFlagsV6])
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -372,21 +371,7 @@ func (e ValueV6) IsForwardDSR() bool {
 }
 
 func (e ValueV6) Upgrade() maps.Upgradable {
-	// Flags have been reworked in v5 to be a contiguous 32bit.
-	// Padding now PREceeds the flags (as opposed to following them).
-	// Overall struct size remains the same.
-	var val5 v5.ValueV6
-	copy(val5[:], e[:])
-	// Zero the 3 padding bytes.
-	cpd := copy(val5[17:20], []byte{0, 0, 0})
-	if cpd != 3 {
-		panic("Oops, Alex needs to learn how to count!")
-	}
-
-	flags5 := uint32(e.Flags())
-	binary.BigEndian.PutUint32(val5[20:25], flags5)
-
-	return val5
+	panic("conntrack map value already at its latest version")
 }
 
 var MapParamsV6 = maps.MapParameters{
