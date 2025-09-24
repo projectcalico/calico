@@ -90,7 +90,11 @@ EOF
 """ % self.external_node_ip6)
 
     def tearDown(self):
-        super(TestBGPFilter, self).tearDown()
+        try:
+            super(TestBGPFilter, self).tearDown()
+        except Exception as e:
+            # Log the error, but don't block further teardown steps.
+            _log.error("Exception during tearDown: %s", e)
 
         self.delete_and_confirm(self.ns, "ns")
 
@@ -162,7 +166,7 @@ EOF
         """Patch BGPFilters in a BGPPeer"""
         filterStr = "\"" + "\", \"".join(filters) + "\"" if len(filters) > 0 else ""
         patchStr = "{\"spec\": {\"filters\": [%s]}}" % filterStr
-        kubectl("patch bgppeer %s --patch '%s'" % (peer, patchStr))
+        kubectl("patch --type merge bgppeer %s --patch '%s'" % (peer, patchStr))
 
 
     def _test_bgp_filter_basic(self, ipv4, ipv6):
@@ -510,11 +514,11 @@ EOF
 
             # Patch BGPPeer to make it global
             if ipv4:
-                kubectl("patch bgppeer node-extra.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
-                self.add_cleanup(lambda: kubectl("patch bgppeer node-extra.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
+                kubectl("patch --type=merge bgppeer node-extra.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
+                self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
             if ipv6:
-                kubectl("patch bgppeer node-extra-v6.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
-                self.add_cleanup(lambda: kubectl("patch bgppeer node-extra-v6.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
+                kubectl("patch --type=merge bgppeer node-extra-v6.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
+                self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra-v6.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
 
             # Check that route is present
             if ipv4:

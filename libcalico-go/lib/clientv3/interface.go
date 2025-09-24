@@ -39,7 +39,7 @@ type Interface interface {
 	ClusterInformationClient
 	KubeControllersConfigurationClient
 	CalicoNodeStatusClient
-	IPAMConfigClient
+	IPAMConfigurationClient
 	BlockAffinitiesClient
 	// Tiers returns an interface for managing tier resources.
 	Tiers() TierInterface
@@ -148,9 +148,9 @@ type CalicoNodeStatusClient interface {
 	CalicoNodeStatus() CalicoNodeStatusInterface
 }
 
-type IPAMConfigClient interface {
+type IPAMConfigurationClient interface {
 	// IPAMConfig returns an interface for managing IPAMConfig resources.
-	IPAMConfig() IPAMConfigInterface
+	IPAMConfiguration() IPAMConfigurationInterface
 }
 
 type BlockAffinitiesClient interface {
