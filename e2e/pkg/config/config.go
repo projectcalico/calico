@@ -85,7 +85,7 @@ func ExtNodeUsername() string {
 }
 
 func ExtNodeSSHKey() string {
-	return allConfigOptions[externalNodeIP].actualValue
+	return allConfigOptions[externalNodeSSHKey].actualValue
 }
 
 func ExtNodeIP() string {
