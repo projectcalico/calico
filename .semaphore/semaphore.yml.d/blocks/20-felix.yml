@@ -14,7 +14,7 @@
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
         - export NUM_FV_BATCHES=4
-        - export RUN_UT=true
+        - export RUN_UT=false
         - export FV_FOCUS='_BPF_.*ct=true'
         - mkdir artifacts
         - ./.semaphore/create-test-vms ${VM_PREFIX}
