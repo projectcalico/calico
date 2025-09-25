@@ -9,5 +9,7 @@ kind: ResourceGroup
 metadata:
   name: {{.Env.AZURE_RESOURCE_GROUP}}
   namespace: winfv
+  annotations:
+    serviceoperator.azure.com/credential-from: aso-credential
 spec:
   location: {{.Env.AZURE_LOCATION}}
