@@ -127,10 +127,14 @@ func (r Rule) AllNotDstNets() []*net.IPNet {
 	return combineNets(r.NotDstNet, r.NotDstNets)
 }
 
+var JoinNetsForTest = joinNets
+
 func joinNets(nets []*net.IPNet) string {
 	parts := make([]string, len(nets))
 	for i, n := range nets {
-		parts[i] = n.String()
+		if n != nil {
+			parts[i] = n.String()
+		}
 	}
 	return strings.Join(parts, ",")
 }
