@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React from 'react';
 import {
     RadioGroup,
@@ -20,10 +21,10 @@ const OmniRadioList: React.FC<OmniInternalListComponentProps> = forwardRef(
             onChange,
             selectedOptions,
             emptyMessage,
-            _height,
-            _onRequestMore,
-            _showMoreButton,
-            _labelShowMore,
+            height,
+            onRequestMore,
+            showMoreButton,
+            labelShowMore,
             ...rest
         },
         ref,

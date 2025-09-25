@@ -1,5 +1,5 @@
 import { FlowLog } from '@/types/render';
-import { handleDuplicateFlowLogs } from '..';
+import { handleDuplicateFlowLogs, getV1Columns, getV2Columns } from '..';
 
 const createFlowLog = (
     startTime: Date,
@@ -138,6 +138,153 @@ describe('utils', () => {
                 ],
                 startTime,
             });
+        });
+    });
+
+    describe('getV1Columns', () => {
+        const mockLocalStorage = {
+            removeItem: jest.fn(),
+            setItem: jest.fn(),
+        };
+
+        beforeEach(() => {
+            Object.defineProperty(window, 'localStorage', {
+                value: mockLocalStorage,
+                writable: true,
+            });
+            jest.clearAllMocks();
+        });
+
+        it('should handle empty v1StoredColumns string', () => {
+            const result = getV1Columns('', 'test-key');
+
+            expect(result).toEqual({
+                start_time: false,
+                end_time: false,
+                action: false,
+                source_namespace: false,
+                source_name: false,
+                dest_namespace: false,
+                dest_name: false,
+                protocol: false,
+                dest_port: false,
+                reporter: true,
+            });
+            expect(mockLocalStorage.removeItem).toHaveBeenCalledWith(
+                'whisker-flow-logs-stream-columns',
+            );
+            expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+                'test-key',
+                JSON.stringify(result),
+            );
+        });
+
+        it('should set specified columns to true when v1StoredColumns contains valid column names', () => {
+            const v1Columns = ['start_time', 'action', 'protocol'];
+            const result = getV1Columns(JSON.stringify(v1Columns), 'test-key');
+
+            expect(result).toEqual({
+                start_time: true,
+                end_time: false,
+                action: true,
+                source_namespace: false,
+                source_name: false,
+                dest_namespace: false,
+                dest_name: false,
+                protocol: true,
+                dest_port: false,
+                reporter: true,
+            });
+
+            expect(mockLocalStorage.removeItem).toHaveBeenCalledWith(
+                'whisker-flow-logs-stream-columns',
+            );
+            expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+                'test-key',
+                JSON.stringify(result),
+            );
+        });
+
+        it('should handle empty array in v1StoredColumns', () => {
+            const result = getV1Columns(JSON.stringify([]), 'test-key');
+
+            expect(result).toMatchObject({
+                reporter: true,
+            });
+        });
+    });
+
+    describe('getV2Columns', () => {
+        const mockLocalStorage = {
+            removeItem: jest.fn(),
+            setItem: jest.fn(),
+        };
+
+        beforeEach(() => {
+            Object.defineProperty(window, 'localStorage', {
+                value: mockLocalStorage,
+                writable: true,
+            });
+            jest.clearAllMocks();
+        });
+
+        it('should add new columns', () => {
+            const storedString = JSON.stringify({
+                start_time: true,
+                end_time: false,
+            });
+
+            const result = getV2Columns(storedString, 'test-key', {
+                start_time: true,
+                end_time: true,
+                reporter: true,
+            } as any);
+
+            const expected = {
+                start_time: true,
+                end_time: false,
+                reporter: true,
+            };
+            expect(result).toEqual(expected);
+            expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+                'test-key',
+                JSON.stringify(expected),
+            );
+        });
+
+        it('should remove old columns', () => {
+            const storedString = JSON.stringify({
+                start_time: true,
+                end_time: true,
+            });
+
+            const result = getV2Columns(storedString, 'test-key', {
+                start_time: true,
+            } as any);
+
+            const expected = {
+                start_time: true,
+            };
+            expect(result).toEqual(expected);
+            expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+                'test-key',
+                JSON.stringify(expected),
+            );
+        });
+
+        it('should use the initial value when there is no stored string', () => {
+            const result = getV2Columns('', 'test-key', {
+                start_time: true,
+            } as any);
+
+            const expected = {
+                start_time: true,
+            };
+            expect(result).toEqual(expected);
+            expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+                'test-key',
+                JSON.stringify(expected),
+            );
         });
     });
 });

@@ -2,10 +2,12 @@ import {
     Box,
     BoxProps,
     Button,
+    Center,
     Flex,
     PopoverContentProps,
     Text,
     useDisclosure,
+    VStack,
 } from '@chakra-ui/react';
 import React, { useEffect } from 'react';
 import OmniCheckboxList, {
@@ -341,6 +343,8 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                     <OmniFilterBody
                         px={hasFilters && !isLoading ? 0 : 3}
                         pt={!showOperatorSelect && !showSearch ? 2 : 0}
+                        pb={hasFilters ? 2 : 0}
+                        data-testid={`popover-body`}
                     >
                         {isLoading && !isLoadingMore ? (
                             <CheckboxListLoadingSkeleton
@@ -364,51 +368,70 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                         ) : isCreatable ? (
                             <Box py={2}>
                                 {!searchInput && filteredData.length === 0 && (
-                                    <Text>{labelNoData}</Text>
+                                    <Center>
+                                        <Text py={4}>{labelNoData}</Text>
+                                    </Center>
                                 )}
 
                                 {searchInput && filteredData.length === 0 && (
-                                    <Button
-                                        variant='ghost'
-                                        leftIcon={<AddIcon fontSize='xs' />}
-                                        pl={0}
-                                        onClick={() => {
-                                            setSearchInput('');
-                                            listComponentProps.onChange([
-                                                ...selectedFilters,
-                                                {
-                                                    label: searchInput,
-                                                    value: searchInput,
+                                    <VStack py={4}>
+                                        <Text>
+                                            We couldn't find any matches
+                                        </Text>
+                                        <Button
+                                            variant='ghost'
+                                            _hover={{
+                                                _dark: {
+                                                    bg: 'tigeraGrey.800',
                                                 },
-                                            ]);
-                                            if (onRequestSearch) {
-                                                onRequestSearch(filterId, '');
+                                            }}
+                                            leftIcon={
+                                                <AddIcon fontSize='2xs' />
                                             }
-                                        }}
-                                        data-testid={`${testId}-create-filter-button`}
-                                    >
-                                        {formatCreatableLabel ? (
-                                            formatCreatableLabel(searchInput)
-                                        ) : (
-                                            <>Add "{searchInput}"</>
-                                        )}
-                                    </Button>
+                                            fontSize='sm'
+                                            onClick={() => {
+                                                setSearchInput('');
+                                                listComponentProps.onChange([
+                                                    ...selectedFilters,
+                                                    {
+                                                        label: searchInput,
+                                                        value: searchInput,
+                                                    },
+                                                ]);
+                                                if (onRequestSearch) {
+                                                    onRequestSearch(
+                                                        filterId,
+                                                        '',
+                                                    );
+                                                }
+                                            }}
+                                            data-testid={`${testId}-create-filter-button`}
+                                        >
+                                            {formatCreatableLabel ? (
+                                                formatCreatableLabel(
+                                                    searchInput,
+                                                )
+                                            ) : (
+                                                <>Add "{searchInput}"</>
+                                            )}
+                                        </Button>
+                                    </VStack>
                                 )}
                             </Box>
                         ) : (
-                            <Text py={2}>{labelNoData}</Text>
+                            <Center>
+                                <Text py={4}>{labelNoData}</Text>
+                            </Center>
                         )}
                     </OmniFilterBody>
 
-                    <OmniFilterFooter
-                        alignItems='center'
-                        justifyContent='space-between'
-                    >
+                    <OmniFilterFooter>
                         <Button
                             isDisabled={selectedFilters.length === 0}
                             variant='ghost'
                             fontWeight='semibold'
                             size='sm'
+                            tabIndex={0}
                             onClick={() => {
                                 onClear();
 

@@ -1,24 +1,21 @@
-import React from 'react';
-import { getTableColumns } from './flowLogsTable';
-import FlowLogDetails from '../FlowLogDetails';
-import { CellProps, Column } from 'react-table';
-import { ApiError } from '@/types/api';
-import { FlowLog } from '@/types/render';
-import { headerStyles, subRowStyles, tableStyles } from './styles';
 import {
     DataTable,
     TableSkeleton,
 } from '@/libs/tigera/ui-components/components/common';
 import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
-import ReorderableCheckList, {
-    ReorderableList,
-} from '@/libs/tigera/ui-components/components/common/ReorderableCheckList';
-import { useShouldAnimate } from '../../hooks';
-import { useLocalStorage } from '@/libs/tigera/ui-components/hooks';
-
-export type CustomColumn = Column & {
-    disableReordering?: boolean;
-};
+import ReorderableCheckList from '@/libs/tigera/ui-components/components/common/ReorderableCheckList';
+import { ApiError } from '@/types/api';
+import { FlowLog } from '@/types/render';
+import React from 'react';
+import { CellProps } from 'react-table';
+import { useShouldAnimate, useStoredColumns } from '../../hooks';
+import FlowLogDetails from '../FlowLogDetails';
+import {
+    ColumnName,
+    getStandardColumns,
+    getTableColumns,
+} from './flowLogsTable';
+import { headerStyles, subRowStyles, tableStyles } from './styles';
 
 type FlowLogsListProps = {
     flowLogs: FlowLog[];
@@ -33,30 +30,20 @@ type FlowLogsListProps = {
 
 const columnsHeight = 36;
 
-const defaultColumnNames = getTableColumns(() => undefined)
-    .filter((column) => !column.disableReordering)
-    .map((column) => column.Header as string);
+export type VisibleColumns = Record<ColumnName, boolean>;
 
-const expandoIndex = 0;
-
-const getVisibleColumns = (columns: CustomColumn[], storedColumns: string[]) =>
-    [
-        columns[expandoIndex],
-        ...columns
-            .slice(1, columns.length - 1)
-            .map((column) => ({
-                ...column,
-                checked:
-                    column.disableReordering ??
-                    storedColumns.includes(column.Header as string),
-            }))
-            .sort(
-                (a, b) =>
-                    storedColumns.indexOf(a.Header as string) -
-                    storedColumns.indexOf(b.Header as string),
-            ),
-        columns[columns.length - 1],
-    ] as ReorderableList<CustomColumn>[];
+const defaultColumns: VisibleColumns = {
+    start_time: true,
+    end_time: true,
+    action: true,
+    source_namespace: true,
+    source_name: true,
+    dest_namespace: true,
+    dest_name: true,
+    protocol: true,
+    dest_port: true,
+    reporter: true,
+};
 
 const FlowLogsList: React.FC<FlowLogsListProps> = ({
     flowLogs,
@@ -68,23 +55,34 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     heightOffset,
     totalItems,
 }) => {
-    const onColumnCustomizerOpen = () => {
-        setColCustomizerVisible(true);
-    };
+    const handleOpenColumnCustomizer = React.useCallback(() => {
+        setIsColumnCustomizerOpen(true);
+    }, []);
 
-    const originalColumns = getTableColumns(
-        onColumnCustomizerOpen,
-    ) as ReorderableList<CustomColumn>[];
+    const [storedColumns, setStoredColumns] = useStoredColumns(defaultColumns);
 
-    const [storedColumns, setStoredColumns] = useLocalStorage(
-        'whisker-flow-logs-stream-columns',
-        defaultColumnNames,
+    const columnOrder = Object.keys(storedColumns);
+    const reorderableColumns = getStandardColumns().sort(
+        (a, b) =>
+            columnOrder.indexOf(a.Header as string) -
+            columnOrder.indexOf(b.Header as string),
+    );
+    const tableColumns = getTableColumns(
+        handleOpenColumnCustomizer,
+        reorderableColumns,
     );
 
-    const [columns, setColumns] = React.useState<
-        ReorderableList<CustomColumn>[]
-    >(getVisibleColumns(originalColumns, storedColumns));
-    const [colCustomizerVisible, setColCustomizerVisible] =
+    const memoizedTableColumns = React.useMemo(
+        () =>
+            tableColumns.filter(
+                (column) =>
+                    column.disableReordering ||
+                    storedColumns[column.accessor as ColumnName],
+            ),
+        [storedColumns],
+    );
+
+    const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] =
         React.useState(false);
     const shouldAnimate = useShouldAnimate(maxStartTime, totalItems);
 
@@ -109,39 +107,41 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
         Math.max(body.scrollHeight, body.offsetHeight) -
         (columnsHeight + heightOffset);
 
-    const customizerIndex = originalColumns.findIndex(
-        (col) => col.accessor === 'customizer_header',
-    );
-
     return (
         <>
-            {colCustomizerVisible && (
+            {isColumnCustomizerOpen && (
                 <ReorderableCheckList
                     size='sm'
                     title='Customize Columns'
-                    items={columns.filter((c) => !c.disableReordering)}
-                    onSave={(list) => {
-                        const newStoredColumns = list
-                            .filter((column) => column.checked)
-                            .map((column) => column.Header as string);
-                        setStoredColumns(newStoredColumns);
-                        setColumns([
-                            originalColumns[expandoIndex],
-                            ...list,
-                            originalColumns[customizerIndex],
-                        ]);
+                    items={Object.entries(storedColumns).map(
+                        ([key, value]) => ({
+                            Header: key,
+                            checked: value,
+                        }),
+                    )}
+                    onSave={(reorderedColumns) => {
+                        setStoredColumns(
+                            reorderedColumns.reduce(
+                                (acc, column) => ({
+                                    ...acc,
+                                    [column.Header as ColumnName]:
+                                        column.checked,
+                                }),
+                                {} as Record<ColumnName, boolean>,
+                            ),
+                        );
                     }}
                     keyProp='Header'
                     labelProp='Header'
-                    isOpen={colCustomizerVisible}
-                    onClose={() => setColCustomizerVisible(false)}
+                    isOpen={isColumnCustomizerOpen}
+                    onClose={() => setIsColumnCustomizerOpen(false)}
                 />
             )}
             <DataTable.Table
                 data-testid='flow-logs-table'
                 items={flowLogs}
                 columnsGenerator={() => []}
-                memoizedColumnsGenerator={columns.filter((c) => c.checked)}
+                memoizedColumnsGenerator={memoizedTableColumns}
                 error={!!error}
                 errorLabel='Could not display any flow logs at this time'
                 emptyTableLabel='Nothing to show yet. Flows will start to appear shortly.'

@@ -1,7 +1,7 @@
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
 import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import {
-    ListOmniFilterParam,
+    DataListOmniFilterParam,
     ListOmniFilterData,
     OmniFilterParam,
     ListOmniFiltersData,
@@ -18,11 +18,11 @@ export const useSelectedListOmniFilters = (
     selectedOmniFilterData: SelectedOmniFilterData,
 ) => {
     const urlFilterValueKeys = Object.keys(urlFilterParams).filter(
-        (key) => ListOmniFilterKeys[key as ListOmniFilterParam],
+        (key) => ListOmniFilterKeys[key as DataListOmniFilterParam],
     );
 
     return urlFilterValueKeys.reduce((accumulator, current) => {
-        const filterId = current as ListOmniFilterParam;
+        const filterId = current as DataListOmniFilterParam;
 
         const selectedFilters = urlFilterParams[filterId].map(
             (selectedValue) => {
@@ -89,7 +89,7 @@ export const useOmniFilterQuery = (
 
 export const useOmniFilterData = (): [
     ListOmniFiltersData,
-    (filterParam: ListOmniFilterParam, query: string | null) => void,
+    (filterParam: DataListOmniFilterParam, query: string | null) => void,
 ] => {
     const dataQueries = {
         policy: useOmniFilterQuery(ListOmniFilterKeys.policy),
@@ -102,7 +102,7 @@ export const useOmniFilterData = (): [
     };
 
     const fetchData = (
-        filterParam: ListOmniFilterParam,
+        filterParam: DataListOmniFilterParam,
         query: string | null,
     ) => {
         dataQueries[filterParam].fetchData(query);

@@ -25,6 +25,7 @@ const urlFilterParams: Record<OmniFilterParam, string[]> = {
     policyV2Namespace: [],
     policyV2Tier: [],
     policyV2Kind: [],
+    reporter: [],
 };
 const omniFilterData: ListOmniFiltersData = {
     dest_namespace: {
@@ -75,6 +76,7 @@ describe('useSelectedListOmniFilters', () => {
             dest_name: [],
             source_name: [],
             source_namespace: [],
+            reporter: [],
         });
     });
 
@@ -101,6 +103,7 @@ describe('useSelectedListOmniFilters', () => {
             dest_name: [],
             source_name: [],
             source_namespace: [],
+            reporter: [],
         });
     });
 
@@ -149,6 +152,7 @@ describe('useSelectedListOmniFilters', () => {
             dest_name: [],
             source_name: [],
             source_namespace: [],
+            reporter: [],
         });
     });
 });

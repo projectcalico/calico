@@ -7,7 +7,7 @@ import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/co
 import PortOmniFilter from '@/features/flowLogs/components/PortOmniFilter';
 import { OmniFilterDataQuery } from '@/types/api';
 import {
-    ListOmniFilterParam,
+    DataListOmniFilterParam,
     OmniFilterProperties,
     ListOmniFiltersData,
     SelectedOmniFilterOptions,
@@ -35,7 +35,7 @@ type OmniFiltersProps = {
     selectedValues: SelectedOmniFilters;
     selectedListOmniFilters: SelectedOmniFilterOptions;
     onRequestFilterData: (query: OmniFilterDataQuery) => void;
-    onRequestNextPage: (filterId: ListOmniFilterParam) => void;
+    onRequestNextPage: (filterId: DataListOmniFilterParam) => void;
 };
 
 const OmniFilters: React.FC<OmniFiltersProps> = ({
@@ -106,53 +106,60 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     />
                 )}
 
-                {listOmniFilterIds.map((filterId) => (
-                    <OmniFilter
-                        key={filterId}
-                        filterId={filterId}
-                        filterLabel={OmniFilterProperties[filterId].label}
-                        filters={omniFilterData[filterId].filters ?? []}
-                        selectedFilters={selectedListOmniFilters[filterId]}
-                        onChange={onChange}
-                        onClear={() => handleClear(filterId)}
-                        showOperatorSelect={false}
-                        listType='checkbox'
-                        isLoading={
-                            omniFilterData[filterId].isLoading || isLoading
-                        }
-                        totalItems={omniFilterData[filterId].total}
-                        onReady={() =>
-                            onRequestFilterData({
-                                filterParam: filterId,
-                                searchOption: '',
-                            })
-                        }
-                        onRequestSearch={(filterId, searchOption) => {
-                            const requestData = () => {
-                                onRequestFilterData({
-                                    filterParam:
-                                        filterId as ListOmniFilterParam,
-                                    searchOption,
-                                });
-                                setIsLoading(false);
-                            };
-
-                            if (searchOption.length >= 1) {
-                                setIsLoading(true);
-                                debounce(searchOption, requestData);
-                            } else {
-                                requestData();
+                {listOmniFilterIds.map((id) => {
+                    const filterId = id as DataListOmniFilterParam;
+                    return (
+                        <OmniFilter
+                            key={filterId}
+                            filterId={filterId}
+                            filterLabel={OmniFilterProperties[filterId].label}
+                            filters={omniFilterData[filterId]?.filters ?? []}
+                            selectedFilters={selectedListOmniFilters[filterId]}
+                            onChange={onChange}
+                            onClear={() => handleClear(filterId)}
+                            showOperatorSelect={false}
+                            listType='checkbox'
+                            isLoading={
+                                omniFilterData[filterId]?.isLoading || isLoading
                             }
-                        }}
-                        onRequestMore={(filterId) =>
-                            onRequestNextPage(filterId as ListOmniFilterParam)
-                        }
-                        showSelectedList
-                        isCreatable
-                        labelSelectedListHeader=''
-                        labelListHeader='Filters'
-                    />
-                ))}
+                            totalItems={omniFilterData[filterId]?.total}
+                            onReady={() =>
+                                onRequestFilterData({
+                                    filterParam: filterId,
+                                    searchOption: '',
+                                })
+                            }
+                            onRequestSearch={(filterId, searchOption) => {
+                                const requestData = () => {
+                                    onRequestFilterData({
+                                        filterParam:
+                                            filterId as DataListOmniFilterParam,
+                                        searchOption,
+                                    });
+                                    setIsLoading(false);
+                                };
+
+                                if (searchOption.length >= 1) {
+                                    setIsLoading(true);
+                                    debounce(searchOption, requestData);
+                                } else {
+                                    requestData();
+                                }
+                            }}
+                            onRequestMore={(filterId) =>
+                                onRequestNextPage(
+                                    filterId as DataListOmniFilterParam,
+                                )
+                            }
+                            showSelectedList
+                            isCreatable
+                            labelSelectedListHeader=''
+                            labelListHeader='Filters'
+                            {...OmniFilterProperties[filterId]
+                                .filterComponentProps}
+                        />
+                    );
+                })}
 
                 <PortOmniFilter
                     key='port-omni-filter'

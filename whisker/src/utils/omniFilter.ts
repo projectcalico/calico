@@ -1,3 +1,4 @@
+import { OmniFilterProps } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import {
     OmniFilterOption as ListOmniFilterOption,
     OperatorType,
@@ -24,6 +25,7 @@ export enum FilterKey {
     policyV2Namespace = 'policyV2Namespace',
     policyV2Tier = 'policyV2Tier',
     policyV2Kind = 'policyV2Kind',
+    reporter = 'reporter',
 }
 
 export type FilterProperty = {
@@ -48,9 +50,13 @@ export const ListOmniFilterKeys: Omit<
     [FilterKey.source_name]: FilterKey.source_name,
     [FilterKey.dest_namespace]: FilterKey.dest_namespace,
     [FilterKey.dest_name]: FilterKey.dest_name,
+    [FilterKey.reporter]: FilterKey.reporter,
 } as const;
 
-export type ListOmniFilterParam = keyof typeof ListOmniFilterKeys;
+export type DataListOmniFilterParam = keyof Omit<
+    typeof ListOmniFilterKeys,
+    'reporter'
+>;
 
 export const FilterHintKeys: Omit<
     typeof FilterKey,
@@ -65,6 +71,7 @@ export const FilterHintKeys: Omit<
     [FilterKey.policyV2Namespace]: FilterKey.policyV2Namespace,
     [FilterKey.policyV2Kind]: FilterKey.policyV2Kind,
     [FilterKey.policyV2]: FilterKey.policyV2,
+    [FilterKey.reporter]: FilterKey.reporter,
 } as const;
 export type FilterHintKey = keyof typeof FilterHintKeys;
 
@@ -76,16 +83,18 @@ export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
     [FilterKey.policyV2Namespace]: FilterKey.policyV2Namespace,
     [FilterKey.policyV2Tier]: FilterKey.policyV2Tier,
     [FilterKey.policyV2Kind]: FilterKey.policyV2Kind,
+    [FilterKey.reporter]: FilterKey.reporter,
 } as const;
 
 export type OmniFilterParam = keyof typeof OmniFilterKeys;
 
 export const CustomOmniFilterKeys: Pick<
     typeof FilterKey,
-    'dest_port' | 'policyV2'
+    'dest_port' | 'policyV2' | 'reporter'
 > = {
     [FilterKey.dest_port]: FilterKey.dest_port,
     [FilterKey.policyV2]: FilterKey.policyV2,
+    [FilterKey.reporter]: FilterKey.reporter,
 } as const;
 
 export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
@@ -114,7 +123,7 @@ const transformToListFilterSearchRequest = (
 
 export const transformToFlowsFilterQuery = (
     omniFilterValues: Record<FilterKey, string[]>,
-    listFilterId?: ListOmniFilterParam,
+    listFilterId?: DataListOmniFilterParam,
     searchInput?: string,
 ) => {
     const filterHintsQuery: FlowsFilter = Object.keys(omniFilterValues).reduce(
@@ -162,7 +171,8 @@ export type FilterHintType =
     | 'PolicyV2'
     | 'PolicyV2Namespace'
     | 'PolicyV2Tier'
-    | 'PolicyV2Kind';
+    | 'PolicyV2Kind'
+    | 'Reporter';
 
 export const FilterHintTypes: Record<
     keyof typeof FilterHintKeys,
@@ -177,6 +187,7 @@ export const FilterHintTypes: Record<
     [FilterKey.policyV2Namespace]: 'PolicyV2Namespace',
     [FilterKey.policyV2Tier]: 'PolicyV2Tier',
     [FilterKey.policyV2Kind]: 'PolicyV2Kind',
+    [FilterKey.reporter]: 'Reporter',
 };
 
 export type OmniFilterPropertiesType = Record<
@@ -195,6 +206,7 @@ export type OmniFilterPropertiesType = Record<
             | {
                   name: FlowsFilterQuery;
               }[];
+        filterComponentProps?: Partial<OmniFilterProps>;
     }
 >;
 
@@ -264,6 +276,25 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         filterHintsKey: 'protocols',
         transformToFilterHintRequest: transformToListFilter,
     },
+    reporter: {
+        label: 'Reporter',
+        filterHintsKey: 'reporters',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        filterComponentProps: {
+            filters: [
+                { label: 'src', value: 'src' },
+                { label: 'dst', value: 'dst' },
+            ],
+            listType: 'radio',
+            showSearch: false,
+            onReady: () => undefined,
+            width: '100px',
+            popoverContentProps: {
+                width: '175px',
+            },
+        },
+    },
     policyV2: {
         label: 'Policy V2',
         filterHintsKey: 'policiesV2',
@@ -303,7 +334,7 @@ export const FilterProperties: Record<FilterKey, FilterProperty> = {
 };
 
 export type ListOmniFiltersData = Record<
-    ListOmniFilterParam,
+    DataListOmniFilterParam,
     ListOmniFilterData
 >;
 
@@ -318,7 +349,7 @@ export type SelectedOmniFilterData = Partial<ListOmniFiltersData>;
 export type SelectedOmniFilters = Partial<Record<OmniFilterParam, string[]>>;
 
 export type SelectedOmniFilterOptions = Record<
-    ListOmniFilterParam,
+    DataListOmniFilterParam,
     ListOmniFilterOption[]
 >;
 
