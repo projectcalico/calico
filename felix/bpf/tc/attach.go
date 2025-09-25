@@ -320,6 +320,7 @@ func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedPro
 				Handle: bpfFilter.Attrs().Handle,
 				Filter: &filter,
 			}
+			log.Debugf("Sridhar found old calico program at %s", iface)
 			log.WithField("prog", p).Debug("Found old calico program")
 			progsAttached = append(progsAttached, p)
 		}
