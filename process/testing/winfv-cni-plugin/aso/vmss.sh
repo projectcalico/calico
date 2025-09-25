@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -195,7 +195,7 @@ function wait_for_aso_resource() {
   
   # First, wait for the resource to exist (up to 30 seconds)
   local wait_count=0
-  while ! ${KUBECTL:-kubectl} get "$resource_type/$resource_name" -n "$namespace" >/dev/null 2>&1; do
+  while ! ${KUBECTL} get "$resource_type/$resource_name" -n "$namespace" >/dev/null 2>&1; do
     if [[ $wait_count -ge 30 ]]; then
       log_fail "$resource_type/$resource_name does not exist after 30 seconds"
       return 1
@@ -206,7 +206,7 @@ function wait_for_aso_resource() {
   done
   
   # Now wait for the Ready condition
-  if ${KUBECTL:-kubectl} wait --for=condition=Ready "$resource_type/$resource_name" -n "$namespace" --timeout="$timeout"; then
+  if ${KUBECTL} wait --for=condition=Ready "$resource_type/$resource_name" -n "$namespace" --timeout="$timeout"; then
     log_info "$resource_type/$resource_name is ready"
     return 0
   else
@@ -214,7 +214,7 @@ function wait_for_aso_resource() {
     
     # Show diagnostic information
     log_info "Resource status for debugging:"
-    ${KUBECTL:-kubectl} describe "$resource_type" "$resource_name" -n "$namespace" | tail -10
+    ${KUBECTL} describe "$resource_type" "$resource_name" -n "$namespace" | tail -10
     return 1
   fi
 }
@@ -460,11 +460,11 @@ function confirm-nodes-ssh() {
       if [[ $((elapsed % 120)) -eq 0 ]] && [[ $elapsed -gt 0 ]]; then
         log_info "Checking $vm_name status after ${elapsed}s..."
         if [[ "$vm_name" == "Windows VM" ]]; then
-          kubectl get vm vm-windows -n winfv -o jsonpath='{.status.conditions[*].type}:{.status.conditions[*].status} ' 2>/dev/null || true
+          ${KUBECTL} get vm vm-windows -n winfv -o jsonpath='{.status.conditions[*].type}:{.status.conditions[*].status} ' 2>/dev/null || true
           echo ""
-          kubectl get virtualmachinesextension vm-windows-openssh -n winfv -o jsonpath='{.status.provisioningState}' 2>/dev/null && echo " (OpenSSH extension)" || true
+          ${KUBECTL} get virtualmachinesextension vm-windows-openssh -n winfv -o jsonpath='{.status.provisioningState}' 2>/dev/null && echo " (OpenSSH extension)" || true
         else
-          kubectl get vm vm-linux -n winfv -o jsonpath='{.status.conditions[*].type}:{.status.conditions[*].status} ' 2>/dev/null || true
+          ${KUBECTL} get vm vm-linux -n winfv -o jsonpath='{.status.conditions[*].type}:{.status.conditions[*].status} ' 2>/dev/null || true
           echo ""
         fi
       fi
