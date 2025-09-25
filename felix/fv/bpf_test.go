@@ -1220,6 +1220,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					ensureBPFProgramsAttached(tc.Felixes[0], "bpfout.cali")
 
+					out, _ := tc.Felixes[0].ExecOutput("bpftool", "net")
+					fmt.Printf("bpftool net: %s\n", string(out))
+
+					out, _ = tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
+					fmt.Printf("bpftool prog: %s\n", string(out))
+
 					By("Changing env and restarting felix")
 
 					tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFENABLED": "false"})
@@ -1241,7 +1247,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						return out
 					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
 
-					out, _ := tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
+					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
 					Expect(out).To(Equal("Device \"bpfin.cali\" does not exist.\n"))
 					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfout.cali")
 					Expect(out).To(Equal("Device \"bpfout.cali\" does not exist.\n"))
