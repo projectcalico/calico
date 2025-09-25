@@ -5,7 +5,7 @@ import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/co
 import {
     FilterHintKey,
     FilterKey,
-    ListOmniFilterParam,
+    DataListOmniFilterParam,
     transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
 import React from 'react';
@@ -40,7 +40,7 @@ const TagListOmniFilter: React.FC<TagListOmniFilterProps> = ({
     const getData = (searchOption?: string) => {
         const query = transformToFlowsFilterQuery(
             filterQuery as Record<FilterKey, string[]>,
-            filterId as ListOmniFilterParam,
+            filterId as DataListOmniFilterParam,
             searchOption,
         );
         fetchData(query);

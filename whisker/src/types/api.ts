@@ -1,5 +1,5 @@
 import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { ListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
+import { DataListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
 import { FlowLogAction } from './render';
 
 export type Policy = {
@@ -51,7 +51,7 @@ export type QueryPage = {
 
 export type OmniFilterDataQuery = {
     searchOption?: string;
-    filterParam: ListOmniFilterParam;
+    filterParam: DataListOmniFilterParam;
 };
 
 export type OmniFilterDataQueries = Record<
@@ -115,6 +115,7 @@ export type FlowsFilter = Partial<{
     policiesV2Namespaces: FlowsFilterQuery[];
     policyV2Tiers: FlowsFilterQuery[];
     policyV2Kinds: FlowsFilterQuery[];
+    reporters: FlowsFilterQuery[];
 }>;
 
 export type FlowsFilterKeys = keyof FlowsFilter;

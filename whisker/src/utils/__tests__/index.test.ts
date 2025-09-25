@@ -20,6 +20,7 @@ describe('transformToFilterHintsQuery', () => {
                     policyV2Namespace: [],
                     policyV2Tier: [],
                     policyV2Kind: [],
+                    reporter: [],
                 },
                 ListOmniFilterKeys.dest_namespace,
                 searchText,
@@ -48,6 +49,7 @@ describe('transformToFilterHintsQuery', () => {
                 policyV2Namespace: [],
                 policyV2Tier: [],
                 policyV2Kind: [],
+                reporter: [],
             }),
         ).toEqual(
             JSON.stringify({
@@ -74,6 +76,7 @@ describe('transformToFilterHintsQuery', () => {
                     policyV2Namespace: [],
                     policyV2Tier: [],
                     policyV2Kind: [],
+                    reporter: [],
                 },
                 ListOmniFilterKeys.policy,
                 searchText,

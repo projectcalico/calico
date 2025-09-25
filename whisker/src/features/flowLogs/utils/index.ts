@@ -2,6 +2,8 @@ import { objToQueryStr } from '@/libs/tigera/ui-components/utils';
 import { FlowLog as ApiFlowLog } from '@/types/api';
 import { FlowLog, UniqueFlowLogs } from '@/types/render';
 import { v4 as uuid } from 'uuid';
+import { ColumnName } from '../components/FlowLogsList/flowLogsTable';
+import { VisibleColumns } from '../components/FlowLogsList';
 
 export const transformFlowLogsResponse = ({
     start_time,
@@ -69,4 +71,63 @@ export const handleDuplicateFlowLogs = (
         ],
         flowLog,
     };
+};
+
+export const getV1Columns = (v1StoredColumns: string) => {
+    const v1Columns = v1StoredColumns ? JSON.parse(v1StoredColumns) : [];
+    const newColumns: VisibleColumns = {
+        start_time: false,
+        end_time: false,
+        action: false,
+        source_namespace: false,
+        source_name: false,
+        dest_namespace: false,
+        dest_name: false,
+        protocol: false,
+        dest_port: false,
+        // default newest column to true
+        reporter: true,
+    };
+
+    if (v1Columns.length > 0) {
+        v1Columns.forEach((columnName: ColumnName) => {
+            newColumns[columnName] = true;
+        });
+    }
+
+    window.localStorage.removeItem('whisker-flow-logs-stream-columns');
+
+    return newColumns;
+};
+
+export const getV2Columns = (
+    storedColumns: string,
+    key: string,
+    initialValue: VisibleColumns,
+) => {
+    const parsedItem: Record<ColumnName, boolean> = storedColumns
+        ? JSON.parse(storedColumns)
+        : initialValue;
+
+    // account for new columns in the future
+    Object.keys(initialValue).forEach((key) => {
+        const columnName = key as ColumnName;
+
+        if (!Object.hasOwn(parsedItem, key)) {
+            parsedItem[columnName] = initialValue[columnName];
+        }
+    });
+
+    // account for removed columns in the future
+    Object.keys(parsedItem).forEach((key) => {
+        const columnName = key as ColumnName;
+
+        if (!Object.hasOwn(initialValue, key)) {
+            delete parsedItem[columnName];
+        }
+    });
+
+    window.localStorage.setItem(key, JSON.stringify(parsedItem));
+
+    return parsedItem;
 };
