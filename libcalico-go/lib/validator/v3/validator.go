@@ -1743,7 +1743,7 @@ func validateTier(structLevel validator.StructLevel) {
 				reflect.ValueOf(tier.Spec.Order),
 				"TierSpec.Order",
 				"",
-				reason(fmt.Sprintf("Admin tier order must be %v", api.AdminTierOrder)),
+				reason(fmt.Sprintf("admin tier order must be %v", api.AdminTierOrder)),
 				"",
 			)
 		}
@@ -1755,7 +1755,7 @@ func validateTier(structLevel validator.StructLevel) {
 				reflect.ValueOf(tier.Spec.Order),
 				"TierSpec.Order",
 				"",
-				reason(fmt.Sprintf("Baseline tier order must be %v", api.BaselineTierOrder)),
+				reason(fmt.Sprintf("baseline tier order must be %v", api.BaselineTierOrder)),
 				"",
 			)
 		}

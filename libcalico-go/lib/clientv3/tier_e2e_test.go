@@ -237,7 +237,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Cannot delete the admin Tier")
 			_, outError = c.Tiers().Delete(ctx, names.AdminTierName, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("operation Delete is not supported on admin: Cannot delete adminnetworkpolicy tier"))
+			Expect(outError.Error()).To(Equal("operation Delete is not supported on admin: Cannot delete admin tier"))
 
 			By("Getting admin Tier")
 			defRes, outError = c.Tiers().Get(ctx, names.AdminTierName, options.GetOptions{})
@@ -257,7 +257,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			}, options.SetOptions{})
 			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("baseline tier order must be 10e6"))
+			Expect(outError.Error()).Should(ContainSubstring("baseline tier order must be 1e+07"))
 
 			By("Cannot delete the baseline Tier")
 			_, outError = c.Tiers().Delete(ctx, names.BaselineTierName, options.DeleteOptions{})
@@ -273,7 +273,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			defRes.Spec = spec1
 			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("baseline tier order must be 10e6"))
+			Expect(outError.Error()).Should(ContainSubstring("baseline tier order must be 1e+07"))
 
 			By("Updating the Tier before it is created")
 			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{

@@ -269,3 +269,8 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 
 	return "", "", "", fmt.Errorf("could not parse policy %s", name)
 }
+
+func TierIsStatic(name string) bool {
+	return name == DefaultTierName || name == AdminTierName ||
+		name == BaselineTierName || name == AdminNetworkPolicyTierName
+}
