@@ -74,6 +74,7 @@ const (
 	ScanVerdictOK ScanVerdict = iota
 	// ScanVerdictDelete means entry should be deleted
 	ScanVerdictDelete
+	ScanVerdictDeleteImmediate // Delete without adding to cleanup map
 )
 
 const cleanupBatchSize int = 1000
@@ -242,25 +243,42 @@ func (s *Scanner) Scan() {
 		}
 
 		for _, scanner := range s.scanners {
-			if verdict, ts := scanner.Check(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
+			verdict, ts := scanner.Check(ctKey, ctVal, s.get)
+			switch verdict {
+			case ScanVerdictOK:
+				// Entry is fine, continue to next scanner.
+				continue
+			case ScanVerdictDelete, ScanVerdictDeleteImmediate:
+				// Entry should be deleted.
 				numExpired++
-				if debug {
-					log.Debug("Deleting conntrack entry.")
-				}
-				// Fall back to userspace cleaner, when the bpf cleaner
-				// fails to load.
-				if s.bpfCleaner == nil {
-					cleaned++
-					return maps.IterDelete
-				}
-				// NAT entry has expired.
-				if ctVal.Type() != TypeNormal {
-					s.handleNATEntries(ctKey, ctVal, uint64(ts))
-					continue
-				}
-				dummy := s.versionHelper.dummyKey()
-				s.updateCleanupMap(ctKey, dummy, uint64(ts), uint64(ts))
 			}
+			if debug {
+				log.Debug("Deleting conntrack entry.")
+			}
+			// Fall back to userspace cleaner, when the bpf cleaner
+			// fails to load.
+			if s.bpfCleaner == nil {
+				cleaned++
+				return maps.IterDelete
+			}
+			if verdict == ScanVerdictDeleteImmediate {
+				cleaned++
+				if debug {
+					log.WithFields(log.Fields{
+						"key":   ctKey,
+						"entry": ctVal,
+					}).Debug("Deleting conntrack entry immediately.")
+				}
+				// Delete without adding to cleanup map.
+				return maps.IterDelete
+			}
+			// NAT entry has expired.
+			if ctVal.Type() != TypeNormal {
+				s.handleNATEntries(ctKey, ctVal, uint64(ts))
+				continue
+			}
+			dummy := s.versionHelper.dummyKey()
+			s.updateCleanupMap(ctKey, dummy, uint64(ts), uint64(ts))
 		}
 		if numExpired > 0 && numExpired%cleanupBatchSize == 0 {
 			cleaned += s.runBPFCleaner()
