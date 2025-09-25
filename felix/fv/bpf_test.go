@@ -1223,7 +1223,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					out, _ := tc.Felixes[0].ExecOutput("bpftool", "net")
 					fmt.Printf("bpftool net: %s\n", string(out))
 
-					out, _ = tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
+					out, _ = tc.Felixes[0].ExecOutput("bpftool", "prog", "show")
 					fmt.Printf("bpftool prog: %s\n", string(out))
 
 					By("Changing env and restarting felix")
