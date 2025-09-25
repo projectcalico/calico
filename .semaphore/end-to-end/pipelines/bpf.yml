@@ -120,6 +120,10 @@ blocks:
               value: "None"
             - name: BGP_STATUS
               value: Enabled
+            - name: BPF_NETWORK_BOOTSTRAP
+              value: "Enabled"
+            - name: KUBE_PROXY_MANAGEMENT
+              value: "Enabled"
 
         - name: AWS, no encap, DSR
           execution_time_limit:
@@ -152,6 +156,10 @@ blocks:
               value: "true"
             - name: ENABLE_IP_FORWARDING
               value: "true"
+            - name: BPF_NETWORK_BOOTSTRAP
+              value: "Enabled"
+            - name: KUBE_PROXY_MANAGEMENT
+              value: "Enabled"
 
         - name: GCP BPF DP encap w/ NodeLocal DNSCache
           execution_time_limit:
