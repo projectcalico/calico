@@ -1,0 +1,74 @@
+version: v1.0
+
+name: banzai-calico Openshift Certification
+
+# This file is used to perform testing for Openshift Certification.
+# New releases are run against this pipeline and it generates artifacts that are sent to Redhat to update certification.
+
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+    - name: redhat-certification
+  env_vars:
+    - name: FUNCTIONAL_AREA
+      value: "certification.yml"
+    - name: TEST_TYPE
+      value: "ocp-cert"
+    - name: STERN_CHECK
+      value: "DISABLED"
+
+blocks:
+  - name: Openshift OCP
+    dependencies: []
+    task:
+      jobs:
+        - name: CNI & Virtualization tests
+          execution_time_limit:
+            hours: 6
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: OPENSHIFT_VERSION
+              values:
+                - "4.16.38"
+                - "4.17.25"
+                - "4.18.9"
+          env_vars:
+            - name: USE_HASH_RELEASE
+              value: "false"
+            - name: PROVISIONER
+              value: aws-openshift
+            - name: INSTALLER
+              value: operator
+            - name: ENABLE_OCP_VIRT
+              value: "true"
+            - name: DATAPLANE
+              value: "CalicoIptables"
+
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force
