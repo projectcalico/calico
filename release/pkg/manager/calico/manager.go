@@ -116,6 +116,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		imageRegistries:  defaultRegistries,
 		operatorRegistry: operator.DefaultRegistry,
 		operatorImage:    operator.DefaultImage,
+		operatorBranch:   operator.DefaultBranchName,
 	}
 
 	// Run through provided options.
@@ -187,6 +188,7 @@ type CalicoManager struct {
 	operatorImage    string
 	operatorRegistry string
 	operatorVersion  string
+	operatorBranch   string
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
@@ -414,7 +416,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 }
 
 func (r *CalicoManager) checkCodeGeneration() error {
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "get-operator-crds generate check-dirty"); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "get-operator-crds generate check-dirty", fmt.Sprintf("OPERATOR_BRANCH=%s", r.operatorBranch)); err != nil {
 		logrus.WithError(err).Error("Failed to check code generation")
 		return fmt.Errorf("code generation error, try 'make get-operator-crds generate' to fix")
 	}

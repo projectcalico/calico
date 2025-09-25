@@ -101,6 +101,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
+					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
@@ -212,6 +213,7 @@ func releaseBuildFlags() []cli.Flag {
 	f := append(productFlags,
 		archFlag,
 		registryFlag,
+		operatorBranchFlag,
 		buildImagesFlag,
 		githubTokenFlag,
 		skipValidationFlag)

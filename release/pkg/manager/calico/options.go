@@ -74,6 +74,13 @@ func WithOperator(registry, image, version string) Option {
 	}
 }
 
+func WithOperatorBranch(branch string) Option {
+	return func(r *CalicoManager) error {
+		r.operatorBranch = branch
+		return nil
+	}
+}
+
 func WithOperatorVersion(version string) Option {
 	return func(r *CalicoManager) error {
 		r.operatorVersion = version
