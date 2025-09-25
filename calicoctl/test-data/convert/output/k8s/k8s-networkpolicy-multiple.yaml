@@ -71,6 +71,7 @@ items:
       source: {}
     order: 1000
     selector: projectcalico.org/orchestrator == 'k8s'
+    tier: default
     types:
     - Egress
 kind: List
