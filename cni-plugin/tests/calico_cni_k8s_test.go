@@ -212,8 +212,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				  "policy": {"type": "k8s"},
 				  "nodename_file_optional": true,
 				  "log_level":"debug",
-				  "nodename": "%s"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+				  "nodename": "%s",
+					"calico_api_group": "%s"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 		})
 
 		It("successfully networks the namespace", func() {
@@ -538,7 +539,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
 			  "log_level":"debug",
-			  "nodename": "%s"
+			  "nodename": "%s",
+				"calico_api_group": "%s"
 			}`
 
 			It("should create pods with the right MTU", func() {
@@ -548,13 +550,13 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				err = os.MkdirAll("/var/lib/calico", os.ModePerm)
 				Expect(err).NotTo(HaveOccurred())
-				err = os.WriteFile(utils.MTUFilePath, []byte("3000"), 0644)
+				err = os.WriteFile(utils.MTUFilePath, []byte("3000"), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 				defer func() { _ = os.Remove(utils.MTUFilePath) }()
 
 				// Create a K8s pod/container
 				name1 := fmt.Sprintf("mtutest%d", rand.Uint32())
-				mtuNetconf1 := fmt.Sprintf(mtuNetconfTemplate, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+				mtuNetconf1 := fmt.Sprintf(mtuNetconfTemplate, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 
 				ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name1},
@@ -598,7 +600,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
 			  "log_level":"debug",
-			  "nodename": "%s"
+			  "nodename": "%s",
+				"calico_api_group": "%s"
 			}`
 
 			It("creates pods with the new mtu", func() {
@@ -606,7 +609,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				// Create a K8s pod/container with non-default MTU
 				name1 := fmt.Sprintf("mtutest%d", rand.Uint32())
-				mtuNetconf1 := fmt.Sprintf(mtuNetconfTemplate, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), 3000, testNodeName)
+				mtuNetconf1 := fmt.Sprintf(mtuNetconfTemplate, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), 3000, testNodeName, os.Getenv("CALICO_API_GROUP"))
 
 				ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name1},
@@ -626,7 +629,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				// Create another K8s pod/container with a different non-default MTU
 				name2 := fmt.Sprintf("mtutest2%d", rand.Uint32())
-				mtuNetconf2 := fmt.Sprintf(mtuNetconfTemplate, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), 4000, testNodeName)
+				mtuNetconf2 := fmt.Sprintf(mtuNetconfTemplate, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), 4000, testNodeName, os.Getenv("CALICO_API_GROUP"))
 
 				ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name2},
@@ -678,7 +681,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"debug",
-					  "nodename": "%s"
+					  "nodename": "%s",
+						"calico_api_group": "%s"
 					}`,
 				expectedV4Routes: []string{
 					regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
@@ -721,7 +725,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"debug",
-					  "nodename": "%s"
+					  "nodename": "%s",
+						"calico_api_group": "%s"
 					}`,
 				expectedV4Routes: []string{
 					regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
@@ -769,7 +774,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"debug",
-					  "nodename": "%s"
+					  "nodename": "%s",
+						"calico_api_group": "%s"
 					}`,
 				expectedV4Routes: []string{
 					regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
@@ -831,7 +837,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"debug",
-					  "nodename": "%s"
+					  "nodename": "%s",
+						"calico_api_group": "%s"
 					}`,
 				expectedV4Routes: []string{
 					regexp.QuoteMeta("10.123.0.0/16 via 169.254.1.1 dev eth0"),
@@ -893,7 +900,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"debug",
-					  "nodename": "%s"
+					  "nodename": "%s",
+						"calico_api_group": "%s"
 					}`,
 				expectedV4Routes: []string{
 					regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
@@ -914,14 +922,13 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		// Run tests with PodCIDR
 		for _, c := range hostLocalIPAMConfigs {
-			c := c // Make sure we get a fresh variable on each loop.
 			// The dual-stack requires PodCIDRs
 			if strings.Contains(c.config, "usePodCidrIPv6") {
 				continue
 			}
 			Context("Using host-local IPAM with one PodCIDR ("+c.description+"): request an IP then release it, and then request it again", func() {
 				It("should successfully assign IP both times and successfully release it in the middle", func() {
-					netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), c.nodename)
+					netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), c.nodename, os.Getenv("CALICO_API_GROUP"))
 
 					clientset := getKubernetesClient()
 
@@ -1029,10 +1036,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		// Run tests with PodCIDRs defining a dual-stack deployment
 		for _, c := range hostLocalIPAMConfigs {
-			c := c // Make sure we get a fresh variable on each loop.
 			Context("Using host-local IPAM with two PodCIDRs ("+c.description+"): request an IP then release it, and then request it again", func() {
 				It("should successfully assign IP both times and successfully release it in the middle", func() {
-					netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), c.nodename)
+					netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), c.nodename, os.Getenv("CALICO_API_GROUP"))
 
 					clientset := getKubernetesClient()
 
@@ -1162,6 +1168,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -1406,6 +1413,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -1493,6 +1501,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -1598,6 +1607,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			netconf.IPAM.Type = "calico-ipam"
 
@@ -1678,6 +1688,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				LogLevel:             "debug",
 				FeatureControl:       types.FeatureControl{FloatingIPs: true},
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			netconf.IPAM.Type = "calico-ipam"
 
@@ -1789,6 +1800,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				LogLevel:             "debug",
 				FeatureControl:       types.FeatureControl{IPAddrsNoIpam: true},
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			Expect(nc.CNIVersion).NotTo(BeEmpty())
@@ -1978,8 +1990,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					 },
 					"policy": {"type": "k8s"},
 					"log_level":"debug",
-					"nodename": "%s"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+					"nodename": "%s",
+					"calico_api_group": "%s"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 
 			assignIP := net.IPv4(20, 0, 0, 111).To4()
 
@@ -2112,8 +2125,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					 },
 					"policy": {"type": "k8s"},
 					"log_level":"debug",
-					"nodename": "%s"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+					"nodename": "%s",
+					"calico_api_group": "%s"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 
 			// Now create a K8s pod (without any pod IP annotations).
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
@@ -2234,6 +2248,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -2505,6 +2520,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -2650,8 +2666,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				    "kubeconfig": "/home/user/certs/kubeconfig"
 				  },
 				  "policy": {"type": "k8s"},
-				  "nodename": "%s"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+				  "nodename": "%s",
+					"calico_api_group": "%s"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 		})
 		It("should successfully execute both ADDs but for second ADD will return the same result as the first time but it won't network the container", func() {
 			// Create a new ipPool.
@@ -2843,6 +2860,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -3008,6 +3026,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -3139,8 +3158,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				    "kubeconfig": "/home/user/certs/kubeconfig"
 				  },
 				  "policy": {"type": "k8s"},
-				  "nodename": "%s"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+				  "nodename": "%s",
+					"calico_api_group": "%s"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 		})
 		It("should fail container creation", func() {
 			// Create a new ipPool.
@@ -3201,8 +3221,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				    "kubeconfig": "/home/user/certs/kubeconfig"
 				  },
 				  "policy": {"type": "k8s"},
-				  "nodename": "%s"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testEndpoint, testNodeName)
+				  "nodename": "%s",
+					"calico_api_group": "%s"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testEndpoint, testNodeName, os.Getenv("CALICO_API_GROUP"))
 		})
 
 		AfterEach(func() {
@@ -3260,8 +3281,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
 			  "log_level":"debug",
-			  "nodename": "%s"
-			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+			  "nodename": "%s",
+				"calico_api_group": "%s"
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 			c := exec.Command(pluginPath, "-t")
 			stdin, err := c.StdinPipe()
@@ -3297,8 +3319,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
 			  "log_level":"debug",
-			  "nodename": "%s"
-			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+			  "nodename": "%s",
+				"calico_api_group": "%s"
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 			c := exec.Command(pluginPath, "-t")
 			stdin, err := c.StdinPipe()
@@ -3336,8 +3359,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				  "policy": {"type": "k8s"},
 				  "nodename_file_optional": true,
 				  "log_level":"debug",
-				  "nodename": "%s"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
+				  "nodename": "%s",
+					"calico_api_group": "%s"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, os.Getenv("CALICO_API_GROUP"))
 			name = generateName("test-pod")
 		})
 
@@ -3404,10 +3428,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var netconf string
 		var ipPool4CIDR *net.IPNet
 		var ipPool6CIDR *net.IPNet
-		var ipPool4 = "50.80.0.0/16"
-		var ipPool6 = "fd80:50::/96"
+		ipPool4 := "50.80.0.0/16"
+		ipPool6 := "fd80:50::/96"
 		var clientset *kubernetes.Clientset
-		var testNS = testutils.K8S_TEST_NS
+		testNS := testutils.K8S_TEST_NS
 
 		BeforeEach(func() {
 			if version.Compare(cniVersion, "0.3.0", "<") {
@@ -3425,6 +3449,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				NodenameFileOptional: true,
 				LogLevel:             "debug",
 				Nodename:             testNodeName,
+				CalicoAPIGroup:       os.Getenv("CALICO_API_GROUP"),
 			}
 			nc.IPAM.Type = "calico-ipam"
 			ncb, err := json.Marshal(nc)
@@ -3446,7 +3471,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Create a new IP Pool.
 			testutils.MustCreateNewIPPool(calicoClient, ipPool4, false, false, true)
 			testutils.MustCreateNewIPPool(calicoClient, ipPool6, false, false, true)
-
 		})
 
 		AfterEach(func() {
