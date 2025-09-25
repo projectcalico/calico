@@ -1279,7 +1279,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			Expect(err).NotTo(HaveOccurred())
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == "upgrade-test-node" && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
-					labels = list.Items[i].ObjectMeta.Labels
+					labels = list.Items[i].Labels
 					break
 				}
 			}
@@ -1288,7 +1288,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 		} else {
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == "upgrade-test-node" && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
-					labels = list.Items[i].ObjectMeta.Labels
+					labels = list.Items[i].Labels
 					break
 				}
 			}

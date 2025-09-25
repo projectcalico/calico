@@ -13,6 +13,7 @@ items:
       source: {}
     order: 1000
     selector: projectcalico.org/orchestrator == 'k8s'
+    tier: default
     types:
     - Egress
 - apiVersion: projectcalico.org/v3
@@ -24,6 +25,7 @@ items:
   spec:
     order: 1000
     selector: projectcalico.org/orchestrator == 'k8s'
+    tier: default
     types:
     - Ingress
 - apiVersion: projectcalico.org/v3
