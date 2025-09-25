@@ -1222,6 +1222,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					out, _ := tc.Felixes[0].ExecOutput("bpftool", "net")
 					fmt.Printf("bpftool net: %s\n", string(out))
+
+					out, _ = tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
+					fmt.Printf("bpftool prog: %s\n", string(out))
+
 					By("Changing env and restarting felix")
 
 					tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFENABLED": "false"})
