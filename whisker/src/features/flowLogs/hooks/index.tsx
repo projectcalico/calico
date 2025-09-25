@@ -78,7 +78,7 @@ export const useStoredColumns = (initialValue: VisibleColumns) => {
             );
 
             if (v1StoredColumns) {
-                return getV1Columns(v1StoredColumns);
+                return getV1Columns(v1StoredColumns, key);
             }
 
             const storedColumns = window.localStorage.getItem(key);

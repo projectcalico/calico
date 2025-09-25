@@ -247,6 +247,7 @@ describe('useStoredColumns', () => {
 
         expect(getV1Columns).toHaveBeenCalledWith(
             JSON.stringify(mockV1Columns),
+            'whisker-flow-logs-stream-columns-v2',
         );
     });
 

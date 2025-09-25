@@ -73,7 +73,7 @@ export const handleDuplicateFlowLogs = (
     };
 };
 
-export const getV1Columns = (v1StoredColumns: string) => {
+export const getV1Columns = (v1StoredColumns: string, storageKey: string) => {
     const v1Columns = v1StoredColumns ? JSON.parse(v1StoredColumns) : [];
     const newColumns: VisibleColumns = {
         start_time: false,
@@ -96,6 +96,7 @@ export const getV1Columns = (v1StoredColumns: string) => {
     }
 
     window.localStorage.removeItem('whisker-flow-logs-stream-columns');
+    window.localStorage.setItem(storageKey, JSON.stringify(newColumns));
 
     return newColumns;
 };

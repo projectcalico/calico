@@ -7,6 +7,6 @@
         "calico_cloud_url": "https://www.dev.calicocloud.io/api"
     },
     "features": {
-        "fitlersV2": false
+        "fitlersV2": true
     }
 }
