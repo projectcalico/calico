@@ -21,7 +21,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -102,12 +101,12 @@ func NewController(ctx context.Context,
 				}
 				_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
 				if err != nil {
-					log.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
+					logrus.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
 					continue
 				}
 				_, blockNet, err := cnet.ParseCIDR(block.Spec.CIDR)
 				if err != nil {
-					log.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
+					logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
 					continue
 				}
 				if poolNet.Contains(blockNet.IP) {
@@ -131,25 +130,25 @@ func NewController(ctx context.Context,
 func (c *IPPoolController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
-	log.Info("Starting IPPool controller")
+	logrus.Info("Starting IPPool controller")
 
 	// Wait till k8s cache is synced
-	log.Debug("Waiting to sync with Kubernetes API (IPPools)")
+	logrus.Debug("Waiting to sync with Kubernetes API (IPPools)")
 	if !cache.WaitForNamedCacheSync("pools", stopCh, c.poolInformer.HasSynced) {
-		log.Info("Failed to sync resources, received signal for controller to shut down.")
+		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
 
-	log.Debug("Finished syncing with Kubernetes API (IPPools)")
+	logrus.Debug("Finished syncing with Kubernetes API (IPPools)")
 
 	// We're in-sync. Start the sub-controllers.
 	<-stopCh
-	log.Info("Stopping IPPool controller")
+	logrus.Info("Stopping IPPool controller")
 }
 
 func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 	ctx := context.TODO()
-	logCtx := log.WithFields(logrus.Fields{
+	logCtx := logrus.WithFields(logrus.Fields{
 		"name":         p.Name,
 		"cidr":         p.Spec.CIDR,
 		"hasFinalizer": HasFinalizer(p),
@@ -211,11 +210,11 @@ func (c *IPPoolController) blocksInPool(cidr cnet.IPNet) bool {
 		block := i.(*v3.IPAMBlock)
 		_, parsedNet, err := cnet.ParseCIDR(block.Spec.CIDR)
 		if err != nil {
-			log.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
+			logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
 			continue
 		}
 		if cidr.Contains(parsedNet.IP) {
-			log.WithField("cidr", cidr.String()).WithField("block", block.Spec.CIDR).Debug("Found IPAMBlock in pool")
+			logrus.WithField("cidr", cidr.String()).WithField("block", block.Spec.CIDR).Debug("Found IPAMBlock in pool")
 			return true
 		}
 	}

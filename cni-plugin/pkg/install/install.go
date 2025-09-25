@@ -357,7 +357,7 @@ func writeCNIConfig(c config) {
 
 	netconf = strings.ReplaceAll(netconf, "__SERVICEACCOUNT_TOKEN__", string(c.ServiceAccountToken))
 
-	netconf = strings.Replace(netconf, "__CALICO_API_GROUP__", string(c.CalicoAPIGroup), -1)
+	netconf = strings.ReplaceAll(netconf, "__CALICO_API_GROUP__", string(c.CalicoAPIGroup))
 
 	// Replace etcd datastore variables.
 	hostSecretsDir := c.CNINetDir + "/calico-tls"

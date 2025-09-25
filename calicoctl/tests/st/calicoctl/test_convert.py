@@ -73,6 +73,7 @@ class TestCalicoctlConvert(TestBase):
         # conversion is successful, otherwise assert an error occurs
         if os.path.isfile(output_filename):
             rc.assert_no_error()
+
             with open(output_filename, 'r') as f:
                 expected_output = f.read().rstrip()
                 self.assertEqual(rc.output, expected_output)
@@ -80,6 +81,7 @@ class TestCalicoctlConvert(TestBase):
             # With the converted data to a temp file
             with open("/tmp/converted", 'w') as f:
                 f.write(rc.output)
+
 
             # Load the converted data
             rc = calicoctl("apply -f /tmp/converted")
