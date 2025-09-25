@@ -722,8 +722,12 @@ try
     Copy-Item "$Env:ProgramFiles\containerd\bin\ctr.exe" "c:\bin"
     C:\bin\ctr.exe --version
 
-    Write-Output "Pulling servercore:1809 image..."
-    C:\bin\ctr.exe -n k8s.io images pull mcr.microsoft.com/windows/servercore:1809 | Out-Null
+    # NOTE: Servercore image pre-pulling is disabled to avoid CI timeouts
+    # - Semaphore jobs occasionally hang indefinitely when pulling large servercore images
+    # - Pre-pulling servercore was primarily needed for Docker runtime (now deprecated)
+
+    # Write-Output "Pulling servercore:1809 image..."
+    # C:\bin\ctr.exe -n k8s.io images pull mcr.microsoft.com/windows/servercore:1809 | Out-Null
 
     Write-Output "Pulling pause image..."
     c:\bin\ctr.exe images pull k8s.gcr.io/pause:3.5 | Out-Null
