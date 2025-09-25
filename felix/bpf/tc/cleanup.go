@@ -77,7 +77,7 @@ func CleanUpProgramsAndPins() {
 		}
 		for _, p := range progs {
 			if strings.HasPrefix(p.Name, "cali_") || strings.HasPrefix(p.Name, "calico_") {
-				log.WithField("id", p.ID).Debug("Found calico program (by name)")
+				log.WithFields(log.Fields{"id": p.ID, "name": p.Name}).Debug("Found calico program (by name)")
 				calicoProgIDs.Add(p.ID)
 				continue
 			}
@@ -119,7 +119,7 @@ func CleanUpProgramsAndPins() {
 					continue
 				}
 				if calicoProgIDs.Contains(bpfFilter.Id) {
-					log.Infof("Found calico program on interface %s", link.Attrs().Name)
+					log.Infof("Found calico program on interface %s, id %d", link.Attrs().Name, bpfFilter.Id)
 					err := netlink.QdiscDel(qdisc)
 					if err != nil {
 						log.WithError(err).WithField("iface", link.Attrs().Name).Info(
