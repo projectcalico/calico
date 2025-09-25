@@ -219,7 +219,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make image-windows
   - name: "cni-plugin: Windows"
     run:
-      when: "true"
+      when: "false or true"
     dependencies:
       - Prerequisites
     task:

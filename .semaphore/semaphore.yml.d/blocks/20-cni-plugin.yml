@@ -16,7 +16,7 @@
           - ../.semaphore/run-and-monitor ci.log make image-windows
 - name: "cni-plugin: Windows"
   run:
-    when: "${CHANGE_IN(cni-plugin)}"
+    when: "false or ${CHANGE_IN(felix,process)}"
   dependencies:
     - Prerequisites
   task:
