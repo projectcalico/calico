@@ -2486,8 +2486,8 @@ func (t testFlowLog) IPSets() map[string][]string {
 	return t.ipSets
 }
 
-func (_ testFlowLog) Setup() error    { return nil }
-func (_ testFlowLog) TearDown() error { return nil }
+func (testFlowLog) Setup() error    { return nil }
+func (testFlowLog) TearDown() error { return nil }
 
 func TestPolicyProgramsExceedMatchIdSpace(t *testing.T) {
 	test := testFlowLog{

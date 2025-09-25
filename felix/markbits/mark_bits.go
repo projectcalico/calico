@@ -109,7 +109,7 @@ func (mc *MarkBitsManager) nthMark(n int) (uint32, error) {
 		}
 	}
 
-	return 0, errors.New("No mark bit found")
+	return 0, errors.New("no mark bit found")
 }
 
 // Return how many free position number left.
@@ -143,7 +143,7 @@ func (mc *MarkBitsManager) MapNumberToMark(n int) (uint32, error) {
 			"MarkMask":           mc.mask,
 			"requestedMapNumber": n,
 		}).Warn("Not enough mark bits available.")
-		return 0, errors.New("Not enough mark bits available")
+		return 0, errors.New("not enough mark bits available")
 	}
 
 	return mark, nil
@@ -153,7 +153,7 @@ func (mc *MarkBitsManager) MapNumberToMark(n int) (uint32, error) {
 func (mc *MarkBitsManager) MapMarkToNumber(mark uint32) (int, error) {
 	if mark&mc.mask != mark {
 		// mark bit not compatible.
-		return 0, errors.New("Mark bit not compatible")
+		return 0, errors.New("mark bit not compatible")
 	}
 
 	number := 0
