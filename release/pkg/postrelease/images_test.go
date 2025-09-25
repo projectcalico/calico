@@ -14,8 +14,8 @@ import (
 )
 
 var excludeImageArch = map[string][]string{
-	"calico/envoy-proxy": {"ppc64le", "s390x"},
-	"calico/whisker":     {"ppc64le", "s390x"},
+	"envoy-proxy": {"ppc64le", "s390x"},
+	"whisker":     {"ppc64le", "s390x"},
 }
 
 func TestImagesPublished(t *testing.T) {
