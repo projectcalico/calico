@@ -167,7 +167,7 @@ type iperfReport struct {
 }
 
 var _ = infrastructure.DatastoreDescribe(
-	"QoS controls tests",
+	"_BPF_ _BPF-SAFE_ QoS controls tests",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes, apiconfig.EtcdV3},
 	func(getInfra infrastructure.InfraFactory) {
 		type testConf struct {
