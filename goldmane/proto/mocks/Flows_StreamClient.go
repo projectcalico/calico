@@ -7,10 +7,9 @@ package mocks
 import (
 	"context"
 
+	"github.com/projectcalico/calico/goldmane/proto"
 	mock "github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 // NewFlows_StreamClient creates a new instance of Flows_StreamClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
