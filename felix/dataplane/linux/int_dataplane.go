@@ -252,6 +252,7 @@ type Config struct {
 	BPFAttachType                      apiv3.BPFAttachOption
 
 	BPFProfiling               string
+	BPFFlags                   []string
 	KubeProxyMinSyncPeriod     time.Duration
 	KubeProxyHealtzPort        int
 	SidecarAccelerationEnabled bool
