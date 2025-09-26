@@ -162,7 +162,7 @@ cp ~/secrets/docker_cfg.json "$HOME/.docker/config.json"
 
 mkdir -p "${BZ_LOGS_DIR}"
 
-cd "$HOME"
+cd "$HOME" || exit
 std="echo \"[INFO] Initializing Banzai profile...\""
 std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
 std="$std; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
