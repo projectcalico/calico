@@ -252,6 +252,7 @@ type Config struct {
 	BPFAttachType                      apiv3.BPFAttachOption
 
 	BPFProfiling               string
+	BPFFlags                   []string
 	KubeProxyMinSyncPeriod     time.Duration
 	KubeProxyHealtzPort        int
 	SidecarAccelerationEnabled bool
@@ -428,6 +429,11 @@ const (
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
+	}
+
+	// Log BPF flags for debugging
+	if len(config.BPFFlags) > 0 {
+		log.WithField("bpfFlags", config.BPFFlags).Info("BPF flags configured")
 	}
 
 	log.WithField("config", config).Info("Creating internal dataplane driver.")

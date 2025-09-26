@@ -3531,6 +3531,21 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfFlags": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFFlags is a comma-separated list of BPF flag values, each consisting of lowercase letters, dash, and numbers",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",
