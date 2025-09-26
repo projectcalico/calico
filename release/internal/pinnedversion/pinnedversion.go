@@ -38,7 +38,7 @@ var (
 	// Components that do not produce images.
 	noImageComponents = []string{
 		"calico",
-		"calico/api",
+		"api",
 		"networking-calico",
 	}
 
@@ -118,7 +118,7 @@ func (p *PinnedVersion) ImageComponents(includeOperator bool) map[string]registr
 		if img != "" {
 			component.Image = img
 		} else if component.Image == "" {
-			component.Image = strings.TrimPrefix(name, registry.CalicoNamespace)
+			component.Image = name
 		}
 		components[name] = component
 	}
