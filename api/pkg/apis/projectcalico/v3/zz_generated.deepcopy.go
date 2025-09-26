@@ -1708,6 +1708,15 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.BPFFlags != nil {
+		in, out := &in.BPFFlags, &out.BPFFlags
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
+	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges
 		*out = new(RouteTableRanges)

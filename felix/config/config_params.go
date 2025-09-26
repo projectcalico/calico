@@ -52,6 +52,8 @@ var (
 	HostnameRegexp           = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
 	StringRegexp             = regexp.MustCompile(`^.*$`)
 	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
+	// BPFFlagRegexp matches BPF flag values that consist of lowercase letters, dash, and numbers
+	BPFFlagRegexp = regexp.MustCompile(`^[a-z0-9-]+$`)
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	HostAddressRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 )
@@ -225,6 +227,7 @@ type Config struct {
 	BPFAttachType                      string            `config:"oneof(TCX,TC);TCX;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
+	BPFFlags                           []string          `config:"bpf-flag-slice;;"`
 
 	// CgroupV2Path is not used by Felix, but its init container
 	CgroupV2Path string `config:"string;;"`
@@ -1155,6 +1158,8 @@ func loadParams() {
 			param = &StringSliceParam{ValidationRegex: InterfaceRegex}
 		case "iface-filter-slice":
 			param = &StringSliceParam{ValidationRegex: IfaceParamRegexp}
+		case "bpf-flag-slice":
+			param = &StringSliceParam{ValidationRegex: BPFFlagRegexp}
 		case "route-table-range":
 			param = &RouteTableRangeParam{}
 		case "route-table-ranges":
