@@ -661,11 +661,26 @@ blocks:
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF UT tests on Ubuntu 25.04"
+  - name: "Felix: Arbitrary Stub"
     run:
       when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
       - Prerequisites
+    task:
+      prologue:
+        commands:
+          - "true"
+      jobs:
+        - name: No-op
+          commands:
+            - "true"
+      epilogue:
+        - "true"
+  - name: "Felix: BPF UT tests on Ubuntu 25.04"
+    run:
+      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    dependencies:
+      - "Felix: Arbitrary Stub"
     task:
       prologue:
         commands:
