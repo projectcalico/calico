@@ -37,15 +37,9 @@ if [ -n "${IPAM_TEST_POOL_SUBNET}" ]; then
   echo "IPAM_TEST_POOL_SUBNET=$IPAM_TEST_POOL_SUBNET"
 fi
 
-if [ "${ENABLE_DSR}" == "true" ]; then
-  echo "[INFO] Enabling DSR"
-  KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl set env -n kube-system ds/calico-node FELIX_BPFExternalServiceMode="DSR"
-fi
-
 if [ "${FAILSAFE_443}" == "true" ]; then
   KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl patch felixconfiguration default --type=merge -p '{"spec":{"failsafeOutboundHostPorts": [{"protocol": "udp", "port":53},{"protocol": "udp", "port":67},{"protocol": "tcp", "port":179},{"protocol": "tcp", "port":2379},{"protocol": "tcp", "port":2380},{"protocol": "tcp", "port":5473},{"protocol": "tcp", "port":443},{"protocol": "tcp", "port":6666},{"protocol": "tcp", "port":6667}]}}'
 fi
-
 
 # Perform the operator migration following the instructions here:
 # https://projectcalico.docs.tigera.io/maintenance/operator-migration

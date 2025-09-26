@@ -20,7 +20,7 @@ global_job_config:
   epilogue:
     always:
       commands:
-        - ./.semaphore/end-to-end/scripts/global_epilogue.sh
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
   secrets:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
@@ -33,6 +33,10 @@ global_job_config:
       value: "test.yml"
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/calico/"
 
 blocks:
   - name: calico tests
@@ -43,7 +47,7 @@ blocks:
           execution_time_limit:
             hours: 4
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values: ["gcp-kubeadm"]

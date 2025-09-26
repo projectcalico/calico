@@ -20,7 +20,7 @@ global_job_config:
   epilogue:
     always:
       commands:
-        - ./.semaphore/end-to-end/scripts/global_epilogue.sh
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
   secrets:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
@@ -29,7 +29,7 @@ global_job_config:
       value: k8s-e2e
     - name: PRODUCT
       value: calico
-    - name: RELEASE_STREAM   # in this context, this is the version to upgrade from
+    - name: RELEASE_STREAM # in this context, this is the version to upgrade from
       value: v3.29
     - name: USE_HASH_RELEASE
       value: "false"
@@ -47,8 +47,10 @@ global_job_config:
     # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)
-    - name: BANZAI_CORE_BRANCH
-      value: lwr-retry-calicoctl-install
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/calico/"
 
 blocks:
   - name: calico tests
@@ -59,7 +61,7 @@ blocks:
           execution_time_limit:
             hours: 4
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
               value: azr-aks
@@ -79,7 +81,7 @@ blocks:
           execution_time_limit:
             hours: 4
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
               value: aws-eks
@@ -100,7 +102,7 @@ blocks:
           execution_time_limit:
             hours: 4
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values: ["aws-kubeadm"]
@@ -115,7 +117,7 @@ blocks:
           execution_time_limit:
             hours: 4
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values: ["gcp-kubeadm"]
@@ -130,7 +132,7 @@ blocks:
           execution_time_limit:
             hours: 4
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
               value: aws-openshift
@@ -146,7 +148,7 @@ blocks:
           execution_time_limit:
             hours: 4
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
               value: gcp-rke2

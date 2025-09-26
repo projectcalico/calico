@@ -1,0 +1,517 @@
+version: v1.0
+
+name: banzai-calico patch verification
+
+agent:
+  machine:
+    type: c1-standard-1
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    # The intent here is to run a representative set of tests that cover the main functionality of Calico
+    # Using tests that usually pass.
+    # So we're running the Conformance tests, some RBAC tests, and some Observe tests.
+    # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
+    - name: K8S_E2E_FLAGS
+      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)
+    - name: K8S_VERSION
+      value: "stable-3"
+    - name: FUNCTIONAL_AREA
+      value: "patch-verification.yml"
+    - name: IPV4_POD_CIDR
+      value: "192.168.0.0/16"
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/calico/"
+
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force
+
+blocks:
+  # The intent of this file is to provide scattergun coverage across many dimensions, so that we can
+  # run this against proposed patch releases and have reasonable confidence that they aren't going to regress things.
+  #
+  # Dimensions considered here:
+  #   install type: manifest/operator/helmerator
+  #   CNIs: awscni/azurecni/flannel/calicocni
+  #   interop with k8s versions: stable/stable-3
+  #   cpu arch: amd64/arm64
+  #   dataplane: iptables/nftables/bpf/windows
+  #   ipfamily: ipv4/dual-stack/ipv6
+  #   platforms: EKS/AKS/OpenShift/kubeadm/RKE2 crossed with versions
+  #   datastore: etcd/kdd
+  #   windows versions: 1809/2022/other
+  #   windows container runtime: containerd/docker
+  #   features:  alp/wireguard/autohep/private clusters/windows/bpf lb interop/bpf DSR/nodelocal dns
+  #   encapsulation: vxlan/ipip/none
+  #   node OS: ubuntu2204/ubuntu2404/amazonlinux2023/amazonlinux2/rhel10/RHCOS
+  #   migrations: flannel/canal/manifest
+  #   kubeproxy mode: iptables/ipvs/nftables/none
+  #   benchmarks?
+  #   upgrades?
+
+  # So the runs we need:
+
+  # manifest, flannel migrated to calico, stable, amd64, iptables, dualstack, aws-kubeadm, vxlan, kdd, ubuntu2204, iptables-kube-proxy
+  # manifest, canal, stable, amd64, iptables, ipv4, gcp-kubeadm, kdd, ubuntu2204, iptables-kube-proxy
+  # manifest, canal migrated to calico, stable, amd64, iptables, ipv4, gcp-kubeadm, kdd, ubuntu2204, iptables-kube-proxy
+  # manifest, calico, stable, amd64, iptables, ipv4, gcp-kubeadm, etcd, ubuntu2404, ipip encap, ipvs-kube-proxy
+  # manifest migrated to operator, calico, stable, amd64, iptables, ipv4, gcp-kubeadm, kdd, ubuntu2404, ipip encap, nftables-kube-proxy
+
+  # operator, azurecni, stable-1, amd64, bpf, ipv4, AKS, kdd, wireguard, ubuntu?, no-kube-proxy, private-cluster, autohep
+  # helmerator, calicocni, stable-1, amd64, iptables, ipv6, kind, kdd, n/a, no-kube-proxy, autohep
+  # operator, calicocni, 4.18, amd64, bpf, ipv4, openshift, RHCOS, kdd, n/a, no-kube-proxy, autohep
+  # helmerator, calicocni, stable-3, arm64, bpf, ipv4, EKS, kdd, wireguard, amazonlinux2023, no-kube-proxy, nodelocaldns, [bpf lb interop, bpf DSR]
+  # operator, awscni, stable-1, amd64, bpf, ipv4, EKS, kdd, amazonlinux2, no-kube-proxy,
+  # helmerator, calicocni, stable, amd64, bpf, ipv4, aws-kubeadm, kdd, windows 2022, containerd, ubuntu2404, autohep, vxlan
+  # operator, calicocni, stable-3, amd64, iptables, ipv4, aws-kubeadm, kdd, windows 1809, docker, ubuntu2204, autohep, none encap, nftables-kube-proxy
+  # operator, calicocni, stable-1, amd64, bpf, ipv4, gcp-rke2, kdd, ubuntu2204, autohep, vxlan encap, nodelocaldns
+
+  # The above runs attempt to cover all the dimensions we identified above, taking into the account the constraints on the combinations.
+
+  - name: "KinD tests"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      jobs:
+        # helmerator, calicocni, stable-1, amd64, bpf, ipv6, kind, kdd, n/a, no-kube-proxy, autohep
+        - name: "IPv6"
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: CNI_PLUGIN
+              value: "Calico"
+            - name: K8S_VERSION
+              value: "stable-1"
+            - name: PROVISIONER
+              value: "local-kind"
+            - name: DATAPLANE
+              value: CalicoIptables
+            - name: IP_FAMILY
+              value: ipv6
+            - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+              value: --env IP_FAMILY
+            - name: IPV6_POD_CIDR
+              value: "fd00:10:244::/56"
+            - name: IPV4_POD_CIDR
+              value: ""
+            - name: INSTALLER
+              value: "helmerator"
+            - name: ENABLE_AUTO_HEP # autohep
+              value: "true"
+
+  - name: "Manifests"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: c1-standard-1
+          os_image: ubuntu2204
+      jobs:
+        # manifest, flannel migrated to calico, stable-1, amd64, iptables, dualstack, local-kind, vxlan, kdd, iptables-kube-proxy
+        # BUT couldn't get Flannel to work with ipv6 in KinD - something about the way KinD sets up the cluster
+        - name: "Flannel migration"
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ./scripts/body_flannel-migration.sh
+          env_vars:
+            - name: DOWNLEVEL_MANIFEST
+              value: "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
+            - name: K8S_VERSION
+              value: "stable"
+            - name: AWS_NODE_INSTANCE_TYPE
+              value: t3.large
+            - name: CLUSTER_IMAGE
+              value: "jammy-22.04"
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: DATAPLANE
+              value: CalicoIptables
+            - name: IP_FAMILY
+              value: ipv4
+              # value: dual
+            - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+              value: --env IP_FAMILY # --feature-gates=dualstack=true
+            # - name: NAT_OUTGOING_V6
+            #   value: "Enabled"
+            - name: NAT_OUTGOING
+              value: "Enabled"
+            # - name: ENCAPSULATION_TYPE_V6
+            #   value: "VXLAN"
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            # - name: IPV6_POD_CIDR
+            #   value: "fd00:10:244::/56"
+            - name: IPV4_POD_CIDR
+              value: "192.168.0.0/16"
+            - name: MIGRATION_MANIFEST
+              value: "manifests/flannel-migration/migration-job.yaml"
+            - name: CALICO_MANIFEST
+              value: "manifests/flannel-migration/calico.yaml"
+            - name: INSTALLER
+              value: "manual"
+
+        # manifest, canal, stable, amd64, iptables, ipv4, gcp-kubeadm, kdd, ubuntu2204, iptables-kube-proxy
+        - name: "Canal"
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: MANIFEST_FILE
+              value: "canal.yaml"
+            - name: K8S_VERSION
+              value: "stable"
+            - name: GOOGLE_MACHINE_TYPE
+              value: "e2-standard-2"
+            - name: CLUSTER_IMAGE
+              value: "ubuntu-2204-lts"
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
+            - name: DATAPLANE
+              value: CalicoIptables
+            - name: IP_FAMILY
+              value: ipv4
+            - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+              value: --env IP_FAMILY
+            - name: NAT_OUTGOING
+              value: "Enabled"
+            - name: INSTALLER
+              value: "manual"
+
+        # manifest, canal migrated to calico, stable, amd64, iptables, ipv4, gcp-kubeadm, kdd, ubuntu2204, iptables-kube-proxy
+        - name: "Canal migration"
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ./scripts/body_flannel-migration.sh
+          env_vars:
+            - name: DOWNLEVEL_MANIFEST
+              value: "https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml"
+            - name: K8S_VERSION
+              value: "stable"
+            - name: GOOGLE_MACHINE_TYPE
+              value: "e2-standard-2"
+            - name: CLUSTER_IMAGE
+              value: "ubuntu-2204-lts"
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
+            - name: DATAPLANE
+              value: CalicoIptables
+            - name: IP_FAMILY
+              value: ipv4
+            - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+              value: --env IP_FAMILY
+            - name: MIGRATION_MANIFEST
+              value: "manifests/flannel-migration/migration-job.yaml"
+            - name: CALICO_MANIFEST
+              value: "manifests/flannel-migration/calico.yaml"
+            - name: INSTALLER
+              value: "manual"
+        # manifest, calico, stable, amd64, iptables, ipv4, gcp-kubeadm, etcd, ubuntu2404, ipip encap, ipvs-kube-proxy
+        - name: "Calico etcd"
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: MANIFEST_FILE
+              value: "calico-etcd.yaml"
+            - name: INSTALL_ETCD_POD
+              value: "true"
+            - name: K8S_VERSION
+              value: "stable"
+            - name: GOOGLE_MACHINE_TYPE
+              value: "e2-standard-2"
+            - name: CLUSTER_IMAGE
+              value: "ubuntu-2404-lts-amd64"
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
+            - name: ENCAPSULATION_TYPE
+              value: "IPIP"
+            - name: DATAPLANE
+              value: CalicoIptables
+            - name: IP_FAMILY
+              value: ipv4
+            - name: KUBE_PROXY_MODE
+              value: ipvs
+            - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+              value: --env IP_FAMILY
+            - name: NAT_OUTGOING
+              value: "Enabled"
+            - name: INSTALLER
+              value: "manual"
+
+        # manifest migrated to operator, calico, stable, amd64, iptables, ipv4, gcp-kubeadm, kdd, ubuntu2404, ipip encap, nftables-kube-proxy
+        - name: operator migration
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: MANIFEST_FILE
+              value: "calico.yaml"
+            - name: K8S_VERSION
+              value: "stable"
+            - name: GOOGLE_MACHINE_TYPE
+              value: "e2-standard-2"
+            - name: CLUSTER_IMAGE
+              value: "ubuntu-2404-lts-amd64"
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
+            - name: ENCAPSULATION_TYPE
+              value: "IPIP"
+            - name: DATAPLANE
+              value: CalicoNftables
+            - name: IP_FAMILY
+              value: ipv4
+            - name: KUBE_PROXY_MODE
+              value: nftables
+            - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+              value: --env IP_FAMILY
+            - name: NAT_OUTGOING
+              value: "Enabled"
+            - name: INSTALLER
+              value: "manual"
+            - name: OPERATOR_MIGRATE
+              value: "true"
+
+  - name: "Operator/Helmerator"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: c1-standard-1
+          os_image: ubuntu2204
+      jobs:
+        # operator, azurecni, stable-1, amd64, bpf, ipv4, AKS, kdd, wireguard, ubuntu?, no-kube-proxy, private-cluster, autohep
+        - name: AKS w AKS CNI + Overlay
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: NETWORK_PLUGIN_MODE
+              value: "overlay"
+            - name: CNI_PLUGIN
+              value: "AzureVNET"
+            - name: IPV4_POD_CIDR
+              value: "10.244.0.0/16"
+            - name: INSTALLER
+              value: "operator"
+            # - name: CLUSTER_MODE
+            #   value: "private"    # I couldn't get this to provision, so I've skipped this for now
+            - name: PROVISIONER
+              value: "azr-aks"
+            - name: K8S_VERSION
+              value: "stable-1"
+            - name: AZ_CREATE_MODE
+              value: AKS
+            - name: K8S_VERSION
+              value: "stable-1"
+            - name: IP_FAMILY
+              value: ipv4
+
+        # operator, calicocni, 4.18, amd64, bpf, ipv4, openshift, RHCOS, kdd, n/a, no-kube-proxy, autohep
+        - name: Openshift OCP
+          execution_time_limit:
+            hours: 6
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: OPENSHIFT_VERSION
+              value: "4.18.17"
+            - name: PROVISIONER
+              value: aws-openshift
+            - name: INSTALLER
+              value: operator
+            - name: DATAPLANE
+              value: "CalicoBPF"
+            - name: IP_FAMILY
+              value: ipv4
+
+        # helmerator, calicocni, stable-3, arm64, bpf, ipv4, EKS, kdd, wireguard, amazonlinux2023, no-kube-proxy, nodelocaldns, [bpf lb interop, bpf DSR]
+        - name: EKS w/ calico CNI
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            - name: PROVISIONER
+              value: "aws-eks"
+            - name: EKS_AMI_FAMILY
+              value: AmazonLinux2023
+            - name: INSTALLER
+              value: "helmerator"
+            - name: IP_FAMILY
+              value: "ipv4"
+            - name: IPV4_POD_CIDR
+              value: "172.16.0.0/16"
+            - name: IPAM_TEST_POOL_SUBNET
+              value: "10.0.0.0/29"
+            - name: K8S_VERSION
+              value: "stable-3"
+            - name: CNI_PLUGIN
+              value: "Calico"
+            - name: AWS_NODE_INSTANCE_TYPE
+              value: "t3.large" # amd64 instance type
+              # value: "t4g.large"  # ARM64 instance type  (hacked out for now to see if the operator problem applies to all archs)
+            - name: DATAPLANE
+              value: CalicoBPF
+            - name: ENABLE_WIREGUARD
+              value: "true"
+            - name: ENABLE_NODE_LOCAL_DNS_CACHE # nodelocaldns
+              value: "true"
+              # The extra skip here is for the upstream DNS tests.  They require access to pods via the control plane, and with Calico CNI, the EKS control plane can't access pods.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.........DNS)
+
+        # operator, awscni, stable-1, amd64, bpf, ipv4, EKS, kdd, amazonlinux2, no-kube-proxy,
+        - name: EKS w/ aws CNI
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-eks"
+            - name: INSTALLER
+              value: "operator"
+            - name: IP_FAMILY
+              value: "ipv4"
+            - name: IPV4_POD_CIDR
+              value: "172.16.0.0/16"
+            - name: IPAM_TEST_POOL_SUBNET
+              value: "10.0.0.0/29"
+            - name: K8S_VERSION
+              value: "stable-1"
+            - name: CNI_PLUGIN
+              value: "AmazonVPC"
+            - name: AWS_K8S_CNI_VERSION
+              value: "NA"
+            - name: AWS_NODE_INSTANCE_TYPE
+              value: "t3.large" # amd64 instance type
+            - name: DATAPLANE
+              value: CalicoBPF
+
+        # helmerator, calicocni, stable, amd64, bpf, ipv4, aws-kubeadm, kdd, windows 2022, containerd, ubuntu2404, autohep, vxlan
+        - name: windows - aws-kubeadm - containerd
+          execution_time_limit:
+            hours: 5
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: INSTALLER
+              value: "helmerator"
+            - name: PROVISIONER
+              value: aws-kubeadm
+            - name: K8S_VERSION
+              value: "stable"
+            - name: DATAPLANE
+              value: CalicoBPF
+            - name: CNI_PLUGIN
+              value: "Calico"
+            - name: IP_FAMILY
+              value: ipv4
+            - name: WINDOWS_OS_VERSION
+              value: "2022"
+            - name: WINDOWS_CONTAINER_RUNTIME
+              value: "containerd:2.1.1"
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            - name: ENABLE_AUTO_HEP
+              value: "true"
+
+        # operator, calicocni, stable-3, amd64, nftables, ipv4, aws-kubeadm, kdd, windows 1809, docker, ubuntu2204, autohep, none encap, nftables-kube-proxy
+        - name: windows - aws-kubeadm - docker
+          execution_time_limit:
+            hours: 5
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: INSTALLER
+              value: "helmerator"
+            - name: PROVISIONER
+              value: aws-kubeadm
+            - name: K8S_VERSION
+              value: "stable-3"
+            - name: DATAPLANE
+              value: CalicoNftables
+            - name: CNI_PLUGIN
+              value: "Calico"
+            - name: IP_FAMILY
+              value: ipv4
+            - name: WINDOWS_OS_VERSION
+              value: "1809"
+            - name: ENCAPSULATION_TYPE
+              value: "None"
+            - name: VPC_SUBNETS
+              value: '["172.16.101.0/24"]' # single subnet because no encapsulation is being used
+            - name: ENABLE_AUTO_HEP
+              value: "true"
+            - name: KUBE_PROXY_MODE
+              value: nftables
+            - name: CLUSTER_IMAGE
+              value: "jammy-22.04"
+            - name: ENABLE_AUTO_HEP
+              value: "true"
+
+          # operator, calicocni, stable-1, amd64, bpf, ipv4, gcp-rke2, kdd, ubuntu2204, autohep, vxlan encap, nodelocaldns
+        - name: RKE2
+          execution_time_limit:
+            hours: 5
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: INSTALLER
+              value: "operator"
+            - name: PROVISIONER
+              value: gcp-rke2
+            - name: K8S_VERSION
+              value: "stable-1"
+            - name: DATAPLANE
+              value: CalicoBPF
+            - name: CNI_PLUGIN
+              value: "Calico"
+            - name: IP_FAMILY
+              value: ipv4
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            - name: CLUSTER_IMAGE
+              value: "ubuntu-2204-lts"
+            - name: ENABLE_AUTO_HEP
+              value: "true"
+            # - name: ENABLE_NODE_LOCAL_DNS_CACHE # nodelocaldns - doesn't appear to work with RKE2
+            #   value: "true"
