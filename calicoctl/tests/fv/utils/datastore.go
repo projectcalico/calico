@@ -15,7 +15,9 @@
 package utils
 
 import (
+	"os"
 	"testing"
+
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 
@@ -52,6 +54,7 @@ func RunDatastoreTest(t *testing.T, testFn func(t *testing.T, kdd bool, client c
 		config := apiconfig.NewCalicoAPIConfig()
 		config.Spec.DatastoreType = apiconfig.Kubernetes
 		config.Spec.Kubeconfig = "/go/src/github.com/projectcalico/calico/calicoctl/test-data/kubeconfig.yaml"
+		config.Spec.CalicoAPIGroup = os.Getenv("CALICO_API_GROUP")
 		client, err := clientv3.New(*config)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {

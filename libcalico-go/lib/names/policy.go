@@ -207,7 +207,9 @@ func TierOrDefault(tier string) string {
 // - <namespace>/staged:<tier>.<name>      => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
 // - staged:<tier>.<name>                  => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
 // - <namespace>/staged:knp.default.<name> => Name=staged:knp.default.<name>, Namespace=<name>, Tier=default
-func DeconstructPolicyName(name string) (string, string, string, error) {
+//
+// The given tier is used if the name does not imply a tier, otherwise the tier implied by the name is returned.
+func DeconstructPolicyName(name, tier string) (string, string, string, error) {
 	var namespace string
 
 	// Split the name to extract the namespace.
@@ -219,7 +221,7 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 		namespace = parts[0]
 		name = parts[1]
 	default:
-		return "", "", "", fmt.Errorf("could not parse policy %s", name)
+		return "", "", "", fmt.Errorf("could not parse policy %s (wrong # parts)", name)
 	}
 
 	// Remove the staged prefix if present so we can extract the tier.
@@ -244,8 +246,16 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 
 	// This is a non-kubernetes policy, so extract the tier name from the policy name.
 	if parts = strings.SplitN(name, ".", 2); len(parts) == 2 {
-		return namespace, parts[0], stagedPrefix + parts[1], nil
+		if parts[0] == tier {
+			// This is an old-style name with the tier prefix.
+			// TODO: This isn't really fully correct, since "new" style policies could be named this way! If they are,
+			// we should treat them as new-style, but we have no way of knowing that here.
+			return namespace, tier, stagedPrefix + parts[1], nil
+		}
+		// This is a new-style name without the tier prefix, so use the given tier, and return the name as-is.
+		return namespace, tier, stagedPrefix + name, nil
 	}
 
-	return "", "", "", fmt.Errorf("could not parse policy %s", name)
+	// This is a new-style name without the tier prefix, so use the given tier, and return the name as-is.
+	return namespace, tier, stagedPrefix + name, nil
 }

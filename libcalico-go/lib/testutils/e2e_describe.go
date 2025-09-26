@@ -65,7 +65,8 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 					Spec: apiconfig.CalicoAPIConfigSpec{
 						DatastoreType: apiconfig.Kubernetes,
 						KubeConfig: apiconfig.KubeConfig{
-							Kubeconfig: kubeconfig,
+							Kubeconfig:     kubeconfig,
+							CalicoAPIGroup: os.Getenv("CALICO_API_GROUP"),
 						},
 					},
 				})
