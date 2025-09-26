@@ -403,6 +403,7 @@ func StartDataplaneDriver(
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
 			BPFAttachType:                      configParams.GetBPFAttachType(),
 			BPFProfiling:                       configParams.BPFProfiling,
+			BPFFlags:                           configParams.BPFFlags,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 
 			KubeClientSet: k8sClientSet,
