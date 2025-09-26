@@ -430,6 +430,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.BPFLogLevel = "off"
 	}
 
+	// Log BPF flags for debugging
+	if len(config.BPFFlags) > 0 {
+		log.WithField("bpfFlags", config.BPFFlags).Info("BPF flags configured")
+	}
+
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
