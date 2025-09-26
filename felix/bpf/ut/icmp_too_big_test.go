@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	conntrack4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
@@ -269,7 +269,7 @@ func TestICMPTooBigNATNodePort(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd | conntrack3.FlagClusterExternal))
+	Expect(v.Flags()).To(Equal(conntrack4.FlagNATNPFwd | conntrack4.FlagClusterExternal))
 
 	_, _, _, _, pkt2Bytes, err := testPacket(4, nil, &origIPHeader, udpDefault, make([]byte, 1600))
 	Expect(err).NotTo(HaveOccurred())

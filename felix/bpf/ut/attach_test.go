@@ -1196,6 +1196,8 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 			deleteLink(workload0_new)
 		}
 	}()
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0_new.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
