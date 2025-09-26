@@ -225,6 +225,7 @@ enum calico_skb_mark {
 static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 	// Need volatile here because we don't use rc after this assembler fragment.
 	// The BPF assembler rejects an input-only operand so we make r0 an in/out operand.
+	bpf_get_smp_processor_id(); //TODO: this fixes a 'R0 !read_ok' verifier error by calling the cheapest helper function
 	asm volatile ( \
 		"exit" \
 		: "=r0" (rc) /*out*/ \
