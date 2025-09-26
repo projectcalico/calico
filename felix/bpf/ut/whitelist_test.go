@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
@@ -137,7 +137,7 @@ func TestSkipIngressRedirect(t *testing.T) {
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
 		// Not approved by WEP yet
 		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
-		Expect(ctr.Flags() & v3.FlagNoRedirPeer).To(Equal(v3.FlagNoRedirPeer))
+		Expect(ctr.Flags() & v4.FlagNoRedirPeer).To(Equal(v4.FlagNoRedirPeer))
 	})
 
 	// Reset route map and add reverse route from local workload with skip ingress redirect flag
@@ -169,7 +169,7 @@ func TestSkipIngressRedirect(t *testing.T) {
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
 		// Not approved by dst WEP yet
 		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
-		Expect(ctr.Flags() & v3.FlagNoRedirPeer).To(Equal(v3.FlagNoRedirPeer))
+		Expect(ctr.Flags() & v4.FlagNoRedirPeer).To(Equal(v4.FlagNoRedirPeer))
 	})
 }
 

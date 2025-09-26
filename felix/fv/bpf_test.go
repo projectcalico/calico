@@ -1350,6 +1350,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							log.WithError(err).WithField("resp", resp).Warn("HTTP GET failed")
 							return -1
 						}
+						defer resp.Body.Close()
 						return resp.StatusCode
 					}, "3s", "500ms").Should(BeGood())
 				}
