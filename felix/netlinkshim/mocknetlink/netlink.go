@@ -957,6 +957,27 @@ func addNeighs(family int, neighMap map[NeighKey]*netlink.Neigh, neighs []netlin
 	}
 }
 
+// RemoveNeighs allows test code to remove neighbours from the mock dataplane
+// without going through the netlink API.
+func (d *MockNetlinkDataplane) RemoveNeighs(family int, neighs ...netlink.Neigh) {
+	err := d.checkNeighFamily(family)
+	if err != nil {
+		panic(err)
+	}
+	if d.NeighsByFamily[family] == nil {
+		return
+	}
+	removeNeighs(family, d.NeighsByFamily[family], neighs)
+}
+
+func removeNeighs(family int, neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
+	for _, neigh := range neighs {
+		neigh := neigh
+		nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
+		delete(neighMap, nk)
+	}
+}
+
 // NeighKeyForFamily returns an appropriate NeighKey for the given family.
 // Different families are keyed in different ways by the kernel.  ARP/NDP
 // entries are keyed on IP address, but FDB entries are keyed on MAC address
