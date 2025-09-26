@@ -503,6 +503,9 @@ func (e Value) String() string {
 		if flags&FlagNoDSR != 0 {
 			flagsStr += " no-dsr"
 		}
+		if flags&FlagNoRedirPeer != 0 {
+			flagsStr += " no-redir-peer"
+		}
 	}
 
 	ret := fmt.Sprintf("Entry{Type:%d, LastSeen:%d, Flags:%s ",
