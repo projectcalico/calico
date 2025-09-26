@@ -39,6 +39,7 @@ func UsingV3CRDs(cfg *apiconfig.CalicoAPIConfigSpec) bool {
 		logrus.WithField("apiGroup", cfg.CalicoAPIGroup).Info("Using explicitly configured Calico API group")
 		return cfg.CalicoAPIGroup == apiv3.GroupVersionCurrent
 	}
+	logrus.Info("No explicit Calico API group configured, attempting to auto-discover")
 
 	// Try to perform auto-discovery of the API group, by contacting the API server.
 	// If we can't contact the API server, we default to not using v3 CRDs.
@@ -56,14 +57,17 @@ func UsingV3CRDs(cfg *apiconfig.CalicoAPIConfigSpec) bool {
 	v3present, v1present := false, false
 	for _, g := range apiGroups.Groups {
 		if g.Name == apiv3.GroupName {
-			logrus.WithField("apiGroup", g.Name).Info("Discovered v3 Calico API group")
 			v3present = true
 		}
 		if g.Name == v1scheme.GroupName {
-			logrus.WithField("apiGroup", g.Name).Info("Discovered v1 Calico API group")
 			v1present = true
 		}
 	}
+
+	logrus.WithFields(log.Fields{
+		"v3present": v3present,
+		"v1present": v1present,
+	}).Info("Auto-discovered Calico API groups")
 
 	// If v3 is present but v1 is not, this means we should use the projectcalico.org/v3 API group.
 	// If both are present, it likely means that crd.projectcalico.org/v1 is present and used to implement the

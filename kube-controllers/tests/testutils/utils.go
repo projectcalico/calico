@@ -132,11 +132,14 @@ func RunEtcd() *containers.Container {
 }
 
 func GetCalicoClient(dsType apiconfig.DatastoreType, etcdIP, kcfg string) client.Interface {
-	cfg := apiconfig.NewCalicoAPIConfig()
+	// Load the config from the environment.
+	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Override with the given config.
 	cfg.Spec.DatastoreType = dsType
 	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
 	cfg.Spec.Kubeconfig = kcfg
-	cfg.Spec.CalicoAPIGroup = os.Getenv("CALICO_API_GROUP")
 
 	client, err := client.New(*cfg)
 	Expect(err).NotTo(HaveOccurred())
@@ -144,12 +147,15 @@ func GetCalicoClient(dsType apiconfig.DatastoreType, etcdIP, kcfg string) client
 }
 
 func GetBackendClient(etcdIP string) api.Client {
-	cfg := apiconfig.NewCalicoAPIConfig()
+	// Load the config from the environment.
+	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Override with the given config.
 	cfg.Spec.DatastoreType = apiconfig.EtcdV3
 	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
-	cfg.Spec.CalicoAPIGroup = os.Getenv("CALICO_API_GROUP")
-	be, err := backend.NewClient(*cfg)
 
+	be, err := backend.NewClient(*cfg)
 	Expect(err).NotTo(HaveOccurred())
 	return be
 }

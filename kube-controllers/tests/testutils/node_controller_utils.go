@@ -51,7 +51,6 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
-		"-e", fmt.Sprintf("CALICO_API_GROUP=%s", os.Getenv("CALICO_API_GROUP")),
 		"-e", "SYNC_NODE_LABELS=true",
 		"-e", "LOG_LEVEL=debug",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
@@ -75,7 +74,6 @@ func RunKubeControllerWithEnv(datastoreType apiconfig.DatastoreType, etcdIP, kco
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
-		"-e", fmt.Sprintf("CALICO_API_GROUP=%s", os.Getenv("CALICO_API_GROUP")),
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
 		os.Getenv("CONTAINER_NAME"))
 
