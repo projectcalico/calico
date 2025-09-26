@@ -24,3 +24,11 @@ const (
 	// and Init image when testing.
 	InitRegistry = "{{.Registry}}/"
 )
+
+// Default image paths for Calico and Tigera components.
+const (
+	CalicoImagePath = "{{.ProductImagePath}}/"
+	TigeraImagePath = "tigera/"
+	// Image path for operator init image.
+	InitImagePath = "{{.ImagePath}}/"
+)
