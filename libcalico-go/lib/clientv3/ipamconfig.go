@@ -18,96 +18,101 @@ import (
 	"context"
 	"errors"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
-// IPAMConfigInterface has methods to work with IPAMConfig resources.
-type IPAMConfigInterface interface {
-	Create(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error)
-	Update(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error)
-	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.IPAMConfig, error)
-	Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.IPAMConfig, error)
-	List(ctx context.Context, opts options.ListOptions) (*libapiv3.IPAMConfigList, error)
+const (
+	GlobalIPAMConfigName = "default"
+)
+
+// IPAMConfigurationInterface has methods to work with IPAMConfiguration resources.
+type IPAMConfigurationInterface interface {
+	Create(ctx context.Context, res *v3.IPAMConfiguration, opts options.SetOptions) (*v3.IPAMConfiguration, error)
+	Update(ctx context.Context, res *v3.IPAMConfiguration, opts options.SetOptions) (*v3.IPAMConfiguration, error)
+	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*v3.IPAMConfiguration, error)
+	Get(ctx context.Context, name string, opts options.GetOptions) (*v3.IPAMConfiguration, error)
+	List(ctx context.Context, opts options.ListOptions) (*v3.IPAMConfigurationList, error)
 	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 }
 
-// IPAMConfigs implements IPAMConfigInterface
-type IPAMConfigs struct {
+// IPAMConfigurations implements IPAMConfigurationInterface
+type IPAMConfigurations struct {
 	client client
 }
 
-func validateMetadata(res *libapiv3.IPAMConfig) error {
-	if res.ObjectMeta.GetName() != libapiv3.GlobalIPAMConfigName {
-		return errors.New("Cannot create a IPAMConfiguration resource with a name other than \"default\"")
+func validateMetadata(res *v3.IPAMConfiguration) error {
+	if res.ObjectMeta.GetName() != GlobalIPAMConfigName {
+		return errors.New("Cannot create an IPAMConfiguration resource with a name other than \"default\"")
 	}
 	return nil
 }
 
-// Create takes the representation of a IPAMConfig and creates it.  Returns the stored
-// representation of the IPAMConfig, and an error, if there is any.
-func (r IPAMConfigs) Create(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error) {
+// Create takes the representation of a IPAMConfiguration and creates it.  Returns the stored
+// representation of the IPAMConfiguration, and an error, if there is any.
+func (r IPAMConfigurations) Create(ctx context.Context, res *v3.IPAMConfiguration, opts options.SetOptions) (*v3.IPAMConfiguration, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	} else if err := validateMetadata(res); err != nil {
 		return nil, err
 	}
 
-	out, err := r.client.resources.Create(ctx, opts, libapiv3.KindIPAMConfig, res)
+	out, err := r.client.resources.Create(ctx, opts, v3.KindIPAMConfiguration, res)
 	if out != nil {
-		return out.(*libapiv3.IPAMConfig), err
+		return out.(*v3.IPAMConfiguration), err
 	}
 	return nil, err
 }
 
-// Update takes the representation of a IPAMConfig and updates it. Returns the stored
-// representation of the IPAMConfig, and an error, if there is any.
-func (r IPAMConfigs) Update(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error) {
+// Update takes the representation of a IPAMConfiguration and updates it. Returns the stored
+// representation of the IPAMConfiguration, and an error, if there is any.
+func (r IPAMConfigurations) Update(ctx context.Context, res *v3.IPAMConfiguration, opts options.SetOptions) (*v3.IPAMConfiguration, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	} else if err := validateMetadata(res); err != nil {
 		return nil, err
 	}
 
-	out, err := r.client.resources.Update(ctx, opts, libapiv3.KindIPAMConfig, res)
+	out, err := r.client.resources.Update(ctx, opts, v3.KindIPAMConfiguration, res)
 	if out != nil {
-		return out.(*libapiv3.IPAMConfig), err
+		return out.(*v3.IPAMConfiguration), err
 	}
 	return nil, err
 }
 
-// Delete takes name of the IPAMConfig and deletes it. Returns an error if one occurs.
-func (r IPAMConfigs) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.IPAMConfig, error) {
-	out, err := r.client.resources.Delete(ctx, opts, libapiv3.KindIPAMConfig, noNamespace, name)
+// Delete takes name of the IPAMConfiguration and deletes it. Returns an error if one occurs.
+func (r IPAMConfigurations) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*v3.IPAMConfiguration, error) {
+	out, err := r.client.resources.Delete(ctx, opts, v3.KindIPAMConfiguration, noNamespace, name)
 	if out != nil {
-		return out.(*libapiv3.IPAMConfig), err
+		return out.(*v3.IPAMConfiguration), err
 	}
 	return nil, err
 }
 
-// Get takes name of the IPAMConfig, and returns the corresponding IPAMConfig object,
+// Get takes name of the IPAMConfiguration, and returns the corresponding IPAMConfiguration object,
 // and an error if there is any.
-func (r IPAMConfigs) Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.IPAMConfig, error) {
-	out, err := r.client.resources.Get(ctx, opts, libapiv3.KindIPAMConfig, noNamespace, name)
+func (r IPAMConfigurations) Get(ctx context.Context, name string, opts options.GetOptions) (*v3.IPAMConfiguration, error) {
+	out, err := r.client.resources.Get(ctx, opts, v3.KindIPAMConfiguration, noNamespace, name)
 	if out != nil {
-		return out.(*libapiv3.IPAMConfig), err
+		return out.(*v3.IPAMConfiguration), err
 	}
 	return nil, err
 }
 
-// List returns the list of IPAMConfig objects that match the supplied options.
-func (r IPAMConfigs) List(ctx context.Context, opts options.ListOptions) (*libapiv3.IPAMConfigList, error) {
-	res := &libapiv3.IPAMConfigList{}
-	if err := r.client.resources.List(ctx, opts, libapiv3.KindIPAMConfig, libapiv3.KindIPAMConfigList, res); err != nil {
+// List returns the list of IPAMConfiguration objects that match the supplied options.
+func (r IPAMConfigurations) List(ctx context.Context, opts options.ListOptions) (*v3.IPAMConfigurationList, error) {
+	res := &v3.IPAMConfigurationList{}
+	if err := r.client.resources.List(ctx, opts, v3.KindIPAMConfiguration, v3.KindIPAMConfigurationList, res); err != nil {
 		return nil, err
 	}
 	return res, nil
 }
 
-// Watch returns a watch.Interface that watches the IPAMConfigs that match the
+// Watch returns a watch.Interface that watches the IPAMConfigurations that match the
 // supplied options.
-func (r IPAMConfigs) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, libapiv3.KindIPAMConfig, nil)
+func (r IPAMConfigurations) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
+	return r.client.resources.Watch(ctx, opts, v3.KindIPAMConfiguration, nil)
 }
