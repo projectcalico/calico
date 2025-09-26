@@ -219,7 +219,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make image-windows
   - name: "cni-plugin: Windows"
     run:
-      when: "change_in(['/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/cni-plugin/**','/crypto/pkg/tls/*.go','/hack/test/certs/','/lib.Makefile','/lib/std/uniquelabels/*.go','/lib/std/uniquestr/*.go','/libcalico-go/lib/apiconfig/*.go','/libcalico-go/lib/apis/v3/*.go','/libcalico-go/lib/backend/*.go','/libcalico-go/lib/backend/api/*.go','/libcalico-go/lib/backend/encap/*.go','/libcalico-go/lib/backend/etcdv3/*.go','/libcalico-go/lib/backend/k8s/*.go','/libcalico-go/lib/backend/k8s/conversion/*.go','/libcalico-go/lib/backend/k8s/resources/*.go','/libcalico-go/lib/backend/k8s/scheme/*.go','/libcalico-go/lib/backend/model/*.go','/libcalico-go/lib/clientv3/*.go','/libcalico-go/lib/errors/*.go','/libcalico-go/lib/hash/*.go','/libcalico-go/lib/ipam/*.go','/libcalico-go/lib/json/*.go','/libcalico-go/lib/logutils/*.go','/libcalico-go/lib/names/*.go','/libcalico-go/lib/namespace/*.go','/libcalico-go/lib/net/*.go','/libcalico-go/lib/netlinkutils/*.go','/libcalico-go/lib/options/*.go','/libcalico-go/lib/resources/*.go','/libcalico-go/lib/selector/*.go','/libcalico-go/lib/selector/parser/*.go','/libcalico-go/lib/selector/tokenizer/*.go','/libcalico-go/lib/set/*.go','/libcalico-go/lib/validator/v3/*.go','/libcalico-go/lib/watch/*.go','/libcalico-go/lib/winutils/*.go','/metadata.mk','/node/pkg/cni/*.go','/pkg/buildinfo/*.go'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go','/node/**/*_test.go','/pkg/**/*_test.go']})"
+      when: "false or change_in(['/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/cni-plugin/**','/crypto/pkg/tls/*.go','/hack/test/certs/','/lib.Makefile','/lib/std/uniquelabels/*.go','/lib/std/uniquestr/*.go','/libcalico-go/lib/apiconfig/*.go','/libcalico-go/lib/apis/v3/*.go','/libcalico-go/lib/backend/*.go','/libcalico-go/lib/backend/api/*.go','/libcalico-go/lib/backend/encap/*.go','/libcalico-go/lib/backend/etcdv3/*.go','/libcalico-go/lib/backend/k8s/*.go','/libcalico-go/lib/backend/k8s/conversion/*.go','/libcalico-go/lib/backend/k8s/resources/*.go','/libcalico-go/lib/backend/k8s/scheme/*.go','/libcalico-go/lib/backend/model/*.go','/libcalico-go/lib/clientv3/*.go','/libcalico-go/lib/errors/*.go','/libcalico-go/lib/hash/*.go','/libcalico-go/lib/ipam/*.go','/libcalico-go/lib/json/*.go','/libcalico-go/lib/logutils/*.go','/libcalico-go/lib/names/*.go','/libcalico-go/lib/namespace/*.go','/libcalico-go/lib/net/*.go','/libcalico-go/lib/netlinkutils/*.go','/libcalico-go/lib/options/*.go','/libcalico-go/lib/resources/*.go','/libcalico-go/lib/selector/*.go','/libcalico-go/lib/selector/parser/*.go','/libcalico-go/lib/selector/tokenizer/*.go','/libcalico-go/lib/set/*.go','/libcalico-go/lib/validator/v3/*.go','/libcalico-go/lib/watch/*.go','/libcalico-go/lib/winutils/*.go','/metadata.mk','/node/pkg/cni/*.go','/pkg/buildinfo/*.go','/process','process/**/*Dockerfile*','process/Makefile','process/deps.txt'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go','/node/**/*_test.go','/pkg/**/*_test.go']})"
     dependencies:
       - Prerequisites
     task:
@@ -235,9 +235,7 @@ blocks:
           - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
           - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-cni-plugin/report
           - export LOGS_DIR=~/fv.log
-          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}
-          - export SUFFIX=${CLUSTER_NAME}
+          - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
           - cd cni-plugin
           - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
       epilogue:
@@ -259,14 +257,16 @@ blocks:
             minutes: 60
           commands:
             - export BACKEND=overlay
-            - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+            - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
         - name: Containerd - Windows FV - l2bridge
           execution_time_limit:
             minutes: 60
           commands:
             - export BACKEND=l2bridge
-            - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+            - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
   - name: confd
     run:
