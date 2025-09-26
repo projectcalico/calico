@@ -283,7 +283,9 @@
         commands:
           - "true"
     epilogue:
-      - "true"
+      always:
+        commands:
+          - "true"
 - name: "Felix: BPF UT tests on Ubuntu 25.04"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
