@@ -52,7 +52,8 @@ var _ = Describe("Node status FV tests", func() {
 	cfg.Spec = apiconfig.CalicoAPIConfigSpec{
 		DatastoreType: apiconfig.Kubernetes,
 		KubeConfig: apiconfig.KubeConfig{
-			Kubeconfig: os.Getenv("KUBECONFIG"),
+			Kubeconfig:     os.Getenv("KUBECONFIG"),
+			CalicoAPIGroup: os.Getenv("CALICO_API_GROUP"),
 		},
 	}
 
@@ -143,7 +144,6 @@ var _ = Describe("Node status FV tests", func() {
 	}
 
 	Context("Mock bird connections", func() {
-
 		BeforeEach(func() {
 			err = be.Clean()
 			Expect(err).ToNot(HaveOccurred())
@@ -279,7 +279,6 @@ var _ = Describe("Node status FV tests", func() {
 			Eventually(func() int {
 				return r.GetNumberOfReporters()
 			}, 2*time.Second, 500*time.Millisecond).Should(Equal(0))
-
 		})
 	})
 
