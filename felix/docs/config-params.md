@@ -1781,6 +1781,19 @@ node; this requires a permissive L2 network.
 | Default value (YAML) | `Tunnel` |
 | Notes | Required. | 
 
+### `BPFFlags` (config file) / `bpfFlags` (YAML)
+
+A comma-separated list of BPF flag values, each consisting of lowercase letters, dash, and numbers.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFFlags` |
+| Encoding (env var/config file) | Comma-delimited list of strings, each matching the regex <code>^[a-z0-9-]+$</code> |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `bpfFlags` (YAML) `BPFFlags` (Go API) |
+| `FelixConfiguration` schema | List of strings: <code>["&lt;string&gt;", ...]</code>. |
+| Default value (YAML) | none |
+
 ### `BPFForceTrackPacketsFromIfaces` (config file) / `bpfForceTrackPacketsFromIfaces` (YAML)
 
 In BPF mode, forces traffic from these interfaces

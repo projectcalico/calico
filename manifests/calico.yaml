@@ -983,6 +983,13 @@ spec:
                     node; this requires a permissive L2 network.  [Default: Tunnel]
                   pattern: ^(?i)(Tunnel|DSR)?$
                   type: string
+                bpfFlags:
+                  description:
+                    BPFFlags is a comma-separated list of BPF flag values,
+                    each consisting of lowercase letters, dash, and numbers
+                  items:
+                    type: string
+                  type: array
                 bpfForceTrackPacketsFromIfaces:
                   description: |-
                     BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic from these interfaces

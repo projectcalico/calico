@@ -928,6 +928,9 @@ type FelixConfigurationSpec struct {
 	//+kubebuilder:validation:Enum=Enabled;Disabled
 	BPFProfiling string `json:"bpfProfiling,omitempty"`
 
+	// BPFFlags is a comma-separated list of BPF flag values, each consisting of lowercase letters, dash, and numbers
+	BPFFlags *[]string `json:"bpfFlags,omitempty"`
+
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
