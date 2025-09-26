@@ -22,6 +22,10 @@ global_job_config:
     - name: iss-image-scanning
     # Secrets for Slack notifications
     - name: releasebot-slack
+    # OIDC-related credentials
+    - name: oidc-credentials-gcp-tigera-dev-ci
+    - name: oidc-credentials-gcp-hashrelease-publish
+
   prologue:
     commands:
       - chmod 0600 ~/.keys/*
@@ -33,14 +37,20 @@ global_job_config:
       - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
       - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       # Credentials for accessing gcloud
-      - gcloud auth activate-service-account --key-file=${HASHRELEASE_SERVER_CREDENTIALS}
-      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
-      - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-      # Manually log in to GCR until we can test the gcr credentials helper
-      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://gcr.io
-      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
-      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
-      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
+      - echo "${SEMAPHORE_OIDC_TOKEN}" > "${SEMAPHORE_TOKEN_FILE_PATH}"
+      - |
+        gcloud iam workload-identity-pools create-cred-config \
+            $OIDC_GCP_POOL_URI \
+            --quiet \
+            --service-account="${OIDC_SERVICE_ACCOUNT_EMAIL}" \
+            --service-account-token-lifetime-seconds="${OIDC_SERVICE_ACCOUNT_LIFETIME}" \
+            --output-file="${GOOGLE_APPLICATION_CREDENTIALS_PATH}" \
+            --credential-source-file="${SEMAPHORE_TOKEN_FILE_PATH}" \
+            --credential-source-type="text"
+      - gcloud auth login --quiet --cred-file="${GOOGLE_APPLICATION_CREDENTIALS_PATH}"
+      - gcloud config set project --quiet "${OIDC_GCP_PROJECT_NAME}"
+      # Configure docker to use the gcloud credential helper
+      - gcloud auth configure-docker --quiet
 
 blocks:
   - name: Publish hashrelease
