@@ -194,7 +194,7 @@
     # when: "${CHANGE_IN(felix,typha)}"
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
-    - Prerequisites
+    - "Felix: Arbitrary Stub"
   task:
     prologue:
       commands:
@@ -233,7 +233,7 @@
     #when: "${CHANGE_IN(felix,typha)}"
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
-    - Prerequisites
+    - "Felix: Arbitrary Stub"
   task:
     prologue:
       commands:

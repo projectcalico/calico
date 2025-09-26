@@ -586,7 +586,7 @@ blocks:
       # when: "true"
       when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
-      - Prerequisites
+      - "Felix: Arbitrary Stub"
     task:
       prologue:
         commands:
@@ -625,7 +625,7 @@ blocks:
       #when: "true"
       when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
-      - Prerequisites
+      - "Felix: Arbitrary Stub"
     task:
       prologue:
         commands:
