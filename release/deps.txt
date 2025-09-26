@@ -2,7 +2,7 @@
 This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
-go 1.24.6
+go 1.25.1
 cel.dev/expr v0.20.0
 cloud.google.com/go v0.120.0
 cloud.google.com/go/auth v0.16.1
@@ -24,7 +24,6 @@ github.com/cncf/xds/go v0.0.0-20250121191232-2f005788dc42
 github.com/containerd/errdefs v1.0.0
 github.com/containerd/errdefs/pkg v0.3.0
 github.com/containerd/stargz-snapshotter/estargz v0.16.3
-github.com/coreos/go-semver v0.3.1
 github.com/distribution/reference v0.6.0
 github.com/docker/cli v27.5.0+incompatible
 github.com/docker/distribution v2.8.3+incompatible
