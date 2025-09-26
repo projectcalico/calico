@@ -84,7 +84,7 @@ type KubeConfig struct {
 	// K8sCurrentContext provides a context override for kubeconfig.
 	K8sCurrentContext string `json:"k8sCurrentContext" envconfig:"K8S_CURRENT_CONTEXT" default:""`
 
-	CalicoAPIGroup string `json:"calicoAPIGroup" envconfig:"CALICO_API_GROUP" default:"crd.projectcalico.org/v1"`
+	CalicoAPIGroup string `json:"calicoAPIGroup" envconfig:"CALICO_API_GROUP"`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the

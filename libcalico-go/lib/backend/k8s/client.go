@@ -71,41 +71,6 @@ type KubeClient struct {
 	clientsByListType map[reflect.Type]resources.K8sResourceClient
 }
 
-func UsingV3CRDs(cfg *apiconfig.CalicoAPIConfigSpec) bool {
-	if cfg.DatastoreType == apiconfig.Kubernetes && cfg.CalicoAPIGroup == apiv3.GroupVersionCurrent {
-		// We've been explicitly configured to use v3 CRDs.
-		return true
-	}
-
-	// Try to perform auto-discovery of the API group, by contacting the API server.
-	// If we can't contact the API server, we default to not using v3 CRDs.
-	_, cs, err := CreateKubernetesClientset(cfg)
-	if err != nil {
-		log.WithError(err).Warn("Failed to create clientset, cannot autodiscover API group, defaulting to crd.projectcalico.org/v1")
-		return false
-	}
-	apiGroups, err := cs.Discovery().ServerGroups()
-	if err != nil {
-		log.WithError(err).Warn("Failed to query API server for supported API groups, cannot autodiscover API group, defaulting to crd.projectcalico.org/v1")
-		return false
-	}
-
-	v3present, v1present := false, false
-	for _, g := range apiGroups.Groups {
-		if g.Name == apiv3.GroupName {
-			v3present = true
-		}
-		if g.Name == v1scheme.GroupName {
-			v1present = true
-		}
-	}
-
-	// If v3 is present but v1 is not, this means we should use the projectcalico.org/v3 API group.
-	// If both are present, it likely means that crd.projectcalico.org/v1 is present and used to implement the
-	// projectcalico.org/v3 API group via the API server, so we should use crd.projectcalico.org/v1 directly.
-	return v3present && !v1present
-}
-
 func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	// Whether or not we are writing to projectcalico.org/v3 resources. If true, we're running in
 	// "no API server" mode where the v3 resources are backed by CRDs directly. Otherwise, we're running
