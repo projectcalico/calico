@@ -169,6 +169,13 @@ var (
 		EnvVars: publishImagesFlag.EnvVars,
 		Value:   false,
 	}
+
+	archiveImagesFlag = &cli.BoolFlag{
+		Name:    "archive-images",
+		Usage:   "Archive images in the release tarball",
+		EnvVars: []string{"ARCHIVE_IMAGES"},
+		Value:   true,
+	}
 )
 
 // Operator flags are flags used to interact with Tigera operator repository
