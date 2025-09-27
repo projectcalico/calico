@@ -171,16 +171,31 @@ var _ = infrastructure.DatastoreDescribe(
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes, apiconfig.EtcdV3},
 	func(getInfra infrastructure.InfraFactory) {
 		type testConf struct {
-			Encap string
+			Encap       string
+			BPFLogLevel string
 		}
 		for _, testConfig := range []testConf{
-			{Encap: "none"},
-			{Encap: "ipip"},
-			{Encap: "vxlan"},
+			{
+				Encap:       "none",
+				BPFLogLevel: "Debug",
+			},
+			{
+				Encap:       "none",
+				BPFLogLevel: "Info",
+			},
+			{
+				Encap:       "ipip",
+				BPFLogLevel: "Debug",
+			},
+			{
+				Encap:       "vxlan",
+				BPFLogLevel: "Debug",
+			},
 		} {
 			encap := testConfig.Encap
+			bpfLogLevel := testConfig.BPFLogLevel
 
-			Describe(fmt.Sprintf("encap='%s'", encap), func() {
+			Describe(fmt.Sprintf("encap='%s', bpfLogLevel='%s'", encap, bpfLogLevel), func() {
 				var (
 					infra        infrastructure.DatastoreInfra
 					tc           infrastructure.TopologyContainers
@@ -193,6 +208,10 @@ var _ = infrastructure.DatastoreDescribe(
 				BeforeEach(func() {
 					infra = getInfra()
 					topt = infrastructure.DefaultTopologyOptions()
+
+					if bpfLogLevel != "Debug" && !BPFMode() {
+						Skip("Skipping QoS control tests with non-debug bpfLogLevel on iptables/nftables mode (for deduplication).")
+					}
 
 					switch encap {
 					case "none":
@@ -218,6 +237,9 @@ var _ = infrastructure.DatastoreDescribe(
 					topt.UseIPPools = true
 					topt.DelayFelixStart = true
 					topt.TriggerDelayedFelixStart = true
+					if BPFMode() {
+						topt.ExtraEnvVars["FELIX_BPFLogLevel"] = bpfLogLevel
+					}
 
 					if _, ok := infra.(*infrastructure.EtcdDatastoreInfra); ok && BPFMode() {
 						Skip("Skipping QoS control tests on etcd datastore and BPF mode.")

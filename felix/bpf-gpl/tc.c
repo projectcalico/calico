@@ -87,7 +87,7 @@ int calico_tc_main(struct __sk_buff *skb)
 			/* If we are on vxlan and we do not have the key set, we cannot short-cirquit */
 			!(CALI_F_VXLAN &&
 			 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
-		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
+		if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
 			DECLARE_TC_CTX(_ctx,
 				.skb = skb,
@@ -101,11 +101,6 @@ int calico_tc_main(struct __sk_buff *skb)
 
 			CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
 			parse_packet_ip(ctx);
-			if (CALI_F_WEP && qos_enforce_packet_rate(ctx) == TC_ACT_SHOT) {
-				CALI_DEBUG("Final result=DENY (%d). Dropped due to packet rate QoS.", CALI_REASON_DROPPED_BY_QOS);
-				deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
-				return TC_ACT_SHOT;
-			}
 			CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
 		}
 		return TC_ACT_UNSPEC;
@@ -165,6 +160,13 @@ int calico_tc_main(struct __sk_buff *skb)
 	CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
 
 	counter_inc(ctx, COUNTER_TOTAL_PACKETS);
+
+	if (CALI_F_WEP && qos_enforce_packet_rate(ctx) == TC_ACT_SHOT) {
+		CALI_DEBUG("Drop packet due to QoS packet rate limit.");
+		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
+		ctx->fwd.res = TC_ACT_SHOT;
+		goto finalize;
+	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO || PROFILING) {
 		ctx->state->prog_start_time = bpf_ktime_get_ns();
@@ -1344,10 +1346,6 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 #endif
 
-	if (CALI_F_WEP && qos_enforce_packet_rate(ctx) == TC_ACT_SHOT) {
-		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
-		goto deny;
-	}
 	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && qos_dscp_needs_update(ctx) && !qos_dscp_set(ctx)) {
 		goto deny;
 	}

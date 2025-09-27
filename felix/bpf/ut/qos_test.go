@@ -57,6 +57,8 @@ func TestQoSPacketRate(t *testing.T) {
 	defer resetRTMap(rtMap)
 
 	// Populate QoS map
+	resetQoSMap(qosMap)
+	defer resetQoSMap(qosMap)
 	key1 := qos.NewKey(uint32(ifIndex), 1)
 	key2 := qos.NewKey(uint32(ifIndex), 0)
 	value := qos.NewValue(1, 1, -1, 0)

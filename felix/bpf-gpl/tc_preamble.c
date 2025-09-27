@@ -55,6 +55,13 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 	/* We do the copy once here so keep the program smaller */
 	globals->data = *globals_data;
 
+	// Clear bypass mark from packet if ingress packet rate QoS is configured
+	if (globals->data.flags & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED) {
+		if (skb->mark == CALI_SKB_MARK_BYPASS) {
+			skb->mark = CALI_SKB_MARK_SEEN;
+		}
+	}
+
 #if EMIT_LOGS
 	CALI_LOG("tc_preamble iface %s", globals->data.iface_name);
 #endif

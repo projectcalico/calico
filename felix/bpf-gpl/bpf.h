@@ -223,14 +223,14 @@ enum calico_skb_mark {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winvalid-noreturn"
 static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
-	// Need volatile here because we don't use rc after this assembler fragment.
-	// The BPF assembler rejects an input-only operand so we make r0 an in/out operand.
-	asm volatile ( \
-		"exit" \
-		: "=r0" (rc) /*out*/ \
-		: "0" (rc) /*in*/ \
-		: /*clobber*/ \
+	asm volatile (
+		"r0 = %[rc_arg]\n" //Explicitly move the value of 'rc' into register R0 to prohibit excessive compiler optimization and make the verifier happy
+		"exit"
+		: // No output operands
+		: [rc_arg] "r" (rc) // Input: rc to a general purpose register
+		: "r0" // Clobber list: R0 is modified by the assembly code
 	);
+	__builtin_unreachable(); // Tell the compiler that this function never returns
 }
 #pragma clang diagnostic pop
 
