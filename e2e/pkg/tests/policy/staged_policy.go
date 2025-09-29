@@ -22,54 +22,9 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
+	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
-
-type StagedPolicyKind string
-
-type PolicyTrace struct {
-	Enforced []*PolicyHit `json:"enforced"`
-	Pending  []*PolicyHit `json:"pending"`
-}
-
-type PolicyHit struct {
-	Kind        string     `json:"kind"`
-	Name        string     `json:"name"`
-	Namespace   string     `json:"namespace"`
-	Tier        string     `json:"tier"`
-	Action      string     `json:"action"`
-	PolicyIndex int64      `json:"policy_index"`
-	RuleIndex   int64      `json:"rule_index"`
-	Trigger     *PolicyHit `json:"trigger"`
-}
-
-type Response struct {
-	Items []*FlowResponse `json:"items"`
-	Total *Total          `json:"total"`
-}
-
-type Total struct {
-	TotalPages int `json:"totalPages"`
-}
-
-type FlowResponse struct {
-	StartTime       time.Time   `json:"start_time"`
-	EndTime         time.Time   `json:"end_time"`
-	Action          string      `json:"action"`
-	SourceName      string      `json:"source_name"`
-	SourceNamespace string      `json:"source_namespace"`
-	SourceLabels    string      `json:"source_labels"`
-	DestName        string      `json:"dest_name"`
-	DestNamespace   string      `json:"dest_namespace"`
-	DestLabels      string      `json:"dest_labels"`
-	Protocol        string      `json:"protocol"`
-	DestPort        int64       `json:"dest_port"`
-	Reporter        string      `json:"reporter"`
-	Policies        PolicyTrace `json:"policies"`
-	PacketsIn       int64       `json:"packets_in"`
-	PacketsOut      int64       `json:"packets_out"`
-	BytesIn         int64       `json:"bytes_in"`
-	BytesOut        int64       `json:"bytes_out"`
-}
 
 // DESCRIPTION: This test verifies the staged network policy feature.
 //
@@ -168,8 +123,8 @@ var _ = describe.CalicoDescribe(
 						url,
 						stagedKubernetesNetworkPolicy.Name,
 						"default",
-						v3.KindStagedKubernetesNetworkPolicy,
-						"ActionUnspecified",
+						whiskerv1.PolicyKindStagedKubernetesNetworkPolicy,
+						whiskerv1.Action(0), // Action is empty for StagedKubernetesNetworkPolicy
 					)
 				})
 
@@ -205,8 +160,8 @@ var _ = describe.CalicoDescribe(
 						url,
 						stagedPolicyName,
 						stagedPolicy.Spec.Tier,
-						v3.KindStagedNetworkPolicy,
-						string(v3.Deny),
+						whiskerv1.PolicyKindStagedNetworkPolicy,
+						whiskerv1.ActionDeny,
 					)
 				})
 
@@ -241,8 +196,8 @@ var _ = describe.CalicoDescribe(
 						url,
 						stagedGlobalNetworkPolicyName,
 						stagedGlobalNetworkPolicy.Spec.Tier,
-						v3.KindStagedGlobalNetworkPolicy,
-						string(v3.Deny),
+						whiskerv1.PolicyKindStagedGlobalNetworkPolicy,
+						whiskerv1.ActionDeny,
 					)
 				})
 
@@ -391,7 +346,7 @@ func verifyPortForward(url string) {
 }
 
 func verifyFlowCount(url string, count int) {
-	var response Response
+	var response apiutil.List[whiskerv1.FlowResponse]
 
 	Eventually(func() error {
 		resp, err := http.Get(url)
@@ -417,8 +372,8 @@ func verifyFlowCount(url string, count int) {
 	}, 90*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
 }
 
-func verifyFlowContainsStagedPolicy(url, name, tier, kind, action string) {
-	var response Response
+func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.PolicyKind, action whiskerv1.Action) {
+	var response apiutil.List[whiskerv1.FlowResponse]
 	containsStagedPolicy := false
 
 	resp, err := http.Get(url)
