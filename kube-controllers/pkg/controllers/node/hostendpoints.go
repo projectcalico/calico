@@ -335,7 +335,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 			}
 
 			if template.InterfacePattern == "" {
-				// When interfacePatter is empty this template will always generate at most one AutoHostEndpoint
+				// When interfacePattern is empty this template will always generate at most one AutoHostEndpoint
 				hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, "")
 				if err != nil {
 					logrus.WithError(err).Error("failed to generate host endpoint name")
