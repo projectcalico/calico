@@ -206,21 +206,22 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut      uint16 = (1 << 0)
-	FlagNATFwdDsr   uint16 = (1 << 1)
-	FlagNATNPFwd    uint16 = (1 << 2)
-	FlagSkipFIB     uint16 = (1 << 3)
-	FlagReserved4   uint16 = (1 << 4)
-	FlagReserved5   uint16 = (1 << 5)
-	FlagExtLocal    uint16 = (1 << 6)
-	FlagViaNATIf    uint16 = (1 << 7)
-	FlagSrcDstBA    uint16 = (1 << 8)
-	FlagHostPSNAT   uint16 = (1 << 9)
-	FlagSvcSelf     uint16 = (1 << 10)
-	FlagNPLoop      uint16 = (1 << 11)
-	FlagNPRemote    uint16 = (1 << 12)
-	FlagNoDSR       uint16 = (1 << 13)
-	FlagNoRedirPeer uint16 = (1 << 14)
+	FlagNATOut          uint16 = (1 << 0)
+	FlagNATFwdDsr       uint16 = (1 << 1)
+	FlagNATNPFwd        uint16 = (1 << 2)
+	FlagSkipFIB         uint16 = (1 << 3)
+	FlagReserved4       uint16 = (1 << 4)
+	FlagReserved5       uint16 = (1 << 5)
+	FlagExtLocal        uint16 = (1 << 6)
+	FlagViaNATIf        uint16 = (1 << 7)
+	FlagSrcDstBA        uint16 = (1 << 8)
+	FlagHostPSNAT       uint16 = (1 << 9)
+	FlagSvcSelf         uint16 = (1 << 10)
+	FlagNPLoop          uint16 = (1 << 11)
+	FlagNPRemote        uint16 = (1 << 12)
+	FlagNoDSR           uint16 = (1 << 13)
+	FlagNoRedirPeer     uint16 = (1 << 14)
+	FlagClusterExternal uint16 = (1 << 15)
 )
 
 func (e Value) ReverseNATKey() KeyInterface {
@@ -499,8 +500,11 @@ func (e Value) String() string {
 			flagsStr += " np-remote"
 		}
 
-		if flags&FlagNPRemote != 0 {
+		if flags&FlagNoDSR != 0 {
 			flagsStr += " no-dsr"
+		}
+		if flags&FlagNoRedirPeer != 0 {
+			flagsStr += " no-redir-peer"
 		}
 	}
 
