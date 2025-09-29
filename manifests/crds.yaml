@@ -2637,6 +2637,7 @@ spec:
                     type: string
                   type: array
                 assignmentMode:
+                  default: Automatic
                   enum:
                     - Automatic
                     - Manual
