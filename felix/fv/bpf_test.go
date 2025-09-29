@@ -2112,12 +2112,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					It("should maintain connections to a ClusterIP across loadbalancer failure using maglev", func() {
+					testFailover := func(serviceIP string) {
 						By("making a connection over a loadbalancer and then switching off routing to it")
 						pc := &PersistentConnection{
 							Runtime:             externalClient,
 							RuntimeName:         externalClient.Name,
-							IP:                  clusterIP,
+							IP:                  serviceIP,
 							Port:                int(port),
 							SourcePort:          50000,
 							Protocol:            testOpts.protocol,
@@ -2134,17 +2134,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						ctVal, ctExists := checkConntrackExistsAnyDirection(tc.Felixes[1], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "No conntrack (src->dst / dst->src) existed for the connection on Felix[1]")
-						Expect(ctVal.OrigIP().String()).To(Equal(clusterIP), "Unexpected OrigIP on loadbalancer Felix service connection")
+						Expect(ctVal.OrigIP().String()).To(Equal(serviceIP), "Unexpected OrigIP on loadbalancer Felix service connection")
 
 						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeFalse(), "Conntrack existed for the connection on Felix[2] before Felix[2] should have handled the connection: %v", ctVal)
 
-						// Traffic is flowing over LB 1. Change ExtClient's clusterIP route to go via LB 2.
+						// Traffic is flowing over LB 1. Change ExtClient's serviceIP route to go via LB 2.
 						ipRoute := []string{"ip"}
 						if testOpts.ipv6 {
 							ipRoute = append(ipRoute, "-6")
 						}
-						ipRouteReplace := append(ipRoute, "route", "replace", clusterIP, "via", felixIP(2))
+						ipRouteReplace := append(ipRoute, "route", "replace", serviceIP, "via", felixIP(2))
 						externalClient.Exec(ipRouteReplace...)
 
 						lastPongCount := pc.PongCount()
@@ -2157,54 +2157,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[0], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on backing Felix[0].")
 						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
-					})
+					}
 
-					It("should maintain connections to an external IP across loadbalancer failure using maglev", func() {
-						By("making a connection over a loadbalancer and then switching off routing to it")
-						pc := &PersistentConnection{
-							Runtime:             externalClient,
-							RuntimeName:         externalClient.Name,
-							IP:                  externalIP,
-							Port:                int(port),
-							SourcePort:          50000,
-							Protocol:            testOpts.protocol,
-							MonitorConnectivity: true,
-						}
-						err := pc.Start()
-						Expect(err).NotTo(HaveOccurred())
-						defer pc.Stop()
-
-						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", 0), "Connection failed")
-
-						backingPodIPAddr := net.ParseIP(w[0][0].IP)
-						clientIPAddr := net.ParseIP(containerIP(externalClient))
-
-						ctVal, ctExists := checkConntrackExistsAnyDirection(tc.Felixes[1], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
-						Expect(ctExists).To(BeTrue(), "No conntrack (src->dst / dst->src) existed for the connection on Felix[1]")
-						Expect(ctVal.OrigIP().String()).To(Equal(externalIP), "Unexpected OrigIP on loadbalancer Felix service connection")
-
-						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
-						Expect(ctExists).To(BeFalse(), "Conntrack existed for the connection on Felix[2] before Felix[2] should have handled the connection: %v", ctVal)
-
-						// Traffic is flowing over LB 1. Change ExtClient's clusterIP route to go via LB 2.
-						ipRoute := []string{"ip"}
-						if testOpts.ipv6 {
-							ipRoute = append(ipRoute, "-6")
-						}
-						ipRouteReplace := append(ipRoute, "route", "replace", externalIP, "via", felixIP(2))
-						externalClient.Exec(ipRouteReplace...)
-
-						lastPongCount := pc.PongCount()
-						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
-
-						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
-						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on Felix[2] for failover traffic. Did the failover actually occur?")
-
-						// Check the backing node updated conntrack tun_ip to the new loadbalancer node.
-						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[0], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
-						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on backing Felix[0].")
-						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
-					})
+					It("should maintain connections to a cluster IP across loadbalancer failure using maglev", func(){testFailover(clusterIP)})
+					It("should maintain connections to an external IP across loadbalancer failure using maglev", func(){testFailover(externalIP)})
 				})
 
 				Describe("Test Load balancer service with external IP", func() {
