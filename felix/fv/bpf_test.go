@@ -2086,7 +2086,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						log.Info("Waiting for Maglev map to converge...")
 						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[1]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up")
-						Expect(maglevMapAnySearch(testMaglevMapKey, family, tc.Felixes[1]).Addr().String()).Should(Or(Equal(w[0][0].IP), Equal(w[0][1])))
+						Expect(maglevMapAnySearch(testMaglevMapKey, family, tc.Felixes[1]).Addr().String()).Should(Equal(w[0][0].IP))
 
 						// Configure routes on external client and Felix nodes.
 						// Use Felix[1] as a middlebox initially.
