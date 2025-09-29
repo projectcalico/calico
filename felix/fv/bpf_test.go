@@ -1941,7 +1941,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						familyInt = 6
 					}
 
-					newConntrackKey := func(family string, srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16) conntrack.KeyInterface {
+					newConntrackKey := func(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, family string) conntrack.KeyInterface {
 						var key conntrack.KeyInterface
 						// cmp := bytes.Compare(srcIP, dstIP)
 						// srcLTDst := cmp < 0 || (cmp == 0 && srcPort < dstPort)
@@ -1960,7 +1960,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						return key
 					}
-					checkConntrackExists := func(ctK conntrack.KeyInterface, f *infrastructure.Felix) (conntrack.ValueInterface, bool) {
+					checkConntrackExists := func(f *infrastructure.Felix, ctK conntrack.KeyInterface) (conntrack.ValueInterface, bool) {
 						ctMap := dumpCTMapsAny(familyInt, f)
 						log.Infof("Dumping CT map for felix %s, searching for key: %s", f.Name, ctK.String())
 
@@ -1970,13 +1970,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						v, ok := ctMap[ctK]
 						return v, ok
 					}
-					checkConntrackExistsAnyDirection := func(family string, ipA net.IP, portA uint16, ipB net.IP, portB uint16, f *infrastructure.Felix) (conntrack.ValueInterface, bool) {
-						keyAB := newConntrackKey(family, ipA, portA, ipB, portB)
-						keyBA := newConntrackKey(family, ipB, portB, ipA, portA)
+					checkConntrackExistsAnyDirection := func(f *infrastructure.Felix, ipA net.IP, portA uint16, ipB net.IP, portB uint16, family string) (conntrack.ValueInterface, bool) {
+						keyAB := newConntrackKey(ipA, portA, ipB, portB, family)
+						keyBA := newConntrackKey(ipB, portB, ipA, portA, family)
 
-						val, exists := checkConntrackExists(keyAB, f)
+						val, exists := checkConntrackExists(f, keyAB)
 						if !exists {
-							val, exists = checkConntrackExists(keyBA, f)
+							val, exists = checkConntrackExists(f, keyBA)
 						}
 
 						return val, exists
@@ -2132,11 +2132,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						backingPodIPAddr := net.ParseIP(w[0][0].IP)
 						clientIPAddr := net.ParseIP(containerIP(externalClient))
 
-						ctVal, ctExists := checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[1])
+						ctVal, ctExists := checkConntrackExistsAnyDirection(tc.Felixes[1], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "No conntrack (src->dst / dst->src) existed for the connection on Felix[1]")
 						Expect(ctVal.OrigIP().String()).To(Equal(clusterIP), "Unexpected OrigIP on loadbalancer Felix service connection")
 
-						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[2])
+						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeFalse(), "Conntrack existed for the connection on Felix[2] before Felix[2] should have handled the connection: %v", ctVal)
 
 						// Traffic is flowing over LB 1. Change ExtClient's clusterIP route to go via LB 2.
@@ -2150,11 +2150,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						lastPongCount := pc.PongCount()
 						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
 
-						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[2])
+						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on Felix[2] for failover traffic. Did the failover actually occur?")
 
 						// Check the backing node updated conntrack tun_ip to the new loadbalancer node.
-						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[0])
+						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[0], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on backing Felix[0].")
 						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
 					})
@@ -2179,11 +2179,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						backingPodIPAddr := net.ParseIP(w[0][0].IP)
 						clientIPAddr := net.ParseIP(containerIP(externalClient))
 
-						ctVal, ctExists := checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[1])
+						ctVal, ctExists := checkConntrackExistsAnyDirection(tc.Felixes[1], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "No conntrack (src->dst / dst->src) existed for the connection on Felix[1]")
 						Expect(ctVal.OrigIP().String()).To(Equal(externalIP), "Unexpected OrigIP on loadbalancer Felix service connection")
 
-						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[2])
+						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeFalse(), "Conntrack existed for the connection on Felix[2] before Felix[2] should have handled the connection: %v", ctVal)
 
 						// Traffic is flowing over LB 1. Change ExtClient's clusterIP route to go via LB 2.
@@ -2197,11 +2197,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						lastPongCount := pc.PongCount()
 						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
 
-						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[2])
+						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on Felix[2] for failover traffic. Did the failover actually occur?")
 
 						// Check the backing node updated conntrack tun_ip to the new loadbalancer node.
-						ctVal, ctExists = checkConntrackExistsAnyDirection(family, clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), tc.Felixes[0])
+						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[0], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on backing Felix[0].")
 						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
 					})
