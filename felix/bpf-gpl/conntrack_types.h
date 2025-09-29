@@ -84,11 +84,11 @@ struct calico_ct_value {
 			struct calico_ct_leg b_to_a; // 48
 
 			// CALI_CT_TYPE_NAT_REV
-			ipv46_addr_t tun_ip;                      // 72
-			ipv46_addr_t orig_ip;                     // 76
+			ipv46_addr_t tun_ip;               // 72
+			ipv46_addr_t orig_ip;              // 76
 			__u16 orig_port;                   // 80
 			__u16 orig_sport;                  // 82
-			ipv46_addr_t orig_sip;                    // 84
+			ipv46_addr_t orig_sip;             // 84
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.

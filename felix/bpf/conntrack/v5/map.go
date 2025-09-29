@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v4
+package v5
 
 import (
 	"encoding/binary"
@@ -90,45 +90,35 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 }
 
 // struct calico_ct_value {
-//  __u64 rst_seen;
-//  __u64 last_seen; // 8
-//  __u8 type;     // 16
-//  __u8 flags;     // 17
-//
-//  // Important to use explicit padding, otherwise the compiler can decide
-//  // not to zero the padding bytes, which upsets the verifier.  Worse than
-//  // that, debug logging often prevents such optimisation resulting in
-//  // failures when debug logging is compiled out only :-).
-//  __u8 pad0[5];
-//  __u8 flags2;
-//  union {
-//    // CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
-//    struct {
-//      struct calico_ct_leg a_to_b; // 24
-//      struct calico_ct_leg b_to_a; // 36
-//
-//      // CALI_CT_TYPE_NAT_REV only.
-//      __u32 orig_dst;                    // 48
-//      __u16 orig_port;                   // 52
-//      __u8 pad1[2];                      // 54
-//      __u32 tun_ip;                      // 56
-//      __u32 pad3;                        // 60
-//    };
-//
-//    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
-//    struct {
-//      struct calico_ct_key nat_rev_key;  // 24
-//      __u8 pad2[8];
-//    };
-//  };
+// 	__u64 rst_seen;
+// 	__u64 last_seen;	// 8
+// 	__u8 type;		// 16
+// 	__u8 pad0[3];		// 17
+// 	__u32 flags;		// 20 - 24
+// 	union {
+// 		struct {
+// 			struct calico_ct_leg a_to_b; // 24
+// 			struct calico_ct_leg b_to_a; // 48
+// 			ipv46_addr_t tun_ip;                     // 72
+// 			ipv46_addr_t orig_ip;                    // 76
+// 			__u16 orig_port;                   	 // 80
+// 			__u16 orig_sport;                 	 // 82
+// 			ipv46_addr_t orig_sip;                   // 84
+// 		};
+// 		struct {
+// 			struct calico_ct_key nat_rev_key;  // 24
+// 			__u16 nat_sport;
+// 			__u8 pad2[46];
+// 		};
+// 	};
+// 	/* 64bit aligned by here */
 // };
 
 const (
 	VoRSTSeen   int = 0
 	VoLastSeen  int = 8
 	VoType      int = 16
-	VoFlags     int = 17
-	VoFlags2    int = 23
+	VoFlags     int = 20
 	VoRevKey    int = 24
 	VoLegAB     int = 24
 	VoLegBA     int = 48
@@ -255,15 +245,14 @@ func (e *Value) SetNATSport(sport uint16) {
 	binary.LittleEndian.PutUint16(e[VoNATSPort:VoNATSPort+2], sport)
 }
 
-func initValue(v *Value, lastSeen time.Duration, typ uint8, flags uint16) {
+func initValue(v *Value, lastSeen time.Duration, typ uint8, flags uint32) {
 	binary.LittleEndian.PutUint64(v[VoLastSeen:VoLastSeen+8], uint64(lastSeen))
 	v[VoType] = typ
-	v[VoFlags] = byte(flags & 0xff)
-	v[VoFlags2] = byte((flags >> 8) & 0xff)
+	v[VoFlags] = byte(flags)
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
+func NewValueNormal(lastSeen time.Duration, flags uint32, legA, legB Leg) Value {
 	v := Value{}
 
 	initValue(&v, lastSeen, TypeNormal, flags)
@@ -276,7 +265,7 @@ func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value 
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value {
+func NewValueNATForward(lastSeen time.Duration, flags uint32, revKey Key) Value {
 	v := Value{}
 
 	initValue(&v, lastSeen, TypeNATForward, flags)
@@ -288,7 +277,7 @@ func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value 
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueNATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverse(lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
 	v := Value{}
 
@@ -306,7 +295,7 @@ func NewValueNATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
 }
 
 // NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
-func NewValueNATReverseSNAT(lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverseSNAT(lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) Value {
 	v := NewValueNATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 	copy(v[VoOrigSIP:VoOrigSIP+4], origIP.To4())
@@ -535,7 +524,7 @@ var MapParams = maps.MapParameters{
 	ValueSize:    ValueSize,
 	MaxEntries:   MaxEntries,
 	Name:         "cali_v4_ct",
-	Version:      4,
+	Version:      5,
 	UpdatedByBPF: true,
 }
 
