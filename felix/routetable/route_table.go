@@ -156,8 +156,8 @@ type RouteTable struct {
 	// to program for a given CIDR (i.e. the route selected after conflict
 	// resolution if there are multiple routes) and the route that's actually
 	// in the kernel.
-	kernelRoutes *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
-	pendingARPs  map[string]map[ip.Addr]net.HardwareAddr
+	kernelRoutes  *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
+	permanentARPs map[string]map[ip.Addr]net.HardwareAddr
 
 	ifaceNameToIndex      map[string]int
 	ifaceIndexToName      map[int]string
@@ -315,7 +315,7 @@ func New(
 				return a.Equals(b)
 			}),
 		),
-		pendingARPs: map[string]map[ip.Addr]net.HardwareAddr{},
+		permanentARPs: map[string]map[ip.Addr]net.HardwareAddr{},
 
 		ifaceIndexToGraceInfo: map[int]graceInfo{},
 		ifaceNameToIndex:      map[string]int{},
@@ -486,11 +486,11 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 	}
 
 	// Clean out the pending ARP list, then recalculate it below.
-	delete(r.pendingARPs, ifaceName)
+	delete(r.permanentARPs, ifaceName)
 	for cidr, target := range newTargets {
 		// addOwningIface() calls recalculateDesiredKernelRoute.
 		r.addOwningIface(routeClass, ifaceName, cidr)
-		r.updatePendingARP(ifaceName, cidr.Addr(), target.DestMAC)
+		r.updatePermanentARP(ifaceName, cidr.Addr(), target.DestMAC)
 	}
 }
 
@@ -515,7 +515,7 @@ func (r *RouteTable) RouteUpdate(routeClass RouteClass, ifaceName string, target
 	}
 	routesByCIDR[target.CIDR] = target
 	r.addOwningIface(routeClass, ifaceName, target.CIDR)
-	r.updatePendingARP(ifaceName, target.CIDR.Addr(), target.DestMAC)
+	r.updatePermanentARP(ifaceName, target.CIDR.Addr(), target.DestMAC)
 }
 
 // RouteRemove removes the route with the specified CIDR. These deltas will
@@ -532,32 +532,32 @@ func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr i
 		delete(r.ifaceToRoutes[routeClass], ifaceName)
 	}
 	r.removeOwningIface(routeClass, ifaceName, cidr)
-	r.removePendingARP(ifaceName, cidr.Addr())
+	r.removePermanentARP(ifaceName, cidr.Addr())
 }
 
-func (r *RouteTable) updatePendingARP(ifaceName string, addr ip.Addr, mac net.HardwareAddr) {
+func (r *RouteTable) updatePermanentARP(ifaceName string, addr ip.Addr, mac net.HardwareAddr) {
 	if !r.makeARPEntries {
 		return
 	}
 	if len(mac) == 0 {
-		r.removePendingARP(ifaceName, addr)
+		r.removePermanentARP(ifaceName, addr)
 		return
 	}
 	r.logCxt.Debug("Adding pending ARP entry.")
-	if r.pendingARPs[ifaceName] == nil {
-		r.pendingARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
+	if r.permanentARPs[ifaceName] == nil {
+		r.permanentARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
 	}
-	r.pendingARPs[ifaceName][addr] = mac
+	r.permanentARPs[ifaceName][addr] = mac
 }
 
-func (r *RouteTable) removePendingARP(ifaceName string, addr ip.Addr) {
+func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
 	if !r.makeARPEntries {
 		return
 	}
-	if pending, ok := r.pendingARPs[ifaceName]; ok {
-		delete(pending, addr)
-		if len(pending) == 0 {
-			delete(r.pendingARPs, ifaceName)
+	if arps, ok := r.permanentARPs[ifaceName]; ok {
+		delete(arps, addr)
+		if len(arps) == 0 {
+			delete(r.permanentARPs, ifaceName)
 		}
 	}
 }
@@ -917,7 +917,7 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 
 	if r.fullResyncNeeded {
 		// Mark to reprogram static ARP for all interfaces.
-		for ifaceName := range r.pendingARPs {
+		for ifaceName := range r.permanentARPs {
 			r.ifacesToARP.Add(ifaceName)
 		}
 
@@ -1479,7 +1479,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	})
 
 	arpErrs := map[string]error{}
-	for ifaceName, addrToMAC := range r.pendingARPs {
+	for ifaceName, addrToMAC := range r.permanentARPs {
 		if !r.ifacesToARP.Contains(ifaceName) {
 			continue
 		}
