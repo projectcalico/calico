@@ -22,8 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf/maps"
 	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 //	struct calico_ct_key {
@@ -77,7 +77,9 @@ func (k Key) String() string {
 }
 
 func (k Key) Upgrade() maps.Upgradable {
-	panic("conntrack map key already at its latest version")
+	var k5 v5.Key
+	copy(k5[:], k[:])
+	return k5
 }
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
@@ -533,17 +535,16 @@ func (e Value) Upgrade() maps.Upgradable {
 	// Padding now PREceeds the flags (as opposed to following them).
 	// Overall struct size remains the same.
 
-	
 	var val5 v5.Value
 	copy(val5[:], e[:])
 	// Zero the 3 padding bytes.
-	cpd := copy(val5[17:20], []byte{0, 0, 0})
+	cpd := copy(val5[v5.VoPadding1:VoFlags], []byte{0, 0, 0})
 	if cpd != 3 {
 		panic("Oops, Alex needs to learn how to count!")
 	}
 
 	flags5 := uint32(e.Flags())
-	binary.BigEndian.PutUint32(val5[20:25], flags5)
+	binary.BigEndian.PutUint32(val5[v5.VoFlags:v5.VoRevKey], flags5)
 
 	return val5
 }
