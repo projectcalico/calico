@@ -67,9 +67,9 @@ func (k KeyV6) String() string {
 }
 
 func (k KeyV6) Upgrade() maps.Upgradable {
-	var key6 v4.KeyV6
-	copy(key6[:], k[:])
-	return key6
+	var key4 v4.KeyV6
+	copy(key4[:], k[:])
+	return key4
 }
 
 func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) KeyV6 {
@@ -375,9 +375,9 @@ func (e ValueV6) IsForwardDSR() bool {
 }
 
 func (e ValueV6) Upgrade() maps.Upgradable {
-	var val6 v4.ValueV6
-	copy(val6[:], e[:])
-	return val6
+	var val4 v4.ValueV6
+	copy(val4[:], e[:])
+	return val4
 }
 
 var MapParamsV6 = maps.MapParameters{

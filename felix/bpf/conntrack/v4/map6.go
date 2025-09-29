@@ -66,7 +66,9 @@ func (k KeyV6) String() string {
 }
 
 func (k KeyV6) Upgrade() maps.Upgradable {
-	panic("conntrack map key already at its latest version")
+	var k5 v5.ValueV6
+	copy(k5[:], k[:])
+	return k5
 }
 
 func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) KeyV6 {
@@ -384,7 +386,7 @@ func (e ValueV6) Upgrade() maps.Upgradable {
 	}
 
 	flags5 := uint32(e.Flags())
-	binary.BigEndian.PutUint32(val5[20:25], flags5)
+	binary.BigEndian.PutUint32(val5[v5.VoFlagsV6:v5.VoRevKeyV6], flags5)
 
 	return val5
 }

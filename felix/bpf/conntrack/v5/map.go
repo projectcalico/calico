@@ -115,9 +115,10 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 // };
 
 const (
-	VoRSTSeen   int = 0
-	VoLastSeen  int = 8
-	VoType      int = 16
+	VoRSTSeen  int = 0
+	VoLastSeen int = 8
+	VoType     int = 16
+	VoPadding1  int = 17
 	VoFlags     int = 20
 	VoRevKey    int = 24
 	VoLegAB     int = 24
