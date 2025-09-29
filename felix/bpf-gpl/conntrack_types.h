@@ -118,7 +118,7 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 }
 
 #define ct_value_set_flags(v, f) do {	\
-	(v)->flags |= ((f) & 0xffff);	\
+	(v)->flags |= f;		\
 } while(0)
 
 #define ct_value_get_flags(v) ({	\
