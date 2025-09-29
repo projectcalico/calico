@@ -14,6 +14,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -161,7 +162,7 @@ var _ = describe.CalicoDescribe(
 					checker.Execute()
 				})
 
-				It("Validate name, tier, action", func() {
+				framework.ConformanceIt("Validate name, tier, action", func() {
 					verifyFlowCount(url, 2)
 					verifyFlowContainsStagedPolicy(
 						url,
@@ -197,7 +198,7 @@ var _ = describe.CalicoDescribe(
 					checker.Execute()
 				})
 
-				It("Validate name, tier, action", func() {
+				framework.ConformanceIt("Validate name, tier, action", func() {
 					verifyFlowCount(url, 2)
 
 					verifyFlowContainsStagedPolicy(
@@ -234,7 +235,7 @@ var _ = describe.CalicoDescribe(
 					checker.Execute()
 				})
 
-				It("Validate name, tier, action", func() {
+				framework.ConformanceIt("Validate name, tier, action", func() {
 					verifyFlowCount(url, 2)
 					verifyFlowContainsStagedPolicy(
 						url,
