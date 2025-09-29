@@ -74,15 +74,17 @@ const backendValueV6Size = 20
 //		__u8 pad;
 //		__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
 //	};
-const consistentHashBackendKeyV6Size = 24
+const maglevBackendKeyV6Size = 24
 
-const consistentHashBackendValueV6Size = backendValueV6Size
+const maglevBackendValueV6Size = backendValueV6Size
 
-type ConsistentHashBackendKeyV6 [consistentHashBackendKeyV6Size]byte
+type MaglevBackendKeyV6 [maglevBackendKeyV6Size]byte
 
-func NewConsistentHashBackendKeyV6(addr net.IP, port uint16, proto uint8, ordinal uint32) ConsistentHashBackendKeyV6 {
+var _ MaglevBackendKeyInterface = MaglevBackendKeyV6{}
+
+func NewMaglevBackendKeyV6(addr net.IP, port uint16, proto uint8, ordinal uint32) MaglevBackendKeyV6 {
 	// TODO ADAPT TO V6
-	var k ConsistentHashBackendKeyV6
+	var k MaglevBackendKeyV6
 	addr = addr.To16()
 	if len(addr) != 16 {
 		logrus.WithField("ip", addr).Panic("Bad IP")
@@ -97,31 +99,31 @@ func NewConsistentHashBackendKeyV6(addr net.IP, port uint16, proto uint8, ordina
 	return k
 }
 
-func NewConsistentHashBackendKeyV6Intf(addr net.IP, port uint16, protocol uint8, ordinal uint32) ConsistentHashBackendKeyInterface {
-	return NewConsistentHashBackendKeyV6(addr, port, protocol, ordinal)
+func NewMaglevBackendKeyV6Intf(addr net.IP, port uint16, protocol uint8, ordinal uint32) MaglevBackendKeyInterface {
+	return NewMaglevBackendKeyV6(addr, port, protocol, ordinal)
 }
 
-func (k ConsistentHashBackendKeyV6) VIP() net.IP {
+func (k MaglevBackendKeyV6) VIP() net.IP {
 	return k[0:16]
 }
 
-func (k ConsistentHashBackendKeyV6) Port() uint16 {
+func (k MaglevBackendKeyV6) Port() uint16 {
 	return binary.LittleEndian.Uint16(k[16:18])
 }
 
-func (k ConsistentHashBackendKeyV6) Protocol() uint8 {
+func (k MaglevBackendKeyV6) Protocol() uint8 {
 	return k[18]
 }
 
-func (k ConsistentHashBackendKeyV6) Ordinal() uint32 {
+func (k MaglevBackendKeyV6) Ordinal() uint32 {
 	return binary.LittleEndian.Uint32(k[20:24])
 }
 
-func (k ConsistentHashBackendKeyV6) AsBytes() []byte {
+func (k MaglevBackendKeyV6) AsBytes() []byte {
 	return k[:]
 }
 
-func (k ConsistentHashBackendKeyV6) String() string {
+func (k MaglevBackendKeyV6) String() string {
 	addr := k.VIP()
 	port := k.Port()
 	proto := k.Protocol()
@@ -129,8 +131,8 @@ func (k ConsistentHashBackendKeyV6) String() string {
 	return fmt.Sprintf("%s:%d/%d, %d", addr, port, proto, ord)
 }
 
-func ConsistentHashBackendKeyV6FromBytes(b []byte) ConsistentHashBackendKeyInterface {
-	var k ConsistentHashBackendKeyV6
+func MaglevBackendKeyV6FromBytes(b []byte) MaglevBackendKeyInterface {
+	var k MaglevBackendKeyV6
 	copy(k[:], b)
 	return k
 }
@@ -314,22 +316,22 @@ func BackendMapV6() maps.MapWithExistsCheck {
 	return maps.NewPinnedMap(BackendMapV6Parameters)
 }
 
-var ConsistentHashMapV6Parameters = maps.MapParameters{
+var MaglevMapV6Parameters = maps.MapParameters{
 	Type:       "hash",
-	KeySize:    consistentHashBackendKeyV6Size,
-	ValueSize:  consistentHashBackendValueV6Size,
+	KeySize:    maglevBackendKeyV6Size,
+	ValueSize:  maglevBackendValueV6Size,
 	MaxEntries: 1009 * 1000,
 	Name:       "cali_v6_ch",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func ConsistentHashMapV6() maps.MapWithExistsCheck {
-	return maps.NewPinnedMap(ConsistentHashMapV6Parameters)
+func MaglevMapV6() maps.MapWithExistsCheck {
+	return maps.NewPinnedMap(MaglevMapV6Parameters)
 }
 
-type ConsistentHashMapMemV6 map[ConsistentHashBackendKeyV6]BackendValueV6
+type MaglevMapMemV6 map[MaglevBackendKeyV6]BackendValueV6
 
-func (m ConsistentHashMapMemV6) Equal(cmp ConsistentHashMapMemV6) bool {
+func (m MaglevMapMemV6) Equal(cmp MaglevMapMemV6) bool {
 	if len(m) != len(cmp) {
 		return false
 	}
@@ -343,15 +345,15 @@ func (m ConsistentHashMapMemV6) Equal(cmp ConsistentHashMapMemV6) bool {
 	return true
 }
 
-// LoadConsistentHashMapV6 loads the CH NAT map into a go map or returns an error
-func LoadConsistentHashMapV6(m maps.Map) (ConsistentHashMapMemV6, error) {
-	ret := make(ConsistentHashMapMemV6)
+// LoadMaglevMapV6 loads the CH NAT map into a go map or returns an error
+func LoadMaglevMapV6(m maps.Map) (MaglevMapMemV6, error) {
+	ret := make(MaglevMapMemV6)
 
 	if err := m.Open(); err != nil {
 		return nil, err
 	}
 
-	iterFn := ConsistentHashMapMemV6Iter(ret)
+	iterFn := MaglevMapMemV6Iter(ret)
 
 	err := m.Iter(func(k, v []byte) maps.IteratorAction {
 		iterFn(k, v)
@@ -364,13 +366,13 @@ func LoadConsistentHashMapV6(m maps.Map) (ConsistentHashMapMemV6, error) {
 	return ret, err
 }
 
-// ConsistentHashMapMemV6Iter returns maps.MapIter that loads the provided ConsistentHashMapMemV6
-func ConsistentHashMapMemV6Iter(m ConsistentHashMapMemV6) func(k, v []byte) {
-	ks := len(ConsistentHashBackendKeyV6{})
+// MaglevMapMemV6Iter returns maps.MapIter that loads the provided MaglevMapMemV6
+func MaglevMapMemV6Iter(m MaglevMapMemV6) func(k, v []byte) {
+	ks := len(MaglevBackendKeyV6{})
 	vs := len(BackendValueV6{})
 
 	return func(k, v []byte) {
-		var key ConsistentHashBackendKeyV6
+		var key MaglevBackendKeyV6
 		copy(key[:ks], k[:ks])
 
 		var val BackendValueV6
