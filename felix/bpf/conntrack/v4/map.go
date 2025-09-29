@@ -532,6 +532,8 @@ func (e Value) Upgrade() maps.Upgradable {
 	// Flags have been reworked in v5 to be a contiguous 32bit.
 	// Padding now PREceeds the flags (as opposed to following them).
 	// Overall struct size remains the same.
+
+	
 	var val5 v5.Value
 	copy(val5[:], e[:])
 	// Zero the 3 padding bytes.
