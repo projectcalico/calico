@@ -185,9 +185,12 @@ func (ap *AttachPoint) AttachProgram() error {
 	}
 	logCxt.Info("Program attached to tc.")
 	// Remove any tcx program.
-	err = ap.detachTcxProgram()
-	if err != nil {
-		logCxt.Warnf("error removing tcx program from %s", err)
+	if _, err := os.Stat(ap.ProgPinPath()); err == nil {
+		logCxt.Info("Removing any existing tcx program")
+		err = ap.detachTcxProgram()
+		if err != nil {
+			logCxt.Warnf("error removing tcx program from %s", err)
+		}
 	}
 	return nil
 }
