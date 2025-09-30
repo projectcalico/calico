@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -171,6 +172,10 @@ func (h *tieredRBACHook) parsePolicyMetadata(kind string, body []byte) (client.O
 		obj = &v3.GlobalNetworkPolicy{}
 	case "StagedNetworkPolicy":
 		obj = &v3.StagedNetworkPolicy{}
+	case "StagedGlobalNetworkPolicy":
+		obj = &v3.StagedGlobalNetworkPolicy{}
+	case "StagedKubernetesNetworkPolicy":
+		obj = &v3.StagedKubernetesNetworkPolicy{}
 	default:
 		return nil, "", fmt.Errorf("unsupported kind: %s", kind)
 	}
@@ -182,17 +187,30 @@ func (h *tieredRBACHook) parsePolicyMetadata(kind string, body []byte) (client.O
 		return nil, "", fmt.Errorf("failed to decode object: %v", err)
 	}
 
-	tier := "default"
-	switch obj.(type) {
-	case *v3.NetworkPolicy:
-		tier = obj.(*v3.NetworkPolicy).Spec.Tier
-	case *v3.GlobalNetworkPolicy:
-		tier = obj.(*v3.GlobalNetworkPolicy).Spec.Tier
-	case *v3.StagedNetworkPolicy:
-		tier = obj.(*v3.StagedNetworkPolicy).Spec.Tier
+	// Use reflection to access the Spec.Tier field.
+	if tier, ok := getTier(obj); ok {
+		return obj, tier, nil
 	}
+	return nil, "", fmt.Errorf("object does not have a Spec.Tier field")
+}
 
-	return obj, tier, nil
+func getTier(obj any) (string, bool) {
+	v := reflect.ValueOf(obj)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	spec := v.FieldByName("Spec")
+	if !spec.IsValid() {
+		return "", false
+	}
+	tier := spec.FieldByName("Tier")
+	if !tier.IsValid() {
+		return "", false
+	}
+	if tier.Kind() != reflect.String {
+		return "", false
+	}
+	return tier.String(), true
 }
 
 func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse {
@@ -223,6 +241,9 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 		}
 	}
 
+	// Log the tier being used for authorization.
+	logCtx = logCtx.WithField("tier", tier)
+
 	// Create a context with the necessary information to pass to the RBAC authorizer.
 	// This includes the user info from the admission request.
 	ctx = requestContext(ar.Request, obj)
@@ -241,7 +262,7 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 	}
 
 	// If validation passes, return an allowed response
-	logCtx.Info("User is authorized")
+	logCtx.Debug("User is authorized")
 	return &v1.AdmissionResponse{Allowed: true}
 }
 
