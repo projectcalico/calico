@@ -1,0 +1,72 @@
+version: v1.0
+
+name: NFTables
+
+agent:
+  machine:
+    type: c1-standard-1
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    # The skip "EndpointSlice\|Services\sshould" is needed to skip Endpoint slice tests which are only possible in k8s 1.21+
+    # The skip "Ingress.API|IngressClass.API" is needed to skip Ingress tests which are only possible in k8s 1.21+
+    # The skip "Proxy.version.v1.*pod.and.service.Proxy.\[" is needed to skip an upstream test that only works on k8s 1.24+
+    - name: K8S_E2E_FLAGS
+      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[)
+    - name: K8S_VERSION
+      value: "stable-3"
+    - name: FUNCTIONAL_AREA
+      value: "nftables.yml"
+    - name: IPV4_POD_CIDR
+      value: "192.168.0.0/16"
+    - name: DATAPLANE
+      value: CalicoNftables
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/calico/"
+
+blocks:
+  - name: Nftables mode
+    dependencies: []
+    task:
+      jobs:
+        - name: kdd
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: K8S_VERSION
+              values: ["stable"]
+      env_vars:
+        - name: USE_VXLAN
+          value: "true"
+        - name: PROVISIONER
+          value: gcp-kubeadm
+
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force
