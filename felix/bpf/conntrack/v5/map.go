@@ -163,7 +163,7 @@ func (e Value) Type() uint8 {
 }
 
 func (e Value) Flags() uint32 {
-	return uint32(e[VoFlags])
+	return binary.LittleEndian.Uint32(e[VoFlags : VoFlags+4])
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -249,7 +249,7 @@ func (e *Value) SetNATSport(sport uint16) {
 func initValue(v *Value, lastSeen time.Duration, typ uint8, flags uint32) {
 	binary.LittleEndian.PutUint64(v[VoLastSeen:VoLastSeen+8], uint64(lastSeen))
 	v[VoType] = typ
-	v[VoFlags] = byte(flags)
+	binary.LittleEndian.PutUint32(v[VoFlags:VoFlags+4], flags)
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
