@@ -79,7 +79,7 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 
 	t := &Typha{Container: c}
 	// Register Typha teardown with infra.
-	infra.AddTearDown(t.Stop)
+	infra.AddCleanup(t.Stop)
 	return t
 }
 

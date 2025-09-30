@@ -238,16 +238,18 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 
 func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) (w *Workload, err error) {
 	w = New(c, name, profile, ip, ports, protocol, opts...)
-	err = w.Start()
+	err = w.Start(c)
 	if err != nil {
 		return w, err
 	}
-	// Register workload cleanup with the infra via Felix.
-	c.RegisterForCleanup(w.Stop)
 	return w, nil
 }
 
-func (w *Workload) Start() error {
+type CleanupProvider interface {
+	AddCleanup(func())
+}
+
+func (w *Workload) Start(cleanupProvider CleanupProvider) error {
 	var err error
 
 	// Start the workload.
@@ -289,6 +291,9 @@ func (w *Workload) Start() error {
 	if err != nil {
 		return fmt.Errorf("runCmd Start failed: %v", err)
 	}
+
+	// Make sure we get stopped.
+	cleanupProvider.AddCleanup(w.Stop)
 
 	// Read the workload's namespace path, which it writes to its standard output.
 	stdoutReader := bufio.NewReader(w.outPipe)

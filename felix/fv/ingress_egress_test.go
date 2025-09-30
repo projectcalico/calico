@@ -58,28 +58,6 @@ var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ _BPF-SAFE_ with initi
 		cc = &connectivity.Checker{}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
-	})
-
 	It("full connectivity to and from workload 0", func() {
 		cc.ExpectSome(w[1], w[0])
 		cc.ExpectSome(w[2], w[0])
@@ -251,28 +229,6 @@ var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ (iptables-only) with 
 		}
 
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	Context("with an ingress policy with no rules", func() {
