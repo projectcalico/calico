@@ -2159,8 +2159,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
 					}
 
-					It("should maintain connections to a cluster IP across loadbalancer failure using maglev", func(){testFailover(clusterIP)})
-					It("should maintain connections to an external IP across loadbalancer failure using maglev", func(){testFailover(externalIP)})
+					It("should maintain connections to a cluster IP across loadbalancer failure using maglev", func() { testFailover(clusterIP) })
+					It("should maintain connections to an external IP across loadbalancer failure using maglev", func() { testFailover(externalIP) })
 				})
 
 				Describe("Test Load balancer service with external IP", func() {
