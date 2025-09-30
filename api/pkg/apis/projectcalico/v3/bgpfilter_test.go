@@ -104,7 +104,10 @@ func TestBGPFilterValidation(t *testing.T) {
 			// Try to create the BGPFilter object.
 			created, err := c.ProjectcalicoV3().BGPFilters().Create(ctx, tt.obj, metav1.CreateOptions{})
 			if tt.valid {
-				defer c.ProjectcalicoV3().BGPFilters().Delete(ctx, created.Name, metav1.DeleteOptions{})
+				defer func() {
+					err := c.ProjectcalicoV3().BGPFilters().Delete(ctx, created.Name, metav1.DeleteOptions{})
+					g.Expect(err).NotTo(HaveOccurred(), "Expected BGPFilter to be deleted")
+				}()
 				g.Expect(err).NotTo(HaveOccurred(), "Expected BGPFilter to be valid")
 			} else {
 				g.Expect(err).To(HaveOccurred(), "Expected BGPFilter to be invalid")
