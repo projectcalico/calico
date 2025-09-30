@@ -24,6 +24,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	// When adding a new ct version, change curVerXXX to point to the new version
@@ -310,7 +312,9 @@ func GetMapParams(version int) maps.MapParameters {
 	case 2:
 		return v2.MapParams
 	case 3:
-		return curVer.MapParams
+		return v3.MapParams
+	case 4:
+		return v4.MapParams
 	default:
 		return curVer.MapParams
 	}
@@ -325,8 +329,14 @@ func GetKeyValueTypeFromVersion(version int, k, v []byte) (maps.Upgradable, maps
 		copy(val[:], v)
 		return key, val
 	case 3:
-		var key curVer.Key
-		var val curVer.Value
+		var key v3.Key
+		var val v3.Value
+		copy(key[:], k)
+		copy(val[:], v)
+		return key, val
+	case 4:
+		var key v4.Key
+		var val v4.Value
 		copy(key[:], k)
 		copy(val[:], v)
 		return key, val
