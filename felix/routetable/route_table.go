@@ -1497,8 +1497,12 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		// will never be True for the way that Calico provisions VM IPs.
 		//
 		// For (2) it is important that Felix maintains the ARP programming for an interface
-		// beyond the point when that interface is first configured.  For example, interface
-		// flaps can lose the ARP programming, and it then needs to be reinstated.
+		// beyond the point when that interface is first configured.  In particular, dnsmasq
+		// overwrites our ARP programming - with an entry that is identical to ours, except
+		// without the PERMANENT flag - when it receives a DHCP request from an OpenStack VM
+		// and issues its IP address.  Also interface flaps can lose the ARP programming.
+		// In all such cases, our PERMANENT static ARP programming needs to be reinstated;
+		// otherwise we lose connectivity to VMs with arp_ignore=2.
 		ifaceIdx, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			// Asked to add ARP entries but the interface isn't known (yet).
