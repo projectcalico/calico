@@ -92,11 +92,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 	tryRoutingLoop := func(expectLoop bool, count int) {
 		// Run containers to model a default gateway, and an external client connecting to
 		// services within the cluster via that gateway.
-		externalGW := infrastructure.RunExtClient("ext-gw")
-		defer externalGW.Stop()
-
-		externalClient := infrastructure.RunExtClient("ext-client")
-		defer externalClient.Stop()
+		externalGW := infrastructure.RunExtClient(infra, "ext-gw")
+		externalClient := infrastructure.RunExtClient(infra, "ext-client")
 
 		// Add a service CIDR route in those containers, similar to the routes that they
 		// would have via BGP per our service advertisement feature.  (This should really be

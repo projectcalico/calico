@@ -133,7 +133,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				w.WorkloadEndpoint.Labels = labels
 				if run {
-					err := w.Start()
+					err := w.Start(infra)
 					Expect(err).NotTo(HaveOccurred())
 					w.ConfigureInInfra(infra)
 				}
@@ -359,7 +359,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 			It("should be able to ping external client from w[0][0]", func() {
 				tc.TriggerDelayedStart()
-				externalClient := infrastructure.RunExtClient("ext-client")
+				externalClient := infrastructure.RunExtClient(infra, "ext-client")
 				_ = externalClient
 				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
@@ -377,7 +377,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
 					Should(BeNumerically(">", 0), matcher)
-				externalClient.Stop()
 			})
 
 			It("should have both IPv4 and IPv6 routes for a dual stack UDP service", func() {

@@ -1261,7 +1261,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				w.WorkloadEndpoint.Labels = labels
 				if run {
-					err := w.Start()
+					err := w.Start(infra)
 					Expect(err).NotTo(HaveOccurred())
 					w.ConfigureInInfra(infra)
 				}
@@ -1312,11 +1312,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			// We will use this container to model an external client trying to connect into
 			// workloads on a host.  Create a route in the container for the workload CIDR.
 			// TODO: Copied from another test
-			externalClient = infrastructure.RunExtClientWithOpts("ext-client",
-				infrastructure.ExtClientOpts{
-					IPv6Enabled: testOpts.ipv6,
-				},
-			)
+			externalClient = infrastructure.RunExtClientWithOpts(infra, "ext-client", infrastructure.ExtClientOpts{
+				IPv6Enabled: testOpts.ipv6,
+			})
 			_ = externalClient
 
 			err := infra.AddDefaultDeny()
@@ -1381,7 +1379,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						wlIP = "dead:beef::1:5"
 					}
 					dpOnlyWorkload := workload.New(tc.Felixes[1], "w-dp", "default", wlIP, "8057", testOpts.protocol)
-					err = dpOnlyWorkload.Start()
+					err = dpOnlyWorkload.Start(infra)
 					Expect(err).NotTo(HaveOccurred())
 					tc.Felixes[1].Exec("ip", "route", "add", dpOnlyWorkload.IP, "dev", dpOnlyWorkload.InterfaceName, "scope", "link")
 
@@ -4107,7 +4105,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											InterfaceName: "eth20",
 											MTU:           1500, // Need to match host MTU or felix will restart.
 										}
-										err := eth20.Start()
+										err := eth20.Start(infra)
 										Expect(err).NotTo(HaveOccurred())
 
 										// assign address to eth20 and add route to the .20 network
@@ -4249,7 +4247,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									remoteWL.IP6 = remoteWLIP
 								}
 
-								err := remoteWL.Start()
+								err := remoteWL.Start(infra)
 								Expect(err).NotTo(HaveOccurred())
 
 								clusterIP := "10.101.0.211"
@@ -4836,7 +4834,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Skip("NFT does not support third-party rules")
 					}
 
-					c := infrastructure.RunExtClient("ext-workload")
+					c := infrastructure.RunExtClient(infra, "ext-workload")
 					extWorkload = &workload.Workload{
 						C:        c,
 						Name:     "ext-workload",
@@ -4845,7 +4843,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						IP:       containerIP(c),
 					}
 
-					err := extWorkload.Start()
+					err := extWorkload.Start(infra) // FIXME
 					Expect(err).NotTo(HaveOccurred())
 
 					tool := "iptables"
@@ -4943,7 +4941,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					InterfaceName: "test30",
 					MTU:           1500, // Need to match host MTU or felix will restart.
 				}
-				err := test30.Start()
+				err := test30.Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 				// assign address to test30 and add route to the .30 network
 				if testOpts.ipv6 {
@@ -5126,7 +5124,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							InterfaceName: "eth20",
 							MTU:           1500, // Need to match host MTU or felix will restart.
 						}
-						err := eth20.Start()
+						err := eth20.Start(infra)
 						Expect(err).NotTo(HaveOccurred())
 
 						// assign address to eth20 and add route to the .20 network
@@ -5159,7 +5157,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							InterfaceName: "eth30",
 							MTU:           1500, // Need to match host MTU or felix will restart.
 						}
-						err = eth30.Start()
+						err = eth30.Start(infra)
 						Expect(err).NotTo(HaveOccurred())
 
 						// assign address to eth30 and add route to the .30 network

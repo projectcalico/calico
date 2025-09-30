@@ -82,7 +82,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
-		externalClient = infrastructure.RunExtClient("ext-client")
+		externalClient = infrastructure.RunExtClient(infra, "ext-client")
 		externalClient.Exec("ip", "r", "add", "10.65.0.0/24", "via", tc.Felixes[0].IP)
 	})
 

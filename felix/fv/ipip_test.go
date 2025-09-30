@@ -367,7 +367,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		var externalClient *containers.Container
 
 		BeforeEach(func() {
-			externalClient = infrastructure.RunExtClient("ext-client")
+			externalClient = infrastructure.RunExtClient(infra, "ext-client")
 
 			Eventually(func() error {
 				err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
@@ -384,17 +384,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 
 			tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
 				externalClient.IP, "dev", "tunl0", "onlink")
-		})
-
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				externalClient.Exec("ip", "r")
-				externalClient.Exec("ip", "l")
-				externalClient.Exec("ip", "a")
-			}
-		})
-		AfterEach(func() {
-			externalClient.Stop()
 		})
 
 		It("should allow IPIP to external client iff it is in ExternalNodesCIDRList", func() {

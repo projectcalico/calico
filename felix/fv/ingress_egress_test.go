@@ -24,7 +24,6 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -34,7 +33,6 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datastore, 3 workloads", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
@@ -56,28 +54,6 @@ var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ _BPF-SAFE_ with initi
 		}
 
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	It("full connectivity to and from workload 0", func() {
@@ -222,7 +198,6 @@ var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ _BPF-SAFE_ with initi
 
 var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd datastore, 3 workloads", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd    *containers.Container
 		tc      infrastructure.TopologyContainers
 		client  client.Interface
 		infra   infrastructure.DatastoreInfra
@@ -251,28 +226,6 @@ var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ (iptables-only) with 
 		}
 
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	Context("with an ingress policy with no rules", func() {
@@ -330,7 +283,6 @@ var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ (iptables-only) with 
 
 var _ = infrastructure.DatastoreDescribe("with Typha and Felix-Typha TLS", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
@@ -354,28 +306,6 @@ var _ = infrastructure.DatastoreDescribe("with Typha and Felix-Typha TLS", []api
 		}
 
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	It("full connectivity to and from workload 0", func() {

@@ -105,7 +105,7 @@ var _ = infrastructure.DatastoreDescribe(
 					InterfaceName: "eth20",
 					MTU:           1500, // Need to match host MTU or felix will restart.
 				}
-				err := external.Start()
+				err := external.Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 
 				// assign address to eth20 and add route to the .20 network

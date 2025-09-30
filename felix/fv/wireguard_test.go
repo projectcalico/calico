@@ -1470,7 +1470,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		// initialise external client
-		externalClient = infrastructure.RunExtClient("ext-client")
+		externalClient = infrastructure.RunExtClient(infra, "ext-client")
 		externalClient.Exec("ip", "route", "add", wlsByHost[0][0].IP, "via", tc.Felixes[0].IP)
 
 		for i := range tc.Felixes {
@@ -1544,8 +1544,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 	})
 
 	AfterEach(func() {
-		externalClient.Stop()
-
 		for _, tcpdump := range tcpdumps {
 			tcpdump.Stop()
 		}
