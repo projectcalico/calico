@@ -225,7 +225,7 @@ def requires_state(f):
 # context info into a key that Neutron is already using.  And we also want to use a key
 # that is already included in the default logging formats
 # (`logging_context_format_string` and `logging_default_format_string`).  Putting all
-# that together, it seems our best option is the piggy-back on the `request_id` key.
+# that together, it seems our best option is to piggy-back on the `request_id` key.
 task_id_lock = threading.Lock()
 last_task_id = 0
 
