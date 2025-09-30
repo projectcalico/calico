@@ -5497,7 +5497,6 @@ func dumpCTMapV6(felix *infrastructure.Felix) conntrack.MapMemV6 {
 	return m
 }
 
-
 func dumpSendRecvMap(felix *infrastructure.Felix) nat.SendRecvMsgMapMem {
 	bm := nat.SendRecvMsgMap()
 	m := make(nat.SendRecvMsgMapMem)
