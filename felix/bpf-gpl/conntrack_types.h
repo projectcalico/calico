@@ -75,7 +75,7 @@ struct calico_ct_value {
 	// failures when debug logging is compiled out only :-).
 	__u8 pad0[3];		// 17
 
-	__u32 flags;		// 20 - 24
+	__u32 flags;		// 20
 
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
