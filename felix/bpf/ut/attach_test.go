@@ -139,9 +139,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 14
+		programsCount := 15
 		if ipv6Enabled {
-			programsCount = 27
+			programsCount = 28
 		}
 		Expect(programs.Count()).To(Equal(programsCount))
 		at := programs.Programs()
