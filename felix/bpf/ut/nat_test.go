@@ -201,7 +201,6 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagClusterExternal))
 
-
 	// Arriving at workload at node 2
 	expectMark(tcdefs.MarkSeen)
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -438,7 +437,6 @@ func TestNATNodePort(t *testing.T) {
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagNATNPFwd | conntrack5.FlagClusterExternal))
 
-
 	expectMark(tcdefs.MarkSeenBypassForward)
 	// Leaving node 1
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -557,7 +555,6 @@ func TestNATNodePort(t *testing.T) {
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagExtLocal | conntrack5.FlagClusterExternal))
-
 
 	dumpARPMap(arpMap)
 
@@ -1231,7 +1228,6 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagExtLocal | conntrack5.FlagClusterExternal))
-
 
 	// Arriving at workload
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -2241,7 +2237,6 @@ func TestNATNodePortDSROptout(t *testing.T) {
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagNATFwdDsr | conntrack5.FlagNATNPFwd | conntrack5.FlagClusterExternal))
 
-
 	// N.B. we skip the forward part from node, we just needed to have the right packet.
 
 	// Arriving at node 2
@@ -2344,7 +2339,6 @@ func TestNATNodePortDSROptout(t *testing.T) {
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagExtLocal | conntrack5.FlagNoDSR | conntrack5.FlagClusterExternal))
-
 
 	skbMark = tcdefs.MarkSeen
 
@@ -2818,7 +2812,6 @@ func TestNATHostRemoteNPLocalPod(t *testing.T) {
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagNPLoop))
 
-
 	// Arriving at workload
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(recvPkt)
@@ -3014,7 +3007,6 @@ func TestNATPodPodXNodeV6(t *testing.T) {
 	Expect(v.Type()).To(Equal(conntrack.TypeNormal))
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagClusterExternal))
-
 
 	// Arriving at workload at node 2
 	expectMark(tcdefs.MarkSeen)
@@ -3242,7 +3234,6 @@ func TestNATNodePortV6(t *testing.T) {
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagNATNPFwd | conntrack5.FlagClusterExternal))
 
-
 	expectMark(tcdefs.MarkSeenBypassForward)
 	// Leaving node 1
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -3361,7 +3352,6 @@ func TestNATNodePortV6(t *testing.T) {
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
 
 	Expect(v.Flags()).To(Equal(conntrack5.FlagExtLocal | conntrack5.FlagClusterExternal))
-
 
 	dumpARPMapV6(arpMapV6)
 
