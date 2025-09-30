@@ -1480,6 +1480,10 @@ func resetRTMapV6(rtMap maps.Map) {
 	resetMap(rtMap)
 }
 
+func resetQoSMap(qosMap maps.Map) {
+	resetMap(qosMap)
+}
+
 func saveRTMap(rtMap maps.Map) routes.MapMem {
 	rt, err := routes.LoadMap(rtMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -1945,6 +1949,7 @@ func resetBPFMaps() {
 	resetMap(fsafeMap)
 	resetMap(natMap)
 	resetMap(natBEMap)
+	resetMap(qosMap)
 }
 
 func TestMapIterWithDelete(t *testing.T) {

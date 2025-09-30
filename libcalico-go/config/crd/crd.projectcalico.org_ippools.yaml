@@ -36,6 +36,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 assignmentMode:
+                  default: Automatic
                   enum:
                     - Automatic
                     - Manual
