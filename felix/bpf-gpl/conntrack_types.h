@@ -156,9 +156,9 @@ struct ct_create_ctx {
 };
 
 #ifdef IPVER6
-CALI_MAP_NAMED(cali_v6_ct, cali_ct, 4,
+CALI_MAP_NAMED(cali_v6_ct, cali_ct, 5,
 #else
-CALI_MAP_NAMED(cali_v4_ct, cali_ct, 4,
+CALI_MAP_NAMED(cali_v4_ct, cali_ct, 5,
 #endif
 		BPF_MAP_TYPE_LRU_HASH,
 		struct calico_ct_key, struct calico_ct_value,
