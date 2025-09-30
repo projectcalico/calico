@@ -14,7 +14,16 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: Order in which the tier is applied
+          jsonPath: .spec.order
+          name: Order
+          type: integer
+        - description: Default action for the tier
+          jsonPath: .spec.defaultAction
+          name: DefaultAction
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -43,3 +52,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
