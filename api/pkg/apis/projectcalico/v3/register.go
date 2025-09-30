@@ -24,7 +24,9 @@ import (
 )
 
 // GroupName is the group name use in this package
-const GroupName = "projectcalico.org"
+const (
+	GroupName = "projectcalico.org"
+)
 
 // SchemeGroupVersion is group version used to register these objects
 var (

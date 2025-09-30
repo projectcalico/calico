@@ -1,18 +1,18 @@
-/*
-Copyright 2018 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright 2025 Tigera, Inc.
+//
+// Copyright 2018 The Kubernetes Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package main
 
@@ -25,7 +25,6 @@ import (
 	"os"
 	"time"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -34,6 +33,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -47,10 +47,10 @@ import (
 	"k8s.io/component-base/cli"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
-	validation "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 var (
@@ -73,21 +73,17 @@ func addToScheme(scheme *runtime.Scheme) {
 // CmdWebhook is used by agnhost Cobra.
 var CmdWebhook = &cobra.Command{
 	Use:   "webhook",
-	Short: "Starts a HTTP server, useful for testing MutatingAdmissionWebhook and ValidatingAdmissionWebhook",
-	Long: `Starts a HTTP server, useful for testing MutatingAdmissionWebhook and ValidatingAdmissionWebhook.
-After deploying it to Kubernetes cluster, the Administrator needs to create a ValidatingWebhookConfiguration
-in the Kubernetes cluster to register remote webhook admission controllers.`,
-	Args: cobra.MaximumNArgs(0),
-	Run:  hook,
+	Short: "Starts an HTTP server for Calicco admission webhooks.",
+	Long:  `Starts an HTTP server for Calicco admission webhooks.`,
+	Args:  cobra.MaximumNArgs(0),
+	Run:   serveTLS,
 }
 
 func main() {
 	logrus.SetLevel(logrus.InfoLevel)
 	logrus.SetOutput(os.Stdout)
 
-	rootCmd := &cobra.Command{
-		Use: "webhook",
-	}
+	rootCmd := &cobra.Command{Use: "webhook"}
 	rootCmd.AddCommand(CmdWebhook)
 
 	os.Exit(cli.Run(rootCmd))
@@ -100,79 +96,18 @@ func init() {
 	CmdWebhook.Flags().IntVar(&port, "port", 6443, "Secure port that the webhook listens on")
 }
 
-type admitv1Func func(v1.AdmissionReview) *v1.AdmissionResponse
+type v1AdmissionFunc func(v1.AdmissionReview) *v1.AdmissionResponse
 
-// admitHandler is a handler, for both validators and mutators, that supports multiple admission review versions
-type admitHandler struct {
-	v1 admitv1Func
+// admissionReviewHandler is a handler, for both validators and mutators, that supports multiple admission review versions
+type admissionReviewHandler struct {
+	processV1Review v1AdmissionFunc
 }
 
-func newDelegateToV1AdmitHandler(f admitv1Func) admitHandler {
-	return admitHandler{v1: f}
+func newDelegateToV1AdmitHandler(f v1AdmissionFunc) admissionReviewHandler {
+	return admissionReviewHandler{processV1Review: f}
 }
 
-// serve handles the http portion of a request prior to handing to an admit
-// function
-func serve(w http.ResponseWriter, r *http.Request, admit admitHandler) {
-	var body []byte
-	if r.Body != nil {
-		if data, err := io.ReadAll(r.Body); err == nil {
-			body = data
-		}
-	}
-
-	// verify the content type is accurate
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
-		logrus.Errorf("contentType=%s, expect application/json", contentType)
-		return
-	}
-
-	logrus.Info(fmt.Sprintf("handling request: %s", body))
-
-	deserializer := codecs.UniversalDeserializer()
-	obj, gvk, err := deserializer.Decode(body, nil, nil)
-	if err != nil {
-		msg := fmt.Sprintf("Request could not be decoded: %v", err)
-		logrus.Error(msg)
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-
-	var responseObj runtime.Object
-	switch *gvk {
-	case v1.SchemeGroupVersion.WithKind("AdmissionReview"):
-		requestedAdmissionReview, ok := obj.(*v1.AdmissionReview)
-		if !ok {
-			logrus.Errorf("Expected v1.AdmissionReview but got: %T", obj)
-			return
-		}
-		responseAdmissionReview := &v1.AdmissionReview{}
-		responseAdmissionReview.SetGroupVersionKind(*gvk)
-		responseAdmissionReview.Response = admit.v1(*requestedAdmissionReview)
-		responseAdmissionReview.Response.UID = requestedAdmissionReview.Request.UID
-		responseObj = responseAdmissionReview
-	default:
-		msg := fmt.Sprintf("Unsupported group version kind: %v", gvk)
-		logrus.Error(msg)
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-
-	logrus.Info(fmt.Sprintf("sending response: %v", responseObj))
-	respBytes, err := json.Marshal(responseObj)
-	if err != nil {
-		logrus.Error(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if _, err := w.Write(respBytes); err != nil {
-		logrus.Error(err)
-	}
-}
-
-func hook(cmd *cobra.Command, args []string) {
+func serveTLS(cmd *cobra.Command, args []string) {
 	cfg, err := tls.NewTLSConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create TLS config")
@@ -198,10 +133,13 @@ func hook(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
 	}
-	hook := &rbacHook{authz: authorizer.NewTierAuthorizer(a)}
 
-	http.HandleFunc("/", hook.Validate)
+	// Define
+	hook := &tieredRBACHook{authz: authorizer.NewTierAuthorizer(a)}
+
+	http.HandleFunc("/", hook.Authorize)
 	http.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) { w.Write([]byte("ok")) })
+
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", port),
 		TLSConfig: cfg,
@@ -213,109 +151,214 @@ func hook(cmd *cobra.Command, args []string) {
 	}
 }
 
-type rbacHook struct {
+// tieredRBACHook is an admission webhook that uses RBAC to authorize requests based on the tier of the policy being created/updated/deleted.
+type tieredRBACHook struct {
 	calc  rbac.Calculator
 	authz authorizer.TierAuthorizer
 }
 
-func (h *rbacHook) Validate(w http.ResponseWriter, r *http.Request) {
-	serve(w, r, newDelegateToV1AdmitHandler(h.handleValidate))
+func (h *tieredRBACHook) Authorize(w http.ResponseWriter, r *http.Request) {
+	handleRequest(w, r, newDelegateToV1AdmitHandler(h.authorize))
 }
 
-func (h *rbacHook) handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
-	logrus.Infof("validate called with request: %v", ar.Request)
-	ctx := context.TODO()
-
-	// Unpack the AdmissionReview object into a struct.
+func (h *tieredRBACHook) parsePolicyMetadata(kind string, body []byte) (client.Object, string, error) {
+	// Create an empty object of the appropriate type.
 	var obj client.Object
-	switch ar.Request.Kind.Kind {
+	switch kind {
 	case "NetworkPolicy":
 		obj = &v3.NetworkPolicy{}
-		deserializer := codecs.UniversalDeserializer()
-		obj, _, err := deserializer.Decode(ar.Request.Object.Raw, nil, obj)
-		if err != nil {
-			logrus.Errorf("Failed to decode object: %v", err)
-			return &v1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Status:  metav1.StatusFailure,
-					Message: fmt.Sprintf("Failed to decode object: %v", err),
-					Reason:  metav1.StatusReasonInvalid,
-				},
-			}
-		}
-		logrus.Infof("Decoded object: %T", obj)
-		extra := map[string][]string{}
-		for k, v := range ar.Request.UserInfo.Extra {
-			extra[k] = v
-		}
-		info := user.DefaultInfo{
-			Name:   ar.Request.UserInfo.Username,
-			UID:    ar.Request.UserInfo.UID,
-			Groups: ar.Request.UserInfo.Groups,
-			Extra:  extra,
-		}
-		ctx = requestContext(ar.Request, &info)
-
-		pol := obj.(*v3.NetworkPolicy)
-		tier := pol.Spec.Tier
-		if tier == "" {
-			// Needed for delete since there is no spec - can we do this better?
-			// Might need to query the existing object and get the tier from there.
-			tier = "default"
-		}
-		if err = h.authz.AuthorizeTierOperation(ctx, pol.Name, tier); err != nil {
-			logrus.Errorf("Authorization failed: %v", err)
-			return &v1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Status:  metav1.StatusFailure,
-					Message: fmt.Sprintf("Authorization failed: %v", err),
-					Reason:  metav1.StatusReasonForbidden,
-				},
-			}
-		}
-
-		// Perform validation on the object, because we can (for create / update).
-		if ar.Request.Operation == v1.Create || ar.Request.Operation == v1.Update {
-			if err = validation.Validate(obj); err != nil {
-				logrus.WithError(err).Error("Validation failed")
-				return &v1.AdmissionResponse{
-					Allowed: false,
-					Result: &metav1.Status{
-						Status:  metav1.StatusFailure,
-						Message: fmt.Sprintf("Validation failed: %v", err),
-						Reason:  metav1.StatusReasonInvalid,
-					},
-				}
-			}
-		}
-
 	case "GlobalNetworkPolicy":
+		obj = &v3.GlobalNetworkPolicy{}
 	case "StagedNetworkPolicy":
+		obj = &v3.StagedNetworkPolicy{}
+	default:
+		return nil, "", fmt.Errorf("unsupported kind: %s", kind)
+	}
+
+	// Decode the object into the appropriate type.
+	deserializer := codecs.UniversalDeserializer()
+	_, _, err := deserializer.Decode(body, nil, obj)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to decode object: %v", err)
+	}
+
+	tier := "default"
+	switch obj.(type) {
+	case *v3.NetworkPolicy:
+		tier = obj.(*v3.NetworkPolicy).Spec.Tier
+	case *v3.GlobalNetworkPolicy:
+		tier = obj.(*v3.GlobalNetworkPolicy).Spec.Tier
+	case *v3.StagedNetworkPolicy:
+		tier = obj.(*v3.StagedNetworkPolicy).Spec.Tier
+	}
+
+	return obj, tier, nil
+}
+
+func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse {
+	logCtx := logrus.WithFields(logrus.Fields{
+		"uid":       ar.Request.UID,
+		"kind":      ar.Request.Kind,
+		"resource":  ar.Request.Resource,
+		"operation": ar.Request.Operation,
+		"name":      ar.Request.Name,
+		"namespace": ar.Request.Namespace,
+		"user":      ar.Request.UserInfo.Username,
+	})
+	logCtx.Debug("Handling admission review")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	obj, tier, err := h.parsePolicyMetadata(ar.Request.Kind.Kind, ar.Request.Object.Raw)
+	if err != nil {
+		logCtx.WithError(err).Error("Failed to parse policy metadata")
+		return &v1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: fmt.Sprintf("Failed to parse policy metadata: %v", err),
+				Reason:  metav1.StatusReasonInvalid,
+			},
+		}
+	}
+
+	// Create a context with the necessary information to pass to the RBAC authorizer.
+	// This includes the user info from the admission request.
+	ctx = requestContext(ar.Request, obj)
+
+	// Run the RBAC authorizer to check if the user is authorized to perform the operation.
+	if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), tier); err != nil {
+		logCtx.WithError(err).Warn("User is not authorized")
+		return &v1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: fmt.Sprintf("Authorization failed: %v", err),
+				Reason:  metav1.StatusReasonForbidden,
+			},
+		}
 	}
 
 	// If validation passes, return an allowed response
+	logCtx.Info("User is authorized")
 	return &v1.AdmissionResponse{Allowed: true}
 }
 
-func requestContext(req *v1.AdmissionRequest, user user.Info) context.Context {
-	ctx := genericapirequest.NewContext()
-	ctx = genericapirequest.WithUser(ctx, user)
+// handleRequest handles an incoming HTTP request, decodes the AdmissionReview, processes it, and writes the response.
+func handleRequest(w http.ResponseWriter, r *http.Request, admit admissionReviewHandler) {
+	// Decode the AdmissionReview request.
+	obj, gvk, err := decodeAdmissionReview(r)
+	if err != nil {
+		logrus.Error(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Process the AdmissionReview request.
+	responseObj, err := processAdmissionReview(obj, gvk, admit)
+	if err != nil {
+		logrus.Error(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Encode and send the AdmissionReview response.
+	respBytes, err := json.Marshal(responseObj)
+	if err != nil {
+		logrus.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(respBytes); err != nil {
+		logrus.Error(err)
+	}
+}
+
+func decodeAdmissionReview(r *http.Request) (runtime.Object, *schema.GroupVersionKind, error) {
+	var body []byte
+	if r.Body != nil {
+		if data, err := io.ReadAll(r.Body); err == nil {
+			body = data
+		}
+	} else {
+		return nil, nil, fmt.Errorf("empty body")
+	}
+
+	// Verify the content type is accurate
+	if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+		return nil, nil, fmt.Errorf("invalid Content-Type '%s', expected `application/json`", ct)
+	}
+
+	// Decoee the body into an AdmissionReview object, and check the
+	// GroupVersionKind to ensure it's something we support.
+	deserializer := codecs.UniversalDeserializer()
+	obj, gvk, err := deserializer.Decode(body, nil, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Request could not be decoded: %v", err)
+	}
+	return obj, gvk, nil
+}
+
+func processAdmissionReview(obj runtime.Object, gvk *schema.GroupVersionKind, handler admissionReviewHandler) (*v1.AdmissionReview, error) {
+	switch *gvk {
+	case v1.SchemeGroupVersion.WithKind("AdmissionReview"):
+		requestedAdmissionReview, ok := obj.(*v1.AdmissionReview)
+		if !ok {
+			return nil, fmt.Errorf("Expected v1.AdmissionReview but got: %T", obj)
+		}
+		responseAdmissionReview := &v1.AdmissionReview{}
+		responseAdmissionReview.SetGroupVersionKind(*gvk)
+		responseAdmissionReview.Response.UID = requestedAdmissionReview.Request.UID
+		responseAdmissionReview.Response = handler.processV1Review(*requestedAdmissionReview)
+		return responseAdmissionReview, nil
+	default:
+		return nil, fmt.Errorf("Unsupported group version kind: %v", gvk)
+	}
+}
+
+func requestContext(req *v1.AdmissionRequest, obj client.Object) context.Context {
+	// Create a user.Info object from the AdmissionRequest's UserInfo.
+	extra := map[string][]string{}
+	for k, v := range req.UserInfo.Extra {
+		extra[k] = v
+	}
+	info := user.DefaultInfo{
+		Name:   req.UserInfo.Username,
+		UID:    req.UserInfo.UID,
+		Groups: req.UserInfo.Groups,
+		Extra:  extra,
+	}
+
+	var resource string
+	switch obj.(type) {
+	case *v3.NetworkPolicy:
+		resource = "networkpolicies"
+	case *v3.GlobalNetworkPolicy:
+		resource = "globalnetworkpolicies"
+	case *v3.StagedNetworkPolicy:
+		resource = "stagednetworkpolicies"
+	}
+
+	// Create a RequestInfo object from the AdmissionRequest.
 	ri := &genericapirequest.RequestInfo{
 		IsResourceRequest: true,
-		Path:              "/apis/projectcalico.org/v3/networkpolicies/" + req.Name,
+		Path:              fmt.Sprintf("/apis/projectcalico.org/v3/%s/%s", resource, obj.GetName()),
 		Verb:              string(req.Operation),
-		APIGroup:          "projectcalico.org",
-		APIVersion:        "v3",
-		Resource:          "networkpolicies",
-		Name:              req.Name,
-		Namespace:         req.Namespace,
+		APIGroup:          v3.SchemeGroupVersion.Group,
+		APIVersion:        v3.SchemeGroupVersion.Version,
+		Resource:          resource,
+		Name:              obj.GetName(),
+		Namespace:         obj.GetNamespace(),
 	}
 	if req.Operation == v1.Connect {
 		ri.Name = ""
-		ri.Path = "/apis/projectcalico.org/v3/networkpolicies"
 	}
+
+	// Create a context with the user info and request info.
+	ctx := genericapirequest.NewContext()
+	ctx = genericapirequest.WithUser(ctx, &info)
 	ctx = genericapirequest.WithRequestInfo(ctx, ri)
 	return ctx
 }
