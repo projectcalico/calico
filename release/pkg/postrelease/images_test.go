@@ -147,7 +147,7 @@ func getMetadataImages() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch metadata from %s: %v", metadataURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch metadata: %v", resp.Status)

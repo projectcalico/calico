@@ -965,7 +965,11 @@ func TestCTLBAttachLegacy(t *testing.T) {
 	RegisterTestingT(t)
 
 	testCtlbAttachLegacy := func(v4, v6 bool) {
-		err := nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false)
+		bpfmaps, err := bpfmap.CreateBPFMaps(false)
+		Expect(err).NotTo(HaveOccurred())
+
+		commonMaps := bpfmaps.CommonMaps
+		err = nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMap)
 		Expect(err).NotTo(HaveOccurred())
 
 		checkPinPath := func(pinPath string, mustExist bool) {
@@ -1035,7 +1039,11 @@ func TestCTLBAttachLegacy(t *testing.T) {
 func TestCTLBAttach(t *testing.T) {
 	RegisterTestingT(t)
 	testCtlbAttach := func(v4, v6 bool) {
-		err := nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false)
+		bpfmaps, err := bpfmap.CreateBPFMaps(false)
+		Expect(err).NotTo(HaveOccurred())
+
+		commonMaps := bpfmaps.CommonMaps
+		err = nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMap)
 		Expect(err).NotTo(HaveOccurred())
 
 		checkPinPath := func(pinPath string, mustExist bool) {
@@ -1114,6 +1122,101 @@ func TestCTLBAttach(t *testing.T) {
 	testCtlbAttach(true, false)
 	testCtlbAttach(false, true)
 	testCtlbAttach(true, true)
+}
+
+func TestAttachInterfaceRecreate(t *testing.T) {
+	RegisterTestingT(t)
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+
+	loglevel := "off"
+	bpfEpMgr, err := newBPFTestEpMgr(
+		&linux.Config{
+			Hostname:              "uthost",
+			BPFLogLevel:           loglevel,
+			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+			VXLANMTU:              1000,
+			VXLANPort:             1234,
+			BPFNodePortDSREnabled: false,
+			RulesConfig: rules.Config{
+				EndpointToHostAction: "RETURN",
+			},
+			BPFExtToServiceConnmark: 0,
+			BPFPolicyDebugEnabled:   true,
+			BPFAttachType:           apiv3.BPFAttachOptionTCX,
+		},
+		bpfmaps,
+		regexp.MustCompile("^workloadep[0123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	workload0 := createVethName("workloadep0")
+	defer func() {
+		if workload0 != nil {
+			deleteLink(workload0)
+		}
+	}()
+
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep0",
+			EndpointId:     "workloadep0",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
+	Expect(err).NotTo(HaveOccurred())
+
+	// Endpoint managed gets interface deleted but interface still exists.
+	// This can happen if the interface is deleted and recreated quickly.
+	// The BPF endpoint manager gets the update that interface is gone but
+	// the interface is still there. The pinned programs must remain.
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, workload0.Attrs().Index))
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
+	Expect(err).NotTo(HaveOccurred())
+
+	// Now simulate interface being deleted and recreated.
+	deleteLink(workload0)
+	workload0 = nil
+	workload0_new := createVethName("workloadep0")
+	defer func() {
+		if workload0_new != nil {
+			deleteLink(workload0_new)
+		}
+	}()
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0_new.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
+	Expect(err).NotTo(HaveOccurred())
+
+	// Interface is deleted. BPF endpoint manager gets the update.
+	// The pinned programs must be removed.
+	deleteLink(workload0_new)
+	workload0_new = nil
+
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, 0))
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).To(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
+	Expect(err).To(HaveOccurred())
 }
 
 func TestAttachTcx(t *testing.T) {

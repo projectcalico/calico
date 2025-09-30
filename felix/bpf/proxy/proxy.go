@@ -109,11 +109,17 @@ type proxy struct {
 	// event recorder to update node events
 	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
-	healthzServer   *healthcheck.ProxierHealthServer
+	healthzServer   healthcheckIntf
 
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
+}
+
+type healthcheckIntf interface {
+	Health() healthcheck.ProxyHealth
+	QueuedUpdate(v1.IPFamily)
+	Updated(v1.IPFamily)
 }
 
 type stoppableRunner interface {
@@ -143,7 +149,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		minDPSyncPeriod: 30 * time.Second, // XXX revisit the default
 
-		stopCh: make(chan struct{}),
+		stopCh:        make(chan struct{}),
+		healthzServer: new(alwaysHealthy),
 	}
 
 	for _, o := range opts {
@@ -159,16 +166,10 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
-	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod)
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
-	p.epsChanges = k8sp.NewEndpointsChangeTracker(p.hostname,
-		nil, // change if you want to provide more ctx
-		ipVersion,
-		p.recorder,
-		nil,
-	)
-	p.svcChanges = k8sp.NewServiceChangeTracker(makeServiceInfo, ipVersion, p.recorder, nil)
+	p.epsChanges = k8sp.NewEndpointsChangeTracker(ipVersion, p.hostname, nil, nil)
+	p.svcChanges = k8sp.NewServiceChangeTracker(ipVersion, makeServiceInfo, nil)
 
 	noProxyName, err := labels.NewRequirement(apis.LabelServiceProxyName, selection.DoesNotExist, nil)
 	if err != nil {
@@ -267,6 +268,10 @@ func (p *proxy) invokeDPSyncer() {
 	}
 	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck endpoints")
+	}
+
+	if p.healthzServer != nil {
+		p.healthzServer.QueuedUpdate(p.v1IPFamily())
 	}
 
 	p.syncerLck.Lock()
@@ -419,13 +424,13 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		ServicePort: baseSvc,
 	}
 
-	if v, ok := s.ObjectMeta.Annotations[ExcludeServiceAnnotation]; ok && v == "true" {
+	if v, ok := s.Annotations[ExcludeServiceAnnotation]; ok && v == "true" {
 		svc.excludeService = true
 		goto out
 	}
 
 	if baseSvc.Protocol() == v1.ProtocolUDP {
-		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
+		if v, ok := s.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
 			svc.reapTerminatingUDP = true
 		}
 	}
@@ -433,3 +438,12 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 out:
 	return svc
 }
+
+type alwaysHealthy struct{}
+
+func (a *alwaysHealthy) Health() healthcheck.ProxyHealth {
+	return healthcheck.ProxyHealth{Healthy: true}
+}
+
+func (a *alwaysHealthy) QueuedUpdate(v1.IPFamily) {}
+func (a *alwaysHealthy) Updated(v1.IPFamily)      {}

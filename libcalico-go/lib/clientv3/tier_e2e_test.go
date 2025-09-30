@@ -260,7 +260,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: Tier(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: Tier(" + name1 + ") with error:"))
 
 			By("Getting Tier (name1) and comparing the output against spec1")
 			res, outError = c.Tiers().Get(ctx, name1, options.GetOptions{})

@@ -18,8 +18,8 @@ import (
 	"os"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -38,10 +38,10 @@ type InfraFactory func(...CreateOption) DatastoreInfra
 func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType, body func(InfraFactory)) bool {
 	for _, ds := range datastores {
 
-		Describe(fmt.Sprintf("%s (%s backend)", description, ds), func() {
+		ginkgo.Describe(fmt.Sprintf("%s (%s backend)", description, ds), func() {
 			var coreFilesAtStart set.Set[string]
 			var currentInfra []DatastoreInfra
-			BeforeEach(func() {
+			ginkgo.BeforeEach(func() {
 				coreFilesAtStart = readCoreFiles()
 				currentInfra = nil
 			})
@@ -54,7 +54,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 			case apiconfig.Kubernetes:
 				baseFactory = createK8sDatastoreInfra
 			default:
-				panic(fmt.Errorf("Unknown DatastoreType, %s", ds))
+				panic(fmt.Errorf("unknown DatastoreType, %s", ds))
 			}
 			wrappedFactory := func(opts ...CreateOption) DatastoreInfra {
 				inf := baseFactory(opts...)
@@ -63,7 +63,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 			}
 			body(wrappedFactory)
 
-			AfterEach(func() {
+			ginkgo.AfterEach(func() {
 				// Always stop the infra after each test (collects diags on failure and cleans up).
 				log.Info("DatastoreDescribe AfterEach: stopping infrastructure.")
 				if len(currentInfra) > 0 {
@@ -76,7 +76,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 				}
 			})
 
-			AfterEach(func() {
+			ginkgo.AfterEach(func() {
 				// Then, perform the core file check.
 				log.Info("DatastoreDescribe AfterEach: checking for core files.")
 				afterCoreFiles := readCoreFiles()
@@ -85,12 +85,12 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 					return nil
 				})
 				if afterCoreFiles.Len() != 0 {
-					if CurrentGinkgoTestDescription().Failed {
-						Fail(fmt.Sprintf("Test FAILED and new core files were detected during tear-down: %v.  "+
+					if ginkgo.CurrentGinkgoTestDescription().Failed {
+						ginkgo.Fail(fmt.Sprintf("Test FAILED and new core files were detected during tear-down: %v.  "+
 							"Felix must have panicked during the test.", afterCoreFiles.Slice()))
 						return
 					}
-					Fail(fmt.Sprintf("Test PASSED but new core files were detected during tear-down: %v.  "+
+					ginkgo.Fail(fmt.Sprintf("Test PASSED but new core files were detected during tear-down: %v.  "+
 						"Felix must have panicked during the test.", afterCoreFiles.Slice()))
 				}
 			})
@@ -102,7 +102,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 func readCoreFiles() set.Set[string] {
 	tmpFiles, err := os.ReadDir("/tmp")
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	var coreFiles []string
 	for _, f := range tmpFiles {
 		if strings.HasPrefix(f.Name(), "core_felix-") {

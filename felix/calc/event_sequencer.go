@@ -307,6 +307,10 @@ func (buf *EventSequencer) flushPolicyUpdates() {
 }
 
 func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *proto.ActivePolicyUpdate {
+	var perfHints []string
+	for _, hint := range rules.PerformanceHints {
+		perfHints = append(perfHints, string(hint))
+	}
 	return &proto.ActivePolicyUpdate{
 		Id: &proto.PolicyID{
 			Tier: key.Tier,
@@ -325,6 +329,7 @@ func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *p
 			Untracked:        rules.Untracked,
 			PreDnat:          rules.PreDNAT,
 			OriginalSelector: rules.OriginalSelector,
+			PerfHints:        perfHints,
 		},
 	}
 }
@@ -438,10 +443,10 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 
 	var skipRedir *proto.WorkloadBpfSkipRedir
 	// BPF ingress redirect should be skipped for VM workloads and workloads that have ingress BW QoS configured
-	if isVMWorkload(ep.Labels) || (ep.QoSControls != nil && ep.QoSControls.IngressBandwidth > 0) {
+	if isVMWorkload(ep.Labels) || (ep.QoSControls != nil && (ep.QoSControls.IngressBandwidth > 0 || ep.QoSControls.IngressPacketRate > 0)) {
 		skipRedir = &proto.WorkloadBpfSkipRedir{Ingress: true}
 	}
-	if ep.QoSControls != nil && ep.QoSControls.EgressBandwidth > 0 {
+	if ep.QoSControls != nil && (ep.QoSControls.EgressBandwidth > 0 || ep.QoSControls.EgressPacketRate > 0) {
 		if skipRedir == nil {
 			skipRedir = &proto.WorkloadBpfSkipRedir{}
 		}
@@ -599,7 +604,7 @@ func (buf *EventSequencer) flushHostIPUpdates() {
 	for hostname, hostIP := range buf.pendingHostIPUpdates {
 		hostAddr := ""
 		if hostIP != nil {
-			hostAddr = hostIP.IP.String()
+			hostAddr = hostIP.String()
 		}
 		buf.Callback(&proto.HostMetadataUpdate{
 			Hostname: hostname,
@@ -641,7 +646,7 @@ func (buf *EventSequencer) flushHostIPv6Updates() {
 	for hostname, hostIP := range buf.pendingHostIPv6Updates {
 		hostIPv6Addr := ""
 		if hostIP != nil {
-			hostIPv6Addr = hostIP.IP.String()
+			hostIPv6Addr = hostIP.String()
 		}
 		buf.Callback(&proto.HostMetadataV6Update{
 			Hostname: hostname,

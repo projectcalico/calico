@@ -44,7 +44,6 @@ class PortExtra(object):
         self.floating_ips = None
         self.interface_name = None
         self.network_name = None
-        self.network_qos_policy_id = None
         self.project_data = None
         self.qos = None
         self.security_groups = None
@@ -245,9 +244,6 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         except Exception:
             LOG.warning(f"Failed to find network name for port {port['id']}")
 
-        if "qos_policy_id" in network:
-            port_extra.network_qos_policy_id = network["qos_policy_id"]
-
     def get_extra_port_information(self, context, port):
         """get_extra_port_information
 
@@ -336,7 +332,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 setting = max
             return setting
 
-        qos_policy_id = port.get("qos_policy_id") or port_extra.network_qos_policy_id
+        qos_policy_id = port.get("qos_policy_id") or port.get("qos_network_policy_id")
         LOG.debug("QoS Policy ID = %r", qos_policy_id)
         if qos_policy_id:
             rules = context.session.query(qos_models.QosBandwidthLimitRule).filter_by(

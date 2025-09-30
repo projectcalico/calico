@@ -89,7 +89,7 @@ func RunOutput(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thr
 			}
 
 			// Check that BIRD is actually responding to commands.
-			out, err := exec.Command("/usr/bin/birdcl", "-s", "/var/run/calico/bird.ctl", "show", "status").Output()
+			out, err := exec.Command("/bin/birdcl", "-s", "/var/run/calico/bird.ctl", "show", "status").Output()
 			if err != nil {
 				return fmt.Errorf("calico/node is not ready: bird is not live: %+v", err)
 			}
@@ -108,7 +108,7 @@ func RunOutput(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thr
 			}
 
 			// Check that BIRD is actually responding to commands.
-			out, err := exec.Command("/usr/bin/birdcl", "-s", "/var/run/calico/bird6.ctl", "show", "status").Output()
+			out, err := exec.Command("/bin/birdcl", "-s", "/var/run/calico/bird6.ctl", "show", "status").Output()
 			if err != nil {
 				return fmt.Errorf("calico/node is not ready: bird6 is not live: %+v", err)
 			}
@@ -168,7 +168,7 @@ func checkService(serviceName string) error {
 
 	cmdOutput := string(out)
 	if !strings.HasPrefix(cmdOutput, "run") {
-		return fmt.Errorf("Service %s is not running. Output << %s >>", serviceName, strings.Trim(cmdOutput, "\n"))
+		return fmt.Errorf("service %s is not running. Output << %s >>", serviceName, strings.Trim(cmdOutput, "\n"))
 	}
 
 	return nil
@@ -181,7 +181,7 @@ func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
 	// Stat nodename file to get the modified time of the file.
 	nodenameFileStat, err := os.Stat("/var/lib/calico/nodename")
 	if err != nil {
-		return fmt.Errorf("Failed to stat() nodename file: %v", err)
+		return fmt.Errorf("failed to stat() nodename file: %v", err)
 	}
 
 	// Check for unestablished peers
@@ -245,7 +245,7 @@ func checkFelixHealth(ctx context.Context, endpoint, probeType string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("%s probe reporting %d", probeType, resp.StatusCode)

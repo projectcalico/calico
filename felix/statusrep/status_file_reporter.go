@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/proto/protoconv"
 	epstatus "github.com/projectcalico/calico/libcalico-go/lib/epstatusfile"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
@@ -253,25 +254,26 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusUpdate")
 			return
 		}
-		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
+		key := protoconv.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
 
-		epStatus := epstatus.WorkloadEndpointToWorkloadEndpointStatus(m.Endpoint)
+		epStatus := protoconv.WorkloadEndpointToWorkloadEndpointStatus(m.Endpoint)
 		if epStatus == nil {
 			logrus.WithField("update", m).Error("Failed to construct WorkloadEndpointStatus from WorkloadEndpointUpdate")
 			return
 		}
 
-		if m.Status.Status == statusDown {
+		switch m.Status.Status {
+		case statusDown:
 			logrus.WithField("update", e).Debug("Skipping WorkloadEndpointStatusUpdate with down status")
 			fr.statusDirDeltaTracker.Desired().Delete(fn)
 			return
-		} else if m.Status.Status == statusUp {
+		case statusUp:
 			// Explicitly checking the opposite case here (rather than fallthrough)
 			// in-case of a terrible failure where status is neither "up" nor "down".
 			logrus.WithField("update", e).Debug("Handling WorkloadEndpointUpdate with up status")
 			fr.statusDirDeltaTracker.Desired().Set(fn, *epStatus)
-		} else {
+		default:
 			logrus.WithField("update", e).Warn("Skipping update with unrecognized status")
 		}
 
@@ -280,7 +282,7 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusRemove")
 			return
 		}
-		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
+		key := protoconv.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
 
 		logrus.WithField("remove", e).Debug("Handling WorkloadEndpointStatusRemove")

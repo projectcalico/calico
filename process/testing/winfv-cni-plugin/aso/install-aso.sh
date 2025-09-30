@@ -17,16 +17,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-. ./utils.sh
-
-# Verify the required Environment Variables are present.
-: "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
-: "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
-: "${AZURE_CLIENT_ID:?Environment variable empty or not defined.}"
-: "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
-
+: ${KUBE_VERSION:=v1.31.0}
 CRD_PATTERN="resources.azure.com/*;containerservice.azure.com/*;compute.azure.com/*;network.azure.com/*"
-SUFFIX=""
 
 # Utilities
 : ${KIND:=./bin/kind}
@@ -35,8 +27,8 @@ SUFFIX=""
 : ${ASOCTL:=./bin/asoctl}
 
 # Create management cluster
-${KIND} create cluster --image kindest/node:${KUBE_VERSION} --name kind${SUFFIX}
-${KUBECTL} wait node kind${SUFFIX}-control-plane --for=condition=ready --timeout=90s
+${KIND} create cluster --image kindest/node:${KUBE_VERSION} --name kind
+${KUBECTL} wait node kind-control-plane --for=condition=ready --timeout=90s
 
 # Install cert-manager
 echo; echo "Wait for cert manager to be installed ..."
@@ -45,34 +37,11 @@ ${CMCTL} check api --wait=2m
 
 echo; echo "Installing ASO ..."
 
-# We are not able to call asoctl in semaphore VM with ubuntu 20.04.
-# bin/asoctl: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.32' not found (required by bin/asoctl)
-# The workaround is to have the manifests generated in advance. 
-file="asoctl-generated-manifests-v2.6.0.yaml"
-# Check if the file exists in the current directory
-if [ -f "$file" ]; then
-    echo "The file '$file' exists in the current directory."
-    ${KUBECTL} apply -f $file
-else
-    # Install ASO https://azure.github.io/azure-service-operator/guide/installing-from-yaml/
-    ${ASOCTL} export template --version v2.6.0 --crd-pattern "${CRD_PATTERN}" | ${KUBECTL} apply -f -
-fi
-
-
-# Create a secret to include the password of the Service Principal identity created in Azure
-echo; echo "Creating secret with azure credentials..."
-cat <<EOF | ${KUBECTL} apply -f -
-apiVersion: v1
-kind: Secret
-metadata:
-  name: aso-controller-settings
-  namespace: azureserviceoperator-system
-stringData:
-  AZURE_SUBSCRIPTION_ID: "$AZURE_SUBSCRIPTION_ID"
-  AZURE_TENANT_ID: "$AZURE_TENANT_ID"
-  AZURE_CLIENT_ID: "$AZURE_CLIENT_ID"
-  AZURE_CLIENT_SECRET: "$AZURE_CLIENT_SECRET"
-EOF
+helm repo add aso2 https://raw.githubusercontent.com/Azure/azure-service-operator/main/v2/charts
+helm upgrade --install aso2 aso2/azure-service-operator \
+    --create-namespace \
+    --namespace=azureserviceoperator-system \
+    --set crdPattern=${CRD_PATTERN}
 
 # Wait for ASO deployments
 echo "Wait for ASO controller manager to be ready (up to 2m) ..."

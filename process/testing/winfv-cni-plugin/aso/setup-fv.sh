@@ -15,7 +15,7 @@
 
 set -e
 
-. ./utils.sh
+. ../../util/utils.sh
 
 . ./vmss.sh info
 

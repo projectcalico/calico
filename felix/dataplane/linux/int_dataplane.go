@@ -36,11 +36,11 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
+	k8shealthcheck "k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpftimeouts "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/events"
@@ -48,7 +48,6 @@ import (
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
-	"github.com/projectcalico/calico/felix/bpf/nat"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
@@ -58,7 +57,6 @@ import (
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
 	collectortypes "github.com/projectcalico/calico/felix/collector/types"
-	"github.com/projectcalico/calico/felix/config"
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -200,10 +198,11 @@ type Config struct {
 	ConfigChangedRestartCallback func()
 	FatalErrorRestartCallback    func(error)
 
-	PostInSyncCallback func()
-	HealthAggregator   *health.HealthAggregator
-	WatchdogTimeout    time.Duration
-	RouteTableManager  *idalloc.IndexAllocator
+	PostInSyncCallback    func()
+	HealthAggregator      *health.HealthAggregator
+	WatchdogTimeout       time.Duration
+	RouteTableManager     *idalloc.IndexAllocator
+	bpfProxyHealthzServer *k8shealthcheck.ProxyHealthServer
 
 	DebugSimulateDataplaneHangAfter  time.Duration
 	DebugSimulateDataplaneApplyDelay time.Duration
@@ -213,6 +212,7 @@ type Config struct {
 	BPFEnabled                         bool
 	BPFPolicyDebugEnabled              bool
 	BPFDisableUnprivileged             bool
+	BPFJITHardening                    string
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
 	BPFConntrackLogLevel               string
@@ -253,6 +253,7 @@ type Config struct {
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
+	KubeProxyHealtzPort        int
 	SidecarAccelerationEnabled bool
 
 	// Flow logs related fields.
@@ -277,7 +278,7 @@ type Config struct {
 
 	RouteSource string
 
-	KubernetesProvider config.Provider
+	KubernetesProvider felixconfig.Provider
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
 	NewNftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
@@ -511,11 +512,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
-		if !config.RulesConfig.NFTables {
-			log.Info("BPF enabled, configuring iptables layer to clean up kube-proxy's rules.")
-			iptablesOptions.ExtraCleanupRegexPattern = rules.KubeProxyInsertRuleRegex
-			iptablesOptions.HistoricChainPrefixes = append(iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...)
-		}
+		log.Info("BPF enabled, configuring iptables/nftables layer to clean up kube-proxy's rules.")
+		iptablesOptions.ExtraCleanupRegexPattern = rules.KubeProxyInsertRuleRegex
+		iptablesOptions.HistoricChainPrefixes = append(iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...)
 	}
 
 	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
@@ -1020,14 +1019,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			// Activate the connect-time load balancer.
 			err = bpfnat.InstallConnectTimeLoadBalancer(true, config.BPFIpv6Enabled,
-				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP)
+				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP, bpfMaps.CommonMaps.CTLBProgramsMap)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
 			log.Infof("Connect time load balancer enabled: %s", config.BPFConnTimeLB)
 		} else {
 			// Deactivate the connect-time load balancer.
-			err = nat.RemoveConnectTimeLoadBalancer(true, config.BPFCgroupV2)
+			err = bpfnat.RemoveConnectTimeLoadBalancer(true, config.BPFCgroupV2)
 			if err != nil {
 				log.WithError(err).Warn("Failed to detach connect-time load balancer. Ignoring.")
 			}
@@ -1043,12 +1042,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			collectorPacketInfoReader = policyEventListener
 
-			collectorCtInfoReader := conntrack.NewCollectorCtInfoReader()
+			collectorCtInfoReader := bpfconntrack.NewCollectorCtInfoReader()
 			// We must add the collectorConntrackInfoReader before
 			// conntrack.LivenessScanner as we want to see expired connections and the
 			// liveness scanner would remove them for us.
 			if conntrackScannerV4 != nil {
-				conntrackInfoReaderV4 := conntrack.NewInfoReader(
+				conntrackInfoReaderV4 := bpfconntrack.NewInfoReader(
 					config.BPFConntrackTimeouts,
 					config.BPFNodePortDSREnabled,
 					nil,
@@ -1057,7 +1056,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				conntrackScannerV4.AddFirstUnlocked(conntrackInfoReaderV4)
 			}
 			if conntrackScannerV6 != nil {
-				conntrackInfoReaderV6 := conntrack.NewInfoReader(
+				conntrackInfoReaderV6 := bpfconntrack.NewInfoReader(
 					config.BPFConntrackTimeouts,
 					config.BPFNodePortDSREnabled,
 					nil,
@@ -1113,10 +1112,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
-	dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+
+	if config.RulesConfig.IPIPEnabled ||
+		config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
+		dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+	}
 
 	if !config.BPFEnabled {
-		dp.RegisterManager(newDSCPManager(mangleTableV4, ruleRenderer, 4))
+		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
 	}
 
 	if config.RulesConfig.IPIPEnabled {
@@ -1314,10 +1317,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
-		dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+
+		if config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
+			dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+		}
 
 		if !config.BPFEnabled {
-			dp.RegisterManager(newDSCPManager(mangleTableV6, ruleRenderer, 6))
+			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
 		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -1519,7 +1525,7 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 		c.VXLANMTUV6 = hostMTU - vxlanV6MTUOverhead
 	}
 	if c.Wireguard.MTU == 0 {
-		if c.KubernetesProvider == config.ProviderAKS && c.Wireguard.EncryptHostTraffic {
+		if c.KubernetesProvider == felixconfig.ProviderAKS && c.Wireguard.EncryptHostTraffic {
 			// The default MTU on Azure is 1500, but the underlying network stack will fragment packets at 1400 bytes,
 			// see https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning#azure-and-vm-mtu
 			// for details.
@@ -1534,7 +1540,7 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 		}
 	}
 	if c.Wireguard.MTUV6 == 0 {
-		if c.KubernetesProvider == config.ProviderAKS && c.Wireguard.EncryptHostTraffic {
+		if c.KubernetesProvider == felixconfig.ProviderAKS && c.Wireguard.EncryptHostTraffic {
 			// The default MTU on Azure is 1500, but the underlying network stack will fragment packets at 1400 bytes,
 			// see https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning#azure-and-vm-mtu
 			// for details.
@@ -2194,7 +2200,7 @@ func (d *InternalDataplane) shutdownXDPCompletely() error {
 		log.WithError(err).WithField("try", i).Warn("failed to wipe the XDP state")
 		time.Sleep(waitInterval)
 	}
-	return fmt.Errorf("Failed to wipe the XDP state after %v tries over %v seconds: Error %v", maxTries, waitInterval, err)
+	return fmt.Errorf("failed to wipe the XDP state after %v tries over %v seconds: Error %v", maxTries, waitInterval, err)
 }
 
 func (d *InternalDataplane) loopUpdatingDataplane() {
@@ -2822,7 +2828,25 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
+	if config.bpfProxyHealthzServer == nil {
+		healthzAddr := fmt.Sprintf(":%d", config.KubeProxyHealtzPort)
+		config.bpfProxyHealthzServer = k8shealthcheck.NewProxyHealthServer(
+			healthzAddr, config.KubeProxyMinSyncPeriod)
+
+		// We cannot wait for the healthz server as we cannot stop it.
+		go func() {
+			for {
+				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
+				if err != nil {
+					log.WithError(err).Error("BPF Proxy Healthz server failed, restarting in 1s")
+					time.Sleep(time.Second)
+				}
+			}
+		}()
+	}
+
 	bpfproxyOpts := []bpfproxy.Option{
+		bpfproxy.WithHealthzServer(config.bpfProxyHealthzServer),
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 	}
 
@@ -2876,7 +2900,7 @@ func startBPFDataplaneComponents(
 		ctLogLevel = bpfconntrack.BPFLogLevelDebug
 	}
 
-	bpfCleaner, err := conntrack.NewBPFProgCleaner(int(ipFamily), config.BPFConntrackTimeouts, ctLogLevel)
+	bpfCleaner, err := bpfconntrack.NewBPFProgCleaner(int(ipFamily), config.BPFConntrackTimeouts, ctLogLevel)
 	if err != nil {
 		log.Errorf("error creating the bpf cleaner %v", err)
 	}

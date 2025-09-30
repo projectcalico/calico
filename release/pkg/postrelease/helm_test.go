@@ -31,13 +31,13 @@ func TestHelmChart(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to fetch helm chart: server returned %s", resp.Status)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	tmpFile, err := os.CreateTemp("", "*.tgz")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
 		t.Fatalf("failed to write helm chart to temp file: %v", err)
@@ -71,7 +71,7 @@ func TestHelmIndex(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to fetch helm index: server returned %s", resp.Status)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	index := helmIndex{}
 	if err := yaml.NewDecoder(resp.Body).Decode(&index); err != nil {
 		t.Fatalf("failed to decode helm index: %v", err)

@@ -96,7 +96,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkSet tests", testutils.DatastoreAl
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: NetworkSet(" + namespace1 + "/" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: NetworkSet(" + namespace1 + "/" + name1 + ") with error:"))
 
 			By("Getting NetworkSet (namespace1/name1) and comparing the output against spec1")
 			res, outError := c.NetworkSets().Get(ctx, namespace1, name1, options.GetOptions{})
@@ -430,7 +430,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkSet tests", testutils.DatastoreAl
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
 			be.Clean()
-			testWatcher4.ExpectEvents(apiv3.KindNetworkSet, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(apiv3.KindNetworkSet, []watch.Event{
 				{
 					Type:     watch.Deleted,
 					Previous: outRes1,

@@ -83,13 +83,13 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
 	}
 	if context := parsedArgs["--context"]; context != nil {
-		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
+		_ = os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	results := common.ExecuteConfigCommand(parsedArgs, common.ActionPatch)
@@ -100,11 +100,11 @@ Description:
 		if results.Err != nil {
 			return results.Err
 		}
-		return fmt.Errorf("No resources specified")
+		return fmt.Errorf("no resources specified")
 	} else if results.Err == nil && results.NumHandled > 0 {
 		fmt.Printf("Successfully patched %d '%s' resource\n", results.NumHandled, results.SingleKind)
 	} else if results.Err != nil {
-		return fmt.Errorf("Hit error: %v", results.Err)
+		return fmt.Errorf("hit error: %v", results.Err)
 	}
 
 	if len(results.ResErrs) > 0 {

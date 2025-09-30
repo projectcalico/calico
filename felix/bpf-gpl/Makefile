@@ -60,13 +60,12 @@ UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 UT_OBJS+=ut/ip_parse_test_v6.o
 
 XDP_MAP_HEADERS := jump.h
-COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h qos.h $(XDP_MAP_HEADERS)
+COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
 IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
 
 MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
-MAP_STUB_CS := $(MAP_OBJS:.o=.c)
 
 # Map stub ojbs cannot have '-emit-llvm' in flags
 MAP_CFLAGS := $(subst -emit-llvm,,$(CFLAGS))

@@ -137,7 +137,7 @@ func (r ResourcePrinterTable) Print(client client.Interface, resources []runtime
 		if err != nil {
 			panic(err)
 		}
-		writer.Flush()
+		_ = writer.Flush()
 
 		// Leave a gap after each table.
 		fmt.Printf("\n")

@@ -106,7 +106,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: IPAMConfig(" + name + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: IPAMConfig(" + name + ") with error:"))
 
 			By("Getting IPAMConfig and comparing the output against spec1")
 			res, outError := c.IPAMConfig().Get(ctx, name, options.GetOptions{})

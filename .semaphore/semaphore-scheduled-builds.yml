@@ -50,15 +50,15 @@ promotions:
   - name: Push ALP images
     pipeline_file: push-images/alp.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push calicoctl images
     pipeline_file: push-images/calicoctl.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push calico-node images
     pipeline_file: push-images/node.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
     auto_promote:
@@ -66,49 +66,53 @@ promotions:
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push key-cert-provisioner images
     pipeline_file: push-images/key-cert-provisioner.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push kube-controllers images
     pipeline_file: push-images/kube-controllers.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push pod2daemon images
     pipeline_file: push-images/pod2daemon.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push typha images
     pipeline_file: push-images/typha.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Goldmane images
     pipeline_file: push-images/goldmane.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Whisker images
     pipeline_file: push-images/whisker.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Whisker Backend images
     pipeline_file: push-images/whisker-backend.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Guardian images
     pipeline_file: push-images/guardian.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
       when: "branch =~ 'master'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
+  - name: Push E2E images
+    pipeline_file: push-images/e2e-test.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
 blocks:
@@ -126,7 +130,7 @@ blocks:
     task:
       agent:
         machine:
-          type: f1-standard-4
+          type: f1-standard-2
           os_image: ubuntu2204
       jobs:
         - name: Pre-flight checks
@@ -215,7 +219,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make image-windows
   - name: "cni-plugin: Windows"
     run:
-      when: "true"
+      when: "false or true"
     dependencies:
       - Prerequisites
     task:
@@ -231,9 +235,7 @@ blocks:
           - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
           - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-cni-plugin/report
           - export LOGS_DIR=~/fv.log
-          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}
-          - export SUFFIX=${CLUSTER_NAME}
+          - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
           - cd cni-plugin
           - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
       epilogue:
@@ -255,14 +257,16 @@ blocks:
             minutes: 60
           commands:
             - export BACKEND=overlay
-            - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+            - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
         - name: Containerd - Windows FV - l2bridge
           execution_time_limit:
             minutes: 60
           commands:
             - export BACKEND=l2bridge
-            - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+            - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
   - name: confd
     run:

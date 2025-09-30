@@ -484,6 +484,48 @@ set to false. This reduces the number of metrics reported, reducing Prometheus l
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
 
+### `PrometheusMetricsCAFile` (config file) / `prometheusMetricsCAFile` (YAML)
+
+Defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
+This certificate must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PrometheusMetricsCAFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `prometheusMetricsCAFile` (YAML) `PrometheusMetricsCAFile` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `PrometheusMetricsCertFile` (config file) / `prometheusMetricsCertFile` (YAML)
+
+Defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
+This certificate must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PrometheusMetricsCertFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `prometheusMetricsCertFile` (YAML) `PrometheusMetricsCertFile` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `PrometheusMetricsClientAuth` (config file) / `prometheusMetricsClientAuth` (YAML)
+
+Specifies the client authentication type for the /metrics endpoint.
+This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PrometheusMetricsClientAuth` |
+| Encoding (env var/config file) | One of: <code>NoClientCert</code>, <code>RequireAndVerifyClientCert</code>, <code>RequireAnyClientCert</code>, <code>VerifyClientCertIfGiven</code> (case insensitive) |
+| Default value (above encoding) | `RequireAndVerifyClientCert` |
+| `FelixConfiguration` field | `prometheusMetricsClientAuth` (YAML) `PrometheusMetricsClientAuth` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `RequireAndVerifyClientCert` |
+
 ### `PrometheusMetricsEnabled` (config file) / `prometheusMetricsEnabled` (YAML)
 
 Enables the Prometheus metrics server in Felix if set to true.
@@ -507,6 +549,20 @@ The host that the Prometheus metrics server should bind to.
 | Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9:._+-]{1,64}$</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `prometheusMetricsHost` (YAML) `PrometheusMetricsHost` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `PrometheusMetricsKeyFile` (config file) / `prometheusMetricsKeyFile` (YAML)
+
+Defines the absolute path to the private key file corresponding to the TLS certificate
+used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PrometheusMetricsKeyFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `prometheusMetricsKeyFile` (YAML) `PrometheusMetricsKeyFile` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
@@ -1771,6 +1827,22 @@ determines the CTLB behavior.
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
+### `BPFJITHardening` (config file) / `bpfJITHardening` (YAML)
+
+Controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+Felix will not modify the JIT hardening setting.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFJITHardening` |
+| Encoding (env var/config file) | One of: <code>Auto</code>, <code>Strict</code> (case insensitive) |
+| Default value (above encoding) | `Auto` |
+| `FelixConfiguration` field | `bpfJITHardening` (YAML) `BPFJITHardening` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `Auto` |
+| Notes | Required. | 
+
 ### `BPFKubeProxyEndpointSlicesEnabled` (config file) / `bpfKubeProxyEndpointSlicesEnabled` (YAML)
 
 Deprecated and has no effect. BPF
@@ -1785,6 +1857,21 @@ the next release.
 | `FelixConfiguration` field | `bpfKubeProxyEndpointSlicesEnabled` (YAML) `BPFKubeProxyEndpointSlicesEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
+
+### `BPFKubeProxyHealtzPort` (config file) / `bpfKubeProxyHealtzPort` (YAML)
+
+In BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+The health check server is used by external load balancers to determine if this node should receive traffic.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFKubeProxyHealtzPort` |
+| Encoding (env var/config file) | Integer |
+| Default value (above encoding) | `10256` |
+| `FelixConfiguration` field | `bpfKubeProxyHealtzPort` (YAML) `BPFKubeProxyHealtzPort` (Go API) |
+| `FelixConfiguration` schema | Integer |
+| Default value (YAML) | `10256` |
+| Notes | Required. | 
 
 ### `BPFKubeProxyIptablesCleanupEnabled` (config file) / `bpfKubeProxyIptablesCleanupEnabled` (YAML)
 

@@ -14,7 +14,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
-		-e GOFLAGS=$(GOFLAGS) \
+		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
@@ -102,6 +102,7 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
+	$(MAKE) get-operator-crds
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
 

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path"
 	"regexp"
@@ -261,10 +262,6 @@ func BPFMode() bool {
 
 func BPFAttachType() string {
 	return strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE"))
-}
-
-func BPFIPv6Support() bool {
-	return false
 }
 
 func describeBPFTests(opts ...bpfTestOpt) bool {
@@ -1331,6 +1328,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						return healthStatus(containerIP(f.Container), "9099", "readiness")
 					}
 					Eventually(felixReady, "10s", "500ms").Should(BeGood())
+					Eventually(func() int {
+						resp, err := http.Get("http://" + containerIP(f.Container) + ":10256" + "/healthz")
+						if err != nil {
+							log.WithError(err).WithField("resp", resp).Warn("HTTP GET failed")
+							return -1
+						}
+						defer resp.Body.Close()
+						return resp.StatusCode
+					}, "3s", "500ms").Should(BeGood())
 				}
 			}
 		}

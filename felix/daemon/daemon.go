@@ -729,7 +729,7 @@ configRetry:
 	dpConnector.ToDataplane <- configParams.ToConfigUpdate()
 
 	if configParams.PrometheusMetricsEnabled {
-		log.Info("Prometheus metrics enabled.  Starting server.")
+		log.Info("Prometheus metrics enabled.")
 		gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
 			Name:        "felix_host",
 			Help:        "Configured Felix hostname (as a label), typically used in grouping/aggregating stats; the label defaults to the hostname of the host but can be overridden by configuration. The value of the gauge is always set to 1.",
@@ -738,10 +738,28 @@ configRetry:
 		gaugeHost.Set(1)
 		prometheus.MustRegister(gaugeHost)
 		dp.ConfigurePrometheusMetrics(configParams)
-		go metricsserver.ServePrometheusMetricsForever(
-			configParams.PrometheusMetricsHost,
-			configParams.PrometheusMetricsPort,
-		)
+		if configParams.PrometheusMetricsKeyFile != "" || configParams.PrometheusMetricsCertFile != "" {
+			log.Info("Trying to start metrics https server.")
+			go func() {
+				err := metricsserver.ServePrometheusMetricsHTTPS(
+					configParams.PrometheusMetricsHost,
+					configParams.PrometheusMetricsPort,
+					configParams.PrometheusMetricsCertFile,
+					configParams.PrometheusMetricsKeyFile,
+					configParams.PrometheusMetricsClientAuth,
+					configParams.PrometheusMetricsCAFile,
+				)
+				if err != nil {
+					log.Info("Error starting metrics https server.", err)
+				}
+			}()
+		} else {
+			log.Info("Starting metrics http server.")
+			go metricsserver.ServePrometheusMetricsHTTP(
+				configParams.PrometheusMetricsHost,
+				configParams.PrometheusMetricsPort,
+			)
+		}
 	}
 
 	// Register signal handlers to dump memory/CPU profiles.
@@ -1240,13 +1258,14 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVe
 		if ipVersion == proto.IPVersion_IPV6 {
 			storedPublicKey = node.Status.WireguardPublicKeyV6
 		} else if ipVersion != proto.IPVersion_IPV4 {
-			return fmt.Errorf("Unknown IP version: %d", ipVersion)
+			return fmt.Errorf("unknown IP version: %d", ipVersion)
 		}
 		if storedPublicKey != dpPubKey {
 			updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			if ipVersion == proto.IPVersion_IPV4 {
+			switch ipVersion {
+			case proto.IPVersion_IPV4:
 				node.Status.WireguardPublicKey = dpPubKey
-			} else if ipVersion == proto.IPVersion_IPV6 {
+			case proto.IPVersion_IPV6:
 				node.Status.WireguardPublicKeyV6 = dpPubKey
 			}
 			_, err := fc.datastorev3.Nodes().Update(updateCtx, node, options.SetOptions{})

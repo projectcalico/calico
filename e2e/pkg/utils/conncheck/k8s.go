@@ -34,19 +34,17 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
 )
 
-func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace, podName string, ports []int, labels map[string]string, podCustomizer func(pod *v1.Pod), serviceCustomizer func(svc *v1.Service)) (*v1.Pod, *v1.Service) {
+func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace, podName string, ports []int, labels map[string]string, podCustomizer func(pod *v1.Pod), serviceCustomizer func(svc *v1.Service), autoCreateSvc bool) (*v1.Pod, *v1.Service) {
 	// Because we have a variable amount of ports, we'll first loop through and generate our Containers for our pod,
 	// and ServicePorts.for our Service.
 	var image string
 	containers := []v1.Container{}
 	servicePorts := []v1.ServicePort{}
 	nodeselector := map[string]string{}
-	imagePull := v1.PullAlways
 
 	if windows.ClusterIsWindows() {
 		image = images.Porter
 		nodeselector["kubernetes.io/os"] = "windows"
-		imagePull = v1.PullIfNotPresent
 	} else {
 		image = images.TestWebserver
 		nodeselector["kubernetes.io/os"] = "linux"
@@ -61,7 +59,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 		containers = append(containers, v1.Container{
 			Name:            fmt.Sprintf("%s-container-%d", podName, port),
 			Image:           image,
-			ImagePullPolicy: imagePull,
+			ImagePullPolicy: v1.PullIfNotPresent,
 			Args:            args,
 			Ports: []v1.ContainerPort{
 				{
@@ -123,6 +121,12 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	pod, err := f.ClientSet.CoreV1().Pods(namespace.Name).Create(ctx, pod, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	logrus.Infof("Created pod %v", pod.ObjectMeta.Name)
+
+	// Only create service if autoCreateSvc is true
+	if !autoCreateSvc {
+		// Return the pod with nil service when service creation is disabled
+		return pod, nil
+	}
 
 	svcName := fmt.Sprintf("svc-%s", podName)
 	By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
