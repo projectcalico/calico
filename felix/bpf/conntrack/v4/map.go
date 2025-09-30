@@ -538,13 +538,13 @@ func (e Value) Upgrade() maps.Upgradable {
 	var val5 v5.Value
 	copy(val5[:], e[:])
 	// Zero the 3 padding bytes.
-	cpd := copy(val5[v5.VoPadding1:VoFlags], []byte{0, 0, 0})
+	cpd := copy(val5[v5.VoPadding1:v5.VoFlags], []byte{0, 0, 0})
 	if cpd != 3 {
-		panic("Oops, Alex needs to learn how to count!")
+		panic(fmt.Sprintf("Oops, Alex needs to learn how to count! Didn't copy 3, but %d", cpd))
 	}
 
 	flags5 := uint32(e.Flags())
-	binary.BigEndian.PutUint32(val5[v5.VoFlags:v5.VoRevKey], flags5)
+	binary.LittleEndian.PutUint32(val5[v5.VoFlags:v5.VoRevKey], flags5)
 
 	return val5
 }

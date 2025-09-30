@@ -380,13 +380,13 @@ func (e ValueV6) Upgrade() maps.Upgradable {
 	var val5 v5.ValueV6
 	copy(val5[:], e[:])
 	// Zero the 3 padding bytes.
-	cpd := copy(val5[17:20], []byte{0, 0, 0})
+	cpd := copy(val5[v5.VoPadding1V6:v5.VoFlagsV6], []byte{0, 0, 0})
 	if cpd != 3 {
 		panic("Oops, Alex needs to learn how to count!")
 	}
 
 	flags5 := uint32(e.Flags())
-	binary.BigEndian.PutUint32(val5[v5.VoFlagsV6:v5.VoRevKeyV6], flags5)
+	binary.LittleEndian.PutUint32(val5[v5.VoFlagsV6:v5.VoRevKeyV6], flags5)
 
 	return val5
 }
