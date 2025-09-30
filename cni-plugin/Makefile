@@ -201,6 +201,9 @@ build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 ###############################################################################
 # Unit Tests
 ###############################################################################
+fv:
+	@echo "No FV tests for CNI plugin"
+
 ## Run the unit tests.
 ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
