@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v3
+package v5
 
 import (
 	"encoding/binary"
@@ -21,9 +21,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 
-	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -67,9 +65,7 @@ func (k KeyV6) String() string {
 }
 
 func (k KeyV6) Upgrade() maps.Upgradable {
-	var key4 v4.KeyV6
-	copy(key4[:], k[:])
-	return key4
+	panic("conntrack map key already at its latest version")
 }
 
 func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) KeyV6 {
@@ -83,45 +79,36 @@ func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) K
 }
 
 // struct calico_ct_value {
-//  __u64 rst_seen;
-//  __u64 last_seen; // 8
-//  __u8 type;     // 16
-//  __u8 flags;     // 17
-//
-//  // Important to use explicit padding, otherwise the compiler can decide
-//  // not to zero the padding bytes, which upsets the verifier.  Worse than
-//  // that, debug logging often prevents such optimisation resulting in
-//  // failures when debug logging is compiled out only :-).
-//  __u8 pad0[5];
-//  __u8 flags2;
-//  union {
-//    // CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
-//    struct {
-//      struct calico_ct_leg a_to_b; // 24
-//      struct calico_ct_leg b_to_a; // 36
-//
-//      // CALI_CT_TYPE_NAT_REV only.
-//      __u32 orig_dst;                    // 48
-//      __u16 orig_port;                   // 52
-//      __u8 pad1[2];                      // 54
-//      __u32 tun_ip;                      // 56
-//      __u32 pad3;                        // 60
-//    };
-//
-//    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
-//    struct {
-//      struct calico_ct_key nat_rev_key;  // 24
-//      __u8 pad2[8];
-//    };
-//  };
+// 	__u64 rst_seen;
+// 	__u64 last_seen;	// 8
+// 	__u8 type;		// 16
+// 	__u8 pad0[3];		// 17
+// 	__u32 flags;		// 20 - 24
+// 	union {
+// 		struct {
+// 			struct calico_ct_leg a_to_b; // 24
+// 			struct calico_ct_leg b_to_a; // 48
+// 			ipv46_addr_t tun_ip;                     // 72
+// 			ipv46_addr_t orig_ip;                    // 76
+// 			__u16 orig_port;                   	 // 80
+// 			__u16 orig_sport;                 	 // 82
+// 			ipv46_addr_t orig_sip;                   // 84
+// 		};
+// 		struct {
+// 			struct calico_ct_key nat_rev_key;  // 24
+// 			__u16 nat_sport;
+// 			__u8 pad2[60];
+// 		};
+// 	};
+// 	/* 64bit aligned by here */
 // };
 
 const (
 	VoRSTSeenV6   int = 0
 	VoLastSeenV6  int = 8
 	VoTypeV6      int = 16
-	VoFlagsV6     int = 17
-	VoFlags2V6    int = 23
+	VoPadding1V6    int = 17
+	VoFlagsV6     int = 20
 	VoRevKeyV6    int = 24
 	VoLegABV6     int = 24
 	VoLegBAV6     int = 48
@@ -147,8 +134,8 @@ func (e ValueV6) Type() uint8 {
 	return e[VoTypeV6]
 }
 
-func (e ValueV6) Flags() uint16 {
-	return uint16(e[VoFlagsV6]) | (uint16(e[VoFlags2]) << 8)
+func (e ValueV6) Flags() uint32 {
+	return uint32(e[VoFlagsV6])
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -207,15 +194,14 @@ func (e *ValueV6) SetNATSport(sport uint16) {
 	binary.LittleEndian.PutUint16(e[VoNATSPortV6:VoNATSPortV6+2], sport)
 }
 
-func initValueV6(v *ValueV6, lastSeen time.Duration, typ uint8, flags uint16) {
+func initValueV6(v *ValueV6, lastSeen time.Duration, typ uint8, flags uint32) {
 	binary.LittleEndian.PutUint64(v[VoLastSeenV6:VoLastSeenV6+8], uint64(lastSeen))
 	v[VoTypeV6] = typ
-	v[VoFlagsV6] = byte(flags & 0xff)
-	v[VoFlags2] = byte((flags >> 8) & 0xff)
+	v[VoFlagsV6] = byte(flags)
 }
 
 // NewValueV6Normal creates a new ValueV6 of type TypeNormal based on the given parameters
-func NewValueV6Normal(lastSeen time.Duration, flags uint16, legA, legB Leg) ValueV6 {
+func NewValueV6Normal(lastSeen time.Duration, flags uint32, legA, legB Leg) ValueV6 {
 	v := ValueV6{}
 
 	initValueV6(&v, lastSeen, TypeNormal, flags)
@@ -228,7 +214,7 @@ func NewValueV6Normal(lastSeen time.Duration, flags uint16, legA, legB Leg) Valu
 
 // NewValueV6NATForward creates a new ValueV6 of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueV6NATForward(lastSeen time.Duration, flags uint16, revKey KeyV6) ValueV6 {
+func NewValueV6NATForward(lastSeen time.Duration, flags uint32, revKey KeyV6) ValueV6 {
 	v := ValueV6{}
 
 	initValueV6(&v, lastSeen, TypeNATForward, flags)
@@ -240,7 +226,7 @@ func NewValueV6NATForward(lastSeen time.Duration, flags uint16, revKey KeyV6) Va
 
 // NewValueV6NATReverse creates a new ValueV6 of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueV6NATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueV6NATReverse(lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) ValueV6 {
 	v := ValueV6{}
 
@@ -258,7 +244,7 @@ func NewValueV6NATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
 }
 
 // NewValueV6NATReverseSNAT in addition to NewValueV6NATReverse sets the orig source IP
-func NewValueV6NATReverseSNAT(lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueV6NATReverseSNAT(lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) ValueV6 {
 	v := NewValueV6NATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 	copy(v[VoOrigSIPV6:VoOrigSIPV6+16], origIP.To4())
@@ -375,19 +361,16 @@ func (e ValueV6) IsForwardDSR() bool {
 }
 
 func (e ValueV6) Upgrade() maps.Upgradable {
-	var val4 v4.ValueV6
-	copy(val4[:], e[:])
-	return val4
+	panic("conntrack map value already at its latest version")
 }
 
 var MapParamsV6 = maps.MapParameters{
-	Type:         "hash",
+	Type:         "lru_hash",
 	KeySize:      KeyV6Size,
 	ValueSize:    ValueV6Size,
 	MaxEntries:   MaxEntries,
 	Name:         "cali_v6_ct",
-	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      3,
+	Version:      5,
 	UpdatedByBPF: true,
 }
 
