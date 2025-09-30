@@ -460,9 +460,17 @@ spec:
                   type: string
                 prometheusGoMetricsEnabled:
                   type: boolean
+                prometheusMetricsCAFile:
+                  type: string
+                prometheusMetricsCertFile:
+                  type: string
+                prometheusMetricsClientAuth:
+                  type: string
                 prometheusMetricsEnabled:
                   type: boolean
                 prometheusMetricsHost:
+                  type: string
+                prometheusMetricsKeyFile:
                   type: string
                 prometheusMetricsPort:
                   type: integer
