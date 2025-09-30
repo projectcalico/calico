@@ -19,11 +19,11 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
+	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-const KeySize = v4.KeySize
+const KeySize = v5.KeySize
 const ValueSize = KeySize + 8 + 8
 const MaxEntries = 100000
 
@@ -56,10 +56,10 @@ func (e *Value) SetRevTS(ts uint64) {
 	binary.LittleEndian.PutUint64(e[KeySize+8:], ts)
 }
 
-func (e Value) OtherNATKey() v4.KeyInterface {
-	var ret v4.Key
+func (e Value) OtherNATKey() v5.KeyInterface {
+	var ret v5.Key
 
-	l := len(v4.Key{})
+	l := len(v5.Key{})
 	copy(ret[:l], e[0:KeySize])
 
 	return ret
@@ -83,22 +83,22 @@ func NewValue(key []byte, ts, rev_ts uint64) Value {
 
 type ValueInterface interface {
 	AsBytes() []byte
-	OtherNATKey() v4.KeyInterface
+	OtherNATKey() v5.KeyInterface
 	Timestamp() uint64
 	RevTimestamp() uint64
 }
 
-type MapMem map[v4.Key]Value
+type MapMem map[v5.Key]Value
 
 // LoadMapMem loads ConntrackMap into memory
 func LoadMapMem(m maps.Map) (MapMem, error) {
 	ret := make(MapMem)
 
 	err := m.Iter(func(k, v []byte) maps.IteratorAction {
-		ks := len(v4.Key{})
+		ks := len(v5.Key{})
 		vs := len(Value{})
 
-		var key v4.Key
+		var key v5.Key
 		copy(key[:ks], k[:ks])
 
 		var val Value
