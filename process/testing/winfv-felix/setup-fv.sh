@@ -9,7 +9,7 @@
 #
 #       - EE Felix fv
 #         copy calico-felix.exe, win-fv.exe to $PWD
-#         copy license.yaml, ~/go/src/github.com/projectcalico/libcalico-go/config/crd to $PWD/infra/ee
+#         copy license.yaml, ~/go/src/github.com/projectcalico/api/config/crd to $PWD/infra/ee
 #         run this script
 
 # Replace following parameters with your own value
