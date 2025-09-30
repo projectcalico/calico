@@ -310,8 +310,8 @@ func processAdmissionReview(obj runtime.Object, gvk *schema.GroupVersionKind, ha
 		}
 		responseAdmissionReview := &v1.AdmissionReview{}
 		responseAdmissionReview.SetGroupVersionKind(*gvk)
-		responseAdmissionReview.Response.UID = requestedAdmissionReview.Request.UID
 		responseAdmissionReview.Response = handler.processV1Review(*requestedAdmissionReview)
+		responseAdmissionReview.Response.UID = requestedAdmissionReview.Request.UID
 		return responseAdmissionReview, nil
 	default:
 		return nil, fmt.Errorf("Unsupported group version kind: %v", gvk)
