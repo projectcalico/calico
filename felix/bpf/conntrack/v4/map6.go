@@ -22,6 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -65,7 +66,9 @@ func (k KeyV6) String() string {
 }
 
 func (k KeyV6) Upgrade() maps.Upgradable {
-	panic("conntrack map key already at its latest version")
+	var k5 v5.ValueV6
+	copy(k5[:], k[:])
+	return k5
 }
 
 func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) KeyV6 {
@@ -371,7 +374,21 @@ func (e ValueV6) IsForwardDSR() bool {
 }
 
 func (e ValueV6) Upgrade() maps.Upgradable {
-	panic("conntrack map value already at its latest version")
+	// Flags have been reworked in v5 to be a contiguous 32bit.
+	// Padding now PREceeds the flags (as opposed to following them).
+	// Overall struct size remains the same.
+	var val5 v5.ValueV6
+	copy(val5[:], e[:])
+	// Zero the 3 padding bytes.
+	cpd := copy(val5[v5.VoPadding1V6:v5.VoFlagsV6], []byte{0, 0, 0})
+	if cpd != 3 {
+		panic("Oops, Alex needs to learn how to count!")
+	}
+
+	flags5 := uint32(e.Flags())
+	binary.LittleEndian.PutUint32(val5[v5.VoFlagsV6:v5.VoRevKeyV6], flags5)
+
+	return val5
 }
 
 var MapParamsV6 = maps.MapParameters{
