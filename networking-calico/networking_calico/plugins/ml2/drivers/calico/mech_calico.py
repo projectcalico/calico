@@ -28,6 +28,7 @@ import contextlib
 import inspect
 import os
 import re
+import threading
 import uuid
 from functools import wraps
 
@@ -58,6 +59,8 @@ from neutron_lib.plugins.ml2 import api
 from oslo_concurrency import lockutils
 
 from oslo_config import cfg
+
+import oslo_context
 
 from oslo_db import exception as db_exc
 
@@ -204,6 +207,50 @@ def requires_state(f):
     return wrapper
 
 
+# The execution model of the Neutron server is complex.  It runs as multiple OS
+# processes, each of which has only one OS thread, but each process uses eventlet to run
+# multiple green threads in parallel.  In the near-ish future eventlet will be removed
+# and there will be multiple OS threads instead.  So the calls into our driver code can
+# be from multiple OS processes, or from multiple threads within the same OS process, or
+# from multiple green threads within the same OS process/thread.  And the processing for
+# such calls can be interleaved - e.g. one thread or green thread yields for a while and
+# allows others to run.  That makes it difficult to follow through logs - for example,
+# to tell if a given log line is part of an UPDATE_PORT_POSTCOMMIT for port A or an
+# earlier UPDATE_PORT_POSTCOMMIT for port B, or some other trigger into our code.
+#
+# Happily OpenStack upstream has kinda solved this problem with oslo_log and
+# oslo_context.  We can create an instance of oslo_context.context.RequestContext (or
+# subclass) at the start of each of our entry points, and arrange for that to return
+# whatever context key/value pairs we want to appear in each log.
+#
+# Unfortunately we can't add a Calico-specific key, because then all the non-Calico
+# Neutron logs (but within the same task) spew a traceback.  So instead we add Calico
+# context info into a key that Neutron is already using.  And we also want to use a key
+# that is already included in the default logging formats
+# (`logging_context_format_string` and `logging_default_format_string`).  Putting all
+# that together, it seems our best option is to piggy-back on the `request_id` key.
+task_id_lock = threading.Lock()
+last_task_id = 0
+
+
+class TrackTask(oslo_context.context.RequestContext):
+    def __init__(self, log_string):
+        super(TrackTask, self).__init__(overwrite=True)
+        with task_id_lock:
+            global last_task_id
+            last_task_id += 1
+            task_id = last_task_id
+        self.log_string = f"CALICO:{task_id}:{log_string}"
+
+    def get_logging_values(self):
+        d = super(TrackTask, self).get_logging_values()
+        if "request_id" in d:
+            d["request_id"] = self.log_string + " " + d["request_id"]
+        else:
+            d["request_id"] = self.log_string
+        return d
+
+
 class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     """Neutron/ML2 mechanism driver for Project Calico.
 
@@ -291,6 +338,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 return
             # else: either this is the first call or our PID has changed:
             # (re)initialise.
+            TrackTask("POST_FORK_INIT")
 
             if self._my_pid is not None:
                 # This is unexpected but we can deal with it: Neutron should
@@ -426,6 +474,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Calico mechanism driver. Watches for felix updates in etcd
         and passes info to Neutron database.
         """
+        TrackTask("STATUS_UPDATING")
         LOG.info("Status updating thread started.")
         while self._epoch == expected_epoch:
             # Only handle updates if we are the master node.
@@ -433,7 +482,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 if self._etcd_watcher is None:
                     LOG.info("Became the master, starting StatusWatcher")
                     self._etcd_watcher = StatusWatcher(self)
-                    self._etcd_watcher_thread = eventlet.spawn(self._etcd_watcher.start)
+
+                    def start_etcd_watcher():
+                        TrackTask("STATUS_ETCD_WATCHER")
+                        self._etcd_watcher.start()
+
+                    self._etcd_watcher_thread = eventlet.spawn(start_etcd_watcher)
                     LOG.info(
                         "Started %s as %s",
                         self._etcd_watcher,
@@ -563,6 +617,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @logging_exceptions(LOG)
     def _loop_writing_port_statuses(self, expected_epoch):
+        TrackTask("PORT_STATUS_WRITE")
         LOG.info("Port status write thread started epoch=%s", expected_epoch)
         admin_context = ctx.get_admin_context()
         while self._epoch == expected_epoch:
@@ -634,6 +689,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @logging_exceptions(LOG)
     def _retry_port_status_update(self, port_status_key):
+        TrackTask("RETRY_PORT_STATUS_UPDATE")
         LOG.info("Retrying update to port %s", port_status_key)
         # Queue up the update so that we'll go via the normal writer threads.
         # They will re-read the current state of the port from the cache.
@@ -705,6 +761,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @requires_state
     def update_network_postcommit(self, context):
+        TrackTask("UPDATE_NETWORK_POSTCOMMIT")
         LOG.info("UPDATE_NETWORK_POSTCOMMIT: %s" % context)
 
         # Determine if qos_policy_id is changing.  If not, no-op.
@@ -746,6 +803,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @requires_state
     def handle_qos_policy_update(self, context, policy_id):
+        TrackTask("HANDLE_QOS_POLICY_UPDATE")
         LOG.info("HANDLE_QOS_POLICY_UPDATE: %s %s", context, policy_id)
 
         with db_api.CONTEXT_READER.using(context):
@@ -786,6 +844,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @requires_state
     def create_subnet_postcommit(self, context):
+        TrackTask("CREATE_SUBNET_POSTCOMMIT")
         LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
 
         # Re-read the subnet from the DB.  This ensures that a change to the
@@ -800,6 +859,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @requires_state
     def update_subnet_postcommit(self, context):
+        TrackTask("UPDATE_SUBNET_POSTCOMMIT")
         LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
 
         # Re-read the subnet from the DB.  This ensures that a change to the
@@ -816,6 +876,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @requires_state
     def delete_subnet_postcommit(self, context):
+        TrackTask("DELETE_SUBNET_POSTCOMMIT")
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
         self.subnet_syncer.subnet_deleted(context.current["id"])
 
@@ -832,6 +893,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         unchanged while we hold the transaction. We can then write the port to
         etcd, along with any other information we may need.
         """
+        TrackTask("CREATE_PORT_POSTCOMMIT")
         LOG.info("CREATE_PORT_POSTCOMMIT: %s", context)
         port = context._port
 
@@ -859,6 +921,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         This is a tricky event, because it can be called in a number of ways
         during VM migration. We farm out to the appropriate method from here.
         """
+        TrackTask("UPDATE_PORT_POSTCOMMIT")
         LOG.info("UPDATE_PORT_POSTCOMMIT: %s", context)
         port = context._port
         original = context.original
@@ -953,6 +1016,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Called after a Neutron floating IP has been associated or
         disassociated from a port.
         """
+        TrackTask("UPDATE_FLOATINGIP")
         LOG.info("UPDATE_FLOATINGIP: %s", plugin_context)
 
         with self._txn_from_context(plugin_context, tag="update_floatingip"):
@@ -968,6 +1032,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         There's no database row for us to lock on here, so don't bother.
         """
+        TrackTask("DELETE_PORT_POSTCOMMIT")
         LOG.info("DELETE_PORT_POSTCOMMIT: %s", context)
         port = context._port
 
@@ -986,6 +1051,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         1. Reread the security rules from the Neutron DB.
         2. Write the updated policy to etcd.
         """
+        TrackTask("SEND_SG_UPDATES")
         LOG.info("Updating security group IDs %s", sgids)
         with self._txn_from_context(context, tag="sg-update"):
             self.policy_syncer.write_sgs_to_etcd(sgids, context)
@@ -1046,6 +1112,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         reconcile them with etcd, ensuring that the etcd database and Neutron
         are in synchronization with each other.
         """
+        TrackTask("RESYNC")
         try:
             LOG.info("Periodic resync thread started")
             while self._epoch == launch_epoch:
