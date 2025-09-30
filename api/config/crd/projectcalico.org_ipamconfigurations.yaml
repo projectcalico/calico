@@ -10,6 +10,9 @@ spec:
     kind: IPAMConfiguration
     listKind: IPAMConfigurationList
     plural: ipamconfigurations
+    shortNames:
+      - ipamconfig
+      - ipamconfigs
     singular: ipamconfiguration
   preserveUnknownFields: false
   scope: Cluster

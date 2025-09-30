@@ -34,6 +34,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName={bgpconfig,bgpconfigs}
 
 // BGPConfigurationList is a list of BGPConfiguration resources.
 type BGPConfigurationList struct {

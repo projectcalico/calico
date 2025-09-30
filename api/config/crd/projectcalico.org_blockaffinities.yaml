@@ -10,6 +10,9 @@ spec:
     kind: BlockAffinity
     listKind: BlockAffinityList
     plural: blockaffinities
+    shortNames:
+      - affinity
+      - affinities
     singular: blockaffinity
   preserveUnknownFields: false
   scope: Cluster

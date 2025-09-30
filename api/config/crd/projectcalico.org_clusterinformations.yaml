@@ -10,6 +10,9 @@ spec:
     kind: ClusterInformation
     listKind: ClusterInformationList
     plural: clusterinformations
+    shortNames:
+      - clusterinfo
+      - clusterinfos
     singular: clusterinformation
   preserveUnknownFields: false
   scope: Cluster

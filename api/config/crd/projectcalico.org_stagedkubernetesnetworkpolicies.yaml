@@ -10,6 +10,8 @@ spec:
     kind: StagedKubernetesNetworkPolicy
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
+    shortNames:
+      - sknp
     singular: stagedkubernetesnetworkpolicy
   preserveUnknownFields: false
   scope: Namespaced

@@ -35,6 +35,8 @@ type NetworkPolicyList struct {
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName={cnp,caliconetworkpolicy}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`

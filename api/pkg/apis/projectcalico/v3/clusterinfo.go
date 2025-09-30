@@ -36,7 +36,8 @@ type ClusterInformationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster,path=clusterinformations
+// +kubebuilder:resource:scope=Cluster,path=clusterinformations,shortName={clusterinfo,clusterinfos}
+
 type ClusterInformation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`

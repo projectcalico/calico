@@ -24,6 +24,7 @@ const (
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName={netset,netsets}
 
 // NetworkSetList is a list of NetworkSet objects.
 type NetworkSetList struct {

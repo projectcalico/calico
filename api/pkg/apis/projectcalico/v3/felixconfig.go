@@ -22,6 +22,7 @@ import (
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:shortName={felixconfig,felixconfigs}
 
 // FelixConfigurationList contains a list of FelixConfiguration object.
 type FelixConfigurationList struct {

@@ -25,7 +25,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:scope=Cluster,shortName={ipp,ipps,pool,pools}
 
 // IPPoolList contains a list of IPPool resources.
 type IPPoolList struct {

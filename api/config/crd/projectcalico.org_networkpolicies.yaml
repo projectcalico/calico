@@ -10,11 +10,18 @@ spec:
     kind: NetworkPolicy
     listKind: NetworkPolicyList
     plural: networkpolicies
+    shortNames:
+      - cnp
+      - caliconetworkpolicy
     singular: networkpolicy
   preserveUnknownFields: false
   scope: Namespaced
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -408,3 +415,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

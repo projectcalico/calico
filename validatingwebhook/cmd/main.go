@@ -25,6 +25,7 @@ import (
 	"os"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -47,7 +48,6 @@ import (
 	"k8s.io/component-base/cli"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
