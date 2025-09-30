@@ -326,7 +326,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		infra:           infra,
 	}
 	// Register this Felix for teardown and diagnostics via infra.
-	infra.AddTearDown(f.Stop)
+	infra.AddCleanup(f.Stop)
 	infra.RegisterFelix(f)
 	return f
 }
@@ -507,10 +507,8 @@ func (f *Felix) FlowServerReset() {
 	}
 }
 
-func (f *Felix) RegisterForCleanup(fn func()) {
-	if f.infra != nil {
-		f.infra.AddTearDown(fn)
-	}
+func (f *Felix) AddCleanup(fn func()) {
+	f.infra.AddCleanup(fn)
 }
 
 func (f *Felix) FlowServerAddress() string {

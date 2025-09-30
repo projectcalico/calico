@@ -88,13 +88,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
-		externalClient = infrastructure.RunExtClient("ext-client")
+		externalClient = infrastructure.RunExtClient(infra, "ext-client")
 		err = infra.AddDefaultDeny()
 		Expect(err).To(BeNil())
-	})
-
-	AfterEach(func() {
-		externalClient.Stop()
 	})
 
 	expectFullConnectivity := func(opts ...ExpectationOption) {

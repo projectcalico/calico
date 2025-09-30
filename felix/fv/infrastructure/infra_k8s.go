@@ -199,7 +199,7 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
 		kds.bpfLog = RunBPFLog()
-		kds.AddTearDown(func() {
+		kds.AddCleanup(func() {
 			if kds.bpfLog != nil {
 				kds.bpfLog.Stop()
 			}
@@ -563,7 +563,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 	kds.cleanups.Run()
 }
 
-func (kds *K8sDatastoreInfra) AddTearDown(f func()) {
+func (kds *K8sDatastoreInfra) AddCleanup(f func()) {
 	kds.cleanups.Add(f)
 }
 

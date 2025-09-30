@@ -338,10 +338,21 @@ func (c *Container) Start() {
 // is stopped.
 func (c *Container) Remove() {
 	c.runCmd = utils.Command("docker", "rm", "-f", c.Name)
-	err := c.runCmd.Run()
+	log.WithField("container", c).Info("Removing... container.")
+	// Do the deletion in the background so we don't hold things up.
+	err := c.runCmd.Start()
+	cmd := c.runCmd
 	Expect(err).NotTo(HaveOccurred())
 
-	log.WithField("container", c).Info("Removed container.")
+	// Make sure we wait on the deletion process.
+	go func() {
+		err := cmd.Wait()
+		if err != nil {
+			log.WithError(err).Infof("Error from docker rm -f %s.", c.Name)
+		} else {
+			log.Infof("Container removed: %s.", c.Name)
+		}
+	}()
 }
 
 func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *sync.WaitGroup, watches *[]*watch, extraWriter io.Writer) {
@@ -659,7 +670,7 @@ func (c *Container) Exec(cmd ...string) {
 }
 
 func (c *Container) ExecWithInput(input []byte, cmd ...string) {
-	log.WithField("container", c.Name).WithFields(log.Fields{"command": cmd, "stack": miniStackTrace()}).Info("ExecWithInpup: Running command")
+	log.WithField("container", c.Name).WithFields(log.Fields{"command": cmd, "stack": miniStackTrace()}).Info("ExecWithInput: Running command")
 	arg := []string{"exec", "-i", c.Name}
 	arg = append(arg, cmd...)
 	utils.RunWithInput(input, "docker", arg...)

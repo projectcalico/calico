@@ -105,7 +105,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 			podIP := "10.0.0.1"
 			pod := workload.New(felix, testPodName, "default",
 				podIP, "12345", "tcp")
-			pod.Start()
+			pod.Start(infra)
 
 			pod.ConfigureInInfra(k8sInfra)
 		}

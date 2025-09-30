@@ -740,7 +740,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				var externalClient *containers.Container
 
 				BeforeEach(func() {
-					externalClient = infrastructure.RunExtClient("ext-client")
+					externalClient = infrastructure.RunExtClient(infra, "ext-client")
 
 					Eventually(func() error {
 						err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
@@ -762,10 +762,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						externalClient.Exec("ip", "l")
 						externalClient.Exec("ip", "a")
 					}
-				})
-
-				AfterEach(func() {
-					externalClient.Stop()
 				})
 
 				It("should allow IPIP to external client if it is in ExternalNodesCIDRList", func() {
@@ -873,9 +869,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
-				_ = hostW
-				_ = hostW6
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.

@@ -60,7 +60,7 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 		return nil, errors.New("failed to create etcd container")
 	}
 	// Ensure etcd is stopped via cleanup stack.
-	eds.AddTearDown(func() {
+	eds.AddCleanup(func() {
 		if eds.EtcdContainer != nil {
 			eds.EtcdContainer.StopLogs()
 			eds.EtcdContainer.Stop()
@@ -70,7 +70,7 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		eds.bpfLog = RunBPFLog()
-		eds.AddTearDown(func() {
+		eds.AddCleanup(func() {
 			if eds.bpfLog != nil {
 				eds.bpfLog.StopLogs()
 				eds.bpfLog.Stop()
@@ -79,7 +79,7 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 	}
 
 	// Ensure client is closed via cleanup stack (if it was created).
-	eds.AddTearDown(func() {
+	eds.AddCleanup(func() {
 		if eds.client != nil {
 			if err := eds.client.Close(); err != nil {
 				log.WithError(err).Warn("Client Close() returned an error.  Ignoring.")
@@ -263,7 +263,7 @@ func (eds *EtcdDatastoreInfra) Stop() {
 	eds.cleanups.Run()
 }
 
-func (eds *EtcdDatastoreInfra) AddTearDown(f func()) {
+func (eds *EtcdDatastoreInfra) AddCleanup(f func()) {
 	eds.cleanups.Add(f)
 }
 

@@ -62,7 +62,7 @@ func describeBPFMultiHomedTests() bool {
 			Felix = tc.Felixes[0]
 
 			w = workload.New(Felix, "workload", "default", "10.65.0.2", "8055", "tcp")
-			err := w.Start()
+			err := w.Start(infra)
 			Expect(err).NotTo(HaveOccurred())
 			w.ConfigureInInfra(infra)
 
@@ -94,7 +94,7 @@ func describeBPFMultiHomedTests() bool {
 				InterfaceName: "eth20",
 				MTU:           1500, // Need to match host MTU or felix will restart.
 			}
-			err := eth20.Start()
+			err := eth20.Start(infra)
 			Expect(err).NotTo(HaveOccurred())
 
 			eth30 := &workload.Workload{
@@ -106,7 +106,7 @@ func describeBPFMultiHomedTests() bool {
 				InterfaceName: "eth30",
 				MTU:           1500, // Need to match host MTU or felix will restart.
 			}
-			err = eth30.Start()
+			err = eth30.Start(infra)
 			Expect(err).NotTo(HaveOccurred())
 
 			// assign address to eth20 and add route to the .20 network
