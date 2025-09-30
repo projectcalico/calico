@@ -847,8 +847,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 				timeout         time.Duration = time.Second * 30

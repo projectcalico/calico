@@ -531,10 +531,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 		})
 
-		AfterEach(func() {
-			externalClient.Stop()
-		})
-
 		createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
 			log.WithField("policy", dumpResource(policy)).Info("Creating policy")
 			policy, err := calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
@@ -569,7 +565,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			JustBeforeEach(func() {
 				tc, calicoClient = infrastructure.StartNNodeTopology(1, options, infra)
-
 				hostW = workload.Run(
 					tc.Felixes[0],
 					"host",
@@ -628,10 +623,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					BeforeEach(func() {
 						// Disable core dumps, we know we're about to cause a panic.
 						options.FelixCoreDumpsEnabled = false
-						tc.Felixes[0].PanicExpected = true
 					})
 
 					It("0xffff000 not covering BPF bits should panic", func() {
+						tc.Felixes[0].PanicExpected = true
 						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask/NftablesMarkMask doesn't cover bits that are used"))
 
 						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
@@ -654,6 +649,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 
 					It("0xfff00000 only covering BPF bits should panic", func() {
+						tc.Felixes[0].PanicExpected = true
 						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*Not enough mark bits available"))
 
 						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
