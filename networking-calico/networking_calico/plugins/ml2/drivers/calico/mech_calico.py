@@ -207,25 +207,53 @@ def requires_state(f):
 # The execution model of the Neutron server is complex.  It runs as multiple OS
 # processes, each of which has only one OS thread, but each process uses eventlet to run
 # multiple green threads in parallel.  In the near-ish future eventlet will be removed
-# and there will be multiple OS threads instead.  So the calls into our driver code can
-# be from multiple OS processes, or from multiple threads within the same OS process, or
-# from multiple green threads within the same OS process/thread.  And the processing for
-# such calls can be interleaved - e.g. one thread or green thread yields for a while and
-# allows others to run.  That makes it difficult to follow through logs - for example,
-# to tell if a given log line is part of an UPDATE_PORT_POSTCOMMIT for port A or an
-# earlier UPDATE_PORT_POSTCOMMIT for port B, or some other trigger into our code.
+# and there will be multiple OS threads instead.  The Calico driver code (which,
+# broadly, maps between configuration in the Neutron DB and corresponding Calico data in
+# the etcd datastore) runs as part of the Neutron server, and so its entry points can be
+# called from any of those contexts: from multiple OS processes, or from multiple
+# threads within the same OS process, or from multiple green threads within the same OS
+# thread.  And the processing for such calls can be interleaved - e.g. one thread or
+# green thread yields for a while and allows others to run.  This makes it difficult to
+# follow through logs - for example, to tell if a given log line is part of an
+# UPDATE_PORT_POSTCOMMIT for port A or an earlier UPDATE_PORT_POSTCOMMIT for port B, or
+# some other trigger into our code.
 #
-# Happily OpenStack upstream has kinda solved this problem with oslo_log and
-# oslo_context.  We can create an instance of oslo_context.context.RequestContext (or
-# subclass) at the start of each of our entry points, and arrange for that to return
-# whatever context key/value pairs we want to appear in each log.
+# Happily OpenStack upstream has a solution for this kind of problem in its logging and
+# 'context' libraries (oslo_log and oslo_context).  Logging honours format strings, for
+# each log line, that include arbitrary keys (like `%(key)s`) and the context library
+# permits setting thread-local values for those keys, where 'thread' means either OS
+# thread or green thread, whichever of those is in use.  We can set values meaningful to
+# us by creating an instance of oslo_context.context.RequestContext (or subclass) at the
+# start of each of our driver entry points.
 #
-# Unfortunately we can't add a Calico-specific key, because then all the non-Calico
-# Neutron logs (but within the same task) spew a traceback.  So instead we add Calico
-# context info into a key that Neutron is already using.  And we also want to use a key
-# that is already included in the default logging formats
-# (`logging_context_format_string` and `logging_default_format_string`).  Putting all
-# that together, it seems our best option is to piggy-back on the `request_id` key.
+# But there are practical constraints:
+#
+# - We can't add a Calico-specific key, and customize the format strings to include
+#   that, because the format strings apply to the whole of the Neutron server, and any
+#   non-Calico context will be missing that key when it tries to log.  (Resulting in
+#   tracebacks throughout the log file.)
+#
+# - Anyway, it's more convenient to piggy-back on a key that is already in the default
+#   format strings, so that we don't need to customize those.
+#
+# Therefore we arrange for our RequestContext subclass to add Calico-specific context to
+# the existing `request_id` key.  This then appears in all of the logs that are emitted
+# within the processing of a Calico driver entry point, including common Neutron code as
+# well as Calico-specific code.  For example:
+#
+# .. 14:19:44 ..INFO networking_calico.plugins.ml2.drivers.calico.subnets \
+#                                           [None CALICO:2:CREATE_SUBNET_POSTCOMMIT ...
+# .. 14:19:44 ..DEBUG networking_calico.etcdv3 \
+#                                           [None CALICO:2:CREATE_SUBNET_POSTCOMMIT ...
+# .. 14:19:44 ..DEBUG neutron.pecan_wsgi.hooks.policy_enforcement \
+#                                           [None CALICO:2:CREATE_SUBNET_POSTCOMMIT ...
+# .. 14:19:44 ..DEBUG neutron_lib.callbacks.manager \
+#                                           [None CALICO:2:CREATE_SUBNET_POSTCOMMIT ...
+#
+# This helps to see that `CALICO:2:CREATE_SUBNET_POSTCOMMIT` is a different entry point
+# than a later operation such as `CALICO:3:CREATE_SUBNET_POSTCOMMIT`, or than processing
+# in a different thread such as `CALICO:3:RESYNC`.
+
 task_id_lock = threading.Lock()
 last_task_id = 0
 
