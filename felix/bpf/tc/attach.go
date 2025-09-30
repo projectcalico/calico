@@ -185,15 +185,18 @@ func (ap *AttachPoint) AttachProgram() error {
 	}
 	logCxt.Info("Program attached to tc.")
 	// Remove any tcx program.
-	err = ap.detachTcxProgram()
-	if err != nil {
-		logCxt.Warnf("error removing tcx program from %s", err)
+	if _, err := os.Stat(ap.ProgPinPath()); err == nil {
+		logCxt.Info("Removing any existing tcx program")
+		err = ap.detachTcxProgram()
+		if err != nil {
+			logCxt.Warnf("error removing tcx program from %s", err)
+		}
 	}
 	return nil
 }
 
 func (ap *AttachPoint) ProgPinPath() string {
-	return path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_%s", strings.Replace(ap.Iface, ".", "", -1), ap.Hook))
+	return path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_%s", strings.ReplaceAll(ap.Iface, ".", ""), ap.Hook))
 }
 
 func (ap *AttachPoint) detachTcxProgram() error {
@@ -367,12 +370,12 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 func HasQdisc(ifaceName string) (bool, error) {
 	link, err := netlink.LinkByName(ifaceName)
 	if err != nil {
-		return false, fmt.Errorf("Failed to get link for interface '%s': %w", ifaceName, err)
+		return false, fmt.Errorf("failed to get link for interface '%s': %w", ifaceName, err)
 	}
 
 	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
-		return false, fmt.Errorf("Failed to list qdiscs for interface '%s': %w", ifaceName, err)
+		return false, fmt.Errorf("failed to list qdiscs for interface '%s': %w", ifaceName, err)
 	}
 
 	for _, qdisc := range qdiscs {

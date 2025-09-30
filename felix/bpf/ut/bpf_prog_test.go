@@ -502,10 +502,7 @@ func caller(skip int) string {
 // runBpfTest runs a specific section of the entire bpf program in isolation
 func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
-	xdp := false
-	if strings.Contains(section, "xdp") {
-		xdp = true
-	}
+	xdp := strings.Contains(section, "xdp")
 
 	ctxIn := make([]byte, 18*4)
 	binary.LittleEndian.PutUint32(ctxIn[2*4:3*4], skbMark)
@@ -1483,6 +1480,10 @@ func resetRTMapV6(rtMap maps.Map) {
 	resetMap(rtMap)
 }
 
+func resetQoSMap(qosMap maps.Map) {
+	resetMap(qosMap)
+}
+
 func saveRTMap(rtMap maps.Map) routes.MapMem {
 	rt, err := routes.LoadMap(rtMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -1948,6 +1949,7 @@ func resetBPFMaps() {
 	resetMap(fsafeMap)
 	resetMap(natMap)
 	resetMap(natBEMap)
+	resetMap(qosMap)
 }
 
 func TestMapIterWithDelete(t *testing.T) {

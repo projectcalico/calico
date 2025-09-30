@@ -42,6 +42,8 @@ blocks:
             - ./delete-az-rg.sh ${USER}-capz-win-felix-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
         - name: Clean up windows cni resources
           commands:
-            - ./delete-az-rg.sh ${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
+            - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
+            - ./delete-az-rg.sh ${RG_PREFIX}-overlay-rg
+            - ./delete-az-rg.sh ${RG_PREFIX}-l2bridge-rg
       secrets:
         - name: banzai-secrets
