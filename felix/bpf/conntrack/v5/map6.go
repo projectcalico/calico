@@ -107,6 +107,7 @@ const (
 	VoRSTSeenV6   int = 0
 	VoLastSeenV6  int = 8
 	VoTypeV6      int = 16
+	VoPadding1V6    int = 17
 	VoFlagsV6     int = 20
 	VoRevKeyV6    int = 24
 	VoLegABV6     int = 24
