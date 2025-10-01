@@ -17,9 +17,9 @@ package optimize
 import (
 	"fmt"
 	"iter"
-	"math"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -166,7 +166,7 @@ func splitIngressOrEgressPolicy(
 		return []*apiv3.GlobalNetworkPolicy{pol}
 	}
 
-	suffixLen := int(math.Floor(math.Log10(float64(len(subsets))) + 1))
+	suffixLen := len(strconv.Itoa(len(subsets) - 1))
 	suffixFmt := fmt.Sprint("%0", suffixLen, "d")
 
 	var out []*apiv3.GlobalNetworkPolicy

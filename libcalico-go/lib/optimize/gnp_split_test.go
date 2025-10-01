@@ -1,16 +1,30 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package optimize
 
 import (
 	"fmt"
-	"math"
 	"slices"
 	"strings"
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
 func TestSplitPolicyOnSelectors_NoSelectors_NoChange(t *testing.T) {
@@ -68,7 +82,7 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 
 	// Expected groups after sorting within action runs: [Allow:a], [Allow:b], [Deny:x,x], [Allow:c,c]
 	// Verify names have proper suffixes and contents are grouped.
-	suffixLen := int(math.Floor(math.Log10(float64(len(pols))) + 1))
+	suffixLen := 1
 	for i, pol := range pols {
 		expectedNameSuffix := "-i-" + fmt.Sprintf("%0*d", suffixLen, i)
 		if !strings.HasSuffix(pol.Name, expectedNameSuffix) {
@@ -84,7 +98,7 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 
 	// Check each group's selector moved to top-level and cleared in rules.
 	// Group 0: single Allow a
-	if pols[0].Spec.Selector != andSelectors("all()", "app == 'a'") {
+	if pols[0].Spec.Selector != "app == 'a'" {
 		t.Fatalf("group 0 top-level selector unexpected: %s", pols[0].Spec.Selector)
 	}
 	if len(pols[0].Spec.Ingress) != 1 || pols[0].Spec.Ingress[0].Destination.Selector != "" || pols[0].Spec.Ingress[0].Destination.NamespaceSelector != "" {
@@ -92,7 +106,7 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 	}
 
 	// Group 1: single Allow b
-	if pols[1].Spec.Selector != andSelectors("all()", "app == 'b'") {
+	if pols[1].Spec.Selector != "app == 'b'" {
 		t.Fatalf("group 1 top-level selector unexpected: %s", pols[1].Spec.Selector)
 	}
 	if len(pols[1].Spec.Ingress) != 1 || pols[1].Spec.Ingress[0].Destination.Selector != "" {
@@ -100,7 +114,7 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 	}
 
 	// Group 2: two Deny x,x
-	if pols[2].Spec.Selector != andSelectors("all()", "app == 'x'") {
+	if pols[2].Spec.Selector != "app == 'x'" {
 		t.Fatalf("group 2 top-level selector unexpected: %s", pols[2].Spec.Selector)
 	}
 	if len(pols[2].Spec.Ingress) != 2 || pols[2].Spec.Ingress[0].Destination.Selector != "" || pols[2].Spec.Ingress[1].Destination.Selector != "" {
@@ -108,7 +122,7 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 	}
 
 	// Group 3: two Allow c,c
-	if pols[3].Spec.Selector != andSelectors("all()", "app == 'c'") {
+	if pols[3].Spec.Selector != "app == 'c'" {
 		t.Fatalf("group 3 top-level selector unexpected: %s", pols[3].Spec.Selector)
 	}
 	if len(pols[3].Spec.Ingress) != 2 || pols[3].Spec.Ingress[0].Destination.Selector != "" || pols[3].Spec.Ingress[1].Destination.Selector != "" {
@@ -145,7 +159,7 @@ func TestSplitPolicyOnSelectors_SplitEgressIntoGroups(t *testing.T) {
 		pols = append(pols, pol)
 	}
 	// Name suffix checks for egress policies
-	suffixLen := int(math.Floor(math.Log10(float64(len(pols))) + 1))
+	suffixLen := 1
 	for i, pol := range pols {
 		expectedNameSuffix := "-e-" + fmt.Sprintf("%0*d", suffixLen, i)
 		if !strings.HasSuffix(pol.Name, expectedNameSuffix) {
