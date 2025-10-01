@@ -2,6 +2,7 @@ package optimize
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	apia "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -177,32 +178,76 @@ func TestOptimizeGNP_RemovesRedundantRuleSelectors(t *testing.T) {
 			NamespaceSelector: topNS,
 			Egress: []apia.Rule{
 				{Source: apia.EntityRule{Selector: topSel, NamespaceSelector: topNS}},           // redundant -> cleared
-				{Source: apia.EntityRule{Selector: "app == 'other'", NamespaceSelector: topNS}}, // not redundant
+				{Source: apia.EntityRule{Selector: "app == 'other'", NamespaceSelector: topNS}}, // not redundant, will be split
 			},
 			Ingress: []apia.Rule{
 				{Destination: apia.EntityRule{Selector: topSel, NamespaceSelector: topNS}},       // redundant -> cleared
-				{Destination: apia.EntityRule{Selector: topSel, NamespaceSelector: "ns == 'x'"}}, // not redundant
+				{Destination: apia.EntityRule{Selector: topSel, NamespaceSelector: "ns == 'x'"}}, // not redundant, will be split
 			},
 		},
 	}
 
 	out := Objects([]runtime.Object{gnp})
-	og := out[0].(*apia.GlobalNetworkPolicy)
-	// Egress rule 0 cleared
-	if og.Spec.Egress[0].Source.Selector != "" || og.Spec.Egress[0].Source.NamespaceSelector != "" {
-		t.Errorf("egress[0] source selectors not cleared: %#v", og.Spec.Egress[0].Source)
+
+	// Expect multiple split policies: some for ingress, some for egress.
+	var ingressPolicies, egressPolicies []*apia.GlobalNetworkPolicy
+	for _, obj := range out {
+		pol := obj.(*apia.GlobalNetworkPolicy)
+		if len(pol.Spec.Types) == 1 && pol.Spec.Types[0] == apia.PolicyTypeIngress {
+			ingressPolicies = append(ingressPolicies, pol)
+		}
+		if len(pol.Spec.Types) == 1 && pol.Spec.Types[0] == apia.PolicyTypeEgress {
+			egressPolicies = append(egressPolicies, pol)
+		}
 	}
-	// Egress rule 1 unchanged
-	if og.Spec.Egress[1].Source.Selector == "" || og.Spec.Egress[1].Source.NamespaceSelector == "" {
-		t.Errorf("egress[1] source selectors unexpectedly cleared: %#v", og.Spec.Egress[1].Source)
+	if len(ingressPolicies) == 0 || len(egressPolicies) == 0 {
+		t.Fatalf("expected split policies for both ingress and egress, got %d ingress, %d egress", len(ingressPolicies), len(egressPolicies))
 	}
-	// Ingress rule 0 cleared
-	if og.Spec.Ingress[0].Destination.Selector != "" || og.Spec.Ingress[0].Destination.NamespaceSelector != "" {
-		t.Errorf("ingress[0] dest selectors not cleared: %#v", og.Spec.Ingress[0].Destination)
+
+	// Validate egress: one policy should have top-level selector unchanged (redundant cleared group),
+	// another should include the specific source selector (app == 'other'). In both, rule-level selectors must be cleared.
+	var foundEgressRedundant, foundEgressOther bool
+	for _, pol := range egressPolicies {
+		if pol.Spec.Selector == topSel && pol.Spec.NamespaceSelector == topNS {
+			// Redundant group: rules should be present with cleared selectors.
+			if len(pol.Spec.Egress) != 1 || pol.Spec.Egress[0].Source.Selector != "" || pol.Spec.Egress[0].Source.NamespaceSelector != "" {
+				t.Fatalf("egress redundant group not cleared correctly: %#v", pol.Spec.Egress)
+			}
+			foundEgressRedundant = true
+		}
+		if strings.Contains(pol.Spec.Selector, "app == 'other'") {
+			if len(pol.Spec.Egress) != 1 || pol.Spec.Egress[0].Source.Selector != "" || pol.Spec.Egress[0].Source.NamespaceSelector != "" {
+				t.Fatalf("egress other group not cleared correctly: %#v", pol.Spec.Egress)
+			}
+			if pol.Spec.NamespaceSelector != topNS {
+				t.Fatalf("egress other group should carry top-level namespace selector, got %q", pol.Spec.NamespaceSelector)
+			}
+			foundEgressOther = true
+		}
 	}
-	// Ingress rule 1 unchanged
-	if og.Spec.Ingress[1].Destination.Selector == "" || og.Spec.Ingress[1].Destination.NamespaceSelector == "" {
-		t.Errorf("ingress[1] dest selectors unexpectedly cleared: %#v", og.Spec.Ingress[1].Destination)
+	if !foundEgressRedundant || !foundEgressOther {
+		t.Fatalf("did not find expected egress groups: redundant=%v other=%v", foundEgressRedundant, foundEgressOther)
+	}
+
+	// Validate ingress similarly: one policy should have top-level unchanged (redundant cleared),
+	// another should include the specific destination namespace selector change (ns == 'x') plus topSel.
+	var foundIngressRedundant, foundIngressNSX bool
+	for _, pol := range ingressPolicies {
+		if pol.Spec.Selector == topSel && pol.Spec.NamespaceSelector == topNS {
+			if len(pol.Spec.Ingress) != 1 || pol.Spec.Ingress[0].Destination.Selector != "" || pol.Spec.Ingress[0].Destination.NamespaceSelector != "" {
+				t.Fatalf("ingress redundant group not cleared correctly: %#v", pol.Spec.Ingress)
+			}
+			foundIngressRedundant = true
+		}
+		if strings.Contains(pol.Spec.Selector, topSel) && strings.Contains(pol.Spec.NamespaceSelector, "ns == 'x'") {
+			if len(pol.Spec.Ingress) != 1 || pol.Spec.Ingress[0].Destination.Selector != "" || pol.Spec.Ingress[0].Destination.NamespaceSelector != "" {
+				t.Fatalf("ingress ns=='x' group not cleared correctly: %#v", pol.Spec.Ingress)
+			}
+			foundIngressNSX = true
+		}
+	}
+	if !foundIngressRedundant || !foundIngressNSX {
+		t.Fatalf("did not find expected ingress groups: redundant=%v nsX=%v", foundIngressRedundant, foundIngressNSX)
 	}
 }
 

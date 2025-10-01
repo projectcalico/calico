@@ -75,7 +75,7 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
 
 	// Split the policy into ingress and egress halves and process separately.
 	var pols []*apiv3.GlobalNetworkPolicy
-	if len(gnp.Spec.Ingress) > 0 && slices.Contains(gnp.Spec.Types, apiv3.PolicyTypeIngress) {
+	if len(gnp.Spec.Ingress) > 0 && policyHasType(gnp, apiv3.PolicyTypeIngress) {
 		inPol := gnp.DeepCopy()
 		inPol.Spec.Egress = nil
 		inPol.Spec.Types = []apiv3.PolicyType{apiv3.PolicyTypeIngress}
@@ -92,7 +92,7 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
 				},
 			)...)
 	}
-	if len(gnp.Spec.Egress) > 0 && slices.Contains(gnp.Spec.Types, apiv3.PolicyTypeEgress) {
+	if len(gnp.Spec.Egress) > 0 && policyHasType(gnp, apiv3.PolicyTypeEgress) {
 		ePol := gnp.DeepCopy()
 		ePol.Spec.Ingress = nil
 		ePol.Spec.Types = []apiv3.PolicyType{apiv3.PolicyTypeEgress}
@@ -116,6 +116,18 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
 		out = append(out, pol)
 	}
 	return out
+}
+
+func policyHasType(gnp *apiv3.GlobalNetworkPolicy, typ apiv3.PolicyType) bool {
+	if len(gnp.Spec.Types) == 0 {
+		switch typ {
+		case apiv3.PolicyTypeIngress:
+			return len(gnp.Spec.Ingress) > 0
+		case apiv3.PolicyTypeEgress:
+			return len(gnp.Spec.Egress) > 0
+		}
+	}
+	return slices.Contains(gnp.Spec.Types, typ)
 }
 
 func splitIngressOrEgressPolicy(
