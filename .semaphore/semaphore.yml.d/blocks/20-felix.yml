@@ -191,8 +191,7 @@
           - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
 - name: "Felix: BPF UT/FV tests on Ubuntu 24.04"
   run:
-    # when: "${CHANGE_IN(felix,typha)}"
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(felix,typha)}"
   dependencies:
     - Prerequisites
   task:
@@ -230,8 +229,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF UT/FV tests on Ubuntu 22.04 (nftables)"
   run:
-    #when: "${CHANGE_IN(felix,typha)}"
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(felix,typha)}"
   dependencies:
     - Prerequisites
   task:
@@ -271,7 +269,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF UT tests on Ubuntu 25.04"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(felix,typha)}"
   dependencies:
     - Prerequisites
   task:
