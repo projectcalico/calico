@@ -23,8 +23,8 @@ global_job_config:
     # Secrets for Slack notifications
     - name: releasebot-slack
     # OIDC-related credentials
-    - name: oidc-credentials-gcp-tigera-dev-ci
-    - name: oidc-credentials-gcp-hashrelease-publish
+    - name: oidc-credentials-gcp-projectcalico-org
+    - name: oidc-credentials-gcp-oss-hashrelease-publish
 
   prologue:
     commands:
