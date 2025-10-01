@@ -87,11 +87,11 @@ type AutoHostEndpointConfig struct {
 }
 
 type AutoHostEndpointTemplate struct {
-	GenerateName      string
-	InterfaceCIDRs    []string
-	InterfaceSelector string
-	Labels            map[string]string
-	NodeSelector      string
+	GenerateName     string
+	InterfaceCIDRs   []string
+	InterfacePattern string
+	Labels           map[string]string
+	NodeSelector     string
 }
 
 type LoadBalancerControllerConfig struct {
@@ -431,11 +431,11 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 			var templates []AutoHostEndpointTemplate
 			for _, template := range ac.Node.HostEndpoint.Templates {
 				rcTemplate := AutoHostEndpointTemplate{
-					GenerateName:      template.GenerateName,
-					InterfaceCIDRs:    template.InterfaceCIDRs,
-					InterfaceSelector: template.InterfaceSelector,
-					NodeSelector:      template.NodeSelector,
-					Labels:            template.Labels,
+					GenerateName:     template.GenerateName,
+					InterfaceCIDRs:   template.InterfaceCIDRs,
+					InterfacePattern: template.InterfacePattern,
+					NodeSelector:     template.NodeSelector,
+					Labels:           template.Labels,
 				}
 
 				templates = append(templates, rcTemplate)
@@ -468,11 +468,11 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 			for template := range rc.Node.AutoHostEndpointConfig.Templates {
 				rcTemplate := (rc.Node.AutoHostEndpointConfig.Templates)[template]
 				scTemplate := v3.Template{
-					GenerateName:      rcTemplate.GenerateName,
-					InterfaceCIDRs:    rcTemplate.InterfaceCIDRs,
-					InterfaceSelector: rcTemplate.InterfaceSelector,
-					NodeSelector:      rcTemplate.NodeSelector,
-					Labels:            rcTemplate.Labels,
+					GenerateName:     rcTemplate.GenerateName,
+					InterfaceCIDRs:   rcTemplate.InterfaceCIDRs,
+					InterfacePattern: rcTemplate.InterfacePattern,
+					NodeSelector:     rcTemplate.NodeSelector,
+					Labels:           rcTemplate.Labels,
 				}
 
 				templates = append(templates, scTemplate)

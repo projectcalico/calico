@@ -3077,7 +3077,7 @@ spec:
                                       type: string
                                     type: array
                                     x-kubernetes-list-type: set
-                                  interfaceSelector:
+                                  interfacePattern:
                                     type: string
                                   labels:
                                     additionalProperties:
@@ -3189,7 +3189,7 @@ spec:
                                           type: string
                                         type: array
                                         x-kubernetes-list-type: set
-                                      interfaceSelector:
+                                      interfacePattern:
                                         type: string
                                       labels:
                                         additionalProperties:
