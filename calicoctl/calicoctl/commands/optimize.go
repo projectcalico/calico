@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	opt "github.com/projectcalico/calico/libcalico-go/lib/optimize"
 )
 
 // Optimize reads resources from file/stdin, validates them (offline), and prints them in YAML.
@@ -96,9 +97,12 @@ Description:
 		return nil
 	}
 
+	// Perform optimization (currently no-op for most types; GNP may expand in future).
+	optimized := opt.Objects(results.Resources)
+
 	// Print YAML for all successfully validated resources.
 	rp := common.ResourcePrinterYAML{}
-	if err := rp.Print(results.Client, results.Resources); err != nil {
+	if err := rp.Print(results.Client, optimized); err != nil {
 		return err
 	}
 
