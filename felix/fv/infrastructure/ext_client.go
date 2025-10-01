@@ -29,11 +29,11 @@ type ExtClientOpts struct {
 	Image       string
 }
 
-func RunExtClient(namePrefix string) *containers.Container {
-	return RunExtClientWithOpts(namePrefix, ExtClientOpts{})
+func RunExtClient(infra DatastoreInfra, namePrefix string) *containers.Container {
+	return RunExtClientWithOpts(infra, namePrefix, ExtClientOpts{})
 }
 
-func RunExtClientWithOpts(namePrefix string, opts ExtClientOpts) *containers.Container {
+func RunExtClientWithOpts(infra DatastoreInfra, namePrefix string, opts ExtClientOpts) *containers.Container {
 	wd, err := os.Getwd()
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get working directory")
 
@@ -51,6 +51,7 @@ func RunExtClientWithOpts(namePrefix string, opts ExtClientOpts) *containers.Con
 		"-v", wd+"/../bin:/usr/local/bin", // Map in the test-connectivity binary etc.
 		image,
 		"/bin/sh", "-c", "sleep 1000")
+	infra.AddCleanup(c.Stop)
 
 	if opts.IPv6Enabled {
 		c.Exec("sysctl", "-w", "net.ipv6.conf.all.disable_ipv6=0")

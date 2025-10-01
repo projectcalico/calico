@@ -77,9 +77,10 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 		args...,
 	)
 
-	return &Typha{
-		Container: c,
-	}
+	t := &Typha{Container: c}
+	// Register Typha teardown with infra.
+	infra.AddCleanup(t.Stop)
+	return t
 }
 
 var CertDir = ""
