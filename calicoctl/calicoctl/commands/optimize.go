@@ -27,8 +27,10 @@ import (
 	opt "github.com/projectcalico/calico/libcalico-go/lib/optimize"
 )
 
-// Optimize reads resources from file/stdin, validates them (offline), and prints them in YAML.
-// Initially this performs a no-op transformation; future iterations may modify resources.
+// Optimize reads resources from file/stdin, validates them (offline), and prints optimized YAML.
+// This may transform resources to canonicalize and improve efficiency. For example, GlobalNetworkPolicy
+// selectors may be canonicalized and per-rule selectors may be hoisted to the top-level selector,
+// potentially splitting a single policy into multiple policies while preserving semantics.
 func Optimize(args []string) error {
 	doc := `Usage:
   <BINARY_NAME> optimize --filename=<FILENAME> [--recursive] [--skip-empty] [--allow-version-mismatch]
@@ -53,14 +55,18 @@ Options:
 
 Description:
   The optimize command reads a set of resources by filename or stdin, validates them offline
-  (without connecting to any datastore), and then outputs the resources in YAML format.
+  (without connecting to any datastore), and then outputs optimized versions of those resources 
+  in YAML format.
 
   Valid resource types are:
 
 <RESOURCE_LIST>
 
-  Initially, optimize performs a no-op transformation (resources are printed unchanged).
-  In future versions, certain resources may be transformed for better efficiency.`
+  For certain resource types (for example, GlobalNetworkPolicy), optimize may:
+    - Canonicalize selector expressions.
+    - Hoist rule-level selectors to the policy-level selector when safe.
+    - Split a single policy into multiple policies, preserving semantics, to improve performance.
+`
 
 	// Replace placeholders.
 	name, _ := util.NameAndDescription()
@@ -87,9 +93,7 @@ Description:
 	}
 
 	// If there were per-resource errors, surface them after printing any that succeeded.
-	// But first, print all successfully handled resources as YAML (no-op transformation).
 	if results.NumResources == 0 {
-		// No resources specified. If there is an associated error use that, otherwise print message with no error.
 		if results.Err != nil {
 			return results.Err
 		}
@@ -97,7 +101,7 @@ Description:
 		return nil
 	}
 
-	// Perform optimization (currently no-op for most types; GNP may expand in future).
+	// Perform optimization.
 	optimized := opt.Objects(results.Resources)
 
 	// Print YAML for all successfully validated resources.

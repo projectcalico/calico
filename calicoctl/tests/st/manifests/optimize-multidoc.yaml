@@ -27,4 +27,3 @@ spec:
     - Tunnel
   assignmentMode: Automatic
   nodeSelector: "all()"
-
