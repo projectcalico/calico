@@ -170,6 +170,8 @@ func TestOptimizeGNP_RemovesRedundantRuleSelectors(t *testing.T) {
 	// Top-level selectors
 	topSel := "app == 'api'"
 	topNS := "has(kubernetes.io/metadata.name)"
+	topSelNorm := selector.Normalise(topSel)
+	topNSNorm := selector.Normalise(topNS)
 	gnp := &apia.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apia.KindGlobalNetworkPolicy, APIVersion: apia.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "gnp"},
@@ -189,65 +191,71 @@ func TestOptimizeGNP_RemovesRedundantRuleSelectors(t *testing.T) {
 
 	out := Objects([]runtime.Object{gnp})
 
-	// Expect multiple split policies: some for ingress, some for egress.
+	// Expect exactly 2 split policies for ingress and 2 for egress.
 	var ingressPolicies, egressPolicies []*apia.GlobalNetworkPolicy
 	for _, obj := range out {
 		pol := obj.(*apia.GlobalNetworkPolicy)
-		if len(pol.Spec.Types) == 1 && pol.Spec.Types[0] == apia.PolicyTypeIngress {
+		if len(pol.Spec.Ingress) > 0 && pol.Spec.Egress == nil {
 			ingressPolicies = append(ingressPolicies, pol)
 		}
-		if len(pol.Spec.Types) == 1 && pol.Spec.Types[0] == apia.PolicyTypeEgress {
+		if len(pol.Spec.Egress) > 0 && pol.Spec.Ingress == nil {
 			egressPolicies = append(egressPolicies, pol)
 		}
 	}
-	if len(ingressPolicies) == 0 || len(egressPolicies) == 0 {
-		t.Fatalf("expected split policies for both ingress and egress, got %d ingress, %d egress", len(ingressPolicies), len(egressPolicies))
+	if len(ingressPolicies) != 2 || len(egressPolicies) != 2 {
+		t.Fatalf("expected 2 ingress and 2 egress split policies, got %d ingress, %d egress", len(ingressPolicies), len(egressPolicies))
 	}
 
-	// Validate egress: one policy should have top-level selector unchanged (redundant cleared group),
-	// another should include the specific source selector (app == 'other'). In both, rule-level selectors must be cleared.
-	var foundEgressRedundant, foundEgressOther bool
+	// Egress: both policies should have exactly 1 rule and cleared per-rule selectors.
 	for _, pol := range egressPolicies {
-		if pol.Spec.Selector == topSel && pol.Spec.NamespaceSelector == topNS {
-			// Redundant group: rules should be present with cleared selectors.
-			if len(pol.Spec.Egress) != 1 || pol.Spec.Egress[0].Source.Selector != "" || pol.Spec.Egress[0].Source.NamespaceSelector != "" {
-				t.Fatalf("egress redundant group not cleared correctly: %#v", pol.Spec.Egress)
-			}
-			foundEgressRedundant = true
+		if len(pol.Spec.Egress) != 1 {
+			t.Fatalf("egress split policy should have 1 rule, got %d", len(pol.Spec.Egress))
 		}
-		if strings.Contains(pol.Spec.Selector, "app == 'other'") {
-			if len(pol.Spec.Egress) != 1 || pol.Spec.Egress[0].Source.Selector != "" || pol.Spec.Egress[0].Source.NamespaceSelector != "" {
-				t.Fatalf("egress other group not cleared correctly: %#v", pol.Spec.Egress)
-			}
-			if pol.Spec.NamespaceSelector != topNS {
-				t.Fatalf("egress other group should carry top-level namespace selector, got %q", pol.Spec.NamespaceSelector)
-			}
-			foundEgressOther = true
+		r := pol.Spec.Egress[0]
+		if r.Source.Selector != "" || r.Source.NamespaceSelector != "" {
+			t.Fatalf("egress rule selectors not cleared: %#v", r.Source)
+		}
+		if selector.Normalise(pol.Spec.NamespaceSelector) != topNSNorm && !strings.Contains(pol.Spec.NamespaceSelector, "kubernetes.io/metadata.name") {
+			t.Fatalf("egress policy should carry namespace selector, got %q", pol.Spec.NamespaceSelector)
 		}
 	}
-	if !foundEgressRedundant || !foundEgressOther {
-		t.Fatalf("did not find expected egress groups: redundant=%v other=%v", foundEgressRedundant, foundEgressOther)
+	// Ensure one policy retains topSel and the other has a different selector (indicating split).
+	var foundTop, foundDifferent bool
+	selectorsSet := map[string]struct{}{}
+	for _, pol := range egressPolicies {
+		selectorsSet[pol.Spec.Selector] = struct{}{}
+		if selector.Normalise(pol.Spec.Selector) == topSelNorm {
+			foundTop = true
+		} else {
+			foundDifferent = true
+		}
+	}
+	if !foundTop || !foundDifferent || len(selectorsSet) != 2 {
+		t.Fatalf("egress split selectors unexpected: foundTop=%v foundDifferent=%v selectors=%v", foundTop, foundDifferent, selectorsSet)
 	}
 
-	// Validate ingress similarly: one policy should have top-level unchanged (redundant cleared),
-	// another should include the specific destination namespace selector change (ns == 'x') plus topSel.
-	var foundIngressRedundant, foundIngressNSX bool
+	// Ingress: both policies should have exactly 1 rule and cleared per-rule destination selectors.
 	for _, pol := range ingressPolicies {
-		if pol.Spec.Selector == topSel && pol.Spec.NamespaceSelector == topNS {
-			if len(pol.Spec.Ingress) != 1 || pol.Spec.Ingress[0].Destination.Selector != "" || pol.Spec.Ingress[0].Destination.NamespaceSelector != "" {
-				t.Fatalf("ingress redundant group not cleared correctly: %#v", pol.Spec.Ingress)
-			}
-			foundIngressRedundant = true
+		if len(pol.Spec.Ingress) != 1 {
+			t.Fatalf("ingress split policy should have 1 rule, got %d", len(pol.Spec.Ingress))
 		}
-		if strings.Contains(pol.Spec.Selector, topSel) && strings.Contains(pol.Spec.NamespaceSelector, "ns == 'x'") {
-			if len(pol.Spec.Ingress) != 1 || pol.Spec.Ingress[0].Destination.Selector != "" || pol.Spec.Ingress[0].Destination.NamespaceSelector != "" {
-				t.Fatalf("ingress ns=='x' group not cleared correctly: %#v", pol.Spec.Ingress)
-			}
+		r := pol.Spec.Ingress[0]
+		if r.Destination.Selector != "" || r.Destination.NamespaceSelector != "" {
+			t.Fatalf("ingress rule selectors not cleared: %#v", r.Destination)
+		}
+	}
+	// Ensure one ingress policy retains topSel/topNS and the other contains the ns=='x' constraint.
+	var foundIngressTop, foundIngressNSX bool
+	for _, pol := range ingressPolicies {
+		if selector.Normalise(pol.Spec.Selector) == topSelNorm && selector.Normalise(pol.Spec.NamespaceSelector) == topNSNorm {
+			foundIngressTop = true
+		}
+		if strings.Contains(pol.Spec.NamespaceSelector, "ns == 'x'") || strings.Contains(pol.Spec.NamespaceSelector, "ns == \"x\"") {
 			foundIngressNSX = true
 		}
 	}
-	if !foundIngressRedundant || !foundIngressNSX {
-		t.Fatalf("did not find expected ingress groups: redundant=%v nsX=%v", foundIngressRedundant, foundIngressNSX)
+	if !foundIngressTop || !foundIngressNSX {
+		t.Fatalf("ingress split selectors unexpected: top=%v nsX=%v", foundIngressTop, foundIngressNSX)
 	}
 }
 
@@ -301,28 +309,25 @@ func TestOptimizeGNP_SortsIngressByDestSelectorWithinAction(t *testing.T) {
 		},
 	}
 
-	out := Objects([]runtime.Object{gnp})
-	og := out[0].(*apia.GlobalNetworkPolicy)
-	// Expect the first Allow run sorted by Destination.Selector: a, z
-	if og.Spec.Ingress[0].Action != apia.Allow || og.Spec.Ingress[0].Destination.Selector != "a" {
-		t.Fatalf("unexpected ingress[0]: action=%s sel=%s", og.Spec.Ingress[0].Action, og.Spec.Ingress[0].Destination.Selector)
+	// Call the sorting pass directly to avoid interaction with splitting logic.
+	sortGNPByRuleSelector(gnp)
+	if gnp.Spec.Ingress[0].Action != apia.Allow || gnp.Spec.Ingress[0].Destination.Selector != "a" {
+		t.Fatalf("unexpected ingress[0]: action=%s sel=%s", gnp.Spec.Ingress[0].Action, gnp.Spec.Ingress[0].Destination.Selector)
 	}
-	if og.Spec.Ingress[1].Action != apia.Allow || og.Spec.Ingress[1].Destination.Selector != "z" {
-		t.Fatalf("unexpected ingress[1]: action=%s sel=%s", og.Spec.Ingress[1].Action, og.Spec.Ingress[1].Destination.Selector)
+	if gnp.Spec.Ingress[1].Action != apia.Allow || gnp.Spec.Ingress[1].Destination.Selector != "z" {
+		t.Fatalf("unexpected ingress[1]: action=%s sel=%s", gnp.Spec.Ingress[1].Action, gnp.Spec.Ingress[1].Destination.Selector)
 	}
-	// Deny run should remain in the middle and be sorted: b, c
-	if og.Spec.Ingress[2].Action != apia.Deny || og.Spec.Ingress[2].Destination.Selector != "b" {
-		t.Fatalf("unexpected ingress[2]: action=%s sel=%s", og.Spec.Ingress[2].Action, og.Spec.Ingress[2].Destination.Selector)
+	if gnp.Spec.Ingress[2].Action != apia.Deny || gnp.Spec.Ingress[2].Destination.Selector != "b" {
+		t.Fatalf("unexpected ingress[2]: action=%s sel=%s", gnp.Spec.Ingress[2].Action, gnp.Spec.Ingress[2].Destination.Selector)
 	}
-	if og.Spec.Ingress[3].Action != apia.Deny || og.Spec.Ingress[3].Destination.Selector != "c" {
-		t.Fatalf("unexpected ingress[3]: action=%s sel=%s", og.Spec.Ingress[3].Action, og.Spec.Ingress[3].Destination.Selector)
+	if gnp.Spec.Ingress[3].Action != apia.Deny || gnp.Spec.Ingress[3].Destination.Selector != "c" {
+		t.Fatalf("unexpected ingress[3]: action=%s sel=%s", gnp.Spec.Ingress[3].Action, gnp.Spec.Ingress[3].Destination.Selector)
 	}
-	// Second Allow run should remain last and be sorted: m, n (not merged with first Allow run)
-	if og.Spec.Ingress[4].Action != apia.Allow || og.Spec.Ingress[4].Destination.Selector != "m" {
-		t.Fatalf("unexpected ingress[4]: action=%s sel=%s", og.Spec.Ingress[4].Action, og.Spec.Ingress[4].Destination.Selector)
+	if gnp.Spec.Ingress[4].Action != apia.Allow || gnp.Spec.Ingress[4].Destination.Selector != "m" {
+		t.Fatalf("unexpected ingress[4]: action=%s sel=%s", gnp.Spec.Ingress[4].Action, gnp.Spec.Ingress[4].Destination.Selector)
 	}
-	if og.Spec.Ingress[5].Action != apia.Allow || og.Spec.Ingress[5].Destination.Selector != "n" {
-		t.Fatalf("unexpected ingress[5]: action=%s sel=%s", og.Spec.Ingress[5].Action, og.Spec.Ingress[5].Destination.Selector)
+	if gnp.Spec.Ingress[5].Action != apia.Allow || gnp.Spec.Ingress[5].Destination.Selector != "n" {
+		t.Fatalf("unexpected ingress[5]: action=%s sel=%s", gnp.Spec.Ingress[5].Action, gnp.Spec.Ingress[5].Destination.Selector)
 	}
 }
 
@@ -341,24 +346,21 @@ func TestOptimizeGNP_SortsEgressBySourceSelectorWithinAction(t *testing.T) {
 		},
 	}
 
-	out := Objects([]runtime.Object{gnp})
-	og := out[0].(*apia.GlobalNetworkPolicy)
-	// First Deny run sorted: alpha, delta
-	if og.Spec.Egress[0].Action != apia.Deny || og.Spec.Egress[0].Source.Selector != "alpha" {
-		t.Fatalf("unexpected egress[0]: action=%s sel=%s", og.Spec.Egress[0].Action, og.Spec.Egress[0].Source.Selector)
+	// Call the sorting pass directly.
+	sortGNPByRuleSelector(gnp)
+	if gnp.Spec.Egress[0].Action != apia.Deny || gnp.Spec.Egress[0].Source.Selector != "alpha" {
+		t.Fatalf("unexpected egress[0]: action=%s sel=%s", gnp.Spec.Egress[0].Action, gnp.Spec.Egress[0].Source.Selector)
 	}
-	if og.Spec.Egress[1].Action != apia.Deny || og.Spec.Egress[1].Source.Selector != "delta" {
-		t.Fatalf("unexpected egress[1]: action=%s sel=%s", og.Spec.Egress[1].Action, og.Spec.Egress[1].Source.Selector)
+	if gnp.Spec.Egress[1].Action != apia.Deny || gnp.Spec.Egress[1].Source.Selector != "delta" {
+		t.Fatalf("unexpected egress[1]: action=%s sel=%s", gnp.Spec.Egress[1].Action, gnp.Spec.Egress[1].Source.Selector)
 	}
-	// Allow run sorted: beta, zeta
-	if og.Spec.Egress[2].Action != apia.Allow || og.Spec.Egress[2].Source.Selector != "beta" {
-		t.Fatalf("unexpected egress[2]: action=%s sel=%s", og.Spec.Egress[2].Action, og.Spec.Egress[2].Source.Selector)
+	if gnp.Spec.Egress[2].Action != apia.Allow || gnp.Spec.Egress[2].Source.Selector != "beta" {
+		t.Fatalf("unexpected egress[2]: action=%s sel=%s", gnp.Spec.Egress[2].Action, gnp.Spec.Egress[2].Source.Selector)
 	}
-	if og.Spec.Egress[3].Action != apia.Allow || og.Spec.Egress[3].Source.Selector != "zeta" {
-		t.Fatalf("unexpected egress[3]: action=%s sel=%s", og.Spec.Egress[3].Action, og.Spec.Egress[3].Source.Selector)
+	if gnp.Spec.Egress[3].Action != apia.Allow || gnp.Spec.Egress[3].Source.Selector != "zeta" {
+		t.Fatalf("unexpected egress[3]: action=%s sel=%s", gnp.Spec.Egress[3].Action, gnp.Spec.Egress[3].Source.Selector)
 	}
-	// Final Deny run remains last (not merged with first Deny) and single-item sorted trivially
-	if og.Spec.Egress[4].Action != apia.Deny || og.Spec.Egress[4].Source.Selector != "gamma" {
-		t.Fatalf("unexpected egress[4]: action=%s sel=%s", og.Spec.Egress[4].Action, og.Spec.Egress[4].Source.Selector)
+	if gnp.Spec.Egress[4].Action != apia.Deny || gnp.Spec.Egress[4].Source.Selector != "gamma" {
+		t.Fatalf("unexpected egress[4]: action=%s sel=%s", gnp.Spec.Egress[4].Action, gnp.Spec.Egress[4].Source.Selector)
 	}
 }

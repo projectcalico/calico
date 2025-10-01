@@ -120,6 +120,7 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
 
 func policyHasType(gnp *apiv3.GlobalNetworkPolicy, typ apiv3.PolicyType) bool {
 	if len(gnp.Spec.Types) == 0 {
+		// Autodetect if there's no types field.
 		switch typ {
 		case apiv3.PolicyTypeIngress:
 			return len(gnp.Spec.Ingress) > 0
