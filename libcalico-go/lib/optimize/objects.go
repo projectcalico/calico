@@ -16,10 +16,9 @@
 package optimize
 
 import (
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	apia "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 // Objects takes a slice of runtime.Object and returns a new slice containing
@@ -59,7 +58,7 @@ func optimizeOne(obj runtime.Object) []runtime.Object {
 // optimizeNonList optimizes a single non-list object and may return multiple objects.
 func optimizeNonList(obj runtime.Object) []runtime.Object {
 	switch t := obj.(type) {
-	case *apia.GlobalNetworkPolicy:
+	case *apiv3.GlobalNetworkPolicy:
 		return optimizeGlobalNetworkPolicy(t)
 	default:
 		// No-op for unhandled resource types.
