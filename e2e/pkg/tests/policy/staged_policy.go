@@ -12,9 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	appsv1 "k8s.io/api/apps/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
@@ -58,12 +56,9 @@ var _ = describe.CalicoDescribe(
 			checker = conncheck.NewConnectionTester(f)
 
 			// These tests rely on Whisker - if Whisker is not installed, short-circuit the tests.
-			err := cli.Get(context.TODO(), ctrlclient.ObjectKey{Name: "whisker"}, &appsv1.Deployment{})
-			if errors.IsNotFound(err) {
-				Expect(err).NotTo(HaveOccurred(), "Whisker is not installed in the cluster")
-			} else {
-				Expect(err).NotTo(HaveOccurred(), "Failed to query for Whisker deployment")
-			}
+			installed, err := utils.WhiskerInstalled(cli)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(installed).To(BeTrue(), "Whisker is not installed in the cluster")
 		})
 
 		Context("Test presence in flow logs", func() {
