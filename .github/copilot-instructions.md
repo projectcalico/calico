@@ -69,6 +69,10 @@ Calico has multiple layers of tests:
 - System tests, which run most of Calico with some mocking.
 - End-to-end tests, which run the entire system in a real kubernetes cluster.
 
+Note that some of the projects are contained in separate directories, and some
+are written in Python despite the project being primarily Go.  For example, 
+calicoctl's tests are in calicoctl/tests, and are written in Python.
+
 ##### Felix tests
 
 Felix's FV tests are in the felix/fv directory. Since calico supports multiple dataplanes, the tests can be run in multiple modes. Running single tests for validation of work recommended, but full suite takes hours.
