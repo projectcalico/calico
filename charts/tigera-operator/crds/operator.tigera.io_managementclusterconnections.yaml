@@ -236,19 +236,23 @@ spec:
                     guardian will lose its default permissions to impersonate groups.
                   properties:
                     groups:
-                      description: Groups is a list of group names that can be impersonated.
+                      description: |-
+                        Groups is a list of group names that can be impersonated. An empty list infers all groups can be impersonated,
+                        a null values means none.
                       items:
                         type: string
                       type: array
                     serviceAccounts:
-                      description:
-                        ServiceAccounts is a list of service account names
-                        that can be impersonated.
+                      description: |-
+                        ServiceAccounts is a list of service account names that can be impersonated. An empty list infers all service accounts can
+                        be impersonated, a null values means none.
                       items:
                         type: string
                       type: array
                     users:
-                      description: Users is a list of users that can be impersonated.
+                      description: |-
+                        Users is a list of users that can be impersonated. An empty list infers all users can be impersonated, a null
+                        value means none.
                       items:
                         type: string
                       type: array
