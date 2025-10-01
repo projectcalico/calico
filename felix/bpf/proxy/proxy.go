@@ -399,13 +399,13 @@ var (
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
-	UseConsistentHashing() bool
+	UseMaglev() bool
 }
 
 type servicePortAnnotations struct {
-	reapTerminatingUDP   bool
-	excludeService       bool
-	useConsistentHashing bool
+	reapTerminatingUDP bool
+	excludeService     bool
+	useMaglev          bool
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -416,8 +416,8 @@ func (s *servicePortAnnotations) ExcludeService() bool {
 	return s.excludeService
 }
 
-func (s *servicePortAnnotations) UseConsistentHashing() bool {
-	return s.useConsistentHashing
+func (s *servicePortAnnotations) UseMaglev() bool {
+	return s.useMaglev
 }
 
 type servicePort struct {
@@ -442,7 +442,7 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 	}
 
 	if a, ok := s.ObjectMeta.Annotations[ExternalTrafficStrategy]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
-		svc.useConsistentHashing = true
+		svc.useMaglev = true
 	}
 
 out:

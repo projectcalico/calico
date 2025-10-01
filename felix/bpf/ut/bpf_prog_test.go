@@ -643,8 +643,8 @@ func initMapsOnce() {
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
 		qosMap = qos.Map()
-		maglevMap = nat.ConsistentHashMap()
-		maglevMapV6 = nat.ConsistentHashMapV6()
+		maglevMap = nat.MaglevMap()
+		maglevMapV6 = nat.MaglevMapV6()
 
 		perfMap = perf.Map("perf_evnt", 512)
 
@@ -1425,8 +1425,8 @@ func tcpResponseRawV6(in []byte) []byte {
 	return out.Bytes()
 }
 
-func dumpConsistentHashMap(chMap maps.Map) {
-	m, err := nat.LoadConsistentHashMap(chMap)
+func dumpMaglevMap(mgMap maps.Map) {
+	m, err := nat.LoadMaglevMap(mgMap)
 	Expect(err).NotTo(HaveOccurred())
 	for k, v := range m {
 		fmt.Printf("%s: %s\n", k, v)
