@@ -31437,7 +31437,7 @@ spec:
                                     items:
                                       type: string
                                     type: array
-                                  interfaceSelector:
+                                  interfacePattern:
                                     type: string
                                   labels:
                                     additionalProperties:
@@ -31523,7 +31523,7 @@ spec:
                                         items:
                                           type: string
                                         type: array
-                                      interfaceSelector:
+                                      interfacePattern:
                                         type: string
                                       labels:
                                         additionalProperties:
