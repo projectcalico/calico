@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -48,7 +49,7 @@ func optimizeGlobalNetworkPolicy(gnp *apiv3.GlobalNetworkPolicy) []runtime.Objec
 // up into chunks based on those selectors and moves the selector into the
 // top-level subject selector.  If therea are no such selectors, it returns the
 // policy unmodified.
-func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
+func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []runtime.Object) {
 	// First check if there are any of the offending selectors.
 	found := false
 	for _, rule := range gnp.Spec.Ingress {
@@ -69,8 +70,20 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
 		return []runtime.Object{gnp}
 	}
 
-	// Otherwise, we split up the policy.  Start by sorting the rules on
+	defer func(gnp *apiv3.GlobalNetworkPolicy) {
+		if r := recover(); r != nil {
+			if r == errNameTooLong {
+				logrus.Warn("could not split policy into more efficient parts because its name was too long, returning it unaltered: ", gnp.Name)
+				out = []runtime.Object{gnp}
+			} else {
+				panic(r)
+			}
+		}
+	}(gnp)
+
 	// selector (but avoid reordering rules that have different actions).
+	// Otherwise, we split up the policy.  Start by sorting the rules on
+	gnp = gnp.DeepCopy()
 	sortGNPByRuleSelector(gnp)
 
 	// Split the policy into ingress and egress halves and process separately.
@@ -111,7 +124,6 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
 			)...)
 	}
 
-	var out []runtime.Object
 	for _, pol := range pols {
 		out = append(out, pol)
 	}
@@ -130,6 +142,8 @@ func policyHasType(gnp *apiv3.GlobalNetworkPolicy, typ apiv3.PolicyType) bool {
 	}
 	return slices.Contains(gnp.Spec.Types, typ)
 }
+
+var errNameTooLong = fmt.Errorf("name too long")
 
 func splitIngressOrEgressPolicy(
 	direction string,
@@ -159,7 +173,10 @@ func splitIngressOrEgressPolicy(
 	for i, rulesSubset := range subsets {
 		// We have a group of rules, make a new policy copy and name it uniquely.
 		cpy := pol.DeepCopy()
-		cpy.Name = cpy.Name + "-" + direction + "-" + fmt.Sprintf(suffixFmt, i) // FIXME handle name too long
+		cpy.Name = cpy.Name + "-" + direction + "-" + fmt.Sprintf(suffixFmt, i)
+		if len(cpy.Name) > 253 {
+			panic(errNameTooLong)
+		}
 
 		// Find the selectors for this group. rulesGroupedOnSelector never
 		// returns an empty slice.
