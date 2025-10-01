@@ -80,7 +80,9 @@ When starting development on a new minor release, the first step is to create a 
 
 ### Setting up the branch
 
-1. Create a new branch off of the latest master and publish it, along with a dev tag for the next release.
+Create a new branch off of the latest master and publish it, along with a dev tag for the next release.
+The new release branch is typically `release-vX.Y` where `X.Y` is the new minor version and all the files
+in the repository are updated to reflect the new version.
 
    ```sh
    git checkout master && git pull origin master
@@ -88,37 +90,7 @@ When starting development on a new minor release, the first step is to create a 
 
    ```sh
    make create-release-branch
-   ```
-
-1. Checkout the newly created branch.
-
-   ```sh
-   git checkout release-vX.Y
-   ```
-
-1. Update manifests to use the new release branch instead of master.  Update versions in the following files:
-
-   - charts/calico/values.yaml
-   - charts/tigera-operator/values.yaml
-   - metadata.mk (OPERATOR_BRANCH)
-
-   Then, run manifest generation
-
-   ```sh
-   make generate
-   ```
-
-   Commit your changes
-
-   ```sh
-   Update manifests for release-vX.Y
-   ```
-
-   Then, push your changes to the branch.
-
-   ```sh
-   git push origin release-vX.Y
-   ```
+    ```
 
 ### Updating milestones for the new branch
 
@@ -127,6 +99,8 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 1. Go to the [Calico milestones page](https://github.com/projectcalico/calico/milestones)
 
 1. Create a new release of the form `Calico vX.Y+1.0`. Leave the existing `Calico vX.Y.0` milestone open.
+
+1. Move any open PRs in the `Calico vX.Y.0` milestone into the new milestone.
 
 ## 4. Performing a release
 
