@@ -28,8 +28,13 @@ spec:
               properties:
                 allowedUses:
                   items:
+                    enum:
+                      - Workload
+                      - Tunnel
+                      - LoadBalancer
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 assignmentMode:
                   default: Automatic
                   enum:
@@ -37,31 +42,33 @@ spec:
                     - Manual
                   type: string
                 blockSize:
+                  maximum: 128
+                  minimum: 0
                   type: integer
                 cidr:
+                  format: cidr
                   type: string
                 disableBGPExport:
                   type: boolean
                 disabled:
                   type: boolean
-                ipip:
-                  properties:
-                    enabled:
-                      type: boolean
-                    mode:
-                      type: string
-                  type: object
                 ipipMode:
+                  enum:
+                    - Never
+                    - Always
+                    - CrossSubnet
                   type: string
                 namespaceSelector:
                   type: string
-                nat-outgoing:
-                  type: boolean
                 natOutgoing:
                   type: boolean
                 nodeSelector:
                   type: string
                 vxlanMode:
+                  enum:
+                    - Never
+                    - Always
+                    - CrossSubnet
                   type: string
               required:
                 - cidr
