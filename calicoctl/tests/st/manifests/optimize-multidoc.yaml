@@ -1,0 +1,29 @@
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: ippool-name1
+spec:
+  cidr: 10.0.1.0/24
+  ipipMode: Always
+  vxlanMode: Never
+  blockSize: 27
+  allowedUses:
+    - Workload
+    - Tunnel
+  assignmentMode: Automatic
+  nodeSelector: "foo == 'bar'"
+---
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: ippool-name2
+spec:
+  cidr: fed0:8001::/64
+  ipipMode: Never
+  vxlanMode: Never
+  blockSize: 123
+  allowedUses:
+    - Workload
+    - Tunnel
+  assignmentMode: Automatic
+  nodeSelector: "all()"
