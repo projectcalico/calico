@@ -15,10 +15,14 @@
 package optimize
 
 import (
+	"fmt"
+	"iter"
+	"math"
+	"slices"
 	"sort"
 	"strings"
 
-	apia "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -31,17 +35,186 @@ import (
 //     for egress source and ingress destination.
 //   - Sort rules by selector within groups of the same action (ingress by destination selector,
 //     egress by source selector).
-func optimizeGlobalNetworkPolicy(gnp *apia.GlobalNetworkPolicy) []runtime.Object {
+func optimizeGlobalNetworkPolicy(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
 	// Work on a deep copy to avoid mutating the original object.
 	cpy := gnp.DeepCopy()
 	canonicaliseGNPSelectors(cpy)
 	removeRedundantRuleSelectors(cpy)
-	sortGNPByRuleSelector(cpy)
-	return []runtime.Object{cpy}
+	return splitPolicyOnSelectors(cpy)
+}
+
+// splitPolicyOnSelectors scans the ingress rules for destination selectors
+// and the egress rules for source selectors.  If found, it breaks the policy
+// up into chunks based on those selectors and moves the selector into the
+// top-level subject selector.  If therea are no such selectors, it returns the
+// policy unmodified.
+func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
+	// First check if there are any of the offending selectors.
+	found := false
+	for _, rule := range gnp.Spec.Ingress {
+		if rule.Destination.Selector != "" || rule.Destination.NamespaceSelector != "" {
+			found = true
+			break
+		}
+	}
+	for _, rule := range gnp.Spec.Egress {
+		if rule.Source.Selector != "" || rule.Source.NamespaceSelector != "" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		// No selectors to split on, return policy unmodified.
+		return []runtime.Object{gnp}
+	}
+
+	// Otherwise, we split up the policy.  Start by sorting the rules on
+	// selector (but avoid reordering rules that have different actions).
+	sortGNPByRuleSelector(gnp)
+
+	// Split the policy into ingress and egress halves and process separately.
+	var pols []*apiv3.GlobalNetworkPolicy
+	if len(gnp.Spec.Ingress) > 0 && slices.Contains(gnp.Spec.Types, apiv3.PolicyTypeIngress) {
+		inPol := gnp.DeepCopy()
+		inPol.Spec.Egress = nil
+		inPol.Spec.Types = []apiv3.PolicyType{apiv3.PolicyTypeIngress}
+		pols = append(pols,
+			splitIngressOrEgressPolicy(
+				"i",
+				inPol,
+				inPol.Spec.Ingress,
+				func(rule *apiv3.Rule) *apiv3.EntityRule {
+					return &rule.Destination
+				},
+				func(policy *apiv3.GlobalNetworkPolicy, rules []apiv3.Rule) {
+					policy.Spec.Ingress = rules
+				},
+			)...)
+	}
+	if len(gnp.Spec.Egress) > 0 && slices.Contains(gnp.Spec.Types, apiv3.PolicyTypeEgress) {
+		ePol := gnp.DeepCopy()
+		ePol.Spec.Ingress = nil
+		ePol.Spec.Types = []apiv3.PolicyType{apiv3.PolicyTypeEgress}
+		pols = append(
+			pols,
+			splitIngressOrEgressPolicy(
+				"e",
+				ePol,
+				ePol.Spec.Egress,
+				func(rule *apiv3.Rule) *apiv3.EntityRule {
+					return &rule.Source
+				},
+				func(policy *apiv3.GlobalNetworkPolicy, rules []apiv3.Rule) {
+					policy.Spec.Egress = rules
+				},
+			)...)
+	}
+
+	var out []runtime.Object
+	for _, pol := range pols {
+		out = append(out, pol)
+	}
+	return out
+}
+
+func splitIngressOrEgressPolicy(
+	direction string,
+	pol *apiv3.GlobalNetworkPolicy,
+	rules []apiv3.Rule,
+	getEntityRule func(rule *apiv3.Rule) *apiv3.EntityRule,
+	setRules func(*apiv3.GlobalNetworkPolicy, []apiv3.Rule),
+) []*apiv3.GlobalNetworkPolicy {
+	// Figure out how long our numeric suffix needs to be. We're relying on
+	// lexicographic ordering of policy names to make sure that the generated
+	// policies run in the right order if more than one policy applies to the
+	// same endpoint.  (In general we can't be sure that the policies will
+	// match disjoint endpoints.)
+	subsets := slices.Collect(rulesGroupedOnSelector(rules, getEntityRule))
+
+	if len(subsets) == 0 {
+		panic("rulesGroupedOnSelector returned 0 groups for policy " + pol.Name + " in direction " + direction)
+	}
+	if len(subsets) == 1 {
+		return []*apiv3.GlobalNetworkPolicy{pol}
+	}
+
+	suffixLen := int(math.Floor(math.Log10(float64(len(subsets))) + 1))
+	suffixFmt := fmt.Sprint("%0", suffixLen, "d")
+
+	var out []*apiv3.GlobalNetworkPolicy
+	for i, rulesSubset := range subsets {
+		// We have a group of rules, make a new policy copy and name it uniquely.
+		cpy := pol.DeepCopy()
+		cpy.Name = cpy.Name + "-" + direction + "-" + fmt.Sprintf(suffixFmt, i) // FIXME handle name too long
+
+		// Find the selectors for this group. rulesGroupedOnSelector never
+		// returns an empty slice.
+		firstEntRule := getEntityRule(&rulesSubset[0])
+		// Rewrite the top-level selector to include the rule selector.
+		cpy.Spec.Selector = andSelectors(cpy.Spec.Selector, firstEntRule.Selector)
+		cpy.Spec.NamespaceSelector = andSelectors(cpy.Spec.NamespaceSelector, firstEntRule.NamespaceSelector)
+
+		// Since we've moved the selector to the top-level subject selector,
+		// we can zero it out in the rule itself.
+		for i := range rulesSubset {
+			er := getEntityRule(&rulesSubset[i])
+			er.Selector = ""
+			er.NamespaceSelector = ""
+		}
+		setRules(cpy, rulesSubset)
+
+		out = append(out, cpy)
+	}
+	return out
+}
+
+func andSelectors(s string, s2 string) string {
+	if s == "" || s == "all()" {
+		return s2
+	}
+	if s2 == "" || s2 == "all()" {
+		return s
+	}
+	return selector.Normalise("((" + s + ") && (" + s2 + "))")
+}
+
+func rulesGroupedOnSelector(rules []apiv3.Rule, getEntityRule func(rule *apiv3.Rule) *apiv3.EntityRule) iter.Seq[[]apiv3.Rule] {
+	return func(yield func([]apiv3.Rule) bool) {
+		var group []apiv3.Rule
+		for _, rule := range rules {
+			if len(group) > 0 {
+				firstGroupRule := getEntityRule(&group[0])
+				thisRule := getEntityRule(&rule)
+				if !entityRuleSelectorsEqual(firstGroupRule, thisRule) {
+					// This rule is the start of a new group, emit the old
+					// group.
+					if !yield(group) {
+						return
+					}
+					group = nil
+				}
+			}
+			group = append(group, rule)
+		}
+		if len(group) > 0 {
+			yield(group)
+		}
+	}
+}
+
+func entityRuleSelectorsEqual(a, b *apiv3.EntityRule) bool {
+	if a.Selector != b.Selector {
+		return false
+	}
+	if a.NamespaceSelector != b.NamespaceSelector {
+		return false
+	}
+	return true
 }
 
 // canonicaliseGNPSelectors normalizes all selector strings within the policy.
-func canonicaliseGNPSelectors(g *apia.GlobalNetworkPolicy) {
+func canonicaliseGNPSelectors(g *apiv3.GlobalNetworkPolicy) {
 	g.Spec.Selector = selector.Normalise(g.Spec.Selector)
 	g.Spec.NamespaceSelector = selector.Normalise(g.Spec.NamespaceSelector)
 	g.Spec.ServiceAccountSelector = selector.Normalise(g.Spec.ServiceAccountSelector)
@@ -53,7 +226,7 @@ func canonicaliseGNPSelectors(g *apia.GlobalNetworkPolicy) {
 	}
 }
 
-func canonicaliseRuleSelectors(r *apia.Rule) {
+func canonicaliseRuleSelectors(r *apiv3.Rule) {
 	// Source
 	r.Source.Selector = normaliseRuleSelector(r.Source.Selector)
 	r.Source.NotSelector = normaliseRuleSelector(r.Source.NotSelector)
@@ -88,7 +261,7 @@ func normaliseRuleSelector(s string) string {
 //     Selector and NamespaceSelector then clear them.
 //
 // Assumes canonicaliseGNPSelectors has already been applied.
-func removeRedundantRuleSelectors(g *apia.GlobalNetworkPolicy) {
+func removeRedundantRuleSelectors(g *apiv3.GlobalNetworkPolicy) {
 	topSel := selector.Normalise(g.Spec.Selector)
 	topNS := selector.Normalise(g.Spec.NamespaceSelector)
 	for i := range g.Spec.Egress {
@@ -111,23 +284,23 @@ func removeRedundantRuleSelectors(g *apia.GlobalNetworkPolicy) {
 
 // sortGNPByRuleSelector sorts ingress rules by Destination.Selector and egress rules by Source.Selector,
 // but only within groups of the same Action. Relative order of different Action groups is preserved.
-func sortGNPByRuleSelector(g *apia.GlobalNetworkPolicy) {
-	g.Spec.Ingress = sortRulesBySelectorAndAction(g.Spec.Ingress, func(r apia.Rule) string {
+func sortGNPByRuleSelector(g *apiv3.GlobalNetworkPolicy) {
+	g.Spec.Ingress = sortRulesBySelectorAndAction(g.Spec.Ingress, func(r apiv3.Rule) string {
 		return r.Destination.Selector
 	})
-	g.Spec.Egress = sortRulesBySelectorAndAction(g.Spec.Egress, func(r apia.Rule) string {
+	g.Spec.Egress = sortRulesBySelectorAndAction(g.Spec.Egress, func(r apiv3.Rule) string {
 		return r.Source.Selector
 	})
 }
 
 // sortRulesBySelectorAndAction sorts only contiguous runs of the same Action by the provided
 // selector function, preserving the relative order of runs with different Actions.
-func sortRulesBySelectorAndAction(rules []apia.Rule, selectorFn func(apia.Rule) string) []apia.Rule {
+func sortRulesBySelectorAndAction(rules []apiv3.Rule, selectorFn func(apiv3.Rule) string) []apiv3.Rule {
 	if len(rules) <= 1 {
 		return rules
 	}
 	// Work on a copy to avoid mutating the input.
-	out := make([]apia.Rule, len(rules))
+	out := make([]apiv3.Rule, len(rules))
 	copy(out, rules)
 
 	// Walk the slice and identify contiguous segments with the same Action.
