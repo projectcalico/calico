@@ -100,9 +100,9 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 				CreateDefaultHostEndpoint: api.DefaultHostEndpointsDisabled,
 				Templates: []api.Template{
 					{
-						GenerateName:      "template",
-						InterfaceSelector: "eth0",
-						Labels:            map[string]string{"template-label": "template-value"},
+						GenerateName:     "template",
+						InterfacePattern: "eth0",
+						Labels:           map[string]string{"template-label": "template-value"},
 					},
 				},
 			},
@@ -933,7 +933,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
-	It("should create valid hep for template with interfaceSelector", func() {
+	It("should create valid hep for template with interfacePattern", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepInterfaceTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
@@ -976,15 +976,15 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(heps.Items)).To(Equal(1))
 
-		// Update the template with InterfaceSelector that should result in multiple host endpoints being created.
+		// Update the template with InterfacePattern that should result in multiple host endpoints being created.
 		nodeController.Stop()
 		kcc, err := c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		kcc.Spec.Controllers.Node.HostEndpoint.Templates = []api.Template{
 			{
-				GenerateName:      "template",
-				InterfaceSelector: "eth0|eth1",
-				Labels:            map[string]string{"template-label": "template-value"},
+				GenerateName:     "template",
+				InterfacePattern: "eth0|eth1",
+				Labels:           map[string]string{"template-label": "template-value"},
 			},
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
@@ -1019,10 +1019,10 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 		kcc.Spec.Controllers.Node.HostEndpoint.Templates = []api.Template{
 			{
-				GenerateName:      "template",
-				InterfaceSelector: "eth0|eth1",
-				InterfaceCIDRs:    []string{"172.16.1.1/24"},
-				Labels:            map[string]string{"template-label": "template-value"},
+				GenerateName:     "template",
+				InterfacePattern: "eth0|eth1",
+				InterfaceCIDRs:   []string{"172.16.1.1/24"},
+				Labels:           map[string]string{"template-label": "template-value"},
 			},
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
@@ -1044,15 +1044,15 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(heps.Items)).To(Equal(2))
 
-		// Update the template InterfaceSelector which will result in eth0 host endpoint to be deleted
+		// Update the template InterfacePattern which will result in eth0 host endpoint to be deleted
 		nodeController.Stop()
 		kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		kcc.Spec.Controllers.Node.HostEndpoint.Templates = []api.Template{
 			{
-				GenerateName:      "template",
-				InterfaceSelector: "eth1",
-				Labels:            map[string]string{"template-label": "template-value"},
+				GenerateName:     "template",
+				InterfacePattern: "eth1",
+				Labels:           map[string]string{"template-label": "template-value"},
 			},
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
