@@ -43,7 +43,7 @@ for batch in "${batches[@]}"; do
   prefix="[batch=${batch} pid=${pid}]"
   echo "$prefix Started test batch in background; monitoring its log ($log_file)."
   (
-    tail -F $log_file | grep --line-buffered \
+    tail -F $log_file < /dev/null| grep --line-buffered \
       -e "^test.*\.\.\. ok" \
       -e "\.\.\. ERROR$" \
       -e "Failure output:" \
