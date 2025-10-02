@@ -16,7 +16,7 @@ run_batch() {
   local log_file="$4"
 
   if [ "$batch" = "ut" ]; then
-    VM_NAME="$vm_name" ${remote_exec} make --directory=calico/${REPO_NAME} ut-bpf check-wireguard >& "$log_file"
+    VM_NAME="$vm_name" ${remote_exec} make --directory=calico/${REPO_NAME} FOCUS="${UT_FOCUS}" ut-bpf check-wireguard >& "$log_file"
   else
     VM_NAME="$vm_name" ${remote_exec} make --directory=calico/${REPO_NAME} fv-bpf FELIX_FV_NFTABLES="$FELIX_FV_NFTABLES" FELIX_FV_BPFATTACHTYPE="$FELIX_FV_BPFATTACHTYPE" GINKGO_FOCUS="${FV_FOCUS}" FV_NUM_BATCHES="$num_fv_batches" FV_BATCHES_TO_RUN="$batch" >& "$log_file"
   fi
