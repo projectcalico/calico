@@ -150,8 +150,13 @@ func TestOptimizeGNP_CanonicalisesSelectors(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected type: %#v", out[0])
 	}
-	if og.Spec.Selector != expectTopSel {
-		t.Errorf("top-level selector not canonicalized: got %q want %q", og.Spec.Selector, expectTopSel)
+	// Optimizer strips explicit all() to empty string at top-level.
+	expSel := expectTopSel
+	if expSel == selector.All.String() {
+		expSel = ""
+	}
+	if og.Spec.Selector != expSel {
+		t.Errorf("top-level selector not canonicalized: got %q want %q", og.Spec.Selector, expSel)
 	}
 	if og.Spec.NamespaceSelector != expectTopNS {
 		t.Errorf("ns selector not canonicalized: got %q want %q", og.Spec.NamespaceSelector, expectTopNS)

@@ -22,7 +22,6 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
@@ -42,7 +41,7 @@ func TestSplitPolicyOnSelectors_NoSelectors_NoChange(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("expected 1 object, got %d", len(out))
 	}
-	if out[0] != runtime.Object(gnp) {
+	if out[0] != gnp {
 		t.Fatalf("expected pass-through of original object when no selectors present")
 	}
 }
@@ -70,15 +69,7 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 		t.Fatalf("expected 4 split policies, got %d", len(out))
 	}
 
-	// Cast and verify each split policy
-	pols := make([]*apiv3.GlobalNetworkPolicy, 0, len(out))
-	for i, obj := range out {
-		pol, ok := obj.(*apiv3.GlobalNetworkPolicy)
-		if !ok {
-			t.Fatalf("out[%d] not a GlobalNetworkPolicy: %#v", i, obj)
-		}
-		pols = append(pols, pol)
-	}
+	pols := out
 
 	// Expected groups after sorting within action runs: [Allow:a], [Allow:b], [Deny:x,x], [Allow:c,c]
 	// Verify names have proper suffixes and contents are grouped.
@@ -150,14 +141,8 @@ func TestSplitPolicyOnSelectors_SplitEgressIntoGroups(t *testing.T) {
 	if len(out) != 3 {
 		t.Fatalf("expected 3 split policies, got %d", len(out))
 	}
-	pols := make([]*apiv3.GlobalNetworkPolicy, 0, len(out))
-	for i, obj := range out {
-		pol, ok := obj.(*apiv3.GlobalNetworkPolicy)
-		if !ok {
-			t.Fatalf("out[%d] not a GlobalNetworkPolicy: %#v", i, obj)
-		}
-		pols = append(pols, pol)
-	}
+	pols := out
+
 	// Name suffix checks for egress policies
 	suffixLen := 1
 	for i, pol := range pols {
@@ -188,6 +173,102 @@ func TestSplitPolicyOnSelectors_SplitEgressIntoGroups(t *testing.T) {
 		if pol.Spec.Ingress != nil {
 			t.Fatalf("expected Ingress to be nil in split egress policy")
 		}
+	}
+}
+
+func TestSplitPolicyOnSelectors_SkipsForApplyOnForward(t *testing.T) {
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "apply-on-forward-nosplit"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			ApplyOnForward: true,
+			Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
+			Ingress: []apiv3.Rule{
+				{
+					Action:      apiv3.Allow,
+					Destination: apiv3.EntityRule{Selector: "app == 'a'"},
+				},
+				{
+					Action:      apiv3.Allow,
+					Destination: apiv3.EntityRule{Selector: "app == 'b'"},
+				},
+			},
+		},
+	}
+	out := splitPolicyOnSelectors(gnp)
+	if len(out) != 1 || out[0] != gnp {
+		t.Fatalf("expected no split for ApplyOnForward policy")
+	}
+}
+
+func TestSplitPolicyOnSelectors_SkipsForPreDNAT(t *testing.T) {
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "prednat-nosplit"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			PreDNAT: true,
+			Types:   []apiv3.PolicyType{apiv3.PolicyTypeIngress},
+			Ingress: []apiv3.Rule{
+				{
+					Action:      apiv3.Allow,
+					Destination: apiv3.EntityRule{Selector: "app == 'a'"},
+				},
+				{
+					Action:      apiv3.Allow,
+					Destination: apiv3.EntityRule{Selector: "app == 'b'"},
+				},
+			},
+		},
+	}
+	out := splitPolicyOnSelectors(gnp)
+	if len(out) != 1 || out[0] != gnp {
+		t.Fatalf("expected no split for PreDNAT policy")
+	}
+}
+
+func TestSplitPolicyOnSelectors_SkipsForDoNotTrack(t *testing.T) {
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "dnt-nosplit"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			DoNotTrack: true,
+			Types:      []apiv3.PolicyType{apiv3.PolicyTypeIngress},
+			Ingress: []apiv3.Rule{
+				{
+					Action:      apiv3.Allow,
+					Destination: apiv3.EntityRule{Selector: "app == 'a'"},
+				},
+				{
+					Action:      apiv3.Allow,
+					Destination: apiv3.EntityRule{Selector: "app == 'b'"},
+				},
+			},
+		},
+	}
+	out := splitPolicyOnSelectors(gnp)
+	if len(out) != 1 || out[0] != gnp {
+		t.Fatalf("expected no split for DoNotTrack policy")
+	}
+}
+
+func TestSplitPolicyOnSelectors_NameTooLong_ReturnsOriginal(t *testing.T) {
+	longName := strings.Repeat("n", 250) // 250 + "-i-0" => 254 > 253, triggers name-too-long recovery
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: longName},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Selector: "all()",
+			Types:    []apiv3.PolicyType{apiv3.PolicyTypeIngress},
+			Ingress: []apiv3.Rule{
+				{Action: apiv3.Allow, Destination: apiv3.EntityRule{Selector: "app == 'a'"}},
+				{Action: apiv3.Allow, Destination: apiv3.EntityRule{Selector: "app == 'b'"}},
+			},
+		},
+	}
+
+	out := splitPolicyOnSelectors(gnp)
+	if len(out) != 1 || out[0] != gnp {
+		t.Fatalf("expected original policy returned when name too long for split; got %d results", len(out))
 	}
 }
 
