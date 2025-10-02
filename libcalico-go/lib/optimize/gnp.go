@@ -17,6 +17,7 @@ package optimize
 import (
 	"fmt"
 	"iter"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -82,6 +83,14 @@ func removeRedundantRulesInner(rules []apiv3.Rule) (out []apiv3.Rule) {
 			continue
 		}
 		out = append(out, rule)
+
+		if reflect.DeepEqual(rule, apiv3.Rule{Action: apiv3.Deny}) ||
+			reflect.DeepEqual(rule, apiv3.Rule{Action: apiv3.Allow}) ||
+			reflect.DeepEqual(rule, apiv3.Rule{Action: apiv3.Pass}) {
+			logrus.Debug("Reached a terminal allow/deny/pass all rule; skipping remaining rules.")
+			break
+		}
+
 		seenRules.Add(js)
 	}
 	return
