@@ -356,6 +356,52 @@ var _ = Describe("RouteTable", func() {
 					HardwareAddr: mac1,
 				})
 			})
+			Context("after initial route programming", func() {
+				var cidr *net.IPNet
+				var linkIndex int
+				BeforeEach(func() {
+					// Initial route programming...
+					addLink := dataplane.AddIface(6, "cali6", true, true)
+					linkIndex = addLink.LinkAttrs.Index
+					rt.SetRoutes(RouteClassLocalWorkload, addLink.LinkAttrs.Name, []Target{
+						{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
+					})
+					err := rt.Apply()
+					Expect(err).ToNot(HaveOccurred())
+					cidr = mustParseCIDR("10.0.0.6/32")
+				})
+				It("ARP entry should exist", func() {
+					dataplane.ExpectNeighs(unix.AF_INET, netlink.Neigh{
+						Family:       unix.AF_INET,
+						LinkIndex:    linkIndex,
+						State:        netlink.NUD_PERMANENT,
+						Type:         unix.RTN_UNICAST,
+						IP:           cidr.IP,
+						HardwareAddr: mac1,
+					})
+				})
+				It("ARP entry should be reestablished by a resync", func() {
+					dataplane.RemoveNeighs(unix.AF_INET, netlink.Neigh{
+						Family:       unix.AF_INET,
+						LinkIndex:    linkIndex,
+						State:        netlink.NUD_PERMANENT,
+						Type:         unix.RTN_UNICAST,
+						IP:           cidr.IP,
+						HardwareAddr: mac1,
+					})
+					rt.QueueResync()
+					err := rt.Apply()
+					Expect(err).NotTo(HaveOccurred())
+					dataplane.ExpectNeighs(unix.AF_INET, netlink.Neigh{
+						Family:       unix.AF_INET,
+						LinkIndex:    linkIndex,
+						State:        netlink.NUD_PERMANENT,
+						Type:         unix.RTN_UNICAST,
+						IP:           cidr.IP,
+						HardwareAddr: mac1,
+					})
+				})
+			})
 			It("Should skip adding an ARP entry if route is deleted via SetRoutes before sync", func() {
 				// Route that needs to be added
 				link := dataplane.AddIface(6, "cali6", true, true)
