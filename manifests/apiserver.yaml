@@ -175,6 +175,9 @@ rules:
   - caliconodestatuses
   - ipamconfigs
   - tiers
+  - stagednetworkpolicies
+  - stagedglobalnetworkpolicies
+  - stagedkubernetesnetworkpolicies
   verbs:
   - get
   - list
