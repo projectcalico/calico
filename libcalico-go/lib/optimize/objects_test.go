@@ -379,3 +379,23 @@ func TestOptimizeGNP_SortsEgressBySourceSelectorWithinAction(t *testing.T) {
 		t.Fatalf("unexpected egress[4]: action=%s sel=%s", gnp.Spec.Egress[4].Action, gnp.Spec.Egress[4].Source.Selector)
 	}
 }
+
+func TestOptimizeGNP_PreservesEmptyTopLevelServiceAccountSelector(t *testing.T) {
+	gnp := &apia.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apia.KindGlobalNetworkPolicy, APIVersion: apia.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "gnp-empty-top-sa"},
+		Spec: apia.GlobalNetworkPolicySpec{
+			Selector:               "all()",
+			ServiceAccountSelector: "   ", // should remain empty, not all()
+		},
+	}
+
+	out := Objects([]runtime.Object{gnp})
+	if len(out) != 1 {
+		t.Fatalf("expected 1 optimized object, got %d", len(out))
+	}
+	og := out[0].(*apia.GlobalNetworkPolicy)
+	if og.Spec.ServiceAccountSelector != "" {
+		t.Fatalf("top-level ServiceAccountSelector should remain empty, got %q", og.Spec.ServiceAccountSelector)
+	}
+}

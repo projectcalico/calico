@@ -41,7 +41,63 @@ func optimizeGlobalNetworkPolicy(gnp *apiv3.GlobalNetworkPolicy) []runtime.Objec
 	cpy := gnp.DeepCopy()
 	canonicaliseGNPSelectors(cpy)
 	removeRedundantRuleSelectors(cpy)
-	return splitPolicyOnSelectors(cpy)
+	pols := splitPolicyOnSelectors(cpy)
+
+	var out []runtime.Object
+	for _, pol := range pols {
+		if pol.Spec.Selector == "all()" {
+			// Remove explicit defaults.
+			pol.Spec.Selector = ""
+		}
+		out = append(out, pol)
+	}
+
+	return out
+}
+
+// canonicaliseGNPSelectors normalizes all selector strings within the policy.
+func canonicaliseGNPSelectors(g *apiv3.GlobalNetworkPolicy) {
+	// The top-level subject selector defaults to "all()" so Normalise does the
+	// right thing.
+	g.Spec.Selector = selector.Normalise(g.Spec.Selector)
+	// For the namespace selector, "" and "all()" mean different things so we must
+	// preserve empties.
+	g.Spec.NamespaceSelector = normaliseSelectorPreserveEmpty(g.Spec.NamespaceSelector)
+	// Preserve empty semantics for top-level ServiceAccountSelector like rule-level selectors.
+	g.Spec.ServiceAccountSelector = normaliseSelectorPreserveEmpty(g.Spec.ServiceAccountSelector)
+	for i := range g.Spec.Ingress {
+		canonicaliseRuleSelectors(&g.Spec.Ingress[i])
+	}
+	for i := range g.Spec.Egress {
+		canonicaliseRuleSelectors(&g.Spec.Egress[i])
+	}
+}
+
+func canonicaliseRuleSelectors(r *apiv3.Rule) {
+	// Source
+	r.Source.Selector = normaliseSelectorPreserveEmpty(r.Source.Selector)
+	r.Source.NotSelector = normaliseSelectorPreserveEmpty(r.Source.NotSelector)
+	r.Source.NamespaceSelector = normaliseSelectorPreserveEmpty(r.Source.NamespaceSelector)
+	if r.Source.ServiceAccounts != nil {
+		r.Source.ServiceAccounts.Selector = normaliseSelectorPreserveEmpty(r.Source.ServiceAccounts.Selector)
+	}
+	// Destination
+	r.Destination.Selector = normaliseSelectorPreserveEmpty(r.Destination.Selector)
+	r.Destination.NotSelector = normaliseSelectorPreserveEmpty(r.Destination.NotSelector)
+	r.Destination.NamespaceSelector = normaliseSelectorPreserveEmpty(r.Destination.NamespaceSelector)
+	if r.Destination.ServiceAccounts != nil {
+		r.Destination.ServiceAccounts.Selector = normaliseSelectorPreserveEmpty(r.Destination.ServiceAccounts.Selector)
+	}
+}
+
+// normaliseSelectorPreserveEmpty preserves the special meaning of an empty selector.
+// If the input is empty or whitespace-only, returns the empty string. Otherwise, returns
+// the canonical normalised selector string.
+func normaliseSelectorPreserveEmpty(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return ""
+	}
+	return selector.Normalise(s)
 }
 
 // splitPolicyOnSelectors scans the ingress rules for destination selectors
@@ -49,8 +105,16 @@ func optimizeGlobalNetworkPolicy(gnp *apiv3.GlobalNetworkPolicy) []runtime.Objec
 // up into chunks based on those selectors and moves the selector into the
 // top-level subject selector.  If therea are no such selectors, it returns the
 // policy unmodified.
-func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []runtime.Object) {
-	// First check if there are any of the offending selectors.
+func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []*apiv3.GlobalNetworkPolicy) {
+	if gnp.Spec.ApplyOnForward || gnp.Spec.PreDNAT || gnp.Spec.DoNotTrack {
+		// These policies apply to traffic flowing through an endpoint as well
+		// as the endpoint itself.  We expect them to have source and dest
+		// selectors on their rules, and it's not safe to split them up.
+		logrus.Infof("Skipping split of pre-DNAT / apply-on-forward / no-track policy: %q", gnp.Name)
+		return []*apiv3.GlobalNetworkPolicy{gnp}
+	}
+
+	// Check if there are any of the offending selectors.
 	found := false
 	for _, rule := range gnp.Spec.Ingress {
 		if rule.Destination.Selector != "" || rule.Destination.NamespaceSelector != "" {
@@ -67,14 +131,14 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []runtime.Objec
 
 	if !found {
 		// No selectors to split on, return policy unmodified.
-		return []runtime.Object{gnp}
+		return []*apiv3.GlobalNetworkPolicy{gnp}
 	}
 
 	defer func(gnp *apiv3.GlobalNetworkPolicy) {
 		if r := recover(); r != nil {
 			if r == errNameTooLong {
 				logrus.Warn("could not split policy into more efficient parts because its name was too long, returning it unaltered: ", gnp.Name)
-				out = []runtime.Object{gnp}
+				out = []*apiv3.GlobalNetworkPolicy{gnp}
 			} else {
 				panic(r)
 			}
@@ -124,10 +188,7 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []runtime.Objec
 			)...)
 	}
 
-	for _, pol := range pols {
-		out = append(out, pol)
-	}
-	return out
+	return pols
 }
 
 func policyHasType(gnp *apiv3.GlobalNetworkPolicy, typ apiv3.PolicyType) bool {
@@ -241,46 +302,6 @@ func entityRuleSelectorsEqual(a, b *apiv3.EntityRule) bool {
 		return false
 	}
 	return true
-}
-
-// canonicaliseGNPSelectors normalizes all selector strings within the policy.
-func canonicaliseGNPSelectors(g *apiv3.GlobalNetworkPolicy) {
-	g.Spec.Selector = selector.Normalise(g.Spec.Selector)
-	g.Spec.NamespaceSelector = selector.Normalise(g.Spec.NamespaceSelector)
-	g.Spec.ServiceAccountSelector = selector.Normalise(g.Spec.ServiceAccountSelector)
-	for i := range g.Spec.Ingress {
-		canonicaliseRuleSelectors(&g.Spec.Ingress[i])
-	}
-	for i := range g.Spec.Egress {
-		canonicaliseRuleSelectors(&g.Spec.Egress[i])
-	}
-}
-
-func canonicaliseRuleSelectors(r *apiv3.Rule) {
-	// Source
-	r.Source.Selector = normaliseRuleSelector(r.Source.Selector)
-	r.Source.NotSelector = normaliseRuleSelector(r.Source.NotSelector)
-	r.Source.NamespaceSelector = normaliseRuleSelector(r.Source.NamespaceSelector)
-	if r.Source.ServiceAccounts != nil {
-		r.Source.ServiceAccounts.Selector = normaliseRuleSelector(r.Source.ServiceAccounts.Selector)
-	}
-	// Destination
-	r.Destination.Selector = normaliseRuleSelector(r.Destination.Selector)
-	r.Destination.NotSelector = normaliseRuleSelector(r.Destination.NotSelector)
-	r.Destination.NamespaceSelector = normaliseRuleSelector(r.Destination.NamespaceSelector)
-	if r.Destination.ServiceAccounts != nil {
-		r.Destination.ServiceAccounts.Selector = normaliseRuleSelector(r.Destination.ServiceAccounts.Selector)
-	}
-}
-
-// normaliseRuleSelector preserves the special meaning of an empty selector at rule level.
-// If the input is empty or whitespace-only, returns the empty string. Otherwise, returns
-// the canonical normalised selector string.
-func normaliseRuleSelector(s string) string {
-	if strings.TrimSpace(s) == "" {
-		return ""
-	}
-	return selector.Normalise(s)
 }
 
 // removeRedundantRuleSelectors removes per-rule Source/Destination selectors that are
