@@ -57,7 +57,7 @@ function git_version_to_deb {
     # but git_auto_version changes them to 'v3.31.0rc.post267'
     # For the Debian package version, translate that to v3.31.0~rc.post267,
     # because it's logically _before_ v3.31.0.
-    echo "${1/rc*/~&}"
+    echo $1 | sed 's/rc/~rc/'
 }
 
 function git_version_to_rpm {
