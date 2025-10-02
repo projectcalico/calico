@@ -26,7 +26,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // optimizeGlobalNetworkPolicy returns zero or more GlobalNetworkPolicy resources
@@ -42,17 +44,47 @@ func optimizeGlobalNetworkPolicy(gnp *apiv3.GlobalNetworkPolicy) []runtime.Objec
 	canonicaliseGNPSelectors(cpy)
 	removeRedundantRuleSelectors(cpy)
 	pols := splitPolicyOnSelectors(cpy)
+	removeExplicitDefaults(pols)
+	pols = removeRedundantRules(pols)
 
 	var out []runtime.Object
 	for _, pol := range pols {
-		if pol.Spec.Selector == "all()" {
-			// Remove explicit defaults.
-			pol.Spec.Selector = ""
-		}
 		out = append(out, pol)
 	}
 
 	return out
+}
+
+func removeRedundantRules(pols []*apiv3.GlobalNetworkPolicy) (out []*apiv3.GlobalNetworkPolicy) {
+	for _, pol := range pols {
+		pol.Spec.Ingress = removeRedundantRulesInner(pol.Spec.Ingress)
+		pol.Spec.Egress = removeRedundantRulesInner(pol.Spec.Egress)
+		if len(pol.Spec.Ingress) == 0 && len(pol.Spec.Egress) == 0 {
+			continue
+		}
+		out = append(out, pol)
+	}
+	return
+}
+
+func removeRedundantRulesInner(rules []apiv3.Rule) (out []apiv3.Rule) {
+	// Rules aren't comparable, so the best way to find dupes is to serialise
+	// to JSON.
+	seenRules := set.New[string]()
+	for _, rule := range rules {
+		j, err := json.Marshal(rule)
+		if err != nil {
+			panic(err)
+		}
+		js := string(j)
+		if seenRules.Contains(js) {
+			logrus.Debug("Skipping duplicate rule: ", js)
+			continue
+		}
+		out = append(out, rule)
+		seenRules.Add(js)
+	}
+	return
 }
 
 // canonicaliseGNPSelectors normalizes all selector strings within the policy.
@@ -393,4 +425,13 @@ func sortRulesBySelectorAndAction(rules []apiv3.Rule, selectorFn func(apiv3.Rule
 		i = j
 	}
 	return out
+}
+
+func removeExplicitDefaults(pols []*apiv3.GlobalNetworkPolicy) {
+	for _, pol := range pols {
+		if pol.Spec.Selector == "all()" {
+			// Remove explicit defaults.
+			pol.Spec.Selector = ""
+		}
+	}
 }
