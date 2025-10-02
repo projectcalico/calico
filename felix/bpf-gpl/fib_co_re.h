@@ -282,15 +282,7 @@ try_fib_external:
 							state->ct_result.ifindex_fwd);
 					goto no_fib_redirect;
 				}
-				CALI_DEBUG("Fall through to redirect without fib lookup rc %d", rc);
 			}
-			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
-			if (rc == TC_ACT_REDIRECT) {
-				counter_inc(ctx, CALI_REDIRECT_NEIGH);
-				CALI_DEBUG("Redirect to host dev %d without fib lookup", state->ct_result.ifindex_fwd);
-				goto no_fib_redirect;
-			}
-			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);
 		}
 
 		*fib_params(ctx) = (struct bpf_fib_lookup) {
