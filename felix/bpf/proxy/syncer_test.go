@@ -47,7 +47,7 @@ var _ = Describe("BPF Syncer", func() {
 	var (
 		svcs      *mockNATMap
 		eps       *mockNATBackendMap
-		chEps     *mockConsistentHashMap
+		mgEps     *mockMaglevMap
 		aff       *mockAffinityMap
 		ct        *mock.Map
 		ctCleanup *mock.Map
@@ -77,14 +77,14 @@ var _ = Describe("BPF Syncer", func() {
 	BeforeEach(func() {
 		svcs = newMockNATMap()
 		eps = newMockNATBackendMap()
-		chEps = newMockConsistentHashMap()
+		mgEps = newMockMaglevMap()
 		aff = newMockAffinityMap()
 		ct = mock.NewMockMap(conntrack.MapParams)
 		ctCleanup = mock.NewMockMap(conntrack.MapParamsCleanup)
 
 		rt = proxy.NewRTCache()
 
-		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, chEps, aff, rt, nil)
+		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil)
 
 		ep := proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true))
 		state = proxy.DPSyncerState{
@@ -508,7 +508,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, chEps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil)
 			checkAfterResync()
 		}))
 
@@ -516,7 +516,7 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, chEps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil)
 			checkAfterResync()
 		}))
 
@@ -664,7 +664,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, chEps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -817,7 +817,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, chEps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -897,7 +897,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, chEps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1528,35 +1528,35 @@ func (m *mockNATBackendMap) Delete(k []byte) error {
 	return nil
 }
 
-type mockConsistentHashMap struct {
+type mockMaglevMap struct {
 	mock.DummyMap
 	sync.Mutex
-	m map[nat.ConsistentHashBackendKey]nat.BackendValue
+	m map[nat.MaglevBackendKey]nat.BackendValue
 }
 
-func (m *mockConsistentHashMap) MapFD() maps.FD {
+func (m *mockMaglevMap) MapFD() maps.FD {
 	panic("implement me")
 }
 
-func newMockConsistentHashMap() *mockConsistentHashMap {
-	return &mockConsistentHashMap{
-		m: make(map[nat.ConsistentHashBackendKey]nat.BackendValue),
+func newMockMaglevMap() *mockMaglevMap {
+	return &mockMaglevMap{
+		m: make(map[nat.MaglevBackendKey]nat.BackendValue),
 	}
 }
 
-func (m *mockConsistentHashMap) GetName() string {
-	return "consistenthash"
+func (m *mockMaglevMap) GetName() string {
+	return "maglev"
 }
 
-func (m *mockConsistentHashMap) Path() string {
-	return "/sys/fs/bpf/tc/consistenthash"
+func (m *mockMaglevMap) Path() string {
+	return "/sys/fs/bpf/tc/maglev"
 }
 
-func (m *mockConsistentHashMap) Iter(iter maps.IterCallback) error {
+func (m *mockMaglevMap) Iter(iter maps.IterCallback) error {
 	m.Lock()
 	defer m.Unlock()
 
-	ks := len(nat.ConsistentHashBackendKey{})
+	ks := len(nat.MaglevBackendKey{})
 	vs := len(nat.BackendValue{})
 	for k, v := range m.m {
 		action := iter(k[:ks], v[:vs])
@@ -1568,15 +1568,15 @@ func (m *mockConsistentHashMap) Iter(iter maps.IterCallback) error {
 	return nil
 }
 
-func (m *mockConsistentHashMap) Update(k, v []byte) error {
+func (m *mockMaglevMap) Update(k, v []byte) error {
 	logrus.WithFields(logrus.Fields{
 		"k": k, "v": v,
-	}).Debug("mockConsistentHashMap.Update()")
+	}).Debug("mockMaglevMap.Update()")
 
 	m.Lock()
 	defer m.Unlock()
 
-	ks := len(nat.ConsistentHashBackendKey{})
+	ks := len(nat.MaglevBackendKey{})
 	if len(k) != ks {
 		return fmt.Errorf("expected key size %d got %d", ks, len(k))
 	}
@@ -1585,7 +1585,7 @@ func (m *mockConsistentHashMap) Update(k, v []byte) error {
 		return fmt.Errorf("expected value size %d got %d", vs, len(v))
 	}
 
-	var key nat.ConsistentHashBackendKey
+	var key nat.MaglevBackendKey
 	copy(key[:ks], k[:ks])
 
 	var val nat.BackendValue
@@ -1596,24 +1596,24 @@ func (m *mockConsistentHashMap) Update(k, v []byte) error {
 	return nil
 }
 
-func (m *mockConsistentHashMap) Get(k []byte) ([]byte, error) {
+func (m *mockMaglevMap) Get(k []byte) ([]byte, error) {
 	panic("not implemented")
 }
 
-func (m *mockConsistentHashMap) Delete(k []byte) error {
+func (m *mockMaglevMap) Delete(k []byte) error {
 	logrus.WithFields(logrus.Fields{
 		"k": k,
-	}).Debug("mockConsistentHashMap.Delete()")
+	}).Debug("mockMaglevMap.Delete()")
 
 	m.Lock()
 	defer m.Unlock()
 
-	ks := len(nat.ConsistentHashBackendKey{})
+	ks := len(nat.MaglevBackendKey{})
 	if len(k) != ks {
 		return fmt.Errorf("expected key size %d got %d", ks, len(k))
 	}
 
-	var key nat.ConsistentHashBackendKey
+	var key nat.MaglevBackendKey
 	copy(key[:ks], k[:ks])
 
 	delete(m.m, key)

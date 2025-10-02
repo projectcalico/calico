@@ -387,7 +387,7 @@ func StartDataplaneDriver(
 			BPFMapSizeConntrackCleanupQueue:    configParams.BPFMapSizeConntrackCleanupQueue,
 			BPFMapSizeIPSets:                   configParams.BPFMapSizeIPSets,
 			BPFMapSizeIfState:                  configParams.BPFMapSizeIfState,
-			BPFMapSizeConsistentHash:           configParams.BPFMapSizeConsistentHash,
+			BPFMapSizeMaglev:                   configParams.BPFMapSizeMaglev,
 			BPFEnforceRPF:                      configParams.BPFEnforceRPF,
 			BPFDisableGROForIfaces:             configParams.BPFDisableGROForIfaces,
 			BPFExportBufferSizeMB:              configParams.BPFExportBufferSizeMB,

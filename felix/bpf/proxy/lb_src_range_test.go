@@ -39,7 +39,7 @@ func init() {
 func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 	svcs := newMockNATMap()
 	eps := newMockNATBackendMap()
-	chEps := newMockConsistentHashMap()
+	chEps := newMockMaglevMap()
 	aff := newMockAffinityMap()
 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}

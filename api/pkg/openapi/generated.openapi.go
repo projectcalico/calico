@@ -3347,9 +3347,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
-					"bpfMapSizeConsistentHash": {
+					"bpfMapSizeMaglev": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeConsistentHash sets the size of the ConsistentHash map. The map must be large enough to hold 1009 entries for each ConsistentHash-enabled service address.",
+							Description: "BPFMapSizeMaglev sets the size of the Maglev backend-lookup map. The map must be large enough to hold 1009 entries for each Maglev-enabled service address.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
