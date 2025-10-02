@@ -312,25 +312,49 @@ func entityRuleSelectorsEqual(a, b *apiv3.EntityRule) bool {
 //     Selector and NamespaceSelector then clear them.
 //
 // Assumes canonicaliseGNPSelectors has already been applied.
-func removeRedundantRuleSelectors(g *apiv3.GlobalNetworkPolicy) {
-	topSel := selector.Normalise(g.Spec.Selector)
-	topNS := selector.Normalise(g.Spec.NamespaceSelector)
-	for i := range g.Spec.Egress {
-		r := &g.Spec.Egress[i]
-		if r.Source.Selector == topSel && r.Source.NamespaceSelector == topNS {
+func removeRedundantRuleSelectors(gnp *apiv3.GlobalNetworkPolicy) {
+	if gnp.Spec.ApplyOnForward || gnp.Spec.PreDNAT || gnp.Spec.DoNotTrack {
+		// These policies apply to traffic flowing through an endpoint as well
+		// as the endpoint itself.  We expect them to have source and dest
+		// selectors on their rules, and it's not safe to split them up.
+		logrus.Infof("Skipping remove redundant on pre-DNAT / apply-on-forward / no-track policy: %q", gnp.Name)
+		return
+	}
+
+	topSel := gnp.Spec.Selector
+	topNS := gnp.Spec.NamespaceSelector
+	for i := range gnp.Spec.Egress {
+		r := &gnp.Spec.Egress[i]
+		if compareTopLevelVsRuleSelectors(topSel, topNS, r.Source.Selector, r.Source.NamespaceSelector) {
 			// Remove redundant matches; keep other Source fields as-is.
 			r.Source.Selector = ""
 			r.Source.NamespaceSelector = ""
 		}
 	}
-	for i := range g.Spec.Ingress {
-		r := &g.Spec.Ingress[i]
-		if r.Destination.Selector == topSel && r.Destination.NamespaceSelector == topNS {
+	for i := range gnp.Spec.Ingress {
+		r := &gnp.Spec.Ingress[i]
+		if compareTopLevelVsRuleSelectors(topSel, topNS, r.Destination.Selector, r.Destination.NamespaceSelector) {
 			// Remove redundant matches; keep other Destination fields as-is.
 			r.Destination.Selector = ""
 			r.Destination.NamespaceSelector = ""
 		}
 	}
+}
+
+func compareTopLevelVsRuleSelectors(topSel, topNS, ruleSel, ruleNS string) bool {
+	topNS = normaliseSelectorPreserveEmpty(topNS)
+	ruleNS = normaliseSelectorPreserveEmpty(ruleNS)
+	if topNS != ruleNS {
+		return false
+	}
+
+	topSel = selector.Normalise(topSel)
+	if ruleNS != "" || ruleSel != "" {
+		// Subtlety: if only the ns selector is set then the rule selector
+		// effectively defaults to "all()".
+		ruleSel = selector.Normalise(ruleSel)
+	}
+	return topSel == ruleSel
 }
 
 // sortGNPByRuleSelector sorts ingress rules by Destination.Selector and egress rules by Source.Selector,
