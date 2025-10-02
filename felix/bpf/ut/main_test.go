@@ -17,14 +17,22 @@
 package ut_test
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"testing"
 )
 
 func TestMain(m *testing.M) {
 	initMapsOnce()
 	cleanUpMaps()
-	cmd := startBPFLogging()
+	cmd := exec.Command("sysctl", "-w", "net.ipv6.conf.all.forwarding=1")
+	err := cmd.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to enable IPv6 forwarding: %v\n", err)
+		os.Exit(1)
+	}
+	cmd = startBPFLogging()
 	rc := m.Run()
 	cleanUpMaps()
 	stopBPFLogging(cmd)
