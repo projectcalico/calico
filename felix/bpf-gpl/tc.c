@@ -69,13 +69,6 @@
 SEC("tc")
 int calico_tc_main(struct __sk_buff *skb)
 {
-#ifdef UNITTEST
-	/* UT-only workaround to allow us to run the program with BPF_TEST_PROG_RUN
-	 * and simulate a specific mark
-	 */
-	skb->mark = SKB_MARK;
-#endif
-
 	if (CALI_F_LO && CALI_F_TO_HOST) {
 		/* Do nothing, it is a packet that just looped around. */
 		return TC_ACT_UNSPEC;

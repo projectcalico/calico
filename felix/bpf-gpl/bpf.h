@@ -327,20 +327,6 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define INGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED)
 #define EGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED)
 
-#ifdef UNITTEST
-#define CALI_PATCH_DEFINE(name, pattern)							\
-static CALI_BPF_INLINE __be32 cali_patch_##name()					\
-{												\
-	__u32 ret;										\
-	asm("%0 = " #pattern ";" : "=r"(ret) /* output */ : /* no inputs */ : /* no clobber */);\
-	return ret;										\
-}
-#define CALI_PATCH(name)	cali_patch_##name()
-
-CALI_PATCH_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
-#define SKB_MARK	CALI_PATCH(__skb_mark)
-#endif
-
 #define map_symbol(name, ver) name##ver
 
 #define MAP_LOOKUP_FN(fname, name, ver) \
