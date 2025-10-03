@@ -1,7 +1,6 @@
 - name: "Node: Build"
   run:
-    # when: "${CHANGE_IN(node)}"
-    when: "true"
+    when: "${CHANGE_IN(node)}"
   dependencies:
     - Prerequisites
   task:
@@ -18,8 +17,7 @@
           - ../.semaphore/run-and-monitor ci.log make ci
 - name: "Node: multi-arch build"
   run:
-    # when: "${CHANGE_IN(node)}"
-    when: "true"
+    when: "${CHANGE_IN(node)}"
   dependencies:
     - "Node: Build"
   task:
@@ -43,8 +41,7 @@
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 - name: "Node: Build - native arm64 runner"
   run:
-    # when: "${CHANGE_IN(node)}"
-    when: "true"
+    when: "${CHANGE_IN(node)}"
   dependencies:
     - "Node: Build"
   task:
