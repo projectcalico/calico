@@ -25,7 +25,6 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
-import inspect
 import os
 import re
 import uuid
@@ -54,8 +53,6 @@ from neutron_lib.agent import topics
 from neutron_lib.db import api as db_api
 from neutron_lib.plugins import directory as plugin_dir
 from neutron_lib.plugins.ml2 import api
-
-from oslo_concurrency import lockutils
 
 from oslo_config import cfg
 
