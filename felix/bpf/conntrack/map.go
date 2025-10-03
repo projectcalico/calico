@@ -24,11 +24,13 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	// When adding a new ct version, change curVerXXX to point to the new version
 	curVerCleanup "github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
-	curVer "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
+	curVer "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 )
 
 func init() {
@@ -74,20 +76,20 @@ const (
 )
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
+func NewValueNormal(lastSeen time.Duration, flags uint32, legA, legB Leg) Value {
 	return curVer.NewValueNormal(lastSeen, flags, legA, legB)
 }
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value {
+func NewValueNATForward(lastSeen time.Duration, flags uint32, revKey Key) Value {
 	return curVer.NewValueNATForward(lastSeen, flags, revKey)
 }
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
 func NewValueNATReverse(
-	lastSeen time.Duration, flags uint16, legA, legB Leg,
+	lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16,
 ) Value {
 	return curVer.NewValueNATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
@@ -95,27 +97,27 @@ func NewValueNATReverse(
 
 // NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
 func NewValueNATReverseSNAT(
-	lastSeen time.Duration, flags uint16, legA, legB Leg,
+	lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16,
 ) Value {
 	return curVer.NewValueNATReverseSNAT(lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
 }
 
 // NewValueV6Normal creates a new ValueV6 of type TypeNormal based on the given parameters
-func NewValueV6Normal(lastSeen time.Duration, flags uint16, legA, legB Leg) ValueV6 {
+func NewValueV6Normal(lastSeen time.Duration, flags uint32, legA, legB Leg) ValueV6 {
 	return curVer.NewValueV6Normal(lastSeen, flags, legA, legB)
 }
 
 // NewValueV6NATForward creates a new ValueV6 of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueV6NATForward(lastSeen time.Duration, flags uint16, revKey KeyV6) ValueV6 {
+func NewValueV6NATForward(lastSeen time.Duration, flags uint32, revKey KeyV6) ValueV6 {
 	return curVer.NewValueV6NATForward(lastSeen, flags, revKey)
 }
 
 // NewValueV6NATReverse creates a new ValueV6 of type TypeNATReverse for the given
 // arguments and reverse parameters
 func NewValueV6NATReverse(
-	lastSeen time.Duration, flags uint16, legA, legB Leg,
+	lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16,
 ) ValueV6 {
 	return curVer.NewValueV6NATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
@@ -123,7 +125,7 @@ func NewValueV6NATReverse(
 
 // NewValueV6NATReverseSNAT in addition to NewValueV6NATReverse sets the orig source IP
 func NewValueV6NATReverseSNAT(
-	lastSeen time.Duration, flags uint16, legA, legB Leg,
+	lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16,
 ) ValueV6 {
 	return curVer.NewValueV6NATReverseSNAT(lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
@@ -310,7 +312,9 @@ func GetMapParams(version int) maps.MapParameters {
 	case 2:
 		return v2.MapParams
 	case 3:
-		return curVer.MapParams
+		return v3.MapParams
+	case 4:
+		return v4.MapParams
 	default:
 		return curVer.MapParams
 	}
@@ -325,8 +329,14 @@ func GetKeyValueTypeFromVersion(version int, k, v []byte) (maps.Upgradable, maps
 		copy(val[:], v)
 		return key, val
 	case 3:
-		var key curVer.Key
-		var val curVer.Value
+		var key v3.Key
+		var val v3.Value
+		copy(key[:], k)
+		copy(val[:], v)
+		return key, val
+	case 4:
+		var key v4.Key
+		var val v4.Value
 		copy(key[:], k)
 		copy(val[:], v)
 		return key, val

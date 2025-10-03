@@ -105,7 +105,7 @@ struct cali_tc_state {
 
 	__u64 flags;
 	/* Result of the conntrack lookup. */
-	struct calico_ct_result ct_result; /* 28 bytes */
+	struct calico_ct_result ct_result; /* 32 bytes */
 
 	/* Result of the NAT calculation.  Zeroed if there is no DNAT. */
 	struct calico_nat_dest nat_dest; /* 8 bytes */

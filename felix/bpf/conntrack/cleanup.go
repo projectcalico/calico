@@ -23,7 +23,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
 )
@@ -238,7 +238,7 @@ again:
 			port uint16
 		)
 
-		if v.Flags()&v3.FlagSrcDstBA != 0 {
+		if v.Flags()&v5.FlagSrcDstBA != 0 {
 			ip = k.AddrA()
 			port = k.PortA()
 		} else {

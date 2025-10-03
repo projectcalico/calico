@@ -60,7 +60,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		infra.Stop()
 	})
 
-	It("should upgrade conntrack entries from v2 to v3", func() {
+	It("should upgrade conntrack entries from v2 to current version", func() {
 		// create conntrack v2 map
 		tc.Felixes[0].Exec("calico-bpf", "conntrack", "create", "--ver=2")
 		srcIP := net.IPv4(123, 123, 123, 123)
@@ -68,7 +68,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 
 		now := time.Duration(timeshim.RealTime().KTimeNanos())
 		leg := v2.Leg{SynSeen: true, AckSeen: true, Opener: true}
-		val := v2.NewValueNormal(now, now, 0, leg, leg)
+		val := v2.NewValueNormal(now, now, 0xCA, leg, leg)
 		val64 := base64.StdEncoding.EncodeToString(val[:])
 
 		key := v2.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
@@ -77,22 +77,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		// write a normal key
 		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
 
-		k3Normal := conntrack.NewKey(6, srcIP, 0, dstIP, 0)
-		leg3Normal := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-		val3Normal := conntrack.NewValueNormal(now, 0, leg3Normal, leg3Normal)
+		kCurNormal := conntrack.NewKey(6, srcIP, 0, dstIP, 0)
+		legCurNormal := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+		valCurNormal := conntrack.NewValueNormal(now, 0xCA, legCurNormal, legCurNormal)
 
 		srcIP = net.IPv4(121, 123, 125, 124)
 		dstIP = net.IPv4(120, 121, 121, 119)
 		key = v2.NewKey(11, srcIP, 0, dstIP, 0)
 		key64 = base64.StdEncoding.EncodeToString(key[:])
-		val = v2.NewValueNATForward(now, now, 0, key)
+		val = v2.NewValueNATForward(now, now, 0xCA, key)
 		val.SetNATSport(4321)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
 		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
-		k3NatFwd := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
-		val3NatFwd := conntrack.NewValueNATForward(now, 0, k3NatFwd)
-		val3NatFwd.SetNATSport(4321)
+		kCurNatFwd := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
+		valCurNatFwd := conntrack.NewValueNATForward(now, 0xCA, kCurNatFwd)
+		valCurNatFwd.SetNATSport(4321)
 
 		srcIP = net.IPv4(1, 2, 3, 4)
 		dstIP = net.IPv4(5, 6, 7, 8)
@@ -100,12 +100,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		origIP := net.IPv4(120, 121, 121, 115)
 		key = v2.NewKey(11, srcIP, 0, dstIP, 0)
 		key64 = base64.StdEncoding.EncodeToString(key[:])
-		val = v2.NewValueNATReverse(now, now, 0, leg, leg, tunIP, origIP, 1234)
+		val = v2.NewValueNATReverse(now, now, 0xCA, leg, leg, tunIP, origIP, 1234)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
 		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
-		k3NatRev := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
-		val3NatRev := conntrack.NewValueNATReverse(now, 0, leg3Normal, leg3Normal, tunIP, origIP, 1234)
+		kCurNatRev := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
+		valCurNatRev := conntrack.NewValueNATReverse(now, 0xCA, legCurNormal, legCurNormal, tunIP, origIP, 1234)
 
 		srcIP = net.IPv4(5, 6, 7, 8)
 		dstIP = net.IPv4(55, 66, 77, 88)
@@ -115,17 +115,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		origSIP := net.IPv4(16, 17, 18, 19)
 		key = v2.NewKey(11, srcIP, 0, dstIP, 0)
 		key64 = base64.StdEncoding.EncodeToString(key[:])
-		val = v2.NewValueNATReverseSNAT(now, now, 0, leg, leg, tunIP, origIP, origSIP, 1234)
+		val = v2.NewValueNATReverseSNAT(now, now, 0xCA, leg, leg, tunIP, origIP, origSIP, 1234)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
 		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
-		k3NatRevSnat := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
-		val3NatRevSnat := conntrack.NewValueNATReverseSNAT(now, 0, leg3Normal, leg3Normal, tunIP, origIP, origSIP, 1234)
+		kCurNatRevSnat := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
+		valCurNatRevSnat := conntrack.NewValueNATReverseSNAT(now, 0xCA, legCurNormal, legCurNormal, tunIP, origIP, origSIP, 1234)
 
 		tc.Felixes[0].Restart()
-		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3Normal, val3Normal))
-		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatFwd, val3NatFwd))
-		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRev, val3NatRev))
-		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRevSnat, val3NatRevSnat))
+		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(kCurNormal, valCurNormal))
+		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(kCurNatFwd, valCurNatFwd))
+		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(kCurNatRev, valCurNatRev))
+		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(kCurNatRevSnat, valCurNatRevSnat))
 	})
 })
