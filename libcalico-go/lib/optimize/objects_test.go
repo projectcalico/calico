@@ -330,7 +330,7 @@ func TestOptimizeGNP_SortsIngressByDestSelectorWithinAction(t *testing.T) {
 	}
 
 	// Call the sorting pass directly to avoid interaction with splitting logic.
-	sortGNPByRuleSelector(gnp)
+	groupGNPByRuleSelector(gnp)
 	if gnp.Spec.Ingress[0].Action != apia.Allow || gnp.Spec.Ingress[0].Destination.Selector != "a" {
 		t.Fatalf("unexpected ingress[0]: action=%s sel=%s", gnp.Spec.Ingress[0].Action, gnp.Spec.Ingress[0].Destination.Selector)
 	}
@@ -367,7 +367,7 @@ func TestOptimizeGNP_SortsEgressBySourceSelectorWithinAction(t *testing.T) {
 	}
 
 	// Call the sorting pass directly.
-	sortGNPByRuleSelector(gnp)
+	groupGNPByRuleSelector(gnp)
 	if gnp.Spec.Egress[0].Action != apia.Deny || gnp.Spec.Egress[0].Source.Selector != "alpha" {
 		t.Fatalf("unexpected egress[0]: action=%s sel=%s", gnp.Spec.Egress[0].Action, gnp.Spec.Egress[0].Source.Selector)
 	}

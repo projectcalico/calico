@@ -19,11 +19,11 @@ import (
 	"iter"
 	"reflect"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -41,6 +41,8 @@ import (
 //     egress by source selector).
 func optimizeGlobalNetworkPolicy(gnp *apiv3.GlobalNetworkPolicy) []runtime.Object {
 	// Work on a deep copy to avoid mutating the original object.
+	logrus.Infof("Optimizing policy %s", gnp.Name)
+	printYAML(gnp, "Input policy:")
 	cpy := gnp.DeepCopy()
 	canonicaliseGNPSelectors(cpy)
 	removeRedundantRuleSelectors(cpy)
@@ -58,12 +60,14 @@ func optimizeGlobalNetworkPolicy(gnp *apiv3.GlobalNetworkPolicy) []runtime.Objec
 
 func removeRedundantRules(pols []*apiv3.GlobalNetworkPolicy) (out []*apiv3.GlobalNetworkPolicy) {
 	for _, pol := range pols {
+		logrus.Infof("Looking for duplicate/unreachable rules in policy %s", pol.Name)
 		pol.Spec.Ingress = removeRedundantRulesInner(pol.Spec.Ingress)
 		pol.Spec.Egress = removeRedundantRulesInner(pol.Spec.Egress)
 		if len(pol.Spec.Ingress) == 0 && len(pol.Spec.Egress) == 0 {
 			continue
 		}
 		out = append(out, pol)
+		printYAML(pol, "Policy after trimming duplicate/unreachable rules:")
 	}
 	return
 }
@@ -73,21 +77,24 @@ func removeRedundantRulesInner(rules []apiv3.Rule) (out []apiv3.Rule) {
 	// to JSON.
 	seenRules := set.New[string]()
 	for _, rule := range rules {
-		j, err := json.Marshal(rule)
+		ruleForComparison := rule
+		ruleForComparison.Metadata = nil
+
+		j, err := json.Marshal(ruleForComparison)
 		if err != nil {
 			panic(err)
 		}
 		js := string(j)
 		if seenRules.Contains(js) {
-			logrus.Debug("Skipping duplicate rule: ", js)
+			logrus.Infof("  Policy contains duplicate rule, skipping: %s", js)
 			continue
 		}
 		out = append(out, rule)
 
-		if reflect.DeepEqual(rule, apiv3.Rule{Action: apiv3.Deny}) ||
-			reflect.DeepEqual(rule, apiv3.Rule{Action: apiv3.Allow}) ||
-			reflect.DeepEqual(rule, apiv3.Rule{Action: apiv3.Pass}) {
-			logrus.Debug("Reached a terminal allow/deny/pass all rule; skipping remaining rules.")
+		if reflect.DeepEqual(ruleForComparison, apiv3.Rule{Action: apiv3.Deny}) ||
+			reflect.DeepEqual(ruleForComparison, apiv3.Rule{Action: apiv3.Allow}) ||
+			reflect.DeepEqual(ruleForComparison, apiv3.Rule{Action: apiv3.Pass}) {
+			logrus.Info("  Reached a terminal allow/deny/pass all rule; skipping remaining rules.")
 			break
 		}
 
@@ -174,6 +181,7 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []*apiv3.Global
 		// No selectors to split on, return policy unmodified.
 		return []*apiv3.GlobalNetworkPolicy{gnp}
 	}
+	logrus.Info("Policy has destination selectors in ingress rules and/or source selectors in egress rules.  Splitting the policy...")
 
 	defer func(gnp *apiv3.GlobalNetworkPolicy) {
 		if r := recover(); r != nil {
@@ -186,10 +194,10 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []*apiv3.Global
 		}
 	}(gnp)
 
-	// selector (but avoid reordering rules that have different actions).
-	// Otherwise, we split up the policy.  Start by sorting the rules on
+	// Sort on selector (but avoid reordering rules that have different actions).
+	// This results in fewer split policies.
 	gnp = gnp.DeepCopy()
-	sortGNPByRuleSelector(gnp)
+	groupGNPByRuleSelector(gnp)
 
 	// Split the policy into ingress and egress halves and process separately.
 	var pols []*apiv3.GlobalNetworkPolicy
@@ -260,11 +268,14 @@ func splitIngressOrEgressPolicy(
 	// same endpoint.  (In general we can't be sure that the policies will
 	// match disjoint endpoints.)
 	subsets := slices.Collect(rulesGroupedOnSelector(rules, getEntityRule))
+	logrus.Infof("Grouped rules on the redundant selectors in %s direction, found %v groups", direction, len(subsets))
 
 	if len(subsets) == 0 {
 		panic("rulesGroupedOnSelector returned 0 groups for policy " + pol.Name + " in direction " + direction)
 	}
 	if len(subsets) == 1 {
+		logrus.Infof("Only found one group in %s direction, short-circuiting.", direction)
+		pol.Name += "-" + direction
 		return []*apiv3.GlobalNetworkPolicy{pol}
 	}
 
@@ -283,9 +294,13 @@ func splitIngressOrEgressPolicy(
 		// Find the selectors for this group. rulesGroupedOnSelector never
 		// returns an empty slice.
 		firstEntRule := getEntityRule(&rulesSubset[0])
+		logrus.Infof("Creating new policy %s from rules with selectors namespace=%q, selector=%q", cpy.Name, firstEntRule.NamespaceSelector, firstEntRule.Selector)
+
 		// Rewrite the top-level selector to include the rule selector.
 		cpy.Spec.Selector = andSelectors(cpy.Spec.Selector, firstEntRule.Selector)
+		logrus.Infof("  Calculating top-level subject selector from parent top-level and rule selector: ((%s) && (%s)) => %s", pol.Spec.Selector, firstEntRule.Selector, cpy.Spec.Selector)
 		cpy.Spec.NamespaceSelector = andSelectors(cpy.Spec.NamespaceSelector, firstEntRule.NamespaceSelector)
+		logrus.Infof("  Calculating top-level subject namespace selector from parent top-level and rule selector: ((%s) && (%s)) => %s", pol.Spec.NamespaceSelector, firstEntRule.NamespaceSelector, cpy.Spec.NamespaceSelector)
 
 		// Since we've moved the selector to the top-level subject selector,
 		// we can zero it out in the rule itself.
@@ -296,19 +311,34 @@ func splitIngressOrEgressPolicy(
 		}
 		setRules(cpy, rulesSubset)
 
+		printYAML(cpy, "New per-selector policy:")
+
 		out = append(out, cpy)
 	}
 	return out
 }
 
+func printYAML(val any, msg string) {
+	polYAML, err := yaml.Marshal(val)
+	if err != nil {
+		panic(err)
+	}
+	logrus.Info("  " + msg)
+	logrus.Info("")
+	for _, line := range strings.Split(string(polYAML), "\n") {
+		line = strings.TrimRight(line, "\n")
+		logrus.Info("    " + line)
+	}
+}
+
 func andSelectors(s string, s2 string) string {
-	if s == "" || s == "all()" {
+	if s == "" || s == "all()" || s == s2 {
 		return s2
 	}
 	if s2 == "" || s2 == "all()" {
 		return s
 	}
-	return selector.Normalise("((" + s + ") && (" + s2 + "))")
+	return selector.Normalise("(" + s + ") && (" + s2 + ")")
 }
 
 func rulesGroupedOnSelector(rules []apiv3.Rule, getEntityRule func(rule *apiv3.Rule) *apiv3.EntityRule) iter.Seq[[]apiv3.Rule] {
@@ -368,6 +398,7 @@ func removeRedundantRuleSelectors(gnp *apiv3.GlobalNetworkPolicy) {
 		r := &gnp.Spec.Egress[i]
 		if compareTopLevelVsRuleSelectors(topSel, topNS, r.Source.Selector, r.Source.NamespaceSelector) {
 			// Remove redundant matches; keep other Source fields as-is.
+			logrus.Infof("Egress rule has redundant source selector: namespaceSelector=%q selector=%q", r.Source.NamespaceSelector, r.Source.Selector)
 			r.Source.Selector = ""
 			r.Source.NamespaceSelector = ""
 		}
@@ -376,6 +407,7 @@ func removeRedundantRuleSelectors(gnp *apiv3.GlobalNetworkPolicy) {
 		r := &gnp.Spec.Ingress[i]
 		if compareTopLevelVsRuleSelectors(topSel, topNS, r.Destination.Selector, r.Destination.NamespaceSelector) {
 			// Remove redundant matches; keep other Destination fields as-is.
+			logrus.Infof("Ingress rule has redundant destination selector: namespaceSelector=%q selector=%q", r.Destination.NamespaceSelector, r.Destination.Selector)
 			r.Destination.Selector = ""
 			r.Destination.NamespaceSelector = ""
 		}
@@ -398,20 +430,20 @@ func compareTopLevelVsRuleSelectors(topSel, topNS, ruleSel, ruleNS string) bool 
 	return topSel == ruleSel
 }
 
-// sortGNPByRuleSelector sorts ingress rules by Destination.Selector and egress rules by Source.Selector,
+// groupGNPByRuleSelector sorts ingress rules by Destination.Selector and egress rules by Source.Selector,
 // but only within groups of the same Action. Relative order of different Action groups is preserved.
-func sortGNPByRuleSelector(g *apiv3.GlobalNetworkPolicy) {
-	g.Spec.Ingress = sortRulesBySelectorAndAction(g.Spec.Ingress, func(r apiv3.Rule) string {
-		return r.Destination.Selector
+func groupGNPByRuleSelector(g *apiv3.GlobalNetworkPolicy) {
+	g.Spec.Ingress = groupRulesBySelectorAndAction(g.Spec.Ingress, func(r apiv3.Rule) string {
+		return "namespaceSelector: " + r.Destination.NamespaceSelector + ", selector: " + r.Destination.Selector
 	})
-	g.Spec.Egress = sortRulesBySelectorAndAction(g.Spec.Egress, func(r apiv3.Rule) string {
-		return r.Source.Selector
+	g.Spec.Egress = groupRulesBySelectorAndAction(g.Spec.Egress, func(r apiv3.Rule) string {
+		return "namespaceSelector: " + r.Source.NamespaceSelector + ", selector: " + r.Source.Selector
 	})
 }
 
-// sortRulesBySelectorAndAction sorts only contiguous runs of the same Action by the provided
+// groupRulesBySelectorAndAction sorts only contiguous runs of the same Action by the provided
 // selector function, preserving the relative order of runs with different Actions.
-func sortRulesBySelectorAndAction(rules []apiv3.Rule, selectorFn func(apiv3.Rule) string) []apiv3.Rule {
+func groupRulesBySelectorAndAction(rules []apiv3.Rule, selectorFn func(apiv3.Rule) string) []apiv3.Rule {
 	if len(rules) <= 1 {
 		return rules
 	}
@@ -428,12 +460,46 @@ func sortRulesBySelectorAndAction(rules []apiv3.Rule, selectorFn func(apiv3.Rule
 		}
 		// Sort this contiguous segment by selector.
 		segment := out[i:j]
-		sort.SliceStable(segment, func(a, b int) bool {
-			return selectorFn(segment[a]) < selectorFn(segment[b])
-		})
+
+		var groupsNames []string
+		groups := map[string][]apiv3.Rule{}
+		indexes := map[string][]int{}
+
+		for k, rule := range segment {
+			groupName := selectorFn(rule)
+			if groups[groupName] == nil {
+				groupsNames = append(groupsNames, groupName)
+			}
+			groups[groupName] = append(groups[groupName], rule)
+			indexes[groupName] = append(indexes[groupName], i+k)
+		}
+
+		k := 0
+		for _, groupName := range groupsNames {
+			logrus.Infof("  Forming group from rules with same selectors and action: %v", summariseIndexes(indexes[groupName]))
+			for _, rule := range groups[groupName] {
+				segment[k] = rule
+				k++
+			}
+			printYAML(segment[k-len(groups[groupName]):k], "Group:")
+		}
+
 		i = j
 	}
 	return out
+}
+
+func summariseIndexes(indexes []int) string {
+	slices.Sort(indexes)
+	first := indexes[0]
+	if len(indexes) == 1 {
+		return fmt.Sprint(first)
+	}
+	last := indexes[len(indexes)-1]
+	if last-first == len(indexes)-1 {
+		return fmt.Sprint(first) + "-" + fmt.Sprint(last)
+	}
+	return fmt.Sprint(indexes)
 }
 
 func removeExplicitDefaults(pols []*apiv3.GlobalNetworkPolicy) {
