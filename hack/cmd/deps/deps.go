@@ -430,9 +430,13 @@ func loadGoMods() ([]module, error) {
 }
 
 func loadGoToolJSON[Item any](args ...string) ([]Item, error) {
-	out, err := exec.Command("go", args...).Output()
+	cmd := exec.Command("go", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		errOut := stderr.Bytes()
+		return nil, fmt.Errorf("%w, %s", err, string(errOut))
 	}
 	var items []Item
 	decoder := json.NewDecoder(bytes.NewReader(out))
