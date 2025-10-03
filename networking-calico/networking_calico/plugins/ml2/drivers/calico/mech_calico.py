@@ -949,7 +949,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 "Unsupported MySQL driver detected in SQLAlchemy connection URL: %s. "
                 "Please use the 'mysql+pymysql' driver to avoid known issues. "
                 "See https://bugs.launchpad.net/oslo.db/+bug/1350149 for details.",
-                conn_url
+                conn_url,
             )
             raise RuntimeError(
                 "Unsupported MySQL driver detected in SQLAlchemy connection URL: %s. "
