@@ -20,6 +20,7 @@ import (
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -39,20 +40,45 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 		ginkgo.Describe(fmt.Sprintf("%s (%s backend)", description, ds), func() {
 			var coreFilesAtStart set.Set[string]
+			var currentInfra []DatastoreInfra
 			ginkgo.BeforeEach(func() {
 				coreFilesAtStart = readCoreFiles()
+				currentInfra = nil
 			})
 
+			// Pick the base factory for this datastore, then wrap it to record the created infra.
+			var baseFactory InfraFactory
 			switch ds {
 			case apiconfig.EtcdV3:
-				body(createEtcdDatastoreInfra)
+				baseFactory = createEtcdDatastoreInfra
 			case apiconfig.Kubernetes:
-				body(createK8sDatastoreInfra)
+				baseFactory = createK8sDatastoreInfra
 			default:
 				panic(fmt.Errorf("unknown DatastoreType, %s", ds))
 			}
+			wrappedFactory := func(opts ...CreateOption) DatastoreInfra {
+				inf := baseFactory(opts...)
+				currentInfra = append(currentInfra, inf)
+				return inf
+			}
+			body(wrappedFactory)
 
 			ginkgo.AfterEach(func() {
+				// Always stop the infra after each test (collects diags on failure and cleans up).
+				logrus.Info("DatastoreDescribe AfterEach: stopping infrastructure.")
+				if len(currentInfra) > 0 {
+					for i := len(currentInfra) - 1; i >= 0; i-- {
+						if currentInfra[i] != nil {
+							currentInfra[i].Stop()
+						}
+					}
+					currentInfra = nil
+				}
+			})
+
+			ginkgo.AfterEach(func() {
+				// Then, perform the core file check.
+				logrus.Info("DatastoreDescribe AfterEach: checking for core files.")
 				afterCoreFiles := readCoreFiles()
 				coreFilesAtStart.Iter(func(item string) error {
 					afterCoreFiles.Discard(item)
