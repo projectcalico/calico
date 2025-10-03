@@ -944,8 +944,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Since 2015 it has been expected that anyone using MySQL also uses the PyMySQL
         # driver, to avoid the problem described in
         # https://bugs.launchpad.net/oslo.db/+bug/1350149.  Assert that here.
-        assert not conn_url.startswith("mysql:")
-        assert not conn_url.startswith("mysql+mysqldb:")
+        if conn_url.startswith("mysql:") or conn_url.startswith("mysql+mysqldb:"):
+            LOG.error(
+                "Unsupported MySQL driver detected in SQLAlchemy connection URL: %s. "
+                "Please use the 'mysql+pymysql' driver to avoid known issues. "
+                "See https://bugs.launchpad.net/oslo.db/+bug/1350149 for details.",
+                conn_url
+            )
+            raise RuntimeError(
+                "Unsupported MySQL driver detected in SQLAlchemy connection URL: %s. "
+                "Please use the 'mysql+pymysql' driver to avoid known issues. "
+                "See https://bugs.launchpad.net/oslo.db/+bug/1350149 for details."
+                % conn_url
+            )
 
         with context.session.begin(subtransactions=True) as txn:
             yield txn
