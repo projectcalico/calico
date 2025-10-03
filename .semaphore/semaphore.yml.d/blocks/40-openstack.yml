@@ -1,13 +1,15 @@
 - name: "OpenStack integration (Yoga)"
+  # run:
+  #   when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'], {pipeline_file: 'ignore'})"
   run:
-    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'], {pipeline_file: 'ignore'})"
+    when: "true"
   dependencies:
     - Prerequisites
   task:
     agent:
       machine:
         type: f1-standard-2
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
         - cd networking-calico
