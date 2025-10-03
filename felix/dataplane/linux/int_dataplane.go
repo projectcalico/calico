@@ -2678,7 +2678,7 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
-	if config.bpfProxyHealthzServer == nil {
+	if config.bpfProxyHealthzServer == nil && config.KubeProxyHealtzPort != 0 {
 		healthzAddr := fmt.Sprintf(":%d", config.KubeProxyHealtzPort)
 		config.bpfProxyHealthzServer = k8shealthcheck.NewProxierHealthServer(
 			healthzAddr, config.KubeProxyMinSyncPeriod)
@@ -2696,8 +2696,13 @@ func startBPFDataplaneComponents(
 	}
 
 	bpfproxyOpts := []bpfproxy.Option{
-		bpfproxy.WithHealthzServer(config.bpfProxyHealthzServer),
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
+	}
+
+	if config.bpfProxyHealthzServer != nil {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthzServer(config.bpfProxyHealthzServer))
+	} else {
+		log.Info("No healthz server configured for BPF kube-proxy.")
 	}
 
 	if config.BPFNodePortDSREnabled {
