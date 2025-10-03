@@ -12,10 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
 
-zone=$1
-vm_name=$2
-shift
-shift
-
-exec gcloud --quiet compute ssh "--zone=${zone}" "ubuntu@${vm_name}" -- -A -o ServerAliveInterval=10 "$@"
+exec gcloud --quiet compute ssh "--zone=${ZONE}" "ubuntu@${VM_NAME}" -- -n -A -o ServerAliveInterval=10 "$@"
