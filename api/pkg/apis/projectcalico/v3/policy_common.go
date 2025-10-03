@@ -15,6 +15,8 @@
 package v3
 
 import (
+	"reflect"
+
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 )
 
@@ -54,9 +56,9 @@ type Rule struct {
 	// NotICMP is the negated version of the ICMP field.
 	NotICMP *ICMPFields `json:"notICMP,omitempty" validate:"omitempty"`
 	// Source contains the match criteria that apply to source entity.
-	Source EntityRule `json:"source,omitempty" validate:"omitempty"`
+	Source EntityRule `json:"source,omitzero,omitempty" validate:"omitempty"`
 	// Destination contains the match criteria that apply to destination entity.
-	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
+	Destination EntityRule `json:"destination,omitzero,omitempty" validate:"omitempty"`
 
 	// HTTP contains match criteria that apply to HTTP requests.
 	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
@@ -177,6 +179,10 @@ type EntityRule struct {
 	// ServiceAccounts is an optional field that restricts the rule to only apply to traffic that originates from (or
 	// terminates at) a pod running as a matching service account.
 	ServiceAccounts *ServiceAccountMatch `json:"serviceAccounts,omitempty" validate:"omitempty"`
+}
+
+func (e EntityRule) IsZero() bool {
+	return reflect.DeepEqual(e, EntityRule{})
 }
 
 type ServiceMatch struct {
