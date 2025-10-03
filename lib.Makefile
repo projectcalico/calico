@@ -1255,7 +1255,7 @@ bin/yq:
 # This setup is used to download and install the 'crane' binary into the local bin/ directory.
 # The binary will be placed at: ./bin/crane
 # Normalize architecture for go-containerregistry filenames
-CRANE_BUILDARCH := $(shell uname -m | sed 's/amd64/x86_64/;s/x86_64/x86_64/;s/aarch64/arm64/')
+CRANE_BUILDARCH := $(shell uname -m | sed 's/aarch64/arm64/')
 CRANE_OS := $(shell uname -s)
 ifeq ($(CRANE_BUILDARCH),)
   $(error Unsupported or unknown architecture: $(shell uname -m))
