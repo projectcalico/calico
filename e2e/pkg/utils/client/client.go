@@ -18,6 +18,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/discovery"
@@ -94,6 +95,9 @@ func newScheme() (*runtime.Scheme, error) {
 
 	// Add core k8s APIs.
 	if err := networkingv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := appsv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil
