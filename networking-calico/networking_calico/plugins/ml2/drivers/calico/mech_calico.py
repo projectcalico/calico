@@ -246,9 +246,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # RPC client for fanning out agent state reports.
         self.state_report_rpc = None
-        # Whether the version of update_port_status() available in this version
-        # of OpenStack has the host argument.  computed on first use.
-        self._cached_update_port_status_has_host_param = None
+
         # Last time we logged about a long port-status queue.  Used for rate
         # limiting.  Note: monotonic_time() uses its own epoch so it's only
         # safe to compare this with other values returned by monotonic_time().
@@ -320,55 +318,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 else:
                     LOG.debug("authcfg[%s] = %s", key, authcfg[key])
 
-            # Compatibility with older versions of openstack [mitaka and below]
-            try:
-                user_domain_name = authcfg.user_domain_name
-            except cfg.NoSuchOptError:
-                user_domain_name = "Default"
-                LOG.debug("authcfg[user_domain_name] fallback = %s", user_domain_name)
-
-            try:
-                username = authcfg.username
-            except cfg.NoSuchOptError:
-                username = authcfg.admin_user
-                LOG.debug("authcfg[username] fallback[admin_user] = %s", username)
-
-            try:
-                password = authcfg.password
-            except cfg.NoSuchOptError:
-                password = authcfg.admin_password
-                LOG.debug("authcfg[password] fallback[admin_password] = %s", "***")
-
-            try:
-                project_domain_name = authcfg.project_domain_name
-            except cfg.NoSuchOptError:
-                project_domain_name = "Default"
-                LOG.debug(
-                    "authcfg[project_domain_name] fallback = %s", project_domain_name
-                )
-
-            try:
-                project_name = authcfg.project_name
-            except cfg.NoSuchOptError:
-                project_name = authcfg.admin_tenant_name
-                LOG.debug(
-                    "authcfg[project_name] fallback[admin_tenant_name] = %s",
-                    project_name,
-                )
-
-            try:
-                auth_url = authcfg.auth_url
-            except cfg.NoSuchOptError:
-                auth_url = authcfg.identity_uri
-                LOG.debug("authcfg[auth_url] fallback[identity_uri] = %s", auth_url)
-
             auth = v3.Password(
-                user_domain_name=user_domain_name,
-                username=username,
-                password=password,
-                project_domain_name=project_domain_name,
-                project_name=project_name,
-                auth_url=re.sub(r"/v3/?$", "", auth_url) + "/v3",
+                user_domain_name=authcfg.user_domain_name,
+                username=authcfg.username,
+                password=authcfg.password,
+                project_domain_name=authcfg.project_domain_name,
+                project_name=authcfg.project_name,
+                auth_url=re.sub(r"/v3/?$", "", authcfg.auth_url) + "/v3",
             )
             sess = session.Session(auth=auth)
             keystone_client = KeystoneClient(session=sess)
@@ -592,17 +548,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Reporting port %s deletion", port_id)
 
         try:
-            if self._update_port_status_has_host_param():
-                # Later OpenStack versions support passing the hostname.
-                LOG.debug("update_port_status() supports host parameter")
-                self.db.update_port_status(
-                    admin_context, port_id, neutron_status, host=hostname
-                )
-            else:
-                # Older versions don't have a way to specify the hostname so
-                # we do our best.
-                LOG.debug("update_port_status() missing host parameter")
-                self.db.update_port_status(admin_context, port_id, neutron_status)
+            self.db.update_port_status(
+                admin_context, port_id, neutron_status, host=hostname
+            )
         except db_exc.DBError as e:
             # Defensive: pre-Liberty, it was easy to cause deadlocks here if
             # any code path (in another loaded plugin, say) failed to take
@@ -640,17 +588,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._port_status_queue.put(
             ((PRIORITY_RETRY, monotonic_time()), port_status_key)
         )
-
-    def _update_port_status_has_host_param(self):
-        """Check whether update_port_status() supports the host parameter."""
-        if self._cached_update_port_status_has_host_param is None:
-            full_arg_spec = inspect.getfullargspec(self.db.update_port_status)
-            args = full_arg_spec.args
-            varkw = full_arg_spec.varkw
-            has_host_param = varkw or "host" in args
-            self._cached_update_port_status_has_host_param = has_host_param
-            LOG.info("update_port_status() supports host arg: %s", has_host_param)
-        return self._cached_update_port_status_has_host_param
 
     def _get_db(self):
         if not self.db:
@@ -1003,26 +940,26 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             conn_url = str(session.bind.url).lower()
         else:
             conn_url = str(session.connection().engine.url).lower()
+
+        # Since 2015 it has been expected that anyone using MySQL also uses the PyMySQL
+        # driver, to avoid the problem described in
+        # https://bugs.launchpad.net/oslo.db/+bug/1350149.  Assert that here.
         if conn_url.startswith("mysql:") or conn_url.startswith("mysql+mysqldb:"):
-            # Neutron is using the mysqldb driver for accessing the database.
-            # This has a known incompatibility with eventlet that leads to
-            # deadlock.  Take the neutron-wide db-access lock as a workaround.
-            # See https://bugs.launchpad.net/oslo.db/+bug/1350149 for a
-            # description of the issue.
-            LOG.debug("Waiting for db-access lock tag=%s...", tag)
-            try:
-                with lockutils.lock("db-access"):
-                    LOG.debug("...acquired db-access lock tag=%s", tag)
-                    with context.session.begin(subtransactions=True) as txn:
-                        yield txn
-            finally:
-                LOG.debug("Released db-access lock tag=%s", tag)
-        else:
-            # Liberty or later uses an eventlet-safe mysql library.  (Or, we're
-            # not using mysql at all.)
-            LOG.debug("Not using mysqldb driver, skipping db-access lock")
-            with context.session.begin(subtransactions=True) as txn:
-                yield txn
+            LOG.error(
+                "Unsupported MySQL driver detected in SQLAlchemy connection URL: %s. "
+                "Please use the 'mysql+pymysql' driver to avoid known issues. "
+                "See https://bugs.launchpad.net/oslo.db/+bug/1350149 for details.",
+                conn_url
+            )
+            raise RuntimeError(
+                "Unsupported MySQL driver detected in SQLAlchemy connection URL: %s. "
+                "Please use the 'mysql+pymysql' driver to avoid known issues. "
+                "See https://bugs.launchpad.net/oslo.db/+bug/1350149 for details."
+                % conn_url
+            )
+
+        with context.session.begin(subtransactions=True) as txn:
+            yield txn
 
     def _update_port(self, plugin_context, port):
         """_update_port
