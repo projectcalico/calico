@@ -244,18 +244,6 @@ func DeconstructPolicyName(name, tier string) (string, string, string, error) {
 		return namespace, BaselineAdminNetworkPolicyTierName, stagedPrefix + name, nil
 	}
 
-	// This is a non-kubernetes policy, so extract the tier name from the policy name.
-	if parts = strings.SplitN(name, ".", 2); len(parts) == 2 {
-		if parts[0] == tier {
-			// This is an old-style name with the tier prefix.
-			// TODO: This isn't really fully correct, since "new" style policies could be named this way! If they are,
-			// we should treat them as new-style, but we have no way of knowing that here.
-			return namespace, tier, stagedPrefix + parts[1], nil
-		}
-		// This is a new-style name without the tier prefix, so use the given tier, and return the name as-is.
-		return namespace, tier, stagedPrefix + name, nil
-	}
-
-	// This is a new-style name without the tier prefix, so use the given tier, and return the name as-is.
+	// This is a Calico policy, so use the given tier, and return the name as-is.
 	return namespace, tier, stagedPrefix + name, nil
 }
