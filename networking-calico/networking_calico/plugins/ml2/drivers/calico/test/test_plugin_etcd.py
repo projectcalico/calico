@@ -2003,7 +2003,11 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
             self.driver._try_to_update_port_status(context, ("host", "p1"))
         self.assertEqual(
-            [mock.call(context, "p1", mech_calico.constants.PORT_STATUS_ERROR, host="host")],
+            [
+                mock.call(
+                    context, "p1", mech_calico.constants.PORT_STATUS_ERROR, host="host"
+                )
+            ],
             mock_calls,
         )
         self.assertEqual([], m_spawn.mock_calls)  # No retry on success
