@@ -177,7 +177,7 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	operatorGitFlags   = []cli.Flag{operatorRepoRemoteFlag, operatorOrgFlag, operatorRepoFlag}
+	operatorGitFlags   = []cli.Flag{operatorRepoRemoteFlag, operatorOrgFlag, operatorRepoFlag, operatorBranchFlag}
 	operatorBuildFlags = []cli.Flag{
 		operatorRepoRemoteFlag, operatorOrgFlag, operatorRepoFlag,
 		operatorBranchFlag, operatorReleaseBranchPrefixFlag, operatorDevTagSuffixFlag,

@@ -14,46 +14,46 @@
       version: vX.Y.Z
     calicoctl:
       version:  vX.Y.Z
-    calico/node:
+    node:
       version:  vX.Y.Z
-    calico/cni:
+    cni:
       version:  vX.Y.Z
-    calico/apiserver:
+    apiserver:
       version: vX.Y.Z
-    calico/kube-controllers:
+    kube-controllers:
       version: vX.Y.Z
-    calico/api:
+    api:
       version: vX.Y.Z
-    calico/goldmane:
+    goldmane:
       version: vX.Y.Z
     networking-calico:
       version: release-v1.0
     flannel:
       version: v0.12.0
       registry: quay.io
-    calico/dikastes:
+    dikastes:
       version: vX.Y.Z
-    calico/envoy-gateway:
+    envoy-gateway:
       version: vX.Y.Z
-    calico/envoy-proxy:
+    envoy-proxy:
       version: vX.Y.Z
-    calico/envoy-ratelimit:
+    envoy-ratelimit:
       version: vX.Y.Z
     flexvol:
       version: vX.Y.Z
     key-cert-provisioner:
       version: vX.Y.Z
-    calico/csi:
+    csi:
       version: vX.Y.Z
     csi-node-driver-registrar:
       version: vX.Y.Z
-    calico/cni-windows:
+    cni-windows:
       version: vX.Y.Z
-    calico/node-windows:
+    node-windows:
       version: vX.Y.Z
-    calico/guardian:
+    guardian:
       version: vX.Y.Z
-    calico/whisker:
+    whisker:
       version: vX.Y.Z
-    calico/whisker-backend:
+    whisker-backend:
       version: vX.Y.Z

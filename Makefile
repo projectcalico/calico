@@ -107,18 +107,18 @@ generate:
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm bin/yq
-	cd ./manifests && \
-		OPERATOR_VERSION=$(OPERATOR_VERSION) \
-		CALICO_VERSION=$(CALICO_VERSION) \
-		./generate.sh
+	cd ./manifests && ./generate.sh
 
 # Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
-get-operator-crds: var-require-all-OPERATOR_BRANCH
-	@echo ================================================================
-	@echo === Pulling new operator CRDs from branch $(OPERATOR_BRANCH) ===
-	@echo ================================================================
+get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERATOR_BRANCH
+	@echo ==============================================================================================================
+	@echo === Pulling new operator CRDs from $(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) branch $(OPERATOR_BRANCH) ===
+	@echo ==============================================================================================================
 	cd ./charts/tigera-operator/crds/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; done
+	for file in operator.tigera.io_*.yaml; do \
+		echo "downloading $$file from operator repo"; \
+		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; \
+	done
 	$(MAKE) fix-changed
 
 gen-semaphore-yaml:

@@ -119,6 +119,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithOperatorDirectory(operatorDir),
 					operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
 					operator.IsHashRelease(),
+					operator.WithImage(c.String(operatorImageFlag.Name)),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
@@ -145,6 +146,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				opts := []calico.Option{
 					calico.WithVersion(data.ProductVersion()),
 					calico.WithOperator(c.String(operatorRegistryFlag.Name), c.String(operatorImageFlag.Name), data.OperatorVersion()),
+					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.IsHashRelease(),
