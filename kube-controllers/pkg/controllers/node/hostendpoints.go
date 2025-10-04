@@ -174,7 +174,6 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 			c.syncerUpdates <- update.KVPair
 		}
 	}
-
 }
 
 func (c *autoHostEndpointController) handleUpdate(update interface{}) {
@@ -482,7 +481,7 @@ func (c *autoHostEndpointController) getExpectedIPsMatchingInterfaceCIDRs(node *
 	for _, ipAddrs := range expectedIPs {
 		ip := net.ParseIP(ipAddrs)
 		for _, interfaceSelectorCIDR := range template.InterfaceCIDRs {
-			_, cidr, err := net.ParseCIDR(interfaceSelectorCIDR)
+			_, cidr, err := net.ParseCIDR(string(interfaceSelectorCIDR))
 			if err != nil {
 				logrus.WithError(err).Errorf("failed to parse interface selector cidr %s", interfaceSelectorCIDR)
 				return nil

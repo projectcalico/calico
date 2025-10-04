@@ -26,6 +26,8 @@ const (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName={scnp,snp}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 
 // StagedNetworkPolicy is a staged NetworkPolicy.
 // StagedNetworkPolicy is the Namespaced-equivalent of the StagedGlobalNetworkPolicy.

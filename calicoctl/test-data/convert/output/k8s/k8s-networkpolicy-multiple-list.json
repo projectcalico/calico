@@ -12,6 +12,7 @@
         "creationTimestamp": null
       },
       "spec": {
+        "tier": "default",
         "order": 1000,
         "egress": [
           {
@@ -35,6 +36,7 @@
         "creationTimestamp": null
       },
       "spec": {
+        "tier": "default",
         "order": 1000,
         "selector": "projectcalico.org/orchestrator == 'k8s'",
         "types": [
@@ -51,6 +53,7 @@
         "creationTimestamp": null
       },
       "spec": {
+        "tier": "default",
         "order": 1000,
         "ingress": [
           {

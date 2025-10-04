@@ -44,6 +44,7 @@ endif
 
 include ../lib.Makefile
 
+
 FIPS ?= false
 
 ifeq ($(FIPS),true)
@@ -104,7 +105,9 @@ lint-cache-dir:
 
 .PHONY: ut
 ut: lint-cache-dir run-etcd
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) \
+	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" go test $(UNIT_TEST_FLAGS) \
 			$(addprefix $(PACKAGE_NAME)/,$(TEST_DIRS))'
 
@@ -172,6 +175,7 @@ fv-etcd: run-kubernetes-server hack-lib
 fv-kdd: run-kubernetes-server hack-lib
 	$(DOCKER_RUN) \
 		-v $(CERTS_PATH):/home/user/certs \
+		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) \
 		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'
