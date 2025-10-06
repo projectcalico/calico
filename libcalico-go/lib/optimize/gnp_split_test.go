@@ -22,6 +22,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -334,5 +335,368 @@ func TestEntityRuleSelectorsEqual(t *testing.T) {
 	}
 	if entityRuleSelectorsEqual(a, d) {
 		t.Fatalf("expected a!=d (namespace selector different)")
+	}
+}
+
+func TestOptimizeGNP_CanonicalisesSelectors(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "gnp"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Selector:               "  ", // may canonicalize to all()
+			NamespaceSelector:      "  all( ) ",
+			ServiceAccountSelector: "sa == \"x\"\n\t",
+			Ingress: []apiv3.Rule{{
+				Source:      apiv3.EntityRule{Selector: "foo==\"bar\"", NamespaceSelector: "ns in{\"a\",\"b\"}"},
+				Destination: apiv3.EntityRule{NotSelector: "has(label)\t"},
+			}},
+			Egress: []apiv3.Rule{{
+				Source:      apiv3.EntityRule{NotSelector: " not has(x) ", ServiceAccounts: &apiv3.ServiceAccountMatch{Selector: " has(sa) "}},
+				Destination: apiv3.EntityRule{Selector: "(all())"},
+			}},
+		},
+	}
+
+	// Compute expected normalized forms using the same Normalise function as the optimizer.
+	expectTopSel := selector.Normalise(gnp.Spec.Selector)
+	expectTopNS := selector.Normalise(gnp.Spec.NamespaceSelector)
+	expectTopSA := selector.Normalise(gnp.Spec.ServiceAccountSelector)
+	expectIngressSrcSel := selector.Normalise(gnp.Spec.Ingress[0].Source.Selector)
+	expectIngressSrcNS := selector.Normalise(gnp.Spec.Ingress[0].Source.NamespaceSelector)
+	expectIngressDstNotSel := selector.Normalise(gnp.Spec.Ingress[0].Destination.NotSelector)
+	expectEgressSrcNotSel := selector.Normalise(gnp.Spec.Egress[0].Source.NotSelector)
+	expectEgressDstSel := selector.Normalise(gnp.Spec.Egress[0].Destination.Selector)
+	expectEgressSASel := selector.Normalise(gnp.Spec.Egress[0].Source.ServiceAccounts.Selector)
+
+	out := Objects([]runtime.Object{gnp})
+	if len(out) != 1 {
+		t.Fatalf("expected single optimized GNP, got %d", len(out))
+	}
+	og, ok := out[0].(*apiv3.GlobalNetworkPolicy)
+	if !ok {
+		t.Fatalf("unexpected type: %#v", out[0])
+	}
+	// Optimizer strips explicit all() to empty string at top-level.
+	expSel := expectTopSel
+	if expSel == selector.All.String() {
+		expSel = ""
+	}
+	if og.Spec.Selector != expSel {
+		t.Errorf("top-level selector not canonicalized: got %q want %q", og.Spec.Selector, expSel)
+	}
+	if og.Spec.NamespaceSelector != expectTopNS {
+		t.Errorf("ns selector not canonicalized: got %q want %q", og.Spec.NamespaceSelector, expectTopNS)
+	}
+	if og.Spec.ServiceAccountSelector != expectTopSA {
+		t.Errorf("sa selector not canonicalized: got %q want %q", og.Spec.ServiceAccountSelector, expectTopSA)
+	}
+	// Ingress rule canonicalization
+	if og.Spec.Ingress[0].Source.Selector != expectIngressSrcSel {
+		t.Errorf("ingress source selector not canonicalized: got %q want %q", og.Spec.Ingress[0].Source.Selector, expectIngressSrcSel)
+	}
+	if og.Spec.Ingress[0].Source.NamespaceSelector != expectIngressSrcNS {
+		t.Errorf("ingress source ns selector not canonicalized: got %q want %q", og.Spec.Ingress[0].Source.NamespaceSelector, expectIngressSrcNS)
+	}
+	if og.Spec.Ingress[0].Destination.NotSelector != expectIngressDstNotSel {
+		t.Errorf("ingress dest notSelector not canonicalized: got %q want %q", og.Spec.Ingress[0].Destination.NotSelector, expectIngressDstNotSel)
+	}
+	// Egress rule canonicalization
+	if og.Spec.Egress[0].Source.NotSelector != expectEgressSrcNotSel {
+		t.Errorf("egress source notSelector not canonicalized: got %q want %q", og.Spec.Egress[0].Source.NotSelector, expectEgressSrcNotSel)
+	}
+	if og.Spec.Egress[0].Source.ServiceAccounts == nil || og.Spec.Egress[0].Source.ServiceAccounts.Selector != expectEgressSASel {
+		t.Errorf("egress source sa selector not canonicalized: %#v want %q", og.Spec.Egress[0].Source.ServiceAccounts, expectEgressSASel)
+	}
+	if og.Spec.Egress[0].Destination.Selector != expectEgressDstSel {
+		t.Errorf("egress dest selector not canonicalized: got %q want %q", og.Spec.Egress[0].Destination.Selector, expectEgressDstSel)
+	}
+}
+
+func TestOptimizeGNP_RemovesRedundantRuleSelectors(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	// Top-level selectors
+	topSel := "app == 'api'"
+	topNS := "has(kubernetes.io/metadata.name)"
+	topSelNorm := selector.Normalise(topSel)
+	topNSNorm := selector.Normalise(topNS)
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "gnp"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Selector:          topSel,
+			NamespaceSelector: topNS,
+			Egress: []apiv3.Rule{
+				{Source: apiv3.EntityRule{Selector: topSel, NamespaceSelector: topNS}},           // redundant -> cleared
+				{Source: apiv3.EntityRule{Selector: "app == 'other'", NamespaceSelector: topNS}}, // not redundant, will be split
+			},
+			Ingress: []apiv3.Rule{
+				{Destination: apiv3.EntityRule{Selector: topSel, NamespaceSelector: topNS}},       // redundant -> cleared
+				{Destination: apiv3.EntityRule{Selector: topSel, NamespaceSelector: "ns == 'x'"}}, // not redundant, will be split
+			},
+		},
+	}
+
+	out := Objects([]runtime.Object{gnp})
+
+	// Expect exactly 2 split policies for ingress and 2 for egress.
+	var ingressPolicies, egressPolicies []*apiv3.GlobalNetworkPolicy
+	for _, obj := range out {
+		pol := obj.(*apiv3.GlobalNetworkPolicy)
+		if len(pol.Spec.Ingress) > 0 && pol.Spec.Egress == nil {
+			ingressPolicies = append(ingressPolicies, pol)
+		}
+		if len(pol.Spec.Egress) > 0 && pol.Spec.Ingress == nil {
+			egressPolicies = append(egressPolicies, pol)
+		}
+	}
+	if len(ingressPolicies) != 2 || len(egressPolicies) != 2 {
+		t.Fatalf("expected 2 ingress and 2 egress split policies, got %d ingress, %d egress", len(ingressPolicies), len(egressPolicies))
+	}
+
+	// Egress: both policies should have exactly 1 rule and cleared per-rule selectors.
+	for _, pol := range egressPolicies {
+		if len(pol.Spec.Egress) != 1 {
+			t.Fatalf("egress split policy should have 1 rule, got %d", len(pol.Spec.Egress))
+		}
+		r := pol.Spec.Egress[0]
+		if r.Source.Selector != "" || r.Source.NamespaceSelector != "" {
+			t.Fatalf("egress rule selectors not cleared: %#v", r.Source)
+		}
+		if selector.Normalise(pol.Spec.NamespaceSelector) != topNSNorm && !strings.Contains(pol.Spec.NamespaceSelector, "kubernetes.io/metadata.name") {
+			t.Fatalf("egress policy should carry namespace selector, got %q", pol.Spec.NamespaceSelector)
+		}
+	}
+	// Ensure one policy retains topSel and the other has a different selector (indicating split).
+	var foundTop, foundDifferent bool
+	selectorsSet := map[string]struct{}{}
+	for _, pol := range egressPolicies {
+		selectorsSet[pol.Spec.Selector] = struct{}{}
+		if selector.Normalise(pol.Spec.Selector) == topSelNorm {
+			foundTop = true
+		} else {
+			foundDifferent = true
+		}
+	}
+	if !foundTop || !foundDifferent || len(selectorsSet) != 2 {
+		t.Fatalf("egress split selectors unexpected: foundTop=%v foundDifferent=%v selectors=%v", foundTop, foundDifferent, selectorsSet)
+	}
+
+	// Ingress: both policies should have exactly 1 rule and cleared per-rule destination selectors.
+	for _, pol := range ingressPolicies {
+		if len(pol.Spec.Ingress) != 1 {
+			t.Fatalf("ingress split policy should have 1 rule, got %d", len(pol.Spec.Ingress))
+		}
+		r := pol.Spec.Ingress[0]
+		if r.Destination.Selector != "" || r.Destination.NamespaceSelector != "" {
+			t.Fatalf("ingress rule selectors not cleared: %#v", r.Destination)
+		}
+	}
+	// Ensure one ingress policy retains topSel/topNS and the other contains the ns=='x' constraint.
+	var foundIngressTop, foundIngressNSX bool
+	for _, pol := range ingressPolicies {
+		if selector.Normalise(pol.Spec.Selector) == topSelNorm && selector.Normalise(pol.Spec.NamespaceSelector) == topNSNorm {
+			foundIngressTop = true
+		}
+		if strings.Contains(pol.Spec.NamespaceSelector, "ns == 'x'") || strings.Contains(pol.Spec.NamespaceSelector, "ns == \"x\"") {
+			foundIngressNSX = true
+		}
+	}
+	if !foundIngressTop || !foundIngressNSX {
+		t.Fatalf("ingress split selectors unexpected: top=%v nsX=%v", foundIngressTop, foundIngressNSX)
+	}
+}
+
+func TestOptimizeGNP_PreservesEmptyRuleSelectors(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "gnp-empty-selectors"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Selector: selector.All.String(),
+			Egress: []apiv3.Rule{{
+				Source:      apiv3.EntityRule{Selector: "   ", NamespaceSelector: "\n\t"},
+				Destination: apiv3.EntityRule{NotSelector: "   "},
+			}},
+			Ingress: []apiv3.Rule{{
+				Destination: apiv3.EntityRule{Selector: "   ", NamespaceSelector: "   ", ServiceAccounts: &apiv3.ServiceAccountMatch{Selector: "   "}},
+			}},
+		},
+	}
+
+	out := Objects([]runtime.Object{gnp})
+	og := out[0].(*apiv3.GlobalNetworkPolicy)
+	// Egress: rule-level whitespace selectors should remain empty after normalization.
+	if og.Spec.Egress[0].Source.Selector != "" || og.Spec.Egress[0].Source.NamespaceSelector != "" {
+		t.Errorf("expected empty egress source selectors, got: %#v", og.Spec.Egress[0].Source)
+	}
+	if og.Spec.Egress[0].Destination.NotSelector != "" {
+		t.Errorf("expected empty egress destination notSelector, got: %q", og.Spec.Egress[0].Destination.NotSelector)
+	}
+	// Ingress: destination selector/ns and SA selector should be empty.
+	if og.Spec.Ingress[0].Destination.Selector != "" || og.Spec.Ingress[0].Destination.NamespaceSelector != "" {
+		t.Errorf("expected empty ingress destination selectors, got: %#v", og.Spec.Ingress[0].Destination)
+	}
+	if og.Spec.Ingress[0].Destination.ServiceAccounts == nil || og.Spec.Ingress[0].Destination.ServiceAccounts.Selector != "" {
+		t.Errorf("expected empty SA selector, got: %#v", og.Spec.Ingress[0].Destination.ServiceAccounts)
+	}
+}
+
+func TestOptimizeGNP_SortsIngressByDestSelectorWithinAction(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "gnp-sort-ingress"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Ingress: []apiv3.Rule{
+				{Action: apiv3.Allow, Destination: apiv3.EntityRule{Selector: "z"}},
+				{Action: apiv3.Allow, Destination: apiv3.EntityRule{Selector: "a"}},
+				{Action: apiv3.Deny, Destination: apiv3.EntityRule{Selector: "c"}},
+				{Action: apiv3.Deny, Destination: apiv3.EntityRule{Selector: "b"}},
+				{Action: apiv3.Allow, Destination: apiv3.EntityRule{Selector: "n"}},
+				{Action: apiv3.Allow, Destination: apiv3.EntityRule{Selector: "m"}},
+			},
+		},
+	}
+
+	groupGNPByRuleSelector(gnp)
+	// New behavior: stable grouping only, original relative order of unique selectors within each contiguous action run preserved.
+	if gnp.Spec.Ingress[0].Destination.Selector != "z" || gnp.Spec.Ingress[1].Destination.Selector != "a" ||
+		gnp.Spec.Ingress[2].Destination.Selector != "c" || gnp.Spec.Ingress[3].Destination.Selector != "b" ||
+		gnp.Spec.Ingress[4].Destination.Selector != "n" || gnp.Spec.Ingress[5].Destination.Selector != "m" {
+		// Update failure message to show full order
+		var order []string
+		for _, r := range gnp.Spec.Ingress {
+			order = append(order, r.Destination.Selector)
+		}
+		// Use Fatalf for concise failure.
+		// nolint:staticcheck
+		t.Fatalf("unexpected ingress ordering: %v", order)
+	}
+}
+
+func TestOptimizeGNP_SortsEgressBySourceSelectorWithinAction(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "gnp-sort-egress"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Egress: []apiv3.Rule{
+				{Action: apiv3.Deny, Source: apiv3.EntityRule{Selector: "delta"}},
+				{Action: apiv3.Deny, Source: apiv3.EntityRule{Selector: "alpha"}},
+				{Action: apiv3.Allow, Source: apiv3.EntityRule{Selector: "zeta"}},
+				{Action: apiv3.Allow, Source: apiv3.EntityRule{Selector: "beta"}},
+				{Action: apiv3.Deny, Source: apiv3.EntityRule{Selector: "gamma"}},
+			},
+		},
+	}
+
+	groupGNPByRuleSelector(gnp)
+	if gnp.Spec.Egress[0].Source.Selector != "delta" || gnp.Spec.Egress[1].Source.Selector != "alpha" ||
+		gnp.Spec.Egress[2].Source.Selector != "zeta" || gnp.Spec.Egress[3].Source.Selector != "beta" ||
+		gnp.Spec.Egress[4].Source.Selector != "gamma" {
+		var order []string
+		for _, r := range gnp.Spec.Egress {
+			order = append(order, r.Source.Selector)
+		}
+		t.Fatalf("unexpected egress ordering: %v", order)
+	}
+}
+
+func TestOptimizeGNP_PreservesEmptyTopLevelServiceAccountSelector(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "gnp-empty-top-sa"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Selector:               "all()",
+			ServiceAccountSelector: "   ",                               // should remain empty, not all()
+			Ingress:                []apiv3.Rule{{Action: apiv3.Allow}}, // ensure policy retained (not dropped as empty)
+		},
+	}
+
+	out := Objects([]runtime.Object{gnp})
+	if len(out) != 1 {
+		t.Fatalf("expected 1 optimized object, got %d", len(out))
+	}
+	og := out[0].(*apiv3.GlobalNetworkPolicy)
+	if og.Spec.ServiceAccountSelector != "" {
+		t.Fatalf("top-level ServiceAccountSelector should remain empty, got %q", og.Spec.ServiceAccountSelector)
+	}
+}
+
+// New test: duplicate rule detection ignores Metadata differences.
+func TestOptimizeGNP_DuplicateRulesIgnoreMetadata(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "dup-meta"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Ingress: []apiv3.Rule{
+				// Two allow-all rules differing only by metadata; second should be removed.
+				{Action: apiv3.Allow, Metadata: &apiv3.RuleMetadata{Annotations: map[string]string{"id": "1"}}},
+				{Action: apiv3.Allow, Metadata: &apiv3.RuleMetadata{Annotations: map[string]string{"id": "2"}}},
+				{Action: apiv3.Deny}, // unreachable after terminal allow, trimmed
+			},
+		},
+	}
+	out := Objects([]runtime.Object{gnp})
+	if len(out) != 1 {
+		t.Fatalf("expected 1 optimized object, got %d", len(out))
+	}
+	og := out[0].(*apiv3.GlobalNetworkPolicy)
+	if len(og.Spec.Ingress) != 1 {
+		t.Fatalf("expected 1 rule, got %d: %#v", len(og.Spec.Ingress), og.Spec.Ingress)
+	}
+	if og.Spec.Ingress[0].Action != apiv3.Allow {
+		t.Fatalf("unexpected rule action: %s", og.Spec.Ingress[0].Action)
+	}
+	if og.Spec.Ingress[0].Metadata == nil || og.Spec.Ingress[0].Metadata.Annotations["id"] != "1" {
+		t.Fatalf("expected rule collapse: %#v", og.Spec.Ingress)
+	}
+}
+
+func TestOptimizeGNP_RemovesDuplicateNonTerminalRule(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	gnp := &apiv3.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "dup-non-terminal"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Ingress: []apiv3.Rule{
+				// Non-terminal allow rule (has selector) with metadata.
+				{Action: apiv3.Allow, Source: apiv3.EntityRule{Selector: "app == 'x'"}, Metadata: &apiv3.RuleMetadata{Annotations: map[string]string{"id": "1"}}},
+				// Duplicate of first rule differing only by metadata; should be removed by duplicate detection (seenRules.Contains).
+				{Action: apiv3.Allow, Source: apiv3.EntityRule{Selector: "app == 'x'"}, Metadata: &apiv3.RuleMetadata{Annotations: map[string]string{"id": "2"}}},
+				// Another distinct non-terminal rule.
+				{Action: apiv3.Deny, Source: apiv3.EntityRule{Selector: "app == 'y'"}},
+				// Terminal deny-all rule.
+				{Action: apiv3.Deny},
+				// Unreachable rule after terminal, should be trimmed.
+				{Action: apiv3.Allow, Source: apiv3.EntityRule{Selector: "app == 'z'"}},
+			},
+		},
+	}
+
+	out := Objects([]runtime.Object{gnp})
+	if len(out) != 1 {
+		t.Fatalf("expected 1 optimized object, got %d", len(out))
+	}
+	og := out[0].(*apiv3.GlobalNetworkPolicy)
+	if len(og.Spec.Ingress) != 3 { // duplicate removed; unreachable trimmed
+		// Provide details for debugging.
+		var sels []string
+		for _, r := range og.Spec.Ingress {
+			sels = append(sels, r.Source.Selector)
+		}
+		t.Fatalf("expected 3 ingress rules, got %d: selectors=%v", len(og.Spec.Ingress), sels)
+	}
+	if og.Spec.Ingress[0].Action != apiv3.Allow || og.Spec.Ingress[0].Source.Selector != "app == \"x\"" {
+		t.Fatalf("unexpected first rule: %#v", og.Spec.Ingress[0])
+	}
+	if og.Spec.Ingress[1].Action != apiv3.Deny || og.Spec.Ingress[1].Source.Selector != "app == \"y\"" {
+		t.Fatalf("unexpected second rule: %#v", og.Spec.Ingress[1])
+	}
+	if og.Spec.Ingress[2].Action != apiv3.Deny || og.Spec.Ingress[2].Source.Selector != "" {
+		t.Fatalf("expected terminal deny-all third rule, got: %#v", og.Spec.Ingress[2])
 	}
 }
