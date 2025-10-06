@@ -65,6 +65,21 @@ func DoWithClock(shim Clock, fn func() error) error {
 	return fn()
 }
 
+type CleanUpRegisterable interface {
+	Cleanup(func())
+}
+
+// ShimClockForTestingT temporarily sets the shim as the time and runs the given function for a test and when the test
+// is done, the time is returned to its original state.
+func ShimClockForTestingT(t CleanUpRegisterable, shim Clock) {
+	original := activeClock
+	activeClock = shim
+
+	t.Cleanup(func() {
+		activeClock = original
+	})
+}
+
 // Clock is our shim interface to the time package.
 type Clock interface {
 	Now() Time
