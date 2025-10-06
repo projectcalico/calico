@@ -394,25 +394,13 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		defer o.Close()
 	}
 
-	log.Infof("Patching binary %s", obj+".o")
-
-	bin, err := bpf.BinaryFromFile(obj + ".o")
-	Expect(err).NotTo(HaveOccurred())
-	// XXX for now we both path the mark here and include it in the context as
-	// well. This needs to be done for as long as we want to run the tests on
-	// older kernels.
-	bin.PatchSkbMark(skbMark)
-	tempObj := tempDir + "bpf.o"
-	err = bin.WriteToFile(tempObj)
-	Expect(err).NotTo(HaveOccurred())
-
 	if loglevel == "debug" {
 		ipFamily += " debug"
 	}
 
-	var o *libbpf.Obj
+	obj += ".o"
 
-	o, err = objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true)
+	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
 
@@ -1480,6 +1468,10 @@ func resetRTMapV6(rtMap maps.Map) {
 	resetMap(rtMap)
 }
 
+func resetQoSMap(qosMap maps.Map) {
+	resetMap(qosMap)
+}
+
 func saveRTMap(rtMap maps.Map) routes.MapMem {
 	rt, err := routes.LoadMap(rtMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -1945,6 +1937,7 @@ func resetBPFMaps() {
 	resetMap(fsafeMap)
 	resetMap(natMap)
 	resetMap(natBEMap)
+	resetMap(qosMap)
 }
 
 func TestMapIterWithDelete(t *testing.T) {

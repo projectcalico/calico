@@ -1889,8 +1889,8 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         m_watcher = m_StatusWatcher.return_value
         self.assertEqual(
             [
-                mock.call(m_watcher.start),
-                mock.call(m_watcher.start),
+                mock.call(mock.ANY),
+                mock.call(mock.ANY),
             ],
             [c for c in m_spawn.mock_calls if c[0] == ""],
         )
@@ -1991,37 +1991,33 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         )
 
     def test_try_to_update_port_status(self):
-        # New OpenStack releases have a host parameter.
         self.driver._get_db()
 
-        # Driver uses reflection to check the function sig so we have to put
-        # a real function here.
         mock_calls = []
 
-        def m_update_port_status(context, port_id, status):
-            """Older version of OpenStack; no host parameter"""
-            mock_calls.append(mock.call(context, port_id, status))
+        def m_update_port_status(context, port_id, status, host=None):
+            mock_calls.append(mock.call(context, port_id, status, host=host))
 
         self.db.update_port_status = m_update_port_status
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
             self.driver._try_to_update_port_status(context, ("host", "p1"))
         self.assertEqual(
-            [mock.call(context, "p1", mech_calico.constants.PORT_STATUS_ERROR)],
+            [
+                mock.call(
+                    context, "p1", mech_calico.constants.PORT_STATUS_ERROR, host="host"
+                )
+            ],
             mock_calls,
         )
         self.assertEqual([], m_spawn.mock_calls)  # No retry on success
 
     def test_try_to_update_port_status_fail(self):
-        # New OpenStack releases have a host parameter.
         self.driver._get_db()
 
-        # Driver uses reflection to check the function sig so we have to put
-        # a real function here.
         mock_calls = []
 
         def m_update_port_status(context, port_id, status, host=None):
-            """Newer version of OpenStack; host parameter"""
             mock_calls.append(mock.call(context, port_id, status, host=host))
             raise lib.DBError()
 

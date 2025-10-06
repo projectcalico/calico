@@ -2877,6 +2877,34 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"prometheusMetricsCAFile": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PrometheusMetricsCAFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint. This certificate must be valid and accessible by the calico-node process.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"prometheusMetricsCertFile": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PrometheusMetricsCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint. This certificate must be valid and accessible by the calico-node process.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"prometheusMetricsKeyFile": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PrometheusMetricsKeyFile defines the absolute path to the private key file corresponding to the TLS certificate used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"prometheusMetricsClientAuth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"RequireAndVerifyClientCert\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"failsafeInboundHostPorts": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified, it defaults to \"tcp\". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value \"[]\". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API. [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]",
@@ -6501,7 +6529,7 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 					},
 					"interfaceCIDRs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint. If specified, only addresses within these CIDRs will be included in the expected IPs. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
+							Description: "InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint. If specified, only addresses within these CIDRs will be included in the expected IPs. At least one of InterfaceCIDRs and InterfacePattern must be specified.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6514,9 +6542,9 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 							},
 						},
 					},
-					"interfaceSelector": {
+					"interfacePattern": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceSelector contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
+							Description: "InterfacePattern contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node. At least one of InterfaceCIDRs and InterfacePattern must be specified.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
