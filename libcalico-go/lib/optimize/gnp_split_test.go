@@ -74,7 +74,9 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 
 	pols := out
 
-	// Expected groups after sorting within action runs: [Allow:a], [Allow:b], [Deny:x,x], [Allow:c,c]
+	// Expected groups with new stable grouping (no alphabetical sort within action runs):
+	// Original order of distinct selectors within each action run preserved, duplicates grouped:
+	// [Allow:b], [Allow:a], [Deny:x,x], [Allow:c,c]
 	// Verify names have proper suffixes and contents are grouped.
 	suffixLen := 1
 	for i, pol := range pols {
@@ -90,17 +92,16 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 		}
 	}
 
-	// Check each group's selector moved to top-level and cleared in rules.
-	// Group 0: single Allow a
-	if pols[0].Spec.Selector != "app == 'a'" {
+	// Group 0: single Allow b
+	if pols[0].Spec.Selector != "app == 'b'" {
 		t.Fatalf("group 0 top-level selector unexpected: %s", pols[0].Spec.Selector)
 	}
 	if len(pols[0].Spec.Ingress) != 1 || pols[0].Spec.Ingress[0].Destination.Selector != "" || pols[0].Spec.Ingress[0].Destination.NamespaceSelector != "" {
 		t.Fatalf("group 0 rule not cleared or wrong size: %#v", pols[0].Spec.Ingress)
 	}
 
-	// Group 1: single Allow b
-	if pols[1].Spec.Selector != "app == 'b'" {
+	// Group 1: single Allow a
+	if pols[1].Spec.Selector != "app == 'a'" {
 		t.Fatalf("group 1 top-level selector unexpected: %s", pols[1].Spec.Selector)
 	}
 	if len(pols[1].Spec.Ingress) != 1 || pols[1].Spec.Ingress[0].Destination.Selector != "" {
@@ -147,7 +148,7 @@ func TestSplitPolicyOnSelectors_SplitEgressIntoGroups(t *testing.T) {
 	}
 	pols := out
 
-	// Name suffix checks for egress policies
+	// Expected groups with new stable grouping: [Deny:b], [Deny:a], [Allow:c,c]
 	suffixLen := 1
 	for i, pol := range pols {
 		expectedNameSuffix := "-e-" + fmt.Sprintf("%0*d", suffixLen, i)
@@ -156,12 +157,10 @@ func TestSplitPolicyOnSelectors_SplitEgressIntoGroups(t *testing.T) {
 		}
 	}
 
-	// Expected groups after sorting within action runs: [Deny:a], [Deny:b], [Allow:c,c]
-	// Validate top-level selectors reflect Source selector and rules cleared.
-	if pols[0].Spec.Selector != andSelectors("env == 'prod'", "app == 'a'") {
+	if pols[0].Spec.Selector != andSelectors("env == 'prod'", "app == 'b'") {
 		t.Fatalf("egress group 0 top-level selector unexpected: %s", pols[0].Spec.Selector)
 	}
-	if pols[1].Spec.Selector != andSelectors("env == 'prod'", "app == 'b'") {
+	if pols[1].Spec.Selector != andSelectors("env == 'prod'", "app == 'a'") {
 		t.Fatalf("egress group 1 top-level selector unexpected: %s", pols[1].Spec.Selector)
 	}
 	if pols[2].Spec.Selector != andSelectors("env == 'prod'", "app == 'c'") {

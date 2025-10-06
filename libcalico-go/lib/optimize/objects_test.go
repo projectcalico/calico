@@ -59,7 +59,9 @@ func TestObjects_PassThrough_UnoptimizedSlice(t *testing.T) {
 func TestObjects_Preserves_GNPList(t *testing.T) {
 	logutils.ConfigureLoggingForTestingT(t)
 	gnp1 := *newGNP("a")
+	gnp1.Spec.Ingress = []apia.Rule{{Action: apia.Allow}}
 	gnp2 := *newGNP("b")
+	gnp2.Spec.Egress = []apia.Rule{{Action: apia.Allow}}
 	lst := &apia.GlobalNetworkPolicyList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       apia.KindGlobalNetworkPolicyList,
@@ -338,25 +340,19 @@ func TestOptimizeGNP_SortsIngressByDestSelectorWithinAction(t *testing.T) {
 		},
 	}
 
-	// Call the sorting pass directly to avoid interaction with splitting logic.
 	groupGNPByRuleSelector(gnp)
-	if gnp.Spec.Ingress[0].Action != apia.Allow || gnp.Spec.Ingress[0].Destination.Selector != "a" {
-		t.Fatalf("unexpected ingress[0]: action=%s sel=%s", gnp.Spec.Ingress[0].Action, gnp.Spec.Ingress[0].Destination.Selector)
-	}
-	if gnp.Spec.Ingress[1].Action != apia.Allow || gnp.Spec.Ingress[1].Destination.Selector != "z" {
-		t.Fatalf("unexpected ingress[1]: action=%s sel=%s", gnp.Spec.Ingress[1].Action, gnp.Spec.Ingress[1].Destination.Selector)
-	}
-	if gnp.Spec.Ingress[2].Action != apia.Deny || gnp.Spec.Ingress[2].Destination.Selector != "b" {
-		t.Fatalf("unexpected ingress[2]: action=%s sel=%s", gnp.Spec.Ingress[2].Action, gnp.Spec.Ingress[2].Destination.Selector)
-	}
-	if gnp.Spec.Ingress[3].Action != apia.Deny || gnp.Spec.Ingress[3].Destination.Selector != "c" {
-		t.Fatalf("unexpected ingress[3]: action=%s sel=%s", gnp.Spec.Ingress[3].Action, gnp.Spec.Ingress[3].Destination.Selector)
-	}
-	if gnp.Spec.Ingress[4].Action != apia.Allow || gnp.Spec.Ingress[4].Destination.Selector != "m" {
-		t.Fatalf("unexpected ingress[4]: action=%s sel=%s", gnp.Spec.Ingress[4].Action, gnp.Spec.Ingress[4].Destination.Selector)
-	}
-	if gnp.Spec.Ingress[5].Action != apia.Allow || gnp.Spec.Ingress[5].Destination.Selector != "n" {
-		t.Fatalf("unexpected ingress[5]: action=%s sel=%s", gnp.Spec.Ingress[5].Action, gnp.Spec.Ingress[5].Destination.Selector)
+	// New behavior: stable grouping only, original relative order of unique selectors within each contiguous action run preserved.
+	if gnp.Spec.Ingress[0].Destination.Selector != "z" || gnp.Spec.Ingress[1].Destination.Selector != "a" ||
+		gnp.Spec.Ingress[2].Destination.Selector != "c" || gnp.Spec.Ingress[3].Destination.Selector != "b" ||
+		gnp.Spec.Ingress[4].Destination.Selector != "n" || gnp.Spec.Ingress[5].Destination.Selector != "m" {
+		// Update failure message to show full order
+		var order []string
+		for _, r := range gnp.Spec.Ingress {
+			order = append(order, r.Destination.Selector)
+		}
+		// Use Fatalf for concise failure.
+		// nolint:staticcheck
+		t.Fatalf("unexpected ingress ordering: %v", order)
 	}
 }
 
@@ -376,22 +372,15 @@ func TestOptimizeGNP_SortsEgressBySourceSelectorWithinAction(t *testing.T) {
 		},
 	}
 
-	// Call the sorting pass directly.
 	groupGNPByRuleSelector(gnp)
-	if gnp.Spec.Egress[0].Action != apia.Deny || gnp.Spec.Egress[0].Source.Selector != "alpha" {
-		t.Fatalf("unexpected egress[0]: action=%s sel=%s", gnp.Spec.Egress[0].Action, gnp.Spec.Egress[0].Source.Selector)
-	}
-	if gnp.Spec.Egress[1].Action != apia.Deny || gnp.Spec.Egress[1].Source.Selector != "delta" {
-		t.Fatalf("unexpected egress[1]: action=%s sel=%s", gnp.Spec.Egress[1].Action, gnp.Spec.Egress[1].Source.Selector)
-	}
-	if gnp.Spec.Egress[2].Action != apia.Allow || gnp.Spec.Egress[2].Source.Selector != "beta" {
-		t.Fatalf("unexpected egress[2]: action=%s sel=%s", gnp.Spec.Egress[2].Action, gnp.Spec.Egress[2].Source.Selector)
-	}
-	if gnp.Spec.Egress[3].Action != apia.Allow || gnp.Spec.Egress[3].Source.Selector != "zeta" {
-		t.Fatalf("unexpected egress[3]: action=%s sel=%s", gnp.Spec.Egress[3].Action, gnp.Spec.Egress[3].Source.Selector)
-	}
-	if gnp.Spec.Egress[4].Action != apia.Deny || gnp.Spec.Egress[4].Source.Selector != "gamma" {
-		t.Fatalf("unexpected egress[4]: action=%s sel=%s", gnp.Spec.Egress[4].Action, gnp.Spec.Egress[4].Source.Selector)
+	if gnp.Spec.Egress[0].Source.Selector != "delta" || gnp.Spec.Egress[1].Source.Selector != "alpha" ||
+		gnp.Spec.Egress[2].Source.Selector != "zeta" || gnp.Spec.Egress[3].Source.Selector != "beta" ||
+		gnp.Spec.Egress[4].Source.Selector != "gamma" {
+		var order []string
+		for _, r := range gnp.Spec.Egress {
+			order = append(order, r.Source.Selector)
+		}
+		t.Fatalf("unexpected egress ordering: %v", order)
 	}
 }
 
@@ -402,7 +391,8 @@ func TestOptimizeGNP_PreservesEmptyTopLevelServiceAccountSelector(t *testing.T) 
 		ObjectMeta: metav1.ObjectMeta{Name: "gnp-empty-top-sa"},
 		Spec: apia.GlobalNetworkPolicySpec{
 			Selector:               "all()",
-			ServiceAccountSelector: "   ", // should remain empty, not all()
+			ServiceAccountSelector: "   ",                             // should remain empty, not all()
+			Ingress:                []apia.Rule{{Action: apia.Allow}}, // ensure policy retained (not dropped as empty)
 		},
 	}
 
@@ -413,5 +403,36 @@ func TestOptimizeGNP_PreservesEmptyTopLevelServiceAccountSelector(t *testing.T) 
 	og := out[0].(*apia.GlobalNetworkPolicy)
 	if og.Spec.ServiceAccountSelector != "" {
 		t.Fatalf("top-level ServiceAccountSelector should remain empty, got %q", og.Spec.ServiceAccountSelector)
+	}
+}
+
+// New test: duplicate rule detection ignores Metadata differences.
+func TestOptimizeGNP_DuplicateRulesIgnoreMetadata(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
+	gnp := &apia.GlobalNetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: apia.KindGlobalNetworkPolicy, APIVersion: apia.GroupVersionCurrent},
+		ObjectMeta: metav1.ObjectMeta{Name: "dup-meta"},
+		Spec: apia.GlobalNetworkPolicySpec{
+			Ingress: []apia.Rule{
+				// Two allow-all rules differing only by metadata; second should be removed.
+				{Action: apia.Allow, Metadata: &apia.RuleMetadata{Annotations: map[string]string{"id": "1"}}},
+				{Action: apia.Allow, Metadata: &apia.RuleMetadata{Annotations: map[string]string{"id": "2"}}},
+				{Action: apia.Deny}, // unreachable after terminal allow, trimmed
+			},
+		},
+	}
+	out := Objects([]runtime.Object{gnp})
+	if len(out) != 1 {
+		t.Fatalf("expected 1 optimized object, got %d", len(out))
+	}
+	og := out[0].(*apia.GlobalNetworkPolicy)
+	if len(og.Spec.Ingress) != 1 {
+		t.Fatalf("expected 1 rule, got %d: %#v", len(og.Spec.Ingress), og.Spec.Ingress)
+	}
+	if og.Spec.Ingress[0].Action != apia.Allow {
+		t.Fatalf("unexpected rule action: %s", og.Spec.Ingress[0].Action)
+	}
+	if og.Spec.Ingress[0].Metadata == nil || og.Spec.Ingress[0].Metadata.Annotations["id"] != "1" {
+		t.Fatalf("expected rule collapse: %#v", og.Spec.Ingress)
 	}
 }
