@@ -116,7 +116,7 @@ struct cali_tc_state {
 	 */
 	DECLARE_IP_ADDR(ip_src_masq);
 #ifndef IPVER6
-	__u8 __pad_ipv4[48];
+	__u8 __pad_ipv4[44];
 #endif
 };
 
