@@ -42,7 +42,6 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 
 	// TODO (mazdak): baseline tier is not limited to priority 1000 anymore?
 	order := float64(kcnp.Spec.Priority)
-	// TODO (mazdak): need to rename error type
 	errorTracker := cerrors.ErrorClusterNetworkPolicyConversion{PolicyName: kcnp.Name}
 
 	// Generate the ingress rules list.
@@ -183,8 +182,9 @@ func k8sClusterNetPolEgressRuleToCalico(rule clusternetpol.ClusterNetworkPolicyE
 
 func K8sClusterNetworkPolicyActionToCalico(action clusternetpol.ClusterNetworkPolicyRuleAction) (apiv3.Action, error) {
 	switch action {
-	case clusternetpol.ClusterNetworkPolicyRuleActionAllow,
-		clusternetpol.ClusterNetworkPolicyRuleActionDeny,
+	case clusternetpol.ClusterNetworkPolicyRuleActionAccept:
+		return apiv3.Allow, nil
+	case clusternetpol.ClusterNetworkPolicyRuleActionDeny,
 		clusternetpol.ClusterNetworkPolicyRuleActionPass:
 		return apiv3.Action(action), nil
 	default:
