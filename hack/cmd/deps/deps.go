@@ -546,7 +546,7 @@ func generateSemaphoreYamls() {
 		}
 	}
 	if foundWeekly {
-		logrus.Info("Found templates that run weekly, generating %s.", thirdPartyFile)
+		logrus.Infof("Found templates that run weekly, generating %s.", thirdPartyFile)
 		err = buildSemaphoreYAML(thirdPartyFile, weeklyTemplates, globalExtraDeps, nil, true, defaultBranchStanza)
 		if err != nil {
 			logrus.Fatalf("Failed to build semaphore YAML: %v", err)
