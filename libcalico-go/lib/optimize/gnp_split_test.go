@@ -23,10 +23,12 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
 func TestSplitPolicyOnSelectors_NoSelectors_NoChange(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apiv3.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "nosplit"},
@@ -47,6 +49,7 @@ func TestSplitPolicyOnSelectors_NoSelectors_NoChange(t *testing.T) {
 }
 
 func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apiv3.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "ingress-split"},
@@ -122,6 +125,7 @@ func TestSplitPolicyOnSelectors_SplitIngressIntoGroups(t *testing.T) {
 }
 
 func TestSplitPolicyOnSelectors_SplitEgressIntoGroups(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apiv3.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "egress-split"},
@@ -177,6 +181,7 @@ func TestSplitPolicyOnSelectors_SplitEgressIntoGroups(t *testing.T) {
 }
 
 func TestSplitPolicyOnSelectors_SkipsForApplyOnForward(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apiv3.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "apply-on-forward-nosplit"},
@@ -202,6 +207,7 @@ func TestSplitPolicyOnSelectors_SkipsForApplyOnForward(t *testing.T) {
 }
 
 func TestSplitPolicyOnSelectors_SkipsForPreDNAT(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apiv3.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "prednat-nosplit"},
@@ -227,6 +233,7 @@ func TestSplitPolicyOnSelectors_SkipsForPreDNAT(t *testing.T) {
 }
 
 func TestSplitPolicyOnSelectors_SkipsForDoNotTrack(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apiv3.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "dnt-nosplit"},
@@ -252,6 +259,7 @@ func TestSplitPolicyOnSelectors_SkipsForDoNotTrack(t *testing.T) {
 }
 
 func TestSplitPolicyOnSelectors_NameTooLong_ReturnsOriginal(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	longName := strings.Repeat("n", 250) // 250 + "-i-0" => 254 > 253, triggers name-too-long recovery
 	gnp := &apiv3.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apiv3.KindGlobalNetworkPolicy, APIVersion: apiv3.GroupVersionCurrent},
@@ -273,6 +281,7 @@ func TestSplitPolicyOnSelectors_NameTooLong_ReturnsOriginal(t *testing.T) {
 }
 
 func TestAndSelectors(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	cases := []struct{ a, b, exp string }{
 		{"", "app == 'x'", "app == 'x'"},
 		{"all()", "app == 'x'", "app == 'x'"},
@@ -289,6 +298,7 @@ func TestAndSelectors(t *testing.T) {
 }
 
 func TestRulesGroupedOnSelector(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	rules := []apiv3.Rule{
 		{Destination: apiv3.EntityRule{Selector: "a"}},
 		{Destination: apiv3.EntityRule{Selector: "a"}},
@@ -312,6 +322,7 @@ func TestRulesGroupedOnSelector(t *testing.T) {
 }
 
 func TestEntityRuleSelectorsEqual(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	a := &apiv3.EntityRule{Selector: "app == 'x'", NamespaceSelector: "ns == 'a'"}
 	b := &apiv3.EntityRule{Selector: "app == 'x'", NamespaceSelector: "ns == 'a'"}
 	c := &apiv3.EntityRule{Selector: "app == 'y'", NamespaceSelector: "ns == 'a'"}

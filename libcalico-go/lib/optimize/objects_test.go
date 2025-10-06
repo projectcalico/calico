@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
@@ -39,6 +40,7 @@ func newGNP(name string) *apia.GlobalNetworkPolicy {
 }
 
 func TestObjects_PassThrough_UnoptimizedSlice(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	// Use an unhandled type (IPPool) to verify pass-through behavior for a slice.
 	ipp1 := &apia.IPPool{TypeMeta: metav1.TypeMeta{Kind: apia.KindIPPool, APIVersion: apia.GroupVersionCurrent}, ObjectMeta: metav1.ObjectMeta{Name: "a"}}
 	ipp2 := &apia.IPPool{TypeMeta: metav1.TypeMeta{Kind: apia.KindIPPool, APIVersion: apia.GroupVersionCurrent}, ObjectMeta: metav1.ObjectMeta{Name: "b"}}
@@ -55,6 +57,7 @@ func TestObjects_PassThrough_UnoptimizedSlice(t *testing.T) {
 }
 
 func TestObjects_Preserves_GNPList(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp1 := *newGNP("a")
 	gnp2 := *newGNP("b")
 	lst := &apia.GlobalNetworkPolicyList{
@@ -84,6 +87,7 @@ func TestObjects_Preserves_GNPList(t *testing.T) {
 }
 
 func TestObjects_PassThrough_UnhandledType(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	ippool := &apia.IPPool{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       apia.KindIPPool,
@@ -101,6 +105,7 @@ func TestObjects_PassThrough_UnhandledType(t *testing.T) {
 }
 
 func TestObjects_EmptyInput(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	out := Objects(nil)
 	if len(out) != 0 {
 		t.Fatalf("expected empty output for nil input, got %d", len(out))
@@ -113,6 +118,7 @@ func TestObjects_EmptyInput(t *testing.T) {
 }
 
 func TestOptimizeGNP_CanonicalisesSelectors(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apia.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apia.KindGlobalNetworkPolicy, APIVersion: apia.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "gnp"},
@@ -187,6 +193,7 @@ func TestOptimizeGNP_CanonicalisesSelectors(t *testing.T) {
 }
 
 func TestOptimizeGNP_RemovesRedundantRuleSelectors(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	// Top-level selectors
 	topSel := "app == 'api'"
 	topNS := "has(kubernetes.io/metadata.name)"
@@ -280,6 +287,7 @@ func TestOptimizeGNP_RemovesRedundantRuleSelectors(t *testing.T) {
 }
 
 func TestOptimizeGNP_PreservesEmptyRuleSelectors(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apia.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apia.KindGlobalNetworkPolicy, APIVersion: apia.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "gnp-empty-selectors"},
@@ -314,6 +322,7 @@ func TestOptimizeGNP_PreservesEmptyRuleSelectors(t *testing.T) {
 }
 
 func TestOptimizeGNP_SortsIngressByDestSelectorWithinAction(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apia.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apia.KindGlobalNetworkPolicy, APIVersion: apia.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "gnp-sort-ingress"},
@@ -352,6 +361,7 @@ func TestOptimizeGNP_SortsIngressByDestSelectorWithinAction(t *testing.T) {
 }
 
 func TestOptimizeGNP_SortsEgressBySourceSelectorWithinAction(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apia.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apia.KindGlobalNetworkPolicy, APIVersion: apia.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "gnp-sort-egress"},
@@ -386,6 +396,7 @@ func TestOptimizeGNP_SortsEgressBySourceSelectorWithinAction(t *testing.T) {
 }
 
 func TestOptimizeGNP_PreservesEmptyTopLevelServiceAccountSelector(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	gnp := &apia.GlobalNetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{Kind: apia.KindGlobalNetworkPolicy, APIVersion: apia.GroupVersionCurrent},
 		ObjectMeta: metav1.ObjectMeta{Name: "gnp-empty-top-sa"},
