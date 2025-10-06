@@ -48,6 +48,7 @@ func main() {
     version      Display the version of this binary.
     datastore    Calico datastore management.
     cluster      Access cluster information.
+    optimize     Optimize certain resource types (such as global netowrk policies).
 
 Options:
   -h --help                    Show this screen.
@@ -137,6 +138,8 @@ Description:
 			err = commands.Cluster(args)
 		case "datastore":
 			err = commands.Datastore(args)
+		case "optimize":
+			err = commands.Optimize(args)
 		default:
 			err = fmt.Errorf("unknown command: %q\n%s", command, doc)
 		}
