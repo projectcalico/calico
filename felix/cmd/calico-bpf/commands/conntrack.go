@@ -29,7 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
-	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
+	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -172,7 +172,7 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 
 	switch v.Type() {
 	case conntrack.TypeNormal:
-		if v.Flags()&v4.FlagSrcDstBA != 0 {
+		if v.Flags()&v5.FlagSrcDstBA != 0 {
 			cmd.Printf("%s %s:%d -> %s:%d ", protoStr(k.Proto()), k.AddrB(), k.PortB(), k.AddrA(), k.PortA())
 		} else {
 			cmd.Printf("%s %s:%d -> %s:%d ", protoStr(k.Proto()), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
@@ -180,7 +180,7 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 	case conntrack.TypeNATForward:
 		return
 	case conntrack.TypeNATReverse:
-		if v.Flags()&v4.FlagSrcDstBA != 0 {
+		if v.Flags()&v5.FlagSrcDstBA != 0 {
 			cmd.Printf("%s %s:%d -> %s:%d -> %s:%d ",
 				protoStr(k.Proto()), k.AddrB(), k.PortB(), d.OrigDst, d.OrigPort, k.AddrA(), k.PortA())
 		} else {
@@ -193,7 +193,7 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 		}
 	}
 
-	if v.Flags()&v4.FlagHostPSNAT != 0 {
+	if v.Flags()&v5.FlagHostPSNAT != 0 {
 		cmd.Printf("source port changed from %d ", d.OrigSPort)
 	}
 

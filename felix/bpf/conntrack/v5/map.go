@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v4
+package v5
 
 import (
 	"encoding/binary"
@@ -22,7 +22,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	v5 "github.com/projectcalico/calico/felix/bpf/conntrack/v5"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -77,9 +76,7 @@ func (k Key) String() string {
 }
 
 func (k Key) Upgrade() maps.Upgradable {
-	var k5 v5.Key
-	copy(k5[:], k[:])
-	return k5
+	panic("conntrack map key already at its latest version")
 }
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
@@ -93,45 +90,36 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 }
 
 // struct calico_ct_value {
-//  __u64 rst_seen;
-//  __u64 last_seen; // 8
-//  __u8 type;     // 16
-//  __u8 flags;     // 17
-//
-//  // Important to use explicit padding, otherwise the compiler can decide
-//  // not to zero the padding bytes, which upsets the verifier.  Worse than
-//  // that, debug logging often prevents such optimisation resulting in
-//  // failures when debug logging is compiled out only :-).
-//  __u8 pad0[5];
-//  __u8 flags2;
-//  union {
-//    // CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
-//    struct {
-//      struct calico_ct_leg a_to_b; // 24
-//      struct calico_ct_leg b_to_a; // 36
-//
-//      // CALI_CT_TYPE_NAT_REV only.
-//      __u32 orig_dst;                    // 48
-//      __u16 orig_port;                   // 52
-//      __u8 pad1[2];                      // 54
-//      __u32 tun_ip;                      // 56
-//      __u32 pad3;                        // 60
-//    };
-//
-//    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
-//    struct {
-//      struct calico_ct_key nat_rev_key;  // 24
-//      __u8 pad2[8];
-//    };
-//  };
+// 	__u64 rst_seen;
+// 	__u64 last_seen;	// 8
+// 	__u8 type;		// 16
+// 	__u8 pad0[3];		// 17
+// 	__u32 flags;		// 20 - 24
+// 	union {
+// 		struct {
+// 			struct calico_ct_leg a_to_b; // 24
+// 			struct calico_ct_leg b_to_a; // 48
+// 			ipv46_addr_t tun_ip;                     // 72
+// 			ipv46_addr_t orig_ip;                    // 76
+// 			__u16 orig_port;                   	 // 80
+// 			__u16 orig_sport;                 	 // 82
+// 			ipv46_addr_t orig_sip;                   // 84
+// 		};
+// 		struct {
+// 			struct calico_ct_key nat_rev_key;  // 24
+// 			__u16 nat_sport;
+// 			__u8 pad2[46];
+// 		};
+// 	};
+// 	/* 64bit aligned by here */
 // };
 
 const (
 	VoRSTSeen   int = 0
 	VoLastSeen  int = 8
 	VoType      int = 16
-	VoFlags     int = 17
-	VoFlags2    int = 23
+	VoPadding1  int = 17
+	VoFlags     int = 20
 	VoRevKey    int = 24
 	VoLegAB     int = 24
 	VoLegBA     int = 48
@@ -149,7 +137,7 @@ type ValueInterface interface {
 	RSTSeen() int64
 	LastSeen() int64
 	Type() uint8
-	Flags() uint16
+	Flags() uint32
 	OrigIP() net.IP
 	OrigPort() uint16
 	OrigSPort() uint16
@@ -174,8 +162,8 @@ func (e Value) Type() uint8 {
 	return e[VoType]
 }
 
-func (e Value) Flags() uint16 {
-	return uint16(e[VoFlags]) | (uint16(e[VoFlags2]) << 8)
+func (e Value) Flags() uint32 {
+	return binary.LittleEndian.Uint32(e[VoFlags : VoFlags+4])
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -209,22 +197,23 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut          uint16 = (1 << 0)
-	FlagNATFwdDsr       uint16 = (1 << 1)
-	FlagNATNPFwd        uint16 = (1 << 2)
-	FlagSkipFIB         uint16 = (1 << 3)
-	FlagReserved4       uint16 = (1 << 4)
-	FlagReserved5       uint16 = (1 << 5)
-	FlagExtLocal        uint16 = (1 << 6)
-	FlagViaNATIf        uint16 = (1 << 7)
-	FlagSrcDstBA        uint16 = (1 << 8)
-	FlagHostPSNAT       uint16 = (1 << 9)
-	FlagSvcSelf         uint16 = (1 << 10)
-	FlagNPLoop          uint16 = (1 << 11)
-	FlagNPRemote        uint16 = (1 << 12)
-	FlagNoDSR           uint16 = (1 << 13)
-	FlagNoRedirPeer     uint16 = (1 << 14)
-	FlagClusterExternal uint16 = (1 << 15)
+	FlagNATOut          uint32 = (1 << 0)
+	FlagNATFwdDsr       uint32 = (1 << 1)
+	FlagNATNPFwd        uint32 = (1 << 2)
+	FlagSkipFIB         uint32 = (1 << 3)
+	FlagReserved4       uint32 = (1 << 4)
+	FlagReserved5       uint32 = (1 << 5)
+	FlagExtLocal        uint32 = (1 << 6)
+	FlagViaNATIf        uint32 = (1 << 7)
+	FlagSrcDstBA        uint32 = (1 << 8)
+	FlagHostPSNAT       uint32 = (1 << 9)
+	FlagSvcSelf         uint32 = (1 << 10)
+	FlagNPLoop          uint32 = (1 << 11)
+	FlagNPRemote        uint32 = (1 << 12)
+	FlagNoDSR           uint32 = (1 << 13)
+	FlagNoRedirPeer     uint32 = (1 << 14)
+	FlagClusterExternal uint32 = (1 << 15)
+	FlagMaglev          uint32 = (1 << 16)
 )
 
 func (e Value) ReverseNATKey() KeyInterface {
@@ -257,15 +246,14 @@ func (e *Value) SetNATSport(sport uint16) {
 	binary.LittleEndian.PutUint16(e[VoNATSPort:VoNATSPort+2], sport)
 }
 
-func initValue(v *Value, lastSeen time.Duration, typ uint8, flags uint16) {
+func initValue(v *Value, lastSeen time.Duration, typ uint8, flags uint32) {
 	binary.LittleEndian.PutUint64(v[VoLastSeen:VoLastSeen+8], uint64(lastSeen))
 	v[VoType] = typ
-	v[VoFlags] = byte(flags & 0xff)
-	v[VoFlags2] = byte((flags >> 8) & 0xff)
+	binary.LittleEndian.PutUint32(v[VoFlags:VoFlags+4], flags)
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
+func NewValueNormal(lastSeen time.Duration, flags uint32, legA, legB Leg) Value {
 	v := Value{}
 
 	initValue(&v, lastSeen, TypeNormal, flags)
@@ -278,7 +266,7 @@ func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value 
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value {
+func NewValueNATForward(lastSeen time.Duration, flags uint32, revKey Key) Value {
 	v := Value{}
 
 	initValue(&v, lastSeen, TypeNATForward, flags)
@@ -290,7 +278,7 @@ func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value 
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueNATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverse(lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
 	v := Value{}
 
@@ -308,7 +296,7 @@ func NewValueNATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
 }
 
 // NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
-func NewValueNATReverseSNAT(lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverseSNAT(lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) Value {
 	v := NewValueNATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 	copy(v[VoOrigSIP:VoOrigSIP+4], origIP.To4())
@@ -506,9 +494,6 @@ func (e Value) String() string {
 		if flags&FlagNoDSR != 0 {
 			flagsStr += " no-dsr"
 		}
-		if flags&FlagNoRedirPeer != 0 {
-			flagsStr += " no-redir-peer"
-		}
 	}
 
 	ret := fmt.Sprintf("Entry{Type:%d, LastSeen:%d, Flags:%s ",
@@ -531,22 +516,7 @@ func (e Value) IsForwardDSR() bool {
 }
 
 func (e Value) Upgrade() maps.Upgradable {
-	// Flags have been reworked in v5 to be a contiguous 32bit.
-	// Padding now PREceeds the flags (as opposed to following them).
-	// Overall struct size remains the same.
-
-	var val5 v5.Value
-	copy(val5[:], e[:])
-	// Zero the 3 padding bytes.
-	cpd := copy(val5[v5.VoPadding1:v5.VoFlags], []byte{0, 0, 0})
-	if cpd != 3 {
-		panic(fmt.Sprintf("Oops, Alex needs to learn how to count! Didn't copy 3, but %d", cpd))
-	}
-
-	flags5 := uint32(e.Flags())
-	binary.LittleEndian.PutUint32(val5[v5.VoFlags:v5.VoRevKey], flags5)
-
-	return val5
+	panic("conntrack map value already at its latest version")
 }
 
 var MapParams = maps.MapParameters{
@@ -555,7 +525,7 @@ var MapParams = maps.MapParameters{
 	ValueSize:    ValueSize,
 	MaxEntries:   MaxEntries,
 	Name:         "cali_v4_ct",
-	Version:      4,
+	Version:      5,
 	UpdatedByBPF: true,
 }
 
