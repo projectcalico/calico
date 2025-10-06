@@ -137,9 +137,18 @@ var nonGoDeps = map[string][]string{
 		"/whisker",
 	},
 
-	// Process is not a go project so we list the whole thing.
-	"process": {
-		"/process",
+	// Enterprise-only components follow...
+	"deep-packet-inspection": {
+		"/third_party/snort3",
+	},
+	"elasticsearch": {
+		"/third_party/elasticsearch",
+	},
+	"fluentd": {
+		"/third_party/fluentd-base",
+	},
+	"kibana": {
+		"/third_party/kibana",
 	},
 }
 
@@ -154,86 +163,93 @@ var defaultExclusions = []string{
 	"/**/*.md",
 }
 
-func replaceSemChangeInPlaceholders(yamlFile string) {
-	fileContents, err := os.ReadFile(yamlFile)
-	if err != nil {
-		logrus.Fatalf("Failed to read file %s: %s", yamlFile, err)
-	}
-	fileStat, err := os.Stat(yamlFile)
-	if err != nil {
-		logrus.Fatalf("Failed to stat file %s: %s", yamlFile, err)
-	}
-
-	changeInPattern := regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
-	replacements := map[string][]byte{}
-	for _, groups := range changeInPattern.FindAllSubmatch(fileContents, -1) {
-		pkg := string(groups[1])
-		if _, ok := replacements[pkg]; ok {
-			continue // already calculated.
-		}
-		replacements[pkg] = nil
-	}
+func calculateDeps(placeholders set.Set[string]) map[string]*Deps {
+	deps := map[string]*Deps{}
+	placeholders.Iter(func(pkg string) error {
+		deps[pkg] = nil
+		return nil
+	})
 
 	var lock sync.Mutex
 	var eg errgroup.Group
 	eg.SetLimit(runtime.NumCPU())
-	for pkg := range replacements {
+	for pkg := range deps {
 		eg.Go(func() error {
-			repl, err := calculateChangeIn(pkg, false)
+			repl, err := calculateSemDeps(pkg)
 			if err != nil {
 				return fmt.Errorf("failed to calculate change_in for package %s: %w", pkg, err)
 			}
 			lock.Lock()
-			replacements[pkg] = []byte(repl)
+			deps[pkg] = repl
 			lock.Unlock()
 			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		logrus.Fatalln("Failed to calculate change_in replacements:", err)
+		logrus.Fatalln("Failed to calculate change_in dependencies:", err)
 	}
-
-	newContents := changeInPattern.ReplaceAllFunc(fileContents, func(match []byte) []byte {
-		pkg := changeInPattern.FindSubmatch(match)[1]
-		return replacements[string(pkg)]
-	})
-
-	if err := os.WriteFile(yamlFile, newContents, fileStat.Mode()); err != nil {
-		logrus.Fatalf("Failed to write file %s: %s", yamlFile, err)
-	}
+	return deps
 }
 
 func printSemChangeIn(pkg string, pretty bool) {
-	_, _ = fmt.Println(calculateChangeIn(pkg, pretty))
+	changeIn, err := calculateChangeIn(pkg, pretty)
+	if err != nil {
+		logrus.Fatalf("Failed to calculate change_in for package %s: %v", pkg, err)
+	}
+	_, _ = fmt.Println(changeIn)
 }
 
 func calculateChangeIn(pkg string, pretty bool) (string, error) {
-	parts := strings.Split(pkg, ",")
-	pkg = parts[0]
+	deps, err := calculateSemDeps(pkg)
+	if err != nil {
+		return "", err
+	}
+	return formatChangeIn(deps.Inclusions, deps.Exclusions, pretty, ""), nil
+}
+
+func formatChangeIn(inclusions set.Set[string], exclusions set.Set[string], pretty bool, defaultBranchStanza string) string {
+	incl := formatSemList(inclusions)
+	excl := formatSemList(exclusions)
+	if pretty {
+		incl = "\n" + strings.ReplaceAll(incl, ",", ",\n  ") + "\n"
+		excl = "\n" + strings.ReplaceAll(excl, ",", ",\n  ") + "\n"
+	}
+	out := fmt.Sprintf("change_in(%s, {pipeline_file: 'ignore', exclude: %s%s})", incl, excl, defaultBranchStanza)
+	return out
+}
+
+type Deps struct {
+	Inclusions set.Set[string]
+	Exclusions set.Set[string]
+}
+
+func calculateSemDeps(pkgOrPkgList string) (deps *Deps, err error) {
+	parts := strings.Split(pkgOrPkgList, ",")
+	pkgOrPkgList = parts[0]
 	otherPkgs := parts[1:]
 	if len(otherPkgs) == 0 {
-		logrus.Infof("Calculating deps for %s package", pkg)
+		logrus.Infof("Calculating deps for %s package", pkgOrPkgList)
 	} else {
-		logrus.Infof("Calculating deps for %s package; including secondary deps: %v", pkg, otherPkgs)
+		logrus.Infof("Calculating deps for %s package; including secondary deps: %v", pkgOrPkgList, otherPkgs)
 	}
 
-	localDirs, err := loadLocalDirs(pkg, false)
+	localDirs, err := loadLocalDirs(pkgOrPkgList, false)
 	if err != nil {
-		return "", fmt.Errorf("failed to load local dirs: %w", err)
+		return nil, fmt.Errorf("failed to load local dirs: %w", err)
 	}
 
 	inclusions := set.New[string]()
-	inclusions.Add("/" + pkg + "/**")
+	inclusions.Add("/" + pkgOrPkgList + "/**")
 	inclusions.AddAll(defaultInclusions)
-	inclusions.AddAll(nonGoDeps[pkg])
+	inclusions.AddAll(nonGoDeps[pkgOrPkgList])
 	for _, dir := range localDirs {
-		if strings.HasPrefix(dir+"/", "/"+pkg) {
+		if strings.HasPrefix(dir+"/", "/"+pkgOrPkgList) {
 			continue // covered by the whole-package inclusion.
 		}
 		inclusions.Add(dir + "/*.go")
 	}
 
-	exclusions := set.From(calculateTestExclusionGlobs(pkg, localDirs)...)
+	exclusions := set.From(calculateTestExclusionGlobs(pkgOrPkgList, localDirs)...)
 	exclusions.AddAll(defaultExclusions)
 
 	// Some jobs depend on secondary packages.  For example, the node tests
@@ -246,7 +262,7 @@ func calculateChangeIn(pkg string, pretty bool) (string, error) {
 		// pick those up unintentionally.
 		otherPkgDirs, err := loadLocalDirs(otherPkg, true)
 		if err != nil {
-			return "", fmt.Errorf("failed to load local dirs for secondary package %s: %w", otherPkg, err)
+			return nil, fmt.Errorf("failed to load local dirs for secondary package %s: %w", otherPkg, err)
 		}
 		for _, dir := range otherPkgDirs {
 			inclusions.Add(dir + "/*.go")
@@ -255,17 +271,9 @@ func calculateChangeIn(pkg string, pretty bool) (string, error) {
 		inclusions.Add(otherPkg + "/deps.txt")
 		inclusions.Add(otherPkg + "/**/*Dockerfile*")
 		inclusions.AddAll(nonGoDeps[otherPkg])
-		exclusions.AddAll(calculateTestExclusionGlobs(pkg, otherPkgDirs))
+		exclusions.AddAll(calculateTestExclusionGlobs(pkgOrPkgList, otherPkgDirs))
 	}
-
-	incl := formatSemList(inclusions)
-	excl := formatSemList(exclusions)
-	if pretty {
-		incl = "\n" + strings.ReplaceAll(incl, ",", ",\n  ") + "\n"
-		excl = "\n" + strings.ReplaceAll(excl, ",", ",\n  ") + "\n"
-	}
-	out := fmt.Sprintf("change_in(%s, {pipeline_file: 'ignore', exclude: %s})", incl, excl)
-	return out, nil
+	return &Deps{inclusions, exclusions}, nil
 }
 
 func formatSemList(s set.Set[string]) string {
@@ -439,13 +447,9 @@ func loadGoMods() ([]module, error) {
 }
 
 func loadGoToolJSON[Item any](args ...string) ([]Item, error) {
-	cmd := exec.Command("go", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	out, err := exec.Command("go", args...).Output()
 	if err != nil {
-		errOut := stderr.Bytes()
-		return nil, fmt.Errorf("%w, %s", err, string(errOut))
+		return nil, err
 	}
 	var items []Item
 	decoder := json.NewDecoder(bytes.NewReader(out))
@@ -460,166 +464,183 @@ func loadGoToolJSON[Item any](args ...string) ([]Item, error) {
 	return items, nil
 }
 
+type templateData struct {
+	originalPath string
+	filename     string
+	content      string
+}
+
 func generateSemaphoreYamls() {
 	logrus.Info("Generating semaphore YAML pipeline files")
 	semaphoreDir := ".semaphore"
-	mainFile := filepath.Join(semaphoreDir, "semaphore.yml")
-	scheduledFile := filepath.Join(semaphoreDir, "semaphore-scheduled-builds.yml")
-	thirdPartyFile := filepath.Join(semaphoreDir, "semaphore-third-party-builds.yml")
-
-	branchStanza := calculateBranchStanza(semaphoreDir)
-	logrus.Infof("Using branch stanza: %q", branchStanza)
+	defaultBranchStanza := calculateBranchStanza(semaphoreDir)
+	logrus.Infof("Using default branch stanza: %q", defaultBranchStanza)
 
 	// Validate change_in lines in template blocks include pipeline_file stanza.
 	if err := validateChangeInClauses(semaphoreDir); err != nil {
 		logrus.Fatalf("Template validation failed: %v", err)
 	}
 
-	// Build the main + scheduled files (initially with placeholders intact).
-	blocksContent, err := loadAndIndentAllBlocks(filepath.Join(semaphoreDir, "semaphore.yml.d", "blocks"))
+	// Load all the template files
+	templatesDir := filepath.Join(semaphoreDir, "semaphore.yml.d")
+	templates, err := readTemplates(templatesDir)
 	if err != nil {
-		logrus.Fatalf("Failed to load blocks: %v", err)
+		logrus.Fatalf("Failed to read templates: %v", err)
 	}
-	preamble := mustReadFile(filepath.Join(semaphoreDir, "semaphore.yml.d", "01-preamble.yml"))
-	globalCfg := mustReadFile(filepath.Join(semaphoreDir, "semaphore.yml.d", "02-global_job_config.yml"))
-	promotions := mustReadFile(filepath.Join(semaphoreDir, "semaphore.yml.d", "03-promotions.yml"))
-	afterPipeline := mustReadFile(filepath.Join(semaphoreDir, "semaphore.yml.d", "99-after_pipeline.yml"))
-
-	mainContent := buildYAMLWithBlocks(preamble, globalCfg, promotions, blocksContent, afterPipeline)
-	writeWithDisclaimer(mainFile, mainContent)
-
-	scheduledContent := buildYAMLWithBlocks(preamble, globalCfg, promotions, blocksContent, afterPipeline)
-	writeWithDisclaimer(scheduledFile, scheduledContent)
-
-	// Extract CHANGE_IN placeholders BEFORE replacing them in main file.
-	deps := extractChangeInPlaceholders(mainContent)
-	logrus.Infof("Found %d CHANGE_IN placeholders", len(deps))
-
-	// Replace placeholders in scheduled file with true.
-	scheduledContent = mustReadFile(scheduledFile)
-	for dep := range deps {
-		placeholder := fmt.Sprintf("${CHANGE_IN(%s)}", dep)
-		scheduledContent = bytes.ReplaceAll(scheduledContent, []byte(placeholder), []byte("true"))
+	var globalExtraDeps []string
+	for _, t := range templates {
+		globalExtraDeps = append(globalExtraDeps, "/"+t.originalPath)
 	}
-	mustWriteFile(scheduledFile, scheduledContent)
-
-	// Expand CHANGE_IN placeholders in main file using existing function.
-	replaceSemChangeInPlaceholders(mainFile)
-	mainContent = mustReadFile(mainFile)
-
-	// Apply FORCE/WEEKLY substitutions.
-	mainContent = bytes.ReplaceAll(mainContent, []byte("${FORCE_RUN}"), []byte("false"))
-	mainContent = bytes.ReplaceAll(mainContent, []byte("${WEEKLY_RUN}"), []byte("false"))
-	mustWriteFile(mainFile, mainContent)
-
-	scheduledContent = mustReadFile(scheduledFile)
-	scheduledContent = bytes.ReplaceAll(scheduledContent, []byte("${FORCE_RUN}"), []byte("true"))
-	scheduledContent = bytes.ReplaceAll(scheduledContent, []byte("${WEEKLY_RUN}"), []byte("false"))
-	mustWriteFile(scheduledFile, scheduledContent)
-
-	// Third-party builds file.
-	thirdPartyBlocks := []string{
-		"10-prerequisites.yml",
-		"30-deep-packet-inspection.yml",
-		"30-elasticsearch.yml",
-		"30-fluentd.yml",
-	}
-	thirdBlocksContent, err := loadAndIndentSelectedBlocks(filepath.Join(semaphoreDir, "semaphore.yml.d", "blocks"), thirdPartyBlocks)
+	blocksDir := filepath.Join(semaphoreDir, "semaphore.yml.d", "blocks")
+	blocks, err := readTemplates(blocksDir)
 	if err != nil {
-		logrus.Fatalf("Failed to load third-party blocks: %v", err)
+		logrus.Fatalf("Failed to read templates: %v", err)
 	}
-	thirdContent := buildYAMLWithBlocks(preamble, globalCfg, nil, thirdBlocksContent, nil)
-	writeWithDisclaimer(thirdPartyFile, thirdContent)
+	// For convenience when writing blocks we add an indent here.
+	blocks = indentBlocks(blocks)
 
-	thirdPartyRaw := mustReadFile(thirdPartyFile)
-	thirdPartyRaw = bytes.ReplaceAll(thirdPartyRaw, []byte("${FORCE_RUN}"), []byte("true"))
-	thirdPartyRaw = bytes.ReplaceAll(thirdPartyRaw, []byte("${WEEKLY_RUN}"), []byte("true"))
-	// Replace any CHANGE_IN placeholders with true.
-	changeInPattern := regexp.MustCompile(`\$\{CHANGE_IN\([^}]+\)}`)
-	thirdPartyRaw = changeInPattern.ReplaceAll(thirdPartyRaw, []byte("true"))
-	mustWriteFile(thirdPartyFile, thirdPartyRaw)
+	// But after that, we can treat all templates equally.
+	templates = append(templates, blocks...)
+	sort.Slice(templates, func(i, j int) bool {
+		// Sort only on the filename, so we make use of the numeric prefixes.
+		return strings.Compare(templates[i].filename, templates[j].filename) < 0
+	})
 
-	// Apply branch stanza replacement to all 3 files.
-	for _, f := range []string{mainFile, scheduledFile, thirdPartyFile} {
-		c := mustReadFile(f)
-		c = bytes.ReplaceAll(c, []byte("${DEFAULT_BRANCH}"), []byte(branchStanza))
-		mustWriteFile(f, c)
+	// Next, collect all the CHANGE_IN placeholders and do the heavy-lift
+	// calculation to figure out the dependencies.
+	placeholders := extractChangeInPlaceholders(templates)
+	deps := calculateDeps(placeholders)
+
+	// Build the main file, which is triggered by PRs and uses the calculated
+	// dependencies.
+	mainFile := filepath.Join(semaphoreDir, "semaphore.yml")
+	err = buildSemaphoreYAML(mainFile, templates, globalExtraDeps, deps, false, defaultBranchStanza)
+	if err != nil {
+		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
+	}
+
+	// Build the scheduled file, which builds all our code, but not slow
+	// third-party builds.
+	scheduledFile := filepath.Join(semaphoreDir, "semaphore-scheduled-builds.yml")
+	err = buildSemaphoreYAML(scheduledFile, templates, globalExtraDeps, nil, false, defaultBranchStanza)
+	if err != nil {
+		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
+	}
+
+	// If needed, build the third-party file, which runs weekly.
+	thirdPartyFile := filepath.Join(semaphoreDir, "semaphore-third-party-builds.yml")
+	var weeklyTemplates []templateData
+	foundWeekly := false
+	for _, t := range templates {
+		switch t.filename {
+		case "01-preamble.yml",
+			"02-global_job_config.yml",
+			"10-prerequisites.yml",
+			"09-blocks.yml":
+			weeklyTemplates = append(weeklyTemplates, t)
+		default:
+			if strings.Contains(t.content, "WEEKLY_RUN") {
+				weeklyTemplates = append(weeklyTemplates, t)
+				foundWeekly = true
+			}
+		}
+	}
+	if foundWeekly {
+		logrus.Info("Found templates that run weekly, generating %s.", thirdPartyFile)
+		err = buildSemaphoreYAML(thirdPartyFile, weeklyTemplates, globalExtraDeps, nil, true, defaultBranchStanza)
+		if err != nil {
+			logrus.Fatalf("Failed to build semaphore YAML: %v", err)
+		}
 	}
 
 	logrus.Info("Semaphore YAML generation complete")
 }
 
-func writeWithDisclaimer(path string, body []byte) {
-	disclaimer := []byte("# !! WARNING, DO NOT EDIT !! This file is generated from semaphore.yml.d.\n# To update, modify the template and then run 'make gen-semaphore-yaml'.\n")
-	content := append(disclaimer, body...)
-	if err := os.WriteFile(path, content, 0o644); err != nil {
-		logrus.Fatalf("Failed to write %s: %v", path, err)
+func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps []string, deps map[string]*Deps, weekly bool, defaultBranchStanza string) error {
+	var data bytes.Buffer
+
+	data.WriteString(
+		"# !! WARNING, DO NOT EDIT !! This file is generated from semaphore.yml.d.\n" +
+			"# To update, modify the template and then run 'make gen-semaphore-yaml'.\n",
+	)
+	globalExtraDeps = globalExtraDeps[:len(globalExtraDeps):len(globalExtraDeps)]
+	weeklyRun := "false"
+	if weekly {
+		weeklyRun = "true"
 	}
+	forceRun := "false"
+	if deps == nil {
+		forceRun = "true"
+	}
+	for _, t := range templates {
+		extraDeps := append(globalExtraDeps, "/"+t.originalPath)
+		changeInPattern := regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
+		content := changeInPattern.ReplaceAllStringFunc(t.content, func(match string) string {
+			pkg := changeInPattern.FindStringSubmatch(match)[1]
+			if deps == nil {
+				// Generating a daily/weekly file.
+				return "true"
+			}
+			dep := deps[pkg]
+			inclusions := dep.Inclusions.Copy()
+			for _, d := range extraDeps {
+				inclusions.Add(d)
+			}
+			return formatChangeIn(inclusions, dep.Exclusions, false, defaultBranchStanza)
+		})
+		content = strings.ReplaceAll(content, "${FORCE_RUN}", forceRun)
+		content = strings.ReplaceAll(content, "${WEEKLY_RUN}", weeklyRun)
+		content = strings.ReplaceAll(content, "${DEFAULT_BRANCH}", defaultBranchStanza)
+		_, _ = data.WriteString(content)
+	}
+
+	return os.WriteFile(file, data.Bytes(), 0644)
 }
 
-func buildYAMLWithBlocks(preamble, globalCfg, promotions, blocks, afterPipeline []byte) []byte {
-	var buf bytes.Buffer
-	buf.Write(preamble)
-	if len(globalCfg) > 0 {
-		buf.Write(globalCfg)
+func indentBlocks(blocks []templateData) []templateData {
+	for i, block := range blocks {
+		lines := strings.Split(block.content, "\n")
+		indented := ""
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			indented += "  " + line + "\n"
+		}
+		blocks[i].content = indented
 	}
-	if len(promotions) > 0 {
-		buf.Write(promotions)
-	}
-	buf.WriteString("blocks:\n")
-	buf.Write(blocks)
-	if len(afterPipeline) > 0 {
-		buf.Write(afterPipeline)
-	}
-	return buf.Bytes()
+	return blocks
 }
 
-func loadAndIndentAllBlocks(dir string) ([]byte, error) {
-	entries, err := os.ReadDir(dir)
+func readTemplates(templatesDir string) ([]templateData, error) {
+	templateFiles, err := os.ReadDir(templatesDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read templates directory: %w", err)
 	}
-	var names []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
-			names = append(names, e.Name())
-		}
-	}
-	sort.Strings(names)
-	var buf bytes.Buffer
-	for _, n := range names {
-		raw := mustReadFile(filepath.Join(dir, n))
-		buf.Write(indentTwoSpaces(raw))
-	}
-	return buf.Bytes(), nil
-}
-
-func loadAndIndentSelectedBlocks(dir string, files []string) ([]byte, error) {
-	var buf bytes.Buffer
-	for _, f := range files {
-		raw, err := os.ReadFile(filepath.Join(dir, f))
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(indentTwoSpaces(raw))
-	}
-	return buf.Bytes(), nil
-}
-
-func indentTwoSpaces(in []byte) []byte {
-	var out bytes.Buffer
-	scanner := bufio.NewScanner(bytes.NewReader(in))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			out.WriteString("\n")
+	var templates []templateData
+	for _, t := range templateFiles {
+		if t.IsDir() {
 			continue
 		}
-		out.WriteString("  ")
-		out.WriteString(line)
-		out.WriteString("\n")
+		if !strings.HasSuffix(t.Name(), ".yml") {
+			continue
+		}
+		origPath := filepath.Join(templatesDir, t.Name())
+		contentBytes, err := os.ReadFile(origPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read template file %s: %v", origPath, err)
+		}
+		content := string(contentBytes)
+		// Clean up extra space at end of file; but ensure there's one newline.
+		content = strings.TrimRight(content, "\n ")
+		content += "\n"
+		templates = append(templates, templateData{
+			originalPath: origPath,
+			filename:     t.Name(),
+			content:      content,
+		})
 	}
-	return out.Bytes()
+	return templates, err
 }
 
 func mustReadFile(path string) []byte {
@@ -630,12 +651,14 @@ func mustReadFile(path string) []byte {
 	return b
 }
 
-func extractChangeInPlaceholders(content []byte) map[string]struct{} {
+func extractChangeInPlaceholders(templates []templateData) set.Set[string] {
 	pattern := regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
-	matches := pattern.FindAllSubmatch(content, -1)
-	out := map[string]struct{}{}
-	for _, m := range matches {
-		out[string(m[1])] = struct{}{}
+	out := set.New[string]()
+	for _, t := range templates {
+		matches := pattern.FindAllStringSubmatch(t.content, -1)
+		for _, m := range matches {
+			out.Add(m[1])
+		}
 	}
 	return out
 }
@@ -730,10 +753,4 @@ func detectExistingDefaultBranch(path string) (string, error) {
 	}
 
 	return branch, nil
-}
-
-func mustWriteFile(path string, data []byte) {
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		logrus.Fatalf("Failed to write %s: %v", path, err)
-	}
 }
