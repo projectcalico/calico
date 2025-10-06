@@ -18,18 +18,18 @@ import (
 	"reflect"
 	"testing"
 
-	apia "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
-func newGNP(name string) *apia.GlobalNetworkPolicy {
-	return &apia.GlobalNetworkPolicy{
+func newGNP(name string) *apiv3.GlobalNetworkPolicy {
+	return &apiv3.GlobalNetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       apia.KindGlobalNetworkPolicy,
-			APIVersion: apia.GroupVersionCurrent,
+			Kind:       apiv3.KindGlobalNetworkPolicy,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -40,8 +40,8 @@ func newGNP(name string) *apia.GlobalNetworkPolicy {
 func TestObjects_PassThrough_UnoptimizedSlice(t *testing.T) {
 	logutils.ConfigureLoggingForTestingT(t)
 	// Use an unhandled type (IPPool) to verify pass-through behavior for a slice.
-	ipp1 := &apia.IPPool{TypeMeta: metav1.TypeMeta{Kind: apia.KindIPPool, APIVersion: apia.GroupVersionCurrent}, ObjectMeta: metav1.ObjectMeta{Name: "a"}}
-	ipp2 := &apia.IPPool{TypeMeta: metav1.TypeMeta{Kind: apia.KindIPPool, APIVersion: apia.GroupVersionCurrent}, ObjectMeta: metav1.ObjectMeta{Name: "b"}}
+	ipp1 := &apiv3.IPPool{TypeMeta: metav1.TypeMeta{Kind: apiv3.KindIPPool, APIVersion: apiv3.GroupVersionCurrent}, ObjectMeta: metav1.ObjectMeta{Name: "a"}}
+	ipp2 := &apiv3.IPPool{TypeMeta: metav1.TypeMeta{Kind: apiv3.KindIPPool, APIVersion: apiv3.GroupVersionCurrent}, ObjectMeta: metav1.ObjectMeta{Name: "b"}}
 	in := []runtime.Object{ipp1, ipp2}
 
 	out := Objects(in)
@@ -57,15 +57,15 @@ func TestObjects_PassThrough_UnoptimizedSlice(t *testing.T) {
 func TestObjects_Preserves_GNPList(t *testing.T) {
 	logutils.ConfigureLoggingForTestingT(t)
 	gnp1 := *newGNP("a")
-	gnp1.Spec.Ingress = []apia.Rule{{Action: apia.Allow}}
+	gnp1.Spec.Ingress = []apiv3.Rule{{Action: apiv3.Allow}}
 	gnp2 := *newGNP("b")
-	gnp2.Spec.Egress = []apia.Rule{{Action: apia.Allow}}
-	lst := &apia.GlobalNetworkPolicyList{
+	gnp2.Spec.Egress = []apiv3.Rule{{Action: apiv3.Allow}}
+	lst := &apiv3.GlobalNetworkPolicyList{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       apia.KindGlobalNetworkPolicyList,
-			APIVersion: apia.GroupVersionCurrent,
+			Kind:       apiv3.KindGlobalNetworkPolicyList,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		Items: []apia.GlobalNetworkPolicy{gnp1, gnp2},
+		Items: []apiv3.GlobalNetworkPolicy{gnp1, gnp2},
 	}
 	in := []runtime.Object{lst}
 
@@ -74,7 +74,7 @@ func TestObjects_Preserves_GNPList(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("expected 1 output list, got %d", len(out))
 	}
-	ol, ok := out[0].(*apia.GlobalNetworkPolicyList)
+	ol, ok := out[0].(*apiv3.GlobalNetworkPolicyList)
 	if !ok {
 		t.Fatalf("expected GlobalNetworkPolicyList, got %#v", out[0])
 	}
@@ -88,10 +88,10 @@ func TestObjects_Preserves_GNPList(t *testing.T) {
 
 func TestObjects_PassThrough_UnhandledType(t *testing.T) {
 	logutils.ConfigureLoggingForTestingT(t)
-	ippool := &apia.IPPool{
+	ippool := &apiv3.IPPool{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       apia.KindIPPool,
-			APIVersion: apia.GroupVersionCurrent,
+			Kind:       apiv3.KindIPPool,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 		ObjectMeta: metav1.ObjectMeta{Name: "ippool"},
 	}
