@@ -1,5 +1,6 @@
-# !! WARNING, DO NOT EDIT !! This file is generated from semaphore.yml.tpl.
-# To update, modify the template and then run 'make gen-semaphore-yaml'.
+# !! WARNING, DO NOT EDIT !! This file is generated from the templates
+# in /.semaphore/semaphore.yml.d. To update, modify the relevant
+# template and then run 'make gen-semaphore-yaml'.
 version: v1.0
 name: Calico
 execution_time_limit:
@@ -1060,7 +1061,6 @@ blocks:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
             - artifact push job logs
-
   - name: "OpenStack integration (Caracal)"
     run:
       when: "true or change_in(['/networking-calico/'], {pipeline_file: 'ignore'})"
