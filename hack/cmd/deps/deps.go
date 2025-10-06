@@ -136,20 +136,6 @@ var nonGoDeps = map[string][]string{
 	"whisker": {
 		"/whisker",
 	},
-
-	// Enterprise-only components follow...
-	"deep-packet-inspection": {
-		"/third_party/snort3",
-	},
-	"elasticsearch": {
-		"/third_party/elasticsearch",
-	},
-	"fluentd": {
-		"/third_party/fluentd-base",
-	},
-	"kibana": {
-		"/third_party/kibana",
-	},
 }
 
 var defaultExclusions = []string{
@@ -163,9 +149,15 @@ var defaultExclusions = []string{
 	"/**/*.md",
 }
 
-func calculateDeps(placeholders set.Set[string]) map[string]*Deps {
+// calculateDeps calculates the file-level dependencies of the input package
+// specs.  Each package spec is a comma-delimited list of directories relative
+// to the root of the repo.  The first entry in the list is the "primary"
+// package for which we include all Go files, including test files and all
+// their dependencies.  The subsequent items are "secondary" build-only
+// dependencies, for which we include non-test files only.
+func calculateDeps(packages set.Set[string]) map[string]*Deps {
 	deps := map[string]*Deps{}
-	placeholders.Iter(func(pkg string) error {
+	packages.Iter(func(pkg string) error {
 		deps[pkg] = nil
 		return nil
 	})
@@ -447,9 +439,13 @@ func loadGoMods() ([]module, error) {
 }
 
 func loadGoToolJSON[Item any](args ...string) ([]Item, error) {
-	out, err := exec.Command("go", args...).Output()
+	cmd := exec.Command("go", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		errOut := stderr.Bytes()
+		return nil, fmt.Errorf("%w, %s", err, string(errOut))
 	}
 	var items []Item
 	decoder := json.NewDecoder(bytes.NewReader(out))
@@ -560,10 +556,15 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 	var data bytes.Buffer
 
 	data.WriteString(
-		"# !! WARNING, DO NOT EDIT !! This file is generated from semaphore.yml.d.\n" +
-			"# To update, modify the template and then run 'make gen-semaphore-yaml'.\n",
+		"# !! WARNING, DO NOT EDIT !! This file is generated from the templates\n" +
+			"# in /.semaphore/semaphore.yml.d. To update, modify the relevant\n" +
+			"# template and then run 'make gen-semaphore-yaml'.\n",
 	)
+
+	// Force the extraDeps := append(...) call below to allocate a fresh copy
+	// by capping the len/cap of globalExtraDeps.
 	globalExtraDeps = globalExtraDeps[:len(globalExtraDeps):len(globalExtraDeps)]
+
 	weeklyRun := "false"
 	if weekly {
 		weeklyRun = "true"
@@ -603,6 +604,8 @@ func indentBlocks(blocks []templateData) []templateData {
 		indented := ""
 		for _, line := range lines {
 			if line == "" {
+				// Ignore blank lines (and in particular, the empty "line" that
+				// Split() creates if the content ends with a newline.
 				continue
 			}
 			indented += "  " + line + "\n"
@@ -709,7 +712,8 @@ func calculateBranchStanza(semaphoreDir string) string {
 		current = "master"
 	} // final fallback
 
-	if strings.HasPrefix(current, "release-calient-v") {
+	releaseBranchRegexp := regexp.MustCompile(`release(-calient)?-v`)
+	if releaseBranchRegexp.MatchString(current) {
 		return fmt.Sprintf(", default_branch: '%s'", current)
 	}
 	if current == "master" {
@@ -749,7 +753,7 @@ func detectExistingDefaultBranch(path string) (string, error) {
 		branches.Add(branch)
 	}
 	if branches.Len() > 1 {
-		return "", fmt.Errorf("Detected more than one branch in the current semaphore.yml, bailing out: %v", branches.Slice())
+		return "", fmt.Errorf("detected more than one branch in the current semaphore.yml, bailing out: %v", branches.Slice())
 	}
 
 	return branch, nil
