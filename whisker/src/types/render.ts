@@ -1,3 +1,4 @@
+import { FilterHintKey, StreamFilterKey } from '@/utils/omniFilter';
 import { FlowLog as ApiFlowLog } from './api';
 
 export type FlowLogAction = 'Allow' | 'Deny' | 'Pass' | 'Log';
@@ -26,3 +27,7 @@ export type UniqueFlowLogs = {
         flowLog: FlowLog;
     }[];
 };
+
+export type StreamFilters = Partial<Record<StreamFilterKey, string>>;
+
+export type FilterHintValues = Record<FilterHintKey, string[]>;

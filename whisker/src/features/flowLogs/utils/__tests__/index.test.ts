@@ -1,5 +1,10 @@
 import { FlowLog } from '@/types/render';
-import { handleDuplicateFlowLogs, getV1Columns, getV2Columns } from '..';
+import {
+    handleDuplicateFlowLogs,
+    getV1Columns,
+    getV2Columns,
+    updateFirstFlowStartTime,
+} from '..';
 
 const createFlowLog = (
     startTime: Date,
@@ -286,5 +291,82 @@ describe('utils', () => {
                 JSON.stringify(expected),
             );
         });
+    });
+});
+
+describe('updateFirstFlowStartTime', () => {
+    const mockSetFirstFlowStartTime = jest.fn();
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('should set first flow start time to the earliest start time when filterFlowStartTime is null and data has items', () => {
+        const baseTime = new Date('2024-01-01T12:00:00Z').getTime();
+        const data = [
+            {
+                id: '1',
+                start_time: new Date(baseTime + 2000), // 2 seconds later
+                end_time: new Date(baseTime + 3000),
+            } as any,
+            {
+                id: '2',
+                start_time: new Date(baseTime - 1000), // 1 second earlier (earliest)
+                end_time: new Date(baseTime + 1000),
+            } as any,
+            {
+                id: '3',
+                start_time: new Date(baseTime + 1000), // 1 second later
+                end_time: new Date(baseTime + 2000),
+            } as any,
+        ];
+
+        updateFirstFlowStartTime(data, null, mockSetFirstFlowStartTime);
+
+        // The function sorts in descending order (latest first) and takes the last element (earliest)
+        // Original order: [data[0]: +2000, data[1]: -1000, data[2]: +1000]
+        // After descending sort: [data[0]: +2000, data[2]: +1000, data[1]: -1000]
+        // So sorted[data.length - 1] = sorted[2] = data[1] (earliest time)
+        expect(mockSetFirstFlowStartTime).toHaveBeenCalledWith(
+            baseTime - 1000, // The earliest start time
+        );
+    });
+
+    it('should not call setFirstFlowStartTime when filterFlowStartTime is not null', () => {
+        const fixedTime = new Date('2024-01-01T12:00:00Z');
+        const data = [
+            {
+                id: '1',
+                start_time: fixedTime,
+                end_time: new Date(fixedTime.getTime() + 1000),
+            } as any,
+        ];
+
+        updateFirstFlowStartTime(data, 12345, mockSetFirstFlowStartTime);
+
+        expect(mockSetFirstFlowStartTime).not.toHaveBeenCalled();
+    });
+
+    it('should not call setFirstFlowStartTime when data is empty', () => {
+        updateFirstFlowStartTime([], null, mockSetFirstFlowStartTime);
+
+        expect(mockSetFirstFlowStartTime).not.toHaveBeenCalled();
+    });
+
+    it('should handle single item in data array', () => {
+        const fixedTime = new Date('2024-01-01T12:00:00Z');
+        const data = [
+            {
+                id: '1',
+                start_time: fixedTime,
+                end_time: new Date(fixedTime.getTime() + 1000),
+            } as any,
+        ];
+
+        updateFirstFlowStartTime(data, null, mockSetFirstFlowStartTime);
+
+        expect(mockSetFirstFlowStartTime).toHaveBeenCalledWith(
+            fixedTime.getTime(),
+        );
     });
 });

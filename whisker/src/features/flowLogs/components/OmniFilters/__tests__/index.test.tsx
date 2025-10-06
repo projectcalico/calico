@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from '@/test-utils/helper';
-import OmniFilters from '..';
-import { OmniFilterKeys } from '@/utils/omniFilter';
 import { useFeature } from '@/hooks';
+import { fireEvent, render, screen, within } from '@/test-utils/helper';
+import { OmniFilterKeys } from '@/utils/omniFilter';
+import OmniFilters from '..';
 
 jest.mock(
     '@/libs/tigera/ui-components/components/common/OmniFilter',
@@ -103,6 +103,7 @@ const defaultProps = {
     onRequestNextPage: jest.fn(),
     onMultiChange: jest.fn(),
     selectedValues: {},
+    startTime: 0,
 };
 
 jest.useFakeTimers();

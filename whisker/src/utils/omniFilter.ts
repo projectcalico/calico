@@ -11,6 +11,7 @@ import {
     QueryPage,
     FlowsFilterValue,
 } from '@/types/api';
+import { FilterHintValues } from '@/types/render';
 
 export enum FilterKey {
     policy = 'policy',
@@ -26,6 +27,7 @@ export enum FilterKey {
     policyV2Tier = 'policyV2Tier',
     policyV2Kind = 'policyV2Kind',
     reporter = 'reporter',
+    start_time = 'start_time',
 }
 
 export type FilterProperty = {
@@ -44,6 +46,7 @@ export const ListOmniFilterKeys: Omit<
     | 'policyV2Namespace'
     | 'policyV2Tier'
     | 'policyV2Kind'
+    | 'start_time'
 > = {
     [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
@@ -60,7 +63,7 @@ export type DataListOmniFilterParam = keyof Omit<
 
 export const FilterHintKeys: Omit<
     typeof FilterKey,
-    'action' | 'protocol' | 'dest_port'
+    'action' | 'protocol' | 'dest_port' | 'start_time'
 > = {
     [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
@@ -75,6 +78,12 @@ export const FilterHintKeys: Omit<
 } as const;
 export type FilterHintKey = keyof typeof FilterHintKeys;
 
+export const StreamFilterKeys = {
+    [FilterKey.start_time]: FilterKey.start_time,
+} as const;
+
+export type StreamFilterKey = keyof typeof StreamFilterKeys;
+
 export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
     ...ListOmniFilterKeys,
     [FilterKey.dest_port]: FilterKey.dest_port,
@@ -84,17 +93,19 @@ export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
     [FilterKey.policyV2Tier]: FilterKey.policyV2Tier,
     [FilterKey.policyV2Kind]: FilterKey.policyV2Kind,
     [FilterKey.reporter]: FilterKey.reporter,
+    [FilterKey.start_time]: FilterKey.start_time,
 } as const;
 
 export type OmniFilterParam = keyof typeof OmniFilterKeys;
 
 export const CustomOmniFilterKeys: Pick<
     typeof FilterKey,
-    'dest_port' | 'policyV2' | 'reporter'
+    'dest_port' | 'policyV2' | 'reporter' | 'start_time'
 > = {
     [FilterKey.dest_port]: FilterKey.dest_port,
     [FilterKey.policyV2]: FilterKey.policyV2,
     [FilterKey.reporter]: FilterKey.reporter,
+    [FilterKey.start_time]: FilterKey.start_time,
 } as const;
 
 export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
@@ -122,15 +133,15 @@ const transformToListFilterSearchRequest = (
 ];
 
 export const transformToFlowsFilterQuery = (
-    omniFilterValues: Record<FilterKey, string[]>,
+    omniFilterValues: FilterHintValues,
     listFilterId?: DataListOmniFilterParam,
     searchInput?: string,
 ) => {
     const filterHintsQuery: FlowsFilter = Object.keys(omniFilterValues).reduce(
         (acc, filterKey) => {
             if (
-                omniFilterValues[filterKey as FilterKey] === undefined ||
-                omniFilterValues[filterKey as FilterKey].length === 0
+                omniFilterValues[filterKey as FilterHintKey] === undefined ||
+                omniFilterValues[filterKey as FilterHintKey].length === 0
             ) {
                 return acc;
             }
@@ -144,7 +155,7 @@ export const transformToFlowsFilterQuery = (
                       [key]: FilterProperties[
                           filterId
                       ].transformToFilterHintRequest(
-                          omniFilterValues[filterId],
+                          omniFilterValues[filterId as FilterHintKey],
                       ),
                   };
         },
@@ -190,24 +201,25 @@ export const FilterHintTypes: Record<
     [FilterKey.reporter]: 'Reporter',
 };
 
+type OmniFilterProperty = {
+    selectOptions?: ListOmniFilterOption[];
+    defaultOperatorType?: OperatorType;
+    label: string;
+    limit?: number;
+    filterHintsKey: Exclude<FlowsFilterKeys, 'actions'>;
+    transformToFilterHintRequest: (
+        filters: string[],
+    ) => FlowsFilterQuery[] | undefined;
+    transformToFilterSearchRequest?: (search: string) =>
+        | FlowsFilterQuery[]
+        | {
+              name: FlowsFilterQuery;
+          }[];
+    filterComponentProps?: Partial<OmniFilterProps>;
+};
 export type OmniFilterPropertiesType = Record<
     OmniFilterParam,
-    {
-        selectOptions?: ListOmniFilterOption[];
-        defaultOperatorType?: OperatorType;
-        label: string;
-        limit?: number;
-        filterHintsKey: Exclude<FlowsFilterKeys, 'actions'>;
-        transformToFilterHintRequest: (
-            filters: string[],
-        ) => FlowsFilterQuery[] | undefined;
-        transformToFilterSearchRequest?: (search: string) =>
-            | FlowsFilterQuery[]
-            | {
-                  name: FlowsFilterQuery;
-              }[];
-        filterComponentProps?: Partial<OmniFilterProps>;
-    }
+    OmniFilterProperty
 >;
 
 const requestPageSize = 20;
@@ -323,6 +335,9 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         transformToFilterSearchRequest: transformToListFilterSearchRequest,
         limit: requestPageSize,
     },
+    start_time: {
+        label: 'Start Time',
+    } as OmniFilterProperty,
 };
 
 export const FilterProperties: Record<FilterKey, FilterProperty> = {

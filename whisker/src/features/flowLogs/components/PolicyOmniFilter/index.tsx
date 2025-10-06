@@ -4,7 +4,6 @@ import {
     OmniFilterBody,
     OmniFilterContainer,
     OmniFilterContent,
-    OmniFilterFooter,
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
 import {
@@ -14,9 +13,11 @@ import {
     OmniFilterProperties,
     SelectedOmniFilters,
 } from '@/utils/omniFilter';
-import { Button, Flex, FormControl, FormLabel, Text } from '@chakra-ui/react';
+import { Flex, FormControl, FormLabel, Text } from '@chakra-ui/react';
 import React from 'react';
 import PolicyListOmniFilter from '../TagListOmniFilter';
+import { FilterHintValues } from '@/types/render';
+import OmniFilterFooter from '../OmniFilterFooter';
 
 const filters = [
     FilterKey.policyV2,
@@ -108,7 +109,10 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                     <OmniFilterContent width='500px'>
                         <OmniFilterBody py={4}>
                             {filters.map((filterId, index) => (
-                                <FormControl mt={index === 0 ? 0 : 4}>
+                                <FormControl
+                                    mt={index === 0 ? 0 : 4}
+                                    key={filterId}
+                                >
                                     <FormLabel
                                         fontSize='sm'
                                         htmlFor={`${filterId}-taglist`}
@@ -125,7 +129,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                                             {
                                                 ...filterQuery,
                                                 ...values,
-                                            } as Record<FilterHintKey, string[]>
+                                            } as FilterHintValues
                                         }
                                         onChange={handleChange}
                                         onClear={handleClear}
@@ -133,22 +137,16 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                                 </FormControl>
                             ))}
                         </OmniFilterBody>
+
                         <OmniFilterFooter
-                            data-testid={`${testId}-popover-footer`}
-                        >
-                            <Button
-                                variant='ghost'
-                                onClick={() => onClearFilter(onClose)}
-                            >
-                                Clear filter
-                            </Button>
-                            <Button
-                                ml='auto'
-                                onClick={() => onSubmitFilter(onClose)}
-                            >
-                                Apply filter
-                            </Button>
-                        </OmniFilterFooter>
+                            testId={testId}
+                            clearButtonProps={{
+                                onClick: () => onClearFilter(onClose),
+                            }}
+                            submitButtonProps={{
+                                onClick: () => onSubmitFilter(onClose),
+                            }}
+                        />
                     </OmniFilterContent>
                 </>
             )}

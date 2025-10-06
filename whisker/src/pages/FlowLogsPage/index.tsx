@@ -34,6 +34,8 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles, tabStyles } from './styles';
 import { useFlowLogsStream } from '@/features/flowLogs/api';
 import { useMaxStartTime } from '@/features/flowLogs/hooks';
+import { parseStartTime } from '@/utils';
+import { FilterHintValues } from '@/types/render';
 
 const toastProps = {
     duration: 7500,
@@ -80,12 +82,11 @@ const FlowLogsPage: React.FC = () => {
         selectedOmniFilterData,
     );
 
-    const filters = {
+    const startTime = parseStartTime(urlFilterParams.start_time?.[0]);
+    const filterHintValues = {
         ...urlFilterParams,
-        ...(isDeniedSelected && {
-            action: ['Deny'],
-        }),
-    };
+        start_time: undefined,
+    } as Partial<FilterHintValues>;
 
     const {
         stopStream,
@@ -97,7 +98,7 @@ const FlowLogsPage: React.FC = () => {
         hasStoppedStreaming,
         isFetching,
         totalItems,
-    } = useFlowLogsStream(filters);
+    } = useFlowLogsStream(startTime, filterHintValues);
 
     const toast = useToast();
     const selectedRowIdRef = React.useRef<string | null>(null);
@@ -173,12 +174,7 @@ const FlowLogsPage: React.FC = () => {
                             fetchFilter(
                                 filterParam,
                                 transformToFlowsFilterQuery(
-                                    {
-                                        ...urlFilterParams,
-                                        ...(isDeniedSelected && {
-                                            action: ['Deny'],
-                                        }),
-                                    } as Record<FilterKey, string[]>,
+                                    filterHintValues as FilterHintValues,
                                     filterParam,
                                     searchOption,
                                 ),
@@ -189,6 +185,7 @@ const FlowLogsPage: React.FC = () => {
                         }
                         onMultiChange={handleMultiChange}
                         selectedValues={urlFilterParams}
+                        startTime={startTime}
                     />
                 </Flex>
                 <Flex>

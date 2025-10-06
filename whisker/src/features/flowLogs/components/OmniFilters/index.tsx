@@ -19,6 +19,7 @@ import {
 } from '@/utils/omniFilter';
 import React from 'react';
 import PolicyOmniFilter from '../PolicyOmniFilter';
+import StartTimeOmniFilter from '../StartTimeOmniFilter';
 
 const listOmniFilterIds = Object.values(ListOmniFilterKeys);
 
@@ -36,6 +37,7 @@ type OmniFiltersProps = {
     selectedListOmniFilters: SelectedOmniFilterOptions;
     onRequestFilterData: (query: OmniFilterDataQuery) => void;
     onRequestNextPage: (filterId: DataListOmniFilterParam) => void;
+    startTime: number;
 };
 
 const OmniFilters: React.FC<OmniFiltersProps> = ({
@@ -47,6 +49,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
     selectedValues,
     onRequestFilterData,
     onRequestNextPage,
+    startTime,
 }) => {
     const showFiltersV2 = useFeature('fitlersV2');
     const handleClear = (filterId: string) =>
@@ -181,6 +184,18 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     filterLabel={
                         OmniFilterProperties[OmniFilterKeys.dest_port].label
                     }
+                />
+
+                <StartTimeOmniFilter
+                    filterId={CustomOmniFilterKeys.start_time}
+                    filterLabel={
+                        OmniFilterProperties[CustomOmniFilterKeys.start_time]
+                            .label
+                    }
+                    selectedFilters={selectedValues.start_time ?? null}
+                    value={startTime.toString()}
+                    onChange={onChange}
+                    onClear={() => handleClear(CustomOmniFilterKeys.start_time)}
                 />
             </OmniFilterList>
         </>

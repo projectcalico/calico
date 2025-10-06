@@ -42,9 +42,7 @@ describe('<PolicyOmniFilter />', () => {
             }),
         );
 
-        await userEvent.click(
-            screen.getByRole('button', { name: 'Apply filter' }),
-        );
+        await userEvent.click(screen.getByRole('button', { name: 'Update' }));
 
         expect(defaultProps.onChange).toHaveBeenCalledWith({
             policyV2: ['filter-value'],
@@ -65,9 +63,7 @@ describe('<PolicyOmniFilter />', () => {
             }),
         );
 
-        await userEvent.click(
-            screen.getByRole('button', { name: 'Apply filter' }),
-        );
+        await userEvent.click(screen.getByRole('button', { name: 'Update' }));
 
         expect(defaultProps.onChange).toHaveBeenCalledWith({
             policyV2: ['filter-value'],
@@ -93,9 +89,7 @@ describe('<PolicyOmniFilter />', () => {
 
         act(() => MockTagListOmniFilter.policyV2.onClear('policyV2'));
 
-        await userEvent.click(
-            screen.getByRole('button', { name: 'Apply filter' }),
-        );
+        await userEvent.click(screen.getByRole('button', { name: 'Update' }));
 
         expect(defaultProps.onChange).toHaveBeenCalledWith({
             policyV2: [],
@@ -122,9 +116,7 @@ describe('<PolicyOmniFilter />', () => {
             screen.getByRole('button', { name: 'Policy V2 +4' }),
         );
 
-        await userEvent.click(
-            screen.getByRole('button', { name: 'Clear filter' }),
-        );
+        await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
 
         expect(defaultProps.onChange).toHaveBeenCalledWith({
             policyV2: [],
