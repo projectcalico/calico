@@ -229,7 +229,8 @@ enum calico_ct_result_type {
 
 struct calico_ct_result {
 	__s16 rc;
-	__u16 flags;
+	__u16 pad;
+	__u32 flags;
 	ipv46_addr_t nat_ip;
 	ipv46_addr_t nat_sip;
 	__u16 nat_port;
