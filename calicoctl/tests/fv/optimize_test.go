@@ -9,10 +9,11 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 func TestOptimize_SplitsGlobalNetworkPolicy_OnIngressSelectors(t *testing.T) {
-	RunDatastoreTest(t, func(t *testing.T, kdd bool, _ interface{}) {
+	RunDatastoreTest(t, func(t *testing.T, kdd bool, _ clientv3.Interface) {
 		RegisterTestingT(t)
 
 		// Write a GlobalNetworkPolicy that will be split into two ingress policies.
