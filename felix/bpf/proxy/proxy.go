@@ -76,6 +76,7 @@ type DPSyncer interface {
 	ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool
 	Stop()
 	SetTriggerFn(func())
+	HasSynced() bool
 }
 
 type proxy struct {
@@ -108,11 +109,17 @@ type proxy struct {
 	// event recorder to update node events
 	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
-	healthzServer   *healthcheck.ProxierHealthServer
+	healthzServer   healthcheckIntf
 
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
+}
+
+type healthcheckIntf interface {
+	IsHealthy() bool
+	QueuedUpdate(v1.IPFamily)
+	Updated(v1.IPFamily)
 }
 
 type stoppableRunner interface {
@@ -142,7 +149,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		minDPSyncPeriod: 30 * time.Second, // XXX revisit the default
 
-		stopCh: make(chan struct{}),
+		stopCh:        make(chan struct{}),
+		healthzServer: new(alwaysHealthy),
 	}
 
 	for _, o := range opts {
@@ -158,7 +166,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
-	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod)
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
 	p.epsChanges = k8sp.NewEndpointsChangeTracker(p.hostname,
@@ -266,6 +273,10 @@ func (p *proxy) invokeDPSyncer() {
 	}
 	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck endpoints")
+	}
+
+	if p.healthzServer != nil {
+		p.healthzServer.QueuedUpdate(p.v1IPFamily())
 	}
 
 	p.syncerLck.Lock()
@@ -432,3 +443,12 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 out:
 	return svc
 }
+
+type alwaysHealthy struct{}
+
+func (a *alwaysHealthy) IsHealthy() bool {
+	return true
+}
+
+func (a *alwaysHealthy) QueuedUpdate(v1.IPFamily) {}
+func (a *alwaysHealthy) Updated(v1.IPFamily)      {}

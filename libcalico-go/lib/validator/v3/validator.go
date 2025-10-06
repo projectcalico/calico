@@ -93,7 +93,7 @@ var (
 	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
 	assignmentModeRegex     = regexp.MustCompile("^(Automatic|Manual)$")
 	assignIPsRegex          = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
-	logLevelRegex           = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
+	logLevelRegex           = regexp.MustCompile("^(Trace|Debug|Info|Warning|Error|Fatal)$")
 	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
 	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
 	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
@@ -1319,6 +1319,7 @@ func validateRule(structLevel validator.StructLevel) {
 
 	scanNets := func(nets []string, fieldName string) {
 		var v4, v6 bool
+		isNegatedField := fieldName == "Source.NotNets" || fieldName == "Destination.NotNets"
 		for _, n := range nets {
 			_, cidr, err := cnet.ParseCIDR(n)
 			if err != nil {
@@ -1327,6 +1328,16 @@ func validateRule(structLevel validator.StructLevel) {
 			} else {
 				v4 = v4 || cidr.Version() == 4
 				v6 = v6 || cidr.Version() == 6
+
+				// Check for catch-all CIDR in negated context, which creates logical contradictions
+				if isNegatedField {
+					if (cidr.Version() == 4 && n == "0.0.0.0/0") ||
+						(cidr.Version() == 6 && cidr.Mask.String() == cnet.MustParseCIDR("::/0").Mask.String() &&
+							cidr.IP.Equal(cnet.MustParseCIDR("::/0").IP)) {
+						structLevel.ReportError(reflect.ValueOf(n), fieldName,
+							"", reason("catch-all CIDR in negation creates logical contradiction (matches no traffic)"), "")
+					}
+				}
 			}
 		}
 		if rule.IPVersion != nil && ((v4 && *rule.IPVersion != 4) || (v6 && *rule.IPVersion != 6)) {
@@ -1464,6 +1475,10 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 	if !ok {
 		structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
 			reason(msg), "")
+	}
+	if ps.KeepOriginalNextHop && ps.NextHopMode != nil {
+		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "KeepOriginalNextHop", "",
+			reason("The KeepOriginalNextHop field is deprecated. It must not be set to true when NextHopMode is configured."), "")
 	}
 }
 

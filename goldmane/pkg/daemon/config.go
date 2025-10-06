@@ -22,9 +22,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 )
 
 type goldmaneFileConfig struct {
@@ -32,17 +32,17 @@ type goldmaneFileConfig struct {
 }
 
 type sinkManager struct {
-	aggregator *aggregator.LogAggregator
-	sink       bucketing.Sink
-	upd        chan struct{}
-	watchFn    func(context.Context)
-	path       string
+	gm      *goldmane.Goldmane
+	sink    storage.Sink
+	upd     chan struct{}
+	watchFn func(context.Context)
+	path    string
 
 	// cur is the current state of the sink.
 	cur bool
 }
 
-func newSinkManager(agg *aggregator.LogAggregator, sink bucketing.Sink, path string) (*sinkManager, error) {
+func newSinkManager(agg *goldmane.Goldmane, sink storage.Sink, path string) (*sinkManager, error) {
 	onUpdate := make(chan struct{}, 1)
 
 	// Watch for changes to the input file.
@@ -59,11 +59,11 @@ func newSinkManager(agg *aggregator.LogAggregator, sink bucketing.Sink, path str
 	}
 
 	e := sinkManager{
-		upd:        onUpdate,
-		watchFn:    watchFn,
-		aggregator: agg,
-		sink:       sink,
-		path:       path,
+		upd:     onUpdate,
+		watchFn: watchFn,
+		gm:      agg,
+		sink:    sink,
+		path:    path,
 	}
 	return &e, nil
 }
@@ -76,7 +76,7 @@ func (f *sinkManager) run(ctx context.Context) {
 	// Start of day - check if we should enable the sink.
 	if sinkEnabled(f.path) {
 		logrus.Debug("Sink enabled at startup")
-		f.aggregator.SetSink(f.sink)
+		f.gm.SetSink(f.sink)
 	}
 	logrus.Info("Sink manager started")
 
@@ -100,9 +100,9 @@ func (f *sinkManager) set(enabled bool) {
 	}
 	logrus.WithField("enabled", enabled).Info("Sink enablement changed")
 	if enabled {
-		f.aggregator.SetSink(f.sink)
+		f.gm.SetSink(f.sink)
 	} else {
-		f.aggregator.SetSink(nil)
+		f.gm.SetSink(nil)
 	}
 	f.cur = enabled
 }

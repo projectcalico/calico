@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
@@ -30,20 +31,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
-
-// AllSelector is a pre-calculated copy of the "all()" selector.
-var AllSelector selector.Selector
-
-func init() {
-	var err error
-	AllSelector, err = selector.Parse("all()")
-	if err != nil {
-		log.WithError(err).Panic("Failed to parse all() selector.")
-	}
-	// Force the selector's cache fields to be pre-populated.
-	_ = AllSelector.UniqueID()
-	_ = AllSelector.String()
-}
 
 // RuleScanner scans the rules sent to it by the ActiveRulesCalculator, looking for
 // selectors. It calculates the set of active selectors and emits events when they become
@@ -87,7 +74,7 @@ type IPSetData struct {
 	// The selector and named port that this IP set represents.  To represent an unfiltered named
 	// port, set selector to AllSelector.  If NamedPortProtocol == ProtocolNone then
 	// this IP set represents a selector only, with no named port component.
-	Selector selector.Selector
+	Selector *selector.Selector
 
 	// NamedPortProtocol identifies the protocol (TCP or UDP) for a named port IP set.  It is
 	// set to ProtocolNone for a selector-only IP set.
@@ -172,12 +159,12 @@ func NewRuleScanner() *RuleScanner {
 }
 
 func (rs *RuleScanner) OnProfileActive(key model.ProfileRulesKey, profile *model.ProfileRules) {
-	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false, "", "")
+	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false, "", "", nil)
 	rs.RulesUpdateCallbacks.OnProfileActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
-	rs.updateRules(key, nil, nil, false, false, "", "")
+	rs.updateRules(key, nil, nil, false, false, "", "", nil)
 	rs.RulesUpdateCallbacks.OnProfileInactive(key)
 }
 
@@ -190,12 +177,13 @@ func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy)
 		policy.PreDNAT,
 		policy.Namespace,
 		selector.Normalise(policy.Selector),
+		policy.PerformanceHints,
 	)
 	rs.RulesUpdateCallbacks.OnPolicyActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
-	rs.updateRules(key, nil, nil, false, false, "", "")
+	rs.updateRules(key, nil, nil, false, false, "", "", nil)
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
 }
 
@@ -205,6 +193,7 @@ func (rs *RuleScanner) updateRules(
 	untracked, preDNAT bool,
 	origNamespace string,
 	origSelector string,
+	perfHints []apiv3.PolicyPerformanceHint,
 ) (parsedRules *ParsedRules) {
 	log.Debugf("Scanning rules (%v in, %v out) for key %v",
 		len(inbound), len(outbound), key)
@@ -239,6 +228,7 @@ func (rs *RuleScanner) updateRules(
 		Untracked:        untracked,
 		PreDNAT:          preDNAT,
 		OriginalSelector: origSelector,
+		PerformanceHints: perfHints,
 	}
 
 	// Figure out which IP sets are new.
@@ -311,6 +301,8 @@ type ParsedRules struct {
 	PreDNAT bool
 
 	OriginalSelector string
+
+	PerformanceHints []apiv3.PolicyPerformanceHint
 }
 
 // ParsedRule is like a backend.model.Rule, except the selector matches and named ports are
@@ -514,13 +506,13 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 }
 
 // Converts a list of named ports to a list of IPSets.
-func namedPortsToIPSets(namedPorts []string, positiveSelectors []selector.Selector, proto labelindex.IPSetPortProtocol) []*IPSetData {
+func namedPortsToIPSets(namedPorts []string, positiveSelectors []*selector.Selector, proto labelindex.IPSetPortProtocol) []*IPSetData {
 	var ipSets []*IPSetData
 	if len(positiveSelectors) > 1 {
 		log.WithField("selectors", positiveSelectors).Panic(
 			"More than one positive selector passed to namedPortsToIPSets")
 	}
-	sel := AllSelector
+	sel := selector.All
 	if len(positiveSelectors) > 0 {
 		sel = positiveSelectors[0]
 	}
@@ -536,7 +528,7 @@ func namedPortsToIPSets(namedPorts []string, positiveSelectors []selector.Select
 }
 
 // Converts a list of selectors to a list of IPSets.
-func selectorsToIPSets(selectors []selector.Selector) []*IPSetData {
+func selectorsToIPSets(selectors []*selector.Selector) []*IPSetData {
 	var ipSets []*IPSetData
 	for _, s := range selectors {
 		ipSets = append(ipSets, &IPSetData{
@@ -573,13 +565,13 @@ func splitNamedAndNumericPorts(ports []numorstring.Port) (numericPorts []numorst
 // Returns at most one positive src/dst selector in src/dst.  The named port logic above relies on
 // this.  We still return a slice for those values in order to make it easier to use the utility
 // functions uniformly.
-func extractSelectors(rule *model.Rule) (src, dst, notSrc, notDst []selector.Selector) {
+func extractSelectors(rule *model.Rule) (src, dst, notSrc, notDst []*selector.Selector) {
 	// Calculate a minimal set of selectors.  combineMatchesIfPossible will try to combine the
 	// negative matches into that single selector, if possible.
 	srcRawSel, notSrcSel := combineMatchesIfPossible(rule.SrcSelector, rule.NotSrcSelector)
 	dstRawSel, notDstSel := combineMatchesIfPossible(rule.DstSelector, rule.NotDstSelector)
 
-	parseAndAppendSelectorIfNonZero := func(slice []selector.Selector, rawSelector string) []selector.Selector {
+	parseAndAppendSelectorIfNonZero := func(slice []*selector.Selector, rawSelector string) []*selector.Selector {
 		if rawSelector == "" {
 			return slice
 		}

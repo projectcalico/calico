@@ -25,7 +25,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/tasks"
 )
 
 type Config struct {
@@ -76,20 +75,6 @@ func main() {
 		Flags:                globalFlags,
 		Commands:             Commands(cfg),
 		EnableBashCompletion: true,
-		ExitErrHandler: func(c *cli.Context, err error) {
-			if err == nil {
-				return
-			}
-			if c.Bool(ciFlag.Name) {
-				logrus.WithError(err).Info("Sending slack notification")
-				if err := tasks.SendErrorNotification(slackConfig(c), err, ciJobURL(c), cfg.RepoRootDir); err != nil {
-					logrus.WithError(err).Error("Failed to send slack notification")
-				}
-			} else {
-				logrus.WithError(err).Debug("Skip sending slack notification, not running in CI")
-			}
-			cli.HandleExitCoder(err)
-		},
 	}
 
 	// Run the app.

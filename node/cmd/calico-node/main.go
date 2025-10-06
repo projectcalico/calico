@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
 	"github.com/projectcalico/calico/node/pkg/cni"
+	"github.com/projectcalico/calico/node/pkg/flowlogs"
 	"github.com/projectcalico/calico/node/pkg/health"
 	"github.com/projectcalico/calico/node/pkg/hostpathinit"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/shutdown"
@@ -70,6 +71,9 @@ var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshol
 // Options for node status.
 var runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status reporter")
 var showStatus = flagSet.Bool("show-status", false, "Print out node status")
+
+// Options for watching node flowlogs.
+var flows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
 
 // confd flags
 var runConfd = flagSet.Bool("confd", false, "Run confd")
@@ -172,6 +176,8 @@ func main() {
 	} else if *showStatus {
 		status.Show()
 		os.Exit(0)
+	} else if *flows != 0 {
+		flowlogs.RunFlowsCmd(*flows)
 	} else {
 		fmt.Println("No valid options provided. Usage:")
 		flagSet.PrintDefaults()

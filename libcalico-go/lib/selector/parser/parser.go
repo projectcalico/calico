@@ -21,6 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 
@@ -32,7 +33,7 @@ var (
 )
 
 // Parse parses a string representation of a selector expression into a Selector.
-func Parse(selector string) (sel Selector, err error) {
+func Parse(selector string) (sel *Selector, err error) {
 	sharedParserLock.Lock()
 	defer sharedParserLock.Unlock()
 
@@ -61,7 +62,7 @@ type Parser struct {
 	tokBuf []tokenizer.Token
 }
 
-func (p *Parser) Parse(selector string) (sel Selector, err error) {
+func (p *Parser) Parse(selector string) (sel *Selector, err error) {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.Debugf("Parsing %q", selector)
 	}
@@ -76,7 +77,7 @@ func (p *Parser) Validate(selector string) (err error) {
 	return
 }
 
-func (p *Parser) parseRoot(selector string, validateOnly bool) (sel Selector, err error) {
+func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, err error) {
 	// Tokenize the input.  We re-use the same shared buffer to avoid
 	// allocations.
 	tokens, err := tokenizer.AppendTokens(p.tokBuf[:0], selector)
@@ -88,39 +89,47 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel Selector, er
 		p.tokBuf = tokens[:0]
 	}
 
+	var node Node
 	if tokens[0].Kind == tokenizer.TokEOF {
 		if validateOnly {
 			return nil, nil
 		}
-		return &selectorRoot{root: &AllNode{}}, nil
-	}
-	if log.IsLevelEnabled(log.DebugLevel) {
-		log.Debugf("Tokens %v", tokens)
+		node = &AllNode{}
+	} else {
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.Debugf("Tokens %v", tokens)
+		}
+
+		// The "||" operator has the lowest precedence so we start with that.
+		var remTokens []tokenizer.Token
+		node, remTokens, err = p.parseOrExpression(tokens, validateOnly)
+		if err != nil {
+			return
+		}
+		if len(remTokens) != 1 {
+			err = errors.New(fmt.Sprint("unexpected content at end of selector ", remTokens))
+			return
+		}
+		if validateOnly {
+			return
+		}
 	}
 
-	// The "||" operator has the lowest precedence so we start with that.
-	node, remTokens, err := p.parseOrExpression(tokens, validateOnly)
-	if err != nil {
-		return
+	sel = &Selector{
+		root: node,
 	}
-	if len(remTokens) != 1 {
-		err = errors.New(fmt.Sprint("unexpected content at end of selector ", remTokens))
-		return
-	}
-	if validateOnly {
-		return
-	}
-	sel = &selectorRoot{root: node}
+	sel.updateFields()
+
 	return
 }
 
 // parseOrExpression parses a one or more "&&" terms, separated by "||" operators.
-func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing ||s from %v", tokens)
 	}
 	// Look for the first expression.
-	var andNodes []node
+	var andNodes []Node
 	sel, remTokens, err = p.parseAndExpression(tokens, validateOnly)
 	if err != nil {
 		return
@@ -160,12 +169,12 @@ func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) 
 func (p *Parser) parseAndExpression(
 	tokens []tokenizer.Token,
 	validateOnly bool,
-) (sel node, remTokens []tokenizer.Token, err error) {
+) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing &&s from %v", tokens)
 	}
 	// Look for the first operation.
-	var opNodes []node
+	var opNodes []Node
 	sel, remTokens, err = p.parseOperation(tokens, validateOnly)
 	if err != nil {
 		return
@@ -211,7 +220,7 @@ var (
 
 // parseOperations parses a single, possibly negated operation (i.e. ==, !=, has()).
 // It also handles calling parseOrExpression recursively for parenthesized expressions.
-func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (sel node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing op from %v", tokens)
 	}
@@ -235,7 +244,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 	switch tokens[0].Kind {
 	case tokenizer.TokHas:
 		if !validateOnly {
-			sel = &HasNode{tokens[0].Value}
+			sel = &HasNode{uniquestr.Make(tokens[0].Value)}
 		}
 		remTokens = tokens[1:]
 	case tokenizer.TokAll:
@@ -258,7 +267,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokEq:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelEqValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelEqValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -267,7 +276,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokNe:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelNeValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelNeValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -276,7 +285,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokContains:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelContainsValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelContainsValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -285,7 +294,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokStartsWith:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelStartsWithValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelStartsWithValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -294,7 +303,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokEndsWith:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelEndsWithValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelEndsWithValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -303,11 +312,11 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokIn, tokenizer.TokNotIn:
 			if tokens[2].Kind == tokenizer.TokLBrace {
 				remTokens = tokens[3:]
-				values := []string{}
+				var values []uniquestr.Handle
 				for {
 					if remTokens[0].Kind == tokenizer.TokStringLiteral {
 						value := remTokens[0].Value
-						values = append(values, value)
+						values = append(values, uniquestr.Make(value))
 						remTokens = remTokens[1:]
 						if remTokens[0].Kind == tokenizer.TokComma {
 							remTokens = remTokens[1:]
@@ -328,11 +337,11 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 					set := ConvertToStringSetInPlace(values) // Mutates values.
 					if tokens[1].Kind == tokenizer.TokIn {
 						if !validateOnly {
-							sel = &LabelInSetNode{labelName, set}
+							sel = &LabelInSetNode{uniquestr.Make(labelName), set}
 						}
 					} else {
 						if !validateOnly {
-							sel = &LabelNotInSetNode{labelName, set}
+							sel = &LabelNotInSetNode{uniquestr.Make(labelName), set}
 						}
 					}
 				}

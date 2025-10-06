@@ -27,8 +27,8 @@ import (
 // we need to mount root cgroup at /run/calico/cgroup (where felix expects it), not the one
 // allocated by k8s to calico-node. This binary takes the following steps to solve it:
 // - Enter the namespace root before mounting cgroup2 fs. (Usually, /proc/1/ns points to
-//   the root of all namespaces, however, we mount /proc/1 on host at /initproc on calico-node pod,
-//   so /initproc/ns is the root of namespaces.)
+//   the root of all namespaces, however, we mount /proc on host at /nodeproc on calico-node pod,
+//   so /nodeproc/1/ns is the root of namespaces.)
 // - Mount root cgroups fs at /run/calico/cgroup.
 
 // The following C code is executed as a cgo constructor which runs before the main function.
@@ -47,13 +47,13 @@ import (
 #include <fcntl.h>
 
 __attribute__((constructor)) void set_namespaces(void) {
-	// open /initproc/ns/cgroup, which is equivalent to /proc/1/ns/cgroup on host.
+	// open /nodeproc/1/ns/cgroup, which is equivalent to /proc/1/ns/cgroup on host.
 	// Then run setns syscall to change the cgroup namespace to this value.
-	setns(open("/initproc/ns/cgroup", O_RDONLY, 0), CLONE_NEWCGROUP);
+	setns(open("/nodeproc/1/ns/cgroup", O_RDONLY, 0), CLONE_NEWCGROUP);
 
-	// open /initproc/ns/mnt, which is equivalent to /proc/1/ns/mnt on host.
+	// open /nodeproc/1/ns/mnt, which is equivalent to /proc/1/ns/mnt on host.
 	// Then run setns syscall to change the mount namespace to this value.
-	setns(open("/initproc/ns/mnt", O_RDONLY, 0), CLONE_NEWNS);
+	setns(open("/nodeproc/1/ns/mnt", O_RDONLY, 0), CLONE_NEWNS);
 } */
 import "C"
 

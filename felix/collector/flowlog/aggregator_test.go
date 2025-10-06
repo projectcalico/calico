@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -120,7 +121,7 @@ var (
 					WorkloadID:     "kube-system/iperf-4235-5623461",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
@@ -131,7 +132,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -280,7 +281,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 						WorkloadID:     "kube-system/iperf-4235-5434134",
 						EndpointID:     "23456",
 					},
-					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 				),
 			}
 
@@ -292,7 +293,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 						WorkloadID:     "default/nginx-412354-6543645",
 						EndpointID:     "256267",
 					},
-					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 				),
 			}
 
@@ -310,7 +311,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 						EndpointID:     "23456",
 					},
 					// this new MetricUpdates src endpointMeta has a different label than one currently being tracked.
-					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"prod-app": "true"}},
+					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"prod-app": "true"})},
 				),
 			}
 
@@ -323,7 +324,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 						EndpointID:     "256267",
 					},
 					// different label on the destination workload than one being tracked.
-					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "false"}},
+					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "false"})},
 				),
 			}
 
@@ -343,7 +344,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 						WorkloadID:     "kube-system/iperf-4235-5623461",
 						EndpointID:     "4352",
 					},
-					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 				),
 			}
 
@@ -497,7 +498,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					},
 					&model.WorkloadEndpoint{
 						GenerateName: "iperf-4235-",
-						Labels:       map[string]string{"test-app": "true", "new-label": "true"}, // "new-label" appended
+						Labels:       uniquelabels.Make(map[string]string{"test-app": "true", "new-label": "true"}), // "new-label" appended
 					},
 				),
 			}
@@ -513,7 +514,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					},
 					&model.WorkloadEndpoint{
 						GenerateName: "nginx-412354-",
-						Labels:       map[string]string{"k8s-app": "false"}, // conflicting labels; originally "k8s-app": "true"
+						Labels:       uniquelabels.Make(map[string]string{"k8s-app": "false"}), // conflicting labels; originally "k8s-app": "true"
 					},
 				),
 			}
@@ -560,7 +561,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					},
 					&model.WorkloadEndpoint{
 						GenerateName: "iperf-4235-",
-						Labels:       map[string]string{"test-app": "true", "new-label": "true"}, // "new-label" appended
+						Labels:       uniquelabels.Make(map[string]string{"test-app": "true", "new-label": "true"}), // "new-label" appended
 					},
 				),
 			}
@@ -575,7 +576,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					},
 					&model.WorkloadEndpoint{
 						GenerateName: "nginx-412354-",
-						Labels:       map[string]string{"k8s-app": "false"}, // conflicting labels; originally "k8s-app": "true"
+						Labels:       uniquelabels.Make(map[string]string{"k8s-app": "false"}), // conflicting labels; originally "k8s-app": "true"
 					},
 				),
 			}
@@ -733,7 +734,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 						WorkloadID:     "kube-system/iperf-4235-5434134",
 						EndpointID:     "23456",
 					},
-					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 				),
 			}
 
@@ -745,7 +746,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 						WorkloadID:     "default/nginx-412354-6543645",
 						EndpointID:     "256267",
 					},
-					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 				),
 			}
 

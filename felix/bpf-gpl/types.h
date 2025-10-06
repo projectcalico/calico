@@ -154,6 +154,8 @@ enum cali_state_flags {
 	CALI_ST_NAT_EXCLUDE       = 0x200,
 	/* CALI_ST_LOG_PACKET is set by policy program if a log rule was hit. */
 	CALI_ST_LOG_PACKET        = 0x400,
+	/* CALI_ST_SKIP_REDIR_PEER is set when the packet is destined to a local VM workload */
+	CALI_ST_SKIP_REDIR_PEER	  = 0x800,
 };
 
 struct fwd {

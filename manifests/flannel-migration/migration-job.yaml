@@ -107,6 +107,15 @@ rules:
       - get
       - create
       - update
+  # Needs tier permissions for initialization.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - tiers
+    verbs:
+      - get
+      - create
+      - update
+      - list
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -150,7 +159,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: flannel-migration-controller
-          image: calico/flannel-migration-controller:v3.30.0
+          image: calico/flannel-migration-controller:v3.30.3
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS

@@ -65,10 +65,10 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 		var desiredIngress, desiredEgress *qos.TokenBucketState
 		if new.QosControls != nil {
 			if new.QosControls.IngressBandwidth != 0 {
-				desiredIngress = qos.GetTBFValues(uint64(new.QosControls.IngressBandwidth), uint64(new.QosControls.IngressBurst))
+				desiredIngress = qos.GetTBFValues(uint64(new.QosControls.IngressBandwidth), uint64(new.QosControls.IngressBurst), uint64(new.QosControls.IngressPeakrate), uint32(new.QosControls.IngressMinburst))
 			}
 			if new.QosControls.EgressBandwidth != 0 {
-				desiredEgress = qos.GetTBFValues(uint64(new.QosControls.EgressBandwidth), uint64(new.QosControls.EgressBurst))
+				desiredEgress = qos.GetTBFValues(uint64(new.QosControls.EgressBandwidth), uint64(new.QosControls.EgressBurst), uint64(new.QosControls.EgressPeakrate), uint32(new.QosControls.EgressMinburst))
 			}
 		}
 

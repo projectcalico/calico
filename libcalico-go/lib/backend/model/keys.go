@@ -646,59 +646,37 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 
 	if valueType == reflect.TypeOf(apiv3.NetworkPolicy{}) {
 		policy := iface.(*apiv3.NetworkPolicy)
-		annotations := policy.Annotations
-		if annotations != nil && annotations[metadataAnnotation] != "" {
-			policy.Name, policy.Annotations, err = parseMetadataAnnotation(annotations)
-			if err != nil {
-				return nil, err
-			}
+		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	if valueType == reflect.TypeOf(apiv3.GlobalNetworkPolicy{}) {
 		policy := iface.(*apiv3.GlobalNetworkPolicy)
-		annotations := policy.Annotations
-		if annotations != nil && annotations[metadataAnnotation] != "" {
-			policy.Name, policy.Annotations, err = parseMetadataAnnotation(annotations)
-			if err != nil {
-				return nil, err
-			}
+		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	if valueType == reflect.TypeOf(apiv3.StagedNetworkPolicy{}) {
 		policy := iface.(*apiv3.StagedNetworkPolicy)
-		annotations := policy.Annotations
-		if annotations != nil && annotations[metadataAnnotation] != "" {
-			policy.Name, policy.Annotations, err = parseMetadataAnnotation(annotations)
-			if err != nil {
-				return nil, err
-			}
+		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	if valueType == reflect.TypeOf(apiv3.StagedGlobalNetworkPolicy{}) {
 		policy := iface.(*apiv3.StagedGlobalNetworkPolicy)
-		annotations := policy.Annotations
-		if annotations != nil && annotations[metadataAnnotation] != "" {
-			policy.Name, policy.Annotations, err = parseMetadataAnnotation(annotations)
-			if err != nil {
-				return nil, err
-			}
+		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	return iface, nil
-}
-
-func parseMetadataAnnotation(annotations map[string]string) (string, map[string]string, error) {
-	meta := &metav1.ObjectMeta{}
-	err := json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
-	if err != nil {
-		return "", nil, err
-	}
-	delete(annotations, metadataAnnotation)
-	return meta.Name, annotations, nil
 }
 
 // SerializeValue serializes a value in the model to a []byte to be stored in the datastore.  This
@@ -721,4 +699,25 @@ func SerializeValue(d *KVPair) ([]byte, error) {
 		return []byte(fmt.Sprint(d.Value)), nil
 	}
 	return json.Marshal(d.Value)
+}
+
+// determinePolicyName updates Policy name based on either the projectcalico.org/metadata annotation that was added in 3.30,
+// or defaults the name to be returned without the default prefix if no annotation was found. This was the default behaviour in =<3.28
+func determinePolicyName(name, tier string, annotations map[string]string) (string, map[string]string, error) {
+	if annotations != nil && annotations[metadataAnnotation] != "" {
+		meta := &metav1.ObjectMeta{}
+		err := json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
+		if err != nil {
+			return "", nil, err
+		}
+		delete(annotations, metadataAnnotation)
+		return meta.Name, annotations, nil
+	}
+
+	if tier == "default" || tier == "" {
+		// It's possible the policy does not contain tier, that means it's in the default Tier it's added later by the API server
+		return strings.TrimPrefix(name, "default."), annotations, nil
+	}
+
+	return name, annotations, nil
 }

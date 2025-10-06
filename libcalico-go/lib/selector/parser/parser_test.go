@@ -225,7 +225,7 @@ var _ = Describe("Parser", func() {
 	for _, test := range selectorTests {
 		var test = test // Take copy of variable for the closure.
 		Context(fmt.Sprintf("selector %#v", test.sel), func() {
-			var sel parser.Selector
+			var sel *parser.Selector
 			var err error
 			BeforeEach(func() {
 				sel, err = parser.Parse(test.sel)

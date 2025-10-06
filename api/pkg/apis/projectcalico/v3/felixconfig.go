@@ -308,16 +308,16 @@ type FelixConfigurationSpec struct {
 	LogFilePath string `json:"logFilePath,omitempty"`
 
 	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityFile string `json:"logSeverityFile,omitempty" validate:"omitempty,logLevel"`
 
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
 
 	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
 	// [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeveritySys string `json:"logSeveritySys,omitempty" validate:"omitempty,logLevel"`
 
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
@@ -709,6 +709,10 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	BPFKubeProxyMinSyncPeriod *metav1.Duration `json:"bpfKubeProxyMinSyncPeriod,omitempty" validate:"omitempty" configv1timescale:"seconds"`
 
+	// BPFKubeProxyHealtzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+	// The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
+	BPFKubeProxyHealtzPort *int `json:"bpfKubeProxyHealtzPort,omitempty" validate:"omitempty,gte=1,lte=65535" confignamev1:"BPFKubeProxyHealtzPort"`
+
 	// BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
 	// kube-proxy always accepts endpoint slices. This option will be removed in
 	// the next release.
@@ -837,6 +841,10 @@ type FelixConfigurationSpec struct {
 
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
+
+	// FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]
+	// +kubebuilder:validation:Enum=Disabled;Enabled
+	FlowLogsLocalReporter *string `json:"flowLogsLocalReporter,omitempty"`
 
 	// BPFProfiling controls profiling of BPF programs. At the monent, it can be
 	// Disabled or Enabled. [Default: Disabled]

@@ -2,7 +2,7 @@ Source: felix
 Section: net
 Priority: optional
 Maintainer: Project Calico Maintainers <maintainers@projectcalico.org>
-Build-Depends: debhelper (>= 8.0.0), base-files (>= 11.1~) | dh-systemd, libelf-dev, libpcap-dev
+Build-Depends: debhelper-compat (= 12), libelf-dev, libpcap0.8-dev
 Standards-Version: 3.9.4
 
 Package: calico-common

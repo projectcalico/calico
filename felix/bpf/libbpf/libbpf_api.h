@@ -50,12 +50,61 @@ int bpf_program_fd(struct bpf_object *obj, char *secname)
 	return fd;
 }
 
-struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio)
+struct bpf_link *bpf_link_open(char *path) {
+	struct bpf_link *link = bpf_link__open(path);
+	int err = libbpf_get_error(link);
+	if (err) {
+		set_errno(err);
+		return NULL;
+	}
+	return link;
+}
+
+int bpf_update_link(struct bpf_link *link, struct bpf_object *obj, char *progName)
+{
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, progName);
+        if (prog == NULL) {
+                errno = ENOENT;
+                return -1;
+        }
+	int err = bpf_link__update_program(link, prog);
+	set_errno(err);
+	return err;
+}
+
+int bpf_ctlb_get_prog_fd(int target_fd, int attach_type) {
+       int err;
+        __u32 attach_flags, prog_cnt, prog_id;
+
+        err = bpf_prog_query(target_fd, attach_type, 0, &attach_flags, &prog_id, &prog_cnt);
+        if (err) {
+                goto out;
+        }
+        int prog_fd = bpf_prog_get_fd_by_id(prog_id);
+        if (prog_fd < 0) {
+                err = -prog_fd;
+                goto out;
+        }
+out:
+        set_errno(err);
+        return prog_fd;
+}
+
+
+void bpf_ctlb_detach_legacy(int prog_fd, int target_fd, int attach_type) {
+        set_errno(bpf_prog_detach2(prog_fd, target_fd, attach_type));
+}
+
+struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio, uint handle)
 {
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
 			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
 			);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, attach, .priority=prio,);
+	if (prio) {
+		attach.handle = handle;
+		attach.flags = BPF_TC_F_REPLACE;
+	}
 
 	attach.prog_fd = bpf_program__fd(bpf_object__find_program_by_name(obj, secName));
 	if (attach.prog_fd < 0) {
@@ -293,7 +342,7 @@ out:
 	return link;
 }
 
-int bpf_program_attach_cgroup_legacy(struct bpf_object *obj, int cgroup_fd, char *name)
+void bpf_program_attach_cgroup_legacy(struct bpf_object *obj, int cgroup_fd, char *name)
 {
 	int err = 0, prog_fd;
 	struct bpf_program *prog;
@@ -315,7 +364,6 @@ int bpf_program_attach_cgroup_legacy(struct bpf_object *obj, int cgroup_fd, char
 
 out:
 	set_errno(err);
-	return err;
 }
 
 void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo, bool exclude_udp)

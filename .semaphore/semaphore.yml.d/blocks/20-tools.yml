@@ -1,0 +1,13 @@
+- name: "Tools (hack directory)"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/hack/', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd hack
+    jobs:
+      - name: "Tools (hack directory)"
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci

@@ -89,7 +89,7 @@ skip_redir_ifindex:
 		bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
 
 		if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
-			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
+			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX && !(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
 			rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
 				CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
@@ -146,7 +146,7 @@ skip_redir_ifindex:
 			}
 			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
 			if (rc == TC_ACT_REDIRECT) {
-				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
+				CALI_DEBUG("Redirect to host dev %d without fib lookup", state->ct_result.ifindex_fwd);
 				goto no_fib_redirect;
 			}
 			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);

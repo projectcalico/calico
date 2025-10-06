@@ -41,8 +41,9 @@ type Rule struct {
 }
 
 type Chain struct {
-	Name  string
-	Rules []Rule
+	Name             string
+	Rules            []Rule
+	ForceProgramming bool
 }
 
 func (c *Chain) IPSetNames() (ipSetNames []string) {

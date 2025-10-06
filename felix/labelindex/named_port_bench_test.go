@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -104,7 +105,7 @@ func makeEndpointUpdates(num int) []api.Update {
 			KVPair: model.KVPair{
 				Key: key,
 				Value: &model.WorkloadEndpoint{
-					Labels:     map[string]string{"alpha": "beta", "ipset-1": "true"},
+					Labels:     uniquelabels.Make(map[string]string{"alpha": "beta", "ipset-1": "true"}),
 					IPv4Nets:   []calinet.IPNet{ipNet},
 					ProfileIDs: []string{fmt.Sprintf("namespace-%d", n)},
 				},
@@ -232,7 +233,7 @@ func benchmarkSelectorUpdates(b *testing.B, numEndpoints int) {
 	}
 
 	// Pre-calculate the selectors.
-	var sels []selector.Selector
+	var sels []*selector.Selector
 	for i := 0; i < b.N; i++ {
 		sel, err := selector.Parse(fmt.Sprintf(`alpha == "beta" && has(ipset-%d)`, i%10))
 		if err != nil {

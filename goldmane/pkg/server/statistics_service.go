@@ -20,20 +20,20 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-func NewStatisticsServer(aggr *aggregator.LogAggregator) *Statistics {
+func NewStatisticsServer(aggr *goldmane.Goldmane) *Statistics {
 	return &Statistics{
-		aggr: aggr,
+		gm: aggr,
 	}
 }
 
 type Statistics struct {
 	proto.UnimplementedStatisticsServer
 
-	aggr *aggregator.LogAggregator
+	gm *goldmane.Goldmane
 }
 
 func (s *Statistics) RegisterWith(srv *grpc.Server) {
@@ -43,7 +43,7 @@ func (s *Statistics) RegisterWith(srv *grpc.Server) {
 }
 
 func (s *Statistics) List(req *proto.StatisticsRequest, server proto.Statistics_ListServer) error {
-	responses, err := s.aggr.Statistics(req)
+	responses, err := s.gm.Statistics(req)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get statistics")
 		return err

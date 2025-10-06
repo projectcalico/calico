@@ -200,6 +200,7 @@ type Config struct {
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool              `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration     `config:"seconds;1"`
+	BPFKubeProxyHealtzPort             int               `config:"int;10256;non-zero"`
 	BPFKubeProxyEndpointSlicesEnabled  bool              `config:"bool;true"`
 	BPFExtToServiceConnmark            int               `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port  `config:"portrange;20000:29999"`
@@ -333,9 +334,9 @@ type Config struct {
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
-	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
-	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
-	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeverityFile   string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeverityScreen string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeveritySys    string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
 	// to Debug level logs.
@@ -412,6 +413,7 @@ type Config struct {
 	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
 	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
 	FlowLogsGoldmaneServer       string        `config:"string;"`
+	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
@@ -538,8 +540,13 @@ func (config *Config) TableRefreshInterval() time.Duration {
 	return config.IptablesRefreshInterval
 }
 
+func (config *Config) FlowLogsLocalReporterEnabled() bool {
+	return config.FlowLogsLocalReporter == "Enabled"
+}
+
 func (config *Config) FlowLogsEnabled() bool {
-	return config.FlowLogsGoldmaneServer != ""
+	return config.FlowLogsGoldmaneServer != "" ||
+		config.FlowLogsLocalReporterEnabled()
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.

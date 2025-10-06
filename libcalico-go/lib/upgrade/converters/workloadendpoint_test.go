@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -62,7 +63,7 @@ var wepTable = []TableEntry{
 				EndpointID:     "eth0",
 			},
 			Value: &model.WorkloadEndpoint{
-				Labels:                     makeLabelsV1(),
+				Labels:                     uniquelabels.Make(makeLabelsV1()),
 				ActiveInstanceID:           "1337495556942031415926535",
 				State:                      "active",
 				Name:                       "cali1234",
@@ -134,7 +135,7 @@ var wepTable = []TableEntry{
 				EndpointID:     "eth0",
 			},
 			Value: &model.WorkloadEndpoint{
-				Labels:           makeLabelsV1(),
+				Labels:           uniquelabels.Make(makeLabelsV1()),
 				ActiveInstanceID: "1337495556942031415926535",
 				State:            "active",
 				Name:             "cali1234",
@@ -205,7 +206,7 @@ var wepTable = []TableEntry{
 				EndpointID:     "eth0",
 			},
 			Value: &model.WorkloadEndpoint{
-				Labels:           makeLabelsV1(),
+				Labels:           uniquelabels.Make(makeLabelsV1()),
 				ActiveInstanceID: "133749555694203141592653c",
 				State:            "active",
 				Name:             "cali1234",
@@ -272,7 +273,7 @@ var wepTable = []TableEntry{
 				EndpointID:     "eth0",
 			},
 			Value: &model.WorkloadEndpoint{
-				Labels:           map[string]string{},
+				Labels:           uniquelabels.Empty,
 				ActiveInstanceID: "133749555694203141592653a",
 				State:            "active",
 				Name:             "cali1234",
@@ -348,7 +349,7 @@ var _ = Describe("v1->v3 workload endpoint conversion tests", func() {
 				EndpointID:     "eth0",
 			},
 			Value: &model.WorkloadEndpoint{
-				Labels:           makeLabelsV1(),
+				Labels:           uniquelabels.Make(makeLabelsV1()),
 				ActiveInstanceID: "1337495556942031415926535",
 				State:            "active",
 				Name:             "cali1234",

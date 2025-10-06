@@ -32,9 +32,4 @@ static CALI_BPF_INLINE void event_flow_log(struct cali_tc_ctx *ctx)
 	}
 }
 
-static CALI_BPF_INLINE bool flow_logs_enabled(struct cali_tc_ctx *ctx)
-{
-	return (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED);
-}
-
 #endif /* __CALI_EVETNS_H__ */

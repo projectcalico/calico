@@ -38,6 +38,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NP_LOOP	0x800 /* marks connections that were turned around when accessing nodeport on a local IP */
 #define CALI_CT_FLAG_NP_REMOTE	0x1000 /* marks connections from local host to remote backend of a nodeport */
 #define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
+#define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
 
 struct calico_ct_leg {
 	__u64 bytes;

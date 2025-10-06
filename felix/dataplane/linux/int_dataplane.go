@@ -36,6 +36,7 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
+	k8shealthcheck "k8s.io/kubernetes/pkg/proxy/healthcheck"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
@@ -191,10 +192,11 @@ type Config struct {
 	ConfigChangedRestartCallback func()
 	FatalErrorRestartCallback    func(error)
 
-	PostInSyncCallback func()
-	HealthAggregator   *health.HealthAggregator
-	WatchdogTimeout    time.Duration
-	RouteTableManager  *idalloc.IndexAllocator
+	PostInSyncCallback    func()
+	HealthAggregator      *health.HealthAggregator
+	WatchdogTimeout       time.Duration
+	RouteTableManager     *idalloc.IndexAllocator
+	bpfProxyHealthzServer *k8shealthcheck.ProxierHealthServer
 
 	DebugSimulateDataplaneHangAfter  time.Duration
 	DebugSimulateDataplaneApplyDelay time.Duration
@@ -244,6 +246,7 @@ type Config struct {
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
+	KubeProxyHealtzPort        int
 	SidecarAccelerationEnabled bool
 
 	// Flow logs related fields.
@@ -784,7 +787,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, config.RulesConfig.NFTables))
 
 		// Clean up any leftover BPF state.
-		err := bpfnat.RemoveConnectTimeLoadBalancer("")
+		err := bpfnat.RemoveConnectTimeLoadBalancer(true, "")
 		if err != nil {
 			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
 		}
@@ -958,7 +961,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Infof("Connect time load balancer enabled: %s", config.BPFConnTimeLB)
 		} else {
 			// Deactivate the connect-time load balancer.
-			err = nat.RemoveConnectTimeLoadBalancer(config.BPFCgroupV2)
+			err = nat.RemoveConnectTimeLoadBalancer(true, config.BPFCgroupV2)
 			if err != nil {
 				log.WithError(err).Warn("Failed to detach connect-time load balancer. Ignoring.")
 			}
@@ -2675,7 +2678,25 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
+	if config.bpfProxyHealthzServer == nil {
+		healthzAddr := fmt.Sprintf(":%d", config.KubeProxyHealtzPort)
+		config.bpfProxyHealthzServer = k8shealthcheck.NewProxierHealthServer(
+			healthzAddr, config.KubeProxyMinSyncPeriod)
+
+		// We cannot wait for the healthz server as we cannot stop it.
+		go func() {
+			for {
+				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
+				if err != nil {
+					log.WithError(err).Error("BPF Proxy Healthz server failed, restarting in 1s")
+					time.Sleep(time.Second)
+				}
+			}
+		}()
+	}
+
 	bpfproxyOpts := []bpfproxy.Option{
+		bpfproxy.WithHealthzServer(config.bpfProxyHealthzServer),
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 	}
 

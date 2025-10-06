@@ -449,7 +449,7 @@ syn_force_policy:
 
 			ctx->state->ip_proto != IPPROTO_ICMPV6 &&
 #endif
-			!hep_rpf_check(ctx)) {
+			(hep_rpf_check(ctx) == RPF_RES_FAIL)) {
 			goto deny;
 		}
 	}
@@ -471,7 +471,7 @@ syn_force_policy:
 		) {
 		struct cali_rt *r = cali_rt_lookup(&ctx->state->ip_src);
 		/* Do RPF check since it's our responsibility to police that. */
-		if (!wep_rpf_check(ctx, r)) {
+		if (wep_rpf_check(ctx, r) == RPF_RES_FAIL) {
 			goto deny;
 		}
 
@@ -606,16 +606,20 @@ syn_force_policy:
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
-	} else if (CALI_F_FROM_HEP && !ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
-		/* Disable FIB, let the packet go through the host after it is
-		 * policed. It is ingress into the system and we got a packet, which is
-		 * not for this host, and it wasn't resolved as a service and it is not
-		 * for a local workload either. But we hit a route so it may be some L2
-		 * broadcast, we do not quite know. Let the host route it or dump it.
-		 *
-		 * https://github.com/projectcalico/calico/issues/8918
-		 */
-		ctx->state->flags |= CALI_ST_SKIP_FIB;
+	} else if (CALI_F_FROM_HEP) {
+		if (cali_rt_flags_local_workload_vm(dest_rt->flags)) {
+			ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
+		} else if (!ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
+			/* Disable FIB, let the packet go through the host after it is
+			 * policed. It is ingress into the system and we got a packet, which is
+			 * not for this host, and it wasn't resolved as a service and it is not
+			 * for a local workload either. But we hit a route so it may be some L2
+			 * broadcast, we do not quite know. Let the host route it or dump it.
+			 *
+			 * https://github.com/projectcalico/calico/issues/8918
+			 */
+			ctx->state->flags |= CALI_ST_SKIP_FIB;
+		}
 	}
 
 	if (CALI_F_TO_HEP && ctx->nat_dest && !skb_seen(ctx->skb) && !(ctx->state->flags & CALI_ST_HOST_PSNAT)) {
@@ -1247,7 +1251,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	if (!policy_skipped) {
-		if (flow_logs_enabled(ctx)) {
+		if (FLOWLOGS_ENABLED) {
 			event_flow_log(ctx);
 			CALI_DEBUG("Flow log event generated for ALLOW\n");
 		}
@@ -1335,6 +1339,9 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
+	}
+	if (CALI_F_FROM_HEP && state->flags & CALI_ST_SKIP_REDIR_PEER) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_REDIR_PEER;
 	}
 	if (CALI_F_TO_WEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
@@ -2011,7 +2018,7 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		}
 	}
 
-	if (flow_logs_enabled(ctx)) {
+	if (FLOWLOGS_ENABLED) {
 		event_flow_log(ctx);
 		CALI_DEBUG("Flow log event generated for DENY/DROP\n");
 	}

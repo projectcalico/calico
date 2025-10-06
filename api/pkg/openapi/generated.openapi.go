@@ -1245,8 +1245,15 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					},
 					"keepOriginalNextHop": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Option to keep the original nexthop field when routes are sent to a BGP Peer. Setting \"true\" configures the selected BGP Peers node to use the \"next hop keep;\" instead of \"next hop self;\"(default) in the specific branch of the Node on \"bird.cfg\".",
+							Description: "Option to keep the original nexthop field when routes are sent to a BGP Peer. Setting \"true\" configures the selected BGP Peers node to use the \"next hop keep;\" instead of \"next hop self;\"(default) in the specific branch of the Node on \"bird.cfg\". Note: that this field is deprecated. Users should use the NextHopMode field to control the next hop attribute for a BGP peer.",
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"nextHopMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NextHopMode defines the method of calculating the next hop attribute for received routes. This replaces and expands the deprecated KeepOriginalNextHop field. Users should use this setting to control the next hop attribute for a BGP peer. When this is set, the value of the KeepOriginalNextHop field is ignored. if neither keepOriginalNextHop or nextHopMode is specified, BGP's default behaviour is used. Set it to “Auto” to apply BGP’s default behaviour. Set it to \"Self\" to configure \"next hop self;\" in \"bird.cfg\". Set it to \"Keep\" to configure \"next hop keep;\" in \"bird.cfg\".",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
@@ -1308,6 +1315,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					"localWorkloadSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty, and the ASNumber must not be empty.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"reversePeering": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReversePeering, for peerings between Calico nodes controls whether the reverse peering from nodes selected by peerSelector is generated automatically. If set to Manual, a separate BGPPeer must be created for the reverse peering. [Default: Auto]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3221,6 +3235,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"bpfKubeProxyHealtzPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFKubeProxyHealtzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"bpfKubeProxyEndpointSlicesEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF kube-proxy always accepts endpoint slices. This option will be removed in the next release.",
@@ -3406,6 +3427,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"flowLogsGoldmaneServer": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"flowLogsLocalReporter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

@@ -15,6 +15,7 @@
 package client
 
 import (
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -152,7 +153,7 @@ func (h *hostEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPai
 	d := model.KVPair{
 		Key: k,
 		Value: &model.HostEndpoint{
-			Labels: ah.Metadata.Labels,
+			Labels: uniquelabels.Make(ah.Metadata.Labels),
 
 			Name:              ah.Spec.InterfaceName,
 			ProfileIDs:        ah.Spec.Profiles,
@@ -178,7 +179,7 @@ func (h *hostEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Resourc
 	ah := api.NewHostEndpoint()
 	ah.Metadata.Node = bk.Hostname
 	ah.Metadata.Name = bk.EndpointID
-	ah.Metadata.Labels = bh.Labels
+	ah.Metadata.Labels = bh.Labels.RecomputeOriginalMap()
 	ah.Spec.InterfaceName = bh.Name
 	ah.Spec.Profiles = bh.ProfileIDs
 	ah.Spec.ExpectedIPs = ips

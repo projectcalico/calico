@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -63,7 +64,7 @@ func (_ HostEndpoint) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, e
 			EndpointID: ah.Metadata.Name,
 		},
 		Value: &model.HostEndpoint{
-			Labels:            ah.Metadata.Labels,
+			Labels:            uniquelabels.Make(ah.Metadata.Labels),
 			Name:              ah.Spec.InterfaceName,
 			ProfileIDs:        ah.Spec.Profiles,
 			ExpectedIPv4Addrs: ipv4Addrs,
@@ -114,7 +115,7 @@ func (_ HostEndpoint) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 
 	ah := apiv3.NewHostEndpoint()
 	ah.Name = convertName(fmt.Sprintf("%s.%s", nodeName, bk.EndpointID))
-	ah.Labels = bh.Labels
+	ah.Labels = bh.Labels.RecomputeOriginalMap()
 	ah.Spec = apiv3.HostEndpointSpec{
 		Node:          nodeName,
 		Ports:         ports,

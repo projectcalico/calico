@@ -83,6 +83,8 @@ func init() {
 	validWireguardPortOrRulePriority := 12345
 	invalidWireguardPortOrRulePriority := 99999
 
+	nextHopMode := api.NextHopMode("Auto")
+
 	var awsCheckEnable, awsCheckDisable, awsCheckDoNothing,
 		awsCheckbadVal, awsCheckenable api.AWSSrcDstCheckOption
 
@@ -748,8 +750,10 @@ func init() {
 		Entry("should reject an invalid LogSeveritySys value 'Critical'", api.FelixConfigurationSpec{LogSeveritySys: "Critical"}, false),
 		Entry("should accept a valid LogSeverityScreen value 'Fatal'", api.FelixConfigurationSpec{LogSeverityScreen: "Fatal"}, true),
 		Entry("should accept a valid LogSeverityScreen value 'Warning'", api.FelixConfigurationSpec{LogSeverityScreen: "Warning"}, true),
+		Entry("should accept a valid LogSeverityScreen value 'Trace'", api.FelixConfigurationSpec{LogSeverityScreen: "Trace"}, true),
 		Entry("should accept a valid LogSeverityFile value 'Debug'", api.FelixConfigurationSpec{LogSeverityFile: "Debug"}, true),
 		Entry("should accept a valid LogSeveritySys value 'Info'", api.FelixConfigurationSpec{LogSeveritySys: "Info"}, true),
+		Entry("should accept a valid LogSeveritySys value 'Trace'", api.FelixConfigurationSpec{LogSeveritySys: "Trace"}, true),
 
 		Entry("should accept a valid IptablesNATOutgoingInterfaceFilter value 'cali-123'", api.FelixConfigurationSpec{IptablesNATOutgoingInterfaceFilter: "cali-123"}, true),
 		Entry("should reject an invalid IptablesNATOutgoingInterfaceFilter value 'cali@123'", api.FelixConfigurationSpec{IptablesNATOutgoingInterfaceFilter: "cali@123"}, false),
@@ -1964,6 +1968,10 @@ func init() {
 			LocalWorkloadSelector: "has(labelone)",
 			PeerIP:                ipv4_1,
 			ASNumber:              as61234,
+		}, false),
+		Entry("should reject BGPPeerSpec with both positive KeepOriginalNextHop and non-empty NextHopMode", api.BGPPeerSpec{
+			KeepOriginalNextHop: true,
+			NextHopMode:         &nextHopMode,
 		}, false),
 		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv4_2,
@@ -3594,6 +3602,52 @@ func init() {
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker+'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker+"}}, true),
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker0,docker1'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker0", "docker1"}}, true),
 		Entry("should reject invalid BPFForceTrackPacketsFromIfaces value 'cali-123,cali@456'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"cali-123", "cali@456"}}, false),
+
+		Entry("disallow a NotNets catch-all IPv4 CIDR match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								NotNets: []string{"0.0.0.0/0"},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a NotNets catch-all IPv6 CIDR match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								NotNets: []string{"::0/0"},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a NotNets catch-all IPv6 CIDR match - non-standard representation",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								NotNets: []string{"0:0:0::/0"},
+							},
+						},
+					},
+				},
+			}, false,
+		),
 	)
 }
 

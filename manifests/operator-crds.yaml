@@ -26243,6 +26243,8 @@ spec:
                   Option to keep the original nexthop field when routes are sent to a BGP Peer.
                   Setting "true" configures the selected BGP Peers node to use the "next hop keep;"
                   instead of "next hop self;"(default) in the specific branch of the Node on "bird.cfg".
+                  Note: that this field is deprecated. Users should use the NextHopMode field to control
+                  the next hop attribute for a BGP peer.
                 type: boolean
               localWorkloadSelector:
                 description: |-
@@ -26253,6 +26255,26 @@ spec:
                 description: |-
                   Time to allow for software restart.  When specified, this is configured as the graceful
                   restart timeout.  When not specified, the BIRD default of 120s is used.
+                type: string
+              nextHopMode:
+                allOf:
+                - enum:
+                  - Auto
+                  - Self
+                  - Keep
+                - enum:
+                  - Auto
+                  - Self
+                  - Keep
+                description: |-
+                  NextHopMode defines the method of calculating the next hop attribute for received routes.
+                  This replaces and expands the deprecated KeepOriginalNextHop field.
+                  Users should use this setting to control the next hop attribute for a BGP peer.
+                  When this is set, the value of the KeepOriginalNextHop field is ignored.
+                  if neither keepOriginalNextHop or nextHopMode is specified, BGP's default behaviour is used.
+                  Set it to “Auto” to apply BGP’s default behaviour.
+                  Set it to "Self" to configure "next hop self;" in "bird.cfg".
+                  Set it to "Keep" to configure "next hop keep;" in "bird.cfg".
                 type: string
               node:
                 description: |-
@@ -26320,6 +26342,16 @@ spec:
                 description: |-
                   Add an exact, i.e. /32, static route toward peer IP in order to prevent route flapping.
                   ReachableBy contains the address of the gateway which peer can be reached by.
+                type: string
+              reversePeering:
+                description: |-
+                  ReversePeering, for peerings between Calico nodes controls whether
+                  the reverse peering from nodes selected by peerSelector is generated
+                  automatically. If set to Manual, a separate BGPPeer must be created
+                  for the reverse peering. [Default: Auto]
+                enum:
+                - Auto
+                - Manual
                 type: string
               sourceAddress:
                 description: |-
@@ -27012,6 +27044,11 @@ spec:
                   kube-proxy always accepts endpoint slices. This option will be removed in
                   the next release.
                 type: boolean
+              bpfKubeProxyHealtzPort:
+                description: |-
+                  BPFKubeProxyHealtzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+                  The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
+                type: integer
               bpfKubeProxyIptablesCleanupEnabled:
                 description: |-
                   BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF mode, Felix will proactively clean up the upstream
@@ -27350,6 +27387,13 @@ spec:
                 description: FlowLogGoldmaneServer is the flow server endpoint to
                   which flow data should be published.
                 type: string
+              flowLogsLocalReporter:
+                description: 'FlowLogsLocalReporter configures local unix socket for
+                  reporting flow data from each node. [Default: Disabled]'
+                enum:
+                - Disabled
+                - Enabled
+                type: string
               flowLogsPolicyEvaluationMode:
                 description: |-
                   Continuous - Felix evaluates active flows on a regular basis to determine the rule
@@ -27593,18 +27637,18 @@ spec:
               logSeverityFile:
                 description: 'LogSeverityFile is the log severity above which logs
                   are sent to the log file. [Default: Info]'
-                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
+                pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                 type: string
               logSeverityScreen:
                 description: 'LogSeverityScreen is the log severity above which logs
                   are sent to the stdout. [Default: Info]'
-                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
+                pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                 type: string
               logSeveritySys:
                 description: |-
                   LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
                   [Default: Info]
-                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
+                pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                 type: string
               maxIpsetSize:
                 description: |-

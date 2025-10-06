@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -307,6 +308,10 @@ func (buf *EventSequencer) flushPolicyUpdates() {
 }
 
 func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *proto.ActivePolicyUpdate {
+	var perfHints []string
+	for _, hint := range rules.PerformanceHints {
+		perfHints = append(perfHints, string(hint))
+	}
 	return &proto.ActivePolicyUpdate{
 		Id: &proto.PolicyID{
 			Tier: key.Tier,
@@ -325,6 +330,7 @@ func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *p
 			Untracked:        rules.Untracked,
 			PreDnat:          rules.PreDNAT,
 			OriginalSelector: rules.OriginalSelector,
+			PerfHints:        perfHints,
 		},
 	}
 }
@@ -407,8 +413,14 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 			EgressBandwidth:       ep.QoSControls.EgressBandwidth,
 			IngressBurst:          ep.QoSControls.IngressBurst,
 			EgressBurst:           ep.QoSControls.EgressBurst,
+			IngressPeakrate:       ep.QoSControls.IngressPeakrate,
+			EgressPeakrate:        ep.QoSControls.EgressPeakrate,
+			IngressMinburst:       ep.QoSControls.IngressMinburst,
+			EgressMinburst:        ep.QoSControls.EgressMinburst,
 			IngressPacketRate:     ep.QoSControls.IngressPacketRate,
 			EgressPacketRate:      ep.QoSControls.EgressPacketRate,
+			IngressPacketBurst:    ep.QoSControls.IngressPacketBurst,
+			EgressPacketBurst:     ep.QoSControls.EgressPacketBurst,
 			IngressMaxConnections: ep.QoSControls.IngressMaxConnections,
 			EgressMaxConnections:  ep.QoSControls.EgressMaxConnections,
 		}
@@ -419,6 +431,11 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		localBGPPeer = &proto.LocalBGPPeer{
 			BgpPeerName: peerData.v3PeerName,
 		}
+	}
+
+	epType := proto.WorkloadType_REGULAR
+	if isVMWorkload(ep.Labels) {
+		epType = proto.WorkloadType_VM
 	}
 
 	return &proto.WorkloadEndpoint{
@@ -435,6 +452,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		Annotations:                ep.Annotations,
 		QosControls:                qosControls,
 		LocalBgpPeer:               localBGPPeer,
+		Type:                       epType,
 	}
 }
 
@@ -1265,4 +1283,13 @@ func natsToProtoNatInfo(nats []model.IPNAT) []*proto.NatInfo {
 		}
 	}
 	return protoNats
+}
+
+func isVMWorkload(labels uniquelabels.Map) bool {
+	if val, ok := labels.GetString("kubevirt.io"); ok {
+		if val == "virt-launcher" {
+			return true
+		}
+	}
+	return false
 }

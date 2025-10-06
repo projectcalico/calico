@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
@@ -298,8 +299,8 @@ func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterTy
 			DstService: dstService,
 		},
 		FlowLabels: FlowLabels{
-			SrcLabels: srcLabels,
-			DstLabels: dstLabels,
+			SrcLabels: uniquelabels.Make(srcLabels),
+			DstLabels: uniquelabels.Make(dstLabels),
 		},
 		FlowEnforcedPolicySet: fep,
 		FlowPendingPolicySet:  fpp,

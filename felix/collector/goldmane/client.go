@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 )
 
 type GoldmaneReporter struct {
@@ -67,7 +68,7 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
-			g.client.Push(convertFlowlogToGoldmane(l))
+			g.client.Push(ConvertFlowlogToGoldmane(l))
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
@@ -115,7 +116,7 @@ func convertAction(a flowlog.Action) proto.Action {
 	return proto.Action_ActionUnspecified
 }
 
-func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
+func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 	return &types.Flow{
 		Key: types.NewFlowKey(
 			&types.FlowKeySource{
@@ -277,18 +278,18 @@ func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 	return policySet
 }
 
-func ensureLabels(labels map[string]string) unique.Handle[string] {
-	if labels == nil {
+func ensureLabels(labels uniquelabels.Map) unique.Handle[string] {
+	if labels.IsNil() {
 		return unique.Make("")
 	}
-	flat := utils.FlattenLabels(labels)
+	flat := utils.FlattenLabels(labels.RecomputeOriginalMap())
 	sort.Strings(flat)
 	return unique.Make(strings.Join(flat, ","))
 }
 
-func ensureFlowLogLabels(lables []string) map[string]string {
+func ensureFlowLogLabels(lables []string) uniquelabels.Map {
 	if lables == nil {
-		return map[string]string{}
+		return uniquelabels.Empty
 	}
-	return utils.UnflattenLabels(lables)
+	return uniquelabels.Make(utils.UnflattenLabels(lables))
 }

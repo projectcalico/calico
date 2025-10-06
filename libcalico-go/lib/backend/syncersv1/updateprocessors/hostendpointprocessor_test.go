@@ -20,6 +20,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -101,7 +102,7 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 				Value: &model.HostEndpoint{
 					Name:              name2,
 					ExpectedIPv4Addrs: []net.IP{expectedIpv4},
-					Labels:            map[string]string{"testLabel": "label"},
+					Labels:            uniquelabels.Make(map[string]string{"testLabel": "label"}),
 					ProfileIDs:        []string{"testProfile"},
 					Ports: []model.EndpointPort{
 						model.EndpointPort{

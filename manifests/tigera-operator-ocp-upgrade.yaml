@@ -109,9 +109,7 @@ rules:
     verbs:
       - update
     resourceNames:
-      - adminnetworkpolicies.policy.networking.k8s.io
       - apiservers.operator.tigera.io
-      - baselineadminnetworkpolicies.policy.networking.k8s.io
       - gatewayapis.operator.tigera.io
       - imagesets.operator.tigera.io
       - installations.operator.tigera.io
@@ -141,6 +139,17 @@ rules:
       - whiskers.operator.tigera.io
       - goldmanes.operator.tigera.io
       - managementclusterconnections.operator.tigera.io
+  # We need update and delete access for ANP/BANP CRDs to set owner refs when assuming control of pre-existing CRDs, for example on OCP.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - update
+      - delete
+    resourceNames:
+      - adminnetworkpolicies.policy.networking.k8s.io
+      - baselineadminnetworkpolicies.policy.networking.k8s.io
   - apiGroups:
       - ""
     resources:
@@ -193,6 +202,13 @@ rules:
       - list
       # We need this for Typha autoscaling
       - watch
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      # The operator creates a token review to learn its identity.
+      - tokenreviews
+    verbs:
+      - create
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -279,6 +295,8 @@ rules:
     resources:
       - installations
       - apiservers
+      - whiskers
+      - goldmanes
     verbs:
       - delete
   - apiGroups:
@@ -626,7 +644,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: quay.io/tigera/operator:v1.38.0
+          image: quay.io/tigera/operator:v1.38.6
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -647,7 +665,7 @@ spec:
             - name: OPERATOR_NAME
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
-              value: v1.38.0
+              value: v1.38.6
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint
@@ -667,7 +685,7 @@ spec:
       initContainers:
         # Install CRDs first, so that APIs exist for calicoctl to use.
         - name: bootstrap-crds
-          image: quay.io/tigera/operator:v1.38.0
+          image: quay.io/tigera/operator:v1.38.6
           command:
             - operator
           args:
@@ -678,7 +696,7 @@ spec:
                 optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
-          image: docker.io/calico/ctl:v3.30.0
+          image: docker.io/calico/ctl:v3.30.3
           env:
             - name: DATASTORE_TYPE
               value: kubernetes

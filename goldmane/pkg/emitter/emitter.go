@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
@@ -59,7 +59,7 @@ type Emitter struct {
 
 	// Use a rate limited workqueue to manage bucket emission.
 	buckets *bucketCache
-	q       workqueue.TypedRateLimitingInterface[bucketKey]
+	queue   workqueue.TypedRateLimitingInterface[bucketKey]
 
 	// Track the latest timestamp of emitted flows. This helps us avoid emitting the same flow multiple times
 	// on restart.
@@ -67,12 +67,12 @@ type Emitter struct {
 }
 
 // Make sure Emitter implements the Receiver interface to be able to receive aggregated Flows.
-var _ bucketing.Sink = &Emitter{}
+var _ storage.Sink = &Emitter{}
 
 func NewEmitter(opts ...Option) *Emitter {
 	e := &Emitter{
 		buckets: newBucketCache(),
-		q: workqueue.NewTypedRateLimitingQueue(
+		queue: workqueue.NewTypedRateLimitingQueue(
 			workqueue.NewTypedMaxOfRateLimiter(
 				workqueue.NewTypedItemExponentialFailureRateLimiter[bucketKey](1*time.Second, 30*time.Second),
 				&workqueue.TypedBucketRateLimiter[bucketKey]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
@@ -109,7 +109,7 @@ func (e *Emitter) Run(ctx context.Context) {
 
 	// Shutdown the emitter if the context was cancelled
 	go func() {
-		defer e.q.ShutDown()
+		defer e.queue.ShutDown()
 		select {
 		case <-ctx.Done():
 			logrus.Info("Context cancelled, shutting down emitter.")
@@ -131,17 +131,17 @@ func (e *Emitter) Run(ctx context.Context) {
 	// This is the main loop for the emitter. It listens for new batches of flows to emit and emits them.
 	for {
 		// Get pending work from the queue.
-		key, quit := e.q.Get()
+		key, quit := e.queue.Get()
 		if quit {
 			logrus.Info("Emitter queue completed")
 			return
 		}
-		e.q.Done(key)
+		e.queue.Done(key)
 
 		bucket, ok := e.buckets.get(key)
 		if !ok {
 			logrus.WithField("bucket", key).Error("Bucket not found in cache.")
-			e.q.Forget(key)
+			e.queue.Forget(key)
 			continue
 		}
 
@@ -154,7 +154,7 @@ func (e *Emitter) Run(ctx context.Context) {
 
 		// Success. Remove the bucket from our internal map, and
 		// clear it from the workqueue.
-		if retries := e.q.NumRequeues(key); retries > 0 {
+		if retries := e.queue.NumRequeues(key); retries > 0 {
 			logrus.WithFields(logrus.Fields{
 				"bucket":  key,
 				"retries": retries,
@@ -171,18 +171,18 @@ func (e *Emitter) reportHealth(report *health.HealthReport) {
 	}
 }
 
-func (e *Emitter) Receive(bucket *bucketing.FlowCollection) {
+func (e *Emitter) Receive(bucket *storage.FlowCollection) {
 	// Add the bucket to our internal map so we can retry it if needed.
 	// We'll remove it from the map once it's successfully emitted.
 	k := bucketKey{startTime: bucket.StartTime, endTime: bucket.EndTime}
 	e.buckets.add(k, bucket)
-	e.q.Add(k)
+	e.queue.Add(k)
 }
 
 func (e *Emitter) retry(k bucketKey) {
-	if e.q.NumRequeues(k) < maxRetries {
+	if e.queue.NumRequeues(k) < maxRetries {
 		logrus.WithField("bucket", k).Debug("Queueing retry for bucket.")
-		e.q.AddRateLimited(k)
+		e.queue.AddRateLimited(k)
 	} else {
 		logrus.WithField("bucket", k).Error("Max retries exceeded, dropping bucket.")
 		e.forget(k)
@@ -194,10 +194,10 @@ func (e *Emitter) retry(k bucketKey) {
 // maximum number of retries.
 func (e *Emitter) forget(k bucketKey) {
 	e.buckets.remove(k)
-	e.q.Forget(k)
+	e.queue.Forget(k)
 }
 
-func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
+func (e *Emitter) emit(bucket *storage.FlowCollection) error {
 	// Check if we have already emitted this batch. If it pre-dates
 	// the latest timestamp we've emitted, skip it. This can happen, for example, on restart when
 	// we learn already emitted flows from the cache.
@@ -225,7 +225,7 @@ func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
 	return nil
 }
 
-func (e *Emitter) collectionToReader(bucket *bucketing.FlowCollection) (*bytes.Reader, error) {
+func (e *Emitter) collectionToReader(bucket *storage.FlowCollection) (*bytes.Reader, error) {
 	body := []byte{}
 	for _, flow := range bucket.Flows {
 		if len(body) != 0 {

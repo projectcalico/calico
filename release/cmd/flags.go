@@ -20,7 +20,6 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
-	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -169,6 +168,13 @@ var (
 		Usage:   publishImagesFlag.Usage,
 		EnvVars: publishImagesFlag.EnvVars,
 		Value:   false,
+	}
+
+	archiveImagesFlag = &cli.BoolFlag{
+		Name:    "archive-images",
+		Usage:   "Archive images in the release tarball",
+		EnvVars: []string{"ARCHIVE_IMAGES"},
+		Value:   true,
 	}
 )
 
@@ -399,50 +405,26 @@ var (
 	}
 
 	// Hashrelease server configuration flags.
-	hashreleaseServerFlags = []cli.Flag{
-		sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag,
-		sshKnownHostsFlag,
-	}
-	sshHostFlag = &cli.StringFlag{
-		Name:    "server-ssh-host",
-		Usage:   "The SSH host for the connection to the hashrelease server",
-		EnvVars: []string{"DOCS_HOST"},
-	}
-	sshUserFlag = &cli.StringFlag{
-		Name:    "server-ssh-user",
-		Usage:   "The SSH user for the connection to the hashrelease server",
-		EnvVars: []string{"DOCS_USER"},
-	}
-	sshKeyFlag = &cli.StringFlag{
-		Name:    "server-ssh-key",
-		Usage:   "The SSH key for the connection to the hashrelease server",
-		EnvVars: []string{"DOCS_KEY"},
-	}
-	sshPortFlag = &cli.StringFlag{
-		Name:    "server-ssh-port",
-		Usage:   "The SSH port for the connection to the hashrelease server",
-		EnvVars: []string{"DOCS_PORT"},
-	}
-	sshKnownHostsFlag = &cli.StringFlag{
-		Name: "sever-ssh-known-hosts",
-		Usage: "The known_hosts file is the absolute path to the known_hosts file " +
-			"to use for the user host key database instead of ~/.ssh/known_hosts",
-		EnvVars: []string{"DOCS_KNOWN_HOSTS"},
-	}
-	maxHashreleasesFlag = &cli.IntFlag{
-		Name:    "maxiumum",
-		Aliases: []string{"max"},
-		Usage:   "The maximum number of hashreleases to keep on the hashrelease server",
-		Value:   hashreleaseserver.DefaultMax,
-	}
+	hashreleaseServerFlags = []cli.Flag{hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag}
 	publishHashreleaseFlag = &cli.BoolFlag{
 		Name:  "publish-to-hashrelease-server",
 		Usage: "Publish the hashrelease to the hashrelease server",
 		Value: true,
 	}
 	latestFlag = &cli.BoolFlag{
-		Name:  "latest",
-		Usage: "Publish the hashrelease as the latest hashrelease",
-		Value: true,
+		Name:    "latest",
+		Usage:   "Publish the hashrelease as the latest hashrelease",
+		EnvVars: []string{"LATEST"},
+		Value:   true,
+	}
+	hashreleaseServerCredentialsFlag = &cli.StringFlag{
+		Name:    "hashrelease-server-credentials",
+		Usage:   "The absolute path to the credentials file for the hashrelease server",
+		EnvVars: []string{"HASHRELEASE_SERVER_CREDENTIALS"},
+	}
+	hashreleaseServerBucketFlag = &cli.StringFlag{
+		Name:    "hashrelease-server-bucket",
+		Usage:   "The bucket name for the hashrelease server",
+		EnvVars: []string{"HASHRELEASE_SERVER_BUCKET"},
 	}
 )

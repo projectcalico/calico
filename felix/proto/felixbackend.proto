@@ -251,6 +251,8 @@ message Policy {
   bool pre_dnat = 4;
 
   string original_selector = 6;
+
+  repeated string perf_hints = 7;
 }
 
 enum IPVersion {
@@ -391,6 +393,11 @@ message WorkloadEndpointUpdate {
   WorkloadEndpoint endpoint = 5;
 }
 
+enum WorkloadType {
+  REGULAR = 0;
+  VM = 1;
+}
+
 message WorkloadEndpoint {
   string state = 1;
   string name = 2;
@@ -405,6 +412,7 @@ message WorkloadEndpoint {
   map<string, string> annotations = 11;
   QoSControls qos_controls = 12;
   LocalBGPPeer local_bgp_peer = 13;
+  WorkloadType type = 14;
 }
 
 message QoSControls {
@@ -416,10 +424,16 @@ message QoSControls {
   int64 EgressPacketRate      = 6;
   int64 IngressMaxConnections = 7;
   int64 EgressMaxConnections  = 8;
+  int64 IngressPeakrate       = 9;
+  int64 EgressPeakrate        = 10;
+  int64 IngressMinburst       = 11;
+  int64 EgressMinburst        = 12;
+  int64 IngressPacketBurst    = 13;
+  int64 EgressPacketBurst     = 14;
 }
 
 message LocalBGPPeer {
-  string bgp_peer_name = 1;   
+  string bgp_peer_name = 1;
 }
 
 message WorkloadEndpointRemove {
