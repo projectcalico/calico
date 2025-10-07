@@ -104,7 +104,7 @@
         "order": 1000,
         "egress": [
           {
-            "action": "Allow",
+            "action": "Allow"
           }
         ],
         "selector": "projectcalico.org/orchestrator == 'k8s'",

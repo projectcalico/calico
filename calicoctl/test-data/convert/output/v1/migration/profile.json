@@ -61,7 +61,7 @@
             4567,
             "8:9"
           ]
-        },
+        }
       }
     ],
     "egress": [
@@ -75,7 +75,7 @@
         "action": "Allow",
         "source": {
           "selector": "something in {'a', 'b'}"
-        },
+        }
       },
       {
         "action": "Allow",

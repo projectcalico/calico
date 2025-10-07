@@ -16,7 +16,7 @@
         "action": "Deny",
         "source": {
           "selector": "type=='application'"
-        },
+        }
       }
     ],
     "selector": "type=='database'",
