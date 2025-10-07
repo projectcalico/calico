@@ -122,7 +122,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
-	$(DOCKER_GO_BUILD) sh -c "cd .semaphore && ./generate-semaphore-yaml.sh"
+	$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps generate-semaphore-yamls"
 
 GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
