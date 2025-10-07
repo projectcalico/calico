@@ -35,6 +35,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Aggregated API server which enables calico resources to be managed via kubectl"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico API server"
+LABEL release=1
+LABEL summary="Aggregated API server which enables calico resources to be managed via kubectl"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 COPY --from=source / /
 
 USER 10001:10001
