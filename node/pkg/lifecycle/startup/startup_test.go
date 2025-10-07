@@ -30,6 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
@@ -1188,7 +1190,12 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			Fail(fmt.Sprintf("Could not create K8s client: %v", err))
 		}
 
-		crdClient, err = rawcrdclient.New(kcfg)
+		// Determine if we're running in v3 CRD mode.
+		cfg, err := apiconfig.LoadClientConfig("")
+		Expect(err).NotTo(HaveOccurred())
+		v3CRD := k8s.UsingV3CRDs(&cfg.Spec)
+
+		crdClient, err = rawcrdclient.New(kcfg, v3CRD)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -1261,20 +1268,35 @@ var _ = Describe("FV tests against K8s API server.", func() {
 		Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, "upgrade-test-node", "10.11.0.0/26")).To(Succeed())
 		Run(WithBailOutAfterUpgrade(true))
 
-		// 4) Verify the previously unlabeled BA is now labeled.
+		// 4) Verify the previously unlabeled BA is now labeled. We need to try both API groups.
+		var labels map[string]string
 		list := libapiv3.BlockAffinityList{}
-		Expect(crdClient.List(ctx, &list)).To(Succeed())
-		var found1 *libapiv3.BlockAffinity
-		for i := range list.Items {
-			if list.Items[i].Spec.Node == "upgrade-test-node" && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
-				found1 = &list.Items[i]
-				break
+		err := crdClient.List(ctx, &list)
+		if runtime.IsNotRegisteredError(err) {
+			// try the other API group.
+			list := apiv3.BlockAffinityList{}
+			err = crdClient.List(ctx, &list)
+			Expect(err).NotTo(HaveOccurred())
+			for i := range list.Items {
+				if list.Items[i].Spec.Node == "upgrade-test-node" && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
+					labels = list.Items[i].Labels
+					break
+				}
+			}
+		} else if err != nil {
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			for i := range list.Items {
+				if list.Items[i].Spec.Node == "upgrade-test-node" && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
+					labels = list.Items[i].Labels
+					break
+				}
 			}
 		}
-		Expect(found1).NotTo(BeNil())
-		Expect(found1.Labels).To(HaveKey(apiv3.LabelAffinityType))
-		Expect(found1.Labels).To(HaveKey(apiv3.LabelIPVersion))
-		Expect(found1.Labels).To(HaveKey(apiv3.LabelHostnameHash))
+		Expect(labels).NotTo(BeNil())
+		Expect(labels).To(HaveKey(apiv3.LabelAffinityType))
+		Expect(labels).To(HaveKey(apiv3.LabelIPVersion))
+		Expect(labels).To(HaveKey(apiv3.LabelHostnameHash))
 	})
 })
 
