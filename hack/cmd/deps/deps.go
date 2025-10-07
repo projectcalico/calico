@@ -690,7 +690,7 @@ func validateChangeInClauses(semaphoreDir string) error {
 		return err
 	}
 	if len(offending) > 0 {
-		return fmt.Errorf("All change_in clauses must include pipeline_file: 'ignore' (or 'track'). Offending lines:\n%s", strings.Join(offending, "\n"))
+		return fmt.Errorf("all change_in clauses must include pipeline_file: 'ignore' (or 'track'). Offending lines:\n%s", strings.Join(offending, "\n"))
 	}
 	return nil
 }
