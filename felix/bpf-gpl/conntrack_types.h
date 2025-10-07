@@ -127,7 +127,7 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 } while(0)
 
 #define ct_value_get_flags(v) ({									\
-	__u16 ret = (v)->flags | ((v)->flags2 << 8) /*| ((v)->flags3 << 16) | ((v)->flags4 << 24) */;	\
+	__u32 ret = (v)->flags | ((v)->flags2 << 8) | ((v)->flags3 << 16) | ((v)->flags4 << 24);	\
 													\
 	ret;												\
 })
