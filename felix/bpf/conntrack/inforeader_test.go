@@ -139,7 +139,7 @@ var _ = Describe("BPF Conntrack InfoReader", func() {
 		),
 		Entry("32-bit flags RW",
 			conntrack.NewKey(123, clientIP, clientPort, backendIP, backendPort),
-			conntrack.NewValueNormal(now, v4.FlagSeventeenthBit, LegSrcDst, LegDstSrc),
+			conntrack.NewValueNormal(now, 0x10000, LegSrcDst, LegDstSrc),
 			collector.ConntrackInfo{
 				Tuple: makeTuple(clientIP, backendIP, clientPort, backendPort, 123),
 			},

@@ -40,7 +40,6 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
 #define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
 #define CALI_CT_FLAG_CLUSTER_EXTERNAL	0x8000 /* marks connections with source or destination outside cluster */
-#define CALI_CT_FLAG_SEVENTEENTH_BIT 0x10000 /* Triggers compilation failures on 16-bit conntrack systems :) */
 
 struct calico_ct_leg {
 	__u64 bytes;
