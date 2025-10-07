@@ -45,6 +45,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Calico Flannel migration controller updates a flannel cluster to Calico"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Flannel migration controller"
+LABEL release=1
+LABEL summary="Calico Flannel migration controller updates a flannel cluster to Calico"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 COPY --from=source / /
 
 USER 999
