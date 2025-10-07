@@ -717,7 +717,6 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 		// Canonical string form
 		_, subnet, _ := net.ParseCIDR(fmt.Sprintf("%s/%d", ip.String(), 96))
 		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, subnet.String())
-		//nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx))
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
 			Address: felix.IPv6,
 			Type:    v1.NodeInternalIP,
