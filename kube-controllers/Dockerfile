@@ -48,6 +48,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Calico Kubernetes controllers monitor the Kubernetes API and perform actions based on cluster state"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Kubernetes controllers"
+LABEL release=1
+LABEL summary="Calico Kubernetes controllers monitor the Kubernetes API and perform actions based on cluster state"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 COPY --from=source / /
 
 USER 999
