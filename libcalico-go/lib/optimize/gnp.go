@@ -25,6 +25,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
@@ -197,6 +198,9 @@ func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []*apiv3.Global
 	// Sort on selector (but avoid reordering rules that have different actions).
 	// This results in fewer split policies.
 	gnp = gnp.DeepCopy()
+	gnp.ObjectMeta.CreationTimestamp = metav1.Time{}
+	gnp.ObjectMeta.UID = ""
+	gnp.ObjectMeta.ResourceVersion = ""
 	groupGNPByRuleSelector(gnp)
 
 	// Split the policy into ingress and egress halves and process separately.
