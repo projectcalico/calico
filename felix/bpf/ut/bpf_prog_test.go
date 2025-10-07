@@ -763,7 +763,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
-			if strings.Contains(m.Name(), ".rodata") {
+			if ipFamily != "preamble" {
+				continue
+			}
+			if !strings.HasSuffix(m.Name(), ".rodata") {
 				continue
 			}
 			if forXDP {
@@ -931,6 +934,9 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
+			if !strings.HasSuffix(m.Name(), ".rodata") {
+				continue
+			}
 			globals := libbpf.TcGlobalData{
 				Tmtu:       natTunnelMTU,
 				VxlanPort:  testVxlanPort,
