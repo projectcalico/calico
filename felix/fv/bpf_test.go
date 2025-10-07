@@ -30,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -5690,12 +5689,50 @@ func k8sServiceWithExtIP(name, clusterIP string, w *workload.Workload, port,
 }
 
 func k8sGetEpsForService(k8s kubernetes.Interface, svc *v1.Service) []v1.EndpointSubset {
-	ep, _ := k8s.CoreV1().
-		Endpoints(svc.ObjectMeta.Namespace).
-		Get(context.Background(), svc.ObjectMeta.Name, metav1.GetOptions{})
-	log.WithField("endpoints",
-		spew.Sprint(ep)).Infof("Got endpoints for %s", svc.ObjectMeta.Name)
-	return ep.Subsets
+	slices, err := k8s.DiscoveryV1().
+		EndpointSlices(svc.Namespace).
+		List(context.Background(), metav1.ListOptions{
+			LabelSelector: "kubernetes.io/service-name=" + svc.Name,
+		})
+	if err != nil {
+		log.Errorf("Failed to list EndpointSlices for %s: %v", svc.Name, err)
+		return nil
+	}
+
+	var subsets []v1.EndpointSubset
+	for _, slice := range slices.Items {
+		var addresses, notReadyAddresses []v1.EndpointAddress
+		for _, ep := range slice.Endpoints {
+			addrs := make([]v1.EndpointAddress, len(ep.Addresses))
+			for i, addr := range ep.Addresses {
+				addrs[i] = v1.EndpointAddress{IP: addr}
+			}
+			// Ready field may be nil; treat nil as ready per k8s docs
+			if ep.Conditions.Ready == nil || *ep.Conditions.Ready {
+				addresses = append(addresses, addrs...)
+			} else {
+				notReadyAddresses = append(notReadyAddresses, addrs...)
+			}
+		}
+
+		ports := make([]v1.EndpointPort, len(slice.Ports))
+		for i, port := range slice.Ports {
+			ports[i] = v1.EndpointPort{
+				Name:     *port.Name,
+				Port:     *port.Port,
+				Protocol: *port.Protocol,
+			}
+		}
+
+		if len(addresses) > 0 || len(notReadyAddresses) > 0 {
+			subsets = append(subsets, v1.EndpointSubset{
+				Addresses:         addresses,
+				NotReadyAddresses: notReadyAddresses,
+				Ports:             ports,
+			})
+		}
+	}
+	return subsets
 }
 
 func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() []v1.EndpointSubset {
