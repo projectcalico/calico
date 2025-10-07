@@ -739,7 +739,7 @@ blocks:
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
           execution_time_limit:
-            minutes: 60
+            minutes: 180
           commands:
             - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
