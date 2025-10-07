@@ -26,13 +26,13 @@ import (
 	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
