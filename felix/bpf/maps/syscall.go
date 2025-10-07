@@ -139,16 +139,11 @@ func checkMapIfDebug(mapFD FD, keySize, valueSize int) error {
 }
 
 func GetMapInfo(fd FD) (*MapInfo, error) {
-	bpfAttr := C.bpf_maps_attr_alloc()
-	defer C.free(unsafe.Pointer(bpfAttr))
-	var bpfMapInfo *C.struct_bpf_map_info = (*C.struct_bpf_map_info)(C.malloc(C.sizeof_struct_bpf_map_info))
-	defer C.free(unsafe.Pointer(bpfMapInfo))
-
-	C.bpf_maps_attr_setup_get_info(bpfAttr, C.uint(fd), C.sizeof_struct_bpf_map_info, unsafe.Pointer(bpfMapInfo))
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_OBJ_GET_INFO_BY_FD, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
-
+	var bpfMapInfo C.struct_bpf_map_info
+	infoLen := C.__u32(unsafe.Sizeof(bpfMapInfo))
+	errno := C.bpf_map_get_info_by_fd(C.int(fd), &bpfMapInfo, &infoLen)
 	if errno != 0 {
-		return nil, errno
+		return nil, unix.Errno(errno)
 	}
 	return &MapInfo{
 		Type:       int(bpfMapInfo._type),
