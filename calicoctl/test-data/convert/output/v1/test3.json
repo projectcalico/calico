@@ -17,7 +17,6 @@
         "source": {
           "selector": "type=='application'"
         },
-        "destination": {}
       }
     ],
     "selector": "type=='database'",
