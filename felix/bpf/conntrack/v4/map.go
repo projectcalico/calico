@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -505,6 +505,9 @@ func (e Value) String() string {
 		}
 		if flags&FlagNoRedirPeer != 0 {
 			flagsStr += " no-redir-peer"
+		}
+		if flags&FlagSetDSCP != 0 {
+			flagsStr += " dscp"
 		}
 	}
 
