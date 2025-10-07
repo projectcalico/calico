@@ -40,12 +40,10 @@
             "source": {
               "notSelector": "role != 'something' \u0026\u0026 thing in {'one', 'two'}"
             },
-            "destination": {}
           },
           {
             "action": "Deny",
             "protocol": "TCP",
-            "source": {},
             "destination": {
               "ports": [
                 22,
@@ -64,7 +62,6 @@
                 "172.18.19.0/24"
               ]
             },
-            "destination": {}
           },
           {
             "action": "Allow",
@@ -73,7 +70,6 @@
                 "172.18.18.100/32"
               ]
             },
-            "destination": {}
           },
           {
             "action": "Deny",
@@ -82,7 +78,6 @@
                 "172.19.19.100/32"
               ]
             },
-            "destination": {}
           },
           {
             "action": "Deny",
@@ -91,7 +86,6 @@
                 "172.18.0.0/16"
               ]
             },
-            "destination": {}
           }
         ],
         "egress": [
@@ -102,8 +96,6 @@
               "type": 25,
               "code": 25
             },
-            "source": {},
-            "destination": {}
           }
         ],
         "selector": "role == 'database' \u0026\u0026 !has(demo)",
