@@ -2398,13 +2398,13 @@ func loadObject(obj *libbpf.Obj, data libbpf.GlobalData, mapsToBePinned ...strin
 		// userspace before the program is loaded.
 		mapName := m.Name()
 		if m.IsMapInternal() {
-			if strings.HasPrefix(mapName, ".rodata") {
+			if !strings.HasSuffix(mapName, ".rodata") {
 				continue
 			}
 
 			if data != nil {
 				if err := data.Set(m); err != nil {
-					return nil, fmt.Errorf("failed to configure %s: %w", obj.Filename(), err)
+					return nil, fmt.Errorf("failed to configure %s map %s: %w", obj.Filename(), mapName, err)
 				}
 			}
 			continue
