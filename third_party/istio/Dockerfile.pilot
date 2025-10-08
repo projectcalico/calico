@@ -1,0 +1,65 @@
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+ARG CALICO_BASE
+ARG UBI_IMAGE
+ARG ISTIO_PILOT_IMAGE
+
+FROM ${ISTIO_PILOT_IMAGE} AS istio-pilot
+
+FROM ${UBI_IMAGE} AS ubi
+
+FROM scratch AS source
+
+COPY --from=istio-pilot --chown=0:0 --chmod=755 \
+    /usr/local/bin/pilot-discovery /usr/local/bin/pilot-discovery
+
+# dependencies
+COPY --from=ubi /bin/sh /bin/sh
+COPY --from=ubi /usr/bin/chown /usr/bin/chown
+COPY --from=ubi /usr/bin/coreutils /usr/bin/coreutils
+COPY --from=ubi /usr/bin/env /usr/bin/env
+COPY --from=ubi /usr/bin/id /usr/bin/id
+COPY --from=ubi /usr/sbin/groupmod /usr/sbin/groupmod
+COPY --from=ubi /usr/sbin/usermod /usr/sbin/usermod
+
+COPY --from=ubi /lib64/libacl.so.1 /lib64/libacl.so.1
+COPY --from=ubi /lib64/libattr.so.1 /lib64/libattr.so.1
+COPY --from=ubi /lib64/libaudit.so.1 /lib64/libaudit.so.1
+COPY --from=ubi /lib64/libbz2.so.1 /lib64/libbz2.so.1
+COPY --from=ubi /lib64/libcap-ng.so.0 /lib64/libcap-ng.so.0
+COPY --from=ubi /lib64/libcap.so.2 /lib64/libcap.so.2
+COPY --from=ubi /lib64/libdl.so.2 /lib64/libdl.so.2
+COPY --from=ubi /lib64/libm.so.6 /lib64/libm.so.6
+COPY --from=ubi /lib64/libpcre2-8.so.0 /lib64/libpcre2-8.so.0
+COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
+COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
+COPY --from=ubi /lib64/libsemanage.so.2 /lib64/libsemanage.so.2
+COPY --from=ubi /lib64/libsepol.so.2 /lib64/libsepol.so.2
+COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
+
+FROM ${CALICO_BASE}
+
+ARG GIT_VERSION=unknown
+
+COPY --from=source / /
+
+# These labels are required for OCP Certification
+LABEL description="This image contains a build of Istio's pilot component from github.com/istio/istio, which is a component of the Istio service mesh"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Istio Pilot"
+LABEL release="1"
+LABEL summary="istio-pilot is the pilot component of Calico's integration with Istio"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
+LABEL org.opencontainers.image.description="This image contains a build of Istio's pilot component from github.com/istio/istio, which is a component of the Istio service mesh"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="istio-pilot is the pilot component of Calico's integration with Istio"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+ENTRYPOINT [ "/usr/local/bin/pilot-discovery" ]
+CMD []
+ENV PATH=$PATH:/usr/local/bin
