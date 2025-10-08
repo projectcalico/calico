@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -2864,6 +2865,7 @@ type testCase interface {
 }
 
 var nextPolProgIdx atomic.Int64
+var jumpStride = asm.TrampolineStrideDefault
 
 func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 	RegisterTestingT(t)
@@ -2921,6 +2923,10 @@ func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 	polProgIdx := int(nextPolProgIdx.Add(1))
 	stride := jump.TCMaxEntryPoints
 	polprogOpts = append(polprogOpts, polprog.WithPolicyMapIndexAndStride(int(polProgIdx), stride))
+
+retry:
+	polprogOpts = append(polprogOpts, polprog.WithTrampolineStride(jumpStride))
+
 	if tp.ForIPv6() {
 		polprogOpts = append(polprogOpts, polprog.WithIPv6())
 		ipsfd = ipsMapV6.MapFD()
@@ -2950,6 +2956,10 @@ func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 	}()
 	for i, p := range insns {
 		polProgFD, err := bpf.LoadBPFProgramFromInsns(p, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+		if err != nil && errors.Is(err, unix.ERANGE) && jumpStride == asm.TrampolineStrideDefault {
+			jumpStride = 14000
+			goto retry
+		}
 		Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 		Expect(polProgFD).NotTo(BeZero())
 		polProgFDs = append(polProgFDs, polProgFD)
