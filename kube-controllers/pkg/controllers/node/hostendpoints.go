@@ -324,7 +324,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 
 		if nodeSelector.Evaluate(node.Labels) {
 			expectedIPs := c.getExpectedIPsMatchingInterfaceCIDRs(node, template)
-			if len(expectedIPs) == 0 && template.InterfaceSelector == "" {
+			if len(expectedIPs) == 0 && template.InterfacePattern == "" {
 				// Because we do not specify interfaceName in HostEndpoint, expectedIPs should not be empty.
 				// If expectedIPs are empty the HostEndpoint will be invalid, and we should not create it
 				// If there is an existing HostEndpoint with this name, it will be deleted further down
@@ -334,8 +334,8 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 				continue
 			}
 
-			if template.InterfaceSelector == "" {
-				// When interfaceSelector is empty this template will always generate at most one AutoHostEndpoint
+			if template.InterfacePattern == "" {
+				// When interfacePattern is empty this template will always generate at most one AutoHostEndpoint
 				hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, "")
 				if err != nil {
 					logrus.WithError(err).Error("failed to generate host endpoint name")
@@ -346,14 +346,14 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 
 				hostEndpointsMatchingNode[hostEndpointName] = true
 
-				// If there is no InterfaceSelector we only create one host endpoint, we can continue to the next template
+				// If there is no InterfacePattern we only create one host endpoint, we can continue to the next template
 				continue
 			}
 
 			for _, iface := range node.Spec.Interfaces {
-				// If we reached here we know the template has interfaceSelector specified, we want to create a HostEndpoint for each interface that matches the regex selector.
-				if regexp.MustCompile(template.InterfaceSelector).MatchString(iface.Name) {
-					// Generate Host Endpoint for interface matching the InterfaceSelector from the template
+				// If we reached here we know the template has interfacePattern specified, we want to create a HostEndpoint for each interface that matches the regex selector.
+				if regexp.MustCompile(template.InterfacePattern).MatchString(iface.Name) {
+					// Generate Host Endpoint for interface matching the InterfacePattern from the template
 					hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, iface.Name)
 					if err != nil {
 						logrus.WithError(err).Error("failed to generate host endpoint name")

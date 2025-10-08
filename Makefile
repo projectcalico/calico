@@ -122,7 +122,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
-	$(DOCKER_GO_BUILD) sh -c "cd .semaphore && ./generate-semaphore-yaml.sh"
+	$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps generate-semaphore-yamls"
 
 GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
@@ -165,12 +165,13 @@ image:
 # using a local kind cluster.
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance"
+E2E_SKIP ?= ""
 ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
 ADMINPOLICY_UNSUPPORTED_FEATURES ?= ""
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS)
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
 	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)

@@ -20,15 +20,17 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
-func ServePrometheusMetricsHTTP(host string, port int) {
+func ServePrometheusMetricsHTTP(gatherer prometheus.Gatherer, host string, port int) {
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	handler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
+	mux.Handle("/metrics", handler)
 	addr := fmt.Sprintf("[%v]:%v", host, port)
 
 	for {
@@ -44,9 +46,10 @@ func ServePrometheusMetricsHTTP(host string, port int) {
 }
 
 // ServePrometheusMetricsHTTPS starts a secure Prometheus metrics server with dynamic TLS certificate reloading.
-func ServePrometheusMetricsHTTPS(host string, port int, certFile, keyFile, clientAuthType, caFile string) error {
+func ServePrometheusMetricsHTTPS(gatherer prometheus.Gatherer, host string, port int, certFile, keyFile, clientAuthType, caFile string) error {
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	handler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
+	mux.Handle("/metrics", handler)
 	addr := fmt.Sprintf("[%v]:%v", host, port)
 
 	// Initial TLS config loading to catch errors early.
