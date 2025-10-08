@@ -15,8 +15,6 @@
 package v3
 
 import (
-	"reflect"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 )
 
@@ -179,10 +177,6 @@ type EntityRule struct {
 	// ServiceAccounts is an optional field that restricts the rule to only apply to traffic that originates from (or
 	// terminates at) a pod running as a matching service account.
 	ServiceAccounts *ServiceAccountMatch `json:"serviceAccounts,omitempty" validate:"omitempty"`
-}
-
-func (e EntityRule) IsZero() bool {
-	return reflect.DeepEqual(e, EntityRule{})
 }
 
 type ServiceMatch struct {
