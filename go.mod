@@ -64,8 +64,6 @@ require (
 	github.com/projectcalico/api v0.0.0-20220722155641-439a754a988b
 	github.com/projectcalico/calico/lib/httpmachinery v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
-	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
-	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
 	github.com/prometheus/client_golang v1.23.0
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.65.0
