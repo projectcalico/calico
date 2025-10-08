@@ -26,6 +26,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -133,6 +134,8 @@ func (rw blockReaderWriter) findUsableBlock(
 		affinityCfg AffinityConfig
 		empty       bool
 		cidr        cnet.IPNet
+		claimTime   time.Time
+		seqNo       uint64
 	}
 
 	// Build a map for faster lookups.
@@ -152,6 +155,8 @@ func (rw blockReaderWriter) findUsableBlock(
 			affinityCfg: bAffinityCfg,
 			cidr:        e.Key.(model.BlockKey).CIDR,
 			empty:       block.empty(),
+			claimTime:   block.AffinityClaimTime.Time,
+			seqNo:       block.SequenceNumber,
 		}
 	}
 
@@ -179,7 +184,7 @@ func (rw blockReaderWriter) findUsableBlock(
 				log.Debugf("Block %s already assigned to host, has free space", subnet.String())
 				return subnet, nil
 			} else if info.empty && info.numFree != 0 {
-				log.Debugf("Block %s is empty, will try to reclaim it if we run out.", subnet.String())
+				log.Debugf("Block %s is empty, may try to reclaim it if we run out.", subnet.String())
 				emptyBlocks = append(emptyBlocks, info)
 			}
 			log.Debugf("Block %s already exists and is either affine to another host or has no space, try another", subnet.String())
@@ -194,9 +199,15 @@ func (rw blockReaderWriter) findUsableBlock(
 		// blocks get stranded, affine to other nodes).
 		log.Info("Ran out of empty blocks, trying to reclaim an empty one.")
 		for i, block := range emptyBlocks {
-			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, true)
+			if time.Since(block.claimTime) < time.Minute {
+				// Avoid a race where two nodes fight over a block, each freeing
+				// it before the other has a chance to use it.
+				log.Infof("Block %s was only just claimed by another node, not trying to reclaim it.", block.cidr.String())
+				continue
+			}
+			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, true, &block.seqNo)
 			if err != nil {
-				log.WithError(err).Warnf("Failed to release affinity while trying to release blocks. %v left to try.", len(emptyBlocks)-i)
+				log.Warnf("Failed to release affinity while trying to release blocks. %v left to try: %s", len(emptyBlocks)-i, err)
 				if ctx.Err() != nil {
 					log.Warn("Context expired while trying to reclaim empty blocks.  Giving up.")
 					return nil, noFreeBlocksError("No Free Blocks")
@@ -266,6 +277,8 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 	affinityKeyStr := fmt.Sprintf("%s:%s", affinityCfg.AffinityType, host)
 	block := newBlock(subnet, rsvdAttr)
 	block.Affinity = &affinityKeyStr
+	now := metav1.NewTime(time.Now())
+	block.AffinityClaimTime = &now
 
 	// Create the new block in the datastore.
 	o := model.KVPair{
@@ -350,7 +363,13 @@ func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPa
 
 // releaseBlockAffinity releases the host's affinity to the given block, and returns an affinityClaimedError if
 // the host does not claim an affinity for the block.
-func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCfg AffinityConfig, blockCIDR cnet.IPNet, requireEmpty bool) error {
+func (rw blockReaderWriter) releaseBlockAffinity(
+	ctx context.Context,
+	affinityCfg AffinityConfig,
+	blockCIDR cnet.IPNet,
+	requireEmpty bool,
+	expectedSeqNumber *uint64,
+) error {
 	// Make sure hostname is not empty.
 	if affinityCfg.Host == "" {
 		log.Errorf("Hostname can't be empty")
@@ -375,6 +394,10 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCf
 		return err
 	}
 	b := allocationBlock{obj.Value.(*model.AllocationBlock)}
+
+	if expectedSeqNumber != nil && *expectedSeqNumber != b.SequenceNumber {
+		return fmt.Errorf("IPAM block updated since we last read it")
+	}
 
 	// Check that the block affinity matches the given affinity.
 	if b.Affinity != nil && !affinityMatches(affinityCfg, b.AllocationBlock) {
@@ -418,6 +441,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCf
 		// non-affine blocks.
 		logCtx.Debug("Block is not empty - remove the affinity")
 		b.Affinity = nil
+		b.AffinityClaimTime = nil
 
 		// Pass back the original KVPair with the new
 		// block information so we can do a CAS.
