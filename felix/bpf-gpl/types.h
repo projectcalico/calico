@@ -158,9 +158,8 @@ enum cali_state_flags {
 	CALI_ST_SKIP_REDIR_PEER	  = 0x800,
 	/* CALI_ST_SKIP_REDIR_ONCE skips redirection once for this particular packet */
 	CALI_ST_SKIP_REDIR_ONCE   = 0x1000,
-	/* CALI_ST_CLUSTER_EXTERNAL is set if the packet is heading toward or originating from
-	 * an endpoint outside the cluster */
-	CALI_ST_CLUSTER_EXTERNAL   = 0x2000,
+	/* CALI_ST_SET_DSCP is set if we need to update packet's DSCP */
+	CALI_ST_SET_DSCP   = 0x2000,
 };
 
 struct fwd {
