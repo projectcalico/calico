@@ -48,25 +48,13 @@ func NewFilteredNetworkSetInformer(client clientset.Interface, namespace string,
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().NetworkSets(namespace).List(context.Background(), options)
+				return client.ProjectcalicoV3().NetworkSets(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().NetworkSets(namespace).Watch(context.Background(), options)
-			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().NetworkSets(namespace).List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().NetworkSets(namespace).Watch(ctx, options)
+				return client.ProjectcalicoV3().NetworkSets(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&apisprojectcalicov3.NetworkSet{},

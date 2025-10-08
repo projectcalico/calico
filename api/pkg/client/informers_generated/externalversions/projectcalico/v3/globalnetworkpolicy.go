@@ -47,25 +47,13 @@ func NewFilteredGlobalNetworkPolicyInformer(client clientset.Interface, resyncPe
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().GlobalNetworkPolicies().List(context.Background(), options)
+				return client.ProjectcalicoV3().GlobalNetworkPolicies().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().GlobalNetworkPolicies().Watch(context.Background(), options)
-			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().GlobalNetworkPolicies().List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().GlobalNetworkPolicies().Watch(ctx, options)
+				return client.ProjectcalicoV3().GlobalNetworkPolicies().Watch(context.TODO(), options)
 			},
 		},
 		&apisprojectcalicov3.GlobalNetworkPolicy{},

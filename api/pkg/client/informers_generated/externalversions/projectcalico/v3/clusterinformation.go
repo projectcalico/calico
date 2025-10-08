@@ -47,25 +47,13 @@ func NewFilteredClusterInformationInformer(client clientset.Interface, resyncPer
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().ClusterInformations().List(context.Background(), options)
+				return client.ProjectcalicoV3().ClusterInformations().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().ClusterInformations().Watch(context.Background(), options)
-			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().ClusterInformations().List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().ClusterInformations().Watch(ctx, options)
+				return client.ProjectcalicoV3().ClusterInformations().Watch(context.TODO(), options)
 			},
 		},
 		&apisprojectcalicov3.ClusterInformation{},

@@ -47,25 +47,13 @@ func NewFilteredHostEndpointInformer(client clientset.Interface, resyncPeriod ti
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().HostEndpoints().List(context.Background(), options)
+				return client.ProjectcalicoV3().HostEndpoints().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().HostEndpoints().Watch(context.Background(), options)
-			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().HostEndpoints().List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().HostEndpoints().Watch(ctx, options)
+				return client.ProjectcalicoV3().HostEndpoints().Watch(context.TODO(), options)
 			},
 		},
 		&apisprojectcalicov3.HostEndpoint{},

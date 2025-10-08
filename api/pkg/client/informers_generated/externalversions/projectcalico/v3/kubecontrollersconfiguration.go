@@ -47,25 +47,13 @@ func NewFilteredKubeControllersConfigurationInformer(client clientset.Interface,
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().KubeControllersConfigurations().List(context.Background(), options)
+				return client.ProjectcalicoV3().KubeControllersConfigurations().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().KubeControllersConfigurations().Watch(context.Background(), options)
-			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().KubeControllersConfigurations().List(ctx, options)
-			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
-				if tweakListOptions != nil {
-					tweakListOptions(&options)
-				}
-				return client.ProjectcalicoV3().KubeControllersConfigurations().Watch(ctx, options)
+				return client.ProjectcalicoV3().KubeControllersConfigurations().Watch(context.TODO(), options)
 			},
 		},
 		&apisprojectcalicov3.KubeControllersConfiguration{},

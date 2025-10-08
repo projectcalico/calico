@@ -3,7 +3,7 @@
 #################################################################################################
 
 # The version of calico/go-build and calico/base to use.
-GO_BUILD_VER=1.24.8-llvm18.1.8-k8s1.33.5
+GO_BUILD_VER=1.24.8-llvm18.1.8-k8s1.32.9
 CALICO_BASE_VER=ubi8-1744398299
 
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
