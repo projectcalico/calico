@@ -1559,8 +1559,8 @@ var ipv4Default = &layers.IPv4{
 	Protocol: layers.IPProtocolUDP,
 }
 
-var srcIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
-var dstIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2})
+var srcIPv6 = net.IP([]byte{0x20, 0x1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+var dstIPv6 = net.IP([]byte{0x20, 0x1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2})
 var srcV6CIDR = ip.CIDRFromNetIP(srcIPv6).(ip.V6CIDR)
 var dstV6CIDR = ip.CIDRFromNetIP(dstIPv6).(ip.V6CIDR)
 
