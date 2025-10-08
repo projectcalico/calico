@@ -126,7 +126,42 @@ metadata:
 spec:
   ingress:
   - action: Allow
-`))
+`,
+		))
+	})
+})
+
+var _ = Describe("ResourcePrinterJSON tests", func() {
+	It("should omit zero fields with the omitzero tag", func() {
+		rp := ResourcePrinterJSON{}
+		var buf bytes.Buffer
+		gnp := apiv3.NewGlobalNetworkPolicy()
+		gnp.Name = "foo"
+		gnp.Spec.Ingress = []apiv3.Rule{
+			{
+				Action: "Allow",
+			},
+		}
+		err := rp.FPrint(&buf, nil, []runtime.Object{gnp})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The source/destination fields of apiv3.Rule use omitzero.
+		Expect(buf.String()).To(MatchJSON(
+			`{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "GlobalNetworkPolicy",
+  "metadata": {
+    "creationTimestamp": null,
+    "name": "foo"
+  },
+  "spec": {
+    "ingress":[
+      {"action": "Allow"}
+    ]
+  }
+}
+`,
+		))
 	})
 })
 
