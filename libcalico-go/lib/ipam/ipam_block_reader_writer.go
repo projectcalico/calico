@@ -108,7 +108,14 @@ func findContainingPool(pools []v3.IPPool, addr net.IP) (*v3.IPPool, error) {
 //
 // Note that the block may become claimed between receiving the CIDR from this function and attempting to claim the corresponding
 // block as this function does not reserve the returned IPNet.
-func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg AffinityConfig, version int, pools []v3.IPPool, reservations addrFilter, config IPAMConfig) (*cnet.IPNet, error) {
+func (rw blockReaderWriter) findUsableBlock(
+	ctx context.Context,
+	affinityCfg AffinityConfig,
+	version int,
+	pools []v3.IPPool,
+	reservations addrFilter,
+	config IPAMConfig,
+) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
 		return nil, fmt.Errorf("no configured Calico pools for %s:%s", affinityCfg.AffinityType, affinityCfg.Host)
@@ -124,22 +131,32 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg Aff
 	type blockInfo struct {
 		numFree     int
 		affinityCfg AffinityConfig
+		empty       bool
+		cidr        cnet.IPNet
 	}
 
 	// Build a map for faster lookups.
 	exists := map[string]blockInfo{}
 	for _, e := range existingBlocks.KVPairs {
-		host := e.Value.(*model.AllocationBlock).Host()
-		affinityType := AffinityType(e.Value.(*model.AllocationBlock).AffinityType())
+		allocBlock := e.Value.(*model.AllocationBlock)
+		host := allocBlock.Host()
+		affinityType := AffinityType(allocBlock.AffinityType())
 		bAffinityCfg := AffinityConfig{
 			AffinityType: affinityType,
 			Host:         host,
 		}
-		numFree := allocationBlock{e.Value.(*model.AllocationBlock)}.NumFreeAddresses(reservations)
-		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{numFree: numFree, affinityCfg: bAffinityCfg}
+		block := allocationBlock{allocBlock}
+		numFree := block.NumFreeAddresses(reservations)
+		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{
+			numFree:     numFree,
+			affinityCfg: bAffinityCfg,
+			cidr:        e.Key.(model.BlockKey).CIDR,
+			empty:       block.empty(),
+		}
 	}
 
 	// Iterate through pools to find a new block.
+	var emptyBlocks []blockInfo
 	for _, pool := range pools {
 		// Use a block generator to iterate through all of the blocks
 		// that fall within the pool.
@@ -158,13 +175,45 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg Aff
 				log.Infof("Found free block: %+v", *subnet)
 				return subnet, nil
 			} else if info.affinityCfg == affinityCfg && info.numFree != 0 {
-				// Belongs to this host and has free allocations.  Check that the IPs really are free (not reserved).
+				// Belongs to this host and has free allocations.  We already took account of any reservations above.
 				log.Debugf("Block %s already assigned to host, has free space", subnet.String())
 				return subnet, nil
+			} else if info.empty && info.numFree != 0 {
+				log.Debugf("Block %s is empty, will try to reclaim it if we run out.", subnet.String())
+				emptyBlocks = append(emptyBlocks, info)
 			}
 			log.Debugf("Block %s already exists and is either affine to another host or has no space, try another", subnet.String())
 		}
 	}
+
+	if len(emptyBlocks) > 0 {
+		// This step is very important for small special-purpose IPAM pools
+		// with small blocks (and especially /32 blocks). Without it, we can
+		// be unable to allocate an IP even though there are fewer workloads
+		// using the special pool than there are total blocks (because the
+		// blocks get stranded, affine to other nodes).
+		log.Info("Ran out of empty blocks, trying to reclaim an empty one.")
+		for i, block := range emptyBlocks {
+			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, true)
+			if err != nil {
+				log.WithError(err).Warnf("Failed to release affinity while trying to release blocks. %v left to try.", len(emptyBlocks)-i)
+				if ctx.Err() != nil {
+					log.Warn("Context expired while trying to reclaim empty blocks.  Giving up.")
+					return nil, noFreeBlocksError("No Free Blocks")
+				}
+				continue
+			}
+
+			// Else... we reclaimed a block. So let's try to claim it.
+			log.Infof("Reclaimed block: %s", block.cidr.String())
+			subnet := block.cidr
+			return &subnet, nil
+		}
+
+		log.Warn("Unable to reclaim any empty blocks.")
+	}
+
+	log.Warn("No free blocks found in any pool.")
 	return nil, noFreeBlocksError("No Free Blocks")
 }
 
