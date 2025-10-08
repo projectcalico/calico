@@ -8,7 +8,6 @@ metadata:
 spec:
   ingress:
   - action: Deny
-    destination: {}
     source:
       selector: type=='application'
   order: 100

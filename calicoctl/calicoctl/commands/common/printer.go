@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"sort"
@@ -26,9 +27,9 @@ import (
 
 	"github.com/google/safetext/yamltemplate"
 	"github.com/projectcalico/go-json/json"
-	"github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -65,6 +66,10 @@ func (r ResourcePrinterJSON) Print(client client.Interface, resources []runtime.
 type ResourcePrinterYAML struct{}
 
 func (r ResourcePrinterYAML) Print(client client.Interface, resources []runtime.Object) error {
+	return r.FPrint(os.Stdout, client, resources)
+}
+
+func (r ResourcePrinterYAML) FPrint(w io.Writer, client client.Interface, resources []runtime.Object) error {
 	// If the results contain a single entry then extract the only value.
 	var rs interface{}
 	if len(resources) == 1 {
@@ -75,9 +80,9 @@ func (r ResourcePrinterYAML) Print(client client.Interface, resources []runtime.
 	if output, err := yaml.Marshal(rs); err != nil {
 		return err
 	} else {
-		fmt.Printf("%s", string(output))
+		_, err := w.Write(output)
+		return err
 	}
-	return nil
 }
 
 // ResourcePrinterTable implements the ResourcePrinter interface and is used to display
