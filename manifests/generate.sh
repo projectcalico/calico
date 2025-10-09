@@ -169,4 +169,5 @@ echo "Replacing image versions for static manifests"
 		echo "$curr_img:$defaultCalicoVersion --> $new_img:$CALICO_VERSION"
 		find . -type f -exec sed -i "s|${curr_img}:[A-Za-z0-9_.-]*|${new_img}:$CALICO_VERSION|g" {} \;
 	done
+  find ../test-tools/mocknode/mock-node.yaml -type f -exec sed -i "s|${defaultRegistry}/mock-node:[A-Za-z0-9_.-]*|${REGISTRY}/mock-node:$CALICO_VERSION|g" {} \;
 fi
