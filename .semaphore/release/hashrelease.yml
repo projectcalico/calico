@@ -14,8 +14,6 @@ global_job_config:
     - name: private-repo
     # Secret for GitHub API access.
     - name: marvin-github-token
-    # Secret for pushing to the docs box.
-    - name: docs-ssh
     # Secret for image registries
     - name: quay-hashrelease
     - name: docker
