@@ -13,8 +13,7 @@ func TestConfigValid(t *testing.T) {
 		{
 			name: "all fields set",
 			config: Config{
-				CredentialsFile: "/path/to/credentials.json",
-				BucketName:      "bucket-name",
+				BucketName: "bucket-name",
 			},
 			expectedValid: true,
 		},
@@ -26,10 +25,8 @@ func TestConfigValid(t *testing.T) {
 			expectedValid: false,
 		},
 		{
-			name: "missing bucket name",
-			config: Config{
-				CredentialsFile: "/path/to/credentials.json",
-			},
+			name:          "missing bucket name",
+			config:        Config{},
 			expectedValid: false,
 		},
 	} {
