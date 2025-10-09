@@ -54,9 +54,9 @@ type Rule struct {
 	// NotICMP is the negated version of the ICMP field.
 	NotICMP *ICMPFields `json:"notICMP,omitempty" validate:"omitempty"`
 	// Source contains the match criteria that apply to source entity.
-	Source EntityRule `json:"source,omitempty" validate:"omitempty"`
+	Source EntityRule `json:"source,omitzero,omitempty" validate:"omitempty"`
 	// Destination contains the match criteria that apply to destination entity.
-	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
+	Destination EntityRule `json:"destination,omitzero,omitempty" validate:"omitempty"`
 
 	// HTTP contains match criteria that apply to HTTP requests.
 	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`

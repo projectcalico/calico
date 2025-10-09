@@ -8,15 +8,12 @@ spec:
   - action: Allow
     destination:
       notSelector: profile == 'system'
-    source: {}
   - action: Allow
-    destination: {}
     source:
       selector: something in {'a', 'b'}
   - action: Allow
     destination:
       selector: something not in {'a', 'b'}
-    source: {}
   ingress:
   - action: Deny
     destination:
@@ -49,7 +46,6 @@ spec:
       notNets:
       - 10.0.20.0/25
   - action: Allow
-    destination: {}
     protocol: TCP
     source:
       ports:

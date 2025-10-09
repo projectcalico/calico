@@ -15,6 +15,7 @@
 package common
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -24,6 +25,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -97,6 +99,69 @@ var _ = Describe("Testing printer config()", func() {
 	It("prints 'unknown' when there is an error getting the default BGPConfig", func() {
 		client.throwError = true
 		Expect(config(client)("asnumber")).To(Equal("unknown"))
+	})
+})
+
+var _ = Describe("ResourcePrinterYAML tests", func() {
+	It("should omit zero fields with the omitzero tag", func() {
+		rp := ResourcePrinterYAML{}
+		var buf bytes.Buffer
+		gnp := apiv3.NewGlobalNetworkPolicy()
+		gnp.Name = "foo"
+		gnp.Spec.Ingress = []apiv3.Rule{
+			{
+				Action: "Allow",
+			},
+		}
+		err := rp.FPrint(&buf, nil, []runtime.Object{gnp})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The source/destination fields of apiv3.Rule use omitzero.
+		Expect(buf.String()).To(MatchYAML(
+			`apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  creationTimestamp: null
+  name: foo
+spec:
+  ingress:
+  - action: Allow
+`,
+		))
+	})
+})
+
+var _ = Describe("ResourcePrinterJSON tests", func() {
+	It("should omit zero fields with the omitzero tag", func() {
+		rp := ResourcePrinterJSON{}
+		var buf bytes.Buffer
+		gnp := apiv3.NewGlobalNetworkPolicy()
+		gnp.Name = "foo"
+		gnp.Spec.Ingress = []apiv3.Rule{
+			{
+				Action: "Allow",
+			},
+		}
+		err := rp.FPrint(&buf, nil, []runtime.Object{gnp})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The source/destination fields of apiv3.Rule use omitzero.
+		Expect(buf.String()).To(MatchJSON(
+			`{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "GlobalNetworkPolicy",
+  "metadata": {
+    "creationTimestamp": null,
+    "name": "foo"
+  },
+  "spec": {
+    "ingress":[
+      {"action": "Allow"}
+    ]
+  }
+}
+`,
+		))
 	})
 })
 
