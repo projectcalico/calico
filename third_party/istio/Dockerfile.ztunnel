@@ -12,6 +12,14 @@ FROM scratch AS source
 
 COPY --from=istio-ztunnel --chown=0:0 --chmod=755 \
     /usr/local/bin/ztunnel /usr/local/bin/ztunnel
+# Copying the glibc from ztunnel container because the one present in
+# CALICO_BASE is minor version and not compatible.
+COPY --from=istio-ztunnel --chown=0:0 --chmod=755 \
+    /usr/lib/x86_64-linux-gnu/libc.so.6 /lib64/libc.so.6
+COPY --from=istio-ztunnel --chown=0:0 --chmod=755 \
+    /usr/lib/x86_64-linux-gnu/libm.so.6 /lib64/libm.so.6
+COPY --from=istio-ztunnel --chown=0:0 --chmod=755 \
+    /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 
 # dependencies
 COPY --from=ubi /bin/sh /bin/sh
@@ -36,6 +44,7 @@ COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
 COPY --from=ubi /lib64/libsemanage.so.2 /lib64/libsemanage.so.2
 COPY --from=ubi /lib64/libsepol.so.2 /lib64/libsepol.so.2
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
+COPY --from=ubi /lib64/libgcc_s.so.1 /lib64/libgcc_s.so.1
 
 FROM ${CALICO_BASE}
 
@@ -64,3 +73,5 @@ WORKDIR /
 ENTRYPOINT ["/usr/local/bin/ztunnel"]
 CMD []
 ENV PATH=$PATH:/usr/local/bin
+# Needed after copying glibc from ztunnel container
+ENV LD_LIBRARY_PATH=/lib64
