@@ -14,7 +14,7 @@ spec:
   hostNetwork: true
   containers:
     - name: calicoctl
-      image: calico/ctl:master
+      image: quay.io/calico/ctl:release-v3.31
       command:
         - calicoctl
       args:
