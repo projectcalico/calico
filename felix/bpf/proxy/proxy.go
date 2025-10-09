@@ -446,7 +446,7 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		}
 	}
 
-	if a, ok := s.ObjectMeta.Annotations[ExternalTrafficStrategy]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
+	if a, ok := s.Annotations[ExternalTrafficStrategy]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
 		svc.useMaglev = true
 	}
 

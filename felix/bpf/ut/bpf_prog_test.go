@@ -410,17 +410,12 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		defer o.Close()
 	}
 
-	hasMaglev := false
-	if strings.Contains(obj, "from_hep") {
-		hasMaglev = true
-	}
-
 	if loglevel == "debug" {
 		ipFamily += " debug"
 	}
 
+	hasMaglev := strings.Contains(obj, "from_hep")
 	obj += ".o"
-
 	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
