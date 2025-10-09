@@ -50,7 +50,8 @@ type BranchManager struct {
 	// publish indicates if we should push the branch changes to the remote repository
 	publish bool
 
-	// repoManager indicates if we are setting up a new release branch
+	// repoManager is responsible for handling repository specific operations
+	// required during branch cut. If none specified, no repository specific operations will be performed.
 	repoManager RepoManager
 }
 

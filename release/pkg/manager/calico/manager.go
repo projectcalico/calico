@@ -129,6 +129,7 @@ func NewManager(opts ...Option) *CalicoManager {
 	if b.repoRoot == "" {
 		logrus.Fatal("No repo root specified")
 	}
+	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
 	if b.githubOrg == "" {
 		logrus.Fatal("GitHub organization not specified")
 	}
@@ -138,7 +139,11 @@ func NewManager(opts ...Option) *CalicoManager {
 	if b.remote == "" {
 		logrus.Fatal("No git remote specified")
 	}
-	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
+	logrus.WithFields(logrus.Fields{
+		"org":    b.githubOrg,
+		"repo":   b.repo,
+		"remote": b.remote,
+	}).Info("Using GitHub configuration")
 
 	return b
 }
@@ -175,9 +180,7 @@ type CalicoManager struct {
 	operatorImage    string
 	operatorRegistry string
 	operatorVersion  string
-
-	// new release branch cut variables
-	operatorBranch string
+	operatorBranch   string
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
@@ -237,18 +240,23 @@ func (r *CalicoManager) helmChartVersion() string {
 }
 
 func (r *CalicoManager) PreBuildValidation() error {
+	var errStack error
 	if r.calicoVersion == "" {
-		logrus.Fatal("No calico version specified")
+		errStack = errors.Join(errStack, fmt.Errorf("no calico version specified"))
 	}
-	logrus.WithField("version", r.calicoVersion).Info("Using product version")
 
 	if r.operatorVersion == "" {
-		logrus.Fatal("No operator version specified")
+		errStack = errors.Join(errStack, fmt.Errorf("no operator version specified"))
 	}
-	logrus.WithField("operatorVersion", r.operatorVersion).Info("Using operator version")
 	if (r.buildImages || r.archiveImages) && len(r.imageRegistries) == 0 {
-		logrus.Fatal("No image registries specified")
+		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
 	}
+	if errStack != nil {
+		return errStack
+	}
+	logrus.WithField("version", r.calicoVersion).Info("Using product version")
+	logrus.WithField("operatorVersion", r.operatorVersion).Info("Using operator version")
+	logrus.WithField("registries", r.imageRegistries).Info("Using image registries for release")
 	if r.isHashRelease {
 		return r.PreHashreleaseValidate()
 	}
@@ -807,16 +815,21 @@ func (r *CalicoManager) publishPrereqs() error {
 		logrus.Warn("Skipping pre-publish validation")
 		return nil
 	}
+	var errStack error
 	if r.calicoVersion == "" {
-		logrus.Fatal("No calico version specified")
+		errStack = errors.Join(errStack, fmt.Errorf("no calico version specified"))
 	}
-	logrus.WithField("version", r.calicoVersion).Info("Using product version")
 	if r.publishImages && len(r.imageRegistries) == 0 {
-		logrus.Fatal("No image registries specified")
+		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
 	}
 	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
-		return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before publishing the release")
+		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before publishing the release"))
 	}
+	if errStack != nil {
+		return errStack
+	}
+	logrus.WithField("version", r.calicoVersion).Info("Using product version")
+	logrus.WithField("registries", r.imageRegistries).Info("Using image registries for publishing")
 	if r.isHashRelease {
 		return r.hashreleasePrereqs()
 	}
@@ -1291,18 +1304,19 @@ func (r *CalicoManager) releaseBranchPrereqs(branch string) error {
 		logrus.Warn("Skipping pre-release branch validation")
 		return nil
 	}
+	var errStack error
 	if dirty, err := utils.GitIsDirty(r.repoRoot); err != nil {
-		return fmt.Errorf("failed to check if git is dirty: %s", err)
+		errStack = errors.Join(errStack, fmt.Errorf("failed to check if git is dirty: %s", err))
 	} else if dirty {
-		return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before cutting a release branch")
+		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before cutting a release branch"))
 	}
 	if branch == "" {
-		return fmt.Errorf("no branch specified")
+		errStack = errors.Join(errStack, fmt.Errorf("release branch not specified"))
 	}
 	if r.operatorBranch == "" {
-		return fmt.Errorf("operator branch not specified")
+		errStack = errors.Join(errStack, fmt.Errorf("operator branch not specified"))
 	}
-	return nil
+	return errStack
 }
 
 // SetupReleaseBranch runs the steps necessary when cutting a new release branch
