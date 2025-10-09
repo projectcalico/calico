@@ -27,7 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	conntrack4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/consistenthash"
 	chtypes "github.com/projectcalico/calico/felix/bpf/consistenthash/test"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -199,7 +199,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		v, ok := ct[conntrack.NewKey(uint8(layers.IPProtocolTCP), ipv4.SrcIP, uint16(tcp.SrcPort), podIP.To4(), podPort)]
 		Expect(ok).To(BeTrue())
 		Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-		Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd | conntrack3.FlagMaglev))
+		Expect(v.Flags()).To(Equal(conntrack4.FlagNATNPFwd | conntrack4.FlagMaglev))
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -325,7 +325,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		v, ok := ct[conntrack.NewKey(uint8(layers.IPProtocolTCP), ipv4.SrcIP, uint16(tcp.SrcPort), podIP.To4(), podPort)]
 		Expect(ok).To(BeTrue())
 		Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-		Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagMaglev))
+		Expect(v.Flags()).To(Equal(conntrack4.FlagExtLocal | conntrack4.FlagMaglev))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -563,7 +563,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(layers.IPProtocolTCP), ipv4.SrcIP, uint16(tcp.SrcPort), podIP.To4(), podPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd | conntrack3.FlagMaglev))
+	Expect(v.Flags()).To(Equal(conntrack4.FlagNATNPFwd | conntrack4.FlagMaglev))
 
 	// Leaving node 1
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -668,7 +668,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		v, ok = ct[conntrack.NewKey(uint8(layers.IPProtocolTCP), ipv4.SrcIP, uint16(tcp.SrcPort), podIP.To4(), podPort)]
 		Expect(ok).To(BeTrue())
 		Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-		Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagMaglev))
+		Expect(v.Flags()).To(Equal(conntrack4.FlagExtLocal | conntrack4.FlagMaglev))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -1031,7 +1031,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	v, ok := ct[conntrack.NewKeyV6(uint8(layers.IPProtocolTCP), ipv6.SrcIP, uint16(tcp.SrcPort), natIP, natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd | conntrack3.FlagMaglev))
+	Expect(v.Flags()).To(Equal(conntrack4.FlagNATNPFwd | conntrack4.FlagMaglev))
 
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -1150,7 +1150,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	v, ok = ct[conntrack.NewKeyV6(uint8(layers.IPProtocolTCP), ipv6.SrcIP, uint16(tcp.SrcPort), natIP, natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagMaglev))
+	Expect(v.Flags()).To(Equal(conntrack4.FlagExtLocal | conntrack4.FlagMaglev))
 
 	dumpARPMapV6(arpMapV6)
 
@@ -1508,7 +1508,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	v, ok = ct[conntrack.NewKeyV6(uint8(layers.IPProtocolTCP), ipv6.SrcIP, uint16(tcp.SrcPort), natIP, natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd | conntrack3.FlagMaglev))
+	Expect(v.Flags()).To(Equal(conntrack4.FlagNATNPFwd | conntrack4.FlagMaglev))
 
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -1627,7 +1627,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	v, ok = ct[conntrack.NewKeyV6(uint8(layers.IPProtocolTCP), ipv6.SrcIP, uint16(tcp.SrcPort), natIP, natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagMaglev))
+	Expect(v.Flags()).To(Equal(conntrack4.FlagExtLocal | conntrack4.FlagMaglev))
 
 	dumpARPMapV6(arpMapV6)
 
@@ -1974,7 +1974,7 @@ func TestMaglevNATNodePortNoFWD(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagMaglev))
+	Expect(v.Flags()).To(Equal(conntrack4.FlagExtLocal | conntrack4.FlagMaglev))
 
 	// Arriving at workload
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
