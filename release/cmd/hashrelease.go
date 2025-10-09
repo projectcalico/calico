@@ -318,7 +318,7 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	// CI condtional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease bucket name, ensure --%s is set",
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
 				hashreleaseServerBucketFlag.Name)
 		}
 		if c.String(ciTokenFlag.Name) == "" {
