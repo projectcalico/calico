@@ -21,7 +21,6 @@ import (
 	"os"
 
 	"cloud.google.com/go/storage"
-	"google.golang.org/api/option"
 )
 
 // Config holds the configuration for hashrelease publishing.
@@ -41,7 +40,7 @@ func (s *Config) Valid() bool {
 
 func (s *Config) Bucket() (*storage.BucketHandle, error) {
 	if s.gcsClient == nil {
-		cli, err := storage.NewClient(context.Background(), option.WithCredentialsFile(s.CredentialsFile))
+		cli, err := storage.NewClient(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("failed to create storage client: %w", err)
 		}
