@@ -44,7 +44,3 @@ func (s *Config) Bucket() (*storage.BucketHandle, error) {
 	}
 	return s.gcsClient.Bucket(s.BucketName), nil
 }
-
-type serviceAccountCredentials struct {
-	ClientEmail string `json:"client_email"`
-}
