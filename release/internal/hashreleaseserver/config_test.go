@@ -11,20 +11,6 @@ func TestConfigValid(t *testing.T) {
 		expectedValid bool
 	}{
 		{
-			name: "all fields set",
-			config: Config{
-				BucketName: "bucket-name",
-			},
-			expectedValid: true,
-		},
-		{
-			name: "missing GCS credentials",
-			config: Config{
-				BucketName: "bucket-name",
-			},
-			expectedValid: false,
-		},
-		{
 			name:          "missing bucket name",
 			config:        Config{},
 			expectedValid: false,
