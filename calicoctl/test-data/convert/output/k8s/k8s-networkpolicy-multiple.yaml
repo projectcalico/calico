@@ -15,7 +15,6 @@ items:
         ports:
         - 5978
       protocol: TCP
-      source: {}
     ingress:
     - action: Allow
       destination:
@@ -67,8 +66,6 @@ items:
   spec:
     egress:
     - action: Allow
-      destination: {}
-      source: {}
     order: 1000
     selector: projectcalico.org/orchestrator == 'k8s'
     tier: default

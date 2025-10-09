@@ -13,7 +13,6 @@ spec:
       ports:
       - 5978
     protocol: TCP
-    source: {}
   ingress:
   - action: Allow
     destination:

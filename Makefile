@@ -172,9 +172,11 @@ e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
-	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+	
+	# Disabling ANP/BANP conformance tests due to being replaced by ClusterNetworkPolicy (and also being flaky).
+	#KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
+	# -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
+	#  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
 
 e2e-test-adminpolicy:
 	$(MAKE) -C e2e build

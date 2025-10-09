@@ -39,7 +39,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NP_REMOTE	0x1000 /* marks connections from local host to remote backend of a nodeport */
 #define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
 #define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
-#define CALI_CT_FLAG_CLUSTER_EXTERNAL	0x8000 /* marks connections with source or destination outside cluster */
+#define CALI_CT_FLAG_SET_DSCP	0x8000 /* marks connections that needs to set DSCP */
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -67,28 +67,30 @@ struct calico_ct_leg {
 #define CT_INVALID_IFINDEX	0
 struct calico_ct_value {
 	__u64 rst_seen;
-	__u64 last_seen; // 8
-	__u8 type;		 // 16
+	__u64 last_seen;	// 8
+	__u8 type;		// 16
 	__u8 flags;
 
+	__u8 flags3;
+	__u8 flags4;
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
 	// failures when debug logging is compiled out only :-).
-	__u8 pad0[5];
+	__u8 pad0[3];
 	__u8 flags2;
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
-			struct calico_ct_leg a_to_b; // 24
-			struct calico_ct_leg b_to_a; // 48
+			struct calico_ct_leg a_to_b;	// 24
+			struct calico_ct_leg b_to_a;	// 48
 
 			// CALI_CT_TYPE_NAT_REV
-			ipv46_addr_t tun_ip;                      // 72
-			ipv46_addr_t orig_ip;                     // 76
-			__u16 orig_port;                   // 80
-			__u16 orig_sport;                  // 82
-			ipv46_addr_t orig_sip;                    // 84
+			ipv46_addr_t tun_ip;	// 72
+			ipv46_addr_t orig_ip;	// 76
+			__u16 orig_port;	// 80
+			__u16 orig_sport;	// 82
+			ipv46_addr_t orig_sip;	// 84
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -120,12 +122,14 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 #define ct_value_set_flags(v, f) do {		\
 	(v)->flags |= ((f) & 0xff);		\
 	(v)->flags2 |= (((f) >> 8) & 0xff);	\
+	(v)->flags3 |= (((f) >> 16) & 0xff);	\
+	(v)->flags4 |= (((f) >> 24) & 0xff);	\
 } while(0)
 
-#define ct_value_get_flags(v) ({			\
-	__u16 ret = (v)->flags | ((v)->flags2 << 8);	\
-							\
-	ret;						\
+#define ct_value_get_flags(v) ({									\
+	__u32 ret = (v)->flags | ((v)->flags2 << 8) | ((v)->flags3 << 16) | ((v)->flags4 << 24);	\
+													\
+	ret;												\
 })
 
 struct ct_lookup_ctx {
@@ -224,7 +228,8 @@ enum calico_ct_result_type {
 
 struct calico_ct_result {
 	__s16 rc;
-	__u16 flags;
+	__u16 pad;
+	__u32 flags;
 	ipv46_addr_t nat_ip;
 	ipv46_addr_t nat_sip;
 	__u16 nat_port;
