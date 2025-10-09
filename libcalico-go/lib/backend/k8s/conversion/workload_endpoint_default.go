@@ -44,8 +44,8 @@ var (
 	maxBandwidth = resource.MustParse("1P")
 	// Burst sizes in bits
 	minBurst     = resource.MustParse("1k")
-	defaultBurst = resource.MustParse("4Gi")                            // 512 Mi bytes
-	maxBurst     = resource.MustParse(strconv.Itoa(math.MaxUint32 * 8)) // 34359738360, approx. 4Gi bytes
+	defaultBurst = resource.MustParse("4Gi")                                    // 512 Mi bytes
+	maxBurst     = resource.MustParse(strconv.FormatUint(math.MaxUint32*8, 10)) // 34359738360, approx. 4Gi bytes
 	// Peakrate in bits per second
 	// Peakrate should always be greater than bandwidth, so we make the min and max slightly higher than those
 	minPeakrate = resource.MustParse("1.01k")
@@ -66,7 +66,7 @@ var (
 	minNumConnections = resource.MustParse("1")
 	// The connection limit is an uint32 (maximum value 4294967295).
 	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_connlimit.h#L25
-	maxNumConnections = resource.MustParse(strconv.Itoa(math.MaxUint32))
+	maxNumConnections = resource.MustParse(strconv.FormatUint(math.MaxUint32, 10))
 )
 
 type defaultWorkloadEndpointConverter struct{}
