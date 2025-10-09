@@ -114,10 +114,6 @@ func Publish(productCode string, h *Hashrelease, cfg *Config) error {
 }
 
 func publishFiles(h *Hashrelease, cfg *Config) error {
-	logrus.WithFields(logrus.Fields{
-		"hashrelease": h.Name,
-		"srcDir":      h.Source,
-	}).Info("Publishing hashrelease files")
 	// publish to cloud storage
 	logrus.WithFields(logrus.Fields{
 		"hashrelease": h.Name,
