@@ -451,7 +451,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 
 		// Release the block affinity, requiring it to be empty.
 		for i := 0; i < datastoreRetries; i++ {
-			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, block, true); err != nil {
+			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, block, true, nil); err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Not claimed by this host - ignore.
 				} else if _, ok := err.(errBlockNotEmpty); ok {
@@ -1414,7 +1414,7 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
 		logCtx := log.WithField("cidr", blockCIDR)
 		for i := 0; i < datastoreRetries; i++ {
-			err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, mustBeEmpty)
+			err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, mustBeEmpty, nil)
 			if err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Not claimed by this host - ignore.
@@ -1448,7 +1448,7 @@ func (c ipamClient) ReleaseBlockAffinity(ctx context.Context, block *model.Alloc
 		return err
 	}
 
-	err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, block.CIDR, mustBeEmpty)
+	err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, block.CIDR, mustBeEmpty, nil)
 	if err != nil {
 		if _, ok := err.(errBlockClaimConflict); ok {
 			// Not claimed by this host - ignore.
@@ -1485,7 +1485,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg Affin
 		for _, blockCIDR := range blockCIDRs {
 			logCtx := log.WithField("cidr", blockCIDR)
 			for i := 0; i < datastoreRetries; i++ {
-				err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, blockCIDR, mustBeEmpty)
+				err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, blockCIDR, mustBeEmpty, nil)
 				if err != nil {
 					if _, ok := err.(errBlockClaimConflict); ok {
 						// Claimed by a different host. Move to next block.
@@ -1530,7 +1530,7 @@ func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) e
 			_, blockCIDR, _ := net.ParseCIDR(blockString)
 			logCtx := log.WithField("cidr", blockCIDR)
 			for i := 0; i < datastoreRetries; i++ {
-				err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, false)
+				err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, false, nil)
 				if err != nil {
 					if _, ok := err.(errBlockClaimConflict); ok {
 						retry = true
@@ -2117,7 +2117,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	logCtx.WithField("selector", pool.Spec.NodeSelector).Debug("Pool no longer selects node, releasing block affinity")
 
 	// Pool does not match this node's label, release this block's affinity.
-	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, b.CIDR, true); err != nil {
+	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, b.CIDR, true, nil); err != nil {
 		if _, ok := err.(errBlockClaimConflict); ok {
 			// Not claimed by this host - ignore.
 		} else if _, ok := err.(errBlockNotEmpty); ok {
