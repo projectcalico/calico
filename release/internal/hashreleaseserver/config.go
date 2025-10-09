@@ -16,17 +16,13 @@ package hashreleaseserver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"cloud.google.com/go/storage"
 )
 
 // Config holds the configuration for hashrelease publishing.
 type Config struct {
-	// credentials file for GCS access
-	CredentialsFile string
 
 	// cloud storage bucket name
 	BucketName string
@@ -35,7 +31,7 @@ type Config struct {
 }
 
 func (s *Config) Valid() bool {
-	return s.BucketName != "" && s.CredentialsFile != ""
+	return s.BucketName != ""
 }
 
 func (s *Config) Bucket() (*storage.BucketHandle, error) {
@@ -51,17 +47,4 @@ func (s *Config) Bucket() (*storage.BucketHandle, error) {
 
 type serviceAccountCredentials struct {
 	ClientEmail string `json:"client_email"`
-}
-
-func (s *Config) credentialsAccount() (string, error) {
-	// return the email address of the service account used for GCS access
-	data, err := os.ReadFile(s.CredentialsFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to read credentials file: %w", err)
-	}
-	var creds serviceAccountCredentials
-	if err := json.Unmarshal(data, &creds); err != nil {
-		return "", fmt.Errorf("failed to unmarshal credentials file: %w", err)
-	}
-	return creds.ClientEmail, nil
 }
