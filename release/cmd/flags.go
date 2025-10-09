@@ -412,7 +412,7 @@ var (
 	}
 
 	// Hashrelease server configuration flags.
-	hashreleaseServerFlags = []cli.Flag{hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag}
+	hashreleaseServerFlags = []cli.Flag{hashreleaseServerBucketFlag}
 	publishHashreleaseFlag = &cli.BoolFlag{
 		Name:  "publish-to-hashrelease-server",
 		Usage: "Publish the hashrelease to the hashrelease server",
@@ -423,11 +423,6 @@ var (
 		Usage:   "Publish the hashrelease as the latest hashrelease",
 		Sources: cli.EnvVars("LATEST"),
 		Value:   true,
-	}
-	hashreleaseServerCredentialsFlag = &cli.StringFlag{
-		Name:    "hashrelease-server-credentials",
-		Usage:   "The absolute path to the credentials file for the hashrelease server",
-		Sources: cli.EnvVars("HASHRELEASE_SERVER_CREDENTIALS"),
 	}
 	hashreleaseServerBucketFlag = &cli.StringFlag{
 		Name:    "hashrelease-server-bucket",

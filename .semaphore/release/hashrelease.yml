@@ -14,8 +14,6 @@ global_job_config:
     - name: private-repo
     # Secret for GitHub API access.
     - name: marvin-github-token
-    # Secret for pushing to the docs box.
-    - name: docs-ssh
     # Secret for image registries
     - name: quay-hashrelease
     - name: docker
@@ -44,10 +42,10 @@ global_job_config:
             --quiet \
             --service-account="${OIDC_SERVICE_ACCOUNT_EMAIL}" \
             --service-account-token-lifetime-seconds="${OIDC_SERVICE_ACCOUNT_LIFETIME}" \
-            --output-file="${GOOGLE_APPLICATION_CREDENTIALS_PATH}" \
+            --output-file="${GOOGLE_APPLICATION_CREDENTIALS}" \
             --credential-source-file="${SEMAPHORE_TOKEN_FILE_PATH}" \
             --credential-source-type="text"
-      - gcloud auth login --quiet --cred-file="${GOOGLE_APPLICATION_CREDENTIALS_PATH}"
+      - gcloud auth login --quiet --cred-file="${GOOGLE_APPLICATION_CREDENTIALS}"
       - gcloud config set project --quiet "${OIDC_GCP_PROJECT_NAME}"
       # Configure docker to use the gcloud credential helper
       - gcloud auth configure-docker --quiet
