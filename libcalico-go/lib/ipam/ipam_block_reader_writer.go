@@ -199,24 +199,28 @@ func (rw blockReaderWriter) findUsableBlock(
 		// blocks get stranded, affine to other nodes).
 		log.Info("Ran out of empty blocks, trying to reclaim an empty one.")
 		for i, block := range emptyBlocks {
-			if time.Since(block.claimTime) < time.Minute {
+			age := time.Since(block.claimTime)
+			if age < time.Minute {
 				// Avoid a race where two nodes fight over a block, each freeing
 				// it before the other has a chance to use it.
-				log.Infof("Block %s was only just claimed by another node, not trying to reclaim it.", block.cidr.String())
+				log.Infof("Block %s was claimed %.1fs ago by another node, not trying to reclaim it.",
+					block.cidr.String(), age.Seconds())
 				continue
 			}
 			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, true, &block.seqNo)
 			if err != nil {
-				log.Warnf("Failed to release affinity while trying to release blocks. %v left to try: %s", len(emptyBlocks)-i, err)
+				log.Warnf("Failed to release affinity while trying to reclaim block. %v left to try: %s", len(emptyBlocks)-i, err)
 				if ctx.Err() != nil {
 					log.Warn("Context expired while trying to reclaim empty blocks.  Giving up.")
-					return nil, noFreeBlocksError("No Free Blocks")
+					return nil, ctx.Err()
 				}
+				// If not a context expiry, keep trying other blocks.
 				continue
 			}
 
-			// Else... we reclaimed a block. So let's try to claim it.
-			log.Infof("Reclaimed block: %s", block.cidr.String())
+			// We reclaimed a block. Return it to the caller, who'll try to
+			// claim it.
+			log.Infof("Reclaimed empty block: %s", block.cidr.String())
 			subnet := block.cidr
 			return &subnet, nil
 		}
