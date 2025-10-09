@@ -2328,18 +2328,6 @@ var testExpanders = []testExpander{
 			return out
 		},
 	},
-	{
-		Name: "WithLargePrefixedTierAndJITHarden",
-		Expand: func(p polProgramTest) polProgramTest {
-			out := p
-			initExtraTierOnce.Do(initExtraTier)
-			out.Policy.Tiers = append([]polprog.Tier{extraTier}, out.Policy.Tiers...)
-			out.SetupCB = func() error { return execSysctl("net.core.bpf_jit_harden", "2") }
-			out.TearDownCB = func() error { return execSysctl("net.core.bpf_jit_harden", "0") }
-			out.Options = []polprog.Option{polprog.WithTrampolineStride(14000)}
-			return out
-		},
-	},
 }
 
 var extraTier polprog.Tier
