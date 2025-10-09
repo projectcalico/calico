@@ -24,6 +24,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+type RepoManager interface {
+	SetupReleaseBranch(branch string) error
+}
+
 type BranchManager struct {
 	// repoRoot is the absolute path to the root directory of the repository
 	repoRoot string
@@ -45,6 +49,10 @@ type BranchManager struct {
 
 	// publish indicates if we should push the branch changes to the remote repository
 	publish bool
+
+	// repoManager is responsible for handling repository specific operations
+	// required during branch cut. If none specified, no repository specific operations will be performed.
+	repoManager RepoManager
 }
 
 func NewManager(opts ...Option) *BranchManager {
@@ -101,7 +109,14 @@ func (b *BranchManager) CutVersionedBranch(stream string) error {
 	if _, err := b.git("checkout", "-b", newBranchName); err != nil {
 		return err
 	}
+	if b.repoManager != nil {
+		logrus.Infof("Performing setup necessary for %s branch", newBranchName)
+		if err := b.repoManager.SetupReleaseBranch(newBranchName); err != nil {
+			return fmt.Errorf("failed to set up release branch: %s", err)
+		}
+	}
 	if b.publish {
+		logrus.WithField("branch", newBranchName).Infof("Pushing new release branch to remote '%s'", b.remote)
 		if _, err := b.git("push", b.remote, newBranchName); err != nil {
 			return err
 		}
@@ -109,10 +124,16 @@ func (b *BranchManager) CutVersionedBranch(stream string) error {
 	return nil
 }
 
+// CutReleaseBranch creates a new release branch from the main branch,
+// run branch cut setup by the RepoManager,
+// and updates the main branch to the next development version.
 func (b *BranchManager) CutReleaseBranch() error {
 	if b.validate {
 		if err := b.PreBranchCutValidation(); err != nil {
 			return fmt.Errorf("pre-branch cut validation failed: %s", err)
+		}
+		if b.repoManager == nil {
+			return fmt.Errorf("no repository manager configured")
 		}
 	}
 	if _, err := b.git("fetch", b.remote); err != nil {
@@ -142,6 +163,10 @@ func (b *BranchManager) CutReleaseBranch() error {
 		return err
 	}
 	if b.publish {
+		logrus.WithFields(logrus.Fields{
+			"branch": b.mainBranch,
+			"tag":    nextVersionTag,
+		}).Infof("Pushing updated main branch and new development tag to remote '%s'", b.remote)
 		if _, err := b.git("push", b.remote, b.mainBranch); err != nil {
 			return err
 		}

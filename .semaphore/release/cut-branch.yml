@@ -24,8 +24,4 @@ blocks:
       jobs:
         - name: Cut Branch
           commands:
-            - ./bin/release branch cut
-      prologue:
-        commands:
-          - cd release
-          - make build
+            - make create-release-branch
