@@ -708,7 +708,15 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 	}
 	if len(felix.IPv6) > 0 && v6CIDR != nil {
 		nodeIn.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
-		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx))
+
+		ip := make(net.IP, len(v6CIDR.IP))
+		copy(ip, v6CIDR.IP)
+		ip[14] = byte(idx >> 8)
+		ip[15] = byte(idx & 0xff)
+
+		// Canonical string form
+		_, subnet, _ := net.ParseCIDR(fmt.Sprintf("%s/%d", ip.String(), 96))
+		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, subnet.String())
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
 			Address: felix.IPv6,
 			Type:    v1.NodeInternalIP,
@@ -1241,19 +1249,24 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 				panic(err)
 			}
 		}
-		endpointsInterface := coreV1.Endpoints(ns.Name)
-		endpoints, err := endpointsInterface.List(context.Background(), metav1.ListOptions{})
+		endpointSliceInterface := clientset.DiscoveryV1().EndpointSlices(ns.Name)
+
+		endpointSlices, err := endpointSliceInterface.List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			panic(err)
 		}
-		for _, ep := range endpoints.Items {
-			if ep.Name == "kubernetes" {
-				// Skip cleaning up the Kubernetes API service.
+
+		for _, es := range endpointSlices.Items {
+			// Skip the Kubernetes API service EndpointSlice (usually has a label `kubernetes`).
+			if es.Labels["kubernetes.io/service-name"] == "kubernetes" {
 				continue
 			}
-			err := endpointsInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
+
+			err := endpointSliceInterface.Delete(context.Background(), es.Name, metav1.DeleteOptions{})
 			if err != nil && !strings.Contains(err.Error(), "not found") {
 				panic(err)
+			} else {
+				fmt.Printf("Deleted EndpointSlice: %s\n", es.Name)
 			}
 		}
 	}
