@@ -164,11 +164,18 @@ func (t *TCPDump) Stop() {
 	var err error
 	if t.args[0] == "run" {
 		err = exec.Command("docker", "stop", t.contName).Run()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to stop tcpdump container; maybe it failed to start?")
+		}
 	} else {
 		err = t.cmd.Process.Kill()
-	}
-	if err != nil {
-		logrus.WithError(err).Error("Failed to kill tcpdump; maybe it failed to start?")
+		if err != nil {
+			logrus.Errorf("Failed to stop tcpdump: %v", err)
+		}
+		err := t.cmd.Wait()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to wait for tcpdump to exit")
+		}
 	}
 }
 

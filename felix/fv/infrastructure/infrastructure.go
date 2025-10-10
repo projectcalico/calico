@@ -93,6 +93,10 @@ type DatastoreInfra interface {
 	// occurs.
 	DumpErrorData()
 
+	// AddCleanup registers a function to be run during Stop(), in reverse order of registration.
+	AddCleanup(func())
+	// RegisterFelix records a Felix node to include in diagnostics.
+	RegisterFelix(*Felix)
 	// Stop cleans up anything necessary in preparation for the end of the test.
 	Stop()
 }
