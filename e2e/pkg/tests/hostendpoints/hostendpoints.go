@@ -107,6 +107,7 @@ var _ = describe.CalicoDescribe(
 		var checker conncheck.ConnectionTester
 		var hepServer1 *conncheck.Server
 		var client1 *conncheck.Client
+		var hep *v3.HostEndpoint
 
 		BeforeEach(func() {
 			var err error
@@ -185,18 +186,22 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create our hostEndpoint - it is created with the same name as the GNP.
-			createHostEndpoint(cli, hepPolicyName, hepNodeName, hepPort1, pod.Status.HostIP)
+			hep = createHostEndpoint(cli, hepPolicyName, hepNodeName, hepPort1, pod.Status.HostIP)
 		})
 
 		AfterEach(func() {
 			checker.Stop()
 
-			// Clean up any policies we created.
+			// Clean up any policies / heps we created.
 			err := cli.Delete(context.Background(), defaultAllow)
 			if err != nil && !errors.IsNotFound(err) {
 				Expect(err).NotTo(HaveOccurred())
 			}
 			err = cli.Delete(context.Background(), allowLogCollection)
+			if err != nil && !errors.IsNotFound(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			err = cli.Delete(context.Background(), hep)
 			if err != nil && !errors.IsNotFound(err) {
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -480,7 +485,7 @@ var _ = describe.CalicoDescribe(
 		})
 	})
 
-func createHostEndpoint(cli ctrlclient.Client, policyName string, nodeName string, port int, ip string) {
+func createHostEndpoint(cli ctrlclient.Client, policyName string, nodeName string, port int, ip string) *v3.HostEndpoint {
 	hep := &v3.HostEndpoint{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
@@ -504,4 +509,5 @@ func createHostEndpoint(cli ctrlclient.Client, policyName string, nodeName strin
 
 	err := cli.Create(context.Background(), hep)
 	Expect(err).NotTo(HaveOccurred())
+	return hep
 }
