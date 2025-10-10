@@ -314,6 +314,14 @@ var _ = describe.CalicoDescribe(
 							},
 						},
 					},
+					Egress: []v3.Rule{
+						{
+							Action: "Allow",
+							Destination: v3.EntityRule{
+								NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", ns.Name),
+							},
+						},
+					},
 				},
 			}
 

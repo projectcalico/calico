@@ -152,8 +152,7 @@ func (a *authorizer) AuthorizeTierOperation(
 
 	// If the user has GET access to the tier and either the policy match or tier wildcard match are authorized
 	// then allow the request.
-	if decisionGetTier == k8sauth.DecisionAllow &&
-		(decisionPolicy == k8sauth.DecisionAllow || decisionTierWildcard == k8sauth.DecisionAllow) {
+	if decisionGetTier == k8sauth.DecisionAllow && (decisionPolicy == k8sauth.DecisionAllow || decisionTierWildcard == k8sauth.DecisionAllow) {
 		logrus.Trace("Operation allowed")
 		return nil
 	}

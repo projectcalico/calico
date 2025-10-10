@@ -47,7 +47,8 @@ type IPPoolController struct {
 	ipam ipam.Interface
 }
 
-func NewController(ctx context.Context,
+func NewController(
+	ctx context.Context,
 	cli clientset.Interface,
 	poolInformer cache.SharedIndexInformer,
 	blockInformer cache.SharedIndexInformer,

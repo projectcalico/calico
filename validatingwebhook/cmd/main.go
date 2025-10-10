@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -366,7 +367,7 @@ func requestContext(req *v1.AdmissionRequest, obj client.Object) context.Context
 	ri := &genericapirequest.RequestInfo{
 		IsResourceRequest: true,
 		Path:              fmt.Sprintf("/apis/projectcalico.org/v3/%s/%s", resource, obj.GetName()),
-		Verb:              string(req.Operation),
+		Verb:              strings.ToLower(string(req.Operation)),
 		APIGroup:          v3.SchemeGroupVersion.Group,
 		APIVersion:        v3.SchemeGroupVersion.Version,
 		Resource:          resource,
