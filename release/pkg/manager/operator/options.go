@@ -141,3 +141,10 @@ func WithProductRegistry(registry string) Option {
 		return nil
 	}
 }
+
+func WithImage(image string) Option {
+	return func(o *OperatorManager) error {
+		o.image = image
+		return nil
+	}
+}
