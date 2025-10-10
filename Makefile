@@ -217,7 +217,7 @@ release-public: bin/gh release/bin/release
 
 # Create a release branch.
 create-release-branch: release/bin/release
-	@release/bin/release branch cut -git-publish
+	@release/bin/release branch cut
 
 # Test the release code
 release-test:

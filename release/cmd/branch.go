@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
+	"github.com/projectcalico/calico/release/pkg/manager/calico"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
@@ -49,11 +50,21 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				baseBranchFlag,
 				releaseBranchPrefixFlag,
 				devTagSuffixFlag,
+				operatorBranchFlag,
 				publishBranchFlag,
 				skipValidationFlag,
 			},
 			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("branch-cut.log")
+
+				calicoManager := calico.NewManager(
+					calico.WithGithubOrg(c.String(orgFlag.Name)),
+					calico.WithRepoName(c.String(repoFlag.Name)),
+					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
+					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
+				)
 
 				m := branch.NewManager(
 					branch.WithRepoRoot(cfg.RepoRootDir),
@@ -61,6 +72,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					branch.WithMainBranch(c.String(baseBranchFlag.Name)),
 					branch.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					branch.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
+					branch.WithRepoManager(calicoManager),
 					branch.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					branch.WithPublish(c.Bool(publishBranchFlag.Name)))
 				return m.CutReleaseBranch()

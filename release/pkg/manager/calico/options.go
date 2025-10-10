@@ -208,3 +208,10 @@ func WithArchiveImages(archive bool) Option {
 		return nil
 	}
 }
+
+func WithOperatorBranch(branch string) Option {
+	return func(r *CalicoManager) error {
+		r.operatorBranch = branch
+		return nil
+	}
+}
