@@ -34,6 +34,12 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
+// EmptyBlockMinReclaimAge is the minimum time since a block was claimed before
+// another node will consider reclaiming that block if the node needs a block and
+// the block is empty.  Prevents a block from ping-ponging between two nodes
+// with no chance for either node to actually allocate an IP from it.
+const EmptyBlockMinReclaimAge = time.Minute
+
 type blockReaderWriter struct {
 	client bapi.Client
 	pools  PoolAccessorInterface
@@ -200,14 +206,17 @@ func (rw blockReaderWriter) findUsableBlock(
 		log.Info("Ran out of empty blocks, trying to reclaim an empty one.")
 		for i, block := range emptyBlocks {
 			age := time.Since(block.claimTime)
-			if age < time.Minute {
+			if age < EmptyBlockMinReclaimAge {
 				// Avoid a race where two nodes fight over a block, each freeing
 				// it before the other has a chance to use it.
 				log.Infof("Block %s was claimed %.1fs ago by another node, not trying to reclaim it.",
 					block.cidr.String(), age.Seconds())
 				continue
 			}
-			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, true, &block.seqNo)
+			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, releaseAffinityOpts{
+				RequireEmpty:           true,
+				ExpectedSequenceNumber: &block.seqNo,
+			})
 			if err != nil {
 				log.Warnf("Failed to release affinity while trying to reclaim block. %v left to try: %s", len(emptyBlocks)-i, err)
 				if ctx.Err() != nil {
@@ -365,14 +374,18 @@ func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPa
 	return confirmed, nil
 }
 
+type releaseAffinityOpts struct {
+	RequireEmpty           bool
+	ExpectedSequenceNumber *uint64
+}
+
 // releaseBlockAffinity releases the host's affinity to the given block, and returns an affinityClaimedError if
 // the host does not claim an affinity for the block.
 func (rw blockReaderWriter) releaseBlockAffinity(
 	ctx context.Context,
 	affinityCfg AffinityConfig,
 	blockCIDR cnet.IPNet,
-	requireEmpty bool,
-	expectedSeqNumber *uint64,
+	opts releaseAffinityOpts,
 ) error {
 	// Make sure hostname is not empty.
 	if affinityCfg.Host == "" {
@@ -399,7 +412,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(
 	}
 	b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
-	if expectedSeqNumber != nil && *expectedSeqNumber != b.SequenceNumber {
+	if opts.ExpectedSequenceNumber != nil && *opts.ExpectedSequenceNumber != b.SequenceNumber {
 		return fmt.Errorf("IPAM block updated since we last read it")
 	}
 
@@ -414,7 +427,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(
 	}
 
 	// Don't release block affinity if we require it to be empty and it's not empty.
-	if requireEmpty && !b.empty() {
+	if opts.RequireEmpty && !b.empty() {
 		logCtx.WithField("inUseIPs", b.inUseIPs()).Info("Block must be empty but is not empty, refusing to remove affinity.")
 		return errBlockNotEmpty{Block: b}
 	}
