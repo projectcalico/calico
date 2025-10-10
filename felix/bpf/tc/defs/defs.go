@@ -56,6 +56,7 @@ const (
 	ProgIndexIcmpInnerNat
 	ProgIndexNewFlow
 	ProgIndexIPFrag
+	ProgIndexMaglev
 	ProgIndexMainDebug
 	ProgIndexPolicyDebug
 	ProgIndexAllowedDebug
@@ -65,6 +66,7 @@ const (
 	ProgIndexIcmpInnerNatDebug
 	ProgIndexNewFlowDebug
 	ProgIndexIPFragDebug
+	ProgIndexMaglevDebug
 	ProgIndexEndDebug
 	ProgIndexEnd
 
@@ -89,6 +91,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_icmp_inner_nat",
 	"calico_tc_skb_new_flow_entrypoint",
 	"calico_tc_skb_ipv4_frag",
+	"calico_tc_maglev",
 	/* ipv4 - debug */
 	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
@@ -99,6 +102,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_icmp_inner_nat",
 	"calico_tc_skb_new_flow_entrypoint",
 	"calico_tc_skb_ipv4_frag",
+	"calico_tc_maglev",
 	/* ipv6 */
 	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
@@ -109,6 +113,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_icmp_inner_nat",
 	"calico_tc_skb_new_flow_entrypoint",
 	"",
+	"calico_tc_maglev",
 	/* ipv6 - debug */
 	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
@@ -119,6 +124,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_icmp_inner_nat",
 	"calico_tc_skb_new_flow_entrypoint",
 	"",
+	"calico_tc_maglev",
 }
 
 type ToOrFromEp string
