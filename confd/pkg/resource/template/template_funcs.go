@@ -58,9 +58,7 @@ func addFuncs(out, in map[string]interface{}) {
 func addCalicoFuncs(funcMap map[string]interface{}, storeClient interface{}) {
 	// Add getBGPConfig function that takes the client as parameter
 	funcMap["getBGPConfig"] = func(client interface{}) (interface{}, error) {
-		if calicoClient, ok := client.(interface {
-			GetBirdBGPConfig() (*types.BirdBGPConfig, error)
-		}); ok {
+		if calicoClient, ok := client.(types.BirdBGPConfigProvider); ok {
 			config, err := calicoClient.GetBirdBGPConfig()
 			if err != nil {
 				// Return error to fail template execution and prevent broken config

@@ -335,7 +335,7 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 
 		// Create mesh peer
 		// Mesh peers have same AS, so use true for calico_export_to_bgp_peers
-		exportFilter := fmt.Sprintf("calico_export_to_bgp_peers(true);\n    reject;")
+		exportFilter := "calico_export_to_bgp_peers(true);\n    reject;"
 
 		peer := types.BirdBGPPeer{
 			Name:            fmt.Sprintf("Mesh_%s", strings.ReplaceAll(peerIP, ".", "_")),
@@ -620,7 +620,7 @@ func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS st
 	filterLines = append(filterLines, fmt.Sprintf("calico_export_to_bgp_peers(%v);", sameAS))
 	filterLines = append(filterLines, "reject;")
 
-	return strings.Join(filterLines, " ")
+	return strings.Join(filterLines, "\n    ")
 }
 
 // processPeerType processes a specific type of BGP peers
