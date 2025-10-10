@@ -105,7 +105,7 @@ struct cali_tc_state {
 
 	__u64 flags;
 	/* Result of the conntrack lookup. */
-	struct calico_ct_result ct_result; /* 28 bytes */
+	struct calico_ct_result ct_result; /* 32 bytes */
 
 	/* Result of the NAT calculation.  Zeroed if there is no DNAT. */
 	struct calico_nat_dest nat_dest; /* 8 bytes */
@@ -116,7 +116,7 @@ struct cali_tc_state {
 	 */
 	DECLARE_IP_ADDR(ip_src_masq);
 #ifndef IPVER6
-	__u8 __pad_ipv4[48];
+	__u8 __pad_ipv4[44];
 #endif
 };
 
@@ -158,9 +158,8 @@ enum cali_state_flags {
 	CALI_ST_SKIP_REDIR_PEER	  = 0x800,
 	/* CALI_ST_SKIP_REDIR_ONCE skips redirection once for this particular packet */
 	CALI_ST_SKIP_REDIR_ONCE   = 0x1000,
-	/* CALI_ST_CLUSTER_EXTERNAL is set if the packet is heading toward or originating from
-	 * an endpoint outside the cluster */
-	CALI_ST_CLUSTER_EXTERNAL   = 0x2000,
+	/* CALI_ST_SET_DSCP is set if we need to update packet's DSCP */
+	CALI_ST_SET_DSCP   = 0x2000,
 };
 
 struct fwd {

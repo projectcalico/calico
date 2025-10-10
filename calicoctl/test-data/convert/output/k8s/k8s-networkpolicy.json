@@ -56,7 +56,6 @@
       {
         "action": "Allow",
         "protocol": "TCP",
-        "source": {},
         "destination": {
           "nets": [
             "10.0.0.0/24"

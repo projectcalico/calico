@@ -171,7 +171,7 @@ K8S_NETPOL_UNSUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolic
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
-	#KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS)
+	#KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
@@ -215,7 +215,7 @@ release-public: bin/gh release/bin/release
 
 # Create a release branch.
 create-release-branch: release/bin/release
-	@release/bin/release branch cut -git-publish
+	@release/bin/release branch cut
 
 # Test the release code
 release-test:

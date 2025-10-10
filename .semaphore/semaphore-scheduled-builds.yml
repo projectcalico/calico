@@ -586,7 +586,7 @@ blocks:
             - .semaphore/vms/publish-artifacts
             - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
             - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
-  - name: "Felix: BPF UT/FV tests on Ubuntu 24.04"
+  - name: "Felix: BPF tests on Ubuntu 24.04"
     run:
       when: "true"
     dependencies:
@@ -610,7 +610,7 @@ blocks:
           - mkdir artifacts
           - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
-        - name: BPF UT/FV tests
+        - name: UT/FV tests
           execution_time_limit:
             minutes: 180
           commands:
@@ -624,7 +624,7 @@ blocks:
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF UT/FV tests on Ubuntu 22.04 (nftables)"
+  - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
     run:
       when: "true"
     dependencies:
@@ -645,7 +645,7 @@ blocks:
           - mkdir artifacts
           - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
-        - name: BPF UT/FV tests
+        - name: UT/FV tests
           env_vars:
             - name: FELIX_FV_NFTABLES
               value: "Enabled"
@@ -664,7 +664,7 @@ blocks:
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF UT load/verify tests on Ubuntu 25.04"
+  - name: "Felix: BPF tests on Ubuntu 25.04"
     run:
       when: "true"
     dependencies:
@@ -685,11 +685,54 @@ blocks:
           - export NUM_FV_BATCHES=0
           - export RUN_UT=true
           - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
-          - export FV_FOCUS='_BPF_.*ct=true'
           - mkdir artifacts
           - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
-        - name: BPF UT tests
+        - name: Load / verify precompiled BPF programs
+          env_vars:
+            - name: FELIX_FV_NFTABLES
+              value: "Enabled"
+            - name: FELIX_FV_BPFATTACHTYPE
+              value: "tc"
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+      epilogue:
+        always:
+          commands:
+            - export REPO_NAME=$(basename $(pwd))
+            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
+            - ../.semaphore/vms/publish-artifacts
+            - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
+      secrets:
+        - name: google-service-account-for-gce
+  - name: "Felix: BPF tests with bpf_jit_harden=2"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd felix
+          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+          - export ZONE=europe-west3-c
+          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-jithard-
+          - echo VM_PREFIX=${VM_PREFIX}
+          - export REPO_NAME=$(basename $(pwd))
+          - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
+          - export UBUNTU_VERSION=plucky
+          - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
+          - export NUM_FV_BATCHES=2
+          - export RUN_UT=true
+          - export FV_FOCUS='_BPF_.*tcp.*ct=true'
+          - mkdir artifacts
+          - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
+          - ../.semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
+      jobs:
+        - name: UT/FV tests
           env_vars:
             - name: FELIX_FV_NFTABLES
               value: "Enabled"

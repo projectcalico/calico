@@ -16,6 +16,7 @@ metadata:
 spec:
   peerIP: 10.192.0.3
   asNumber: 64567
+  localASNumber: 64515
   sourceAddress: None
 
 ---
@@ -26,7 +27,7 @@ metadata:
 spec:
   peerIP: 10.192.0.1:166
   asNumber: 64567
-  localASNumber: 65002
+  localASNumber: 64567
 
 ---
 kind: BGPPeer
@@ -36,7 +37,7 @@ metadata:
 spec:
   peerIP: 10.192.0.1
   asNumber: 64567
-  localASNumber: 65001
+  localASNumber: 64567
   numAllowedLocalASNumbers: 1
 
 ---

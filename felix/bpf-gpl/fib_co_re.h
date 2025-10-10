@@ -282,15 +282,7 @@ try_fib_external:
 							state->ct_result.ifindex_fwd);
 					goto no_fib_redirect;
 				}
-				CALI_DEBUG("Fall through to redirect without fib lookup rc %d", rc);
 			}
-			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
-			if (rc == TC_ACT_REDIRECT) {
-				counter_inc(ctx, CALI_REDIRECT_NEIGH);
-				CALI_DEBUG("Redirect to host dev %d without fib lookup", state->ct_result.ifindex_fwd);
-				goto no_fib_redirect;
-			}
-			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);
 		}
 
 		*fib_params(ctx) = (struct bpf_fib_lookup) {
@@ -327,9 +319,11 @@ try_fib_external:
 		CALI_DEBUG("FIB sport=%d", bpf_ntohs(fib_params(ctx)->sport));
 		CALI_DEBUG("FIB dport=%d", bpf_ntohs(fib_params(ctx)->dport));
 #ifdef IPVER6
+		CALI_DEBUG("FIB ipv6_src=" IP_FMT, &fib_params(ctx)->ipv6_src);
+		CALI_DEBUG("FIB ipv6_dst="IP_FMT, &fib_params(ctx)->ipv6_dst);
 #else
-		CALI_DEBUG("FIB ipv4_src=%x", bpf_ntohl(fib_params(ctx)->ipv4_src));
-		CALI_DEBUG("FIB ipv4_dst=%x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+		CALI_DEBUG("FIB ipv4_src=" IP_FMT, &fib_params(ctx)->ipv4_src);
+		CALI_DEBUG("FIB ipv4_dst="IP_FMT, &fib_params(ctx)->ipv4_dst);
 #endif
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");

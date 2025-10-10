@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -128,6 +128,8 @@ const (
 	VoLastSeen  int = 8
 	VoType      int = 16
 	VoFlags     int = 17
+	VoFlags3    int = 18
+	VoFlags4    int = 19
 	VoFlags2    int = 23
 	VoRevKey    int = 24
 	VoLegAB     int = 24
@@ -146,7 +148,7 @@ type ValueInterface interface {
 	RSTSeen() int64
 	LastSeen() int64
 	Type() uint8
-	Flags() uint16
+	Flags() uint32
 	OrigIP() net.IP
 	OrigPort() uint16
 	OrigSPort() uint16
@@ -171,8 +173,8 @@ func (e Value) Type() uint8 {
 	return e[VoType]
 }
 
-func (e Value) Flags() uint16 {
-	return uint16(e[VoFlags]) | (uint16(e[VoFlags2]) << 8)
+func (e Value) Flags() uint32 {
+	return (uint32(e[VoFlags]) | uint32(e[VoFlags2])<<8 | uint32(e[VoFlags3])<<16 | uint32(e[VoFlags4])<<24)
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -206,22 +208,22 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut          uint16 = (1 << 0)
-	FlagNATFwdDsr       uint16 = (1 << 1)
-	FlagNATNPFwd        uint16 = (1 << 2)
-	FlagSkipFIB         uint16 = (1 << 3)
-	FlagReserved4       uint16 = (1 << 4)
-	FlagReserved5       uint16 = (1 << 5)
-	FlagExtLocal        uint16 = (1 << 6)
-	FlagViaNATIf        uint16 = (1 << 7)
-	FlagSrcDstBA        uint16 = (1 << 8)
-	FlagHostPSNAT       uint16 = (1 << 9)
-	FlagSvcSelf         uint16 = (1 << 10)
-	FlagNPLoop          uint16 = (1 << 11)
-	FlagNPRemote        uint16 = (1 << 12)
-	FlagNoDSR           uint16 = (1 << 13)
-	FlagNoRedirPeer     uint16 = (1 << 14)
-	FlagClusterExternal uint16 = (1 << 15)
+	FlagNATOut      uint32 = (1 << 0)
+	FlagNATFwdDsr   uint32 = (1 << 1)
+	FlagNATNPFwd    uint32 = (1 << 2)
+	FlagSkipFIB     uint32 = (1 << 3)
+	FlagReserved4   uint32 = (1 << 4)
+	FlagReserved5   uint32 = (1 << 5)
+	FlagExtLocal    uint32 = (1 << 6)
+	FlagViaNATIf    uint32 = (1 << 7)
+	FlagSrcDstBA    uint32 = (1 << 8)
+	FlagHostPSNAT   uint32 = (1 << 9)
+	FlagSvcSelf     uint32 = (1 << 10)
+	FlagNPLoop      uint32 = (1 << 11)
+	FlagNPRemote    uint32 = (1 << 12)
+	FlagNoDSR       uint32 = (1 << 13)
+	FlagNoRedirPeer uint32 = (1 << 14)
+	FlagSetDSCP     uint32 = (1 << 15)
 )
 
 func (e Value) ReverseNATKey() KeyInterface {
@@ -254,15 +256,17 @@ func (e *Value) SetNATSport(sport uint16) {
 	binary.LittleEndian.PutUint16(e[VoNATSPort:VoNATSPort+2], sport)
 }
 
-func initValue(v *Value, lastSeen time.Duration, typ uint8, flags uint16) {
+func initValue(v *Value, lastSeen time.Duration, typ uint8, flags uint32) {
 	binary.LittleEndian.PutUint64(v[VoLastSeen:VoLastSeen+8], uint64(lastSeen))
 	v[VoType] = typ
 	v[VoFlags] = byte(flags & 0xff)
 	v[VoFlags2] = byte((flags >> 8) & 0xff)
+	v[VoFlags3] = byte((flags >> 16) & 0xff)
+	v[VoFlags4] = byte((flags >> 24) & 0xff)
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
+func NewValueNormal(lastSeen time.Duration, flags uint32, legA, legB Leg) Value {
 	v := Value{}
 
 	initValue(&v, lastSeen, TypeNormal, flags)
@@ -275,7 +279,7 @@ func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value 
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value {
+func NewValueNATForward(lastSeen time.Duration, flags uint32, revKey Key) Value {
 	v := Value{}
 
 	initValue(&v, lastSeen, TypeNATForward, flags)
@@ -287,7 +291,7 @@ func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value 
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueNATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverse(lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
 	v := Value{}
 
@@ -305,7 +309,7 @@ func NewValueNATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
 }
 
 // NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
-func NewValueNATReverseSNAT(lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverseSNAT(lastSeen time.Duration, flags uint32, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) Value {
 	v := NewValueNATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 	copy(v[VoOrigSIP:VoOrigSIP+4], origIP.To4())
@@ -505,6 +509,9 @@ func (e Value) String() string {
 		}
 		if flags&FlagNoRedirPeer != 0 {
 			flagsStr += " no-redir-peer"
+		}
+		if flags&FlagSetDSCP != 0 {
+			flagsStr += " dscp"
 		}
 	}
 
