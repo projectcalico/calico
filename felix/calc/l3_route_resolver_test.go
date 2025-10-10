@@ -154,6 +154,115 @@ var _ = Describe("L3RouteResolver", func() {
 			}
 			Expect(info.AddressesAsCIDRs()).To(Equal([]ip.CIDR{}))
 		})
+
+		It("should filter out blank addresses from Addresses slice in AddressesAsCIDRs()", func() {
+			var (
+				emptyV4Addr ip.V4Addr
+				emptyV6Addr ip.V6Addr
+			)
+
+			// Create a node info with some valid addresses and some blank ones
+			info := l3rrNodeInfo{
+				V4Addr: ip.FromString("192.168.1.1").(ip.V4Addr),
+				V6Addr: ip.FromString("2001:db8::1").(ip.V6Addr),
+				Addresses: []ip.Addr{
+					ip.FromString("10.0.0.1"),     // Valid IPv4
+					nil,                           // Nil address
+					emptyV4Addr,                   // Empty V4 address
+					emptyV6Addr,                   // Empty V6 address
+					ip.FromString("2001:db8::2"),  // Valid IPv6
+					nil,                           // Another nil address
+				},
+			}
+
+			cidrs := info.AddressesAsCIDRs()
+
+			// Should only contain the 4 valid addresses (V4Addr, V6Addr, and 2 from Addresses)
+			Expect(len(cidrs)).To(Equal(4))
+
+			// Convert to strings for easier comparison
+			cidrStrings := make([]string, len(cidrs))
+			for i, cidr := range cidrs {
+				cidrStrings[i] = cidr.String()
+			}
+
+			// Should contain all valid addresses as /32 or /128 CIDRs
+			Expect(cidrStrings).To(ContainElement("192.168.1.1/32"))
+			Expect(cidrStrings).To(ContainElement("2001:db8::1/128"))
+			Expect(cidrStrings).To(ContainElement("10.0.0.1/32"))
+			Expect(cidrStrings).To(ContainElement("2001:db8::2/128"))
+
+			// Should not contain any empty address representations
+			for _, cidrStr := range cidrStrings {
+				Expect(cidrStr).NotTo(Equal("0.0.0.0/32"))
+				Expect(cidrStr).NotTo(Equal("::/128"))
+			}
+		})
+
+		It("should handle all blank addresses in AddressesAsCIDRs()", func() {
+			var (
+				emptyV4Addr ip.V4Addr
+				emptyV6Addr ip.V6Addr
+			)
+
+			// Create a node info with only blank addresses
+			info := l3rrNodeInfo{
+				V4Addr: emptyV4Addr,
+				V6Addr: emptyV6Addr,
+				Addresses: []ip.Addr{
+					nil,
+					emptyV4Addr,
+					emptyV6Addr,
+					nil,
+				},
+			}
+
+			cidrs := info.AddressesAsCIDRs()
+
+			// Should return empty slice when all addresses are blank
+			Expect(cidrs).To(Equal([]ip.CIDR{}))
+			Expect(len(cidrs)).To(Equal(0))
+		})
+
+		It("should deduplicate addresses in AddressesAsCIDRs()", func() {
+			duplicateAddr := ip.FromString("192.168.1.1")
+
+			info := l3rrNodeInfo{
+				V4Addr: duplicateAddr.(ip.V4Addr),
+				V6Addr: ip.FromString("2001:db8::1").(ip.V6Addr),
+				Addresses: []ip.Addr{
+					duplicateAddr,  // Same as V4Addr
+					duplicateAddr,  // Duplicate in Addresses slice
+					ip.FromString("10.0.0.1"),
+				},
+			}
+
+			cidrs := info.AddressesAsCIDRs()
+
+			// Should only contain 3 unique addresses despite duplicates
+			Expect(len(cidrs)).To(Equal(3))
+
+			// Convert to strings for easier comparison
+			cidrStrings := make([]string, len(cidrs))
+			for i, cidr := range cidrs {
+				cidrStrings[i] = cidr.String()
+			}
+
+			// Should contain each unique address only once
+			Expect(cidrStrings).To(ContainElement("192.168.1.1/32"))
+			Expect(cidrStrings).To(ContainElement("2001:db8::1/128"))
+			Expect(cidrStrings).To(ContainElement("10.0.0.1/32"))
+
+			// Count occurrences of the duplicate address
+			count := 0
+			for _, cidrStr := range cidrStrings {
+				if cidrStr == "192.168.1.1/32" {
+					count++
+				}
+			}
+			Expect(count).To(Equal(1), "Duplicate address should appear only once")
+		})
+
 		It("should consider VXLANV6Addr in Equal() method", func() {
 			info1 := l3rrNodeInfo{
 				VXLANV6Addr: ip.FromString("dead:beef::1"),
