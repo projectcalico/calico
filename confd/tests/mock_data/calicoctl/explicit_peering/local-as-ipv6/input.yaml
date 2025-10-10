@@ -13,7 +13,7 @@ metadata:
 spec:
   peerIP: 2001::102
   asNumber: 64512
-  localASNumber: 65002
+  localASNumber: 64512
   node: kube-master
   numAllowedLocalASNumbers: 1
 
