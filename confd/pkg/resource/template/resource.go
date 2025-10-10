@@ -86,7 +86,7 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	tr.syncOnly = config.SyncOnly
 	addFuncs(tr.funcMap, tr.store.FuncMap)
 
-	// Add Calico-specific functions if using Calico backend
+	// Add Calico-specific functions.
 	addCalicoFuncs(tr.funcMap, config.StoreClient)
 
 	if runtime.GOOS == "windows" {
