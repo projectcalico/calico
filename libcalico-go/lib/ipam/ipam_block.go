@@ -556,6 +556,16 @@ func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]
 	return attrIndex
 }
 
+func (b *allocationBlock) affinityClaimTime() time.Time {
+	if b.AllocationBlock == nil {
+		return time.Time{}
+	}
+	if b.AffinityClaimTime == nil {
+		return time.Time{}
+	}
+	return b.AffinityClaimTime.Time
+}
+
 func getBlockCIDRForAddress(addr cnet.IP, pool *v3.IPPool) cnet.IPNet {
 	var mask net.IPMask
 	if addr.Version() == 6 {

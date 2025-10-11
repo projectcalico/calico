@@ -196,6 +196,10 @@ func (in *IPAMBlockSpec) DeepCopyInto(out *IPAMBlockSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.AffinityClaimTime != nil {
+		in, out := &in.AffinityClaimTime, &out.AffinityClaimTime
+		*out = (*in).DeepCopy()
+	}
 	if in.Allocations != nil {
 		in, out := &in.Allocations, &out.Allocations
 		*out = make([]*int, len(*in))
