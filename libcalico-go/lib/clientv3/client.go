@@ -65,7 +65,6 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 
 // NewFromEnv loads the config from ENV variables and returns a connected client.
 func NewFromEnv() (Interface, error) {
-
 	config, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		return nil, err
@@ -181,8 +180,8 @@ func (c client) CalicoNodeStatus() CalicoNodeStatusInterface {
 }
 
 // IPAMConfig returns an interface for managing the IPAMConfig resource.
-func (c client) IPAMConfig() IPAMConfigInterface {
-	return IPAMConfigs{client: c}
+func (c client) IPAMConfiguration() IPAMConfigurationInterface {
+	return IPAMConfigurations{client: c}
 }
 
 // BlockAffinity returns an interface for viewing the IPAM block affinity resources.
