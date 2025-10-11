@@ -488,9 +488,10 @@ func (cc *controllerControl) InitControllers(
 
 		// Register a controller to ensure policies have default fields set.
 		gnpInformer := calicoFactory.Projectcalico().V3().GlobalNetworkPolicies().Informer()
-		policyDefaulter := networkpolicy.NewPolicyDefaulter(ctx, v3c, gnpInformer)
+		npInformer := calicoFactory.Projectcalico().V3().NetworkPolicies().Informer()
+		policyDefaulter := networkpolicy.NewPolicyDefaulter(ctx, v3c, gnpInformer, npInformer)
 		cc.controllers["PolicyDefaulter"] = policyDefaulter
-		cc.registerInformers(gnpInformer)
+		cc.registerInformers(gnpInformer, npInformer)
 	}
 
 	if cfg.Controllers.WorkloadEndpoint != nil {
