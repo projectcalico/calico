@@ -19,11 +19,12 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 )
 
 func NewPolicyDefaulter(
