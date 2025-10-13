@@ -477,8 +477,8 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 
 			service, err = k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(service.Status.LoadBalancer.Ingress).NotTo(BeEmpty(), "saw service.Status.LoadBalancer.Ingress non-empty and then empty again!")
 			Expect(service.Status.LoadBalancer.Ingress[0].IP).Should(Equal(specificIpFromAutomaticPool))
-
 		})
 	})
 })
