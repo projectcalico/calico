@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 // Package bpf provides primitives to manage Calico-specific XDP programs
 // attached to network interfaces, along with the blocklist LPM map and the
 // failsafe map.

@@ -15,6 +15,8 @@
 // The utils in this file are specific to the policy controller,
 // and are not expected to be shared across projects.
 
+//go:build linux
+
 package testutils
 
 import (

@@ -1,5 +1,7 @@
 // Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 
+//go:build linux
+
 package main_test
 
 import (
