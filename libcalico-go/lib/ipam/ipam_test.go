@@ -900,6 +900,41 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(blocks.KVPairs)).To(Equal(0))
 		})
 
+		It("should release older blocks created without an explicit affinity type", func() {
+			// Use the backend client to create a block with no affinity type. This simulates a block created by an older version of Calico,
+			// which predate the introduction of affinity types.
+			cidr := "10.0.0.0/24"
+			b := newBlock(cnet.MustParseCIDR(cidr), nil)
+			blockKVP := model.KVPair{
+				Key:   model.BlockKey{CIDR: cnet.MustParseCIDR(cidr)},
+				Value: b.AllocationBlock,
+			}
+			affKVP := model.KVPair{
+				Key: model.BlockAffinityKey{
+					CIDR:         cnet.MustParseCIDR(cidr),
+					Host:         hostname,
+					AffinityType: "",
+				},
+				Value: &model.BlockAffinity{State: "confirmed"},
+			}
+			_, err := bc.Create(context.Background(), &blockKVP)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = bc.Create(context.Background(), &affKVP)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Release the block affinity. It should succeed even though the affinity type is blank.
+			err = ic.ReleasePoolAffinities(context.Background(), cnet.MustParseCIDR("10.0.0.0/16"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block and affinity should both be gone.
+			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(0))
+			affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(affs.KVPairs)).To(Equal(0))
+		})
+
 		It("should release all non-empty blocks if there are multiple", func() {
 			// Allocate several blocks to the node. The pool is a /30, so 4 addresses
 			// per each block.
