@@ -48,8 +48,12 @@ func NewPolicyDefaulter(
 			d.Mux(newObj)
 		},
 	}
-	gnps.AddEventHandler(funcs)
-	nps.AddEventHandler(funcs)
+	if _, err := gnps.AddEventHandler(funcs); err != nil {
+		logrus.WithError(err).Fatal("Failed to register event handler for GlobalNetworkPolicies")
+	}
+	if _, err := nps.AddEventHandler(funcs); err != nil {
+		logrus.WithError(err).Fatal("Failed to register event handler for NetworkPolicies")
+	}
 
 	return d
 }
@@ -102,6 +106,9 @@ func (c *policyDefaulter) defaultNetworkPolicy(p *v3.NetworkPolicy) error {
 		return nil
 	}
 
+	// Force the Tier label to be present and correct.
+	changed = setTierLabel(p, p.Spec.Tier) || changed
+
 	// Update the policy.
 	_, err := c.cli.ProjectcalicoV3().NetworkPolicies(p.Namespace).Update(c.ctx, p, v1.UpdateOptions{})
 	if err != nil {
@@ -114,6 +121,10 @@ func (c *policyDefaulter) defaultNetworkPolicy(p *v3.NetworkPolicy) error {
 func (c *policyDefaulter) defaultGlobalNetworkPolicy(p *v3.GlobalNetworkPolicy) error {
 	// Default the PolicyTypes field if necessary.
 	changed := defaultPolicyTypesField(p.Spec.Ingress, p.Spec.Egress, &p.Spec.Types)
+
+	// Force the Tier label to be present and correct.
+	changed = setTierLabel(p, p.Spec.Tier) || changed
+
 	if !changed {
 		// No change, nothing to do.
 		return nil
@@ -126,6 +137,19 @@ func (c *policyDefaulter) defaultGlobalNetworkPolicy(p *v3.GlobalNetworkPolicy) 
 		return err
 	}
 	return nil
+}
+
+func setTierLabel(obj v1.Object, tier string) bool {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	if labels[v3.LabelTier] != tier {
+		labels[v3.LabelTier] = tier
+		obj.SetLabels(labels)
+		return true
+	}
+	return false
 }
 
 func defaultPolicyTypesField(ingressRules, egressRules []v3.Rule, types *[]v3.PolicyType) bool {
