@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// These tests run on linux with a stubbed HCN.
+//go:build linux
+
 package windataplane
 
 import (

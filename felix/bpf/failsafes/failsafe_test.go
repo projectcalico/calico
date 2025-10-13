@@ -14,6 +14,8 @@
 
 // Copyright (c) 2021  All rights reserved.
 
+//go:build linux
+
 package failsafes
 
 import (

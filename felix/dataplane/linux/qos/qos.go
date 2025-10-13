@@ -42,6 +42,8 @@
 // workload egress we have to use a redirect step so that there's another interface involved for the
 // kernel to send traffic to.)
 
+//go:build linux
+
 package qos
 
 import (
