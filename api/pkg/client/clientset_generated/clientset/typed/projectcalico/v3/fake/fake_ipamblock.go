@@ -16,11 +16,11 @@ type fakeIPAMBlocks struct {
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeIPAMBlocks(fake *FakeProjectcalicoV3, namespace string) projectcalicov3.IPAMBlockInterface {
+func newFakeIPAMBlocks(fake *FakeProjectcalicoV3) projectcalicov3.IPAMBlockInterface {
 	return &fakeIPAMBlocks{
 		gentype.NewFakeClientWithList[*v3.IPAMBlock, *v3.IPAMBlockList](
 			fake.Fake,
-			namespace,
+			"",
 			v3.SchemeGroupVersion.WithResource("ipamblocks"),
 			v3.SchemeGroupVersion.WithKind("IPAMBlock"),
 			func() *v3.IPAMBlock { return &v3.IPAMBlock{} },

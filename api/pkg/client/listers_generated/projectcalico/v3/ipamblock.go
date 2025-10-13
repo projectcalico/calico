@@ -17,8 +17,9 @@ type IPAMBlockLister interface {
 	// List lists all IPAMBlocks in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*projectcalicov3.IPAMBlock, err error)
-	// IPAMBlocks returns an object that can list and get IPAMBlocks.
-	IPAMBlocks(namespace string) IPAMBlockNamespaceLister
+	// Get retrieves the IPAMBlock from the index for a given name.
+	// Objects returned here must be treated as read-only.
+	Get(name string) (*projectcalicov3.IPAMBlock, error)
 	IPAMBlockListerExpansion
 }
 
@@ -30,27 +31,4 @@ type iPAMBlockLister struct {
 // NewIPAMBlockLister returns a new IPAMBlockLister.
 func NewIPAMBlockLister(indexer cache.Indexer) IPAMBlockLister {
 	return &iPAMBlockLister{listers.New[*projectcalicov3.IPAMBlock](indexer, projectcalicov3.Resource("ipamblock"))}
-}
-
-// IPAMBlocks returns an object that can list and get IPAMBlocks.
-func (s *iPAMBlockLister) IPAMBlocks(namespace string) IPAMBlockNamespaceLister {
-	return iPAMBlockNamespaceLister{listers.NewNamespaced[*projectcalicov3.IPAMBlock](s.ResourceIndexer, namespace)}
-}
-
-// IPAMBlockNamespaceLister helps list and get IPAMBlocks.
-// All objects returned here must be treated as read-only.
-type IPAMBlockNamespaceLister interface {
-	// List lists all IPAMBlocks in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*projectcalicov3.IPAMBlock, err error)
-	// Get retrieves the IPAMBlock from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
-	Get(name string) (*projectcalicov3.IPAMBlock, error)
-	IPAMBlockNamespaceListerExpansion
-}
-
-// iPAMBlockNamespaceLister implements the IPAMBlockNamespaceLister
-// interface.
-type iPAMBlockNamespaceLister struct {
-	listers.ResourceIndexer[*projectcalicov3.IPAMBlock]
 }

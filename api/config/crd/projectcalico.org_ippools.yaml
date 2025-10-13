@@ -14,7 +14,12 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The pool CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -79,3 +84,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

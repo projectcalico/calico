@@ -18,7 +18,7 @@ import (
 // IPAMBlocksGetter has a method to return a IPAMBlockInterface.
 // A group's client should implement this interface.
 type IPAMBlocksGetter interface {
-	IPAMBlocks(namespace string) IPAMBlockInterface
+	IPAMBlocks() IPAMBlockInterface
 }
 
 // IPAMBlockInterface has methods to work with IPAMBlock resources.
@@ -40,13 +40,13 @@ type iPAMBlocks struct {
 }
 
 // newIPAMBlocks returns a IPAMBlocks
-func newIPAMBlocks(c *ProjectcalicoV3Client, namespace string) *iPAMBlocks {
+func newIPAMBlocks(c *ProjectcalicoV3Client) *iPAMBlocks {
 	return &iPAMBlocks{
 		gentype.NewClientWithList[*projectcalicov3.IPAMBlock, *projectcalicov3.IPAMBlockList](
 			"ipamblocks",
 			c.RESTClient(),
 			scheme.ParameterCodec,
-			namespace,
+			"",
 			func() *projectcalicov3.IPAMBlock { return &projectcalicov3.IPAMBlock{} },
 			func() *projectcalicov3.IPAMBlockList { return &projectcalicov3.IPAMBlockList{} },
 		),

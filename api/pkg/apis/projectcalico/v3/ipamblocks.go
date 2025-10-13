@@ -19,16 +19,19 @@ import (
 )
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The block CIDR"
+// +kubebuilder:printcolumn:name="Affininty",type=string,JSONPath=".spec.affinity",description="The block affinity"
 
 // +k8s:openapi-gen=true
-// +kubebuilder:resource:scope=Cluster
 type IPAMBlock struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata"`
 	// Specification of the IPAMBlock.
-	Spec IPAMBlockSpec `json:"spec,omitempty"`
+	Spec IPAMBlockSpec `json:"spec"`
 }
 
 // IPAMBlockSpec contains the specification for an IPAMBlock resource.

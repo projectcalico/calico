@@ -28,45 +28,44 @@ type IPAMBlockInformer interface {
 type iPAMBlockInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
-	namespace        string
 }
 
 // NewIPAMBlockInformer constructs a new informer for IPAMBlock type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewIPAMBlockInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredIPAMBlockInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewIPAMBlockInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredIPAMBlockInformer(client, resyncPeriod, indexers, nil)
 }
 
 // NewFilteredIPAMBlockInformer constructs a new informer for IPAMBlock type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredIPAMBlockInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredIPAMBlockInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().IPAMBlocks(namespace).List(context.Background(), options)
+				return client.ProjectcalicoV3().IPAMBlocks().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().IPAMBlocks(namespace).Watch(context.Background(), options)
+				return client.ProjectcalicoV3().IPAMBlocks().Watch(context.Background(), options)
 			},
 			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().IPAMBlocks(namespace).List(ctx, options)
+				return client.ProjectcalicoV3().IPAMBlocks().List(ctx, options)
 			},
 			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().IPAMBlocks(namespace).Watch(ctx, options)
+				return client.ProjectcalicoV3().IPAMBlocks().Watch(ctx, options)
 			},
 		},
 		&apisprojectcalicov3.IPAMBlock{},
@@ -76,7 +75,7 @@ func NewFilteredIPAMBlockInformer(client clientset.Interface, namespace string, 
 }
 
 func (f *iPAMBlockInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredIPAMBlockInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewFilteredIPAMBlockInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
 func (f *iPAMBlockInformer) Informer() cache.SharedIndexInformer {

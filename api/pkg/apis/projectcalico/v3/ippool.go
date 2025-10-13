@@ -39,6 +39,7 @@ type IPPoolList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The pool CIDR"
 
 type IPPool struct {
 	metav1.TypeMeta   `json:",inline"`

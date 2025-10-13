@@ -17,7 +17,16 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The block CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The node the block is affine to
+          jsonPath: .spec.node
+          name: Node
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -56,3 +65,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

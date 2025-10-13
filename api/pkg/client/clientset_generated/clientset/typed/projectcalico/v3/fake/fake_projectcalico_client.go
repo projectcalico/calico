@@ -54,8 +54,8 @@ func (c *FakeProjectcalicoV3) HostEndpoints() v3.HostEndpointInterface {
 	return newFakeHostEndpoints(c)
 }
 
-func (c *FakeProjectcalicoV3) IPAMBlocks(namespace string) v3.IPAMBlockInterface {
-	return newFakeIPAMBlocks(c, namespace)
+func (c *FakeProjectcalicoV3) IPAMBlocks() v3.IPAMBlockInterface {
+	return newFakeIPAMBlocks(c)
 }
 
 func (c *FakeProjectcalicoV3) IPAMConfigurations() v3.IPAMConfigurationInterface {

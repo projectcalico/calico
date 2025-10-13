@@ -121,7 +121,7 @@ func (v *version) HostEndpoints() HostEndpointInformer {
 
 // IPAMBlocks returns a IPAMBlockInformer.
 func (v *version) IPAMBlocks() IPAMBlockInformer {
-	return &iPAMBlockInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &iPAMBlockInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IPAMConfigurations returns a IPAMConfigurationInformer.

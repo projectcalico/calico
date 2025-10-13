@@ -36,6 +36,8 @@ const (
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster,shortName={affinity,affinities}
+// +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The block CIDR"
+// +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".spec.node",description="The node the block is affine to"
 
 // BlockAffinity maintains a block affinity's state
 type BlockAffinity struct {

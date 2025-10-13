@@ -3867,6 +3867,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref common.ReferenceCa
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
@@ -3915,7 +3916,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref common.Referen
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{
@@ -4503,6 +4504,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlock(ref common.ReferenceCallback) co
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
