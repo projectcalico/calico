@@ -239,6 +239,11 @@ spec:
                     type: string
                   type: array
                 stagedAction:
+                  enum:
+                    - Set
+                    - Delete
+                    - Learn
+                    - Ignore
                   type: string
               type: object
           type: object
