@@ -36,7 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	libclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -1654,7 +1653,7 @@ func testKubeControllersConfigurationClient(client calicoclient.Interface) error
 	kubeControllersConfig := &v3.KubeControllersConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
 		Status: v3.KubeControllersConfigurationStatus{
-			RunningConfig: v3.KubeControllersConfigurationSpec{
+			RunningConfig: &v3.KubeControllersConfigurationSpec{
 				Controllers: v3.ControllersConfig{
 					Node: &v3.NodeControllerConfig{
 						SyncLabels: v3.Enabled,
@@ -2026,22 +2025,19 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 			State: "pending",
 		},
 	}
-	libV3BlockAffinity := &libapiv3.BlockAffinity{
+	v3BlockAff := &v3.BlockAffinity{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 
-		Spec: libapiv3.BlockAffinitySpec{
+		Spec: v3.BlockAffinitySpec{
 			CIDR:    "10.0.0.0/24",
 			Node:    "node1",
 			State:   "pending",
-			Deleted: "false",
+			Deleted: false,
 		},
 	}
 	ctx := context.Background()
 
 	// Calico libv3 client instantiation in order to get around the API create restrictions
-	// TODO: Currently these tests only run on a Kubernetes datastore since profile creation
-	// does not work in etcd. Figure out how to divide this configuration to etcd once that
-	// is fixed.
 	config := apiconfig.NewCalicoAPIConfig()
 	config.Spec = apiconfig.CalicoAPIConfigSpec{
 		DatastoreType: apiconfig.Kubernetes,
@@ -2049,7 +2045,8 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 			EtcdEndpoints: "http://localhost:2379",
 		},
 		KubeConfig: apiconfig.KubeConfig{
-			Kubeconfig: os.Getenv("KUBECONFIG"),
+			Kubeconfig:     os.Getenv("KUBECONFIG"),
+			CalicoAPIGroup: os.Getenv("CALICO_API_GROUP"),
 		},
 	}
 	apiClient, err := libclient.New(*config)
@@ -2063,9 +2060,9 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	}
 
 	// Create the block affinity using the libv3 client.
-	_, err = apiClient.BlockAffinities().Create(ctx, libV3BlockAffinity, options.SetOptions{})
+	_, err = apiClient.BlockAffinities().Create(ctx, v3BlockAff, options.SetOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating the object through the Calico v3 API '%v' (%v)", libV3BlockAffinity, err)
+		return fmt.Errorf("error creating the object through the Calico v3 API '%v' (%v)", v3BlockAff, err)
 	}
 
 	blockAffinityNew, err := blockAffinityClient.Get(ctx, name, metav1.GetOptions{})
@@ -2089,7 +2086,7 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	}
 
 	err = blockAffinityClient.Delete(ctx, name, metav1.DeleteOptions{})
-	if nil == err {
+	if err == nil {
 		return fmt.Errorf("should not be able to delete block affinity %s", blockAffinity.Name)
 	}
 
@@ -2107,25 +2104,20 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	// Verify watch
 	var events []watch.Event
 	timeout := time.After(500 * time.Millisecond)
-	var timeoutErr error
+
 	// watch for 2 events
-loop:
 	for range 2 {
 		select {
 		case e := <-w.ResultChan():
 			events = append(events, e)
 		case <-timeout:
-			timeoutErr = fmt.Errorf("timed out waiting for events")
-			break loop
+			return fmt.Errorf("timed out waiting for events")
 		}
 	}
-	if timeoutErr != nil {
-		return timeoutErr
-	}
+
 	if len(events) != 2 {
 		return fmt.Errorf("expected 2 watch events got %d", len(events))
 	}
-
 	return nil
 }
 
