@@ -155,9 +155,9 @@ struct ct_create_ctx {
 	ipv46_addr_t tun_ip; /* is set when the packet arrive through the NP tunnel.
 			* It is also set on the first node when we create the
 			* initial CT entry for the tunneled traffic. */
-	__u16 flags;
+	__u32 flags;
 	__u8 proto;
-	__u8 __pad;
+	__u8 __pad[3];
 	enum cali_ct_type type;
 	bool allow_return;
 };
