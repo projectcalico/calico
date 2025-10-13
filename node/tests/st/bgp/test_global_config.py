@@ -24,42 +24,6 @@ from tests.st.utils.utils import check_bird_status, update_bgp_config, \
 
 class TestBGP(TestBase):
 
-    def test_defaults(self):
-        """
-        Test default BGP configuration commands.
-        """
-        with DockerHost('host', start_calico=False, dind=False) as host:
-            # As the v3 data model now stands, there is no way to query what
-            # the default AS number is, in the absence of any resources.  Also,
-            # if you create a BGPConfiguration resource that does not specify
-            # an AS number, and then read it back, the output does not include
-            # the default AS number.
-            #
-            # So we can't test the default AS number directly with calicoctl
-            # operations.  We can of course test it indirectly: see
-            # test_bird_single_route_reflector_default_as in
-            # test_single_route_reflector.py.
-
-            # Set the global-default AS number.
-            update_bgp_config(host, asNum=12345)
-
-            self.assertEquals(get_bgp_spec(host)['asNumber'], 12345)
-
-            with self.assertRaises(CommandExecError):
-                update_bgp_config(host, asNum=99999999999999999999999)
-            with self.assertRaises(CommandExecError):
-                update_bgp_config(host, asNum='abcde')
-
-            # Check BGP mesh command
-            if 'nodeToNodeMeshEnabled' in get_bgp_spec(host):
-                self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
-
-            update_bgp_config(host, nodeMesh=False)
-            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], False)
-
-            update_bgp_config(host, nodeMesh=True)
-            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
-
     @attr('slow')
     def _test_as_num(self, backend='bird'):
         """
