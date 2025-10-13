@@ -203,7 +203,7 @@ func (rw blockReaderWriter) findUsableBlock(
 		// be unable to allocate an IP even though there are fewer workloads
 		// using the special pool than there are total blocks (because the
 		// blocks get stranded, affine to other nodes).
-		log.Info("Ran out of empty blocks, trying to reclaim an empty one.")
+		log.Info("Ran out of unclaimed blocks, trying to reclaim an empty one.")
 		for i, block := range emptyBlocks {
 			age := time.Since(block.claimTime)
 			if age < EmptyBlockMinReclaimAge {
@@ -214,8 +214,13 @@ func (rw blockReaderWriter) findUsableBlock(
 				continue
 			}
 			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, releaseAffinityOpts{
-				RequireEmpty:           true,
-				ExpectedSequenceNumber: &block.seqNo,
+				RequireEmpty: true,
+				// Pass the sequence number through to make sure that we only
+				// release the affinity if the block hasn't been changed since
+				// we read it.  Otherwise, two hosts that try to reclaim the
+				// same block race, and we may free the new version of the block
+				// that was just created by the other node.
+				RequiredBlockSequenceNumber: &block.seqNo,
 			})
 			if err != nil {
 				log.Warnf("Failed to release affinity while trying to reclaim block. %v left to try: %s", len(emptyBlocks)-i, err)
@@ -375,8 +380,10 @@ func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPa
 }
 
 type releaseAffinityOpts struct {
-	RequireEmpty           bool
-	ExpectedSequenceNumber *uint64
+	RequireEmpty bool
+	// RequiredBlockSequenceNumber if non-nil, is checked against the sequence
+	// number in the block and, if it doesn't match, the release is aborted.
+	RequiredBlockSequenceNumber *uint64
 }
 
 // releaseBlockAffinity releases the host's affinity to the given block, and returns an affinityClaimedError if
@@ -412,7 +419,9 @@ func (rw blockReaderWriter) releaseBlockAffinity(
 	}
 	b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
-	if opts.ExpectedSequenceNumber != nil && *opts.ExpectedSequenceNumber != b.SequenceNumber {
+	if opts.RequiredBlockSequenceNumber != nil && *opts.RequiredBlockSequenceNumber != b.SequenceNumber {
+		// Block modified since caller read it and they want us to abort in
+		// that case.
 		return fmt.Errorf("IPAM block updated since we last read it")
 	}
 
