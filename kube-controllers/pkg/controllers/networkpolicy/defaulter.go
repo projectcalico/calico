@@ -19,6 +19,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
+	"github.com/projectcalico/api/pkg/defaults"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -99,19 +100,17 @@ func (c *policyDefaulter) Mux(obj any) {
 }
 
 func (c *policyDefaulter) defaultNetworkPolicy(p *v3.NetworkPolicy) error {
-	// Default the PolicyTypes field if necessary.
-	changed := defaultPolicyTypesField(p.Spec.Ingress, p.Spec.Egress, &p.Spec.Types)
-
-	// Force the Tier label to be present and correct.
-	changed = setTierLabel(p, p.Spec.Tier) || changed
-
-	if !changed {
+	changed, err := defaults.Default(p)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to default NetworkPolicy %s/%s", p.Namespace, p.Name)
+		return err
+	} else if !changed {
 		// No change, nothing to do.
 		return nil
 	}
 
 	// Update the policy.
-	_, err := c.cli.ProjectcalicoV3().NetworkPolicies(p.Namespace).Update(c.ctx, p, v1.UpdateOptions{})
+	_, err = c.cli.ProjectcalicoV3().NetworkPolicies(p.Namespace).Update(c.ctx, p, v1.UpdateOptions{})
 	if err != nil {
 		logrus.WithError(err).Errorf("Failed to update NetworkPolicy %s/%s", p.Namespace, p.Name)
 		return err
@@ -120,58 +119,20 @@ func (c *policyDefaulter) defaultNetworkPolicy(p *v3.NetworkPolicy) error {
 }
 
 func (c *policyDefaulter) defaultGlobalNetworkPolicy(p *v3.GlobalNetworkPolicy) error {
-	// Default the PolicyTypes field if necessary.
-	changed := defaultPolicyTypesField(p.Spec.Ingress, p.Spec.Egress, &p.Spec.Types)
-
-	// Force the Tier label to be present and correct.
-	changed = setTierLabel(p, p.Spec.Tier) || changed
-
-	if !changed {
+	changed, err := defaults.Default(p)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to default GlobalNetworkPolicy %s", p.Name)
+		return err
+	} else if !changed {
 		// No change, nothing to do.
 		return nil
 	}
 
 	// Update the policy.
-	_, err := c.cli.ProjectcalicoV3().GlobalNetworkPolicies().Update(c.ctx, p, v1.UpdateOptions{})
+	_, err = c.cli.ProjectcalicoV3().GlobalNetworkPolicies().Update(c.ctx, p, v1.UpdateOptions{})
 	if err != nil {
 		logrus.WithError(err).Errorf("Failed to update GlobalNetworkPolicy %s", p.Name)
 		return err
 	}
 	return nil
-}
-
-func setTierLabel(obj v1.Object, tier string) bool {
-	labels := obj.GetLabels()
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	if labels[v3.LabelTier] != tier {
-		labels[v3.LabelTier] = tier
-		obj.SetLabels(labels)
-		return true
-	}
-	return false
-}
-
-func defaultPolicyTypesField(ingressRules, egressRules []v3.Rule, types *[]v3.PolicyType) bool {
-	if len(*types) == 0 {
-		// Default the Types field according to what inbound and outbound rules are present
-		// in the policy.
-		if len(egressRules) == 0 {
-			// Policy has no egress rules, so apply this policy to ingress only.  (Note:
-			// intentionally including the case where the policy also has no ingress
-			// rules.)
-			*types = []v3.PolicyType{v3.PolicyTypeIngress}
-		} else if len(ingressRules) == 0 {
-			// Policy has egress rules but no ingress rules, so apply this policy to
-			// egress only.
-			*types = []v3.PolicyType{v3.PolicyTypeEgress}
-		} else {
-			// Policy has both ingress and egress rules, so apply this policy to both
-			// ingress and egress.
-			*types = []v3.PolicyType{v3.PolicyTypeIngress, v3.PolicyTypeEgress}
-		}
-		return true
-	}
-	return false
 }
