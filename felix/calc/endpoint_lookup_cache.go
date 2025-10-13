@@ -243,7 +243,7 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 
 		var hasIngress, hasEgress bool
 		for _, pol := range ti.OrderedPolicies {
-			namespace, tier, name, err := names.DeconstructPolicyName(pol.Key.Name)
+			namespace, tier, name, err := names.DeconstructPolicyName(pol.Key.Name, ti.Name)
 			if err != nil {
 				log.WithError(err).Error("Unable to parse policy name")
 				continue
@@ -908,8 +908,10 @@ type LocalEndpointData struct {
 	Egress *MatchData
 }
 
-var _ endpointData = &LocalEndpointData{}
-var _ endpointData = &RemoteEndpointData{}
+var (
+	_ endpointData = &LocalEndpointData{}
+	_ endpointData = &RemoteEndpointData{}
+)
 
 func (ed *LocalEndpointData) IsLocal() bool {
 	return true
