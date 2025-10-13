@@ -101,13 +101,14 @@ func (c *policyDefaulter) Mux(obj any) {
 func (c *policyDefaulter) defaultNetworkPolicy(p *v3.NetworkPolicy) error {
 	// Default the PolicyTypes field if necessary.
 	changed := defaultPolicyTypesField(p.Spec.Ingress, p.Spec.Egress, &p.Spec.Types)
+
+	// Force the Tier label to be present and correct.
+	changed = setTierLabel(p, p.Spec.Tier) || changed
+
 	if !changed {
 		// No change, nothing to do.
 		return nil
 	}
-
-	// Force the Tier label to be present and correct.
-	changed = setTierLabel(p, p.Spec.Tier) || changed
 
 	// Update the policy.
 	_, err := c.cli.ProjectcalicoV3().NetworkPolicies(p.Namespace).Update(c.ctx, p, v1.UpdateOptions{})
