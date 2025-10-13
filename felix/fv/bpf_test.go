@@ -1648,7 +1648,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						bpfWaitForPolicy(tc.Felixes[0], "eth0", "egress", "default.host-0-1")
 					})
 
-					It("FOCUS should handle NAT outgoing", func() {
+					It("should handle NAT outgoing", func() {
 						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
 						cc.Expect(Some, w[0][0], hostW[0]) // no snat
