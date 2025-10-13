@@ -14,7 +14,11 @@
 
 package daemon
 
-import "os"
+import (
+	"os"
+	"os/signal"
+	"syscall"
+)
 
 func notifySIGUSR1(signalChan chan os.Signal) {
 	signal.Notify(signalChan, syscall.SIGUSR1)
