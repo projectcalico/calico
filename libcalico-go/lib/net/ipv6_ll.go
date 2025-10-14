@@ -16,9 +16,9 @@ package net
 
 import "net"
 
-// MACToIPv6LinkLocal converts a MAC address to the associated IPv6
+// MustMACToIPv6LinkLocal converts a MAC address to the associated IPv6
 // link-local address.
-func MACToIPv6LinkLocal(mac net.HardwareAddr) net.IP {
+func MustMACToIPv6LinkLocal(mac net.HardwareAddr) net.IP {
 	// First convert MAC to EUI-64.
 	var eui [8]byte
 	if len(mac) == 8 {
@@ -29,7 +29,7 @@ func MACToIPv6LinkLocal(mac net.HardwareAddr) net.IP {
 		eui[4] = 0xfe
 		copy(eui[5:], mac[3:])
 	} else {
-		panic("MACToIPv6LinkLocal: invalid MAC address: " + mac.String())
+		panic("MustMACToIPv6LinkLocal: invalid MAC address: " + mac.String())
 	}
 
 	// Flip 7th bit, as required by LL algorithm.

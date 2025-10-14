@@ -59,15 +59,15 @@ func TestMACToIPv6LinkLocal(t *testing.T) {
 							panicked = true
 						}
 					}()
-					MACToIPv6LinkLocal(mac)
+					MustMACToIPv6LinkLocal(mac)
 				}()
 				if !panicked {
 					t.Errorf("should have panicked on %q", test.in)
 				}
 			} else {
-				out := MACToIPv6LinkLocal(mac)
+				out := MustMACToIPv6LinkLocal(mac)
 				if !net.ParseIP(test.expected).Equal(out) {
-					t.Errorf("MACToIPv6LinkLocal(%q) = %v; want %v", test.in, out, test.expected)
+					t.Errorf("MustMACToIPv6LinkLocal(%q) = %v; want %v", test.in, out, test.expected)
 				}
 			}
 		})

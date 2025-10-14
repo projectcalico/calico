@@ -39,7 +39,7 @@ import (
 
 var (
 	hostSideMAC         = net.HardwareAddr{0xee, 0xee, 0xee, 0xee, 0xee, 0xee}
-	hostSideMACAsIPv6LL = cnet.MACToIPv6LinkLocal(hostSideMAC)
+	hostSideMACAsIPv6LL = cnet.MustMACToIPv6LinkLocal(hostSideMAC)
 )
 
 type LinuxDataplane struct {
