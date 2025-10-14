@@ -1356,12 +1356,13 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		return fmt.Errorf("failed to update operator branch in %s: %w", makeMetadataFilePath, err)
 	}
 
-	// Update branch used for CAPZ - Windows FV tests.
-	logrus.WithField("branch", branch).Debug("Updating branch in setup script for CAPZ Windows FV tests")
+	// Update release stream used for CAPZ - Windows FV tests.
+	releaseStream := strings.TrimPrefix(branch, r.releaseBranchPrefix+"-")
+	logrus.WithField("releaseStream", releaseStream).Debug("Updating release stream in setup script for CAPZ Windows FV tests")
 	scriptFilePath := filepath.Join(r.repoRoot, "process", "testing", "winfv-felix", "setup-fv-capz.sh")
-	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/RELEASE_STREAM=.*HASH_RELEASE/RELEASE_STREAM=%s HASH_RELEASE/g`, branch), scriptFilePath}, nil); err != nil {
-		logrus.WithError(err).Errorf("Failed to update release branch in %s", scriptFilePath)
-		return fmt.Errorf("failed to update release branch in %s: %w", scriptFilePath, err)
+	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/RELEASE_STREAM=.*HASH_RELEASE/RELEASE_STREAM=%s HASH_RELEASE/g`, releaseStream), scriptFilePath}, nil); err != nil {
+		logrus.WithError(err).Errorf("Failed to update release stream in %s", scriptFilePath)
+		return fmt.Errorf("failed to update release stream in %s: %w", scriptFilePath, err)
 	}
 
 	// Run code generation.
