@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 
 	. "github.com/onsi/ginkgo"
@@ -41,7 +38,7 @@ func describeBPFMultiHomedTests() bool {
 	if !BPFMode() {
 		return true
 	}
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF multi-homed tests")
+	desc := "_BPF_ _BPF-SAFE_ BPF multi-homed tests"
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
 			infra        infrastructure.DatastoreInfra
