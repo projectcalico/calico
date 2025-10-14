@@ -234,7 +234,7 @@ func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainer
 
 		result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", k8sNs)
 		if err != nil {
-			log.Errorf("Error: ", err)
+			log.Errorf("RunCNIPluginWithId failed: %s", err)
 			return containerID, nil, "", []string{}, []string{}, err
 		}
 	}
@@ -247,7 +247,7 @@ func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainer
 
 	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
 	if err != nil {
-		log.Errorf("Error: ", err)
+		log.Errorf("RunCNIPluginWithId failed: %s", err)
 		return containerID, nil, "", []string{}, []string{}, err
 	}
 	return
@@ -310,7 +310,7 @@ func RunCNIPluginWithId(
 	// Extract the target CNI version from the provided network config.
 	var nc types.NetConf
 	if err = json.Unmarshal([]byte(netconf), &nc); err != nil {
-		log.Errorf("unmarshal err: ", err)
+		log.Errorf("Unmarshal err: %s", err)
 		panic(err)
 	}
 	// Parse the result as the target CNI version.
@@ -451,7 +451,7 @@ func NetworkPod(
 func CreateNetwork(netconf string) (*hcsshim.HNSNetwork, error) {
 	var conf plugintypes.NetConf
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
-		log.Errorf("unmarshal err: ", err)
+		log.Errorf("Unmarshal err: %s", err)
 		panic(err)
 	}
 
@@ -482,7 +482,7 @@ func CreateNetwork(netconf string) (*hcsshim.HNSNetwork, error) {
 func CreateEndpoint(hnsNetwork *hcsshim.HNSNetwork, netconf string) (*hcsshim.HNSEndpoint, error) {
 	var conf plugintypes.NetConf
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
-		log.Errorf("unmarshal err: ", err)
+		log.Errorf("Unmarshal err: %s", err)
 		panic(err)
 	}
 
@@ -511,7 +511,12 @@ func CheckRegistryKeyExists(path string) (bool, error) {
 	} else if err != nil {
 		return false, err
 	}
-	defer k.Close()
+	defer func() {
+		err := k.Close()
+		if err != nil {
+			log.WithError(err).Warn("Error when closing registry key. Ignoring.")
+		}
+	}()
 
 	return true, nil
 }
@@ -523,7 +528,12 @@ func GetTimestampValue(key, id string) (time.Time, error) {
 	if err != nil {
 		return zTime, err
 	}
-	defer k.Close()
+	defer func() {
+		err := k.Close()
+		if err != nil {
+			log.WithError(err).Warn("Error when closing registry key. Ignoring.")
+		}
+	}()
 
 	val, _, err := k.GetStringValue(id)
 	if err != nil {
@@ -550,7 +560,12 @@ func DeleteSubKey(key, subkeyName string) error {
 	if err != nil {
 		return err
 	}
-	defer k.Close()
+	defer func() {
+		err := k.Close()
+		if err != nil {
+			log.WithError(err).Warn("Error when closing registry key. Ignoring.")
+		}
+	}()
 
 	err = registry.DeleteKey(k, subkeyName)
 	if err != nil {

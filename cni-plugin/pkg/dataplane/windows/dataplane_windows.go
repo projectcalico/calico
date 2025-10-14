@@ -48,13 +48,13 @@ const (
 	DefaultVNI = 4096
 )
 
-type windowsDataplane struct {
+type WindowsDataplane struct {
 	conf   types.NetConf
 	logger *logrus.Entry
 }
 
-func NewWindowsDataplane(conf types.NetConf, logger *logrus.Entry) *windowsDataplane {
-	return &windowsDataplane{
+func NewWindowsDataplane(conf types.NetConf, logger *logrus.Entry) *WindowsDataplane {
+	return &WindowsDataplane{
 		conf:   conf,
 		logger: logger,
 	}
@@ -131,7 +131,7 @@ func SetupVxlanNetwork(networkName string, subNet *net.IPNet, vni uint64, logger
 }
 
 // DoNetworking performs the networking for the given config and IPAM result
-func (d *windowsDataplane) DoNetworking(
+func (d *WindowsDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
 	args *skel.CmdArgs,
@@ -332,11 +332,12 @@ func ensureVxlanNetworkExists(networkName string, subNet *net.IPNet, vni uint64,
 	if createNetwork {
 		// Delete stale network
 		if existingNetwork != nil {
+			name := existingNetwork.Name
 			if _, err := existingNetwork.Delete(); err != nil {
-				logger.Errorf("Unable to delete existing network [%v], error: %v", existingNetwork.Name, err)
+				logger.Errorf("Unable to delete existing network [%v], error: %v", name, err)
 				return nil, err
 			}
-			logger.Infof("Deleted stale HNS network [%v]")
+			logger.Infof("Deleted stale HNS network [%v]", name)
 		}
 
 		// Add a VxLan subnet
@@ -363,22 +364,22 @@ func ensureVxlanNetworkExists(networkName string, subNet *net.IPNet, vni uint64,
 		var waitErr, lastErr error
 		// Wait for the network to populate Management IP
 		logger.Infof("Waiting to get ManagementIP from HNSNetwork %s", networkName)
-		waitErr = wait.Poll(500*time.Millisecond, 5*time.Second, func() (done bool, err error) {
+		waitErr = wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (done bool, err error) {
 			newNetwork, lastErr = hcsshim.HNSNetworkRequest("GET", newNetwork.Id, "")
 			return newNetwork != nil && len(newNetwork.ManagementIP) != 0, nil
 		})
-		if waitErr == wait.ErrWaitTimeout {
+		if wait.Interrupted(waitErr) {
 			return nil, errors.Annotatef(lastErr, "timeout, failed to get management IP from HNSNetwork %s", networkName)
 		}
 
 		// Wait for the interface with the management IP
 		logger.Infof("Waiting to get net interface for HNSNetwork %s (%s)", networkName, newNetwork.ManagementIP)
-		waitErr = wait.Poll(500*time.Millisecond, 5*time.Second, func() (done bool, err error) {
+		waitErr = wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (done bool, err error) {
 			mgmtIP := net.ParseIP(newNetwork.ManagementIP)
 			_, lastErr = lookupManagementIface(mgmtIP, logger)
 			return lastErr == nil, nil
 		})
-		if waitErr == wait.ErrWaitTimeout {
+		if wait.Interrupted(waitErr) {
 			return nil, errors.Annotatef(lastErr, "timeout, failed to get net interface for HNSNetwork %s (%s)", networkName, newNetwork.ManagementIP)
 		}
 
@@ -436,11 +437,12 @@ func EnsureNetworkExists(networkName string, subNet *net.IPNet, logger *logrus.E
 	if createNetwork {
 		// Delete stale network
 		if hnsNetwork != nil {
+			name := hnsNetwork.Name
 			if _, err := hnsNetwork.Delete(); err != nil {
-				logger.Errorf("Unable to delete existing network [%v], error: %v", hnsNetwork.Name, err)
+				logger.Errorf("Unable to delete existing network [%v], error: %v", name, err)
 				return nil, err
 			}
-			logger.Infof("Deleted stale HNS network [%v]")
+			logger.Infof("Deleted stale HNS network [%v]", name)
 		}
 
 		// Create new hnsNetwork
@@ -568,7 +570,7 @@ func CreateAndAttachHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, subNet
 				logger.Errorf("Unable to delete existing bridge endpoint [%v], error: %v", epName, err)
 				return nil, err
 			}
-			logger.Infof("Deleted stale bridge endpoint [%v]")
+			logger.Infof("Deleted stale bridge endpoint [%v]", epName)
 			hnsEndpoint = nil
 		} else if strings.ToUpper(hnsEndpoint.VirtualNetwork) == strings.ToUpper(hnsNetwork.Id) {
 			// Endpoint exists for correct network. No processing required
@@ -676,7 +678,7 @@ func enableForwarding(netInterface net.Interface, logger *logrus.Entry) error {
 	return nil
 }
 
-func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
+func (d *WindowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	hnsNetwork *hcsshim.HNSNetwork,
 	affineBlockSubnet *net.IPNet,
 	allIPAMPools []*net.IPNet,
@@ -1036,7 +1038,7 @@ func SetupRoutes(hostVeth interface{}, result *cniv1.Result) error {
 }
 
 // CleanUpNamespace deletes the devices in the network namespace.
-func (d *windowsDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
+func (d *WindowsDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	d.logger.Infof("Cleaning up endpoint")
 
 	n, _, err := loadNetConf(args.StdinData)
@@ -1070,6 +1072,9 @@ func (d *windowsDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 // This is done so that the DNS details are reflected in the container.
 func NetworkApplicationContainer(args *skel.CmdArgs) error {
 	n, _, err := loadNetConf(args.StdinData)
+	if err != nil {
+		return err
+	}
 	hnsEndpointName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 
 	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(hnsEndpointName)
@@ -1079,12 +1084,12 @@ func NetworkApplicationContainer(args *skel.CmdArgs) error {
 	}
 
 	if err = hcsshim.HotAttachEndpoint(args.ContainerID, hnsEndpoint.Id); err != nil {
-		if err == hcsshim.ErrComputeSystemDoesNotExist {
+		if errors.Is(err, hcsshim.ErrComputeSystemDoesNotExist) {
 			// kubelet Windows uses ADD CmdArgs to get pod status. It is possible for Calico CNI to receive an ADD after application container has completed and been removed from runtime.
 			// In that case, return nil to allow Calico CNI to return good pod status to kubelet.
 			return nil
 		}
-		logrus.Errorf("Failed to attach hns endpoint: %s to container: %v\n ", hnsEndpoint, args.ContainerID)
+		logrus.Errorf("Failed to attach hns endpoint: %v to container: %v\n ", hnsEndpoint, args.ContainerID)
 		return err
 	}
 

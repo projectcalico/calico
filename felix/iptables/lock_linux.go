@@ -15,6 +15,8 @@
 
 // This file is based on that extracted from Kubernetes at pkg/util/iptables/iptables_linux.go.
 
+//go:build linux
+
 package iptables
 
 import (

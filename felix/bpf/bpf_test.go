@@ -15,6 +15,8 @@
 // Test can simply be run with:
 // sudo -E go test -v ./bpf/ -count=1
 
+//go:build linux
+
 package bpf
 
 import (

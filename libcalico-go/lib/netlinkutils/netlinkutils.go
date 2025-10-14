@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Dummy version of the HCN API for compilation on Linux.
+//go:build linux
+
 package netlinkutils
 
 import (
