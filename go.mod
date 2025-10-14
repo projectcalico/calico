@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.25.1
+go 1.25.2
 
 require (
 	cloud.google.com/go/storage v1.50.0
@@ -102,7 +102,7 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.30.2
 	// Replaced with older version below until we can handle the updated permissions it now puts on log files.
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	helm.sh/helm/v3 v3.17.4
+	helm.sh/helm/v3 v3.18.6
 	k8s.io/api v0.33.5
 	k8s.io/apiextensions-apiserver v0.33.5
 	k8s.io/apimachinery v0.33.5
