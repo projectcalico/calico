@@ -648,7 +648,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 
 	if loadBalancerIPs != nil {
 		// User requested specific IP, attempt to allocate
-		log.Infof("Trying to assign requested IPs %v to Sevice %s/%s", loadBalancerIPs, svc.Namespace, svc.Name)
+		log.Infof("Trying to assign requested IPs %v to Service %s/%s", loadBalancerIPs, svc.Namespace, svc.Name)
 		for _, addr := range loadBalancerIPs {
 			if _, exists := c.allocationTracker.ipsByService[*svcKey][addr.String()]; exists {
 				// We must be trying to assign missing address due to an error,
