@@ -1,9 +1,30 @@
 package conncheck
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// CombineCustomizers is a meta customizer that applies multiple Pod customizers
+// to the Pod spec.
+func CombineCustomizers(customizers ...func(*corev1.Pod)) func(*corev1.Pod) {
+	return func(pod *corev1.Pod) {
+		for _, customizer := range customizers {
+			customizer(pod)
+		}
+	}
+}
+
+func UseV4IPPool(poolName string) func(*corev1.Pod) {
+	return func(pod *corev1.Pod) {
+		if pod.Annotations == nil {
+			pod.Annotations = map[string]string{}
+		}
+		pod.Annotations["cni.projectcalico.org/ipv4pools"] = fmt.Sprintf(`["%s"]`, poolName)
+	}
+}
 
 // AvoidEachOther is a Pod customizer that adds PodAntiAffinity rules to avoid
 // scheduling the Pod on the same node as other Pods deployed with this customizer.
