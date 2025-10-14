@@ -1,5 +1,7 @@
 // Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
+//go:build linux
+
 package iptables
 
 import "sync"

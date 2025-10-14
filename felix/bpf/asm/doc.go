@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 // Package asm contains a basic eBPF bytecode assembler.  So far, the instructions that are useful in
 // our BPF programs have been added but adding additional instructions is straightforward following
 // the pattern.

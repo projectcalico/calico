@@ -200,7 +200,6 @@ Ginkgo will re-run tests as files are modified and saved.
               "mode": "test",
               "program": "${workspaceFolder}/felix/fv",
               "env": {
-                  "GOFLAGS": "-tags=fvtests"
               },
               "args": [
                   "-test.v",
