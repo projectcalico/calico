@@ -68,6 +68,7 @@ var features = map[string]bool{
 	"MTU":             true,
 	"Maglev":          true,
 	"BGPPeer":         true,
+	"IPIP":            true,
 }
 
 // WithFeature marks tests as verifying a specific feature.
