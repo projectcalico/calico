@@ -1,6 +1,3 @@
-//go:build fvtests
-// +build fvtests
-
 // Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -131,11 +128,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		tier.Name = "tier1"
 		tier.Spec.Order = &float1_0
 		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		tier = api.NewTier()
 		tier.Name = "tier2"
 		tier.Spec.Order = &float2_0
 		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Allow all traffic to/from ep1-1
 		gnp := api.NewGlobalNetworkPolicy()
@@ -284,7 +283,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		svcName := "test-service"
 		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 		tSvc := k8sService(svcName, clusterIP, ep2_1, svcPort, wepPort, 0, "tcp")
-		tSvcNamespace := tSvc.ObjectMeta.Namespace
+		tSvcNamespace := tSvc.Namespace
 		_, err = k8sClient.CoreV1().Services(tSvcNamespace).Create(context.Background(), tSvc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -768,11 +767,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		tier.Name = "tier1"
 		tier.Spec.Order = &float1_0
 		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		tier = api.NewTier()
 		tier.Name = "tier2"
 		tier.Spec.Order = &float2_0
 		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		// np1-1  egress/ingress pass
 		np := api.NewNetworkPolicy()
@@ -1420,11 +1421,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		tier.Name = "tier1"
 		tier.Spec.Order = &float1_0
 		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		tier = api.NewTier()
 		tier.Name = "tier2"
 		tier.Spec.Order = &float2_0
 		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		// np1-1  egress/ingress pass
 		np := api.NewNetworkPolicy()

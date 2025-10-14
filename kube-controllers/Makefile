@@ -145,8 +145,14 @@ ut fv: $(TEST_BINARIES)
 # ginkgo doesn't let you produce a single test binary with multiple packages.
 # Only do this if there are .go files in the path.
 %/ut.test: $(SRC_FILES)
+	@# We no longer separate Felix FV test infra with a build tag; make sure it's gone
+	@# so that we don't miss any tests.
+	@if grep -R '//go:build.*fvtests' ./$*; then \
+	  echo "Found fvtests build tag, please remove."; \
+	  exit 1; \
+	fi
 	if [ $$(find ./$* -name '*.go' | wc -l) -gt 0 ]; then \
-		$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@; \
+		$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go test ./$* -c -o $@; \
 	else \
 		echo "Skipping $* as it has no .go files in it"; \
 	fi
