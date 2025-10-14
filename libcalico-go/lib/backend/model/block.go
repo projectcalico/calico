@@ -115,6 +115,7 @@ type AllocationBlock struct {
 	// "host:<hostname>". If not set, this block is not affine to a host.
 	Affinity *string `json:"affinity"`
 
+
 	// Time the affinity was claimed; may be zero for old blocks that predate
 	// this field.
 	AffinityClaimTime *metav1.Time `json:"affinity_claim_time,omitempty"`
