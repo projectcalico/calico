@@ -319,7 +319,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 						// Let's give the kernel time to settle this time.
 						time.Sleep(50 * time.Millisecond)
 						if err = hostNlHandle.LinkSetUp(hostVeth); err != nil {
-							return fmt.Errorf("failed to set %q down: %w", hostVethName, err)
+							return fmt.Errorf("failed to set %q up: %w", hostVethName, err)
 						}
 						err = fmt.Errorf("host-side veth got wrong link-local IP address: %s", addresses[0].IP)
 					}
