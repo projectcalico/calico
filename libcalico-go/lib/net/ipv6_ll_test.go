@@ -30,10 +30,13 @@ func TestMACToIPv6LinkLocal(t *testing.T) {
 			expected: "fe80::0200:00ff:fe00:0000",
 		},
 		{
+			// Normal 48-bit MAC address, should get expanded to 64 bits by
+			// inserting ff:ee.
 			in:       "11:22:33:44:55:66",
 			expected: "fe80::1322:33ff:fe44:5566",
 		},
 		{
+			// EUI-64; no expansion needed.
 			in:       "11:22:33:44:55:66:77:88",
 			expected: "fe80::1322:3344:5566:7788",
 		},

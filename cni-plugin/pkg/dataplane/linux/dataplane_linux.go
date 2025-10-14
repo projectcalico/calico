@@ -151,16 +151,19 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			return err
 		}
 
-		// Set the MAC address on the host side interface so the kernel does not
-		// have to generate a persistent address.  (Sometimes the kernel fails
-		// to set the persistent MAC if we do it as part of the LinkAdd.)
+		// We create the veth with random MAC address because the kernel sometimes
+		// fails to honor a MAC that we set on the LinkAdd request.  However,
+		// we want a fixed MAC address so try to set that now.  A fixed MAC
+		// address makes ARP programming easier/static, and it paves the way for
+		// live migration of workloads in the future.
 		var expectedHostSideIPv6Addr net.IP
 		if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, hostSideMAC); err != nil {
 			d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
 		} else {
-			// Sometimes the kernel uses the old MAC to calculate the link-local
-			// address. Give it time to settle and record the expected IP address
-			// so we can confirm it later.
+			// We've seen the kernel use the old MAC to calculate the link-local
+			// address.  Presumably because we bring the link "up" before the
+			// MAC has reached all parts of the kernel.  Give it a bit of time
+			// to settle in hopes of making that less likely.
 			time.Sleep(10 * time.Millisecond)
 			expectedHostSideIPv6Addr = hostSideMACAsIPv6LL
 		}
@@ -294,6 +297,10 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			var err error
 			var addresses []netlink.Addr
 			for i := 0; i < 10; i++ {
+				if i > 0 {
+					time.Sleep(50 * time.Millisecond)
+					d.logger.Info("Retry lookup of host-side IPv6 link local address...")
+				}
 				// No need to add a dummy next hop route as the host veth device will already have an IPv6
 				// link local address that can be used as a next hop.
 				// Just fetch the address of the host end of the veth and use it as the next hop.
@@ -309,6 +316,10 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 					err = fmt.Errorf("failed to get IPv6 addresses for host side of the veth pair")
 				} else {
 					if expectedHostSideIPv6Addr != nil && !expectedHostSideIPv6Addr.Equal(addresses[0].IP) {
+						// [Shaun] I think we hit this case if the kernel hasn't finished processing
+						// the MAC update above when we bring the device up.  It uses the original
+						// random MAC to generate the IPv6 link local address.  To work around that,
+						// toggle the device down/up, which refreshes the calculation of the address.
 						d.logger.Warnf("Host-side veth received unexpected link-local IP; toggling it down/up to reset the IP.")
 						if err = hostNlHandle.LinkSetDown(hostVeth); err != nil {
 							return fmt.Errorf("failed to set %q down: %w", hostVethName, err)
@@ -323,18 +334,21 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 						if err = hostNlHandle.LinkSetUp(hostVeth); err != nil {
 							return fmt.Errorf("failed to set %q down: %w", hostVethName, err)
 						}
+						// Leave an error behind so that we retry the loop.
 						err = fmt.Errorf("host-side veth got wrong link-local IP address: %s", addresses[0].IP)
 					}
 				}
-				if err == nil {
-					break
+
+				if err != nil {
+					continue
 				}
 
-				d.logger.Infof("No IPv6 set on interface, retrying..")
-				time.Sleep(50 * time.Millisecond)
+				d.logger.Infof("Host-side veth link-local IP found: %s", addresses[0].IP.String())
+				break
 			}
 
 			if err != nil {
+				d.logger.Errorf("Gave up waiting for host-side link local address: %s.", err)
 				return err
 			}
 
