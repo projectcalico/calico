@@ -2,7 +2,7 @@
 This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
-go 1.25.1
+go 1.25.2
 cel.dev/expr v0.20.0
 github.com/antlr4-go/antlr/v4 v4.13.0
 github.com/aws/smithy-go v1.22.5
@@ -10,7 +10,7 @@ github.com/beorn7/perks v1.0.1
 github.com/blang/semver/v4 v4.0.0
 github.com/cenkalti/backoff/v4 v4.3.0
 github.com/cespare/xxhash/v2 v2.3.0
-github.com/containerd/containerd v1.7.24
+github.com/containerd/containerd v1.7.27
 github.com/containerd/containerd/api v1.8.0
 github.com/containerd/errdefs v1.0.0
 github.com/containerd/errdefs/pkg v0.3.0
@@ -24,7 +24,7 @@ github.com/distribution/reference v0.6.0
 github.com/docker/go-units v0.5.0
 github.com/emicklei/go-restful/v3 v3.11.0
 github.com/euank/go-kmsg-parser v2.0.0+incompatible
-github.com/evanphx/json-patch v5.9.0+incompatible
+github.com/evanphx/json-patch v5.9.11+incompatible
 github.com/evanphx/json-patch/v5 v5.9.11
 github.com/felixge/httpsnoop v1.0.4
 github.com/fsnotify/fsnotify v1.9.0
