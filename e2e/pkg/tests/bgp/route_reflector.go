@@ -37,6 +37,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
+	describe.WithDisruptive(),
 	"Route reflectors",
 	func() {
 		// Define variables common across all tests.
@@ -204,10 +205,20 @@ var _ = describe.CalicoDescribe(
 			By("Removing one of the route reflectors")
 			setNodeAsNotRouteReflector(cli, &nodes.Items[1])
 
-			// Verify connectivity is maintained.
+			// Verify c nnectivity is maintained.
 			checker.ResetExpectations()
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
 			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
+			checker.Execute()
+
+			// Finally, remove the last RR and verify connectivity is lost.
+			By("Removing the last route reflector")
+			setNodeAsNotRouteReflector(cli, &nodes.Items[0])
+
+			// Verify connectivity is lost.
+			checker.ResetExpectations()
+			checker.ExpectFailure(client1, server1.ClusterIPs()...)
+			checker.ExpectFailure(client2, server1.ClusterIPs()...)
 			checker.Execute()
 		})
 	})
