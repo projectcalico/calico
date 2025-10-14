@@ -45,6 +45,7 @@ var _ = describe.CalicoDescribe(
 		var checker conncheck.ConnectionTester
 		var server1 *conncheck.Server
 		var client1 *conncheck.Client
+		var client2 *conncheck.Client
 		var restoreBGPConfig func()
 
 		// Create a new framework for the tests.
@@ -90,13 +91,20 @@ var _ = describe.CalicoDescribe(
 				f.Namespace,
 				conncheck.WithClientCustomizer(conncheck.AvoidEachOther),
 			)
+			client2 = conncheck.NewClient(
+				"client2",
+				f.Namespace,
+				conncheck.WithClientCustomizer(conncheck.AvoidEachOther),
+			)
 			checker.AddServer(server1)
 			checker.AddClient(client1)
+			checker.AddClient(client2)
 			checker.Deploy()
 
 			// Verify initial connectivity.
 			checker.ResetExpectations()
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
 			checker.Execute()
 		})
 
@@ -115,6 +123,7 @@ var _ = describe.CalicoDescribe(
 			// Verify connectivity is lost.
 			checker.ResetExpectations()
 			checker.ExpectFailure(client1, server1.ClusterIPs()...)
+			checker.ExpectFailure(client2, server1.ClusterIPs()...)
 			checker.Execute()
 
 			// Select a node to act as a route reflector. Give it a RR cluster ID, as well
@@ -123,22 +132,7 @@ var _ = describe.CalicoDescribe(
 			err = cli.List(context.Background(), &nodes)
 			Expect(err).NotTo(HaveOccurred(), "Error querying nodes in the cluster")
 			Expect(nodes.Items).NotTo(BeEmpty(), "No nodes found in the cluster")
-			rrNode := nodes.Items[0]
-			prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
-
-			By(fmt.Sprintf("Using node %s as a route reflector", rrNode.Name))
-			rrNode.Labels[resources.RouteReflectorClusterIDAnnotation] = "224.0.0.2"
-			rrNode.Annotations[resources.RouteReflectorClusterIDAnnotation] = "224.0.0.2"
-			err = cli.Patch(context.Background(), &rrNode, prePatch)
-			Expect(err).NotTo(HaveOccurred(), "Error marking node as route reflector")
-			DeferCleanup(func() {
-				// Remove the label and annotation from the node.
-				prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
-				delete(rrNode.Labels, resources.RouteReflectorClusterIDAnnotation)
-				delete(rrNode.Annotations, resources.RouteReflectorClusterIDAnnotation)
-				err = cli.Patch(context.Background(), &rrNode, prePatch)
-				Expect(err).NotTo(HaveOccurred(), "Error removing route reflector label from node during cleanup")
-			})
+			setNodeAsRouteReflector(cli, &nodes.Items[0], "225.0.0.4")
 
 			// Create BGP peer that causes all non-RR nodes to peer with the RR.
 			By("Creating a BGPPeer to re-enable peers via the RR")
@@ -159,6 +153,61 @@ var _ = describe.CalicoDescribe(
 			// Verify connectivity is restored.
 			checker.ResetExpectations()
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
+			checker.Execute()
+		})
+
+		It("should support clustered route reflectors", func() {
+			// Disable full mesh BGP.
+			disableFullMesh(cli)
+
+			// Set the AS number for the cluster to a non-default value.
+			setASNumber(cli, 64514)
+
+			// Verify connectivity is lost.
+			checker.ResetExpectations()
+			checker.ExpectFailure(client1, server1.ClusterIPs()...)
+			checker.ExpectFailure(client2, server1.ClusterIPs()...)
+			checker.Execute()
+
+			// Select two nodes to act as route reflectors. Give them RR cluster IDs, as well
+			// as a label identifying them as route reflectors.
+			nodes := corev1.NodeList{}
+			err = cli.List(context.Background(), &nodes)
+			Expect(err).NotTo(HaveOccurred(), "Error querying nodes in the cluster")
+			setNodeAsRouteReflector(cli, &nodes.Items[0], "225.0.0.4")
+			setNodeAsRouteReflector(cli, &nodes.Items[1], "225.0.0.4")
+
+			// Create BGP peer that causes all non-RR nodes to peer with the RRs.
+			By("Creating a BGPPeer to re-enable peers via the RRs")
+			peer := &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-rrs"},
+				Spec: v3.BGPPeerSpec{
+					NodeSelector: fmt.Sprintf("!has(%s)", resources.RouteReflectorClusterIDAnnotation),
+					PeerSelector: fmt.Sprintf("has(%s)", resources.RouteReflectorClusterIDAnnotation),
+				},
+			}
+			err = cli.Create(context.Background(), peer)
+			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
+			DeferCleanup(func() {
+				err := cli.Delete(context.Background(), peer)
+				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
+			})
+
+			// Verify connectivity is restored.
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
+			checker.Execute()
+
+			// Now, remove one of the RRs and verify connectivity is maintained.
+			By("Removing one of the route reflectors")
+			setNodeAsNotRouteReflector(cli, &nodes.Items[1])
+
+			// Verify connectivity is maintained.
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
 			checker.Execute()
 		})
 	})

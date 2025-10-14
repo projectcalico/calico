@@ -2,11 +2,14 @@ package bgp
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -40,7 +43,7 @@ func ensureInitialBGPConfig(cli ctrlclient.Client) func() {
 		By("Ensuring full mesh BGP is enabled in existing BGPConfiguration")
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying BGPConfiguration resource")
 		ExpectWithOffset(1, initialConfig.Spec.NodeToNodeMeshEnabled).NotTo(BeNil(), "nodeToNodeMeshEnabled is not configured in BGPConfiguration")
-		ExpectWithOffset(1, initialConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
+		ExpectWithOffset(1, *initialConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
 	}
 
 	return func() {
@@ -73,4 +76,31 @@ func setASNumber(cli ctrlclient.Client, asn int32) {
 	config.Spec.ASNumber = ptr.To(numorstring.ASNumber(asn))
 	err = cli.Update(context.Background(), config)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error updating BGPConfiguration resource")
+}
+
+func setNodeAsRouteReflector(cli ctrlclient.Client, rrNode *corev1.Node, rrClusterID string) {
+	By(fmt.Sprintf("Using node %s as a route reflector", rrNode.Name))
+	prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
+	rrNode.Labels[resources.RouteReflectorClusterIDAnnotation] = rrClusterID
+	rrNode.Annotations[resources.RouteReflectorClusterIDAnnotation] = rrClusterID
+	err := cli.Patch(context.Background(), rrNode, prePatch)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error marking node as route reflector")
+
+	DeferCleanup(func() {
+		// Remove the label and annotation from the node.
+		prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
+		delete(rrNode.Labels, resources.RouteReflectorClusterIDAnnotation)
+		delete(rrNode.Annotations, resources.RouteReflectorClusterIDAnnotation)
+		err = cli.Patch(context.Background(), rrNode, prePatch)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error removing route reflector label from node during cleanup")
+	})
+}
+
+func setNodeAsNotRouteReflector(cli ctrlclient.Client, rrNode *corev1.Node) {
+	By(fmt.Sprintf("Removing route reflector role from node %s", rrNode.Name))
+	prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
+	delete(rrNode.Labels, resources.RouteReflectorClusterIDAnnotation)
+	delete(rrNode.Annotations, resources.RouteReflectorClusterIDAnnotation)
+	err := cli.Patch(context.Background(), rrNode, prePatch)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error removing route reflector label from node")
 }
