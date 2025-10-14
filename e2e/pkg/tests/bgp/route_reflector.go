@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "github.com/tigera/operator/api/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -29,13 +30,14 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
-	"BGPPeer",
+	"Route reflectors",
 	func() {
 		// Define variables common across all tests.
 		var err error
@@ -46,7 +48,7 @@ var _ = describe.CalicoDescribe(
 		var restoreBGPConfig func()
 
 		// Create a new framework for the tests.
-		f := utils.NewDefaultFramework("bgppeer")
+		f := utils.NewDefaultFramework("route-reflection")
 
 		BeforeEach(func() {
 			// Create a connection tester for the test.
@@ -59,7 +61,7 @@ var _ = describe.CalicoDescribe(
 			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
 
 			// We need a minimum of two nodes for BGP peering tests.
-			utils.RequireNodeCount(f, 2)
+			utils.RequireNodeCount(f, 3)
 
 			// Make sure the cluster is in BGP mode by querying the Installation resource. The tests in this file
 			// all require BGP, and all require Calico be installed by the operator.
@@ -103,22 +105,48 @@ var _ = describe.CalicoDescribe(
 			restoreBGPConfig()
 		})
 
-		It("should support BGP peers", func() {
+		It("should support in-cluster route reflectors", func() {
 			// Disable full mesh BGP.
 			disableFullMesh(cli)
+
+			// Set the AS number for the cluster to a non-default value.
+			setASNumber(cli, 64514)
 
 			// Verify connectivity is lost.
 			checker.ResetExpectations()
 			checker.ExpectFailure(client1, server1.ClusterIPs()...)
 			checker.Execute()
 
-			// Create a BGPPeer to re-enable connectivity.
-			By("Creating a BGPPeer to re-enable connectivity, simulating full mesh")
+			// Select a node to act as a route reflector. Give it a RR cluster ID, as well
+			// as a label identifying it as a route reflector.
+			nodes := corev1.NodeList{}
+			err = cli.List(context.Background(), &nodes)
+			Expect(err).NotTo(HaveOccurred(), "Error querying nodes in the cluster")
+			Expect(nodes.Items).NotTo(BeEmpty(), "No nodes found in the cluster")
+			rrNode := nodes.Items[0]
+			prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
+
+			By(fmt.Sprintf("Using node %s as a route reflector", rrNode.Name))
+			rrNode.Labels[resources.RouteReflectorClusterIDAnnotation] = "224.0.0.2"
+			rrNode.Annotations[resources.RouteReflectorClusterIDAnnotation] = "224.0.0.2"
+			err = cli.Patch(context.Background(), &rrNode, prePatch)
+			Expect(err).NotTo(HaveOccurred(), "Error marking node as route reflector")
+			DeferCleanup(func() {
+				// Remove the label and annotation from the node.
+				prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
+				delete(rrNode.Labels, resources.RouteReflectorClusterIDAnnotation)
+				delete(rrNode.Annotations, resources.RouteReflectorClusterIDAnnotation)
+				err = cli.Patch(context.Background(), &rrNode, prePatch)
+				Expect(err).NotTo(HaveOccurred(), "Error removing route reflector label from node during cleanup")
+			})
+
+			// Create BGP peer that causes all non-RR nodes to peer with the RR.
+			By("Creating a BGPPeer to re-enable peers via the RR")
 			peer := &v3.BGPPeer{
-				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-self"},
+				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-rrs"},
 				Spec: v3.BGPPeerSpec{
-					NodeSelector: "all()",
-					PeerSelector: "all()",
+					NodeSelector: fmt.Sprintf("!has(%s)", resources.RouteReflectorClusterIDAnnotation),
+					PeerSelector: fmt.Sprintf("has(%s)", resources.RouteReflectorClusterIDAnnotation),
 				},
 			}
 			err = cli.Create(context.Background(), peer)
