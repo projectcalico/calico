@@ -16,6 +16,8 @@
 // and should one day be moved to a central location for use across all
 // projects.
 
+//go:build linux
+
 package testutils
 
 import (

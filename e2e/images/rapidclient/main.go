@@ -1,3 +1,5 @@
+//go:build linux
+
 /*
 Copyright (c) 2025 Tigera, Inc. All rights reserved.
 

@@ -1,0 +1,375 @@
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//go:build linux
+
+package rules
+
+import (
+	"log"
+	"net"
+	"reflect"
+	"strings"
+
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
+)
+
+type RuleRenderer interface {
+	StaticFilterTableChains(ipVersion uint8) []*generictables.Chain
+	StaticNATTableChains(ipVersion uint8) []*generictables.Chain
+	StaticNATPostroutingChains(ipVersion uint8) []*generictables.Chain
+	StaticRawTableChains(ipVersion uint8) []*generictables.Chain
+	StaticBPFModeRawChains(ipVersion uint8, wgEncryptHost, disableConntrack bool) []*generictables.Chain
+	StaticMangleTableChains(ipVersion uint8) []*generictables.Chain
+	StaticFilterForwardAppendRules() []generictables.Rule
+
+	DispatchMappings(map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string][]string, map[string][]string)
+	WorkloadDispatchChains(map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
+	WorkloadEndpointToIptablesChains(
+		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
+		adminUp bool,
+		tiers []TierPolicyGroups,
+		profileIDs []string,
+		qosControls *proto.QoSControls,
+	) []*generictables.Chain
+	PolicyGroupToIptablesChains(group *PolicyGroup) []*generictables.Chain
+
+	WorkloadInterfaceAllowChains(endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
+
+	EndpointMarkDispatchChains(
+		epMarkMapper EndpointMarkMapper,
+		wlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
+		hepEndpoints map[string]types.HostEndpointID,
+	) []*generictables.Chain
+
+	HostDispatchChains(map[string]types.HostEndpointID, string, bool) []*generictables.Chain
+	FromHostDispatchChains(map[string]types.HostEndpointID, string) []*generictables.Chain
+	ToHostDispatchChains(map[string]types.HostEndpointID, string) []*generictables.Chain
+	HostEndpointToFilterChains(
+		ifaceName string,
+		tiers []TierPolicyGroups,
+		forwardTiers []TierPolicyGroups,
+		epMarkMapper EndpointMarkMapper,
+		profileIDs []string,
+	) []*generictables.Chain
+	HostEndpointToMangleEgressChains(
+		ifaceName string,
+		tiers []TierPolicyGroups,
+		profileIDs []string,
+	) []*generictables.Chain
+	HostEndpointToRawEgressChain(
+		ifaceName string,
+		untrackedTiers []TierPolicyGroups,
+	) *generictables.Chain
+	HostEndpointToRawChains(
+		ifaceName string,
+		untrackedTiers []TierPolicyGroups,
+	) []*generictables.Chain
+	HostEndpointToMangleIngressChains(
+		ifaceName string,
+		preDNATTiers []TierPolicyGroups,
+	) []*generictables.Chain
+
+	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
+	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
+	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked bool) []generictables.Rule
+
+	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
+
+	EgressDSCPChain(policies []*DSCPRule) *generictables.Chain
+
+	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
+	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain
+	BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*generictables.Chain
+
+	WireguardIncomingMarkChain() *generictables.Chain
+
+	IptablesFilterDenyAction() generictables.Action
+
+	FilterInputChainAllowWG(ipVersion uint8, c Config, allowAction generictables.Action) []generictables.Rule
+	ICMPv6Filter(action generictables.Action) []generictables.Rule
+}
+
+type DefaultRuleRenderer struct {
+	generictables.ActionFactory
+
+	Config
+
+	inputAcceptActions       []generictables.Action
+	filterAllowAction        generictables.Action
+	mangleAllowAction        generictables.Action
+	blockCIDRAction          generictables.Action
+	iptablesFilterDenyAction generictables.Action
+
+	NewMatch       func() generictables.MatchCriteria
+	CombineMatches func(m1, m2 generictables.MatchCriteria) generictables.MatchCriteria
+
+	// wildcard is the symbol to use for wildcard matches.
+	wildcard string
+
+	// maxNameLength is the maximum length of a chain name.
+	maxNameLength int
+}
+
+func (r *DefaultRuleRenderer) IptablesFilterDenyAction() generictables.Action {
+	return r.iptablesFilterDenyAction
+}
+
+func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
+	switch ipVersion {
+	case 4:
+		return r.IPSetConfigV4
+	case 6:
+		return r.IPSetConfigV6
+	default:
+		logrus.WithField("version", ipVersion).Panic("Unknown IP version")
+		return nil
+	}
+}
+
+func NewRenderer(config Config) RuleRenderer {
+	logrus.WithField("config", config).Info("Creating rule renderer.")
+	config.validate()
+
+	actions := iptables.Actions()
+	var reject generictables.Action = iptables.RejectAction{}
+	var accept generictables.Action = iptables.AcceptAction{}
+	var drop generictables.Action = iptables.DropAction{}
+	var ret generictables.Action = iptables.ReturnAction{}
+
+	if config.NFTables {
+		actions = nftables.Actions()
+		reject = nftables.RejectAction{}
+		accept = nftables.AcceptAction{}
+		drop = nftables.DropAction{}
+		ret = nftables.ReturnAction{}
+	}
+
+	newMatchFn := func() generictables.MatchCriteria {
+		if config.NFTables {
+			return nftables.Match()
+		}
+		return iptables.Match()
+	}
+	combineMatches := iptables.Combine
+	if config.NFTables {
+		combineMatches = nftables.Combine
+	}
+
+	// First, what should we do when packets are not accepted.
+	var iptablesFilterDenyAction generictables.Action
+	switch config.FilterDenyAction {
+	case "REJECT":
+		logrus.Info("packets that are not passed by any policy or profile will be rejected.")
+		iptablesFilterDenyAction = reject
+	default:
+		logrus.Info("packets that are not passed by any policy or profile will be dropped.")
+		iptablesFilterDenyAction = drop
+	}
+
+	// Convert configured actions to rule slices.
+	// First, what should we do with packets that come from workloads to the host itself.
+	var inputAcceptActions []generictables.Action
+	switch config.EndpointToHostAction {
+	case "DROP":
+		logrus.Info("Workload to host packets will be dropped.")
+		inputAcceptActions = []generictables.Action{drop}
+	case "REJECT":
+		logrus.Info("Workload to host packets will be rejected.")
+		inputAcceptActions = []generictables.Action{reject}
+	case "ACCEPT":
+		logrus.Info("Workload to host packets will be accepted.")
+		inputAcceptActions = []generictables.Action{accept}
+	default:
+		logrus.Info("Workload to host packets will be returned to INPUT chain.")
+		inputAcceptActions = []generictables.Action{ret}
+	}
+
+	// What should we do with packets that are accepted in the forwarding chain
+	var filterAllowAction, mangleAllowAction generictables.Action
+	switch config.FilterAllowAction {
+	case "RETURN":
+		logrus.Info("filter table allowed packets will be returned to FORWARD chain.")
+		filterAllowAction = ret
+	default:
+		logrus.Info("filter table allowed packets will be accepted immediately.")
+		filterAllowAction = accept
+	}
+	switch config.MangleAllowAction {
+	case "RETURN":
+		logrus.Info("mangle table allowed packets will be returned to PREROUTING chain.")
+		mangleAllowAction = ret
+	default:
+		logrus.Info("mangle table allowed packets will be accepted immediately.")
+		mangleAllowAction = accept
+	}
+
+	// How should we block CIDRs for loop prevention?
+	var blockCIDRAction generictables.Action
+	switch config.ServiceLoopPrevention {
+	case "Drop":
+		logrus.Info("Packets to unknown service IPs will be dropped")
+		blockCIDRAction = drop
+	case "Reject":
+		logrus.Info("Packets to unknown service IPs will be rejected")
+		blockCIDRAction = reject
+	default:
+		logrus.Info("Packets to unknown service IPs will be allowed to loop")
+	}
+
+	maxNameLength := iptables.MaxChainNameLength
+	wildcard := iptables.Wildcard
+	if config.NFTables {
+		wildcard = nftables.Wildcard
+		maxNameLength = nftables.MaxChainNameLength
+	}
+
+	return &DefaultRuleRenderer{
+		Config:                   config,
+		ActionFactory:            actions,
+		NewMatch:                 newMatchFn,
+		inputAcceptActions:       inputAcceptActions,
+		filterAllowAction:        filterAllowAction,
+		mangleAllowAction:        mangleAllowAction,
+		blockCIDRAction:          blockCIDRAction,
+		iptablesFilterDenyAction: iptablesFilterDenyAction,
+		wildcard:                 wildcard,
+		maxNameLength:            maxNameLength,
+		CombineMatches:           combineMatches,
+	}
+}
+
+type Config struct {
+	IPSetConfigV4 *ipsets.IPVersionConfig
+	IPSetConfigV6 *ipsets.IPVersionConfig
+
+	WorkloadIfacePrefixes []string
+
+	MarkAccept   uint32
+	MarkPass     uint32
+	MarkDrop     uint32
+	MarkScratch0 uint32
+	MarkScratch1 uint32
+	MarkEndpoint uint32
+	// MarkNonCaliEndpoint is an endpoint mark which is reserved
+	// to mark non-calico (workload or host) endpoint.
+	MarkNonCaliEndpoint uint32
+
+	KubeNodePortRanges     []numorstring.Port
+	KubeIPVSSupportEnabled bool
+
+	OpenStackMetadataIP          net.IP
+	OpenStackMetadataPort        uint16
+	OpenStackSpecialCasesEnabled bool
+
+	VXLANEnabled   bool
+	VXLANEnabledV6 bool
+	VXLANPort      int
+	VXLANVNI       int
+
+	IPIPEnabled            bool
+	FelixConfigIPIPEnabled *bool
+	// IPIPTunnelAddress is an address chosen from an IPAM pool, used as a source address
+	// by the host when sending traffic to a workload over IPIP.
+	IPIPTunnelAddress net.IP
+	// Same for VXLAN.
+	VXLANTunnelAddress   net.IP
+	VXLANTunnelAddressV6 net.IP
+
+	AllowVXLANPacketsFromWorkloads bool
+	AllowIPIPPacketsFromWorkloads  bool
+
+	WireguardEnabled            bool
+	WireguardEnabledV6          bool
+	WireguardInterfaceName      string
+	WireguardInterfaceNameV6    string
+	WireguardMark               uint32
+	WireguardListeningPort      int
+	WireguardListeningPortV6    int
+	WireguardEncryptHostTraffic bool
+	RouteSource                 string
+
+	LogPrefix            string
+	EndpointToHostAction string
+	FilterAllowAction    string
+	MangleAllowAction    string
+	FilterDenyAction     string
+
+	FailsafeInboundHostPorts  []config.ProtoPort
+	FailsafeOutboundHostPorts []config.ProtoPort
+
+	DisableConntrackInvalid bool
+
+	NATPortRange                       numorstring.Port
+	IptablesNATOutgoingInterfaceFilter string
+
+	NATOutgoingAddress             net.IP
+	NATOutgoingExclusions          string
+	BPFEnabled                     bool
+	BPFForceTrackPacketsFromIfaces []string
+	ServiceLoopPrevention          string
+
+	NFTables        bool
+	FlowLogsEnabled bool
+}
+
+var unusedBitsInBPFMode = map[string]bool{
+	"MarkPass":            true,
+	"MarkScratch1":        true,
+	"MarkEndpoint":        true,
+	"MarkNonCaliEndpoint": true,
+}
+
+func (c *Config) validate() {
+	// Scan for unset iptables mark bits.  We use reflection so that we have a hope of catching
+	// newly-added fields.
+	myValue := reflect.ValueOf(c).Elem()
+	myType := myValue.Type()
+	found := 0
+	usedBits := uint32(0)
+	for i := 0; i < myValue.NumField(); i++ {
+		fieldName := myType.Field(i).Name
+		if strings.HasPrefix(fieldName, "Mark") && fieldName != "MarkNonCaliEndpoint" {
+			if c.BPFEnabled && unusedBitsInBPFMode[fieldName] {
+				logrus.WithField("field", fieldName).Debug("Ignoring unused field in BPF mode.")
+				continue
+			}
+			bits := myValue.Field(i).Interface().(uint32)
+			if bits == 0 {
+				logrus.WithField("field", fieldName).Panic(
+					"MarkXXX field not set.")
+			}
+			if usedBits&bits > 0 {
+				logrus.WithField("field", fieldName).Panic(
+					"MarkXXX field overlapped with another's bits.")
+			}
+			usedBits |= bits
+			found++
+		}
+	}
+	if found == 0 {
+		// Check the reflection found something we were expecting.
+		log.Panic("Didn't find any MarkXXX fields.")
+	}
+}

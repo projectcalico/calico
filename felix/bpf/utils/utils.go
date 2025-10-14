@@ -19,6 +19,8 @@
 // It does not call the bpf() syscall itself but executes external programs
 // like bpftool and ip.
 
+//go:build linux
+
 package utils
 
 import (

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -455,7 +455,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 		for range watchersyncer.MaxErrorsPerRevision * 2 {
 			rs.clientWatchResponse(r1, cerrors.ErrorDatastoreError{
-				Err: unix.ECONNREFUSED,
+				Err: syscall.ECONNREFUSED,
 			})
 			Eventually(rs.allEventsHandled, watchersyncer.MinResyncInterval*2, time.Millisecond).Should(BeTrue())
 		}

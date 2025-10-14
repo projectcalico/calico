@@ -14,6 +14,8 @@
 
 // Copyright (c) 2020  All rights reserved.
 
+//go:build linux
+
 package bpf
 
 import (
