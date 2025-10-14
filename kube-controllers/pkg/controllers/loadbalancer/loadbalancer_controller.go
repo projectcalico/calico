@@ -687,7 +687,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 			num6++
 		}
 	}
-	log.Infof("Service %s/%s requires %v IPv4 and %v IPv6 addresses.", svc.Namespace, svc.Name, loadBalancerIPs, loadBalancerIPs)
+	log.Infof("Service %s/%s requires %v IPv4 and %v IPv6 addresses.", svc.Namespace, svc.Name, num4, num6)
 
 	// Check if IP from ipFamily is already assigned, skip it as we're trying to assign only the missing one.
 	// This can happen when error happened during the initial assignment, and now we're trying to assign ip again from the syncIPAM func
