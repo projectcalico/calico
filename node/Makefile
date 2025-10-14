@@ -367,8 +367,8 @@ operator.tar: $(K8ST_IMAGE_TARS) tests/k8st/infra/calico_versions.yml
 	docker save --output $@ docker.io/tigera/operator:$(TEST_BUILD_TAG)
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
-	docker tag $(NODE_IMAGE):latest-$(ARCH) $(NODE_IMAGE):$(TEST_BUILD_TAG)
-	docker save --output $@ $(NODE_IMAGE):$(TEST_BUILD_TAG)
+	docker tag $(NODE_IMAGE):latest-$(ARCH) calico/node:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/node:$(TEST_BUILD_TAG)
 
 calico-typha.tar: ../go.mod $(shell find ../typha -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../typha image
