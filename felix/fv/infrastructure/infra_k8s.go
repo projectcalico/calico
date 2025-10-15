@@ -1155,7 +1155,7 @@ func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {
 	}
 	log.WithField("count", len(tiers.Items)).Info("Tiers present")
 	for _, tier := range tiers.Items {
-		if tier.Name == names.DefaultTierName || tier.Name == names.AdminNetworkPolicyTierName {
+		if isStaticTier(tier.Name) {
 			continue
 		}
 
@@ -1165,6 +1165,12 @@ func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {
 		}
 	}
 	log.Info("Cleaned up Tiers")
+}
+
+func isStaticTier(name string) bool {
+	return name == names.DefaultTierName ||
+		name == names.AdminNetworkPolicyTierName || name == names.BaselineAdminNetworkPolicyTierName ||
+		name == names.AdminTierName || name == names.BaselineTierName
 }
 
 func cleanupAllNetworkSets(clientset *kubernetes.Clientset, client client.Interface) {

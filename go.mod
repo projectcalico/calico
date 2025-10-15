@@ -118,7 +118,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/kind v0.29.0
 	sigs.k8s.io/knftables v0.0.18
-	sigs.k8s.io/network-policy-api v0.1.5
+	sigs.k8s.io/network-policy-api v0.1.8-0.20250912163209-de1b4e9d7da6
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -410,4 +410,5 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.33.5
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.33.5
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.33.5
+	sigs.k8s.io/network-policy-api/conformance => github.com/npinaeva/network-policy-api v0.0.0-20250929101910-3afae2db2e91
 )

@@ -111,7 +111,7 @@ class TieredPolicyWorkloads(TestBase):
                 objects['items'] = [x for x in objects['items']
                                     if (x.get('kind', '') != 'Tier' or
                                         'metadata' not in x or
-                                        x['metadata'].get('name', '') not in ['default', 'adminnetworkpolicy'])]
+                                        x['metadata'].get('name', '') not in ['default', 'adminnetworkpolicy', 'admin', 'baseline'])]
             if 'items' in objects and len(objects['items']) == 0:
                 pass
             else:
