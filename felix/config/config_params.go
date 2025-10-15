@@ -719,6 +719,10 @@ func (config *Config) KubernetesProvider() Provider {
 	return ProviderNone
 }
 
+func (config *Config) MaglevLUTSize() int {
+	return 10007
+}
+
 func (config *Config) applyDefaults() {
 	for _, param := range knownParams {
 		param.setDefault(config)

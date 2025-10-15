@@ -81,6 +81,7 @@ func init() {
 const (
 	natTunnelMTU  = uint16(700)
 	testVxlanPort = uint16(5665)
+	testMaglevLUTSize = uint32(31)
 )
 
 var (
@@ -803,6 +804,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					Flags:        libbpf.GlobalsNoDSRCidrs,
 					LogFilterJmp: 0xffffffff,
 					IfaceName:    setLogPrefix(ifaceLog),
+					MaglevLUTSize: testMaglevLUTSize,
 				}
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
@@ -953,6 +955,7 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
 				Flags:      libbpf.GlobalsNoDSRCidrs,
 				IfaceName:  setLogPrefix(topts.progLog + "-" + bpfIfaceName),
+				MaglevLUTSize: testMaglevLUTSize,
 			}
 			if topts.ipv6 {
 				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
