@@ -142,6 +142,7 @@ type RouteTable struct {
 	// Interface update tracking.
 	fullResyncNeeded    bool
 	ifacesToRescan      set.Set[string]
+	ifacesToARP         set.Set[string]
 	makeARPEntries      bool
 	haveMultiPathRoutes bool
 
@@ -155,8 +156,8 @@ type RouteTable struct {
 	// to program for a given CIDR (i.e. the route selected after conflict
 	// resolution if there are multiple routes) and the route that's actually
 	// in the kernel.
-	kernelRoutes *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
-	pendingARPs  map[string]map[ip.Addr]net.HardwareAddr
+	kernelRoutes  *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
+	permanentARPs map[string]map[ip.Addr]net.HardwareAddr
 
 	ifaceNameToIndex      map[string]int
 	ifaceIndexToName      map[int]string
@@ -303,6 +304,7 @@ func New(
 
 		fullResyncNeeded: true,
 		ifacesToRescan:   set.New[string](),
+		ifacesToARP:      set.New[string](),
 		ownershipPolicy:  ownershipPolicy,
 
 		ifaceToRoutes: map[RouteClass]map[string]map[ip.CIDR]Target{},
@@ -313,7 +315,7 @@ func New(
 				return a.Equals(b)
 			}),
 		),
-		pendingARPs: map[string]map[ip.Addr]net.HardwareAddr{},
+		permanentARPs: map[string]map[ip.Addr]net.HardwareAddr{},
 
 		ifaceIndexToGraceInfo: map[int]graceInfo{},
 		ifaceNameToIndex:      map[string]int{},
@@ -484,11 +486,11 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 	}
 
 	// Clean out the pending ARP list, then recalculate it below.
-	delete(r.pendingARPs, ifaceName)
+	delete(r.permanentARPs, ifaceName)
 	for cidr, target := range newTargets {
 		// addOwningIface() calls recalculateDesiredKernelRoute.
 		r.addOwningIface(routeClass, ifaceName, cidr)
-		r.updatePendingARP(ifaceName, cidr.Addr(), target.DestMAC)
+		r.updatePermanentARP(ifaceName, cidr.Addr(), target.DestMAC)
 	}
 }
 
@@ -513,7 +515,7 @@ func (r *RouteTable) RouteUpdate(routeClass RouteClass, ifaceName string, target
 	}
 	routesByCIDR[target.CIDR] = target
 	r.addOwningIface(routeClass, ifaceName, target.CIDR)
-	r.updatePendingARP(ifaceName, target.CIDR.Addr(), target.DestMAC)
+	r.updatePermanentARP(ifaceName, target.CIDR.Addr(), target.DestMAC)
 }
 
 // RouteRemove removes the route with the specified CIDR. These deltas will
@@ -530,32 +532,32 @@ func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr i
 		delete(r.ifaceToRoutes[routeClass], ifaceName)
 	}
 	r.removeOwningIface(routeClass, ifaceName, cidr)
-	r.removePendingARP(ifaceName, cidr.Addr())
+	r.removePermanentARP(ifaceName, cidr.Addr())
 }
 
-func (r *RouteTable) updatePendingARP(ifaceName string, addr ip.Addr, mac net.HardwareAddr) {
+func (r *RouteTable) updatePermanentARP(ifaceName string, addr ip.Addr, mac net.HardwareAddr) {
 	if !r.makeARPEntries {
 		return
 	}
 	if len(mac) == 0 {
-		r.removePendingARP(ifaceName, addr)
+		r.removePermanentARP(ifaceName, addr)
 		return
 	}
 	r.logCxt.Debug("Adding pending ARP entry.")
-	if r.pendingARPs[ifaceName] == nil {
-		r.pendingARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
+	if r.permanentARPs[ifaceName] == nil {
+		r.permanentARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
 	}
-	r.pendingARPs[ifaceName][addr] = mac
+	r.permanentARPs[ifaceName][addr] = mac
 }
 
-func (r *RouteTable) removePendingARP(ifaceName string, addr ip.Addr) {
+func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
 	if !r.makeARPEntries {
 		return
 	}
-	if pending, ok := r.pendingARPs[ifaceName]; ok {
-		delete(pending, addr)
-		if len(pending) == 0 {
-			delete(r.pendingARPs, ifaceName)
+	if arps, ok := r.permanentARPs[ifaceName]; ok {
+		delete(arps, addr)
+		if len(arps) == 0 {
+			delete(r.permanentARPs, ifaceName)
 		}
 	}
 }
@@ -914,6 +916,11 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 	}
 
 	if r.fullResyncNeeded {
+		// Mark to reprogram static ARP for all interfaces.
+		for ifaceName := range r.permanentARPs {
+			r.ifacesToARP.Add(ifaceName)
+		}
+
 		return r.doFullResync(nl)
 	}
 
@@ -1042,6 +1049,9 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 		r.logCxt.Debug("Ignoring rescan of unknown interface.")
 		return nil
 	}
+
+	// Mark to reprogram static ARP for this interface.
+	r.ifacesToARP.Add(ifaceName)
 
 	routeFilter := &netlink.Route{
 		Table:     r.tableIndex,
@@ -1469,12 +1479,30 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	})
 
 	arpErrs := map[string]error{}
-	for ifaceName, addrToMAC := range r.pendingARPs {
-		// Add static ARP entries (for workload endpoints).  This may have been
-		// needed at one point but it no longer seems to be required.  Leaving
-		// it here for two reasons: (1) there may be an obscure scenario where
-		// it is needed. (2) we have tests that monitor netlink, and they break
-		// if it is removed because they see the ARP traffic.
+	for ifaceName, addrToMAC := range r.permanentARPs {
+		if !r.ifacesToARP.Contains(ifaceName) {
+			continue
+		}
+		// Add static ARP entries (for workload endpoints).  As far as we're aware, this
+		// helps in two ways.
+		//
+		// 1. It slightly reduces the TTFP (time to first ping) for a new endpoint, by
+		// removing the need for the host kernel to send an ARP request to the endpoint and
+		// to wait for its response.
+		//
+		// 2. It supports VMs with a restrictive arp_ignore setting.  For example, we are
+		// aware of OpenStack VMs with arp_ignore set to 2, which means "reply only if the
+		// target IP address is local address configured on the incoming interface and both
+		// with the sender's IP address are part from same subnet on this interface" - which
+		// will never be True for the way that Calico provisions VM IPs.
+		//
+		// For (2) it is important that Felix maintains the ARP programming for an interface
+		// beyond the point when that interface is first configured.  In particular, dnsmasq
+		// overwrites our ARP programming - with an entry that is identical to ours, except
+		// without the PERMANENT flag - when it receives a DHCP request from an OpenStack VM
+		// and issues its IP address.  Also interface flaps can lose the ARP programming.
+		// In all such cases, our PERMANENT static ARP programming needs to be reinstated;
+		// otherwise we lose connectivity to VMs with arp_ignore=2.
 		ifaceIdx, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			// Asked to add ARP entries but the interface isn't known (yet).
@@ -1482,6 +1510,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			// datastore stops asking us to add ARP entries for this interface.
 			continue
 		}
+		ifaceARPDone := true
 		for addr, mac := range addrToMAC {
 			r.livenessCallback()
 			err := r.addStaticARPEntry(nl, addr, mac, ifaceIdx)
@@ -1506,12 +1535,13 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			if err != nil {
 				log.WithError(err).Debug("Failed to add neighbor entry.")
 				arpErrs[fmt.Sprintf("%s/%s", ifaceName, addr)] = err
-			} else {
-				delete(addrToMAC, addr)
+				ifaceARPDone = false
 			}
 		}
-		if len(addrToMAC) == 0 {
-			delete(r.pendingARPs, ifaceName)
+		if ifaceARPDone {
+			// Don't need to program ARP again for this interface until its state
+			// changes or we're asked to do a full resync.
+			r.ifacesToARP.Discard(ifaceName)
 		}
 	}
 
