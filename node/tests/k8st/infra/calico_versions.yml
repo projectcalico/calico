@@ -8,7 +8,7 @@ components:
     image: calico/typha
     version: test-build
   calico/node:
-    image: library/node
+    image: calico/node
     version: test-build
   calico/cni:
     image: calico/cni
