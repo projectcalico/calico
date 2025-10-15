@@ -401,7 +401,7 @@ type bpfEndpointManager struct {
 	healthAggregator     *health.HealthAggregator
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
-	QoSMap maps.MapWithUpdateWithFlags
+	QoSMap        maps.MapWithUpdateWithFlags
 	maglevLUTSize int
 }
 
@@ -520,7 +520,7 @@ func NewBPFEndpointManager(
 		profiling:        config.BPFProfiling,
 		bpfAttachType:    config.BPFAttachType,
 
-		QoSMap: bpfmaps.CommonMaps.QoSMap,
+		QoSMap:        bpfmaps.CommonMaps.QoSMap,
 		maglevLUTSize: config.MaglevLUTSize,
 	}
 

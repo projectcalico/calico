@@ -79,8 +79,8 @@ func init() {
 
 // Constants that are shared with the UT binaries that we build.
 const (
-	natTunnelMTU  = uint16(700)
-	testVxlanPort = uint16(5665)
+	natTunnelMTU      = uint16(700)
+	testVxlanPort     = uint16(5665)
 	testMaglevLUTSize = uint32(31)
 )
 
@@ -797,13 +797,13 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			} else {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
 				globals := libbpf.TcGlobalData{
-					Tmtu:         natTunnelMTU,
-					VxlanPort:    testVxlanPort,
-					PSNatStart:   uint16(topts.psnaStart),
-					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsNoDSRCidrs,
-					LogFilterJmp: 0xffffffff,
-					IfaceName:    setLogPrefix(ifaceLog),
+					Tmtu:          natTunnelMTU,
+					VxlanPort:     testVxlanPort,
+					PSNatStart:    uint16(topts.psnaStart),
+					PSNatLen:      uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:         libbpf.GlobalsNoDSRCidrs,
+					LogFilterJmp:  0xffffffff,
+					IfaceName:     setLogPrefix(ifaceLog),
 					MaglevLUTSize: testMaglevLUTSize,
 				}
 				if topts.flowLogsEnabled {
@@ -949,12 +949,12 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				continue
 			}
 			globals := libbpf.TcGlobalData{
-				Tmtu:       natTunnelMTU,
-				VxlanPort:  testVxlanPort,
-				PSNatStart: uint16(topts.psnaStart),
-				PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
-				Flags:      libbpf.GlobalsNoDSRCidrs,
-				IfaceName:  setLogPrefix(topts.progLog + "-" + bpfIfaceName),
+				Tmtu:          natTunnelMTU,
+				VxlanPort:     testVxlanPort,
+				PSNatStart:    uint16(topts.psnaStart),
+				PSNatLen:      uint16(topts.psnatEnd-topts.psnaStart) + 1,
+				Flags:         libbpf.GlobalsNoDSRCidrs,
+				IfaceName:     setLogPrefix(topts.progLog + "-" + bpfIfaceName),
 				MaglevLUTSize: testMaglevLUTSize,
 			}
 			if topts.ipv6 {
