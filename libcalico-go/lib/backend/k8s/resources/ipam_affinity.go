@@ -92,10 +92,17 @@ func (c *blockAffinityClient) toModelV1(kvpv3 *model.KVPair) (*model.KVPair, err
 		// Determine deleted status.
 		del := kvpv3.Value.(*v3.BlockAffinity).Spec.Deleted
 
+		// Default affinity type to "host" if not set. Older versions of Calico's CRD backend
+		// did not set this field, assuming "host" as the default.
+		affinityType := "host"
+		if kvpv3.Value.(*v3.BlockAffinity).Spec.Type != "" {
+			affinityType = kvpv3.Value.(*v3.BlockAffinity).Spec.Type
+		}
+
 		return &model.KVPair{
 			Key: model.BlockAffinityKey{
 				CIDR:         *cidr,
-				AffinityType: kvpv3.Value.(*v3.BlockAffinity).Spec.Type,
+				AffinityType: affinityType,
 				Host:         kvpv3.Value.(*v3.BlockAffinity).Spec.Node,
 			},
 			Value: &model.BlockAffinity{
@@ -125,10 +132,17 @@ func (c *blockAffinityClient) toModelV1(kvpv3 *model.KVPair) (*model.KVPair, err
 			}
 		}
 
+		// Default affinity type to "host" if not set. Older versions of Calico's CRD backend
+		// did not set this field, assuming "host" as the default.
+		affinityType := "host"
+		if kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type != "" {
+			affinityType = kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type
+		}
+
 		return &model.KVPair{
 			Key: model.BlockAffinityKey{
 				CIDR:         *cidr,
-				AffinityType: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type,
+				AffinityType: affinityType,
 				Host:         kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
 			},
 			Value: &model.BlockAffinity{
@@ -466,6 +480,7 @@ func (c *blockAffinityClient) listModelV1(ctx context.Context, list model.BlockA
 		if err != nil {
 			return nil, err
 		}
+
 		if (host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host) &&
 			(affinityType == "" || v1kvp.Key.(model.BlockAffinityKey).AffinityType == affinityType) {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
