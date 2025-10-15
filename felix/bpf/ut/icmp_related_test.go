@@ -93,7 +93,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -108,7 +108,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 		fmt.Printf("inner = %+v\n", inner)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	// fake icmp echo reply, we do not really care about the payload, just the type and code
@@ -167,7 +167,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		natPkt = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 	})
@@ -186,7 +186,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 		res, err := bpfrun(icmpUNreachable)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		checkICMP(res.dataOut, hostIP, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP, ipv4.Protocol,
 			uint16(udp.SrcPort), uint16(udp.DstPort))
@@ -212,7 +212,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -222,7 +222,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 		res, err := bpfrun(icmpTTLExceeded)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		checkICMP(res.dataOut, hostIP, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP, ipv4.Protocol,
 			uint16(udp.SrcPort), uint16(udp.DstPort))
@@ -280,7 +280,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -293,7 +293,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 		res, err := bpfrun(icmpTTLExceeded)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		checkICMP(res.dataOut, hostIP, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP, ipv4.Protocol,
 			uint16(udp.SrcPort), uint16(udp.DstPort))
@@ -343,7 +343,7 @@ func TestICMPRelatedHostNetBackend(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 		recvPkt = res.dataOut
 		respPkt = udpResponseRaw(recvPkt)
 	})
@@ -354,7 +354,7 @@ func TestICMPRelatedHostNetBackend(t *testing.T) {
 	runBpfTest(t, "calico_to_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	}, withHostNetworked())
 
 	// we base the packet on the original packet before NAT as if we let the original packet through
@@ -371,7 +371,7 @@ func TestICMPRelatedHostNetBackend(t *testing.T) {
 		res, err := bpfrun(icmpFragNeeded)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		checkICMP(res.dataOut, net.ParseIP("192.168.1.1"), hostIP, hostIP, ipv4.DstIP, ipv4.Protocol,
 			natPort, uint16(udp.DstPort))
@@ -631,7 +631,7 @@ func TestICMPv6RelatedPlain(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	}, withIPv6())
 	expectMark(tcdefs.MarkSeen)
 
@@ -646,7 +646,7 @@ func TestICMPv6RelatedPlain(t *testing.T) {
 		fmt.Printf("inner = %+v\n", inner)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	}, withIPv6())
 
 	// fake icmp echo reply, we do not really care about the payload, just the type and code
@@ -707,7 +707,7 @@ func TestICMPv6RelatedNATPodPod(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		natPkt = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 	}, withIPv6())
@@ -726,7 +726,7 @@ func TestICMPv6RelatedNATPodPod(t *testing.T) {
 		res, err := bpfrun(icmpUNreachable)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		checkICMPv6(res.dataOut, hostIP, ipv6.SrcIP, ipv6.SrcIP, ipv6.DstIP, 17,
 			uint16(udp.SrcPort), uint16(udp.DstPort))

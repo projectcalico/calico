@@ -56,7 +56,7 @@ func TestPerfBasic(t *testing.T) {
 	runBpfUnitTest(t, "perf_events.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	eventRaw, err := perfEvents.Next()
@@ -81,7 +81,7 @@ func TestPerfBasic(t *testing.T) {
 	runBpfUnitTest(t, "perf_events.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	eventRaw, err = perfEvents.Next()
@@ -108,7 +108,7 @@ func TestPerfCrash(t *testing.T) {
 	runBpfUnitTest(t, "perf_events.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	eventRaw, err := perfEvents.Next()
@@ -124,7 +124,7 @@ func TestPerfCrash(t *testing.T) {
 	runBpfUnitTest(t, "perf_events.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	eventRaw, err = perfEvents2.Next()

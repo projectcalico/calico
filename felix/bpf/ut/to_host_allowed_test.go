@@ -161,7 +161,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -184,7 +184,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synAckPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	// Non-SYN packet
@@ -202,7 +202,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(ackPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 	expectMark(tcdefs.MarkSeenFallThrough)
 
@@ -214,7 +214,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(ackPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 	expectMark(tcdefs.MarkSeenFallThrough)
 

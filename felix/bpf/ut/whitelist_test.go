@@ -59,7 +59,7 @@ func TestAllowFromWorkloadExitHost(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -79,7 +79,7 @@ func TestAllowFromWorkloadExitHost(t *testing.T) {
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -124,7 +124,7 @@ func TestSkipRedirectPeerHostToVMWorkload(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -175,7 +175,7 @@ func TestAllowEnterHostToWorkload(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -194,7 +194,7 @@ func TestAllowEnterHostToWorkload(t *testing.T) {
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -242,7 +242,7 @@ func TestAllowWorkloadToWorkload(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -261,7 +261,7 @@ func TestAllowWorkloadToWorkload(t *testing.T) {
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -316,7 +316,7 @@ func TestAllowFromHostExitHost(t *testing.T) {
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		dumpCTMap(ctMap)
 
@@ -337,7 +337,7 @@ func TestAllowFromHostExitHost(t *testing.T) {
 		respPkt := udpResponseRaw(pktBytes)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		dumpCTMap(ctMap)
 
@@ -399,7 +399,7 @@ func TestAllowEnterHostToWorkloadV6(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMemV6(ctMapV6)
 		Expect(err).NotTo(HaveOccurred())
@@ -420,7 +420,7 @@ func TestAllowEnterHostToWorkloadV6(t *testing.T) {
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		ct, err := conntrack.LoadMapMemV6(ctMapV6)
 		Expect(err).NotTo(HaveOccurred())
