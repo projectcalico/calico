@@ -50,6 +50,7 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 			&mock.DummyMap{},
 			proxy.NewRTCache(),
 			nil,
+			maglevLUTSize,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 

@@ -283,6 +283,8 @@ type Config struct {
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
 	NewNftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
+
+	MaglevLUTSize int
 }
 
 type UpdateBatchResolver interface {
@@ -2848,6 +2850,7 @@ func startBPFDataplaneComponents(
 
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
+		bpfproxy.WithDefaultMaglevLUTSize(),
 	}
 
 	if config.bpfProxyHealthzServer != nil {

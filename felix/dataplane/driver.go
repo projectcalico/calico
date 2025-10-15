@@ -419,6 +419,8 @@ func StartDataplaneDriver(
 			FlowLogsEnabled:    configParams.FlowLogsEnabled(),
 
 			RequireMTUFile: configParams.RequireMTUFile,
+
+			MaglevLUTSize: configParams.MaglevLUTSize(),
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

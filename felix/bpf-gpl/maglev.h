@@ -15,6 +15,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali
 	__u16 sport = ctx->state->sport;
 	__u16 dport = ctx->state->dport;
 	__u8 ip_proto = ctx->state->ip_proto;
+	__u32 lut_size = ctx->globals->data.maglev_lut_size;
 
 #ifdef IPVER6
 	const __u32 ip_arr[11] = {
@@ -31,7 +32,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali
 
 	CALI_DEBUG("Maglev: hashed packet to %d", hash);
 	struct calico_ch_key ch_key = {
-		.ordinal = (hash % 31),
+		.ordinal = (hash % lut_size),
 		.vip = *ip_dst,
 		.port = dport,
 		.proto = ip_proto,

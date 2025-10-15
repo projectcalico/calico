@@ -135,6 +135,7 @@ type Syncer struct {
 	prevEpsMap k8sp.EndpointsMap
 	// consistentHashMap is the hashing module that powers Maglev backend selection.
 	consistentHashMap map[svcKey]*consistenthash.ConsistentHash
+	maglevLUTSize     int
 
 	// active Maps contain all active svcs endpoints at the end of an iteration
 	activeSvcsMap map[ipPortProto]uint32
@@ -221,6 +222,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 	frontendMap, backendMap, maglevMap maps.MapWithExistsCheck,
 	affmap maps.Map, rt Routes,
 	excludedCIDRs *ip.CIDRTrie,
+	maglevLUTSize int,
 ) (*Syncer, error) {
 
 	s := &Syncer{
@@ -233,6 +235,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 		stop:              make(chan struct{}),
 		excludedCIDRs:     excludedCIDRs,
 		consistentHashMap: make(map[svcKey]*consistenthash.ConsistentHash),
+		maglevLUTSize:     maglevLUTSize,
 	}
 
 	switch family {
@@ -851,7 +854,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 
 	if sinfo.UseMaglev() {
 		flags |= nat.NATFlgMaglev
-		ch = newDefaultConsistentHash()
+		ch = s.newConsistentHash()
 		for _, ep := range eps {
 			if ep.IsReady() {
 				ch.AddBackend(ep)
@@ -879,8 +882,11 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	return cnt, local, nil
 }
 
-func newDefaultConsistentHash() *consistenthash.ConsistentHash {
-	return consistenthash.New(consistenthash.WithHash(fnv.New32(), fnv.New32()))
+func (s *Syncer) newConsistentHash() *consistenthash.ConsistentHash {
+	return consistenthash.New(
+		consistenthash.WithHash(fnv.New32(), fnv.New32()),
+		consistenthash.WithPreferenceLength(s.maglevLUTSize),
+	)
 }
 
 // writeMaglevBackends takes frontend info, and a pre-populated CH module (backends already programmed).
