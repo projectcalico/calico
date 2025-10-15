@@ -28,18 +28,27 @@ func TestComponentString(t *testing.T) {
 			name: "without registry",
 			component: Component{
 				Version: "1.2.3",
-				Image:   "calico/node",
+				Image:   "node",
 			},
-			expected: "calico/node:1.2.3",
+			expected: "node:1.2.3",
 		},
 		{
-			name: "with registry",
+			name: "with registry - Calico component",
 			component: Component{
 				Version:  "1.2.3",
-				Image:    "calico/node",
-				Registry: "docker.io",
+				Image:    "node",
+				Registry: "quay.io/calico",
 			},
-			expected: "docker.io/calico/node:1.2.3",
+			expected: "quay.io/calico/node:1.2.3",
+		},
+		{
+			name: "with registry - Tigera operator",
+			component: Component{
+				Version:  "1.2.3",
+				Image:    "tigera/operator",
+				Registry: "quay.io",
+			},
+			expected: "quay.io/tigera/operator:1.2.3",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

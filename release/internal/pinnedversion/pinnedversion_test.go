@@ -25,7 +25,94 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
-func TestGeneratePinnedVersionFileFromTemplate(t *testing.T) {
+func TestImageComponents(t *testing.T) {
+	data := &calicoTemplateData{
+		ReleaseName:    "test-release",
+		BaseDomain:     "example.com",
+		ProductVersion: "vX.Y.Z",
+		Operator: registry.Component{
+			Version:  "vA.B.C",
+			Image:    "tigera/operator",
+			Registry: "docker.io",
+		},
+		Hash:          "vX.Y.Z-vA.B.C",
+		Note:          "Test note",
+		ReleaseBranch: "release-v1.0",
+	}
+	outputDir := t.TempDir()
+
+	err := generatePinnedVersionFile(data, outputDir)
+	if err != nil {
+		t.Fatalf("failed to generate pinned version file: %v", err)
+	}
+
+	p, err := retrievePinnedVersion(outputDir)
+	if err != nil {
+		t.Fatalf("failed to retrieve pinned version: %v", err)
+	}
+	t.Run("without operator", func(t *testing.T) {
+		expectedComponents := map[string]registry.Component{
+			"typha":                     {Version: "vX.Y.Z", Image: "typha"},
+			"calicoctl":                 {Version: "vX.Y.Z", Image: "ctl"},
+			"node":                      {Version: "vX.Y.Z", Image: "node"},
+			"cni":                       {Version: "vX.Y.Z", Image: "cni"},
+			"apiserver":                 {Version: "vX.Y.Z", Image: "apiserver"},
+			"kube-controllers":          {Version: "vX.Y.Z", Image: "kube-controllers"},
+			"goldmane":                  {Version: "vX.Y.Z", Image: "goldmane"},
+			"flannel":                   {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
+			"dikastes":                  {Version: "vX.Y.Z", Image: "dikastes"},
+			"envoy-gateway":             {Version: "vX.Y.Z", Image: "envoy-gateway"},
+			"envoy-proxy":               {Version: "vX.Y.Z", Image: "envoy-proxy"},
+			"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
+			"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
+			"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
+			"csi":                       {Version: "vX.Y.Z", Image: "csi"},
+			"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
+			"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
+			"node-windows":              {Version: "vX.Y.Z", Image: "node-windows"},
+			"guardian":                  {Version: "vX.Y.Z", Image: "guardian"},
+			"whisker":                   {Version: "vX.Y.Z", Image: "whisker"},
+			"whisker-backend":           {Version: "vX.Y.Z", Image: "whisker-backend"},
+		}
+		actualComponents := p.ImageComponents(false)
+		if diff := cmp.Diff(expectedComponents, actualComponents); diff != "" {
+			t.Errorf("expected components to be same, but they differ: %s", diff)
+		}
+	})
+	t.Run("with operator", func(t *testing.T) {
+		expectedComponents := map[string]registry.Component{
+			"typha":                     {Version: "vX.Y.Z", Image: "typha"},
+			"calicoctl":                 {Version: "vX.Y.Z", Image: "ctl"},
+			"node":                      {Version: "vX.Y.Z", Image: "node"},
+			"cni":                       {Version: "vX.Y.Z", Image: "cni"},
+			"apiserver":                 {Version: "vX.Y.Z", Image: "apiserver"},
+			"kube-controllers":          {Version: "vX.Y.Z", Image: "kube-controllers"},
+			"goldmane":                  {Version: "vX.Y.Z", Image: "goldmane"},
+			"flannel":                   {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
+			"dikastes":                  {Version: "vX.Y.Z", Image: "dikastes"},
+			"envoy-gateway":             {Version: "vX.Y.Z", Image: "envoy-gateway"},
+			"envoy-proxy":               {Version: "vX.Y.Z", Image: "envoy-proxy"},
+			"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
+			"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
+			"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
+			"csi":                       {Version: "vX.Y.Z", Image: "csi"},
+			"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
+			"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
+			"node-windows":              {Version: "vX.Y.Z", Image: "node-windows"},
+			"guardian":                  {Version: "vX.Y.Z", Image: "guardian"},
+			"whisker":                   {Version: "vX.Y.Z", Image: "whisker"},
+			"whisker-backend":           {Version: "vX.Y.Z", Image: "whisker-backend"},
+			"tigera/operator":           {Version: "vA.B.C", Image: "tigera/operator", Registry: "docker.io"},
+			"tigera/operator-init":      {Version: "vA.B.C", Image: "tigera/operator-init", Registry: "docker.io"},
+		}
+		actualComponents := p.ImageComponents(true)
+		if diff := cmp.Diff(expectedComponents, actualComponents); diff != "" {
+			t.Errorf("expected components to be same, but they differ: %s", diff)
+		}
+	})
+}
+
+func TestGeneratePinnedVersionFile(t *testing.T) {
 	data := &calicoTemplateData{
 		ReleaseName:    "test-release",
 		BaseDomain:     "example.com",
@@ -102,197 +189,54 @@ func TestGenerateOperatorComponents(t *testing.T) {
 }
 
 func TestRetrieveImageComponents(t *testing.T) {
-	t.Run("default", func(t *testing.T) {
-		dir := t.TempDir()
-		data := &calicoTemplateData{
-			ReleaseName:    "test-release",
-			BaseDomain:     "example.com",
-			ProductVersion: "vX.Y.Z",
-			Operator: registry.Component{
-				Version:  "vA.B.C",
-				Image:    "tigera/operator",
-				Registry: "docker.io",
-			},
-			Hash:          "vX.Y.Z-vA.B.C",
-			Note:          "Test note",
-			ReleaseBranch: "release-v1.0",
-		}
-		err := generatePinnedVersionFile(data, dir)
-		if err != nil {
-			t.Fatalf("failed to generate pinned version file: %v", err)
-		}
-		retrievedComponents, err := RetrieveImageComponents(dir)
-		if err != nil {
-			t.Fatalf("failed to retrieve image components: %v", err)
-		}
-		expectedComponents := map[string]registry.Component{
-			"typha":                            {Version: "vX.Y.Z", Image: "typha"},
-			"calicoctl":                        {Version: "vX.Y.Z", Image: "ctl"},
-			"calico/node":                      {Version: "vX.Y.Z", Image: "node"},
-			"calico/cni":                       {Version: "vX.Y.Z", Image: "cni"},
-			"calico/apiserver":                 {Version: "vX.Y.Z", Image: "apiserver"},
-			"calico/kube-controllers":          {Version: "vX.Y.Z", Image: "kube-controllers"},
-			"calico/goldmane":                  {Version: "vX.Y.Z", Image: "goldmane"},
-			"calico/dikastes":                  {Version: "vX.Y.Z", Image: "dikastes"},
-			"calico/envoy-gateway":             {Version: "vX.Y.Z", Image: "envoy-gateway"},
-			"calico/envoy-proxy":               {Version: "vX.Y.Z", Image: "envoy-proxy"},
-			"calico/envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
-			"flexvol":                          {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
-			"key-cert-provisioner":             {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
-			"calico/csi":                       {Version: "vX.Y.Z", Image: "csi"},
-			"calico/csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
-			"calico/cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
-			"calico/node-windows":              {Version: "vX.Y.Z", Image: "node-windows"},
-			"calico/guardian":                  {Version: "vX.Y.Z", Image: "guardian"},
-			"calico/whisker":                   {Version: "vX.Y.Z", Image: "whisker"},
-			"calico/whisker-backend":           {Version: "vX.Y.Z", Image: "whisker-backend"},
-			"tigera/operator":                  {Version: "vA.B.C", Image: "tigera/operator", Registry: "docker.io"},
-			"tigera/operator-init":             {Version: "vA.B.C", Image: "tigera/operator-init", Registry: "docker.io"},
-		}
-		if cmp.Equal(expectedComponents, retrievedComponents) {
-			t.Errorf("expected components to be same, but they differ: %s", cmp.Diff(expectedComponents, retrievedComponents))
-		}
-	})
-
-	t.Run("operator in calico namespace", func(t *testing.T) {
-		dir := t.TempDir()
-		data := &calicoTemplateData{
-			ReleaseName:    "test-release",
-			BaseDomain:     "example.com",
-			ProductVersion: "vX.Y.Z",
-			Operator: registry.Component{
-				Version: "vA.B.C",
-				Image:   "calico/operator",
-			},
-			Hash:          "vX.Y.Z-vA.B.C",
-			Note:          "Test note",
-			ReleaseBranch: "release-v1.0",
-		}
-		err := generatePinnedVersionFile(data, dir)
-		if err != nil {
-			t.Fatalf("failed to generate pinned version file: %v", err)
-		}
-		retrievedComponents, err := RetrieveImageComponents(dir)
-		if err != nil {
-			t.Fatalf("failed to retrieve image components: %v", err)
-		}
-		expectedComponents := map[string]registry.Component{
-			"typha":                            {Version: "vX.Y.Z", Image: "typha"},
-			"calicoctl":                        {Version: "vX.Y.Z", Image: "ctl"},
-			"calico/node":                      {Version: "vX.Y.Z", Image: "node"},
-			"calico/cni":                       {Version: "vX.Y.Z", Image: "cni"},
-			"calico/apiserver":                 {Version: "vX.Y.Z", Image: "apiserver"},
-			"calico/kube-controllers":          {Version: "vX.Y.Z", Image: "kube-controllers"},
-			"calico/goldmane":                  {Version: "vX.Y.Z", Image: "goldmane"},
-			"calico/dikastes":                  {Version: "vX.Y.Z", Image: "dikastes"},
-			"calico/envoy-gateway":             {Version: "vX.Y.Z", Image: "envoy-gateway"},
-			"calico/envoy-proxy":               {Version: "vX.Y.Z", Image: "envoy-proxy"},
-			"calico/envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
-			"flexvol":                          {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
-			"key-cert-provisioner":             {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
-			"calico/csi":                       {Version: "vX.Y.Z", Image: "csi"},
-			"calico/csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
-			"calico/cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
-			"calico/node-windows":              {Version: "vX.Y.Z", Image: "node-windows"},
-			"calico/guardian":                  {Version: "vX.Y.Z", Image: "guardian"},
-			"calico/whisker":                   {Version: "vX.Y.Z", Image: "whisker"},
-			"calico/whisker-backend":           {Version: "vX.Y.Z", Image: "whisker-backend"},
-			"calico/operator":                  {Version: "vA.B.C", Image: "calico/operator"},
-			"calico/operator-init":             {Version: "vA.B.C", Image: "calico/operator-init"},
-		}
-		if cmp.Equal(expectedComponents, retrievedComponents) {
-			t.Errorf("expected components to be same, but they differ: %s", cmp.Diff(expectedComponents, retrievedComponents))
-		}
-	})
-}
-
-func TestNormalizeComponent(t *testing.T) {
-	for _, tt := range []struct {
-		componentName string
-		component     registry.Component
-		expected      registry.Component
-	}{
-		// components in registry.ImageMap
-		{
-			componentName: "typha",
-			component: registry.Component{
-				Version: "v1.0.0",
-			},
-			expected: registry.Component{
-				Version: "v1.0.0",
-				Image:   "typha",
-			},
+	dir := t.TempDir()
+	data := &calicoTemplateData{
+		ReleaseName:    "test-release",
+		BaseDomain:     "example.com",
+		ProductVersion: "vX.Y.Z",
+		Operator: registry.Component{
+			Version:  "vA.B.C",
+			Image:    "tigera/operator",
+			Registry: "docker.io",
 		},
-		{
-			componentName: "calicoctl",
-			component: registry.Component{
-				Version: "v1.0.0",
-			},
-			expected: registry.Component{
-				Version: "v1.0.0",
-				Image:   "ctl",
-			},
-		},
-		{
-			componentName: "flannel",
-			component: registry.Component{
-				Version:  "v0.14.0",
-				Registry: "quay.io",
-			},
-			expected: registry.Component{
-				Version:  "v0.14.0",
-				Image:    "coreos/flannel",
-				Registry: "quay.io",
-			},
-		},
-		{
-			componentName: "flexvol",
-			component: registry.Component{
-				Version: "v1.0.0",
-			},
-			expected: registry.Component{
-				Version: "v1.0.0",
-				Image:   "pod2daemon-flexvol",
-			},
-		},
-		{
-			componentName: "key-cert-provisioner",
-			component: registry.Component{
-				Version: "v1.0.0",
-			},
-			expected: registry.Component{
-				Version: "v1.0.0",
-				Image:   "key-cert-provisioner",
-			},
-		},
-		{
-			componentName: "csi-node-driver-registrar",
-			component: registry.Component{
-				Version: "v1.0.0",
-			},
-			expected: registry.Component{
-				Version: "v1.0.0",
-				Image:   "node-driver-registrar",
-			},
-		},
-		// components not in registry.ImageMap
-		{
-			componentName: "calico/cni",
-			component: registry.Component{
-				Version: "v1.0.0",
-				Image:   "cni",
-			},
-			expected: registry.Component{
-				Version: "v1.0.0",
-				Image:   "cni",
-			},
-		},
-	} {
-		t.Run(tt.componentName, func(t *testing.T) {
-			got := normalizeComponent(tt.componentName, tt.component)
-			if got != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, got)
-			}
-		})
+		Hash:          "vX.Y.Z-vA.B.C",
+		Note:          "Test note",
+		ReleaseBranch: "release-v1.0",
+	}
+	err := generatePinnedVersionFile(data, dir)
+	if err != nil {
+		t.Fatalf("failed to generate pinned version file: %v", err)
+	}
+	retrievedComponents, err := RetrieveImageComponents(dir)
+	if err != nil {
+		t.Fatalf("failed to retrieve image components: %v", err)
+	}
+	expectedComponents := map[string]registry.Component{
+		"typha":                     {Version: "vX.Y.Z", Image: "typha"},
+		"calicoctl":                 {Version: "vX.Y.Z", Image: "ctl"},
+		"node":                      {Version: "vX.Y.Z", Image: "node"},
+		"cni":                       {Version: "vX.Y.Z", Image: "cni"},
+		"apiserver":                 {Version: "vX.Y.Z", Image: "apiserver"},
+		"kube-controllers":          {Version: "vX.Y.Z", Image: "kube-controllers"},
+		"goldmane":                  {Version: "vX.Y.Z", Image: "goldmane"},
+		"flannel":                   {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
+		"dikastes":                  {Version: "vX.Y.Z", Image: "dikastes"},
+		"envoy-gateway":             {Version: "vX.Y.Z", Image: "envoy-gateway"},
+		"envoy-proxy":               {Version: "vX.Y.Z", Image: "envoy-proxy"},
+		"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
+		"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
+		"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
+		"csi":                       {Version: "vX.Y.Z", Image: "csi"},
+		"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
+		"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
+		"node-windows":              {Version: "vX.Y.Z", Image: "node-windows"},
+		"guardian":                  {Version: "vX.Y.Z", Image: "guardian"},
+		"whisker":                   {Version: "vX.Y.Z", Image: "whisker"},
+		"whisker-backend":           {Version: "vX.Y.Z", Image: "whisker-backend"},
+		"tigera/operator":           {Version: "vA.B.C", Image: "tigera/operator", Registry: "docker.io"},
+		"tigera/operator-init":      {Version: "vA.B.C", Image: "tigera/operator-init", Registry: "docker.io"},
+	}
+	if diff := cmp.Diff(expectedComponents, retrievedComponents); diff != "" {
+		t.Errorf("expected components to be same, but they differ: %s", diff)
 	}
 }
