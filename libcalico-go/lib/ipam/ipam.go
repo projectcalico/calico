@@ -1514,7 +1514,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg Affin
 // the specified pool across all hosts.
 func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) error {
 	log.Infof("Releasing block affinities within pool '%s'", pool.String())
-	for i := 0; i < ipamKeyErrRetries; i++ {
+	for range datastoreRetries {
 		retry := false
 		pairs, err := c.affinityConfigsByBlocks(ctx, pool)
 		if err != nil {
@@ -1529,7 +1529,7 @@ func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) e
 		for blockString, affinityCfg := range pairs {
 			_, blockCIDR, _ := net.ParseCIDR(blockString)
 			logCtx := log.WithField("cidr", blockCIDR)
-			for i := 0; i < datastoreRetries; i++ {
+			for range datastoreRetries {
 				err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, false)
 				if err != nil {
 					if _, ok := err.(errBlockClaimConflict); ok {
