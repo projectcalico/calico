@@ -62,6 +62,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 				)
