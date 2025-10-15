@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	//go:embed template/images.go.gotmpl
+	//go:embed templates/images.go.gotmpl
 	componentImagesFileTemplate string
 
 	componentImagesFilePath = filepath.Join("pkg", "components", "images.go")
@@ -74,6 +74,9 @@ type OperatorManager struct {
 
 	// outputDir is the absolute path to the output directory
 	outputDir string
+
+	// image is the name of the operator image (e.g. tigera/operator)
+	image string
 
 	// productRegistry is the registry to use for product images
 	registry string
@@ -121,6 +124,7 @@ func NewManager(opts ...Option) *OperatorManager {
 		runner:          &command.RealCommandRunner{},
 		docker:          registry.MustDockerRunner(),
 		registry:        DefaultRegistry,
+		image:           DefaultImage,
 		productRegistry: registry.DefaultCalicoRegistries[0],
 		validate:        true,
 		publish:         true,
@@ -134,6 +138,34 @@ func NewManager(opts ...Option) *OperatorManager {
 	return o
 }
 
+// imageParts splits the operator image into registry and image name.
+// Typically the operator image is something like "tigera/operator".
+// This function splits it into "tigera" and "operator".
+func (o *OperatorManager) imageParts() (imagePath string, imageName string, err error) {
+	parts := strings.Split(o.image, "/")
+	if len(parts) != 2 {
+		err = fmt.Errorf("failed to parse operator image: %s", o.image)
+		return
+	}
+	imagePath = strings.TrimSuffix(parts[0], "/")
+	imageName = strings.TrimPrefix(parts[1], "/")
+	return
+}
+
+// productRegistryParts splits the product registry into registry and image path.
+// Typically the product registry is something like "docker.io/calico" or "quay.io/calico".
+// This function splits it into "docker.io" and "calico" or "quay.io" and "calico".
+func (o *OperatorManager) productRegistryParts() (registry string, imagePath string, err error) {
+	parts := strings.Split(o.productRegistry, "/")
+	if len(parts) < 2 {
+		err = fmt.Errorf("failed to parse product registry: %s", o.productRegistry)
+		return
+	}
+	registry = strings.Join(parts[:len(parts)-1], "/")
+	imagePath = parts[len(parts)-1]
+	return
+}
+
 // modifyComponentsImagesFile overwrites the pkg/components/images.go file
 // with the contents of the embedded file to ensure that operator has the right registries.
 // This is ONLY used by hashreleases because the operator uses the images.go file to determine the registry.
@@ -141,23 +173,31 @@ func (o *OperatorManager) modifyComponentsImagesFile() error {
 	destFilePath := filepath.Join(o.dir, componentImagesFilePath)
 	dest, err := os.OpenFile(destFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
-		logrus.WithError(err).Errorf("Failed to open file %s", destFilePath)
-		return err
+		return fmt.Errorf("failed to open file %s: %w", destFilePath, err)
 	}
 	defer func() { _ = dest.Close() }()
 	tmpl, err := template.New("pkg/components/images.go").Parse(componentImagesFileTemplate)
 	if err != nil {
-		logrus.WithError(err).Errorf("Failed to parse template to overwrite %s file", destFilePath)
+		return fmt.Errorf("failed to parse template to overwrite %s file: %w", destFilePath, err)
+	}
+
+	imagePath, _, err := o.imageParts()
+	if err != nil {
+		return err
+	}
+	productRegistry, productImagePath, err := o.productRegistryParts()
+	if err != nil {
 		return err
 	}
 
 	if err := tmpl.Execute(dest, map[string]string{
-		"Registry":        o.registry,
-		"ProductRegistry": o.productRegistry,
-		"Year":            time.Now().Format("2006"),
+		"ImagePath":        imagePath,
+		"Registry":         o.registry,
+		"ProductImagePath": productImagePath,
+		"ProductRegistry":  productRegistry,
+		"Year":             time.Now().Format("2006"),
 	}); err != nil {
-		logrus.WithError(err).Errorf("Failed to write to file %s", destFilePath)
-		return err
+		return fmt.Errorf("failed to write to file %s: %w", destFilePath, err)
 	}
 	return nil
 }
@@ -175,6 +215,9 @@ func (o *OperatorManager) Build() error {
 	if err != nil {
 		return err
 	}
+	if component.Image != o.image {
+		return fmt.Errorf("operator image mismatch: expected %s, got %s", o.image, component.Image)
+	}
 	defer func() {
 		if _, err := o.runner.RunInDir(o.dir, "git", []string{"reset", "--hard"}, nil); err != nil {
 			logrus.WithError(err).Error("Failed to reset repository")
@@ -185,23 +228,22 @@ func (o *OperatorManager) Build() error {
 	}
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("OS_VERSIONS=%s", componentsVersionPath))
-	env = append(env, fmt.Sprintf("COMMON_VERSIONS=%s", componentsVersionPath))
 	env = append(env, fmt.Sprintf("CALICO_CRDS_DIR=%s", o.calicoDir))
 	if _, err := o.make("gen-versions", env); err != nil {
-		return err
+		return fmt.Errorf("failed to generate versions: %w", err)
 	}
 	env = os.Environ()
 	env = append(env, fmt.Sprintf("ARCHES=%s", strings.Join(o.architectures, " ")))
 	env = append(env, fmt.Sprintf("GIT_VERSION=%s", component.Version))
 	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
 	if _, err := o.make("image-all", env); err != nil {
-		return err
+		return fmt.Errorf("failed to build images: %w", err)
 	}
 	for _, arch := range o.architectures {
 		currentTag := fmt.Sprintf("%s:latest-%s", component.Image, arch)
 		newTag := fmt.Sprintf("%s-%s", component.String(), arch)
 		if err := o.docker.TagImage(currentTag, newTag); err != nil {
-			return err
+			return fmt.Errorf("failed to tag image %q as %q: %w", currentTag, newTag, err)
 		}
 	}
 	env = os.Environ()
@@ -209,21 +251,24 @@ func (o *OperatorManager) Build() error {
 	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
 	env = append(env, fmt.Sprintf("BUILD_INIT_IMAGE=%s", component.InitImage().Image))
 	if _, err := o.make("image-init", env); err != nil {
-		return err
+		return fmt.Errorf("failed to create init image: %w", err)
 	}
 	currentTag := fmt.Sprintf("%s:latest", component.InitImage().Image)
 	newTag := component.InitImage().String()
-	return o.docker.TagImage(currentTag, newTag)
+	if err := o.docker.TagImage(currentTag, newTag); err != nil {
+		return fmt.Errorf("failed to tag image %q as %q: %w", currentTag, newTag, err)
+	}
+	return nil
 }
 
 func (o *OperatorManager) PreBuildValidation(outputDir string) error {
-	if o.dir == "" {
-		logrus.Fatal("No repository root specified")
-	}
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	var errStack error
+	if o.dir == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no repository root specified"))
+	}
 	if o.validateBranch {
 		branch, err := utils.GitBranch(o.dir)
 		if err != nil {
@@ -270,7 +315,7 @@ func (o *OperatorManager) Publish() error {
 	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get operator component")
-		return err
+		return fmt.Errorf("failed to get operator component: %w", err)
 	}
 	var imageList []string
 	for _, arch := range o.architectures {
@@ -289,7 +334,7 @@ func (o *OperatorManager) Publish() error {
 	fields["manifest"] = manifestListName
 	if o.publish {
 		if err = o.docker.ManifestPush(manifestListName, imageList); err != nil {
-			return err
+			return fmt.Errorf("failed to push manifest list: %w", err)
 		}
 	}
 	logrus.WithFields(fields).Info("Pushed operator manifest")
@@ -298,7 +343,7 @@ func (o *OperatorManager) Publish() error {
 	fields["image"] = initImage
 	if o.publish {
 		if err := o.docker.PushImage(initImage.String()); err != nil {
-			return err
+			return fmt.Errorf("failed to push init image: %w", err)
 		}
 	}
 	logrus.WithFields(fields).Info("Pushed operator init image")
@@ -319,19 +364,20 @@ func (o *OperatorManager) PrePublishValidation() error {
 }
 
 func (o *OperatorManager) PreReleasePublicValidation() error {
+	var errStack error
 	if o.githubOrg == "" {
-		logrus.Fatal("GitHub organization not specified")
+		errStack = errors.Join(errStack, fmt.Errorf("GitHub organization not specified"))
 	}
 	if o.repoName == "" {
-		logrus.Fatal("GitHub repository not specified")
+		errStack = errors.Join(errStack, fmt.Errorf("GitHub repository not specified"))
 	}
 	if o.remote == "" {
-		logrus.Fatal("No git remote specified")
+		errStack = errors.Join(errStack, fmt.Errorf("no git remote specified"))
 	}
 	if o.version == "" {
-		logrus.Fatal("No operator version specified")
+		errStack = errors.Join(errStack, fmt.Errorf("no operator version specified"))
 	}
-	return nil
+	return errStack
 }
 
 // ReleasePublic publishes the current draft release of the operator to make it publicly available.
