@@ -493,7 +493,7 @@ st: st-checks $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar wo
 		   -e HOST_CHECKOUT_DIR=$(CURDIR) \
 		   -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
-		   -e NODE_CONTAINER_NAME=$(NODE_IMAGE):$(TEST_BUILD_TAG) \
+		   -e NODE_CONTAINER_NAME=calico/node:$(TEST_BUILD_TAG) \
 		   --rm -t \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
