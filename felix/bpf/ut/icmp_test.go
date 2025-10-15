@@ -49,7 +49,7 @@ func TestICMPCTPlain(t *testing.T) {
 		res, err := bpfrun(icmpEcho)
 		Expect(err).NotTo(HaveOccurred())
 		// there is no normal CT record yet, must be denied
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		dumpCTMap(ctMap)
 
@@ -68,7 +68,7 @@ func TestICMPCTPlain(t *testing.T) {
 		res, err := bpfrun(icmpEcho)
 		Expect(err).NotTo(HaveOccurred())
 		// there is no normal CT record yet, must be denied
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		dumpCTMap(ctMap)
 

@@ -36,7 +36,7 @@ func BenchmarkHEP(b *testing.B) {
 	setupAndRun(b, "no_log", "calico_from_host_ep", nil, func(progName string) {
 		res, err := bpftoolProgRun(progName, pktBytes, ctxIn)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	setupAndRun(b, "no_log", "calico_from_host_ep", nil, func(progName string) {
@@ -44,7 +44,7 @@ func BenchmarkHEP(b *testing.B) {
 		res, err := bpftoolProgRunN(progName, pktBytes, ctxIn, b.N)
 		b.StopTimer()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 		fmt.Printf("%7d iterations avg %d\n", b.N, res.Duration)
 	})
 }

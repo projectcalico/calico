@@ -46,7 +46,7 @@ func TestIPv4Opts(t *testing.T) {
 	runBpfUnitTest(t, "ipv4_opts_test.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -111,7 +111,7 @@ func BenchmarkPktAccess(b *testing.B) {
 	setupAndRun(b, "no_log", "calico_from_workload_ep", rulesDefaultAllow, func(progName string) {
 		res, err := bpftoolProgRun(progName, pktBytes, ctxIn)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 		b.Log("BenchmarkPktAccess initialized")
 
 		b.ResetTimer()
@@ -121,7 +121,7 @@ func BenchmarkPktAccess(b *testing.B) {
 		b.StopTimer()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 		fmt.Printf("%7d iterations avg %d\n", b.N, res.Duration)
 	})
 

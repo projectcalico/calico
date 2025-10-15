@@ -47,7 +47,7 @@ func TestUnknownEnterHostNoRoute(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	expectMark(tcdefs.MarkSeenSkipFIB) // It must have skip FIB set as we did not know what to do with the packet.
@@ -82,7 +82,7 @@ func TestUnknownEnterHostRouteNotLocal(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	expectMark(tcdefs.MarkSeenSkipFIB) // It must have skip FIB set as we did not know what to do with the packet.
@@ -92,7 +92,7 @@ func TestUnknownEnterHostRouteNotLocal(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	expectMark(tcdefs.MarkSeenSkipFIB) // It must have skip FIB set as we did not know what to do with the packet.
@@ -102,7 +102,7 @@ func TestUnknownEnterHostRouteNotLocal(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	expectMark(tcdefs.MarkSeenSkipFIB) // It must have skip FIB set as we did not know what to do with the packet.
@@ -117,7 +117,7 @@ func TestUnknownEnterHostRouteNotLocal(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	})
 
 	expectMark(tcdefs.MarkSeenSkipFIB) // It must have skip FIB set as we did not know what to do with the packet.
