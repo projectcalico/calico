@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -96,7 +97,7 @@ func (c *blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 
 	// Default affinity type to "host" if not set. Older versions of Calico's CRD backend
 	// did not set this field, assuming "host" as the default.
-	affinityType := "host"
+	affinityType := string(ipam.AffinityTypeHost)
 	if kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type != "" {
 		affinityType = kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type
 	}
