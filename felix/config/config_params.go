@@ -208,6 +208,7 @@ type Config struct {
 	BPFMapSizeNATFrontend              int               `config:"int;65536;non-zero"`
 	BPFMapSizeNATBackend               int               `config:"int;262144;non-zero"`
 	BPFMapSizeNATAffinity              int               `config:"int;65536;non-zero"`
+	BPFMapSizeMaglev                   int               `config:"int;1009000;non-zero"`
 	BPFMapSizeRoute                    int               `config:"int;262144;non-zero"`
 	BPFMapSizeConntrack                int               `config:"int;512000;non-zero"`
 	BPFMapSizePerCPUConntrack          int               `config:"int;0"`
@@ -716,6 +717,10 @@ func (config *Config) KubernetesProvider() Provider {
 	log.WithField("clusterType", config.ClusterType).Debug(
 		"failed to detect a known kubernetes provider, defaulting to none")
 	return ProviderNone
+}
+
+func (config *Config) MaglevLUTSize() int {
+	return 10007
 }
 
 func (config *Config) applyDefaults() {
