@@ -27,6 +27,9 @@ const urlFilterParams: Record<OmniFilterParam, string[]> = {
     policyV2Kind: [],
     reporter: [],
     start_time: [],
+    action: [],
+    staged_action: [],
+    pending_action: [],
 };
 const omniFilterData: ListOmniFiltersData = {
     dest_namespace: {

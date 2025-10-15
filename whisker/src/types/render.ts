@@ -1,7 +1,14 @@
 import { FilterHintKey, StreamFilterKey } from '@/utils/omniFilter';
 import { FlowLog as ApiFlowLog } from './api';
 
-export type FlowLogAction = 'Allow' | 'Deny' | 'Pass' | 'Log';
+export enum Action {
+    Allow = 'Allow',
+    Deny = 'Deny',
+    Pass = 'Pass',
+    Log = 'Log',
+}
+
+export type FlowLogAction = keyof typeof Action;
 
 export type FlowLog = Omit<ApiFlowLog, 'start_time' | 'end_time'> & {
     id: string;

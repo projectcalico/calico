@@ -110,12 +110,14 @@ export type FlowsFilter = Partial<{
     dest_namespaces: FlowsFilterQuery[];
     protocols: FlowsFilterQuery[];
     dest_ports: FlowsFilterQuery[];
-    actions: ('Allow' | 'Deny' | 'Pass')[];
     policiesV2: FlowsFilterQuery[];
     policiesV2Namespaces: FlowsFilterQuery[];
     policyV2Tiers: FlowsFilterQuery[];
     policyV2Kinds: FlowsFilterQuery[];
     reporters: FlowsFilterQuery[];
+    actions: FlowsFilterQuery[];
+    staged_actions: FlowsFilterQuery[];
+    pending_actions: FlowsFilterQuery[];
 }>;
 
 export type FlowsFilterKeys = keyof FlowsFilter;

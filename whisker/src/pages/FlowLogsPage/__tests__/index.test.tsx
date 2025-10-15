@@ -1,30 +1,16 @@
-import {
-    useDeniedFlowLogsCount,
-    useFlowLogsCount,
-    useFlowLogsStream,
-} from '@/features/flowLogs/api';
+import { useFlowLogsStream } from '@/features/flowLogs/api';
 import { useOmniFilterUrlState } from '@/libs/tigera/ui-components/components/common/OmniFilter';
-import { fireEvent, renderWithRouter, screen } from '@/test-utils/helper';
+import { fireEvent, render, screen } from '@/test-utils/helper';
 import FlowLogsPage from '..';
 
 import { useOmniFilterData } from '@/hooks/omniFilters';
 import { ListOmniFilterKeys, OmniFilterKeys } from '@/utils/omniFilter';
 import { act } from 'react';
-import { MemoryRouter } from 'react-router-dom';
 
-const MockOutlet = {
+const MockFlowLogsContainer = {
     onRowClicked: jest.fn(),
     onSortClicked: jest.fn(),
 };
-
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
-    Outlet: ({ context }: any) => {
-        MockOutlet.onRowClicked = context.onRowClicked;
-        MockOutlet.onSortClicked = context.onSortClicked;
-        return <>Flow logs view: {context.view}</>;
-    },
-}));
 
 jest.mock('@/features/flowLogs/api', () => ({
     useDeniedFlowLogsCount: jest.fn(),
@@ -47,6 +33,15 @@ jest.mock('@/libs/tigera/ui-components/components/common/OmniFilter', () => ({
 }));
 
 jest.mock('@/hooks/omniFilters', () => ({ useOmniFilterData: jest.fn() }));
+
+jest.mock(
+    '@/features/flowLogs/components/FlowLogsContainer',
+    () => (props: any) => {
+        MockFlowLogsContainer.onRowClicked = props.onRowClicked;
+        MockFlowLogsContainer.onSortClicked = props.onSortClicked;
+        return <div>Mock FlowLogsContainer</div>;
+    },
+);
 
 const MockOmniFilters = {
     onReset: jest.fn(),
@@ -129,37 +124,6 @@ describe('FlowLogsPage', () => {
         ] as any);
     });
 
-    it.skip('should render denied tabs info', () => {
-        jest.mocked(useDeniedFlowLogsCount).mockReturnValue(101);
-        jest.mocked(useFlowLogsCount).mockReturnValue(5);
-        renderWithRouter(<FlowLogsPage />);
-
-        expect(screen.getByTestId('denied-flows-tab')).toHaveTextContent(
-            'Denied Flows',
-        );
-        expect(screen.getByTestId('denied-flows-tab')).toHaveTextContent('101');
-        expect(screen.getByTestId('all-flows-tab')).toHaveTextContent(
-            'All Flows',
-        );
-        expect(screen.getByTestId('all-flows-tab')).toHaveTextContent('5');
-    });
-
-    it('should render all flows context for the child', () => {
-        jest.mocked(useDeniedFlowLogsCount).mockReturnValue(101);
-        renderWithRouter(<FlowLogsPage />);
-
-        expect(screen.getByText('Flow logs view: all')).toBeInTheDocument();
-    });
-
-    it('should render denied flows context for the child', () => {
-        jest.mocked(useDeniedFlowLogsCount).mockReturnValue(101);
-        renderWithRouter(<FlowLogsPage />, {
-            routes: ['/denied-flows'],
-        });
-
-        expect(screen.getByText('Flow logs view: denied')).toBeInTheDocument();
-    });
-
     it('should click play and call startStream', () => {
         const mockStartStream = jest.fn();
         jest.mocked(useFlowLogsStream).mockReturnValue({
@@ -169,7 +133,7 @@ describe('FlowLogsPage', () => {
             totalItems: 0,
         });
 
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Play' }));
 
@@ -185,7 +149,7 @@ describe('FlowLogsPage', () => {
             totalItems: 0,
         });
 
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
 
@@ -199,7 +163,7 @@ describe('FlowLogsPage', () => {
             totalItems: 0,
         });
 
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
         expect(screen.getByText('Waiting for flows')).toBeInTheDocument();
     });
@@ -213,7 +177,7 @@ describe('FlowLogsPage', () => {
             mockClearFilterParams,
             jest.fn(),
         ] as any);
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
         MockOmniFilters.onReset();
 
@@ -230,7 +194,7 @@ describe('FlowLogsPage', () => {
             jest.fn(),
             jest.fn(),
         ] as any);
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
         MockOmniFilters.onChange(changeEvent);
 
@@ -248,7 +212,7 @@ describe('FlowLogsPage', () => {
             fetchDataMock,
         ]);
 
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
         const userText = 'user-text';
         MockOmniFilters.onRequestFilterData({
@@ -271,7 +235,7 @@ describe('FlowLogsPage', () => {
             omniFilterData,
             fetchDataMock,
         ]);
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
         MockOmniFilters.onRequestNextPage(filterParam);
 
@@ -284,9 +248,9 @@ describe('FlowLogsPage', () => {
             isDataStreaming: true,
             totalItems: 0,
         });
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
-        act(() => MockOutlet.onRowClicked({}));
+        act(() => MockFlowLogsContainer.onRowClicked({}));
 
         expect(screen.getByText('Flows stream paused')).toBeInTheDocument();
     });
@@ -298,9 +262,9 @@ describe('FlowLogsPage', () => {
             isDataStreaming: true,
             totalItems: 0,
         });
-        const { rerender } = renderWithRouter(<FlowLogsPage />);
+        const { rerender } = render(<FlowLogsPage />);
 
-        act(() => MockOutlet.onRowClicked({ id }));
+        act(() => MockFlowLogsContainer.onRowClicked({ id }));
 
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
@@ -308,13 +272,9 @@ describe('FlowLogsPage', () => {
             totalItems: 0,
         });
 
-        rerender(
-            <MemoryRouter>
-                <FlowLogsPage />
-            </MemoryRouter>,
-        );
+        rerender(<FlowLogsPage />);
 
-        act(() => MockOutlet.onRowClicked({ id }));
+        act(() => MockFlowLogsContainer.onRowClicked({ id }));
 
         expect(screen.getByText('Flows stream resumed.')).toBeInTheDocument();
     });
@@ -326,9 +286,9 @@ describe('FlowLogsPage', () => {
             hasStoppedStreaming: true,
             totalItems: 0,
         });
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
-        act(() => MockOutlet.onRowClicked({ id }));
+        act(() => MockFlowLogsContainer.onRowClicked({ id }));
 
         expect(
             screen.queryByText('Flows stream resumed.'),
@@ -344,9 +304,9 @@ describe('FlowLogsPage', () => {
             isDataStreaming: false,
             totalItems: 0,
         });
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
-        act(() => MockOutlet.onRowClicked({}));
+        act(() => MockFlowLogsContainer.onRowClicked({}));
 
         expect(
             screen.queryByText('Flows stream paused'),
@@ -360,14 +320,14 @@ describe('FlowLogsPage', () => {
             isDataStreaming: true,
             totalItems: 0,
         });
-        renderWithRouter(<FlowLogsPage />);
+        render(<FlowLogsPage />);
 
         act(() =>
-            MockOutlet.onRowClicked({
+            MockFlowLogsContainer.onRowClicked({
                 closeVirtualizedRow: closeVirtualizedRowMock,
             }),
         );
-        act(() => MockOutlet.onSortClicked());
+        act(() => MockFlowLogsContainer.onSortClicked());
 
         expect(closeVirtualizedRowMock).toHaveBeenCalled();
     });

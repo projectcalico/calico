@@ -4,7 +4,13 @@ const Badge: React.FC<React.PropsWithChildren & BadgeProps> = ({
     children,
     ...rest
 }) => (
-    <ChakraBadge variant='rounded' ml={1} {...rest}>
+    <ChakraBadge
+        ml={1}
+        variant='solid'
+        color='tigeraLightBlue'
+        fontSize='sm'
+        {...rest}
+    >
         +{children}
     </ChakraBadge>
 );

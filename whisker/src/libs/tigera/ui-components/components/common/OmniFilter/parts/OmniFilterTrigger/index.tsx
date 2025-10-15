@@ -1,6 +1,5 @@
 import { ChevronDownIcon } from '@chakra-ui/icons';
 import {
-    Badge,
     Button,
     ButtonProps,
     Flex,
@@ -10,6 +9,7 @@ import {
 } from '@chakra-ui/react';
 import { OperatorType } from '../../types';
 import { useStyles } from '../OmniFilterContainer';
+import Badge from '../../components/Badge';
 
 type OmniFilterTriggerProps = Partial<{
     isOpen: boolean;
@@ -80,11 +80,7 @@ export const OmniFilterTrigger = ({
                                 {operator} {selectedValueLabel}
                             </Text>
                         )}
-                        {badgeLabel && (
-                            <Badge variant='rounded' ml={1}>
-                                +{badgeLabel}
-                            </Badge>
-                        )}
+                        {badgeLabel && <Badge ml={1}>{badgeLabel}</Badge>}
                     </Flex>
                 )}
             </Button>

@@ -1,5 +1,5 @@
 import { useFeature } from '@/hooks';
-import { fireEvent, render, screen, within } from '@/test-utils/helper';
+import { act, fireEvent, render, screen, within } from '@/test-utils/helper';
 import { OmniFilterKeys } from '@/utils/omniFilter';
 import OmniFilters from '..';
 
@@ -59,6 +59,18 @@ jest.mock(
     () =>
         ({ filterLabel }: any) => {
             return <div>{filterLabel} filter</div>;
+        },
+);
+
+const ActionOmniFilterMock = {
+    onChange: jest.fn(),
+};
+jest.mock(
+    '@/features/flowLogs/components/ActionOmniFilter',
+    () =>
+        ({ onChange }: any) => {
+            ActionOmniFilterMock.onChange = onChange;
+            return <div>Mock ActionOmniFilter</div>;
         },
 );
 
@@ -246,5 +258,55 @@ describe('<OmniFilters />', () => {
         render(<OmniFilters {...defaultProps} />);
 
         expect(screen.getByText('Policy V2 filter')).toBeInTheDocument();
+    });
+
+    it('should handle when action values are provided', () => {
+        const mockOnMultiChange = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onMultiChange={mockOnMultiChange}
+                selectedValues={{}}
+            />,
+        );
+
+        act(() => {
+            ActionOmniFilterMock.onChange({
+                action: 'Allow',
+                staged_action: 'Deny',
+                pending_action: 'Allow',
+            });
+        });
+
+        expect(mockOnMultiChange).toHaveBeenCalledWith({
+            action: ['Allow'],
+            staged_action: ['Deny'],
+            pending_action: ['Allow'],
+        });
+    });
+
+    it('should handle when action values are cleared', () => {
+        const mockOnMultiChange = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onMultiChange={mockOnMultiChange}
+                selectedValues={{}}
+            />,
+        );
+
+        act(() => {
+            ActionOmniFilterMock.onChange({
+                action: '',
+                staged_action: '',
+                pending_action: '',
+            });
+        });
+
+        expect(mockOnMultiChange).toHaveBeenCalledWith({
+            action: [],
+            staged_action: [],
+            pending_action: [],
+        });
     });
 });

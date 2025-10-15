@@ -21,13 +21,15 @@ export enum FilterKey {
     dest_namespace = 'dest_namespace',
     protocol = 'protocol',
     dest_port = 'dest_port',
-    action = 'action',
     policyV2 = 'policyV2',
     policyV2Namespace = 'policyV2Namespace',
     policyV2Tier = 'policyV2Tier',
     policyV2Kind = 'policyV2Kind',
     reporter = 'reporter',
     start_time = 'start_time',
+    action = 'action',
+    staged_action = 'staged_action',
+    pending_action = 'pending_action',
 }
 
 export type FilterProperty = {
@@ -39,7 +41,6 @@ export type FilterProperty = {
 
 export const ListOmniFilterKeys: Omit<
     typeof FilterKey,
-    | 'action'
     | 'protocol'
     | 'dest_port'
     | 'policyV2'
@@ -47,6 +48,9 @@ export const ListOmniFilterKeys: Omit<
     | 'policyV2Tier'
     | 'policyV2Kind'
     | 'start_time'
+    | 'action'
+    | 'staged_action'
+    | 'pending_action'
 > = {
     [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
@@ -63,7 +67,12 @@ export type DataListOmniFilterParam = keyof Omit<
 
 export const FilterHintKeys: Omit<
     typeof FilterKey,
-    'action' | 'protocol' | 'dest_port' | 'start_time'
+    | 'protocol'
+    | 'dest_port'
+    | 'start_time'
+    | 'action'
+    | 'staged_action'
+    | 'pending_action'
 > = {
     [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
@@ -84,7 +93,7 @@ export const StreamFilterKeys = {
 
 export type StreamFilterKey = keyof typeof StreamFilterKeys;
 
-export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
+export const OmniFilterKeys = {
     ...ListOmniFilterKeys,
     [FilterKey.dest_port]: FilterKey.dest_port,
     [FilterKey.protocol]: FilterKey.protocol,
@@ -94,18 +103,22 @@ export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
     [FilterKey.policyV2Kind]: FilterKey.policyV2Kind,
     [FilterKey.reporter]: FilterKey.reporter,
     [FilterKey.start_time]: FilterKey.start_time,
+    [FilterKey.action]: FilterKey.action,
+    [FilterKey.staged_action]: FilterKey.staged_action,
+    [FilterKey.pending_action]: FilterKey.pending_action,
 } as const;
 
 export type OmniFilterParam = keyof typeof OmniFilterKeys;
 
 export const CustomOmniFilterKeys: Pick<
     typeof FilterKey,
-    'dest_port' | 'policyV2' | 'reporter' | 'start_time'
+    'dest_port' | 'policyV2' | 'reporter' | 'start_time' | 'action'
 > = {
     [FilterKey.dest_port]: FilterKey.dest_port,
     [FilterKey.policyV2]: FilterKey.policyV2,
     [FilterKey.reporter]: FilterKey.reporter,
     [FilterKey.start_time]: FilterKey.start_time,
+    [FilterKey.action]: FilterKey.action,
 } as const;
 
 export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
@@ -147,12 +160,12 @@ export const transformToFlowsFilterQuery = (
             }
 
             const filterId = filterKey as FilterKey;
-            const key = FilterProperties[filterId].filterHintsKey;
+            const key = OmniFilterProperties[filterId].filterHintsKey;
             return listFilterId === filterId
                 ? acc
                 : {
                       ...acc,
-                      [key]: FilterProperties[
+                      [key]: OmniFilterProperties[
                           filterId
                       ].transformToFilterHintRequest(
                           omniFilterValues[filterId as FilterHintKey],
@@ -206,7 +219,7 @@ type OmniFilterProperty = {
     defaultOperatorType?: OperatorType;
     label: string;
     limit?: number;
-    filterHintsKey: Exclude<FlowsFilterKeys, 'actions'>;
+    filterHintsKey: FlowsFilterKeys;
     transformToFilterHintRequest: (
         filters: string[],
     ) => FlowsFilterQuery[] | undefined;
@@ -338,13 +351,24 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
     start_time: {
         label: 'Start Time',
     } as OmniFilterProperty,
-};
-
-export const FilterProperties: Record<FilterKey, FilterProperty> = {
-    ...OmniFilterProperties,
     action: {
+        label: 'Action',
         filterHintsKey: 'actions',
-        transformToFilterHintRequest: handleEmptyFilters,
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+
+    staged_action: {
+        label: 'Staged Action',
+        filterHintsKey: 'staged_actions',
+        transformToFilterHintRequest: transformToListFilter,
+    },
+
+    pending_action: {
+        label: 'Pending Action',
+        filterHintsKey: 'pending_actions',
+        transformToFilterHintRequest: transformToListFilter,
     },
 };
 

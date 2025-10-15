@@ -3,7 +3,6 @@ import {
     AppErrorBoundary,
     FlowLogsErrorBoundary,
 } from '@/components/core/ErrorBoundary';
-import { FlowLogsContainer } from '@/features/flowLogs/components';
 import { FlowLogsPage } from '@/pages';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -35,16 +34,6 @@ export const routes: RouteObject[] = [
             {
                 path: 'flow-logs',
                 element: <FlowLogsPage />,
-                children: [
-                    {
-                        path: '',
-                        element: <FlowLogsContainer />,
-                    },
-                    {
-                        path: 'denied-flows',
-                        element: <FlowLogsContainer />,
-                    },
-                ],
                 ErrorBoundary: FlowLogsErrorBoundary,
             },
             {
