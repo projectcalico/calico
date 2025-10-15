@@ -2030,6 +2030,21 @@ for each device (host + workloads) on a host.
 | Default value (YAML) | `1000` |
 | Notes | Required. | 
 
+### `BPFMapSizeMaglev` (config file) / `bpfMapSizeMaglev` (YAML)
+
+Sets the size of the Maglev backend-lookup map. The map must be large enough to hold
+1009 entries for each Maglev-enabled service address.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFMapSizeMaglev` |
+| Encoding (env var/config file) | Integer |
+| Default value (above encoding) | `1009000` |
+| `FelixConfiguration` field | `bpfMapSizeMaglev` (YAML) `BPFMapSizeMaglev` (Go API) |
+| `FelixConfiguration` schema | Integer |
+| Default value (YAML) | `1009000` |
+| Notes | Required. | 
+
 ### `BPFMapSizeNATAffinity` (config file) / `bpfMapSizeNATAffinity` (YAML)
 
 Sets the size of the BPF map that stores the affinity of a connection (for services that
