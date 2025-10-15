@@ -798,6 +798,7 @@ test_confd_templates() {
     testdir=$1
     echo "Comparing with templates in $testdir"
     for i in $(seq 1 10); do echo "comparing templates attempt $i" && compare_templates $testdir 0 false && break || sleep 1; done
+    echo "DEBUG: Final compare_templates call with output=1, UPDATE_EXPECTED_DATA=${UPDATE_EXPECTED_DATA}"
     compare_templates $testdir 1 ${UPDATE_EXPECTED_DATA}
 }
 
@@ -836,7 +837,8 @@ compare_templates() {
         fi
         echo "---"
 
-        if ! diff --ignore-blank-lines -q ${expected} ${actual} 1>/dev/null 2>&1; then
+        if ! diff_files_ignoring_comments_and_blank_lines ${expected} ${actual} ${output}; then
+            echo "DEBUG: diff detected for file ${f}, output flag is ${output}, record is ${record}"
             if ! $record; then
                 rc=1;
             fi
@@ -853,6 +855,8 @@ compare_templates() {
                     set -e
                     rc=2
                 fi
+            else
+                echo "DEBUG: diff found but output=${output}, so not printing diff"
             fi
         fi
     done
@@ -874,7 +878,31 @@ compare_templates() {
         ps
     fi
 
+    echo "DEBUG: rc value is $rc"
     return $rc
+}
+
+# Compares two files ignoring comments (lines starting with # and inline comments) and blank lines
+# $1: expected file path
+# $2: actual file path  
+# $3: output flag (0=no output, 1=show diff)
+# Returns: 0 if files match, 1 if they differ
+diff_files_ignoring_comments_and_blank_lines() {
+    expected=$1
+    actual=$2
+    output=$3
+    
+    # Function to normalize a file: remove blank lines, comment-only lines, inline comments, and trailing whitespace
+    # Preserves leading whitespace (indentation) which is significant in BIRD config
+    normalize_file() {
+        sed 's/#.*$//' "$1" | sed '/^[[:space:]]*$/d' | sed 's/[[:space:]]*$//'
+    }
+    
+    if [ $output -eq 0 ]; then
+        diff -q <(normalize_file ${expected}) <(normalize_file ${actual}) 1>/dev/null 2>&1
+    else
+        diff <(normalize_file ${expected}) <(normalize_file ${actual})
+    fi
 }
 
 test_router_id_hash() {

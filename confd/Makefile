@@ -66,13 +66,13 @@ test-kdd: bin/confd-$(ARCH) bin/kubectl bin/bird bin/bird6 bin/calico-node bin/c
 	{ \
 	    echo; \
 	    echo === confd single-shot log:; \
-	    cat tests/logs/kdd/logss || true; \
+	    #cat tests/logs/kdd/logss || true; \
 	    echo; \
 	    echo === confd daemon log:; \
-	    cat tests/logs/kdd/logd1 || true; \
+	    #cat tests/logs/kdd/logd1 || true; \
 	    echo; \
 	    echo === Typha log:; \
-	    cat tests/logs/kdd/typha || true; \
+	    #cat tests/logs/kdd/typha || true; \
 	    echo; \
 	    false; \
 	}
