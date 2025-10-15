@@ -19,7 +19,7 @@ struct name {				\
 	ip_t host_tunnel_ip;		\
 	__be32 flags;			\
 	__be16 wg_port;			\
-	__be16 __pad;			\
+	__be16 profiling;		\
 	__u32 natin_idx;		\
 	__u32 natout_idx;		\
 	__u8 iface_name[16];		\
