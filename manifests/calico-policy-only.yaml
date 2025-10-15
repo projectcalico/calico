@@ -2566,6 +2566,9 @@ spec:
               properties:
                 affinity:
                   type: string
+                affinityClaimTime:
+                  format: date-time
+                  type: string
                 allocations:
                   items:
                     type: integer
