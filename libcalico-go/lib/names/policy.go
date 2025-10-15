@@ -271,6 +271,6 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 }
 
 func TierIsStatic(name string) bool {
-	return name == DefaultTierName || name == AdminTierName ||
-		name == BaselineTierName || name == AdminNetworkPolicyTierName
+	return name == DefaultTierName || name == AdminTierName || name == BaselineTierName ||
+		name == AdminNetworkPolicyTierName || name == BaselineAdminNetworkPolicyTierName
 }
