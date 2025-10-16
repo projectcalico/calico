@@ -81,7 +81,6 @@ for FILE in $(ls ../charts/calico/crds); do
 	        --set typha.registry=$REGISTRY \
 	        --set cni.registry=$REGISTRY \
 	        --set kubeControllers.registry=$REGISTRY \
-	        --set flannel.registry=$REGISTRY \
 	        --set flannelMigration.registry=$REGISTRY \
 	        --set dikastes.registry=$REGISTRY \
 	        --set csi-driver.registry=$REGISTRY \
@@ -159,15 +158,13 @@ for FILE in $OCP_VALUES_FILES; do
 done
 
 ##########################################################################
-# Replace image versions for "static" Calico manifests.
+# Replace image registry and/or versions for "static" Calico manifests.
 ##########################################################################
-if [[ $CALICO_VERSION != master ]]; then
 echo "Replacing image versions for static manifests"
-	for img in $NON_HELM_MANIFEST_IMAGES; do
-		curr_img=${defaultRegistry}/${img}
-		new_img=${REGISTRY}/${img}
-		echo "$curr_img:$defaultCalicoVersion --> $new_img:$CALICO_VERSION"
-		find . -type f -exec sed -i "s|${curr_img}:[A-Za-z0-9_.-]*|${new_img}:$CALICO_VERSION|g" {} \;
-	done
-  find ../test-tools/mocknode/mock-node.yaml -type f -exec sed -i "s|${defaultRegistry}/mock-node:[A-Za-z0-9_.-]*|${REGISTRY}/mock-node:$CALICO_VERSION|g" {} \;
-fi
+for img in $NON_HELM_MANIFEST_IMAGES; do
+  curr_img=${defaultRegistry}/${img}
+  new_img=${REGISTRY}/${img}
+  echo "$curr_img:$defaultCalicoVersion --> $new_img:$CALICO_VERSION"
+  find . -type f -exec sed -i "s|${curr_img}:[A-Za-z0-9_.-]*|${new_img}:$CALICO_VERSION|g" {} \;
+done
+find ../test-tools/mocknode/mock-node.yaml -type f -exec sed -i "s|${defaultRegistry}/mock-node:[A-Za-z0-9_.-]*|${REGISTRY}/mock-node:$CALICO_VERSION|g" {} \;
