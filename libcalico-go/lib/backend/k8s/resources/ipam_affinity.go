@@ -94,10 +94,17 @@ func (c *blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 		}
 	}
 
+	// Default affinity type to "host" if not set. Older versions of Calico's CRD backend
+	// did not set this field, assuming "host" as the default.
+	affinityType := "host"
+	if kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type != "" {
+		affinityType = kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type
+	}
+
 	return &model.KVPair{
 		Key: model.BlockAffinityKey{
 			CIDR:         *cidr,
-			AffinityType: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type,
+			AffinityType: affinityType,
 			Host:         kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
 		},
 		Value: &model.BlockAffinity{
