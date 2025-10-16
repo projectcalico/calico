@@ -122,7 +122,6 @@ func DefaultTopologyOptions() TopologyOptions {
 		TyphaLogSeverity:      "info",
 		IPIPMode:              api.IPIPModeAlways,
 		IPIPStrategy:          NewDefaultTunnelStrategy(DefaultIPPoolCIDR, DefaultIPv6PoolCIDR),
-		SimulateBIRDRoutes:    true,
 		IPPoolCIDR:            DefaultIPPoolCIDR,
 		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
 		UseIPPools:            true,
@@ -259,6 +258,10 @@ func StartNNodeTopology(
 
 	if opts.IPIPMode == "" {
 		opts.IPIPMode = api.IPIPModeNever
+	}
+
+	if !opts.SimulateBIRDRoutes {
+		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	}
 
 	// Get client.
