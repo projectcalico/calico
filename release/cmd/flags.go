@@ -173,7 +173,7 @@ var (
 	archiveImagesFlag = &cli.BoolFlag{
 		Name:    "archive-images",
 		Usage:   "Archive images in the release tarball",
-		EnvVars: []string{"ARCHIVE_IMAGES"},
+		Sources: cli.EnvVars("ARCHIVE_IMAGES"),
 		Value:   true,
 	}
 )
