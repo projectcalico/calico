@@ -1031,7 +1031,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// Add a policy to block traffic.
 						By("Adding deny policy")
 						denyPol := api.NewGlobalNetworkPolicy()
-						denyPol.Name = "policy-2"
+						denyPol.Name = "default.policy-2"
 						var one float64 = 1
 						denyPol.Spec.Order = &one
 						denyPol.Spec.Ingress = []api.Rule{{Action: "Deny"}}
