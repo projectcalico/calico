@@ -280,45 +280,6 @@ EOF
             retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()))
             retry_until_success(lambda: self.assertNotIn(cluster_svc_ip, self.get_routes()))
 
-            # TODO: This assertion is actually incorrect. Kubernetes performs
-            # SNAT on all traffic destined to a service ClusterIP that doesn't
-            # originate from within the cluster's pod CIDR. This assertion
-            # pass for External / LoadBalancer IPs, though.
-            #
-            # Create a network policy that only accepts traffic from the external node.
-            # kubectl("""apply -f - << EOF
-# apiVersion: networking.k8s.io/v1
-# kind: NetworkPolicy
-# metadata:
-  # name: allow-tcp-80-ex
-  # namespace: bgp-test
-# spec:
-  # podSelector: {}
-  # policyTypes:
-  # - Ingress
-  # ingress:
-  # - from:
-    # - ipBlock: { cidr: %s/32 }
-    # ports:
-    # - protocol: TCP
-      # port: 80
-# EOF
-# """ % self.external_node_ip)
-
-            # Connectivity to nginx-local should always succeed.
-            # for i in range(attempts):
-            #   retry_until_success(curl, function_args=[local_svc_ip])
-
-            # # Connectivity to nginx-cluster will rarely succeed because it is load-balanced across all nodes.
-            # # When the traffic hits a node that doesn't host one of the service's pod, it will be re-routed
-            # #  to another node and SNAT will cause the policy to drop the traffic.
-            # # Try to curl 10 times.
-            # try:
-            #   for i in range(attempts):
-            #     curl(cluster_svc_ip)
-            #   self.fail("external node should not be able to consistently access the cluster svc")
-            # except subprocess.CalledProcessError:
-            #   pass
 
             # Scale the local_svc to 4 replicas
             self.scale_deployment(local_svc, self.ns, 4)
