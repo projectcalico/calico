@@ -146,7 +146,7 @@ ut fv: $(TEST_BINARIES)
 # Only do this if there are .go files in the path.
 %/ut.test: $(SRC_FILES)
 	if [ $$(find ./$* -name '*.go' | wc -l) -gt 0 ]; then \
-		$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@; \
+		$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go test ./$* -c -o $@; \
 	else \
 		echo "Skipping $* as it has no .go files in it"; \
 	fi

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -85,7 +83,7 @@ func testIPToHex(ip string) []string {
 }
 
 func getEndpointsMapContents(felix *infrastructure.Felix) [][]string {
-	output, err := felix.Container.ExecOutput(
+	output, err := felix.ExecOutput(
 		"bpftool",
 		"--json",
 		"--pretty",
@@ -275,7 +273,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 			opts := getSockmapOpts()
 			tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 			defer tc.Stop()
-			output, err := tc.Felixes[0].Container.ExecOutput(
+			output, err := tc.Felixes[0].ExecOutput(
 				"bpftool",
 				"--json",
 				"--pretty",
@@ -286,20 +284,20 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 			)
 			if err != nil {
 				log.WithFields(log.Fields{
-					"containerID": tc.Felixes[0].Container.Name,
+					"containerID": tc.Felixes[0].Name,
 					"output":      output,
 				}).WithError(err).Info("Failed to dump the contents of the sock map, skipping cleanup")
 				return
 			}
 			if strings.TrimSpace(output) != "[]" {
 				log.WithFields(log.Fields{
-					"containerID": tc.Felixes[0].Container.Name,
+					"containerID": tc.Felixes[0].Name,
 					"output":      output,
 				}).Info("Sock map is not empty, skipping cleanup")
 				return
 			}
 			fullCgroupDir := "/run/calico/cgroup"
-			output, err = tc.Felixes[0].Container.ExecOutput(
+			output, err = tc.Felixes[0].ExecOutput(
 				"bpftool",
 				"cgroup",
 				"detach",
@@ -311,7 +309,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 			if err != nil {
 				log.WithFields(log.Fields{
 					"cgroupdir":   fullCgroupDir,
-					"containerID": tc.Felixes[0].Container.Name,
+					"containerID": tc.Felixes[0].Name,
 					"output":      output,
 				}).WithError(err).Info("Failed to detach sockops program from cgroup, skipping cleanup")
 				return

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -87,7 +85,7 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 
 		By("Creating a workload, activating the policies")
 		// Create a workload that uses the policy.
-		baseNumSets := tc.Felixes[0].Container.NumIPSets()
+		baseNumSets := tc.Felixes[0].NumIPSets()
 		wep := w.WorkloadEndpoint.DeepCopy()
 		w.ConfigureInInfra(infra)
 		startTime := time.Now()

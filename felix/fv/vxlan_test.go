@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -278,14 +276,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					Expect(err).NotTo(HaveOccurred())
 					lines := strings.Split(strings.Trim(defaultRoute, "\n "), "\n")
 					Expect(lines).To(HaveLen(1))
-					defaultRouteArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+					defaultRouteArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 					// Assuming the subnet route will be "proto kernel" and that will be the only such route.
 					subnetRoute, err := felix.ExecOutput("ip", "route", "show", "proto", "kernel")
 					Expect(err).NotTo(HaveOccurred())
 					lines = strings.Split(strings.Trim(subnetRoute, "\n "), "\n")
 					Expect(lines).To(HaveLen(1), "expected only one proto kernel route, has docker's routing set-up changed?")
-					subnetArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+					subnetArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 					// Add the bond, replacing eth0.
 					felix.Exec("ip", "addr", "del", felix.IP, "dev", "eth0")
@@ -526,7 +524,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 								Action: api.Allow,
 							},
 						}
-						policy.Spec.Selector = fmt.Sprintf("has(host-endpoint)")
+						policy.Spec.Selector = "has(host-endpoint)"
 						_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred())
 					})
@@ -610,6 +608,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 					node.Spec.BGP = nil
 					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
@@ -1295,5 +1294,5 @@ func waitForVXLANDevice(tc infrastructure.TopologyContainers, enableIPv6 bool) {
 }
 
 func vxlanTunnelSupported(vxlanMode api.VXLANMode, routeSource string) bool {
-	return !(vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs")
+	return vxlanMode != api.VXLANModeAlways || routeSource != "WorkloadIPs"
 }

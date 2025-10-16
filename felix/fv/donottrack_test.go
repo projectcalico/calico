@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -328,27 +326,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 				Expect(err).NotTo(HaveOccurred())
 				lines := strings.Split(strings.Trim(defaultRoute, "\n "), "\n")
 				Expect(lines).To(HaveLen(1))
-				defaultRouteArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+				defaultRouteArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 				// Assuming the subnet route will be "proto kernel" and that will be the only such route.
 				subnetRoute, err := felix.ExecOutput("ip", "route", "show", "proto", "kernel")
 				Expect(err).NotTo(HaveOccurred())
 				lines = strings.Split(strings.Trim(subnetRoute, "\n "), "\n")
 				Expect(lines).To(HaveLen(1), "expected only one proto kernel route, has docker's routing set-up changed?")
-				subnetArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+				subnetArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 				//Move IPv6
 				defaultRoute6, err := felix.ExecOutput("ip", "-6", "route", "show", "default")
 				Expect(err).NotTo(HaveOccurred())
 				lines = strings.Split(strings.Trim(defaultRoute6, "\n "), "\n")
 				Expect(lines).To(HaveLen(1))
-				defaultRoute6Args := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+				defaultRoute6Args := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 				// Assuming the subnet route will be "proto kernel" and that will be the only such route.
 				subnetRoute6, err := felix.ExecOutput("ip", "-6", "route", "show", "proto", "kernel")
 				Expect(err).NotTo(HaveOccurred())
 				lines = strings.Split(strings.Trim(subnetRoute6, "\n "), "\n")
-				subnet6Args := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+				subnet6Args := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 				felix.Exec("ip", "addr", "del", felix.IP, "dev", "eth0")
 				ip6WithSubnet := felix.IPv6 + "/" + felix.GetIPv6Prefix()
