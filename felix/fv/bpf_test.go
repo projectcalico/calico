@@ -1045,7 +1045,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 
 						By("Removing deny policy")
-						_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-2", options2.DeleteOptions{})
+						_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "default.policy-2", options2.DeleteOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
 						cc.Expect(Some, w[0], w[1])
@@ -4571,7 +4571,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							})
 						}
 
-						It("should get port unreachable workload to workload", func() {
+						It("FOCUS should get port unreachable workload to workload", func() {
 							tcpdump := w[1][1].AttachTCPDump()
 							tcpdump.SetLogEnabled(true)
 
@@ -4594,7 +4594,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Should(BeNumerically(">", 0), matcher)
 						})
 
-						It("should get port unreachable workload to workload through NP", func() {
+						It("FOCUS should get port unreachable workload to workload through NP", func() {
 							tcpdump := w[1][1].AttachTCPDump()
 							tcpdump.SetLogEnabled(true)
 
