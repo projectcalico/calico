@@ -58,6 +58,7 @@ func (r stagedGlobalNetworkPolicies) Create(ctx context.Context, res *apiv3.Stag
 		resCopy := *res
 		res = &resCopy
 	}
+
 	if res.Spec.StagedAction != apiv3.StagedActionDelete {
 		defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 	} else {
@@ -182,7 +183,7 @@ func (r stagedGlobalNetworkPolicies) List(ctx context.Context, opts options.List
 	}
 
 	// Make sure the tier labels are added
-	for i, _ := range res.Items {
+	for i := range res.Items {
 		res.Items[i].GetObjectMeta().SetLabels(defaultTierLabelIfMissing(res.Items[i].GetObjectMeta().GetLabels()))
 		// Fill in the tier information from the policy name if we find it missing.
 		// We expect backend policies to have the right name (prefixed with tier name).
