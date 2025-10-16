@@ -10,7 +10,7 @@ execution_time_limit:
 global_job_config:
   priority:
     - value: 90
-    - when: "branch =~ '.*'"
+      when: "branch =~ '.*'"
   secrets:
     - name: oss-release-secrets
     # Github SSH secret for pulling private repositories.
