@@ -18,6 +18,8 @@
 // Original code pulled from k8s.io@1.29.4, package: pkg/proxy/endpoints.go.
 // Adapted for legacy use in this repository.
 
+//go:build linux
+
 package proxy
 
 import (

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 // Flexvolume driver that is invoked by kubelet when a pod installs a flexvolume drive
 // of type nodeagent/uds
 // This driver communicates to the nodeagent using either

@@ -14,6 +14,8 @@
 
 // Code copied from https://gist.github.com/ota42y/db4ff0298d9c945cd261, with some modifications.
 
+//go:build linux
+
 package leastsquares
 
 type Point struct {

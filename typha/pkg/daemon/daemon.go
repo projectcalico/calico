@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018,2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -483,7 +483,7 @@ func (t *TyphaDaemon) configurePrometheusMetrics() {
 func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 	// Hook and process the signals we care about
 	usr1SignalChan := make(chan os.Signal, 1)
-	signal.Notify(usr1SignalChan, syscall.SIGUSR1)
+	notifySIGUSR1IfSupported(usr1SignalChan)
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGTERM)
 	serverFinished := make(chan struct{})

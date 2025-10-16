@@ -15,6 +15,8 @@
 // This boilerplate code is based on proxiers in k8s.io/kubernetes/pkg/proxy to
 // allow reuse of the rest of the proxy package without change
 
+//go:build linux
+
 package proxy
 
 import (

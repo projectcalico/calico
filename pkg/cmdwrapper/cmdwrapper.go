@@ -19,7 +19,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"sync"
-	"syscall"
 
 	"github.com/sirupsen/logrus"
 
@@ -72,7 +71,7 @@ func Run() {
 				case s := <-c:
 					// We don't need to know about SIGCHLD signals since cmd.Wait will give us
 					// all we need to know about the command we spawn
-					if s == syscall.SIGCHLD {
+					if isSIGCHLD(s) {
 						continue
 					}
 					err = cmd.Process.Signal(s)
