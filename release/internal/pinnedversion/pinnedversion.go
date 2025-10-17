@@ -223,11 +223,9 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 	}
 	// Remove components that are not needed in the operator components file.
 	// These either do not produce images or are not used by the operator.
-	components := pinnedVersion.Components
 	for _, c := range operatorIgnoreComponents {
-		delete(components, c)
-	}
-	pinnedVersion.Components = components
+		delete(pinnedVersion.Components, c)
+}
 
 	logrus.Info("Generating operator components file")
 	operatorComponentsFilePath := filepath.Join(srcDir, operatorComponentsFileName)
