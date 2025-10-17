@@ -301,6 +301,14 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 	}, nil
 }
 
+// RetrieveImageComponents retrieves the images from Calico components in the pinned version file that produce images.
+// It also adds the Tigera operator and its init image to the returned map.
+//
+// Images are expected to be in the format "<registry>/<image-name>" where <registry> includes the registry and image path.
+// As a result, the image path is stripped from the image name to only return the image name so that images are properly formatted.
+//
+// For example, with "calico/node", this allows the fully qualified image to be "quay.io/calico/node" when registry is included.
+// and prevents duplication of the image path(i.e. "quay.io/calico/calico/node").
 func RetrieveImageComponents(outputDir string) (map[string]registry.Component, error) {
 	pinnedVersion, err := retrievePinnedVersion(outputDir)
 	if err != nil {
