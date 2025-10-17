@@ -78,10 +78,10 @@ type OperatorManager struct {
 	// image is the name of the operator image (e.g. tigera/operator)
 	image string
 
-	// productRegistry is the registry to use for product images
+	// registry is the registry to use for operator (e.g. quay.io)
 	registry string
 
-	// productRegistry is the registry to use for product images
+	// productRegistry is the registry to use for product images (e.g. quay.io/calico)
 	productRegistry string
 
 	// origin remote repository
@@ -207,7 +207,7 @@ func (o *OperatorManager) Build() error {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	if o.validate {
-		if err := o.PreBuildValidation(o.tmpDir); err != nil {
+		if err := o.PreBuildValidation(); err != nil {
 			return err
 		}
 	}
@@ -261,7 +261,7 @@ func (o *OperatorManager) Build() error {
 	return nil
 }
 
-func (o *OperatorManager) PreBuildValidation(outputDir string) error {
+func (o *OperatorManager) PreBuildValidation() error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
@@ -291,7 +291,7 @@ func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	if len(o.architectures) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
+	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
 	if err != nil {
 		return fmt.Errorf("failed to get operator component: %s", err)
 	}
