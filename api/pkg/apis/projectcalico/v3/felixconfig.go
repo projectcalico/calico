@@ -59,8 +59,8 @@ const (
 type NFTablesMode string
 
 const (
-	NFTablesModeEnabled  = "Enabled"
-	NFTablesModeDisabled = "Disabled"
+	NFTablesModeEnabled  NFTablesMode = "Enabled"
+	NFTablesModeDisabled NFTablesMode = "Disabled"
 )
 
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
