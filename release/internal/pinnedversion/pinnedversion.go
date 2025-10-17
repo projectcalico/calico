@@ -308,9 +308,7 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 	}
 	components := pinnedVersion.Components
 	for name, component := range components {
-		// Remove components that should be excluded.
-		// Either because they do not have an image,
-		// or not built by Calico.
+		// Remove components that should be excluded. Either because they do not have an image, or not built by Calico.
 		if slices.Contains(noImageComponents, name) || name == flannelComponentName {
 			delete(components, name)
 			continue
