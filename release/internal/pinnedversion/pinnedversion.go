@@ -317,8 +317,12 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 		if img == "" {
 			img = name
 		}
+		component.Image = img
 		// Only include the image name without the registry imagepath as the product registry includes that.
-		component.Image = strings.SplitAfterN(component.Image, "/", 2)[1]
+		parts := strings.SplitAfterN(component.Image, "/", 2)
+		if len(parts) == 2 {
+			component.Image = parts[1]
+		}
 		components[name] = component
 	}
 	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
