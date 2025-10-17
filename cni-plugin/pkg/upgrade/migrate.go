@@ -43,12 +43,10 @@ const (
 	ipAllocPath = "/var/lib/cni/networks/k8s-pod-network"
 )
 
-var (
-	binariesToDisable = []string{
-		"/host/opt/cni/bin/calico",
-		"/host/opt/cni/bin/host-local",
-	}
-)
+var binariesToDisable = []string{
+	"/host/opt/cni/bin/calico",
+	"/host/opt/cni/bin/host-local",
+}
 
 type accessor interface {
 	Backend() bapi.Client

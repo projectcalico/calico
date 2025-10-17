@@ -5,7 +5,7 @@
 
 # Clone the repository if needed.
 set -e
-REPO=${REPO:-tigera/operator}
+REPO=${REPO:-caseydavenport/operator}
 BRANCH=${BRANCH:-master}
 
 rm -rf operator/

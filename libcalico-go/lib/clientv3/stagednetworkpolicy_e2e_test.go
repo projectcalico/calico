@@ -78,6 +78,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 	var be bapi.Client
 
 	BeforeEach(func() {
+		v3CRD = k8s.UsingV3CRDs(&config.Spec)
+
 		var err error
 		c, err = clientv3.New(config)
 		Expect(err).NotTo(HaveOccurred())
@@ -395,12 +397,16 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			By("Creating the policy with incorrect prefix name")
-			_, err = c.StagedNetworkPolicies().Create(ctx,
-				&apiv3.StagedNetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, Namespace: namespace},
-				}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
+			if !v3CRD {
+				// In v3 CRD mode, the name field is always as-is. There is no semantic meaning or validation
+				// applied to the name field. So, skip this part of the test.
+				By("Creating the policy with incorrect prefix name")
+				_, err = c.StagedNetworkPolicies().Create(ctx,
+					&apiv3.StagedNetworkPolicy{
+						ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, Namespace: namespace},
+					}, options.SetOptions{})
+				Expect(err).To(HaveOccurred())
+			}
 
 			By("Getting the policy")
 			returnedPolicy, err = c.StagedNetworkPolicies().Get(ctx, namespace, policyName, options.GetOptions{})
@@ -434,6 +440,10 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 
 	Describe("StagedNetworkPolicy without name on the projectcalico.org annotation", func() {
 		It("Should return the name without default prefix", func() {
+			if v3CRD {
+				Skip("Skipping test for v3 CRD mode - name is always as-is in v3 CRD mode")
+			}
+
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
 				Expect(err).NotTo(HaveOccurred())
@@ -481,7 +491,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				&apiv3.StagedNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      policyName,
-						Namespace: namespace},
+						Namespace: namespace,
+					},
 					Spec: apiv3.StagedNetworkPolicySpec{
 						Tier: tier,
 					},

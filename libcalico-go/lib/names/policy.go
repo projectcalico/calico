@@ -207,7 +207,9 @@ func TierOrDefault(tier string) string {
 // - <namespace>/staged:<tier>.<name>      => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
 // - staged:<tier>.<name>                  => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
 // - <namespace>/staged:knp.default.<name> => Name=staged:knp.default.<name>, Namespace=<name>, Tier=default
-func DeconstructPolicyName(name string) (string, string, string, error) {
+//
+// The given tier is used if the name does not imply a tier, otherwise the tier implied by the name is returned.
+func DeconstructPolicyName(name, tier string) (string, string, string, error) {
 	var namespace string
 
 	// Split the name to extract the namespace.
@@ -219,7 +221,7 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 		namespace = parts[0]
 		name = parts[1]
 	default:
-		return "", "", "", fmt.Errorf("could not parse policy %s", name)
+		return "", "", "", fmt.Errorf("could not parse policy %s (wrong # parts)", name)
 	}
 
 	// Remove the staged prefix if present so we can extract the tier.
@@ -242,10 +244,20 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 		return namespace, BaselineAdminNetworkPolicyTierName, stagedPrefix + name, nil
 	}
 
-	// This is a non-kubernetes policy, so extract the tier name from the policy name.
+	// This is a Calico policy, so extract the tier name from the policy name (if present).
 	if parts = strings.SplitN(name, ".", 2); len(parts) == 2 {
-		return namespace, parts[0], stagedPrefix + parts[1], nil
+		if parts[0] == tier {
+			// This is an old-style name with the tier prefix. Strip off the tier prefix when returning the name for backwards compat.
+			//
+			// TODO: This isn't really fully correct, since "new" style policies could be named this way! If they are,
+			// we should treat them as new-style. Perhaps we should modify the model.PolicyKey so this code can accurately tell if a Policy
+			// should have old or new semantics based on the API version it was created with (crd.projectcalico.org/v1 vs projectcalico.org/v3)
+			// At a minimum, we should stop stripping the prefix here and then make sure we also remove the logic that adds the prefix back in
+			// to ensure we don't end up with double prefixes downstream.
+			return namespace, tier, stagedPrefix + parts[1], nil
+		}
 	}
 
-	return "", "", "", fmt.Errorf("could not parse policy %s", name)
+	// This is a Calico policy, so use the given tier, and return the name as-is.
+	return namespace, tier, stagedPrefix + name, nil
 }

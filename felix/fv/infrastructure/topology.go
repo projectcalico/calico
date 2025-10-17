@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -403,6 +404,11 @@ func StartNNodeTopology(
 			infra.SetExpectedWireguardV6TunnelAddr(felix, IPv6CIDR, i, n > 1)
 			expectedIPs = append(expectedIPs, felix.ExpectedWireguardV6TunnelAddr)
 		}
+
+		// Deduplicate the expected IPs.
+		dedup := set.New[string]()
+		dedup.AddAll(expectedIPs)
+		expectedIPs = dedup.Slice()
 
 		var w chan struct{}
 		if !opts.DelayFelixStart && felix.ExpectedIPIPTunnelAddr != "" {

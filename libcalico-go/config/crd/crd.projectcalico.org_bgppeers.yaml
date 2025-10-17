@@ -45,15 +45,10 @@ spec:
                 maxRestartTime:
                   type: string
                 nextHopMode:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Self
-                        - Keep
-                    - enum:
-                        - Auto
-                        - Self
-                        - Keep
+                  enum:
+                    - Auto
+                    - Self
+                    - Keep
                   type: string
                 node:
                   type: string
@@ -79,17 +74,25 @@ spec:
                       x-kubernetes-map-type: atomic
                   type: object
                 peerIP:
+                  format: ip
                   type: string
                 peerSelector:
                   type: string
                 reachableBy:
                   type: string
                 reversePeering:
-                  enum:
-                    - Auto
-                    - Manual
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Manual
+                    - enum:
+                        - Auto
+                        - Manual
                   type: string
                 sourceAddress:
+                  enum:
+                    - UseNodeIP
+                    - None
                   type: string
                 ttlSecurity:
                   type: integer
