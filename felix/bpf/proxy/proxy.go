@@ -103,6 +103,12 @@ type proxy struct {
 	// dataplane in case of frequent changes
 	minDPSyncPeriod time.Duration
 
+	// The interval that syncing is guaranteed to run even without any other triggers.
+	maxDPSyncPeriod time.Duration
+
+	// The interval to retry syncing.
+	retryDPSyncPeriod time.Duration
+
 	// how often to fully sync with k8s - 0 is never
 	syncPeriod time.Duration
 
@@ -147,7 +153,10 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		recorder: new(loggerRecorder),
 
-		minDPSyncPeriod: 30 * time.Second, // XXX revisit the default
+		// TODO: revisit these default values.
+		minDPSyncPeriod:   30 * time.Second,
+		maxDPSyncPeriod:   5 * time.Minute,
+		retryDPSyncPeriod: 1 * time.Hour, // XXX might be infinite?
 
 		stopCh:        make(chan struct{}),
 		healthzServer: new(alwaysHealthy),
@@ -162,7 +171,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	// We need to create the runner first as once we start getting updates, they
 	// will kick it
 	p.runner = runner.NewBoundedFrequencyRunner("dp-sync-runner",
-		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
+		p.invokeDPSyncer, p.minDPSyncPeriod, p.retryDPSyncPeriod, p.maxDPSyncPeriod)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
