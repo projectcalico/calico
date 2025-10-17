@@ -75,10 +75,12 @@ type OperatorManager struct {
 	// outputDir is the absolute path to the output directory
 	outputDir string
 
-	// productRegistry is the registry to use for product images
+	// registry is the registry to use for operator
+	// typically quay.io
 	registry string
 
-	// productRegistry is the registry to use for product images
+	// productRegistry is the registry to use for product images.
+	// typically quay.io/calico
 	productRegistry string
 
 	// origin remote repository
