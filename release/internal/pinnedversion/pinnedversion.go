@@ -223,11 +223,9 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 	}
 	// Remove components that are not needed in the operator components file.
 	// These either do not produce images or are not used by the operator.
-	components := pinnedVersion.Components
 	for _, c := range operatorIgnoreComponents {
-		delete(components, c)
+		delete(pinnedVersion.Components, c)
 	}
-	pinnedVersion.Components = components
 
 	logrus.Info("Generating operator components file")
 	operatorComponentsFilePath := filepath.Join(srcDir, operatorComponentsFileName)
@@ -304,10 +302,10 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 // RetrieveImageComponents retrieves the images from Calico components in the pinned version file that produce images.
 // It also adds the Tigera operator and its init image to the returned map.
 //
-// Images are expected to be in the format "<registry>/<image-name>" where <registry> includes the registry and image path.
+// Images returned from this function are expected to be in the format "<registry>/<image-name>" where <registry> includes the registry and image path. However, the versions.yml file represents images differently, including the image path as the first part of the image name instead of as part of the registry.
 // As a result, the image path is stripped from the image name to only return the image name so that images are properly formatted.
 //
-// For example, with "calico/node", this allows the fully qualified image to be "quay.io/calico/node" when registry is included.
+// For example, if the image name is "calico/node", this allows the fully qualified image to be "quay.io/calico/node" when a registry of `quay.io/calico` is prepended.
 // and prevents duplication of the image path(i.e. "quay.io/calico/calico/node").
 func RetrieveImageComponents(outputDir string) (map[string]registry.Component, error) {
 	pinnedVersion, err := retrievePinnedVersion(outputDir)

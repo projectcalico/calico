@@ -57,12 +57,13 @@ func (p *CalicoReleaseVersions) GenerateFile() (version.Versions, error) {
 	return nil, nil
 }
 
+// ImageList return a list of Calico images built by this repo for release validation.
+// It excludes flannel and the Tigera operator images as those are validated separately.
 func (p *CalicoReleaseVersions) ImageList() ([]string, error) {
 	components, err := RetrieveImageComponents(p.Dir)
 	if err != nil {
 		return nil, err
 	}
-	// Exclude flannel (not built by Calico) and the Tigera operator images.
 	componentNames := make([]string, 0, len(components))
 	for name, component := range components {
 		if strings.HasPrefix(component.Image, p.OperatorCfg.Image) || name == flannelComponentName {
