@@ -305,7 +305,7 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 // Images returned from this function are expected to be in the format "<registry>/<image-name>" where <registry> includes the registry and image path. However, the versions.yml file represents images differently, including the image path as the first part of the image name instead of as part of the registry.
 // As a result, the image path is stripped from the image name to only return the image name so that images are properly formatted.
 //
-// For example, with "calico/node", this allows the fully qualified image to be "quay.io/calico/node" when registry is included.
+// For example, if the image name is "calico/node", this allows the fully qualified image to be "quay.io/calico/node" when a registry of `quay.io/calico` is prepended.
 // and prevents duplication of the image path(i.e. "quay.io/calico/calico/node").
 func RetrieveImageComponents(outputDir string) (map[string]registry.Component, error) {
 	pinnedVersion, err := retrievePinnedVersion(outputDir)
