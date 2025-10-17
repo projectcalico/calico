@@ -33,6 +33,22 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+var (
+	// Components that do not produce images.
+	noImageComponents = []string{
+		"calico",
+		"calico/api",
+		"networking-calico",
+	}
+
+	// Components to ignore when generating the operator components file.
+	operatorIgnoreComponents = []string{
+		flannelComponentName,
+	}
+
+	excludedComponents = append(noImageComponents, flannelComponentName)
+)
+
 //go:embed templates/calico-versions.yaml.gotmpl
 var calicoTemplate string
 
@@ -41,14 +57,9 @@ const (
 	operatorComponentsFileName = "pinned_components.yml"
 )
 
-const calicoImageNamespace = "calico/"
-
-var excludedComponents = []string{
-	utils.Calico,
-	"calico/api",
-	"networking-calico",
-	"flannel",
-}
+const (
+	flannelComponentName = "flannel"
+)
 
 type PinnedVersions interface {
 	GenerateFile() (version.Versions, error)
@@ -211,9 +222,14 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 	if err != nil {
 		return op, "", err
 	}
-	for name, component := range pinnedVersion.Components {
-		pinnedVersion.Components[name] = normalizeComponent(name, component)
+	// Remove components that are not needed in the operator components file.
+	// These either do not produce images or are not used by the operator.
+	components := pinnedVersion.Components
+	for _, c := range operatorIgnoreComponents {
+		delete(components, c)
 	}
+	pinnedVersion.Components = components
+
 	logrus.Info("Generating operator components file")
 	operatorComponentsFilePath := filepath.Join(srcDir, operatorComponentsFileName)
 	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
@@ -293,12 +309,20 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 	}
 	components := pinnedVersion.Components
 	for name, component := range components {
-		// Remove components that do not produce images.
+		// Remove components that should be excluded.
+		// Either because they do not have an image,
+		// or not built by Calico.
 		if utils.Contains(excludedComponents, name) {
 			delete(components, name)
 			continue
 		}
-		components[name] = normalizeComponent(name, component)
+		img := registry.ImageMap[name]
+		if img == "" {
+			img = name
+		}
+		// Strip calico/ prefix from image name since registry is <registry>/calico
+		component.Image = strings.TrimPrefix(img, registry.CalicoNamespace)
+		components[name] = component
 	}
 	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
 	components[operator.Image] = operator.Component
@@ -314,20 +338,4 @@ func RetrieveVersions(outputDir string) (version.Versions, error) {
 	}
 
 	return version.NewHashreleaseVersions(version.New(pinnedVersion.Title), pinnedVersion.TigeraOperator.Version), nil
-}
-
-// normalizeComponent normalizes the component image name.
-// It checks if the component name is in the registry.ImageMap and replaces it with the mapped value.
-// If the image name is not found in the map, it sets it to the component name.
-// The image name is also stripped of the calico namespace prefix.
-func normalizeComponent(componentName string, c registry.Component) registry.Component {
-	img := registry.ImageMap[componentName]
-	if img == "" {
-		img = componentName
-	}
-	c.Image = img
-	if strings.HasPrefix(img, calicoImageNamespace) {
-		c.Image = strings.TrimPrefix(img, calicoImageNamespace)
-	}
-	return c
 }

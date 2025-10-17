@@ -153,7 +153,7 @@ func (o *OperatorManager) modifyComponentsImagesFile() error {
 
 	if err := tmpl.Execute(dest, map[string]string{
 		"Registry":        o.registry,
-		"ProductRegistry": o.productRegistry,
+		"ProductRegistry": strings.TrimPrefix(o.productRegistry, registry.CalicoNamespace),
 		"Year":            time.Now().Format("2006"),
 	}); err != nil {
 		logrus.WithError(err).Errorf("Failed to write to file %s", destFilePath)
@@ -167,8 +167,11 @@ func (o *OperatorManager) Build() error {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	if o.validate {
-		if err := o.PreBuildValidation(o.tmpDir); err != nil {
+		if err := o.PreBuildValidation(); err != nil {
 			return err
+		}
+		if !strings.HasSuffix(o.productRegistry, fmt.Sprintf("/%s", registry.CalicoNamespace)) {
+			return fmt.Errorf("operator does not support product registry %q, it must end with /%s", o.productRegistry, registry.CalicoNamespace)
 		}
 	}
 	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir, o.outputDir)
@@ -216,7 +219,7 @@ func (o *OperatorManager) Build() error {
 	return o.docker.TagImage(currentTag, newTag)
 }
 
-func (o *OperatorManager) PreBuildValidation(outputDir string) error {
+func (o *OperatorManager) PreBuildValidation() error {
 	if o.dir == "" {
 		logrus.Fatal("No repository root specified")
 	}
@@ -246,7 +249,7 @@ func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	if len(o.architectures) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
+	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
 	if err != nil {
 		return fmt.Errorf("failed to get operator component: %s", err)
 	}
