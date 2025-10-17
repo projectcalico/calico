@@ -461,6 +461,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
 				}
 			}
+			options.ExtraEnvVars["FELIX_BPFMaglevMaxServices"] = "50"
+			options.ExtraEnvVars["FELIX_BPFMaglevMaxEndpointsPerService"] = "20"
 		})
 
 		JustAfterEach(func() {

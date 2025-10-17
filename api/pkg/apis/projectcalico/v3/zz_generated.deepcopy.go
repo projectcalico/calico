@@ -1645,11 +1645,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
-	if in.BPFMapSizeMaglev != nil {
-		in, out := &in.BPFMapSizeMaglev, &out.BPFMapSizeMaglev
-		*out = new(int)
-		**out = **in
-	}
 	if in.BPFHostConntrackBypass != nil {
 		in, out := &in.BPFHostConntrackBypass, &out.BPFHostConntrackBypass
 		*out = new(bool)
@@ -1815,6 +1810,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.RequireMTUFile != nil {
 		in, out := &in.RequireMTUFile, &out.RequireMTUFile
 		*out = new(bool)
+		**out = **in
+	}
+	if in.BPFMaglevMaxEndpointsPerService != nil {
+		in, out := &in.BPFMaglevMaxEndpointsPerService, &out.BPFMaglevMaxEndpointsPerService
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMaglevMaxServices != nil {
+		in, out := &in.BPFMaglevMaxServices, &out.BPFMaglevMaxServices
+		*out = new(int)
 		**out = **in
 	}
 	return

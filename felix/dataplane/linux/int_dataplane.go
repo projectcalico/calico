@@ -243,6 +243,7 @@ type Config struct {
 	BPFMapSizeIPSets                   int
 	BPFMapSizeIfState                  int
 	BPFMapSizeMaglev                   int
+	BPFMaglevLUTSize                   int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
@@ -283,8 +284,6 @@ type Config struct {
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
 	NewNftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
-
-	MaglevLUTSize int
 }
 
 type UpdateBatchResolver interface {
@@ -2850,7 +2849,7 @@ func startBPFDataplaneComponents(
 
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
-		bpfproxy.WithMaglevLUTSize(config.MaglevLUTSize),
+		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
 	}
 
 	if config.bpfProxyHealthzServer != nil {

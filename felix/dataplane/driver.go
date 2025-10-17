@@ -389,7 +389,8 @@ func StartDataplaneDriver(
 			BPFMapSizeConntrackCleanupQueue:    configParams.BPFMapSizeConntrackCleanupQueue,
 			BPFMapSizeIPSets:                   configParams.BPFMapSizeIPSets,
 			BPFMapSizeIfState:                  configParams.BPFMapSizeIfState,
-			BPFMapSizeMaglev:                   configParams.BPFMapSizeMaglev,
+			BPFMapSizeMaglev:                   configParams.BPFMapSizeMaglev(),
+			BPFMaglevLUTSize:                   configParams.BPFLUTSizeMaglev(),
 			BPFEnforceRPF:                      configParams.BPFEnforceRPF,
 			BPFDisableGROForIfaces:             configParams.BPFDisableGROForIfaces,
 			BPFExportBufferSizeMB:              configParams.BPFExportBufferSizeMB,
@@ -419,8 +420,6 @@ func StartDataplaneDriver(
 			FlowLogsEnabled:    configParams.FlowLogsEnabled(),
 
 			RequireMTUFile: configParams.RequireMTUFile,
-
-			MaglevLUTSize: configParams.MaglevLUTSize(),
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {
