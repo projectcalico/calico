@@ -75,10 +75,13 @@ type OperatorManager struct {
 	// outputDir is the absolute path to the output directory
 	outputDir string
 
-	// productRegistry is the registry to use for product images
+	// image is the name of the operator image (e.g. tigera/operator)
+	image string
+
+	// registry is the registry to use for operator (e.g. quay.io)
 	registry string
 
-	// productRegistry is the registry to use for product images
+	// productRegistry is the registry to use for product images (e.g. quay.io/calico)
 	productRegistry string
 
 	// origin remote repository
@@ -153,7 +156,7 @@ func (o *OperatorManager) modifyComponentsImagesFile() error {
 
 	if err := tmpl.Execute(dest, map[string]string{
 		"Registry":        o.registry,
-		"ProductRegistry": strings.TrimPrefix(o.productRegistry, registry.CalicoNamespace),
+		"ProductRegistry": strings.TrimPrefix(o.productRegistry, "/"+registry.CalicoNamespace),
 		"Year":            time.Now().Format("2006"),
 	}); err != nil {
 		logrus.WithError(err).Errorf("Failed to write to file %s", destFilePath)
