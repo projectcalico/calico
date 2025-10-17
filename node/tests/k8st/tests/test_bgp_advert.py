@@ -566,7 +566,7 @@ spec:
 EOF
 """)
 
-            # Create a Service with the Loadlanacer / External IPs above, using
+            # Create a Service with the External IP above, using
             # externalTrafficPolicy=Cluster. This should trigger advertisement
             # from all nodes.
             svc_name = "nginx-svc"
@@ -578,7 +578,7 @@ EOF
             ext_ip = "90.15.0.1"
             self.add_svc_external_ips(svc_name, self.ns, [ext_ip])
 
-            # Verify the ext IP address is adveretised from all nodes.
+            # Verify the ext IP address is advertised from all nodes.
             retry_until_success(lambda: self.assert_ecmp_routes(ext_ip, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]]))
 
     def test_loadbalancer_ip_advertisement(self):
