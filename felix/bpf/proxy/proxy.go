@@ -155,7 +155,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		// TODO: revisit these default values.
 		minDPSyncPeriod:   30 * time.Second,
-		maxDPSyncPeriod:   5 * time.Minute,
+		maxDPSyncPeriod:   1 * time.Hour,
 		retryDPSyncPeriod: 1 * time.Hour, // XXX might be infinite?
 
 		stopCh:        make(chan struct{}),
