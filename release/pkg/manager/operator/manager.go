@@ -75,9 +75,6 @@ type OperatorManager struct {
 	// outputDir is the absolute path to the output directory
 	outputDir string
 
-	// image is the name of the operator image (e.g. tigera/operator)
-	image string
-
 	// registry is the registry to use for operator (e.g. quay.io)
 	registry string
 
@@ -155,8 +152,10 @@ func (o *OperatorManager) modifyComponentsImagesFile() error {
 	}
 
 	if err := tmpl.Execute(dest, map[string]string{
-		"Registry":        o.registry,
-		"ProductRegistry": strings.TrimPrefix(o.productRegistry, "/"+registry.CalicoNamespace),
+		"Registry": o.registry,
+		// Trim "/calico" from the product registry since operator expects the registry only.
+		// The image path "calico" is part of image name and this template adds "/" after the registry.
+		"ProductRegistry": strings.TrimPrefix(o.productRegistry, "/calico"),
 		"Year":            time.Now().Format("2006"),
 	}); err != nil {
 		logrus.WithError(err).Errorf("Failed to write to file %s", destFilePath)
@@ -173,8 +172,8 @@ func (o *OperatorManager) Build() error {
 		if err := o.PreBuildValidation(); err != nil {
 			return err
 		}
-		if !strings.HasSuffix(o.productRegistry, fmt.Sprintf("/%s", registry.CalicoNamespace)) {
-			return fmt.Errorf("operator does not support product registry %q, it must end with /%s", o.productRegistry, registry.CalicoNamespace)
+		if !strings.HasSuffix(o.productRegistry, "/calico") {
+			return fmt.Errorf("operator does not support product registry %q, it must end with %q", o.productRegistry, "/calico")
 		}
 	}
 	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir, o.outputDir)
