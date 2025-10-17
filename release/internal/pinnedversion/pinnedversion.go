@@ -20,6 +20,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,8 +46,6 @@ var (
 	operatorIgnoreComponents = []string{
 		flannelComponentName,
 	}
-
-	excludedComponents = append(noImageComponents, flannelComponentName)
 )
 
 //go:embed templates/calico-versions.yaml.gotmpl
@@ -312,7 +311,7 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 		// Remove components that should be excluded.
 		// Either because they do not have an image,
 		// or not built by Calico.
-		if utils.Contains(excludedComponents, name) {
+		if slices.Contains(noImageComponents, name) || name == flannelComponentName {
 			delete(components, name)
 			continue
 		}
