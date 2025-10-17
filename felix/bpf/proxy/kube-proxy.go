@@ -41,14 +41,16 @@ type KubeProxy struct {
 	exiting       chan struct{}
 	wg            sync.WaitGroup
 
-	k8s         kubernetes.Interface
-	hostname    string
-	frontendMap maps.MapWithExistsCheck
-	backendMap  maps.MapWithExistsCheck
-	affinityMap maps.Map
-	ctMap       maps.Map
-	rt          *RTCache
-	opts        []Option
+	k8s           kubernetes.Interface
+	hostname      string
+	frontendMap   maps.MapWithExistsCheck
+	backendMap    maps.MapWithExistsCheck
+	MaglevMap     maps.MapWithExistsCheck
+	maglevLUTSize int
+	affinityMap   maps.Map
+	ctMap         maps.Map
+	rt            *RTCache
+	opts          []Option
 
 	excludedCIDRs *ip.CIDRTrie
 
@@ -65,6 +67,7 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 		hostname:    hostname,
 		frontendMap: bpfMaps.FrontendMap.(maps.MapWithExistsCheck),
 		backendMap:  bpfMaps.BackendMap.(maps.MapWithExistsCheck),
+		MaglevMap:   bpfMaps.MaglevMap.(maps.MapWithExistsCheck),
 		affinityMap: bpfMaps.AffinityMap,
 		ctMap:       bpfMaps.CtMap,
 		opts:        opts,
@@ -131,8 +134,8 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap,
-		kp.rt, kp.excludedCIDRs)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap,
+		kp.rt, kp.excludedCIDRs, kp.maglevLUTSize)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -154,7 +157,7 @@ func (kp *KubeProxy) start() error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.maglevLUTSize)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

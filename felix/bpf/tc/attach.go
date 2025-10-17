@@ -75,6 +75,7 @@ type AttachPoint struct {
 	IngressPacketRateConfigured bool
 	EgressPacketRateConfigured  bool
 	DSCP                        int8
+	MaglevLUTSize               uint32
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -418,17 +419,18 @@ func (ap *AttachPoint) Config() string {
 
 func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData := &libbpf.TcGlobalData{
-		ExtToSvcMark: ap.ExtToServiceConnmark,
-		VxlanPort:    ap.VXLANPort,
-		Tmtu:         ap.TunnelMTU,
-		PSNatStart:   ap.PSNATStart,
-		PSNatLen:     ap.PSNATEnd,
-		WgPort:       ap.WgPort,
-		Wg6Port:      ap.Wg6Port,
-		NatIn:        ap.NATin,
-		NatOut:       ap.NATout,
-		LogFilterJmp: uint32(ap.LogFilterIdx),
-		DSCP:         ap.DSCP,
+		ExtToSvcMark:  ap.ExtToServiceConnmark,
+		VxlanPort:     ap.VXLANPort,
+		Tmtu:          ap.TunnelMTU,
+		PSNatStart:    ap.PSNATStart,
+		PSNatLen:      ap.PSNATEnd,
+		WgPort:        ap.WgPort,
+		Wg6Port:       ap.Wg6Port,
+		NatIn:         ap.NATin,
+		NatOut:        ap.NATout,
+		LogFilterJmp:  uint32(ap.LogFilterIdx),
+		DSCP:          ap.DSCP,
+		MaglevLUTSize: ap.MaglevLUTSize,
 	}
 
 	if ap.Profiling == "Enabled" {

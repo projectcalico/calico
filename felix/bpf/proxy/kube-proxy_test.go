@@ -39,6 +39,7 @@ var _ = Describe("BPF kube-proxy", func() {
 	maps.FrontendMap = newMockNATMap()
 	maps.BackendMap = newMockNATBackendMap()
 	maps.AffinityMap = newMockAffinityMap()
+	maps.MaglevMap = newMockMaglevMap()
 	maps.CtMap = mock.NewMockMap(conntrack.MapParams)
 	front := maps.FrontendMap.(*mockNATMap)
 
@@ -87,7 +88,7 @@ var _ = Describe("BPF kube-proxy", func() {
 		}
 
 		k8s := fake.NewClientset(testSvc, testSvcEps)
-		p, _ = proxy.StartKubeProxy(k8s, "test-node", maps, proxy.WithImmediateSync())
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", maps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
 	})
 
 	AfterEach(func() {
