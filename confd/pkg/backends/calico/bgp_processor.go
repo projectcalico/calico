@@ -556,9 +556,13 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 	}
 
 	// Passive for Calico nodes (unidirectional peering)
-	if calicoNode, ok := raw["calico_node"].(bool); ok && calicoNode {
-		if peerIP > config.NodeIP {
-			peer.Passive = true
+	// Only apply to global and local_workload peers, NOT node-specific peers
+	// Node-specific peers only use passive if explicitly set via passive_mode
+	if peer.Type == "global" || peer.Type == "local_workload" {
+		if calicoNode, ok := raw["calico_node"].(bool); ok && calicoNode {
+			if peerIP > config.NodeIP {
+				peer.Passive = true
+			}
 		}
 	}
 
