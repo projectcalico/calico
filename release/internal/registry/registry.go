@@ -22,3 +22,5 @@ var DefaultCalicoRegistries = []string{
 	"asia.gcr.io/projectcalico-org",
 	"us.gcr.io/projectcalico-org",
 }
+
+var CalicoNamespace = "calico"
