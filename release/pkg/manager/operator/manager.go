@@ -78,10 +78,12 @@ type OperatorManager struct {
 	// image is the name of the operator image (e.g. tigera/operator)
 	image string
 
-	// productRegistry is the registry to use for product images
+	// registry is the registry to use for operator (e.g. quay.io)
+	// typically quay.io
 	registry string
 
 	// productRegistry is the registry to use for product images
+	// productRegistry is the registry to use for product images.(e.g. quay.io/calico)
 	productRegistry string
 
 	// origin remote repository
