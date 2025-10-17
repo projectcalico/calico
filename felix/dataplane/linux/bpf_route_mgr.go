@@ -89,10 +89,11 @@ type bpfRouteManager struct {
 	dirtyRoutes   set.Set[routes.KeyInterface]
 
 	// Callbacks used to tell kube-proxy about the relevant routes.
-	cbLck           sync.RWMutex
-	hostIPsUpdateCB func([]net.IP)
-	routesUpdateCB  func(routes.KeyInterface, routes.ValueInterface)
-	routesDeleteCB  func(routes.KeyInterface)
+	cbLck              sync.RWMutex
+	hostIPsUpdateCB    func([]net.IP)
+	routesUpdateCB     func(routes.KeyInterface, routes.ValueInterface)
+	routesDeleteCB     func(routes.KeyInterface)
+	nodeLabelsUpdateCB func(map[string]string)
 
 	opReporter logutils.OpRecorder
 
@@ -211,6 +212,12 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 		m.onWorkloadEndpointRemove(msg)
 	case *proto.GlobalBGPConfigUpdate:
 		m.onBGPConfigUpdate(msg)
+
+	// Updates for local node metadata including labels.
+	case *proto.HostMetadataV4V6Update:
+		if msg.Hostname == m.myNodename && msg.Labels != nil {
+			m.onNodeLabelsChange(msg.Labels)
+		}
 	}
 }
 
@@ -600,6 +607,15 @@ func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
 	log.Debugf("localHostIPs update %+v", newIPs)
 }
 
+func (m *bpfRouteManager) onNodeLabelsChange(labels map[string]string) {
+	m.cbLck.RLock()
+	defer m.cbLck.RUnlock()
+	if m.nodeLabelsUpdateCB != nil {
+		m.nodeLabelsUpdateCB(labels)
+	}
+	log.WithField("labels", labels).Debug("Node labels update")
+}
+
 func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 	cidr := ip.MustParseCIDROrIP(update.Dst)
 	if uint8(m.ipFamily) != cidr.Version() {
@@ -746,6 +762,13 @@ func (m *bpfRouteManager) setHostIPUpdatesCallBack(cb func([]net.IP)) {
 	defer m.cbLck.Unlock()
 
 	m.hostIPsUpdateCB = cb
+}
+
+func (m *bpfRouteManager) setNodeLabelsUpdateCallBack(cb func(map[string]string)) {
+	m.cbLck.Lock()
+	defer m.cbLck.Unlock()
+
+	m.nodeLabelsUpdateCB = cb
 }
 
 func (m *bpfRouteManager) setRoutesCallBacks(update func(routes.KeyInterface, routes.ValueInterface), del func(routes.KeyInterface)) {

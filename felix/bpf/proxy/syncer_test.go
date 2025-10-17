@@ -74,7 +74,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		rt = proxy.NewRTCache()
 
-		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
+		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil, nil)
 
 		ep := proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true))
 		state = proxy.DPSyncerState{
@@ -498,7 +498,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil, nil)
 			checkAfterResync()
 		}))
 
@@ -506,7 +506,7 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil, nil)
 			checkAfterResync()
 		}))
 
@@ -654,7 +654,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt, nil, nil)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -807,7 +807,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt, nil, nil)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -887,7 +887,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt, nil, nil)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1539,3 +1539,223 @@ func ctEntriesForSvc(ct maps.Map, proto v1.Protocol,
 	err = ct.Update(revKey.AsBytes(), val.AsBytes())
 	Expect(err).NotTo(HaveOccurred(), "Test failed to populate ct map with REV")
 }
+
+var _ = Describe("NodePort with node selector", func() {
+	var (
+		s     *proxy.Syncer
+		svcs  *mock.NATMap
+		eps   *mock.NATBackendMap
+		aff   *mock.Map
+		rt    *proxy.RTCache
+		state proxy.DPSyncerState
+	)
+
+	BeforeEach(func() {
+		svcs = newMockNATMap()
+		eps = newMockNATBackendMap()
+		aff = newMockAffinityMap()
+		rt = proxy.NewRTCache()
+		state = proxy.DPSyncerState{
+			SvcMap:   make(k8sp.ServicePortMap),
+			EpsMap:   make(k8sp.EndpointsMap),
+			NodeZone: "zone-a",
+		}
+	})
+
+	It("should program NodePort when node matches selector", func() {
+		nodeLabels := map[string]string{
+			"tenant": "foo",
+			"env":    "production",
+		}
+		s, _ = proxy.NewSyncer(4, []net.IP{net.IPv4(1, 2, 3, 4)}, svcs, eps, aff, rt, nil, nodeLabels)
+
+		svcKey := k8sp.ServicePortName{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-svc"}, Port: "http"}
+
+		// Create service port with node selector through NewK8sServicePortWithSelector
+		svcPort := proxy.NewK8sServicePortWithSelector(net.IPv4(10, 0, 0, 1), 80, v1.ProtocolTCP,
+			"tenant == 'foo'",
+			proxy.K8sSvcWithNodePort(30000))
+
+		ep := proxy.NewEndpointInfo("10.1.0.1", 8080, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptIsLocal(true))
+
+		state.SvcMap[svcKey] = svcPort
+		state.EpsMap[svcKey] = []k8sp.Endpoint{ep}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify NodePort was programmed
+		npKey := nat.NewNATKey(net.IPv4(1, 2, 3, 4), 30000, 6)
+		_, ok := svcs.m[npKey]
+		Expect(ok).To(BeTrue(), "NodePort should be programmed when selector matches")
+	})
+
+	It("should NOT program NodePort when node does not match selector", func() {
+		nodeLabels := map[string]string{
+			"tenant": "bar",
+			"env":    "production",
+		}
+		s, _ = proxy.NewSyncer(4, []net.IP{net.IPv4(1, 2, 3, 4)}, svcs, eps, aff, rt, nil, nodeLabels)
+
+		svcKey := k8sp.ServicePortName{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-svc"}, Port: "http"}
+
+		// Create service port with node selector
+		svcPort := proxy.NewK8sServicePortWithSelector(net.IPv4(10, 0, 0, 1), 80, v1.ProtocolTCP,
+			"tenant == 'foo'",
+			proxy.K8sSvcWithNodePort(30000))
+
+		ep := proxy.NewEndpointInfo("10.1.0.1", 8080, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptIsLocal(true))
+
+		state.SvcMap[svcKey] = svcPort
+		state.EpsMap[svcKey] = []k8sp.Endpoint{ep}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify NodePort was NOT programmed
+		npKey := nat.NewNATKey(net.IPv4(1, 2, 3, 4), 30000, 6)
+		_, ok := svcs.m[npKey]
+		Expect(ok).To(BeFalse(), "NodePort should NOT be programmed when selector does not match")
+	})
+
+	It("should program NodePort when selector is empty", func() {
+		nodeLabels := map[string]string{
+			"tenant": "bar",
+		}
+		s, _ = proxy.NewSyncer(4, []net.IP{net.IPv4(1, 2, 3, 4)}, svcs, eps, aff, rt, nil, nodeLabels)
+
+		svcKey := k8sp.ServicePortName{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-svc"}, Port: "http"}
+
+		// Create service port without node selector annotation
+		svcPort := proxy.NewK8sServicePort(net.IPv4(10, 0, 0, 1), 80, v1.ProtocolTCP,
+			proxy.K8sSvcWithNodePort(30000))
+
+		ep := proxy.NewEndpointInfo("10.1.0.1", 8080, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptIsLocal(true))
+
+		state.SvcMap[svcKey] = svcPort
+		state.EpsMap[svcKey] = []k8sp.Endpoint{ep}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify NodePort was programmed (default behavior when no selector)
+		npKey := nat.NewNATKey(net.IPv4(1, 2, 3, 4), 30000, 6)
+		_, ok := svcs.m[npKey]
+		Expect(ok).To(BeTrue(), "NodePort should be programmed when no selector is specified")
+	})
+
+	It("should handle complex selectors", func() {
+		nodeLabels := map[string]string{
+			"tenant": "acme",
+			"env":    "production",
+			"region": "us-west",
+		}
+		s, _ = proxy.NewSyncer(4, []net.IP{net.IPv4(1, 2, 3, 4)}, svcs, eps, aff, rt, nil, nodeLabels)
+
+		svcKey := k8sp.ServicePortName{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-svc"}, Port: "http"}
+
+		// Create service port with complex selector
+		svcPort := proxy.NewK8sServicePortWithSelector(net.IPv4(10, 0, 0, 1), 80, v1.ProtocolTCP,
+			"tenant == 'acme' && env == 'production'",
+			proxy.K8sSvcWithNodePort(30000))
+
+		ep := proxy.NewEndpointInfo("10.1.0.1", 8080, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptIsLocal(true))
+
+		state.SvcMap[svcKey] = svcPort
+		state.EpsMap[svcKey] = []k8sp.Endpoint{ep}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify NodePort was programmed (both conditions match)
+		npKey := nat.NewNATKey(net.IPv4(1, 2, 3, 4), 30000, 6)
+		_, ok := svcs.m[npKey]
+		Expect(ok).To(BeTrue(), "NodePort should be programmed when complex selector matches")
+	})
+
+	It("should handle 'in' operator selectors", func() {
+		nodeLabels := map[string]string{
+			"zone": "us-east-1a",
+		}
+		s, _ = proxy.NewSyncer(4, []net.IP{net.IPv4(1, 2, 3, 4)}, svcs, eps, aff, rt, nil, nodeLabels)
+
+		svcKey := k8sp.ServicePortName{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-svc"}, Port: "http"}
+
+		// Create service port with 'in' selector
+		svcPort := proxy.NewK8sServicePortWithSelector(net.IPv4(10, 0, 0, 1), 80, v1.ProtocolTCP,
+			"zone in { 'us-east-1a', 'us-east-1b' }",
+			proxy.K8sSvcWithNodePort(30000))
+
+		ep := proxy.NewEndpointInfo("10.1.0.1", 8080, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptIsLocal(true))
+
+		state.SvcMap[svcKey] = svcPort
+		state.EpsMap[svcKey] = []k8sp.Endpoint{ep}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify NodePort was programmed (zone is in the set)
+		npKey := nat.NewNATKey(net.IPv4(1, 2, 3, 4), 30000, 6)
+		_, ok := svcs.m[npKey]
+		Expect(ok).To(BeTrue(), "NodePort should be programmed when 'in' selector matches")
+	})
+
+	It("should handle invalid selectors gracefully", func() {
+		nodeLabels := map[string]string{
+			"tenant": "acme",
+		}
+		s, _ = proxy.NewSyncer(4, []net.IP{net.IPv4(1, 2, 3, 4)}, svcs, eps, aff, rt, nil, nodeLabels)
+
+		svcKey := k8sp.ServicePortName{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-svc"}, Port: "http"}
+
+		// Create service port with invalid selector syntax
+		svcPort := proxy.NewK8sServicePortWithSelector(net.IPv4(10, 0, 0, 1), 80, v1.ProtocolTCP,
+			"invalid selector syntax @#$",
+			proxy.K8sSvcWithNodePort(30000))
+
+		ep := proxy.NewEndpointInfo("10.1.0.1", 8080, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptIsLocal(true))
+
+		state.SvcMap[svcKey] = svcPort
+		state.EpsMap[svcKey] = []k8sp.Endpoint{ep}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify NodePort was still programmed (fail-open behavior on parse error)
+		npKey := nat.NewNATKey(net.IPv4(1, 2, 3, 4), 30000, 6)
+		_, ok := svcs.m[npKey]
+		Expect(ok).To(BeTrue(), "NodePort should be programmed when selector is invalid (fail-open)")
+	})
+
+	It("should work with multiple NodePort IPs", func() {
+		nodeLabels := map[string]string{
+			"tenant": "acme",
+		}
+		nodeIPs := []net.IP{net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8)}
+		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil, nodeLabels)
+
+		svcKey := k8sp.ServicePortName{NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-svc"}, Port: "http"}
+
+		// Create service port with node selector
+		svcPort := proxy.NewK8sServicePortWithSelector(net.IPv4(10, 0, 0, 1), 80, v1.ProtocolTCP,
+			"tenant == 'acme'",
+			proxy.K8sSvcWithNodePort(30000))
+
+		ep := proxy.NewEndpointInfo("10.1.0.1", 8080, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptIsLocal(true))
+
+		state.SvcMap[svcKey] = svcPort
+		state.EpsMap[svcKey] = []k8sp.Endpoint{ep}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify NodePort was programmed on all NodePort IPs
+		npKey1 := nat.NewNATKey(net.IPv4(1, 2, 3, 4), 30000, 6)
+		_, ok1 := svcs.m[npKey1]
+		Expect(ok1).To(BeTrue(), "NodePort should be programmed on first IP when selector matches")
+
+		npKey2 := nat.NewNATKey(net.IPv4(5, 6, 7, 8), 30000, 6)
+		_, ok2 := svcs.m[npKey2]
+		Expect(ok2).To(BeTrue(), "NodePort should be programmed on second IP when selector matches")
+	})
+})
