@@ -521,7 +521,7 @@ func NewBPFEndpointManager(
 		bpfAttachType:    config.BPFAttachType,
 
 		QoSMap:        bpfmaps.CommonMaps.QoSMap,
-		maglevLUTSize: config.MaglevLUTSize,
+		maglevLUTSize: config.BPFMaglevLUTSize,
 	}
 
 	m.policyTrampolineStride.Store(int32(asm.TrampolineStrideDefault))
