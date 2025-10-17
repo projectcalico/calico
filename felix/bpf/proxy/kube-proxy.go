@@ -178,7 +178,6 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 }
 
 func (kp *KubeProxy) start() error {
-	kp.nodeLabels = kp.fetchNodeLabels()
 	var withLocalNP []net.IP
 	if kp.ipFamily == 4 {
 		withLocalNP = append(withLocalNP, podNPIP)
@@ -186,7 +185,8 @@ func (kp *KubeProxy) start() error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.nodeLabels)
+	// Node labels will be fetched in run() when we have the actual host IPs
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, nil)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
