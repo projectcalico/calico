@@ -308,9 +308,7 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 	}
 	components := pinnedVersion.Components
 	for name, component := range components {
-		// Remove components that should be excluded.
-		// Either because they do not have an image,
-		// or not built by Calico.
+		// Remove components that should be excluded. Either because they do not have an image, or not built by Calico.
 		if slices.Contains(noImageComponents, name) || name == flannelComponentName {
 			delete(components, name)
 			continue
@@ -319,8 +317,8 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 		if img == "" {
 			img = name
 		}
-		// Strip "calico/" prefix from image name since registry is <registry>/calico
-		component.Image = strings.TrimPrefix(img, registry.CalicoNamespace+"/")
+		// Only include the image name without the registry imagepath as the product registry includes that.
+		component.Image = strings.SplitAfterN(component.Image, "/", 2)[1]
 		components[name] = component
 	}
 	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
