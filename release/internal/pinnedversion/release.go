@@ -62,12 +62,13 @@ func (p *CalicoReleaseVersions) ImageList() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Exclude flannel (not built by Calico) and the Tigera operator images.
 	componentNames := make([]string, 0, len(components))
-	for _, component := range components {
-		if component.Image == registry.TigeraOperatorImage {
+	for name, component := range components {
+		if strings.HasPrefix(component.Image, p.OperatorCfg.Image) || name == flannelComponentName {
 			continue
 		}
-		componentNames = append(componentNames, strings.TrimPrefix(component.Image, calicoImageNamespace))
+		componentNames = append(componentNames, component.Image)
 	}
 	return componentNames, nil
 }
