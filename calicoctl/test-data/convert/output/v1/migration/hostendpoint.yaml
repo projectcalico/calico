@@ -1,7 +1,6 @@
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
-  creationTimestamp: null
   labels:
     type: production
   name: myhost.eth0
