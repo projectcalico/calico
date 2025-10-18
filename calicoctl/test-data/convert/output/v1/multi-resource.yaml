@@ -3,7 +3,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: BGPPeer
   metadata:
-    creationTimestamp: null
     name: node1.00aa-00bb-0000-0000-0000-0000-0000-00ff
   spec:
     asNumber: 64514
@@ -12,7 +11,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: BGPPeer
   metadata:
-    creationTimestamp: null
     name: node2.1-2-3-4
   spec:
     asNumber: 6455
@@ -21,7 +19,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: BGPPeer
   metadata:
-    creationTimestamp: null
     name: 192-20-30-40
   spec:
     asNumber: 64567
@@ -29,7 +26,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: IPPool
   metadata:
-    creationTimestamp: null
     name: 192-168-0-0-16
   spec:
     allowedUses:
@@ -44,7 +40,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: IPPool
   metadata:
-    creationTimestamp: null
     name: 2001---120
   spec:
     allowedUses:

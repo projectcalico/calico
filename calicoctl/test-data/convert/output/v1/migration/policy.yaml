@@ -5,7 +5,6 @@ items:
   metadata:
     annotations:
       aname: avalue
-    creationTimestamp: null
     labels:
       projectcalico.org/tier: default
     name: default.allow-tcp-6379
@@ -64,7 +63,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
-    creationTimestamp: null
     labels:
       projectcalico.org/tier: default
     name: default.allow-tcp-555-donottrack
