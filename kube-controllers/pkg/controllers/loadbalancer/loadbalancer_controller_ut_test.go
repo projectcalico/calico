@@ -517,4 +517,40 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cli.IPAMUpgradeCallCount()).To(Equal(2))
 	})
+
+	It("should handle invalid IP addresses in allocation tracker without panicking", func() {
+		svcKey, err := serviceKeyFromService(&svc)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Add an invalid IP address to the allocation tracker
+		c.allocationTracker.assignAddressToService(*svcKey, "invalid-ip-address")
+
+		// Create a service with pool annotations to trigger the problematic code path
+		svc.Annotations = map[string]string{
+			annotationIPv4Pools: "[\"10.0.0.0/24\"]",
+		}
+
+		// Add a valid IP pool to the controller
+		ipv4Pool := apiv3.IPPool{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pool",
+			},
+			Spec: apiv3.IPPoolSpec{
+				CIDR:        "10.0.0.0/24",
+				AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+			},
+		}
+		c.ipPools["test-pool"] = ipv4Pool
+
+		// Create the service in the fake client
+		_, err = c.clientSet.CoreV1().Services(svc.Namespace).Create(context.Background(), &svc, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		// This should not panic even with invalid IP in allocation tracker
+		// The syncService method should handle invalid IPs gracefully
+		Expect(func() {
+			c.syncService(*svcKey)
+		}).ToNot(Panic())
+	})
 })
