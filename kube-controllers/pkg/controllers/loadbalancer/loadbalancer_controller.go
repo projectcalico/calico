@@ -502,6 +502,7 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 		// If pool annotations are specified, we need to check that the IPs assigned are from the specified pools
 		for ip := range c.allocationTracker.ipsByService[svcKey] {
 			if !poolContains(ip, ipv4pools) && !poolContains(ip, ipv6pools) {
+				log.Debugf("Releasing IP %s for service %s/%s as it's not in the specified pools", ip, svc.Namespace, svc.Name)
 				err = c.releaseIP(svcKey, ip)
 				if err != nil {
 					log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
@@ -957,6 +958,11 @@ func poolContains(ipAddr string, cidrs []cnet.IPNet) bool {
 		return false
 	}
 	ip := net.ParseIP(ipAddr)
+	if ip == nil {
+		// Invalid IP address, cannot be in any pool
+		log.Warnf("Invalid IP address encountered in IPAM allocation tracker: %q (treating as not in any pool)", ipAddr)
+		return false
+	}
 	for _, cidr := range cidrs {
 		if cidr.Contains(ip) {
 			return true
