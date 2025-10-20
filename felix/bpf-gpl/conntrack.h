@@ -788,7 +788,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				!ip_equal(result.tun_ip, ctx->state->tun_ip)) {
 			CALI_CT_DEBUG("tunnel src changed from " IP_FMT " to " IP_FMT "",
 					debug_ip(result.tun_ip), debug_ip(ctx->state->tun_ip));
+
 			ct_result_set_flag(result.rc, CT_RES_TUN_SRC_CHANGED);
+
+			if (result.flags & CALI_CT_FLAG_MAGLEV) {
+				CALI_DEBUG("overwriting tunnel src for Maglev packet");
+				tracking_v->tun_ip = ctx->state->tun_ip;
+			}
 		}
 
 		if (tracking_v->a_to_b.approved && tracking_v->b_to_a.approved) {
