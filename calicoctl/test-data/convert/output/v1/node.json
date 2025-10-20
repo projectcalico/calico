@@ -7,8 +7,7 @@
       "kind": "Node",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
-        "name": "node1",
-        "creationTimestamp": null
+        "name": "node1"
       },
       "spec": {},
       "status": {}
@@ -17,8 +16,7 @@
       "kind": "Node",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
-        "name": "node2",
-        "creationTimestamp": null
+        "name": "node2"
       },
       "spec": {
         "bgp": {

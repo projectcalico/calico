@@ -1,7 +1,6 @@
 apiVersion: projectcalico.org/v3
 kind: Node
 metadata:
-  creationTimestamp: null
   name: node-hostname
 spec:
   bgp:

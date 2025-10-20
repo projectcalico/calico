@@ -8,8 +8,7 @@
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
         "name": "allow-all-egress",
-        "namespace": "default",
-        "creationTimestamp": null
+        "namespace": "default"
       },
       "spec": {
         "order": 1000,
@@ -29,8 +28,7 @@
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
         "name": "default-deny-ingress",
-        "namespace": "default",
-        "creationTimestamp": null
+        "namespace": "default"
       },
       "spec": {
         "order": 1000,
@@ -45,8 +43,7 @@
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
         "name": "test-network-policy1",
-        "namespace": "test-ns",
-        "creationTimestamp": null
+        "namespace": "test-ns"
       },
       "spec": {
         "order": 1000,
