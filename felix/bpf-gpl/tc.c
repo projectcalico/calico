@@ -453,7 +453,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 						     !ip_void(ctx->state->tun_ip), &nat_res);
 	}
 
-	if (nat_res == NAT_MAGLEV) {
+	if (HAS_MAGLEV && nat_res == NAT_MAGLEV) {
 		/* Packet to be handled by maglev*/
 		CALI_DEBUG("NAT Lookup determined packet handled by maglev");
 		CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
