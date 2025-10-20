@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/apis"
 	"k8s.io/kubernetes/pkg/proxy/config"
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
+	"k8s.io/kubernetes/pkg/proxy/runner"
 	"k8s.io/kubernetes/pkg/proxy/util"
-	"k8s.io/kubernetes/pkg/util/async"
 )
 
 // Proxy watches for updates of Services and Endpoints, maintains their mapping
@@ -96,12 +96,18 @@ type proxy struct {
 	dpSyncer  DPSyncer
 	syncerLck sync.Mutex
 	// executes periodic the dataplane updates
-	runner *async.BoundedFrequencyRunner
+	runner *runner.BoundedFrequencyRunner
 	// ensures that only one invocation runs at any time
 	runnerLck sync.Mutex
 	// sets the minimal distance between to sync to avoid overloading the
 	// dataplane in case of frequent changes
 	minDPSyncPeriod time.Duration
+
+	// The interval that syncing is guaranteed to run even without any other triggers.
+	maxDPSyncPeriod time.Duration
+
+	// The interval to retry syncing.
+	retryDPSyncPeriod time.Duration
 
 	// how often to fully sync with k8s - 0 is never
 	syncPeriod time.Duration
@@ -147,7 +153,10 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		recorder: new(loggerRecorder),
 
-		minDPSyncPeriod: 30 * time.Second, // XXX revisit the default
+		// TODO: revisit these default values.
+		minDPSyncPeriod:   30 * time.Second,
+		maxDPSyncPeriod:   1 * time.Hour,
+		retryDPSyncPeriod: 1 * time.Hour, // XXX might be infinite?
 
 		stopCh:        make(chan struct{}),
 		healthzServer: new(alwaysHealthy),
@@ -161,8 +170,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 	// We need to create the runner first as once we start getting updates, they
 	// will kick it
-	p.runner = async.NewBoundedFrequencyRunner("dp-sync-runner",
-		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
+	p.runner = runner.NewBoundedFrequencyRunner("dp-sync-runner",
+		p.invokeDPSyncer, p.minDPSyncPeriod, p.retryDPSyncPeriod, p.maxDPSyncPeriod)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
@@ -249,12 +258,15 @@ func (p *proxy) syncDP() {
 }
 
 func (p *proxy) forceSyncDP() {
-	p.invokeDPSyncer()
+	err := p.invokeDPSyncer()
+	if err != nil {
+		log.WithError(err).Error("Failed invoking dataplane syncer")
+	}
 }
 
-func (p *proxy) invokeDPSyncer() {
+func (p *proxy) invokeDPSyncer() error {
 	if !p.isInitialized() {
-		return
+		return fmt.Errorf("proxy is not initialized")
 	}
 
 	p.runnerLck.Lock()
@@ -264,10 +276,10 @@ func (p *proxy) invokeDPSyncer() {
 	_ = p.epsMap.Update(p.epsChanges)
 
 	if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
-		log.WithError(err).Error("Error syncing healthcheck services")
+		return fmt.Errorf("error syncing healthcheck Services - err: %w", err)
 	}
 	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
-		log.WithError(err).Error("Error syncing healthcheck endpoints")
+		return fmt.Errorf("error syncing healthcheck endpoints - err: %w", err)
 	}
 
 	if p.healthzServer != nil {
@@ -283,14 +295,15 @@ func (p *proxy) invokeDPSyncer() {
 	p.syncerLck.Unlock()
 
 	if err != nil {
-		log.WithError(err).Errorf("applying changes failed")
 		// TODO log the error or panic as the best might be to restart
 		// completely to wipe out the loaded bpf maps
+		return fmt.Errorf("applying changes failed - err: %w", err)
 	}
 
 	if p.healthzServer != nil {
 		p.healthzServer.Updated(p.v1IPFamily())
 	}
+	return nil
 }
 
 func (p *proxy) OnServiceAdd(svc *v1.Service) {

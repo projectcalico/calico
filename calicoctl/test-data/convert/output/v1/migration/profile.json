@@ -2,8 +2,7 @@
   "kind": "Profile",
   "apiVersion": "projectcalico.org/v3",
   "metadata": {
-    "name": "profile1",
-    "creationTimestamp": null
+    "name": "profile1"
   },
   "spec": {
     "ingress": [
