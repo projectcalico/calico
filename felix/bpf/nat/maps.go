@@ -451,7 +451,7 @@ var MaglevMapParameters = maps.MapParameters{
 	Type:       "hash",
 	KeySize:    MaglevBackendKeySize,
 	ValueSize:  maglevBackendValueSize,
-	MaxEntries: consistenthash.M * 1000,
+	MaxEntries: consistenthash.M * 3000,
 	Name:       "cali_v4_mglv",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }

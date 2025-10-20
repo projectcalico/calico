@@ -12,7 +12,9 @@ import (
 )
 
 // M is a prime number much larger than the number of backends we expect to have for a service.
-const M = 1009
+// It is the largest prime storable in a uint16, and the largest prime we can expect the user
+// to set via Felixconfigs.
+const M = 65521
 
 type ConsistentHashOpt func(*ConsistentHash)
 
