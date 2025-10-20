@@ -104,18 +104,21 @@ var (
 func NewManager(opts ...Option) *CalicoManager {
 	// Configure defaults here.
 	b := &CalicoManager{
-		runner:           &command.RealCommandRunner{},
-		productCode:      utils.CalicoProductCode,
-		validate:         true,
-		validateBranch:   true,
-		buildImages:      true,
-		publishImages:    true,
-		archiveImages:    true,
-		publishTag:       true,
-		publishGithub:    true,
-		imageRegistries:  defaultRegistries,
-		operatorRegistry: operator.DefaultRegistry,
-		operatorImage:    operator.DefaultImage,
+		runner:            &command.RealCommandRunner{},
+		productCode:       utils.CalicoProductCode,
+		validate:          true,
+		validateBranch:    true,
+		buildImages:       true,
+		publishImages:     true,
+		archiveImages:     true,
+		publishTag:        true,
+		publishGithub:     true,
+		imageRegistries:   defaultRegistries,
+		operatorRegistry:  operator.DefaultRegistry,
+		operatorImage:     operator.DefaultImage,
+		operatorGithubOrg: operator.DefaultOrg,
+		operatorRepo:      operator.DefaultRepoName,
+		operatorBranch:    operator.DefaultBranchName,
 	}
 
 	// Run through provided options.
@@ -177,10 +180,12 @@ type CalicoManager struct {
 	calicoVersion string
 
 	// operator variables
-	operatorImage    string
-	operatorRegistry string
-	operatorVersion  string
-	operatorBranch   string
+	operatorImage     string
+	operatorRegistry  string
+	operatorVersion   string
+	operatorGithubOrg string
+	operatorRepo      string
+	operatorBranch    string
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
@@ -425,7 +430,12 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 }
 
 func (r *CalicoManager) checkCodeGeneration() error {
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "get-operator-crds generate check-dirty"); err != nil {
+	env := append(os.Environ(),
+		fmt.Sprintf("OPERATOR_ORGANIZATION=%s", r.operatorGithubOrg),
+		fmt.Sprintf("OPERATOR_GIT_REPO=%s", r.operatorRepo),
+		fmt.Sprintf("OPERATOR_BRANCH=%s", r.operatorBranch),
+	)
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "get-operator-crds generate check-dirty", env...); err != nil {
 		logrus.WithError(err).Error("Failed to check code generation")
 		return fmt.Errorf("code generation error, try 'make get-operator-crds generate' to fix")
 	}
@@ -1356,12 +1366,13 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		return fmt.Errorf("failed to update operator branch in %s: %w", makeMetadataFilePath, err)
 	}
 
-	// Update branch used for CAPZ - Windows FV tests.
-	logrus.WithField("branch", branch).Debug("Updating branch in setup script for CAPZ Windows FV tests")
+	// Update release stream used for CAPZ - Windows FV tests.
+	releaseStream := strings.TrimPrefix(branch, r.releaseBranchPrefix+"-")
+	logrus.WithField("releaseStream", releaseStream).Debug("Updating release stream in setup script for CAPZ Windows FV tests")
 	scriptFilePath := filepath.Join(r.repoRoot, "process", "testing", "winfv-felix", "setup-fv-capz.sh")
-	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/RELEASE_STREAM=.*HASH_RELEASE/RELEASE_STREAM=%s HASH_RELEASE/g`, branch), scriptFilePath}, nil); err != nil {
-		logrus.WithError(err).Errorf("Failed to update release branch in %s", scriptFilePath)
-		return fmt.Errorf("failed to update release branch in %s: %w", scriptFilePath, err)
+	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/RELEASE_STREAM=.*HASH_RELEASE/RELEASE_STREAM=%s HASH_RELEASE/g`, releaseStream), scriptFilePath}, nil); err != nil {
+		logrus.WithError(err).Errorf("Failed to update release stream in %s", scriptFilePath)
+		return fmt.Errorf("failed to update release stream in %s: %w", scriptFilePath, err)
 	}
 
 	// Run code generation.

@@ -1,6 +1,3 @@
-//go:build fvtests
-// +build fvtests
-
 // Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -295,7 +292,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		svcName := "test-service"
 		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 		tSvc := k8sService(svcName, clusterIP, ep2_1, svcPort, wepPort, 0, "tcp")
-		tSvcNamespace := tSvc.ObjectMeta.Namespace
+		tSvcNamespace := tSvc.Namespace
 		_, err = k8sClient.CoreV1().Services(tSvcNamespace).Create(context.Background(), tSvc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -343,19 +340,14 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 					// Nftables
 					out0, err := tc.Felixes[1].ExecOutput("nft", "list", "ruleset")
 					Expect(err).NotTo(HaveOccurred())
-					if strings.Count(out0, "End of tier tier1. Drop if no policies passed packet") == 0 {
-						return false
-					}
-					return true
+					return strings.Contains(out0, "End of tier tier1. Drop if no policies passed packet")
 				}
 
 				// Iptables
 				out0, err := tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
 				Expect(err).NotTo(HaveOccurred())
-				if strings.Count(out0, "End of tier tier1. Drop if no policies passed packet") == 0 {
-					return false
-				}
-				return true
+
+				return strings.Contains(out0, "End of tier tier1. Drop if no policies passed packet")
 			}
 
 			// BPF

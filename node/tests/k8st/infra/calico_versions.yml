@@ -1,49 +1,42 @@
-# Components defined here are required to be kept in sync with hack/gen-versions/calico.go.tpl in the tigera/operator repository.
+# Components defined here are required to be kept in sync with config/calico_versions.yml in the tigera/operator repository.
 # Ideally we can remove this file and the need to re-build the operator altogether if we change how images are loaded into the test cluster.
 title: latest
 components:
   libcalico-go:
     version: master
   typha:
-    image: calico/typha
     version: test-build
-  calico/node:
-    image: library/node
+  node:
     version: test-build
-  calico/cni:
-    image: calico/cni
+  cni:
     version: test-build
-  calico/node-windows:
+  node-windows:
     version: test-build
-  calico/cni-windows:
+  cni-windows:
     version: test-build
-  calico/kube-controllers:
-    image: calico/kube-controllers
+  kube-controllers:
     version: test-build
-  calico/goldmane:
+  goldmane:
     version: test-build
   flexvol:
-    image: calico/pod2daemon-flexvol
     version: test-build
-  calico/apiserver:
-    image: calico/apiserver
+  apiserver:
     version: test-build
-  calico/csi:
-    image: calico/csi
+  csi:
     version: test-build
   csi-node-driver-registrar:
     version: test-build
   key-cert-provisioner:
     version: test-build
-  calico/whisker:
+  whisker:
     version: test-build
-  calico/whisker-backend:
+  whisker-backend:
     version: test-build
-  calico/envoy-gateway:
+  envoy-gateway:
     version: test-build
-  calico/envoy-proxy:
+  envoy-proxy:
     version: test-build
-  calico/envoy-ratelimit:
+  envoy-ratelimit:
     version: test-build
-  calico/guardian:
+  guardian:
     version: test-build

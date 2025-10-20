@@ -1,5 +1,3 @@
-//go:build fvtests
-
 // Copyright (c) 2017-2019,2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -106,8 +104,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 			podIP := "10.0.0.1"
 			pod := workload.New(felix, testPodName, "default",
 				podIP, "12345", "tcp")
-			pod.Start()
-
+			Expect(pod.Start()).To(Succeed())
 			pod.ConfigureInInfra(k8sInfra)
 		}
 

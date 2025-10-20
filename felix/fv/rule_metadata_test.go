@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
-	"math/rand"
+	cryptorand "crypto/rand"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -142,7 +140,7 @@ var _ = Describe("Rule Metadata tests", func() {
 		BeforeEach(func() {
 			// build some random bytes to try to break annotation processing
 			rv := make([]byte, 200)
-			_, err := rand.Read(rv)
+			_, err := cryptorand.Read(rv)
 			Expect(err).ToNot(HaveOccurred())
 			// the profile should allow the workloads to communicate
 			p = api.NewProfile()

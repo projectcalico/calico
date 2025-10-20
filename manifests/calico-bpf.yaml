@@ -1030,9 +1030,9 @@ spec:
                     kube-proxy always accepts endpoint slices. This option will be removed in
                     the next release.
                   type: boolean
-                bpfKubeProxyHealtzPort:
+                bpfKubeProxyHealthzPort:
                   description: |-
-                    BPFKubeProxyHealtzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+                    BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
                     The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
@@ -6803,7 +6803,7 @@ spec:
                                 - message: Start port must be less than End port
                                   rule: self.start < self.end
                           type: object
-                        maxItems: 100
+                        maxItems: 25
                         minItems: 1
                         type: array
                       to:
@@ -7017,14 +7017,14 @@ spec:
                                 - podSelector
                               type: object
                           type: object
-                        maxItems: 100
+                        maxItems: 25
                         minItems: 1
                         type: array
                     required:
                       - action
                       - to
                     type: object
-                  maxItems: 100
+                  maxItems: 25
                   type: array
                 ingress:
                   description: |-
@@ -7252,7 +7252,7 @@ spec:
                                 - podSelector
                               type: object
                           type: object
-                        maxItems: 100
+                        maxItems: 25
                         minItems: 1
                         type: array
                       name:
@@ -7333,14 +7333,14 @@ spec:
                                 - message: Start port must be less than End port
                                   rule: self.start < self.end
                           type: object
-                        maxItems: 100
+                        maxItems: 25
                         minItems: 1
                         type: array
                     required:
                       - action
                       - from
                     type: object
-                  maxItems: 100
+                  maxItems: 25
                   type: array
                 priority:
                   description: |-
