@@ -40,6 +40,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
 #define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
 #define CALI_CT_FLAG_SET_DSCP	0x8000 /* marks connections that needs to set DSCP */
+#define CALI_CT_FLAG_MAGLEV	0X10000 /* marks Maglev connections. Allows packets of an existing to arrive via a different tunnel after failover. */
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -154,9 +155,9 @@ struct ct_create_ctx {
 	ipv46_addr_t tun_ip; /* is set when the packet arrive through the NP tunnel.
 			* It is also set on the first node when we create the
 			* initial CT entry for the tunneled traffic. */
-	__u16 flags;
+	__u32 flags;
 	__u8 proto;
-	__u8 __pad;
+	__u8 __pad[3];
 	enum cali_ct_type type;
 	bool allow_return;
 };
@@ -203,6 +204,11 @@ enum calico_ct_result_type {
 	 * or for packet that have a conntrack entry that is only approved by the other leg
 	 * (indicating that policy on this leg failed to allow the packet). */
 	CALI_CT_INVALID = 6,
+	/* CALI_CT_MAGLEV_MID_FLOW_MISS is set (in the Maglev program) for packets which were
+	 * originally CALI_CT_MID_FLOW_MISS, but where the maglev-lookup returned a backend.
+	 * It indicates that a midflow Maglev packet should be treated as a failed-over connection.
+	 * This is similar to handling CALI_CT_NEW. */
+	CALI_CT_MAGLEV_MID_FLOW_MISS = 7,
 };
 
 #define CT_RES_RELATED         0x100
