@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -1285,7 +1283,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 		for i := range []int{0, 1} {
 			Eventually(func() string {
 				return getWireguardRoutingRule(tc.Felixes[i], 4)
-			}, "10s", "100ms").Should(MatchRegexp(fmt.Sprintf("\\d+:\\s+not from all fwmark 0x\\d+/0x\\d+ lookup \\d+")))
+			}, "10s", "100ms").Should(MatchRegexp(`\d+:\s+not from all fwmark 0x\d+/0x\d+ lookup \d+`))
 		}
 		// 3. by checking, Wireguard route table exist.
 		for i := range []int{0, 1} {
@@ -1341,7 +1339,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 				// Check the rule exists.
 				Eventually(func() string {
 					return getWireguardRoutingRule(tc.Felixes[i], 4)
-				}, "10s", "100ms").Should(MatchRegexp(fmt.Sprintf("\\d+:\\s+not from all fwmark 0x\\d+/0x\\d+ lookup \\d+")))
+				}, "10s", "100ms").Should(MatchRegexp(`\d+:\s+not from all fwmark 0x\d+/0x\d+ lookup \d+`))
 			}
 			for i := range []int{0, 1} {
 				// Check the route entry exists.
@@ -1623,7 +1621,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		for _, felix := range tc.Felixes {
 			Eventually(func() string {
 				return getWireguardRoutingRule(felix, 4)
-			}, "10s", "100ms").Should(MatchRegexp(fmt.Sprintf("\\d+:\\s+not from all fwmark 0x\\d+/0x\\d+ lookup \\d+")))
+			}, "10s", "100ms").Should(MatchRegexp(`\d+:\s+not from all fwmark 0x\d+/0x\d+ lookup \d+`))
 		}
 
 		By("Checking the routing table entries exist")
