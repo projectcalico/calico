@@ -26,7 +26,7 @@ func WithHash(hash1, hash2 hash.Hash) func(*ConsistentHash) {
 
 // WithLUTLength configures the LUT-size and subsequently,
 // the preference-list length for each backend.
-// Should be a prime number.
+// Must be a prime number.
 func WithPreferenceLength(m int) func(*ConsistentHash) {
 	return func(c *ConsistentHash) {
 		c.m = m
