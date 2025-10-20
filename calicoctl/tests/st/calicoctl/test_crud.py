@@ -1164,7 +1164,6 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rev1 = rc.decoded
         self.assertNotIn('uid', rev1['metadata'])
-        self.assertIsNone(rev1['metadata']['creationTimestamp'])
         self.assertNotIn('namespace', rev1['metadata'])
         self.assertNotIn('resourceVersion', rev1['metadata'])
         self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
@@ -1221,7 +1220,6 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rev1 = rc.decoded
         self.assertNotIn('uid', rev1['metadata'])
-        self.assertIsNone(rev1['metadata']['creationTimestamp'])
         self.assertNotIn('namespace', rev1['metadata'])
         self.assertNotIn('resourceVersion', rev1['metadata'])
         self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
@@ -2814,7 +2812,6 @@ class InvalidData(TestBase):
         '- apiVersion: %s\n'
         '  kind: %s\n'
         '  metadata:\n'
-        '    creationTimestamp: null\n'
         '    name: projectcalico-default-allow\n'
         '    resourceVersion: "1"\n'
         '  spec:\n'

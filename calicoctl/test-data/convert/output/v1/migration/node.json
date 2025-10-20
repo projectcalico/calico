@@ -2,8 +2,7 @@
   "kind": "Node",
   "apiVersion": "projectcalico.org/v3",
   "metadata": {
-    "name": "node-hostname",
-    "creationTimestamp": null
+    "name": "node-hostname"
   },
   "spec": {
     "bgp": {

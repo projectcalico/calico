@@ -3,14 +3,12 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
-    creationTimestamp: null
     name: node1
   spec: {}
   status: {}
 - apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
-    creationTimestamp: null
     name: node2
   spec:
     bgp:
