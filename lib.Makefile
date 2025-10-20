@@ -493,12 +493,6 @@ else
 CRANE_CMD         = $(REPO_ROOT)/bin/crane
 endif
 
-ifdef LOCAL_PYTHON
-PYTHON3_CMD       = python3
-else
-PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v $(REPO_ROOT):$(REPO_ROOT) -w $(REPO_ROOT) python:3.13 python3.13
-endif
-
 GIT_CMD           = git
 DOCKER_CMD        = docker
 
@@ -510,10 +504,7 @@ else
 CRANE         = echo [DRY RUN] $(CRANE_CMD)
 GIT           = echo [DRY RUN] $(GIT_CMD)
 DOCKER        = echo [DRY RUN] $(DOCKER_CMD)
-RELEASE_PY3   = echo [DRY RUN] $(PYTHON3_CMD)
 endif
-
-QUAY_SET_EXPIRY_SCRIPT = $(REPO_ROOT)/hack/set_quay_expiry.py
 
 commit-and-push-pr:
 	$(GIT) add $(GIT_COMMIT_FILES)
