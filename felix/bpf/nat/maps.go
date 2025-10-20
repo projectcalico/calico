@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/consistenthash"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
 )
@@ -450,7 +451,7 @@ var MaglevMapParameters = maps.MapParameters{
 	Type:       "hash",
 	KeySize:    MaglevBackendKeySize,
 	ValueSize:  maglevBackendValueSize,
-	MaxEntries: 1009 * 1000,
+	MaxEntries: consistenthash.M * 1000,
 	Name:       "cali_v4_mglv",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
