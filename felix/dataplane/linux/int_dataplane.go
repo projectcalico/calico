@@ -872,11 +872,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ipSetIDAllocatorV4 = idalloc.New()
 
 		// Start IPv4 BPF dataplane components
-		conntrackScannerV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, config, ipsetsManager, dp)
+		conntrackScannerV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
 			ipSetIDAllocatorV6 = idalloc.New()
-			conntrackScannerV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, config, ipsetsManagerV6, dp)
+			conntrackScannerV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp)
 		}
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
@@ -2664,7 +2664,7 @@ func startBPFDataplaneComponents(
 	ipFamily proto.IPVersion,
 	bpfmaps *bpfmap.IPMaps,
 	ipSetIDAllocator *idalloc.IDAllocator,
-	config Config,
+	config *Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
 ) *bpfconntrack.Scanner {
@@ -2685,6 +2685,7 @@ func startBPFDataplaneComponents(
 
 		// We cannot wait for the healthz server as we cannot stop it.
 		go func() {
+			log.Infof("Starting BPF Proxy Healthz server on %s", healthzAddr)
 			for {
 				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
 				if err != nil {
@@ -2746,7 +2747,7 @@ func startBPFDataplaneComponents(
 	)
 	dp.RegisterManager(failsafeMgr)
 
-	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, ipFamily, dp.loopSummarizer)
+	bpfRTMgr := newBPFRouteManager(config, bpfmaps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
 	livenessScanner, err := createBPFConntrackLivenessScanner(ipFamily, config)
@@ -2780,7 +2781,7 @@ func startBPFDataplaneComponents(
 	return conntrackScanner
 }
 
-func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) (bpfconntrack.EntryScanner, error) {
+func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config *Config) (bpfconntrack.EntryScanner, error) {
 	tryBPF := false
 	tryUserspace := false
 	if config.BPFConntrackCleanupMode == apiv3.BPFConntrackModeBPFProgram {
