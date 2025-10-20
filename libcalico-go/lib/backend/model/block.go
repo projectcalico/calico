@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -113,6 +114,10 @@ type AllocationBlock struct {
 	// Affinity of the block, if this block has one. If set, it will be of the form
 	// "host:<hostname>". If not set, this block is not affine to a host.
 	Affinity *string `json:"affinity"`
+
+	// Time the affinity was claimed; may be zero for old blocks that predate
+	// this field.
+	AffinityClaimTime *metav1.Time `json:"affinity_claim_time,omitempty"`
 
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.
 	// For non-nil entries at index i, the index is the ordinal of the allocation within this block
