@@ -61,14 +61,12 @@
             4567,
             "8:9"
           ]
-        },
-        "destination": {}
+        }
       }
     ],
     "egress": [
       {
         "action": "Allow",
-        "source": {},
         "destination": {
           "notSelector": "profile == 'system'"
         }
@@ -77,12 +75,10 @@
         "action": "Allow",
         "source": {
           "selector": "something in {'a', 'b'}"
-        },
-        "destination": {}
+        }
       },
       {
         "action": "Allow",
-        "source": {},
         "destination": {
           "selector": "something not in {'a', 'b'}"
         }

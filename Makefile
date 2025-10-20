@@ -107,18 +107,18 @@ generate:
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm bin/yq
-	cd ./manifests && \
-		OPERATOR_VERSION=$(OPERATOR_VERSION) \
-		CALICO_VERSION=$(CALICO_VERSION) \
-		./generate.sh
+	cd ./manifests && ./generate.sh
 
 # Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
-get-operator-crds: var-require-all-OPERATOR_BRANCH
-	@echo ================================================================
-	@echo === Pulling new operator CRDs from branch $(OPERATOR_BRANCH) ===
-	@echo ================================================================
+get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERATOR_BRANCH
+	@echo ==============================================================================================================
+	@echo === Pulling new operator CRDs from $(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) branch $(OPERATOR_BRANCH) ===
+	@echo ==============================================================================================================
 	cd ./charts/tigera-operator/crds/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; done
+	for file in operator.tigera.io_*.yaml; do \
+		echo "downloading $$file from operator repo"; \
+		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; \
+	done
 	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
@@ -172,9 +172,11 @@ e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
-	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+	
+	# Disabling ANP/BANP conformance tests due to being replaced by ClusterNetworkPolicy (and also being flaky).
+	#KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
+	# -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
+	#  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
 
 e2e-test-adminpolicy:
 	$(MAKE) -C e2e build
@@ -215,7 +217,7 @@ release-public: bin/gh release/bin/release
 
 # Create a release branch.
 create-release-branch: release/bin/release
-	@release/bin/release branch cut -git-publish
+	@release/bin/release branch cut
 
 # Test the release code
 release-test:

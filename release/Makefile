@@ -6,8 +6,11 @@ include ../lib.Makefile
 
 export ORGANIZATION
 export GIT_REPO
-export GIT_REPO_SLUG
+export RELEASE_BRANCH_PREFIX
+export DEV_TAG_SUFFIX
 export DEV_REGISTRIES
+export OPERATOR_ORGANIZATION
+export OPERATOR_GIT_REPO
 export OPERATOR_BRANCH
 
 .PHONY: build
