@@ -26,12 +26,19 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
+
+// EmptyBlockMinReclaimAge is the minimum time since a block was claimed before
+// another node will consider reclaiming that block if the node needs a block and
+// the block is empty.  Prevents a block from ping-ponging between two nodes
+// with no chance for either node to actually allocate an IP from it.
+const EmptyBlockMinReclaimAge = time.Minute
 
 type blockReaderWriter struct {
 	client bapi.Client
@@ -108,7 +115,14 @@ func findContainingPool(pools []v3.IPPool, addr net.IP) (*v3.IPPool, error) {
 //
 // Note that the block may become claimed between receiving the CIDR from this function and attempting to claim the corresponding
 // block as this function does not reserve the returned IPNet.
-func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg AffinityConfig, version int, pools []v3.IPPool, reservations addrFilter, config IPAMConfig) (*cnet.IPNet, error) {
+func (rw blockReaderWriter) findUsableBlock(
+	ctx context.Context,
+	affinityCfg AffinityConfig,
+	version int,
+	pools []v3.IPPool,
+	reservations addrFilter,
+	config IPAMConfig,
+) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
 		return nil, fmt.Errorf("no configured Calico pools for %s:%s", affinityCfg.AffinityType, affinityCfg.Host)
@@ -124,22 +138,36 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg Aff
 	type blockInfo struct {
 		numFree     int
 		affinityCfg AffinityConfig
+		empty       bool
+		cidr        cnet.IPNet
+		claimTime   time.Time
+		seqNo       uint64
 	}
 
 	// Build a map for faster lookups.
 	exists := map[string]blockInfo{}
 	for _, e := range existingBlocks.KVPairs {
-		host := e.Value.(*model.AllocationBlock).Host()
-		affinityType := AffinityType(e.Value.(*model.AllocationBlock).AffinityType())
+		allocBlock := e.Value.(*model.AllocationBlock)
+		host := allocBlock.Host()
+		affinityType := AffinityType(allocBlock.AffinityType())
 		bAffinityCfg := AffinityConfig{
 			AffinityType: affinityType,
 			Host:         host,
 		}
-		numFree := allocationBlock{e.Value.(*model.AllocationBlock)}.NumFreeAddresses(reservations)
-		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{numFree: numFree, affinityCfg: bAffinityCfg}
+		block := allocationBlock{allocBlock}
+		numFree := block.NumFreeAddresses(reservations)
+		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{
+			numFree:     numFree,
+			affinityCfg: bAffinityCfg,
+			cidr:        e.Key.(model.BlockKey).CIDR,
+			empty:       block.empty(),
+			claimTime:   block.affinityClaimTime(),
+			seqNo:       block.SequenceNumber,
+		}
 	}
 
 	// Iterate through pools to find a new block.
+	var emptyBlocks []blockInfo
 	for _, pool := range pools {
 		// Use a block generator to iterate through all of the blocks
 		// that fall within the pool.
@@ -158,13 +186,63 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg Aff
 				log.Infof("Found free block: %+v", *subnet)
 				return subnet, nil
 			} else if info.affinityCfg == affinityCfg && info.numFree != 0 {
-				// Belongs to this host and has free allocations.  Check that the IPs really are free (not reserved).
+				// Belongs to this host and has free allocations.  We already took account of any reservations above.
 				log.Debugf("Block %s already assigned to host, has free space", subnet.String())
 				return subnet, nil
+			} else if info.empty && info.numFree != 0 {
+				log.Debugf("Block %s is empty, may try to reclaim it if we run out.", subnet.String())
+				emptyBlocks = append(emptyBlocks, info)
 			}
 			log.Debugf("Block %s already exists and is either affine to another host or has no space, try another", subnet.String())
 		}
 	}
+
+	if len(emptyBlocks) > 0 {
+		// This step is very important for small special-purpose IPAM pools
+		// with small blocks (and especially /32 blocks). Without it, we can
+		// be unable to allocate an IP even though there are fewer workloads
+		// using the special pool than there are total blocks (because the
+		// blocks get stranded, affine to other nodes).
+		log.Info("Ran out of unclaimed blocks, trying to reclaim an empty one.")
+		for i, block := range emptyBlocks {
+			age := time.Since(block.claimTime)
+			if age < EmptyBlockMinReclaimAge {
+				// Avoid a race where two nodes fight over a block, each freeing
+				// it before the other has a chance to use it.
+				log.Infof("Block %s was claimed %.1fs ago by another node, not trying to reclaim it.",
+					block.cidr.String(), age.Seconds())
+				continue
+			}
+			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, releaseAffinityOpts{
+				RequireEmpty: true,
+				// Pass the sequence number through to make sure that we only
+				// release the affinity if the block hasn't been changed since
+				// we read it.  Otherwise, two hosts that try to reclaim the
+				// same block race, and we may free the new version of the block
+				// that was just created by the other node.
+				RequiredBlockSequenceNumber: &block.seqNo,
+			})
+			if err != nil {
+				log.Warnf("Failed to release affinity while trying to reclaim block. %v left to try: %s", len(emptyBlocks)-i, err)
+				if ctx.Err() != nil {
+					log.Warn("Context expired while trying to reclaim empty blocks.  Giving up.")
+					return nil, ctx.Err()
+				}
+				// If not a context expiry, keep trying other blocks.
+				continue
+			}
+
+			// We reclaimed a block. Return it to the caller, who'll try to
+			// claim it.
+			log.Infof("Reclaimed empty block: %s", block.cidr.String())
+			subnet := block.cidr
+			return &subnet, nil
+		}
+
+		log.Warn("Unable to reclaim any empty blocks.")
+	}
+
+	log.Warn("No free blocks found in any pool.")
 	return nil, noFreeBlocksError("No Free Blocks")
 }
 
@@ -217,6 +295,8 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 	affinityKeyStr := fmt.Sprintf("%s:%s", affinityCfg.AffinityType, host)
 	block := newBlock(subnet, rsvdAttr)
 	block.Affinity = &affinityKeyStr
+	now := metav1.NewTime(time.Now())
+	block.AffinityClaimTime = &now
 
 	// Create the new block in the datastore.
 	o := model.KVPair{
@@ -299,9 +379,21 @@ func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPa
 	return confirmed, nil
 }
 
+type releaseAffinityOpts struct {
+	RequireEmpty bool
+	// RequiredBlockSequenceNumber if non-nil, is checked against the sequence
+	// number in the block and, if it doesn't match, the release is aborted.
+	RequiredBlockSequenceNumber *uint64
+}
+
 // releaseBlockAffinity releases the host's affinity to the given block, and returns an affinityClaimedError if
 // the host does not claim an affinity for the block.
-func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCfg AffinityConfig, blockCIDR cnet.IPNet, requireEmpty bool) error {
+func (rw blockReaderWriter) releaseBlockAffinity(
+	ctx context.Context,
+	affinityCfg AffinityConfig,
+	blockCIDR cnet.IPNet,
+	opts releaseAffinityOpts,
+) error {
 	// Make sure hostname is not empty.
 	if affinityCfg.Host == "" {
 		log.Errorf("Hostname can't be empty")
@@ -327,6 +419,12 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCf
 	}
 	b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
+	if opts.RequiredBlockSequenceNumber != nil && *opts.RequiredBlockSequenceNumber != b.SequenceNumber {
+		// Block modified since caller read it and they want us to abort in
+		// that case.
+		return fmt.Errorf("IPAM block updated since we last read it")
+	}
+
 	// Check that the block affinity matches the given affinity.
 	if b.Affinity != nil && !affinityMatches(affinityCfg, b.AllocationBlock) {
 		// This means the affinity is stale - we can delete it.
@@ -341,7 +439,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCf
 	}
 
 	// Don't release block affinity if we require it to be empty and it's not empty.
-	if requireEmpty && !b.empty() {
+	if opts.RequireEmpty && !b.empty() {
 		logCtx.WithField("inUseIPs", b.inUseIPs()).Info("Block must be empty but is not empty, refusing to remove affinity.")
 		return errBlockNotEmpty{Block: b}
 	}
@@ -372,6 +470,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCf
 		// non-affine blocks.
 		logCtx.Debug("Block is not empty - remove the affinity")
 		b.Affinity = nil
+		b.AffinityClaimTime = nil
 
 		// Pass back the original KVPair with the new
 		// block information so we can do a CAS.
