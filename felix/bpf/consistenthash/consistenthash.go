@@ -54,17 +54,17 @@ type backend struct {
 }
 
 // New returns a backend-hashing module.
-func New(o ...ConsistentHashOpt) *ConsistentHash {
+func New(hash1, hash2 hash.Hash, o ...ConsistentHashOpt) *ConsistentHash {
 	c := &ConsistentHash{m: M}
 	c.backendNames = make([]string, 0)
 	c.backendsByName = make(map[string]backend)
 
-	for _, option := range o {
-		option(c)
+	if hash1 == nil || hash2 == nil {
+		panic("nil hashing function for ConsistentHash")
 	}
 
-	if c.h1 == nil || c.h2 == nil {
-		panic("nil hashing function for ConsistentHash")
+	for _, option := range o {
+		option(c)
 	}
 
 	return c

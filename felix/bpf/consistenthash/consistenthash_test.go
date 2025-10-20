@@ -16,7 +16,7 @@ var testM = 71
 var _ = Describe("BPF ConsistentHash UTs", func() {
 	newDefaultConsistentHash := func() *ConsistentHash {
 		return New(
-			WithHash(fnv.New32(), fnv.New32()),
+			fnv.New32(), fnv.New32(),
 			// A big prime would cause this test's duration to balloon.
 			WithLUTSize(testM))
 	}
