@@ -648,7 +648,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 
 	if loadBalancerIPs != nil {
 		// User requested specific IP, attempt to allocate
-		log.Infof("Trying to assign requested IPs %v to Sevice %s/%s", loadBalancerIPs, svc.Namespace, svc.Name)
+		log.Infof("Trying to assign requested IPs %v to Service %s/%s", loadBalancerIPs, svc.Namespace, svc.Name)
 		for _, addr := range loadBalancerIPs {
 			if _, exists := c.allocationTracker.ipsByService[*svcKey][addr.String()]; exists {
 				// We must be trying to assign missing address due to an error,
@@ -687,7 +687,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 			num6++
 		}
 	}
-	log.Infof("Service %s/%s requires %v IPv4 and %v IPv6 addresses.", svc.Namespace, svc.Name, loadBalancerIPs, loadBalancerIPs)
+	log.Infof("Service %s/%s requires %v IPv4 and %v IPv6 addresses.", svc.Namespace, svc.Name, num4, num6)
 
 	// Check if IP from ipFamily is already assigned, skip it as we're trying to assign only the missing one.
 	// This can happen when error happened during the initial assignment, and now we're trying to assign ip again from the syncIPAM func
