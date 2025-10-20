@@ -394,7 +394,7 @@ const (
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
 	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
-	ExternalTrafficStrategy  = "lb.projectcalico.org/external-traffic-strategy"
+	ExternalTrafficStrategyAnnotation  = "lb.projectcalico.org/external-traffic-strategy"
 )
 
 var (
@@ -446,7 +446,7 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		}
 	}
 
-	if a, ok := s.Annotations[ExternalTrafficStrategy]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
+	if a, ok := s.Annotations[ExternalTrafficStrategyAnnotation]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
 		svc.useMaglev = true
 	}
 
