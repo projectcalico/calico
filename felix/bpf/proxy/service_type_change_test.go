@@ -87,6 +87,7 @@ var _ = Describe("BPF service type change", func() {
 	bpfMaps := &bpfmap.IPMaps{}
 	bpfMaps.FrontendMap = newMockNATMap()
 	bpfMaps.BackendMap = newMockNATBackendMap()
+	bpfMaps.MaglevMap = newMockMaglevMap()
 	bpfMaps.AffinityMap = newMockAffinityMap()
 	bpfMaps.CtMap = mock.NewMockMap(conntrack.MapParams)
 	front := bpfMaps.FrontendMap.(*mockNATMap)
@@ -99,7 +100,7 @@ var _ = Describe("BPF service type change", func() {
 	var p *proxy.KubeProxy
 
 	BeforeEach(func() {
-		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMaps, proxy.WithImmediateSync())
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMaps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
 		p.OnHostIPsUpdate([]net.IP{initIP})
 	})
 
