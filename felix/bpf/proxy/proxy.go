@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -276,12 +276,10 @@ func (p *proxy) invokeDPSyncer() error {
 	_ = p.epsMap.Update(p.epsChanges)
 
 	if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
-		log.WithError(err).Error("Error syncing healthcheck services")
-		return err
+		return fmt.Errorf("error syncing healthcheck Services - err: %w", err)
 	}
 	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
-		log.WithError(err).Error("Error syncing healthcheck endpoints")
-		return err
+		return fmt.Errorf("error syncing healthcheck endpoints - err: %w", err)
 	}
 
 	if p.healthzServer != nil {
@@ -297,10 +295,9 @@ func (p *proxy) invokeDPSyncer() error {
 	p.syncerLck.Unlock()
 
 	if err != nil {
-		log.WithError(err).Errorf("applying changes failed")
 		// TODO log the error or panic as the best might be to restart
 		// completely to wipe out the loaded bpf maps
-		return err
+		return fmt.Errorf("applying changes failed - err: %w", err)
 	}
 
 	if p.healthzServer != nil {
