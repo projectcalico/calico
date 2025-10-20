@@ -44,16 +44,19 @@ var _ = Describe("Test the StagedGlobalNetworkPolicy update processor", func() {
 		Name: name3,
 	}
 	v1StagedGlobalNetworkPolicyKey1 := model.PolicyKey{
-		Name: model.PolicyNamePrefixStaged + name1,
-		Tier: "default",
+		Name:   name1,
+		Kind:   apiv3.KindStagedGlobalNetworkPolicy,
+		Staged: true,
 	}
 	v1StagedGlobalNetworkPolicyKey2 := model.PolicyKey{
-		Name: model.PolicyNamePrefixStaged + name2,
-		Tier: "default",
+		Name:   name2,
+		Kind:   apiv3.KindStagedGlobalNetworkPolicy,
+		Staged: true,
 	}
 	v1StagedGlobalNetworkPolicyKey3 := model.PolicyKey{
-		Name: model.PolicyNamePrefixStaged + name3,
-		Tier: mytier,
+		Name:   name3,
+		Kind:   apiv3.KindStagedGlobalNetworkPolicy,
+		Staged: true,
 	}
 
 	It("should handle conversion of valid StagedGlobalNetworkPolicys", func() {

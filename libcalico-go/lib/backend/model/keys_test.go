@@ -41,10 +41,6 @@ import (
 var interestingPaths = []string{
 	"/calico/v1/config/foobar",
 	"/calico/v1/config/foobar/bazz",
-	"/calico/v1/policy/profile/foo%2fbar/rules",
-	"/calico/v1/policy/profile/foo%2fbar/labels",
-	"/calico/v1/policy/tier/default/policy/biff%2fbop",
-	"/calico/v1/policy/tier",
 	"/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
 	"/calico/v1/host/foobar/endpoint",
 	"/calico/v1/host/foobar/endpoint/biff",
@@ -57,12 +53,6 @@ var interestingPaths = []string{
 	"/calico/v1/netset/foo",
 	"/calico/v1/Ready",
 	"/calico/v1/Ready/garbage",
-	"/calico/v1/policy/tier",
-	"/calico/v1/policy/tier/foo",
-	"/calico/v1/policy/tier/foo/policy",
-	"/calico/v1/policy/tier/foo/policy/bar",
-	"/calico/v1/policy/tier/foo/metadata",
-	"/calico/v1/policy/profile",
 	"/calico/bgp/v1/global",
 	"/calico/bgp/v1/global/peer_v4",
 	"/calico/bgp/v1/global/peer_v4/name",
@@ -171,7 +161,6 @@ func safeKeysEqual(a, b Key) bool {
 }
 
 var _ = Describe("keys with region component", func() {
-
 	It("should not parse workload endpoint status with wrong region", func() {
 		Expect((WorkloadEndpointStatusListOptions{RegionString: "region-Asia"}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1")).To(BeNil())
 	})
@@ -274,24 +263,6 @@ var _ = DescribeTable(
 			Expect(serialized).To(Equal(strKey))
 		}
 	},
-	Entry(
-		"profile rules with a /",
-		"/calico/v1/policy/profile/foo%2fbar/rules",
-		ProfileRulesKey{ProfileKey: ProfileKey{Name: "foo/bar"}},
-		false,
-	),
-	Entry(
-		"profile labels with a /",
-		"/calico/v1/policy/profile/foo%2fbar/labels",
-		ProfileLabelsKey{ProfileKey: ProfileKey{Name: "foo/bar"}},
-		false,
-	),
-	Entry(
-		"policy with a /",
-		"/calico/v1/policy/tier/default/policy/biff%2fbop",
-		PolicyKey{Tier: "default", Name: "biff/bop"},
-		false,
-	),
 	Entry(
 		"workload with a /",
 		"/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
@@ -540,26 +511,28 @@ func mustParseCIDR(s string) net.IPNet {
 	return *ipNet
 }
 
-var benchResult any
-var _ = benchResult
-var benchKeys = []Key{
-	WorkloadEndpointKey{
-		Hostname:       "ip-12-23-24-52.cloud.foo.bar.baz",
-		OrchestratorID: "kubernetes",
-		WorkloadID:     "some-pod-name-12346",
-		EndpointID:     "eth0",
-	},
-	WireguardKey{NodeName: "ip-12-23-24-53.cloud.foo.bar.baz"},
-	HostEndpointKey{
-		Hostname:   "ip-12-23-24-52.cloud.foo.bar.baz",
-		EndpointID: "eth0",
-	},
-	ResourceKey{
-		Name:      "projectcalico-default-allow",
-		Namespace: "default",
-		Kind:      apiv3.KindNetworkPolicy,
-	},
-}
+var (
+	benchResult any
+	_           = benchResult
+	benchKeys   = []Key{
+		WorkloadEndpointKey{
+			Hostname:       "ip-12-23-24-52.cloud.foo.bar.baz",
+			OrchestratorID: "kubernetes",
+			WorkloadID:     "some-pod-name-12346",
+			EndpointID:     "eth0",
+		},
+		WireguardKey{NodeName: "ip-12-23-24-53.cloud.foo.bar.baz"},
+		HostEndpointKey{
+			Hostname:   "ip-12-23-24-52.cloud.foo.bar.baz",
+			EndpointID: "eth0",
+		},
+		ResourceKey{
+			Name:      "projectcalico-default-allow",
+			Namespace: "default",
+			Kind:      apiv3.KindNetworkPolicy,
+		},
+	}
+)
 
 func BenchmarkOldKeyFromDefaultPath(b *testing.B) {
 	benchmarkKeyFromDefaultPathImpl(b, OldKeyFromDefaultPath)

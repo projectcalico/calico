@@ -21,9 +21,6 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 var (
@@ -59,39 +56,19 @@ func PolicyIsStaged(name string) bool {
 	return staged
 }
 
-// PolicyNameLessThan checks if name1 is less that name2. Used for policy sorting. Staged policies are considered to be
-// less than the non-staged equivalent.
-func PolicyNameLessThan(name1, name2 string) bool {
-	staged1, name1 := stagedToEnforcedV1Name(name1)
-	staged2, name2 := stagedToEnforcedV1Name(name2)
-
-	if name1 != name2 {
-		return name1 < name2
-	}
-
-	if staged1 == staged2 {
-		return false
-	}
-
-	// Names are equal, but staging is not. Staged policies are considered lower than enforced.
-	return staged1
-}
-
 type PolicyKey struct {
-	Name string `json:"-" validate:"required,name"`
-	Tier string `json:"-" validate:"required,name"`
+	// Standard object identification fields.
+	Name      string `json:"-" validate:"required,name"`
+	Namespace string `json:"-" validate:"omitempty,name"`
+
+	// Kind and Staged represent the v3 API object type, needed because
+	// multiple kinds map to this same v1 model.
+	Kind   string `json:"-" validate:"omitempty,name"`
+	Staged bool   `json:"-" validate:"-"`
 }
 
 func (key PolicyKey) defaultPath() (string, error) {
-	if key.Tier == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "tier"}
-	}
-	if key.Name == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
-	}
-	e := fmt.Sprintf("/calico/v1/policy/tier/%s/policy/%s",
-		key.Tier, escapeName(key.Name))
-	return e, nil
+	return "", fmt.Errorf("PolicyKey is not supported for datastore operations")
 }
 
 func (key PolicyKey) defaultDeletePath() (string, error) {
@@ -99,7 +76,7 @@ func (key PolicyKey) defaultDeletePath() (string, error) {
 }
 
 func (key PolicyKey) defaultDeleteParentPaths() ([]string, error) {
-	return nil, nil
+	return nil, fmt.Errorf("PolicyKey is not supported for datastore operations")
 }
 
 func (key PolicyKey) valueType() (reflect.Type, error) {
@@ -107,49 +84,13 @@ func (key PolicyKey) valueType() (reflect.Type, error) {
 }
 
 func (key PolicyKey) String() string {
-	return fmt.Sprintf("Policy(tier=%s, name=%s)", key.Tier, key.Name)
-}
-
-type PolicyListOptions struct {
-	Name string
-	Tier string
-}
-
-func (options PolicyListOptions) defaultPathRoot() string {
-	k := "/calico/v1/policy/tier"
-	if options.Tier == "" {
-		return k
-	}
-	k = k + fmt.Sprintf("/%s/policy", options.Tier)
-	if options.Name == "" {
-		return k
-	}
-	k = k + fmt.Sprintf("/%s", escapeName(options.Name))
-	return k
-}
-
-func (options PolicyListOptions) KeyFromDefaultPath(path string) Key {
-	log.Debugf("Get Policy key from %s", path)
-	r := matchPolicy.FindAllStringSubmatch(path, -1)
-	if len(r) != 1 {
-		log.Debugf("Didn't match regex")
-		return nil
-	}
-	tier := r[0][1]
-	name := unescapeName(r[0][2])
-	if options.Tier != "" && tier != options.Tier {
-		log.Infof("Didn't match tier %s != %s", options.Tier, tier)
-		return nil
-	}
-	if options.Name != "" && name != options.Name {
-		log.Debugf("Didn't match name %s != %s", options.Name, name)
-		return nil
-	}
-	return PolicyKey{Tier: tier, Name: name}
+	return fmt.Sprintf("Policy(Name=%s, Namespace=%s, Kind=%s, Staged=%v)",
+		key.Name, key.Namespace, key.Kind, key.Staged)
 }
 
 type Policy struct {
 	Namespace        string                        `json:"namespace,omitempty" validate:"omitempty"`
+	Tier             string                        `json:"tier,omitempty" validate:"omitempty"`
 	Order            *float64                      `json:"order,omitempty" validate:"omitempty"`
 	InboundRules     []Rule                        `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
 	OutboundRules    []Rule                        `json:"outbound_rules,omitempty" validate:"omitempty,dive"`

@@ -38,13 +38,17 @@ const (
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string
-type rawString string
-type rawBool bool
-type rawIP net.IP
+type (
+	rawString string
+	rawBool   bool
+	rawIP     net.IP
+)
 
-var rawStringType = reflect.TypeOf(rawString(""))
-var rawBoolType = reflect.TypeOf(rawBool(true))
-var rawIPType = reflect.TypeOf(rawIP{})
+var (
+	rawStringType = reflect.TypeOf(rawString(""))
+	rawBoolType   = reflect.TypeOf(rawBool(true))
+	rawIPType     = reflect.TypeOf(rawIP{})
+)
 
 // Key represents a parsed datastore key.
 type Key interface {
@@ -342,7 +346,7 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 						return nil
 					}
 					return PolicyKey{
-						Tier: unescapeName(parts[4]),
+						// Tier: unescapeName(parts[4]),
 						Name: unescapeName(parts[6]),
 					}
 				}
@@ -528,7 +532,7 @@ func OldKeyFromDefaultPath(path string) Key {
 	} else if m := matchPolicy.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a policy: %v", path)
 		return PolicyKey{
-			Tier: unescapeName(m[1]),
+			// Tier: unescapeName(m[1]),
 			Name: unescapeName(m[2]),
 		}
 	} else if m := matchProfile.FindStringSubmatch(path); m != nil {
