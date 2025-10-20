@@ -124,7 +124,7 @@ struct vxlanhdr {
 	__be32 vni;
 };
 
-struct calico_ch_key {
+struct cali_maglev_key {
 	ipv46_addr_t vip;
 	__u16 port;
 	__u8 proto;
@@ -134,12 +134,12 @@ struct calico_ch_key {
 
 // 1009 * 1000 gives a large lookup table for up to 1000 services. -Alex
 #ifdef IPVER6
-CALI_MAP_NAMED(cali_v6_ch, cali_ch,,
+CALI_MAP_NAMED(cali_v6_mglv, cali_maglev,,
 #else
-CALI_MAP_NAMED(cali_v4_ch, cali_ch,,
+CALI_MAP_NAMED(cali_v4_mglv, cali_maglev,,
 #endif
 		BPF_MAP_TYPE_HASH,
-		struct calico_ch_key, struct calico_nat_dest,
+		struct cali_maglev_key, struct calico_nat_dest,
 		1009*1000, BPF_F_NO_PREALLOC)
 
 #endif /*  __CALI_NAT_TYPES_H__ */

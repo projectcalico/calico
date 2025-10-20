@@ -31,7 +31,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali
 #endif /* IPVER6 */
 
 	CALI_DEBUG("Maglev: hashed packet to %d", hash);
-	struct calico_ch_key ch_key = {
+	struct cali_maglev_key ch_key = {
 		.ordinal = (hash % lut_size),
 		.vip = *ip_dst,
 		.port = dport,
@@ -39,7 +39,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali
 	};
 	struct calico_nat_dest *ch_val;
 
-	ch_val = cali_ch_lookup_elem(&ch_key);
+	ch_val = cali_maglev_lookup_elem(&ch_key);
 
 	if (!ch_val) {
 		__u32 proto_debug = ip_proto;

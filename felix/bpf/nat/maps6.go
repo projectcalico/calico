@@ -67,7 +67,7 @@ const backendKeyV6Size = 8
 //	};
 const backendValueV6Size = 20
 
-//	struct calico_ch_key {
+//	struct cali_maglev_key {
 //		ipv46_addr_t vip;
 //		__u16 port;
 //		__u8 proto;
@@ -321,7 +321,7 @@ var MaglevMapV6Parameters = maps.MapParameters{
 	KeySize:    maglevBackendKeyV6Size,
 	ValueSize:  maglevBackendValueV6Size,
 	MaxEntries: 1009 * 1000,
-	Name:       "cali_v6_ch",
+	Name:       "cali_v6_mglv",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 

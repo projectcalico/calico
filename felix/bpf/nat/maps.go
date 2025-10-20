@@ -369,7 +369,7 @@ func BackendValueFromBytes(b []byte) BackendValueInterface {
 	return v
 }
 
-//	struct calico_ch_key {
+//	struct cali_maglev_key {
 //		ipv46_addr_t vip; (be32)
 //		__u16 port;
 //		__u8 proto;
@@ -451,7 +451,7 @@ var MaglevMapParameters = maps.MapParameters{
 	KeySize:    MaglevBackendKeySize,
 	ValueSize:  maglevBackendValueSize,
 	MaxEntries: 1009 * 1000,
-	Name:       "cali_v4_ch",
+	Name:       "cali_v4_mglv",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
