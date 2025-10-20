@@ -86,7 +86,7 @@ func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 
 // Delete takes name of the Tier and deletes it. Returns an error if one occurs.
 func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.Tier, error) {
-	if name == names.DefaultTierName || name == names.AdminNetworkPolicyTierName {
+	if names.TierIsStatic(name) {
 		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: name,
 			Operation:  "Delete",

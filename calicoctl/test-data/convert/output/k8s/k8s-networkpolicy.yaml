@@ -1,7 +1,6 @@
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
-  creationTimestamp: null
   name: test-network-policy
   namespace: default
 spec:

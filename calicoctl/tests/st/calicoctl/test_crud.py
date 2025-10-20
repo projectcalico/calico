@@ -624,15 +624,15 @@ class TestCalicoctlCommands(TestBase):
         """
         Test namespace is handled as expected for each non-namespaced resource type.
         """
-        self._create_admin_tier()
+        self._create_app_tier()
         self._test_non_namespaced(data)
-        self._delete_admin_tier()
+        self._delete_app_tier()
 
-    def _create_admin_tier(self):
+    def _create_app_tier(self):
         rc = calicoctl("create", data=tier_name1_rev1)
         rc.assert_no_error()
 
-    def _delete_admin_tier(self):
+    def _delete_app_tier(self):
         # Delete the resource
         rc = calicoctl("delete", data=tier_name1_rev1)
         rc.assert_no_error()
@@ -750,9 +750,9 @@ class TestCalicoctlCommands(TestBase):
         """
         Tests namespace is handled as expected for each namespaced resource type.
         """
-        self._create_admin_tier()
+        self._create_app_tier()
         self._test_namespaced(data)
-        self._delete_admin_tier()
+        self._delete_app_tier()
 
     def _test_namespaced(self, data):
         # Clone the data so that we can modify the metadata parms.
@@ -1164,7 +1164,6 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rev1 = rc.decoded
         self.assertNotIn('uid', rev1['metadata'])
-        self.assertIsNone(rev1['metadata']['creationTimestamp'])
         self.assertNotIn('namespace', rev1['metadata'])
         self.assertNotIn('resourceVersion', rev1['metadata'])
         self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
@@ -1221,7 +1220,6 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rev1 = rc.decoded
         self.assertNotIn('uid', rev1['metadata'])
-        self.assertIsNone(rev1['metadata']['creationTimestamp'])
         self.assertNotIn('namespace', rev1['metadata'])
         self.assertNotIn('resourceVersion', rev1['metadata'])
         self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
@@ -1297,9 +1295,12 @@ class TestCalicoctlCommands(TestBase):
         # Validate the tiers are ordered correctly. Default should have a value of 1M and should be placed last.
         # adminnetworkpolicy has a value of 1K, and should be second one.
         self.assertEqual(tierList['items'][0]['metadata']['name'], name(tier_name2_rev1))
-        self.assertEqual(tierList['items'][1]['metadata']['name'], 'adminnetworkpolicy')
-        self.assertEqual(tierList['items'][2]['metadata']['name'], name(tier_name1_rev1))
-        self.assertEqual(tierList['items'][3]['metadata']['name'], 'default')
+        self.assertEqual(tierList['items'][1]['metadata']['name'], 'admin')
+        self.assertEqual(tierList['items'][2]['metadata']['name'], 'adminnetworkpolicy')
+        self.assertEqual(tierList['items'][3]['metadata']['name'], name(tier_name1_rev1))
+        self.assertEqual(tierList['items'][4]['metadata']['name'], 'default')
+        self.assertEqual(tierList['items'][5]['metadata']['name'], 'baseline')
+        self.assertEqual(tierList['items'][6]['metadata']['name'], 'baselineadminnetworkpolicy')
 
         # Delete the resources
         rc = calicoctl("delete", data=resources)
@@ -2814,7 +2815,6 @@ class InvalidData(TestBase):
         '- apiVersion: %s\n'
         '  kind: %s\n'
         '  metadata:\n'
-        '    creationTimestamp: null\n'
         '    name: projectcalico-default-allow\n'
         '    resourceVersion: "1"\n'
         '  spec:\n'

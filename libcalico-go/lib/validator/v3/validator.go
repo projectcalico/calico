@@ -1737,6 +1737,30 @@ func validateTier(structLevel validator.StructLevel) {
 		}
 	}
 
+	if tier.Name == names.AdminTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.AdminTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("admin tier order must be %v", api.AdminTierOrder)),
+				"",
+			)
+		}
+	}
+
+	if tier.Name == names.BaselineTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.BaselineTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("baseline tier order must be %v", api.BaselineTierOrder)),
+				"",
+			)
+		}
+	}
+
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
 	validateObjectMetaLabels(structLevel, tier.Labels)
 }
