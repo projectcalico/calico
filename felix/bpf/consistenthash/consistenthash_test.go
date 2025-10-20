@@ -18,7 +18,7 @@ var _ = Describe("BPF ConsistentHash UTs", func() {
 		return New(
 			WithHash(fnv.New32(), fnv.New32()),
 			// A big prime would cause this test's duration to balloon.
-			WithPreferenceLength(testM))
+			WithLUTSize(testM))
 	}
 
 	addBackend := func(mag *ConsistentHash, ip string, port uint16) types.MockEndpoint {
