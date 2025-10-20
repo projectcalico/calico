@@ -3,11 +3,11 @@
 function apply_communities ()
 {
 {{- range $config.Communities}}
-  if (net ~ {{.CIDR}}) then {
+      if ( net ~ {{.CIDR}} ) then {
     {{- range .AddStatements}}
-    {{.}}
+          {{.}}
     {{- end}}
-  }
+      }
 {{- end}}
 }
 
