@@ -48,6 +48,8 @@ var (
 	_ = describeBPFDualStackTests(false, true)
 	_ = describeBPFDualStackTests(true, true)
 	_ = describeBPFDualStackTests(false, false)
+
+	_ = describeBPFDualStackProxyHealthTests()
 )
 
 func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
@@ -516,6 +518,50 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				cc.CheckConnectivity()
 			})
+		})
+	})
+}
+
+func describeBPFDualStackProxyHealthTests() bool {
+	if !BPFMode() {
+		return true
+	}
+	desc := "_BPF_ _BPF-SAFE_ BPF dual stack kube-proxy health checking tests"
+	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+		var (
+			infra infrastructure.DatastoreInfra
+			tc    infrastructure.TopologyContainers
+		)
+
+		BeforeEach(func() {
+			iOpts := []infrastructure.CreateOption{
+				infrastructure.K8sWithDualStack(),
+				infrastructure.K8sWithAPIServerBindAddress("::"),
+				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"),
+			}
+			infra = getInfra(iOpts...)
+			opts := infrastructure.DefaultTopologyOptions()
+			opts.EnableIPv6 = true
+			opts.NATOutgoingEnabled = true
+			opts.BPFProxyHealthzPort = 10256
+
+			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+		})
+
+		AfterEach(func() {
+			tc.Stop()
+			infra.Stop()
+		})
+
+		It("should have kube-proxy health check working over both IPv4 and IPv6", func() {
+			felix := tc.Felixes[0]
+
+			felixReady := func(ip string) int {
+				return healthStatus(ip, "10256", "healthz")
+			}
+
+			Eventually(func() int { return felixReady(felix.IP) }, "10s", "330ms").Should(BeGood())
+			Eventually(func() int { return felixReady(felix.IPv6) }, "10s", "330ms").Should(BeGood())
 		})
 	})
 }
