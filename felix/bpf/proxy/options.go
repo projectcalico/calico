@@ -99,20 +99,6 @@ func WithMaglevLUTSize(size int) Option {
 	}
 }
 
-var MaglevLUTSizeDefault int = 10007
-
-func WithDefaultMaglevLUTSize() Option {
-	return func(P Proxy) error {
-		p, ok := P.(*KubeProxy)
-		if !ok {
-			return nil
-		}
-
-		p.maglevLUTSize = MaglevLUTSizeDefault
-		return nil
-	}
-}
-
 var excludeCIDRsMatch = 1
 
 func WithExcludedCIDRs(cidrs []string) Option {
