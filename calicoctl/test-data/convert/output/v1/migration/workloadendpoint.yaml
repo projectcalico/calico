@@ -1,7 +1,6 @@
 apiVersion: projectcalico.org/v3
 kind: WorkloadEndpoint
 metadata:
-  creationTimestamp: null
   labels:
     app: frontend
     projectcalico.org/namespace: default

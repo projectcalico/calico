@@ -3,7 +3,6 @@
   "apiVersion": "projectcalico.org/v3",
   "metadata": {
     "name": "myhost.eth0",
-    "creationTimestamp": null,
     "labels": {
       "type": "production"
     }
