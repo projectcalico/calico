@@ -132,7 +132,6 @@ struct cali_maglev_key {
 	__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
 };
 
-// 1009 * 1000 gives a large lookup table for up to 1000 services. -Alex
 #ifdef IPVER6
 CALI_MAP_NAMED(cali_v6_mglv, cali_maglev,,
 #else
@@ -140,6 +139,6 @@ CALI_MAP_NAMED(cali_v4_mglv, cali_maglev,,
 #endif
 		BPF_MAP_TYPE_HASH,
 		struct cali_maglev_key, struct calico_nat_dest,
-		1009*1000, BPF_F_NO_PREALLOC)
+		1009, BPF_F_NO_PREALLOC)
 
 #endif /*  __CALI_NAT_TYPES_H__ */
