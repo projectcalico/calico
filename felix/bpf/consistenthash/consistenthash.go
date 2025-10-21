@@ -18,14 +18,6 @@ const M = 65521
 
 type ConsistentHashOpt func(*ConsistentHash)
 
-// WithHash returns an option that sets the ConsistentHash hashing function.
-func WithHash(hash1, hash2 hash.Hash) func(*ConsistentHash) {
-	return func(c *ConsistentHash) {
-		c.h1 = hash1
-		c.h2 = hash2
-	}
-}
-
 // WithLUTSize configures the LUT-size and subsequently,
 // the preference-list length for each backend.
 // Must be a prime number.
@@ -64,6 +56,8 @@ func New(hash1, hash2 hash.Hash, o ...ConsistentHashOpt) *ConsistentHash {
 	if hash1 == nil || hash2 == nil {
 		panic("nil hashing function for ConsistentHash")
 	}
+	c.h1 = hash1
+	c.h2 = hash2
 
 	for _, option := range o {
 		option(c)
