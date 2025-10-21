@@ -416,12 +416,12 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				})
 				adminTierOrder := apiv3.AdminTierOrder
 				syncTester.ExpectData(model.KVPair{
-					Key:   model.TierKey{Name: names.AdminTierName},
+					Key:   model.TierKey{Name: names.KubeAdminTierName},
 					Value: &model.Tier{Order: &adminTierOrder, DefaultAction: apiv3.Pass},
 				})
 				baselineTierOrder := apiv3.BaselineTierOrder
 				syncTester.ExpectData(model.KVPair{
-					Key:   model.TierKey{Name: names.BaselineTierName},
+					Key:   model.TierKey{Name: names.KubeBaselineTierName},
 					Value: &model.Tier{Order: &baselineTierOrder, DefaultAction: apiv3.Pass},
 				})
 				anpOrder := apiv3.AdminNetworkPolicyTierOrder

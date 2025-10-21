@@ -2720,23 +2720,23 @@ func init() {
 			Spec: api.TierSpec{
 				Order: &baselineTierOrder,
 			}}, true),
-		Entry("Tier: disallow admin tier with an invalid order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.AdminTierName},
+		Entry("Tier: disallow kube-admin tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
 			}}, false),
-		Entry("Tier: allow admin tier with the predefined order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.AdminTierName},
+		Entry("Tier: allow kube-admin tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{
 				Order: &adminTierOrder,
 			}}, true),
-		Entry("Tier: disallow baseline tier with an invalid order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.BaselineTierName},
+		Entry("Tier: disallow kube-baseline tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
 			}}, false),
-		Entry("Tier: allow baseline tier with the predefined order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.BaselineTierName},
+		Entry("Tier: allow kube-baseline tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
 			Spec: api.TierSpec{
 				Order: &baselineTierOrder,
 			}}, true),

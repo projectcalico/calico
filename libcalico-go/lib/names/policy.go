@@ -24,8 +24,8 @@ import (
 
 const (
 	DefaultTierName                    = "default"
-	AdminTierName                      = "admin"
-	BaselineTierName                   = "baseline"
+	KubeAdminTierName                  = "kube-admin"
+	KubeBaselineTierName               = "kube-baseline"
 	AdminNetworkPolicyTierName         = "adminnetworkpolicy"
 	BaselineAdminNetworkPolicyTierName = "baselineadminnetworkpolicy"
 
@@ -40,8 +40,8 @@ const (
 	// BaselineAdminNetworkPolicy resource, which is cluster-scoped and lives
 	// in a tier after the default tier.
 	K8sBaselineAdminNetworkPolicyNamePrefix = "kbanp.baselineadminnetworkpolicy."
-	K8sCNPAdminTierNamePrefix               = "kcnp.admin."
-	K8sCNPBaselineTierNamePrefix            = "kcnp.baseline."
+	K8sCNPAdminTierNamePrefix               = "kcnp.kube-admin."
+	K8sCNPBaselineTierNamePrefix            = "kcnp.kube-baseline."
 
 	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
 	OpenStackNetworkPolicyNamePrefix = "ossg."
@@ -68,10 +68,10 @@ func TierFromPolicyName(name string) (string, error) {
 		return BaselineAdminNetworkPolicyTierName, nil
 	}
 	if strings.HasPrefix(name, K8sCNPAdminTierNamePrefix) {
-		return AdminTierName, nil
+		return KubeAdminTierName, nil
 	}
 	if strings.HasPrefix(name, K8sCNPBaselineTierNamePrefix) {
-		return BaselineTierName, nil
+		return KubeBaselineTierName, nil
 	}
 	// Policy derived from OpenStack security groups is named as "ossg.default.<security group
 	// ID>", but should go into the default tier.
@@ -206,8 +206,8 @@ func TierOrDefault(tier string) string {
 // -  <namespace>/knp.default.<name> for a k8s NetworkPolicies
 // -  kanp.adminnetworkpolicy.<name> for a k8s AdminNetworkPolicies
 // -  kbanp.baselineadminnetworkpolicy.<name> for a k8s BaselineAdminNetworkPolicies
-// -  kcnp.admin.<name> for a k8s ClusterNetworkPolicies (Admin tier)
-// -  kcnp.baseline.<name> for a k8s ClusterNetworkPolicies (Baseline tier)
+// -  kcnp.kube-admin.<name> for a k8s ClusterNetworkPolicies (Admin tier)
+// -  kcnp.kube-baseline.<name> for a k8s ClusterNetworkPolicies (Baseline tier)
 // and for the staged counterparts, respectively:
 // -  <namespace>/staged:<tier>.<name>
 // -  staged:<tier>.<name>
@@ -256,10 +256,10 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 		return namespace, BaselineAdminNetworkPolicyTierName, stagedPrefix + name, nil
 	}
 	if strings.HasPrefix(name, K8sCNPAdminTierNamePrefix) {
-		return namespace, AdminTierName, stagedPrefix + name, nil
+		return namespace, KubeAdminTierName, stagedPrefix + name, nil
 	}
 	if strings.HasPrefix(name, K8sCNPBaselineTierNamePrefix) {
-		return namespace, BaselineTierName, stagedPrefix + name, nil
+		return namespace, KubeBaselineTierName, stagedPrefix + name, nil
 	}
 
 	// This is a non-kubernetes policy, so extract the tier name from the policy name.
@@ -271,6 +271,6 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 }
 
 func TierIsStatic(name string) bool {
-	return name == DefaultTierName || name == AdminTierName || name == BaselineTierName ||
+	return name == DefaultTierName || name == KubeAdminTierName || name == KubeBaselineTierName ||
 		name == AdminNetworkPolicyTierName || name == BaselineAdminNetworkPolicyTierName
 }

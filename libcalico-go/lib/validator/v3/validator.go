@@ -1737,7 +1737,7 @@ func validateTier(structLevel validator.StructLevel) {
 		}
 	}
 
-	if tier.Name == names.AdminTierName {
+	if tier.Name == names.KubeAdminTierName {
 		if tier.Spec.Order == nil || *tier.Spec.Order != api.AdminTierOrder {
 			structLevel.ReportError(
 				reflect.ValueOf(tier.Spec.Order),
@@ -1749,7 +1749,7 @@ func validateTier(structLevel validator.StructLevel) {
 		}
 	}
 
-	if tier.Name == names.BaselineTierName {
+	if tier.Name == names.KubeBaselineTierName {
 		if tier.Spec.Order == nil || *tier.Spec.Order != api.BaselineTierOrder {
 			structLevel.ReportError(
 				reflect.ValueOf(tier.Spec.Order),

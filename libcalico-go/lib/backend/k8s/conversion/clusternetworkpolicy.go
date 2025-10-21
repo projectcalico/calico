@@ -145,9 +145,9 @@ func clusterNetPolicyTypes(ingressRules []apiv3.Rule, egressRules []apiv3.Rule) 
 func k8sClusterNetPolNameAndTier(kcnp *clusternetpol.ClusterNetworkPolicy) (string, string) {
 	switch kcnp.Spec.Tier {
 	case clusternetpol.AdminTier:
-		return names.K8sCNPAdminTierNamePrefix + kcnp.Name, names.AdminTierName
+		return names.K8sCNPAdminTierNamePrefix + kcnp.Name, names.KubeAdminTierName
 	case clusternetpol.BaselineTier:
-		return names.K8sCNPBaselineTierNamePrefix + kcnp.Name, names.BaselineTierName
+		return names.K8sCNPBaselineTierNamePrefix + kcnp.Name, names.KubeBaselineTierName
 	default:
 		return "", ""
 	}

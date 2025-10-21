@@ -15,6 +15,8 @@
 package updateprocessors_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -27,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -294,7 +297,10 @@ var (
 var (
 	expectedModel1 = []*model.KVPair{
 		{
-			Key: model.PolicyKey{Tier: "admin", Name: "kcnp.admin.test.policy"},
+			Key: model.PolicyKey{
+				Tier: names.KubeAdminTierName,
+				Name: fmt.Sprintf("%vtest.policy", names.K8sCNPAdminTierNamePrefix),
+			},
 			Value: &model.Policy{
 				Order:          &kcnpOrder,
 				Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
@@ -345,8 +351,8 @@ var kcnp2 = clusternetpol.ClusterNetworkPolicy{
 var expectedModel2 = []*model.KVPair{
 	{
 		Key: model.PolicyKey{
-			Name: "kcnp.baseline.test.policy",
-			Tier: "baseline",
+			Tier: names.KubeBaselineTierName,
+			Name: fmt.Sprintf("%vtest.policy", names.K8sCNPBaselineTierNamePrefix),
 		},
 		Value: &model.Policy{
 			Order:          &kcnpOrder,

@@ -288,13 +288,13 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 		errs = append(errs, err)
 	}
 
-	err = c.ensureTierExists(ctx, names.AdminTierName, v3.Pass, v3.AdminTierOrder)
+	err = c.ensureTierExists(ctx, names.KubeAdminTierName, v3.Pass, v3.AdminTierOrder)
 	if err != nil {
 		log.WithError(err).Info("Unable to initialize admin Tier")
 		errs = append(errs, err)
 	}
 
-	err = c.ensureTierExists(ctx, names.BaselineTierName, v3.Pass, v3.BaselineTierOrder)
+	err = c.ensureTierExists(ctx, names.KubeBaselineTierName, v3.Pass, v3.BaselineTierOrder)
 	if err != nil {
 		log.WithError(err).Info("Unable to initialize baseline Tier")
 		errs = append(errs, err)

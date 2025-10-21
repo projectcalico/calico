@@ -3066,13 +3066,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 	})
 
 	Describe("watching ClusterNetworkPolicies", func() {
-		createTestClusterNetworkPolicy := func(name string) {
+		createTestClusterNetworkPolicy := func(name string, tier clusternetpolicy.Tier) {
 			cnp := &clusternetpolicy.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 				},
 				Spec: clusternetpolicy.ClusterNetworkPolicySpec{
-					Tier:     clusternetpolicy.AdminTier,
+					Tier:     tier,
 					Priority: 100,
 					Subject: clusternetpolicy.ClusterNetworkPolicySubject{
 						Namespaces: &metav1.LabelSelector{
@@ -3096,8 +3096,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 		}
 		BeforeEach(func() {
-			createTestClusterNetworkPolicy("test-cluster-net-policy-1")
-			createTestClusterNetworkPolicy("test-cluster-net-policy-2")
+			createTestClusterNetworkPolicy("test-cluster-net-policy-1", clusternetpolicy.AdminTier)
+			createTestClusterNetworkPolicy("test-cluster-net-policy-2", clusternetpolicy.BaselineTier)
 		})
 		AfterEach(func() {
 			deleteAllClusterNetworkPolicies()
@@ -3118,9 +3118,18 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 			watch.Stop()
 		})
-		It("should handle a list for many network policies with a revision", func() {
+		It("should handle a list for many cluster network policies in Admin tier with a revision", func() {
 			for i := 3; i < 1000; i++ {
-				createTestClusterNetworkPolicy(fmt.Sprintf("test-cluster-net-policy-%d", i))
+				createTestClusterNetworkPolicy(fmt.Sprintf("test-cluster-net-policy-%d", i), clusternetpolicy.AdminTier)
+			}
+			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, kvs.Revision)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("should handle a list for many cluster network policies in Baseline tier with a revision", func() {
+			for i := 3; i < 1000; i++ {
+				createTestClusterNetworkPolicy(fmt.Sprintf("test-cluster-net-policy-%d", i), clusternetpolicy.BaselineTier)
 			}
 			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, "")
 			Expect(err).NotTo(HaveOccurred())
