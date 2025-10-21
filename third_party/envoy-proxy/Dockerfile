@@ -6,9 +6,9 @@ ARG THIRD_PARTY_REGISTRY
 ARG UBI_IMAGE
 
 FROM ${ENVOYBINARY_IMAGE} AS envoybinary
-ADD ./nsswitch.conf /etc/nsswitch.conf
 
 FROM ${UBI_IMAGE} AS ubi
+RUN echo 'hosts: files dns' > /etc/nsswitch.conf
 
 FROM scratch AS source
 
@@ -35,13 +35,12 @@ COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
 COPY --from=ubi /lib64/libsemanage.so.2 /lib64/libsemanage.so.2
 COPY --from=ubi /lib64/libsepol.so.2 /lib64/libsepol.so.2
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
 
 COPY --from=envoybinary --chown=0:0 --chmod=644 \
     /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
 COPY --from=envoybinary --chown=0:0 --chmod=755 \
     /usr/local/bin/envoy /usr/local/bin/envoy
-COPY --from=envoybinary --chown=0:0 --chmod=644 \
-    /etc/nsswitch.conf /etc/nsswitch.conf
 
 FROM ${CALICO_BASE}
 
