@@ -340,7 +340,7 @@ tier_name1_rev1 = {
     'apiVersion': API_VERSION,
     'kind': 'Tier',
     'metadata': {
-        'name': 'admin',
+        'name': 'app-tier',
     },
     'spec': {
         'Order': 10000,
