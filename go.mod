@@ -118,7 +118,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/kind v0.29.0
 	sigs.k8s.io/knftables v0.0.18
-	sigs.k8s.io/network-policy-api v0.1.5
+	sigs.k8s.io/network-policy-api v0.1.8-0.20251017092043-375c8a75a50a
 	sigs.k8s.io/yaml v1.6.0
 )
 

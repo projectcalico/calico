@@ -99,7 +99,7 @@ func (c *adminNetworkPolicyClient) List(ctx context.Context, list model.ListInte
 		// Silently ignore rule conversion errors. We don't expect any conversion errors
 		// since the data given to us here is validated by the Kubernetes API. The conversion
 		// code ignores any rules that it cannot parse, and we will pass the valid ones to Felix.
-		var e *cerrors.ErrorAdminPolicyConversion
+		var e *cerrors.ErrorClusterNetworkPolicyConversion
 		if err != nil && !errors.As(err, &e) {
 			return nil, err
 		}
