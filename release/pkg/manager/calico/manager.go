@@ -1350,8 +1350,8 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		"operator_version": r.operatorVersion,
 	}).Debug("Updating versions in helm charts to release branches")
 	calicoChartFilePath := filepath.Join(r.repoRoot, "charts", "calico", "values.yaml")
-	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, branch), calicoChartFilePath}, nil); err != nil {
-		logrus.WithError(err).Errorf("Failed to update version in %s", calicoChartFilePath)
+	if out, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, branch), calicoChartFilePath}, nil); err != nil {
+		logrus.Error(out)
 		return fmt.Errorf("failed to update version in %s: %w", calicoChartFilePath, err)
 	}
 	if err := r.modifyHelmChartsValues(); err != nil {
@@ -1361,8 +1361,8 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 	// Modify values in metadata.mk
 	logrus.WithField("operator_branch", r.operatorBranch).Debug("Updating variables in metadata.mk")
 	makeMetadataFilePath := filepath.Join(r.repoRoot, "metadata.mk")
-	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/^OPERATOR_BRANCH.*/OPERATOR_BRANCH ?= %s/g`, r.operatorBranch), makeMetadataFilePath}, nil); err != nil {
-		logrus.WithError(err).Errorf("Failed to update operator branch in %s", makeMetadataFilePath)
+	if out, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/^OPERATOR_BRANCH.*/OPERATOR_BRANCH ?= %s/g`, r.operatorBranch), makeMetadataFilePath}, nil); err != nil {
+		logrus.Error(out)
 		return fmt.Errorf("failed to update operator branch in %s: %w", makeMetadataFilePath, err)
 	}
 
@@ -1370,21 +1370,28 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 	releaseStream := strings.TrimPrefix(branch, r.releaseBranchPrefix+"-")
 	logrus.WithField("releaseStream", releaseStream).Debug("Updating release stream in setup script for CAPZ Windows FV tests")
 	scriptFilePath := filepath.Join(r.repoRoot, "process", "testing", "winfv-felix", "setup-fv-capz.sh")
-	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/RELEASE_STREAM=.*HASH_RELEASE/RELEASE_STREAM=%s HASH_RELEASE/g`, releaseStream), scriptFilePath}, nil); err != nil {
-		logrus.WithError(err).Errorf("Failed to update release stream in %s", scriptFilePath)
+	if out, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/RELEASE_STREAM=.*HASH_RELEASE/RELEASE_STREAM=%s HASH_RELEASE/g`, releaseStream), scriptFilePath}, nil); err != nil {
+		logrus.Error(out)
 		return fmt.Errorf("failed to update release stream in %s: %w", scriptFilePath, err)
+	}
+
+	// Update mocknode test tool to use the correct branch tag.
+	logrus.WithField("branch", branch).Debug("Updating mocknode test tool to use the correct branch tag")
+	mockNodeFilePath := filepath.Join(r.repoRoot, "test-tools", "mocknode", "mock-node.yaml")
+	if out, err := r.runner.Run("sed", []string{"-Ei", fmt.Sprintf(`s#([a-zA-Z .]+)([a-zA-Z.]+/mock-node:)[^[:space:]]+#\1\2%s#g`, branch), mockNodeFilePath}, nil); err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("failed to update mocknode image in %s: %w", mockNodeFilePath, err)
 	}
 
 	// Run code generation.
 	logrus.Debug("Running code generation")
 	env := append(os.Environ(), fmt.Sprintf("DEFAULT_BRANCH_OVERRIDE=%s", branch))
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate", env...); err != nil {
-		logrus.WithError(err).Error("Failed to run code generation for branch cut")
 		return fmt.Errorf("failed to run code generation: %w", err)
 	}
 
 	// Commit the changes.
-	if _, err := r.git("add",
+	if out, err := r.git("add",
 		filepath.Join(r.repoRoot, ".semaphore"),
 		filepath.Join(r.repoRoot, "charts"),
 		filepath.Join(r.repoRoot, "manifests"),
@@ -1392,9 +1399,11 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		filepath.Join(r.repoRoot, "process", "testing", "winfv-felix", "setup-fv-capz.sh"),
 		filepath.Join(r.repoRoot, "test-tools", "mocknode"),
 	); err != nil {
+		logrus.Error(out)
 		return fmt.Errorf("failed to add files to git: %s", err)
 	}
-	if _, err := r.git("commit", "-m", fmt.Sprintf("Updates for %s release branch", branch)); err != nil {
+	if out, err := r.git("commit", "-m", fmt.Sprintf("Updates for %s release branch", branch)); err != nil {
+		logrus.Error(out)
 		return fmt.Errorf("failed to commit changes: %s", err)
 	}
 
