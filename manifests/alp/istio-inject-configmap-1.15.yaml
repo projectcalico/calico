@@ -434,7 +434,7 @@ data:
               name: dikastes-sock
 
           - name: dikastes
-            image: quay.io/calico/dikastes:release-v3.31
+            image: quay.io/calico/dikastes:v3.31.0
             args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
             securityContext:
               allowPrivilegeEscalation: false
@@ -719,7 +719,7 @@ data:
               name: dikastes-sock
 
           - name: dikastes
-            image: quay.io/calico/dikastes:release-v3.31
+            image: quay.io/calico/dikastes:v3.31.0
             args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
             securityContext:
               allowPrivilegeEscalation: false

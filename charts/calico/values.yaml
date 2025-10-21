@@ -1,5 +1,5 @@
 # The Calico version to use when generating manifests.
-version: release-v3.31
+version: v3.31.0
 
 # Configure the images to use when generating manifests.
 # If a new image is added, update manifests/generate.sh
