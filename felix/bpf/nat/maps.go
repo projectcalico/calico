@@ -451,7 +451,7 @@ var MaglevMapParameters = maps.MapParameters{
 	Type:       "hash",
 	KeySize:    MaglevBackendKeySize,
 	ValueSize:  maglevBackendValueSize,
-	MaxEntries: (int(libch.NearestPrimeUint16(libch.MaglevMaxEndpointsPerService)) * libch.MaglevEndpointLUTFactor) * libch.MaglevMaxServices,
+	MaxEntries: (int(libch.NextPrimeUint16(libch.MaglevMaxEndpointsPerService)) * libch.MaglevEndpointLUTFactor) * libch.MaglevMaxServices,
 	Name:       "cali_v4_mglv",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }

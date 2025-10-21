@@ -2,6 +2,8 @@ package consistenthash
 
 import (
 	"sort"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Every prime that can be represented in a uint16.
@@ -663,8 +665,11 @@ var pr = []uint16{
 	65519, 65521,
 }
 
-// NearestPrimeUint16 finds the nearest prime number to i.
-func NearestPrimeUint16(i int) uint16 {
+// NextPrimeUint16 finds the next prime number after i.
+func NextPrimeUint16(i int) uint16 {
+	if i > 65521 {
+		logrus.WithField("i", i).Panic("Integer has no next prime uint16")
+	}
 	idx := sort.Search(len(pr), func(x int) bool { return int(pr[x]) >= i })
 	if idx == len(pr) {
 		return pr[len(pr)-1]
