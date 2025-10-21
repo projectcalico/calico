@@ -522,8 +522,21 @@ func TestTierList(t *testing.T) {
 	}
 
 	opts := storage.GetOptions{IgnoreNotFound: false}
+
+	adminTier := makeTier(names.AdminTierName, "", v3.AdminTierOrder)
+	err := store.Get(ctx, "projectcalico.org/tiers/admin", opts, adminTier)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
 	defaultTier := makeTier(names.DefaultTierName, "", v3.DefaultTierOrder)
-	err := store.Get(ctx, "projectcalico.org/tiers/default", opts, defaultTier)
+	err = store.Get(ctx, "projectcalico.org/tiers/default", opts, defaultTier)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	baselineTier := makeTier(names.BaselineTierName, "", v3.BaselineTierOrder)
+	err = store.Get(ctx, "projectcalico.org/tiers/baseline", opts, baselineTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -559,7 +572,7 @@ func TestTierList(t *testing.T) {
 			},
 		},
 		// Tiers are returned in name order.
-		expectedOut: []*v3.Tier{anpTier, preset[1].storedObj, banpTier, defaultTier},
+		expectedOut: []*v3.Tier{adminTier, anpTier, preset[1].storedObj, baselineTier, banpTier, defaultTier},
 	}}
 
 	for i, tt := range tests {
