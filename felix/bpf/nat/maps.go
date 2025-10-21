@@ -23,10 +23,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	libch "github.com/projectcalico/calico/libcalico-go/lib/consistenthash"
-
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
+	libch "github.com/projectcalico/calico/libcalico-go/lib/consistenthash"
 )
 
 func init() {
