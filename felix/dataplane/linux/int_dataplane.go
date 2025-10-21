@@ -2840,7 +2840,7 @@ func startBPFDataplaneComponents(
 		go func() {
 			log.Infof("Starting BPF Proxy Healthz server on %s", healthzAddr)
 			for {
-				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
+				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mostly ignored inside
 				if err != nil {
 					log.WithError(err).Error("BPF Proxy Healthz server failed, restarting in 1s")
 					time.Sleep(time.Second)
