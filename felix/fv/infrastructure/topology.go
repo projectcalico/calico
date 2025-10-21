@@ -76,6 +76,7 @@ type TopologyOptions struct {
 	IPv6PoolUsages            []api.IPPoolAllowedUse
 	NeedNodeIP                bool
 	FlowLogSource             int
+	BPFProxyHealthzPort       int // zero means disable
 }
 
 // Calico containers created during topology creation.
@@ -305,6 +306,8 @@ func StartNNodeTopology(
 		opts.ExtraEnvVars["FELIX_TYPHAADDR"] = tc.Typha.IP + ":5473"
 		typhaIP = tc.Typha.IP
 	}
+
+	opts.ExtraEnvVars["FELIX_BPFKUBEPROXYHEALTZPORT"] = fmt.Sprintf("%d", opts.BPFProxyHealthzPort)
 
 	tc.Felixes = make([]*Felix, n)
 	var wg sync.WaitGroup
