@@ -169,10 +169,14 @@ skip_redir_ifindex:
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if (cali_rt_is_vxlan(dest_rt) && !(cali_rt_is_same_subnet(dest_rt))) {
+		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_vxlan(dest_rt)) ||
+				(cali_rt_is_vxlan(dest_rt) && !(cali_rt_is_same_subnet(dest_rt)))) {
 			struct bpf_tunnel_key key = {
-				.tunnel_id = OVERLAY_TUNNEL_ID,
+				.tunnel_id = 1,
 			};
+			if (cali_rt_is_vxlan(dest_rt)) {
+				key.tunnel_id = OVERLAY_TUNNEL_ID;
+			}
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6

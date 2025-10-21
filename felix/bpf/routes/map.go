@@ -174,6 +174,10 @@ func (v Value) String() string {
 		parts = append(parts, "skip-ingress-redir")
 	}
 
+	if typeFlags&FlagVXLAN != 0 {
+		parts = append(parts, "vxlan")
+	}
+
 	if typeFlags&FlagLocal != 0 && typeFlags&FlagWorkload != 0 {
 		parts = append(parts, "idx", fmt.Sprint(v.IfaceIndex()))
 	}
