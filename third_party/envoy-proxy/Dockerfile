@@ -39,6 +39,8 @@ COPY --from=envoybinary --chown=0:0 --chmod=644 \
     /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
 COPY --from=envoybinary --chown=0:0 --chmod=755 \
     /usr/local/bin/envoy /usr/local/bin/envoy
+COPY --from=envoybinary --chown=0:0 --chmod=644 \
+    /etc/nsswitch.conf /etc/nsswitch.conf
 
 FROM ${CALICO_BASE}
 
