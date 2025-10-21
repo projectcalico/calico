@@ -11,22 +11,6 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 )
 
-// M is a prime number much larger than the number of backends we expect to have for a service.
-// It is the largest prime storable in a uint16, and the largest prime we can expect the user
-// to set via Felixconfigs.
-const M = 65521
-
-type ConsistentHashOpt func(*ConsistentHash)
-
-// WithLUTSize configures the LUT-size and subsequently,
-// the preference-list length for each backend.
-// Must be a prime number.
-func WithLUTSize(m int) func(*ConsistentHash) {
-	return func(c *ConsistentHash) {
-		c.m = m
-	}
-}
-
 // ConsistentHash implements ConsistentHash consistent hashing:
 //   - For each configured backend, generates a preference-list
 //     of LUT positions it would like to occupy.
@@ -48,8 +32,8 @@ type backend struct {
 }
 
 // New returns a backend-hashing module.
-func New(hash1, hash2 hash.Hash, o ...ConsistentHashOpt) *ConsistentHash {
-	c := &ConsistentHash{m: M}
+func New(lutSize int, hash1, hash2 hash.Hash) *ConsistentHash {
+	c := &ConsistentHash{m: lutSize}
 	c.backendNames = make([]string, 0)
 	c.backendsByName = make(map[string]backend)
 
@@ -58,10 +42,6 @@ func New(hash1, hash2 hash.Hash, o ...ConsistentHashOpt) *ConsistentHash {
 	}
 	c.h1 = hash1
 	c.h2 = hash2
-
-	for _, option := range o {
-		option(c)
-	}
 
 	return c
 }

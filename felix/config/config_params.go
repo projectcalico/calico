@@ -730,10 +730,8 @@ func (config *Config) KubernetesProvider() Provider {
 	return ProviderNone
 }
 
-const maglevEndpointLUTFactor = 5
-
 func (config *Config) BPFLUTSizeMaglev() int {
-	return int(consistenthash.NearestPrimeUint16(config.BPFMaglevMaxEndpointsPerService * maglevEndpointLUTFactor))
+	return int(consistenthash.NearestPrimeUint16(config.BPFMaglevMaxEndpointsPerService * consistenthash.MaglevEndpointLUTFactor))
 }
 
 func (config *Config) BPFMapSizeMaglev() int {

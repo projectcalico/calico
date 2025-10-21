@@ -45,6 +45,8 @@ import (
 // used by the BPF program, and would be an error to do so.
 // We would like such errors to be immediately apparent, hence the omission.
 
+var maglevTestM = 31
+
 func TestMaglevNATServiceIPTCP(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -117,7 +119,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Node 3: Build a maglev LUT and program each item to the BPF map.
-	mglv := consistenthash.New(fnv.New32(), fnv.New32(), consistenthash.WithLUTSize(31))
+	mglv := consistenthash.New(maglevTestM, fnv.New32(), fnv.New32())
 	mglv.AddBackend(chtypes.MockEndpoint{
 		Ip:  podIP.String(),
 		Prt: podPort,
@@ -255,7 +257,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Node 2: Build a maglev LUT and program each item to the BPF map.
-	mglv = consistenthash.New(fnv.New32(), fnv.New32(), consistenthash.WithLUTSize(31))
+	mglv = consistenthash.New(maglevTestM, fnv.New32(), fnv.New32())
 	mglv.AddBackend(chtypes.MockEndpoint{
 		Ip:  podIP.String(),
 		Prt: podPort,
@@ -476,7 +478,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Node 1: Build a maglev LUT and program each item to the BPF map.
-	mglv = consistenthash.New(fnv.New32(), fnv.New32(), consistenthash.WithLUTSize(31))
+	mglv = consistenthash.New(maglevTestM, fnv.New32(), fnv.New32())
 	mglv.AddBackend(chtypes.MockEndpoint{
 		Ip:  podIP.String(),
 		Prt: podPort,
@@ -601,7 +603,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Node 2: Build a maglev LUT and program each item to the BPF map.
-	mglv = consistenthash.New(fnv.New32(), fnv.New32(), consistenthash.WithLUTSize(31))
+	mglv = consistenthash.New(maglevTestM, fnv.New32(), fnv.New32())
 	mglv.AddBackend(chtypes.MockEndpoint{
 		Ip:  podIP.String(),
 		Prt: podPort,
@@ -808,7 +810,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		nat.NewNATValueWithFlags(0, 1, 0, 0, nat.NATFlgMaglev).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
-	mglv = consistenthash.New(fnv.New32(), fnv.New32(), consistenthash.WithLUTSize(31))
+	mglv = consistenthash.New(maglevTestM, fnv.New32(), fnv.New32())
 	mglv.AddBackend(chtypes.MockEndpoint{
 		Ip:  podIP.String(),
 		Prt: podPort,
@@ -934,7 +936,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Build a maglev LUT and program each item to the BPF map.
-	mglv := consistenthash.New(fnv.New32(), fnv.New32(), consistenthash.WithLUTSize(31))
+	mglv := consistenthash.New(maglevTestM, fnv.New32(), fnv.New32())
 	mglv.AddBackend(chtypes.MockEndpoint{
 		Ip:  natIP.String(),
 		Prt: natPort,
@@ -1410,7 +1412,7 @@ func TestMaglevNATServiceIPTCPV6(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Build a maglev LUT and program each item to the BPF map.
-	mglv = consistenthash.New(fnv.New32(), fnv.New32(), consistenthash.WithLUTSize(31))
+	mglv = consistenthash.New(maglevTestM, fnv.New32(), fnv.New32())
 	mglv.AddBackend(chtypes.MockEndpoint{
 		Ip:  natIP.String(),
 		Prt: natPort,
@@ -1902,7 +1904,7 @@ func TestMaglevNATNodePortNoFWD(t *testing.T) {
 	natPort := uint16(666)
 
 	// Build a maglev LUT and program each item to the BPF map.
-	mglv := consistenthash.New(fnv.New32(), fnv.New32(), consistenthash.WithLUTSize(31))
+	mglv := consistenthash.New(maglevTestM, fnv.New32(), fnv.New32())
 	mglv.AddBackend(chtypes.MockEndpoint{
 		Ip:  natIP.String(),
 		Prt: natPort,

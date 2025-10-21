@@ -874,8 +874,8 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 
 func (s *Syncer) newConsistentHash() *consistenthash.ConsistentHash {
 	return consistenthash.New(
+		s.maglevLUTSize,
 		fnv.New32(), fnv.New32(),
-		consistenthash.WithLUTSize(s.maglevLUTSize),
 	)
 }
 
