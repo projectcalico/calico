@@ -523,7 +523,7 @@ func TestTierList(t *testing.T) {
 
 	opts := storage.GetOptions{IgnoreNotFound: false}
 
-	adminTier := makeTier(names.AdminTierName, "", v3.AdminTierOrder)
+	adminTier := makeTier(names.KubeAdminTierName, "", v3.AdminTierOrder)
 	err := store.Get(ctx, "projectcalico.org/tiers/admin", opts, adminTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
@@ -535,7 +535,7 @@ func TestTierList(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	baselineTier := makeTier(names.BaselineTierName, "", v3.BaselineTierOrder)
+	baselineTier := makeTier(names.KubeBaselineTierName, "", v3.BaselineTierOrder)
 	err = store.Get(ctx, "projectcalico.org/tiers/baseline", opts, baselineTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
