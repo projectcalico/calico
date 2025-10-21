@@ -2052,10 +2052,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// Create service with maglev annotation
 						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0,
 							testOpts.protocol, []string{externalIP})
-						testSvc.ObjectMeta.Annotations = map[string]string{
+						testSvc.Annotations = map[string]string{
 							"lb.projectcalico.org/external-traffic-strategy": "maglev",
 						}
-						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						testSvcNamespace = testSvc.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
