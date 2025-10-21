@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -158,7 +159,6 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) 
 	// construct a dummy svc using the service name from endpointslice to get the key
 	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: svcName, Namespace: ep.Namespace}}
 	key, err := cache.MetaNamespaceKeyFunc(svc)
-
 	if err != nil {
 		log.WithField("ep", ep.Name).WithError(err).Warn("getServiceForEndpoints: error on retrieving key for endpoint, passing")
 		return nil, ""
@@ -479,20 +479,17 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 	// we need to announce single IPs for services of type externalTrafficPolicy Cluster.
 	// There are 2 cases inside this type:
 	// - LoadBalancer with a single IP.
-	// - Any one of externalIPs in service of type LoadBalancer or NodePort with a single IP.
+	// - Any one of the externalIPs are a single IP.
 	if svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster {
 		if svc.Spec.Type == v1.ServiceTypeLoadBalancer && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
 			logc.Debug("Advertising load balancer of type cluster because of single IP definition")
 			return true
 		}
 
-		if svc.Spec.Type == v1.ServiceTypeLoadBalancer || svc.Spec.Type == v1.ServiceTypeNodePort {
-			for _, extIP := range svc.Spec.ExternalIPs {
-				if rg.isSingleExternalIP(extIP) {
-					logc.Debug("Advertising external IP of type cluster because of single IP definition")
-					return true
-				}
-			}
+		// Advertise if there is a fully qualified (i.e., /32 or /128) external IP defined.
+		if slices.ContainsFunc(svc.Spec.ExternalIPs, rg.isSingleExternalIP) {
+			logc.Debug("Advertising external IP of type cluster because of single IP definition")
+			return true
 		}
 	}
 
