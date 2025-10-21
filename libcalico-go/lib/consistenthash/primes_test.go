@@ -9,7 +9,7 @@ import (
 
 var _ = DescribeTable("RulesAPIToBackend",
 	func(input int, expected int) {
-		Expect(consistenthash.NearestPrimeUint16(input)).To(Equal(expected))
+		Expect(consistenthash.NearestPrimeUint16(input)).To(BeEquivalentTo(expected))
 	},
 	Entry("Negative number should return 2", -1, 2),
 	Entry("0 should return 2", 0, 2),
