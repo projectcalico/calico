@@ -105,6 +105,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 	})
 
@@ -284,6 +285,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		// A workload on host 2 can connect to a non-workload server on host 1.
 		cc.ExpectSome(wlHost2[0], hostW[0])
 
+		time.Sleep(time.Minute * 40)
 		// Do 3 rounds of connectivity checking.
 		cc.CheckConnectivity()
 		for ii := range tc.Felixes {
@@ -470,7 +472,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	}
 
-	It("should get expected flow logs", func() {
+	It("pepper should get expected flow logs", func() {
 		checkFlowLogs()
 	})
 
