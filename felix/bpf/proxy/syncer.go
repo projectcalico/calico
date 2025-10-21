@@ -133,9 +133,8 @@ type Syncer struct {
 	newEpsMap  k8sp.EndpointsMap
 	prevSvcMap map[svcKey]svcInfo
 	prevEpsMap k8sp.EndpointsMap
-	// consistentHashMap is the hashing module that powers Maglev backend selection.
-	consistentHashMap map[svcKey]*consistenthash.ConsistentHash
-	maglevLUTSize     int
+
+	maglevLUTSize int
 
 	// active Maps contain all active svcs endpoints at the end of an iteration
 	activeSvcsMap map[ipPortProto]uint32
@@ -226,16 +225,15 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 ) (*Syncer, error) {
 
 	s := &Syncer{
-		ipFamily:          family,
-		bpfAff:            affmap,
-		rt:                rt,
-		nodePortIPs:       uniqueIPs(nodePortIPs),
-		prevSvcMap:        make(map[svcKey]svcInfo),
-		prevEpsMap:        make(k8sp.EndpointsMap),
-		stop:              make(chan struct{}),
-		excludedCIDRs:     excludedCIDRs,
-		consistentHashMap: make(map[svcKey]*consistenthash.ConsistentHash),
-		maglevLUTSize:     maglevLUTSize,
+		ipFamily:      family,
+		bpfAff:        affmap,
+		rt:            rt,
+		nodePortIPs:   uniqueIPs(nodePortIPs),
+		prevSvcMap:    make(map[svcKey]svcInfo),
+		prevEpsMap:    make(k8sp.EndpointsMap),
+		stop:          make(chan struct{}),
+		excludedCIDRs: excludedCIDRs,
+		maglevLUTSize: maglevLUTSize,
 	}
 
 	switch family {
@@ -421,7 +419,7 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 	return nil
 }
 
-func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error {
+func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint, maglevEPs []k8sp.Endpoint) error {
 	var id uint32
 
 	old, exists := s.prevSvcMap[skey]
@@ -430,7 +428,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error
 	} else {
 		id = s.newSvcID()
 	}
-	count, local, err := s.updateService(skey, sinfo, id, eps)
+	count, local, err := s.updateService(skey, sinfo, id, eps, maglevEPs)
 	if err != nil {
 		return err
 	}
@@ -473,12 +471,13 @@ func (s *Syncer) addActiveEps(id uint32, svc Service, eps []k8sp.Endpoint) {
 
 func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
 	eps []k8sp.Endpoint, node ip.Addr, nport int) error {
+
 	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.AsNetIP()))
 	si := serviceInfoFromK8sServicePort(sinfo)
 	si.clusterIP = node.AsNetIP()
 	si.port = nport
 
-	if err := s.applySvc(skey, si, eps); err != nil {
+	if err := s.applySvc(skey, si, eps, nil); err != nil {
 		return fmt.Errorf("apply NodePortRemote for %s node %s", sname, node)
 	}
 
@@ -550,6 +549,7 @@ func (s *Syncer) applyDerived(
 	sname k8sp.ServicePortName,
 	t svcType,
 	sinfo Service,
+	maglevEPs []k8sp.Endpoint,
 ) error {
 
 	svc, ok := s.newSvcMap[getSvcKey(sname, "")]
@@ -558,11 +558,6 @@ func (s *Syncer) applyDerived(
 		return fmt.Errorf("no ClusterIP for derived service type %d", t)
 	}
 
-	// Instead of configuring a new CH module for the derived service,
-	// we'll just copy the original. This assumes the backend lists for
-	// the service and derived service are the same.
-	// TO THE REVIEWER: PLEASE SUGGEST REMOVING THIS LINE IF THE ABOVE IS SATISFACTORY!
-	var origCH *consistenthash.ConsistentHash
 	var skey svcKey
 	count := svc.count
 	local := svc.localCount
@@ -575,15 +570,6 @@ func (s *Syncer) applyDerived(
 			log.WithField("service", sname).Warn("Ignoring Maglev directive for unsupported service type: NodePort")
 		default:
 			flags |= nat.NATFlgMaglev
-			origSKey := getSvcKey(sname, "")
-			ch, ok := s.consistentHashMap[origSKey]
-			if !ok {
-				// This shouldn't happen.
-				log.WithField("name", sname).Warn("No Maglev LUT was originally written for this service. Cannot program derived service LUT")
-			} else {
-				origCH = ch
-				log.WithField("service", sname).Debug("Found pre-existing CH for Maglev service.")
-			}
 		}
 	}
 
@@ -604,8 +590,8 @@ func (s *Syncer) applyDerived(
 		svc:        sinfo,
 	}
 
-	if origCH != nil {
-		s.writeMaglevSvcBackends(skey, sinfo, origCH)
+	if sinfo.UseMaglev() && maglevEPs != nil {
+		s.writeMaglevSvcBackends(skey, sinfo, maglevEPs)
 	}
 
 	if (svcTypeLoadBalancer == t || svcTypeExternalIP == t) && len(sinfo.LoadBalancerSourceRanges()) != 0 {
@@ -671,7 +657,18 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			}
 		}
 
-		err := s.applySvc(skey, svc, eps)
+		var maglevEPs []k8sp.Endpoint
+		if svc.UseMaglev() {
+			ch := s.newConsistentHash()
+			for _, ep := range eps {
+				if ep.IsReady() {
+					ch.AddBackend(ep)
+				}
+			}
+			maglevEPs = ch.Generate()
+		}
+
+		err := s.applySvc(skey, svc, eps, maglevEPs)
 		if err != nil {
 			return err
 		}
@@ -680,7 +677,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			if len(lbIP) != 0 {
 				extInfo := serviceInfoFromK8sServicePort(svc)
 				extInfo.clusterIP = lbIP
-				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo)
+				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo, maglevEPs)
 				if err != nil {
 					log.Errorf("failed to apply LoadBalancer IP %s for service %s : %s", lbIP, sname, err)
 					continue
@@ -693,7 +690,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		for _, extIP := range svc.ExternalIPs() {
 			extInfo := serviceInfoFromK8sServicePort(svc)
 			extInfo.clusterIP = extIP
-			err := s.applyDerived(sname, svcTypeExternalIP, extInfo)
+			err := s.applyDerived(sname, svcTypeExternalIP, extInfo, maglevEPs)
 			if err != nil {
 				log.Errorf("failed to apply ExternalIP %s for service %s : %s", extIP, sname, err)
 				continue
@@ -711,7 +708,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 					// separately
 					continue
 				}
-				err := s.applyDerived(sname, svcTypeNodePort, npInfo)
+				err := s.applyDerived(sname, svcTypeNodePort, npInfo, nil)
 				if err != nil {
 					log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)
 					continue
@@ -802,11 +799,10 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 	return s.cleanupSticky()
 }
 
-func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp.Endpoint) (int, int, error) {
+func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp.Endpoint, maglevEPs []k8sp.Endpoint) (int, int, error) {
 	cpEps := make([]k8sp.Endpoint, 0, len(eps))
 	cnt := 0
 	local := 0
-	var ch *consistenthash.ConsistentHash
 
 	if sinfo.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		// since we write the backend before we write the frontend, we need to
@@ -852,15 +848,9 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 		flags |= nat.NATFlgInternalLocal
 	}
 
-	if sinfo.UseMaglev() {
+	if sinfo.UseMaglev() && maglevEPs != nil {
 		flags |= nat.NATFlgMaglev
-		ch = s.newConsistentHash()
-		for _, ep := range eps {
-			if ep.IsReady() {
-				ch.AddBackend(ep)
-			}
-		}
-		s.writeMaglevSvcBackends(skey, sinfo, ch)
+		s.writeMaglevSvcBackends(skey, sinfo, maglevEPs)
 	}
 
 	if err := s.writeSvc(sinfo, id, cnt, local, flags); err != nil {
@@ -890,21 +880,13 @@ func (s *Syncer) newConsistentHash() *consistenthash.ConsistentHash {
 }
 
 // writeMaglevBackends takes frontend info, and a pre-populated CH module (backends already programmed).
-func (s *Syncer) writeMaglevSvcBackends(skey svcKey, sinfo Service, ch *consistenthash.ConsistentHash) {
-	if ch == nil {
-		log.WithFields(log.Fields{"service": skey, "name": sinfo.String()}).Info("Skipping ConsistentHash-enabled service update for empty endpoint list")
-		return
-	}
-
+func (s *Syncer) writeMaglevSvcBackends(skey svcKey, sinfo Service, maglevEPs []k8sp.Endpoint) {
 	vip := sinfo.ClusterIP()
 	port := uint16(sinfo.Port())
 	proto := ProtoV1ToIntPanic(sinfo.Protocol())
 
-	s.consistentHashMap[skey] = ch
-
 	n := time.Now()
-	lut := ch.Generate()
-	for i, b := range lut {
+	for i, b := range maglevEPs {
 		mKey := s.newMaglevKey(vip, port, proto, uint32(i))
 		mVal := s.newBackendValue(net.ParseIP(b.IP()), uint16(b.Port()))
 		s.bpfMaglevEps.Desired().Set(mKey, mVal)

@@ -393,8 +393,8 @@ const (
 	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
-	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
-	ExternalTrafficStrategyAnnotation  = "lb.projectcalico.org/external-traffic-strategy"
+	ExcludeServiceAnnotation          = "projectcalico.org/natExcludeService"
+	ExternalTrafficStrategyAnnotation = "lb.projectcalico.org/external-traffic-strategy"
 )
 
 var (
