@@ -8,6 +8,22 @@ ARG UBI_IMAGE
 FROM ${ENVOYBINARY_IMAGE} AS envoybinary
 
 FROM ${UBI_IMAGE} AS ubi
+RUN cat > /etc/nsswitch.conf <<EOF
+passwd:     files
+shadow:     files
+group:      files
+hosts:      files dns
+services:   files
+automount:  files
+
+aliases:    files
+ethers:     files
+gshadow:    files
+networks:   files dns
+protocols:  files
+publickey:  files
+rpc:        files
+EOF
 
 FROM scratch AS source
 
@@ -34,6 +50,7 @@ COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
 COPY --from=ubi /lib64/libsemanage.so.2 /lib64/libsemanage.so.2
 COPY --from=ubi /lib64/libsepol.so.2 /lib64/libsepol.so.2
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
 
 COPY --from=envoybinary --chown=0:0 --chmod=644 \
     /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
