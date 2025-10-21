@@ -8,7 +8,22 @@ ARG UBI_IMAGE
 FROM ${ENVOYBINARY_IMAGE} AS envoybinary
 
 FROM ${UBI_IMAGE} AS ubi
-RUN echo 'hosts: files dns' > /etc/nsswitch.conf
+RUN cat > /etc/nsswitch.conf <<EOF
+passwd:     files
+shadow:     files
+group:      files
+hosts:      files dns
+services:   files
+automount:  files
+
+aliases:    files
+ethers:     files
+gshadow:    files
+networks:   files dns
+protocols:  files
+publickey:  files
+rpc:        files
+EOF
 
 FROM scratch AS source
 
