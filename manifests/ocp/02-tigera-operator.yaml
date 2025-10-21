@@ -32,7 +32,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: quay.io/tigera/operator:release-v1.40
+          image: quay.io/tigera/operator:v1.40.0
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -53,7 +53,7 @@ spec:
             - name: OPERATOR_NAME
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
-              value: release-v1.40
+              value: v1.40.0
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint
@@ -73,7 +73,7 @@ spec:
       initContainers:
         # Install CRDs first, so that APIs exist for calicoctl to use.
         - name: bootstrap-crds
-          image: quay.io/tigera/operator:release-v1.40
+          image: quay.io/tigera/operator:v1.40.0
           command:
             - operator
           args:
@@ -84,7 +84,7 @@ spec:
                 optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
-          image: quay.io/calico/ctl:release-v3.31
+          image: quay.io/calico/ctl:v3.31.0
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
