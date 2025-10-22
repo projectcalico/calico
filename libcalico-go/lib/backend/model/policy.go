@@ -21,10 +21,11 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 var (
-	matchPolicy = regexp.MustCompile("^/?calico/v1/policy/tier/([^/]+)/policy/([^/]+)$")
+	matchPolicy = regexp.MustCompile("^/?calico/v1/policy/([^/]+)/([^/]+)/([^/]+)$")
 	typePolicy  = reflect.TypeOf(Policy{})
 )
 
@@ -47,7 +48,19 @@ type PolicyKey struct {
 }
 
 func (key PolicyKey) defaultPath() (string, error) {
-	return "", fmt.Errorf("PolicyKey is not supported for datastore operations")
+	if key.Name == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
+	}
+	if key.Kind == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "kind"}
+	}
+	switch key.Kind {
+	case apiv3.KindNetworkPolicy, apiv3.KindStagedNetworkPolicy, apiv3.KindStagedKubernetesNetworkPolicy:
+		if key.Namespace == "" {
+			return "", errors.ErrorInsufficientIdentifiers{Name: "namespace"}
+		}
+	}
+	return fmt.Sprintf("/calico/v1/policy/%s/%s/%s", key.Kind, key.Namespace, key.Name), nil
 }
 
 func (key PolicyKey) defaultDeletePath() (string, error) {
@@ -55,7 +68,7 @@ func (key PolicyKey) defaultDeletePath() (string, error) {
 }
 
 func (key PolicyKey) defaultDeleteParentPaths() ([]string, error) {
-	return nil, fmt.Errorf("PolicyKey is not supported for datastore operations")
+	return nil, fmt.Errorf("defaultDeleteParentPaths is not implemented for PolicyKey")
 }
 
 func (key PolicyKey) valueType() (reflect.Type, error) {
@@ -63,8 +76,7 @@ func (key PolicyKey) valueType() (reflect.Type, error) {
 }
 
 func (key PolicyKey) String() string {
-	return fmt.Sprintf("Policy(Name=%s, Namespace=%s, Kind=%s, Staged=%v)",
-		key.Name, key.Namespace, key.Kind, key.Staged)
+	return fmt.Sprintf("Policy(Name=%s, Namespace=%s, Kind=%s)", key.Name, key.Namespace, key.Kind)
 }
 
 type Policy struct {

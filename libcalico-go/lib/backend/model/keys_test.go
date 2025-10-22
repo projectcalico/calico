@@ -374,6 +374,35 @@ var _ = DescribeTable(
 		nil,
 		true,
 	),
+	Entry(
+		"NetworkPolicy",
+		"/calico/v1/policy/NetworkPolicy/default/my-policy",
+		PolicyKey{
+			Kind:      "NetworkPolicy",
+			Namespace: "default",
+			Name:      "my-policy",
+		},
+		false,
+	),
+	Entry(
+		"StagedNetworkPolicy",
+		"/calico/v1/policy/StagedNetworkPolicy/default/my-staged-policy",
+		PolicyKey{
+			Kind:      "StagedNetworkPolicy",
+			Namespace: "default",
+			Name:      "my-staged-policy",
+		},
+		false,
+	),
+	Entry(
+		"GlobalNetworkPolicy",
+		"/calico/v1/policy/GlobalNetworkPolicy//my-global-policy",
+		PolicyKey{
+			Kind: "GlobalNetworkPolicy",
+			Name: "my-global-policy",
+		},
+		false,
+	),
 )
 
 var _ = DescribeTable(

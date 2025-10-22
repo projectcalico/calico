@@ -39,8 +39,8 @@ var _ = Describe("Policy functions", func() {
 		Expect(p.String()).To(Equal(`order:10.5,selector:"apples=='oranges'",inbound:Deny,outbound:Allow,untracked:false,pre_dnat:true,apply_on_forward:true,types:Ingress;Egress,performance_hints:[AssumeNeededOnEveryNode]`))
 	})
 
-	It("Policy should identify as staged by name", func() {
-		Expect(model.KindIsStaged("staged:policy1")).To(BeTrue())
-		Expect(model.KindIsStaged("policy1")).To(BeFalse())
+	It("Policy should identify as staged by kind", func() {
+		Expect(model.KindIsStaged(v3.KindStagedNetworkPolicy)).To(BeTrue())
+		Expect(model.KindIsStaged(v3.KindNetworkPolicy)).To(BeFalse())
 	})
 })
