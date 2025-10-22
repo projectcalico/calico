@@ -45,6 +45,7 @@ var (
 	// Components to ignore when generating the operator components file.
 	operatorIgnoreComponents = []string{
 		flannelComponentName,
+		"test-signer",
 	}
 )
 
