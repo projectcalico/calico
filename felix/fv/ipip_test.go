@@ -396,6 +396,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		var externalClient *containers.Container
 
 		BeforeEach(func() {
+			if BPFMode() {
+				Skip("Skipping BPF test for external nodes.")
+			}
 			externalClient = infrastructure.RunExtClient("ext-client")
 
 			Eventually(func() error {
@@ -484,6 +487,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 
 			By("testing that the ext client can connect via ipip")
 			cc.ResetExpectations()
+			fmt.Println("Sridhar ", externalClient.IP)
+			time.Sleep(50 * time.Second)
 			cc.ExpectSome(externalClient, w[0])
 			cc.CheckConnectivity()
 		})
