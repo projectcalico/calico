@@ -53,19 +53,16 @@ var _ = Describe("Test the StagedNetworkPolicy update processor", func() {
 		Name:      name1,
 		Namespace: ns1,
 		Kind:      apiv3.KindStagedNetworkPolicy,
-		Staged:    true,
 	}
 	v1StagedNetworkPolicyKey2 := model.PolicyKey{
 		Name:      name2,
 		Namespace: ns2,
 		Kind:      apiv3.KindStagedNetworkPolicy,
-		Staged:    true,
 	}
 	v1StagedNetworkPolicyKey3 := model.PolicyKey{
 		Name:      name3,
 		Namespace: ns3,
 		Kind:      apiv3.KindStagedNetworkPolicy,
-		Staged:    true,
 	}
 
 	It("should handle conversion of valid StagedNetworkPolicys", func() {

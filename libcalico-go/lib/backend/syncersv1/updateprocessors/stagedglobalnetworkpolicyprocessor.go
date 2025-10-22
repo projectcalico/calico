@@ -42,7 +42,6 @@ func ConvertStagedGlobalNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.K
 		Name:      v3key.Name,
 		Namespace: "",
 		Kind:      apiv3.KindStagedGlobalNetworkPolicy,
-		Staged:    true,
 	}, nil
 }
 

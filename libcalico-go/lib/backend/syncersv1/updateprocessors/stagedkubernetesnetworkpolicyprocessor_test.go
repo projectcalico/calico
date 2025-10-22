@@ -37,7 +37,6 @@ var _ = Describe("Test the StagedKubernetesNetworkPolicy update processor", func
 		Name:      "knp.default." + name1,
 		Namespace: ns1,
 		Kind:      apiv3.KindStagedKubernetesNetworkPolicy,
-		Staged:    true,
 	}
 
 	It("should handle conversion of valid StagedKubernetesNetworkPolicy", func() {

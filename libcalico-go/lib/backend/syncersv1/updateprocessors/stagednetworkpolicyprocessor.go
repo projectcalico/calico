@@ -42,7 +42,6 @@ func ConvertStagedNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, er
 		Name:      v3key.Name,
 		Namespace: v3key.Namespace,
 		Kind:      apiv3.KindStagedNetworkPolicy,
-		Staged:    true,
 	}, nil
 }
 

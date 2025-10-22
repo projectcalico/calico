@@ -47,7 +47,6 @@ func ConvertStagedKubernetesNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (mod
 		Name:      name,
 		Namespace: v3key.Namespace,
 		Kind:      apiv3.KindStagedKubernetesNetworkPolicy,
-		Staged:    true,
 	}, nil
 }
 

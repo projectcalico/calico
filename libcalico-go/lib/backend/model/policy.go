@@ -41,14 +41,9 @@ func KindIsStaged(kind string) bool {
 }
 
 type PolicyKey struct {
-	// Standard object identification fields.
 	Name      string `json:"-" validate:"required,name"`
 	Namespace string `json:"-" validate:"omitempty,name"`
-
-	// Kind and Staged represent the v3 API object type, needed because
-	// multiple kinds map to this same v1 model.
-	Kind   string `json:"-" validate:"omitempty,name"`
-	Staged bool   `json:"-" validate:"-"`
+	Kind      string `json:"-" validate:"omitempty,name"`
 }
 
 func (key PolicyKey) defaultPath() (string, error) {
