@@ -93,7 +93,6 @@ func (ch *ConsistentHash) Generate() []k8sp.Endpoint {
 	// Can't rely on the outer-loop condition to break at the right time,
 	// so we're counting manually.
 	n := 0
-populate:
 	for {
 		for i, backend := range ch.backendNames {
 			prefs := ch.backendsByName[backend].permutation
@@ -111,12 +110,10 @@ populate:
 			next[i]++
 			n++
 			if n == ch.m {
-				break populate
+				return lut
 			}
 		}
 	}
-
-	return lut
 }
 
 // Permutation implements Permutator interface.
