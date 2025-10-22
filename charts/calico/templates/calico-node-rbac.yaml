@@ -68,14 +68,6 @@ rules:
     verbs:
       - watch
       - list
-  # Watch for changes to Kubernetes (Baseline)AdminNetworkPolicies.
-  - apiGroups: ["policy.networking.k8s.io"]
-    resources:
-      - adminnetworkpolicies
-      - baselineadminnetworkpolicies
-    verbs:
-      - watch
-      - list
   # Used by Calico for policy information.
   - apiGroups: [""]
     resources:
