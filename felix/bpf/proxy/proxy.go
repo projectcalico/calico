@@ -406,17 +406,24 @@ const (
 	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
-	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
+	ExcludeServiceAnnotation          = "projectcalico.org/natExcludeService"
+	ExternalTrafficStrategyAnnotation = "lb.projectcalico.org/external-traffic-strategy"
+)
+
+var (
+	ExternalTrafficStrategyMaglev = "maglev"
 )
 
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
+	UseMaglev() bool
 }
 
 type servicePortAnnotations struct {
 	reapTerminatingUDP bool
 	excludeService     bool
+	useMaglev          bool
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -425,6 +432,10 @@ func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
 
 func (s *servicePortAnnotations) ExcludeService() bool {
 	return s.excludeService
+}
+
+func (s *servicePortAnnotations) UseMaglev() bool {
+	return s.useMaglev
 }
 
 type servicePort struct {
@@ -446,6 +457,10 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		if v, ok := s.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
 			svc.reapTerminatingUDP = true
 		}
+	}
+
+	if a, ok := s.Annotations[ExternalTrafficStrategyAnnotation]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
+		svc.useMaglev = true
 	}
 
 out:
