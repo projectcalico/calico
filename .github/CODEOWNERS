@@ -8,9 +8,9 @@
 calico/*       @docs
 
 # Gateway and Proxy components
-third_party/envoy-gateway/    @projectcalico/core-maintainers
-third_party/envoy-proxy/      @projectcalico/core-maintainers
-third_party/envoy-ratelimit/  @projectcalico/core-maintainers
+third_party/envoy-gateway/    @projectcalico/ingress-maintainers
+third_party/envoy-proxy/      @projectcalico/ingress-maintainers
+third_party/envoy-ratelimit/  @projectcalico/ingress-maintainers
 
 # Application Layer Policy (Dikastes, L7 policy enforcement with Envoy/Istio)
-app-policy/                   @projectcalico/core-maintainers
+app-policy/                   @projectcalico/ingress-maintainers
