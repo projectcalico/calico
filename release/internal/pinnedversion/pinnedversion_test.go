@@ -21,6 +21,7 @@ import (
 
 	approvals "github.com/approvals/go-approval-tests"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/projectcalico/calico/release/internal/registry"
 )
@@ -66,6 +67,7 @@ func TestImageComponents(t *testing.T) {
 			"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
 			"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
 			"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
+			"test-signer":               {Version: "vX.Y.Z", Image: "test-signer"},
 			"csi":                       {Version: "vX.Y.Z", Image: "csi"},
 			"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
 			"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
@@ -95,6 +97,7 @@ func TestImageComponents(t *testing.T) {
 			"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
 			"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
 			"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
+			"test-signer":               {Version: "vX.Y.Z", Image: "test-signer"},
 			"csi":                       {Version: "vX.Y.Z", Image: "csi"},
 			"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
 			"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
@@ -226,6 +229,7 @@ func TestRetrieveImageComponents(t *testing.T) {
 		"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
 		"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
 		"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
+		"test-signer":               {Version: "vX.Y.Z", Image: "test-signer"},
 		"csi":                       {Version: "vX.Y.Z", Image: "csi"},
 		"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
 		"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
@@ -236,7 +240,7 @@ func TestRetrieveImageComponents(t *testing.T) {
 		"tigera/operator":           {Version: "vA.B.C", Image: "tigera/operator", Registry: "docker.io"},
 		"tigera/operator-init":      {Version: "vA.B.C", Image: "tigera/operator-init", Registry: "docker.io"},
 	}
-	if diff := cmp.Diff(expectedComponents, retrievedComponents); diff != "" {
-		t.Errorf("expected components to be same, but they differ: %s", diff)
+	if diff := cmp.Diff(expectedComponents, retrievedComponents, cmpopts.SortMaps(func(a, b string) bool { return a < b })); diff != "" {
+		t.Errorf("components do not match (-expected +actual):\n%s", diff)
 	}
 }
