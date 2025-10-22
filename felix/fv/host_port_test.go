@@ -1,5 +1,3 @@
-//go:build fvtests
-
 // Copyright (c) 2017-2018,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +39,7 @@ func MetricsPortReachable(felix *infrastructure.Felix, bpf bool) bool {
 	// Delete existing conntrack state for the metrics port.
 	felix.Exec("conntrack", "-L")
 	felix.Exec("conntrack", "-L", "-p", "tcp", "--dport", metrics.PortString())
-	felix.ExecMayFail("conntrack", "-D", "-p", "tcp", "--orig-port-dst", metrics.PortString())
+	_ = felix.ExecMayFail("conntrack", "-D", "-p", "tcp", "--orig-port-dst", metrics.PortString())
 
 	// Now try to get a metric.
 	m, err := metrics.GetFelixMetric(felix.IP, "felix_active_local_endpoints")

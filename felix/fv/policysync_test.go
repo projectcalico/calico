@@ -1,5 +1,3 @@
-//go:build fvtests
-
 // Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -118,7 +116,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 		createWorkloadDirectory := func(wl *workload.Workload) (string, string) {
 			dirName := dirNameForWorkload(wl)
 			hostWlDir := filepath.Join(tempDir, dirName)
-			os.MkdirAll(hostWlDir, 0777)
+			Expect(os.MkdirAll(hostWlDir, 0777)).To(Succeed())
 			return hostWlDir, filepath.Join("/var/run/calico/policysync", dirName)
 		}
 
@@ -201,7 +199,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 				createWorkloadConn := func(i int) (*grpc.ClientConn, proto.PolicySyncClient) {
 					var opts []grpc.DialOption
 					opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-					opts = append(opts, grpc.WithDialer(unixDialer))
+					opts = append(opts, grpc.WithContextDialer(unixDialer))
 					var conn *grpc.ClientConn
 					conn, err = grpc.NewClient(hostWlSocketPath[i], opts...)
 					Expect(err).NotTo(HaveOccurred())
@@ -270,7 +268,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 							Eventually(mockWlClient[2].InSync, "10s").Should(BeTrue())
 
 							// Close it and wait for the client to shut down.
-							wlConn[2].Close()
+							_ = wlConn[2].Close()
 							Eventually(mockWlClient[2].Done, "10s").Should(BeClosed())
 						})
 
@@ -590,7 +588,9 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 
 					// Then create a new mock client with a new connection.
 					newWlConn, newWlClient := createWorkloadConn(0)
-					defer newWlConn.Close()
+					defer func() {
+						_ = newWlConn.Close()
+					}()
 					client := newMockWorkloadClient("workload-0 second client")
 					client.StartSyncing(ctx, newWlClient)
 
@@ -610,12 +610,14 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 
 					// Workload should be sent over the API.
 					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
-					wlConn[0].Close()
+					_ = wlConn[0].Close()
 					Eventually(client.Done).Should(BeClosed())
 
 					// Then create a new mock client with a new connection.
 					newWlConn, newWlClient := createWorkloadConn(0)
-					defer newWlConn.Close()
+					defer func() {
+						_ = newWlConn.Close()
+					}()
 					client = newMockWorkloadClient("workload-0 second client")
 					client.StartSyncing(ctx, newWlClient)
 
@@ -641,7 +643,9 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 
 					// Then create a new mock client with a new connection.
 					newWlConn, newWlClient := createWorkloadConn(0)
-					defer newWlConn.Close()
+					defer func() {
+						_ = newWlConn.Close()
+					}()
 					client := newMockWorkloadClient("workload-0 second client")
 					client.StartSyncing(ctx, newWlClient)
 
@@ -671,8 +675,11 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 	})
 })
 
-func unixDialer(target string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("unix", target, timeout)
+func unixDialer(ctx context.Context, target string) (net.Conn, error) {
+	if deadline, ok := ctx.Deadline(); ok {
+		return net.DialTimeout("unix", target, time.Until(deadline))
+	}
+	return net.DialTimeout("unix", target, 0)
 }
 
 type mockWorkloadClient struct {

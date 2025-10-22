@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -82,7 +80,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
-				timeout         time.Duration = time.Second * 30
+				timeout         = time.Second * 30
 			)
 
 			BeforeEach(func() {
@@ -233,14 +231,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Expect(err).NotTo(HaveOccurred())
 					lines := strings.Split(strings.Trim(defaultRoute, "\n "), "\n")
 					Expect(lines).To(HaveLen(1))
-					defaultRouteArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+					defaultRouteArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 					// Assuming the subnet route will be "proto kernel" and that will be the only such route.
 					subnetRoute, err := felix.ExecOutput("ip", "route", "show", "proto", "kernel")
 					Expect(err).NotTo(HaveOccurred())
 					lines = strings.Split(strings.Trim(subnetRoute, "\n "), "\n")
 					Expect(lines).To(HaveLen(1), "expected only one proto kernel route, has docker's routing set-up changed?")
-					subnetArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+					subnetArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 					// Add the bond, replacing eth0.
 					felix.Exec("ip", "addr", "del", felix.IP, "dev", "eth0")
@@ -482,7 +480,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 								Action: api.Allow,
 							},
 						}
-						policy.Spec.Selector = fmt.Sprintf("has(host-endpoint)")
+						policy.Spec.Selector = "has(host-endpoint)"
 						_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred())
 					})
@@ -571,6 +569,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 
 					node.Spec.BGP = nil
 					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
@@ -849,7 +848,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				w6              [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
-				timeout         time.Duration = time.Second * 30
+				timeout         = time.Second * 30
 			)
 
 			BeforeEach(func() {
@@ -908,7 +907,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
-				timeout         time.Duration = time.Second * 30
+				timeout         = time.Second * 30
 			)
 
 			BeforeEach(func() {
@@ -1047,7 +1046,7 @@ func createK8sServiceWithoutKubeProxy(args createK8sServiceWithoutKubeProxyArgs)
 	if BPFMode() {
 		k8sClient := args.infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 		testSvc := k8sService(args.svcName, args.serviceIP, args.w, args.port, args.tgtPort, 0, "tcp")
-		testSvcNamespace := testSvc.ObjectMeta.Namespace
+		testSvcNamespace := testSvc.Namespace
 		_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
@@ -1121,5 +1120,5 @@ func allHostsIPSetSize(felixes []*infrastructure.Felix, ipipMode api.IPIPMode) i
 }
 
 func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
-	return !(ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs")
+	return ipipMode != api.IPIPModeAlways || routeSource != "WorkloadIPs"
 }

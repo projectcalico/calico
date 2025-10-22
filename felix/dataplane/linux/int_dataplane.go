@@ -2831,7 +2831,7 @@ func startBPFDataplaneComponents(
 	if config.bpfProxyHealthzServer == nil && config.KubeProxyHealtzPort != 0 {
 		healthzAddr := fmt.Sprintf(":%d", config.KubeProxyHealtzPort)
 		config.bpfProxyHealthzServer = k8shealthcheck.NewProxyHealthServer(
-			healthzAddr, config.KubeProxyMinSyncPeriod)
+			healthzAddr, config.KubeProxyMinSyncPeriod, nil)
 
 		// We cannot wait for the healthz server as we cannot stop it.
 		go func() {

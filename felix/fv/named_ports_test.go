@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -152,10 +150,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 		applyAtOthers
 	)
 
-	bpfEnabled := false
-	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		bpfEnabled = true
-	}
+	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 
 	cleanConntrack := func() {
 		if bpfEnabled && protocol == "udp" {

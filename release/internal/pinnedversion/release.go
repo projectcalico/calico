@@ -71,8 +71,8 @@ func (p *CalicoReleaseVersions) GenerateFile() (version.Versions, error) {
 	return nil, nil
 }
 
-// ImageList returns a list of all the Calico images in the pinned version file.
-// This excludes the Tigera operator and images not built by the Calico build system.
+// ImageList return a list of Calico images built by this repo for release validation.
+// It excludes flannel and the Tigera operator images as those are validated separately.
 func (p *CalicoReleaseVersions) ImageList() ([]string, error) {
 	components, err := RetrieveImageComponents(p.Dir)
 	if err != nil {

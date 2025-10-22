@@ -327,7 +327,7 @@ func startCompactor(ctx context.Context, interval time.Duration) {
 		}
 
 		log.WithField("period", interval).Info("Starting periodic etcdv3 compaction")
-		etcd3.StartCompactor(ctx, etcdClient, interval)
+		etcd3.StartCompactorPerEndpoint(etcdClient, interval)
 		break
 	}
 }

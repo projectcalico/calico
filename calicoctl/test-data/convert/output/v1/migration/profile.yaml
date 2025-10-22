@@ -1,7 +1,6 @@
 apiVersion: projectcalico.org/v3
 kind: Profile
 metadata:
-  creationTimestamp: null
   name: profile1
 spec:
   egress:

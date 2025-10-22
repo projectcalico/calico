@@ -43,7 +43,8 @@ type IPAMBlockSpec struct {
 
 	// Affinity of the block, if this block has one. If set, it will be of the form
 	// "host:<hostname>". If not set, this block is not affine to a host.
-	Affinity *string `json:"affinity,omitempty"`
+	Affinity          *string      `json:"affinity,omitempty"`
+	AffinityClaimTime *metav1.Time `json:"affinityClaimTime,omitempty"`
 
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.
 	// For non-nil entries at index i, the index is the ordinal of the allocation within this block

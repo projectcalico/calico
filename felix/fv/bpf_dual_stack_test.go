@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -69,11 +67,11 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 		)
 
 		felixIP := func(f int) string {
-			return tc.Felixes[f].Container.IP
+			return tc.Felixes[f].IP
 		}
 
 		felixIP6 := func(f int) string {
-			return tc.Felixes[f].Container.IPv6
+			return tc.Felixes[f].IPv6
 		}
 
 		BeforeEach(func() {
@@ -157,6 +155,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 						},
 						Hostname: tc.Felixes[ii].Hostname,
 					})
+					Expect(err).NotTo(HaveOccurred())
 				}
 
 				return w
@@ -254,7 +253,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 				_ = k8sClient
 				testSvc = k8sServiceForDualStack("test-svc", clusterIPs, w[0][0], 80, 8055, int32(npPort), "tcp")
-				testSvcNamespace = testSvc.ObjectMeta.Namespace
+				testSvcNamespace = testSvc.Namespace
 				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
@@ -301,7 +300,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				node, err := k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				delete(node.ObjectMeta.Annotations, "projectcalico.org/IPv6Address")
+				delete(node.Annotations, "projectcalico.org/IPv6Address")
 				_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -336,7 +335,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				// Add the node IPv6 address
 				node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				node.ObjectMeta.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felixIP6(0), tc.Felixes[0].IPv6Prefix)
+				node.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felixIP6(0), tc.Felixes[0].IPv6Prefix)
 				_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -385,7 +384,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 				_ = k8sClient
 				testSvc = k8sServiceForDualStack("test-svc", clusterIPs, w[0][0], 80, 8055, int32(npPort), "udp")
-				testSvcNamespace = testSvc.ObjectMeta.Namespace
+				testSvcNamespace = testSvc.Namespace
 				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
@@ -474,34 +473,34 @@ func removeIPv4Address(k8sClient *kubernetes.Clientset, felix *infrastructure.Fe
 	node, err := k8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	delete(node.ObjectMeta.Annotations, "projectcalico.org/IPv4Address")
+	delete(node.Annotations, "projectcalico.org/IPv4Address")
 	_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
 	node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felix.Container.IPv6}}
+	node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felix.IPv6}}
 	_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	felix.Exec("ip", "addr", "del", felix.Container.IP, "dev", "eth0")
+	felix.Exec("ip", "addr", "del", felix.IP, "dev", "eth0")
 }
 
 func removeIPv6Address(k8sClient *kubernetes.Clientset, felix *infrastructure.Felix) {
 	node, err := k8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	delete(node.ObjectMeta.Annotations, "projectcalico.org/IPv6Address")
+	delete(node.Annotations, "projectcalico.org/IPv6Address")
 	_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
 	node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felix.Container.IP}}
+	node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felix.IP}}
 	_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	felix.Exec("ip", "-6", "addr", "del", felix.Container.IPv6+"/64", "dev", "eth0")
+	felix.Exec("ip", "-6", "addr", "del", felix.IPv6+"/64", "dev", "eth0")
 }
 
 func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, hostIfType uint32, additionalInterfaces map[string]uint32) {
@@ -509,10 +508,8 @@ func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, hostIfTy
 		"eth0": hostIfType | ready,
 	}
 
-	if additionalInterfaces != nil {
-		for k, v := range additionalInterfaces {
-			expectedIfacesToFlags[k] = v
-		}
+	for k, v := range additionalInterfaces {
+		expectedIfacesToFlags[k] = v
 	}
 
 	for _, w := range felix.Workloads {
@@ -535,10 +532,7 @@ func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, hostIfTy
 				numIfaces++
 			}
 		}
-		if numIfaces != len(expectedIfacesToFlags) {
-			return false
-		}
-		return true
+		return numIfaces == len(expectedIfacesToFlags)
 	}, "1m", "1s").Should(BeTrue())
 }
 

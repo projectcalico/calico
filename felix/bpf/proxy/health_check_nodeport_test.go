@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,8 +43,8 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		By("creating proxy with fake client and mock syncer", func() {
 			var err error
 
-			p, err = proxy.New(k8s, &mockDummySyncer{},
-				testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond))
+			p, err = proxy.New(k8s, &mockDummySyncer{}, testNodeName,
+				proxy.WithMinSyncPeriod(200*time.Millisecond), proxy.WithMaxSyncPeriod(1*time.Second))
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
