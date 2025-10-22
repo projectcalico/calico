@@ -3,10 +3,10 @@ package postrelease
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"net/http"
 	"strings"
 	"testing"
+	"text/template"
 )
 
 // PackageRevision represents a package with all its various permutations
@@ -54,8 +54,8 @@ type ubuntuComponent struct {
 
 var urlTemplates = map[string]map[string]string{
 	"ubuntu": {
-		"felix":             "https://ppa.launchpadcontent.net/project-calico/%s/ubuntu/pool/main/f/felix",
-		"networking-calico": "https://ppa.launchpadcontent.net/project-calico/%s/ubuntu/pool/main/n/networking-calico",
+		"felix":             `https://launchpad.net/~project-calico/+archive/ubuntu/%s/+files`,
+		"networking-calico": `https://launchpad.net/~project-calico/+archive/ubuntu/%s/+files`,
 	},
 	"rpm": {
 		"x86_64": "https://binaries.projectcalico.org/rpm/%s/x86_64",
