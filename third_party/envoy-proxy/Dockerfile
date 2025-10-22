@@ -9,8 +9,6 @@ FROM ${ENVOYBINARY_IMAGE} AS envoybinary
 
 FROM ${UBI_IMAGE} AS ubi
 
-FROM ${CALICO_BASE} as base
-
 FROM scratch AS source
 
 # dependencies
@@ -37,13 +35,8 @@ COPY --from=ubi /lib64/libsemanage.so.2 /lib64/libsemanage.so.2
 COPY --from=ubi /lib64/libsepol.so.2 /lib64/libsepol.so.2
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
 
-# explicitly copy nsswitch.conf
-COPY --from=base /etc/nsswitch.conf /etc/nsswitch.conf
-
-COPY --from=envoybinary --chown=0:0 --chmod=644 \
-    /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
-COPY --from=envoybinary --chown=0:0 --chmod=755 \
-    /usr/local/bin/envoy /usr/local/bin/envoy
+COPY --from=envoybinary /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
+COPY --from=envoybinary --chmod=755 /usr/local/bin/envoy /usr/local/bin/envoy
 
 FROM ${CALICO_BASE}
 
