@@ -120,31 +120,31 @@ populate:
 }
 
 // Permutation implements Permutator interface.
-func (c *ConsistentHash) permutation(backendName string) ([]int, error) {
-	offset, skip, err := c.offsetAndSKip(backendName)
+func (ch *ConsistentHash) permutation(backendName string) ([]int, error) {
+	offset, skip, err := ch.offsetAndSKip(backendName)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't generate permutation skip/offset for backend '%s': %w", backendName, err)
 	}
 
-	permutation := make([]int, c.m)
-	for j := range c.m {
-		permutation[j] = (offset + (j * skip)) % c.m
+	permutation := make([]int, ch.m)
+	for j := range ch.m {
+		permutation[j] = (offset + (j * skip)) % ch.m
 	}
 
 	return permutation, nil
 }
 
-func (c *ConsistentHash) offsetAndSKip(s string) (int, int, error) {
-	offset, err := hashFromString(s, c.h1, []byte{0})
+func (ch *ConsistentHash) offsetAndSKip(s string) (int, int, error) {
+	offset, err := hashFromString(s, ch.h1, []byte{0})
 	if err != nil {
 		return 0, 0, err
 	}
 
-	skip, err := hashFromString(s, c.h2, []byte{0xa})
+	skip, err := hashFromString(s, ch.h2, []byte{0xa})
 	if err != nil {
 		return 0, 0, err
 	}
-	return (offset % c.m), (skip % (c.m - 1)) + 1, nil
+	return (offset % ch.m), (skip % (ch.m - 1)) + 1, nil
 }
 
 func hashFromString(s string, h hash.Hash, seed []byte) (int, error) {
