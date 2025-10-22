@@ -5,7 +5,7 @@ FROM ${ENVOYBINARY_IMAGE} AS envoybinary
 
 FROM ${UBI9_IMAGE} AS ubi
 
-FROM scratch as source
+FROM scratch AS source
 
 # dependencies
 COPY --from=ubi /bin/sh /bin/sh
@@ -34,10 +34,8 @@ COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
 COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
 
-COPY --from=envoybinary --chown=0:0 --chmod=644 \
-    /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
-COPY --from=envoybinary --chown=0:0 --chmod=755 \
-    /usr/local/bin/envoy /usr/local/bin/
+COPY --from=envoybinary /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
+COPY --from=envoybinary --chmod=755 /usr/local/bin/envoy /usr/local/bin/envoy
 
 FROM scratch
 
