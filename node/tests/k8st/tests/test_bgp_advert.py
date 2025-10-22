@@ -548,6 +548,36 @@ EOF
             # Assert that external IP is no longer an advertised route.
             retry_until_success(lambda: self.assertNotIn(local_svc_externalips_route, self.get_routes()))
 
+    def test_fully_qualified_service_ips(self):
+        """
+        Test advertisement of /32 Service IPs.
+        """
+        with DiagsCollector():
+
+            # Allow exact IPs for each type of service IP. We expect these to be properly advertised.
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceExternalIPs:
+  - cidr: 90.15.0.1/32
+EOF
+""")
+
+            # Create a Service with the External IP above, using
+            # externalTrafficPolicy=Cluster. This should trigger advertisement
+            # from all nodes.
+            svc_name = "nginx-svc"
+            ext_ip = "90.15.0.1"
+            self.deploy(NGINX_IMAGE, svc_name, self.ns, 80, traffic_policy="Cluster", svc_type="ClusterIP", ext_ip=ext_ip)
+            self.wait_until_exists(svc_name, "svc", self.ns)
+            self.wait_for_deployment(svc_name, self.ns)
+
+            # Verify the ext IP address is advertised from all nodes.
+            retry_until_success(lambda: self.assert_ecmp_routes(ext_ip, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]]))
+
     def test_loadbalancer_ip_advertisement(self):
         """
         Runs the tests for service LoadBalancer IP advertisement
