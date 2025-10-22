@@ -290,7 +290,7 @@ function create-branch-and-pr() {
       # If patch is applied cleanly, add files, they will be committed later
       git add .
     else
-      # If there are conflitcs, prompt user to resolve them in another window and continue
+      # If there are conflicts, prompt user to resolve them in another window and continue
       conflicts=false
       while unmerged=$(git status --porcelain | grep ^U) && [[ -n ${unmerged} ]] \
         || [[ -e "${REBASEMAGIC}" ]]; do
