@@ -1,5 +1,5 @@
 package consistenthash
 
 const (
-	MaglevEndpointLUTFactor      = 5
+	MaglevEndpointLUTFactor = 5
 )
