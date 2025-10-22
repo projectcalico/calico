@@ -3565,7 +3565,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			// Modify the kubernetes policies
 			found := 0
 			for _, kvp := range l.KVPairs {
-				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kcnp.admin.")
+				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kcnp.kube-admin.")
 				p, err := kcnpClient.ClusterNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				p.SetLabels(map[string]string{"test": "00"})
@@ -3590,7 +3590,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			// Make a second change to one of the k8s CNPs
 			for _, kvp := range l.KVPairs {
-				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kcnp.admin.")
+				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kcnp.kube-admin.")
 				p, err := kcnpClient.ClusterNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				p.SetLabels(map[string]string{"test": "01"})

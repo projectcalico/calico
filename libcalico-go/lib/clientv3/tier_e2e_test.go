@@ -237,7 +237,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Cannot delete the admin Tier")
 			_, outError = c.Tiers().Delete(ctx, names.KubeAdminTierName, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("operation Delete is not supported on admin: Cannot delete admin tier"))
+			Expect(outError.Error()).To(Equal("operation Delete is not supported on kube-admin: Cannot delete kube-admin tier"))
 
 			By("Getting admin Tier")
 			defRes, outError = c.Tiers().Get(ctx, names.KubeAdminTierName, options.GetOptions{})
@@ -262,7 +262,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Cannot delete the baseline Tier")
 			_, outError = c.Tiers().Delete(ctx, names.KubeBaselineTierName, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("operation Delete is not supported on baseline: Cannot delete baseline tier"))
+			Expect(outError.Error()).To(Equal("operation Delete is not supported on kube-baseline: Cannot delete kube-baseline tier"))
 
 			By("Getting baseline Tier")
 			defRes, outError = c.Tiers().Get(ctx, names.KubeBaselineTierName, options.GetOptions{})
@@ -337,11 +337,11 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			checkAndFilterDefaultTiers := func(outList *apiv3.TierList) []apiv3.Tier {
 				// Tiers are returned in name order, and the default ones happen
 				// to sort first in these tests.
-				Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.KubeAdminTierName, kcnpAdminSpec))
-				Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
-				Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.KubeBaselineTierName, kcnpBaselineSpec))
-				Expect(&outList.Items[3]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.BaselineAdminNetworkPolicyTierName, banpSpec))
-				Expect(&outList.Items[4]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
+				Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
+				Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.BaselineAdminNetworkPolicyTierName, banpSpec))
+				Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
+				Expect(&outList.Items[3]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.KubeAdminTierName, kcnpAdminSpec))
+				Expect(&outList.Items[4]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.KubeBaselineTierName, kcnpBaselineSpec))
 				return outList.Items[5:]
 			}
 			outList, outError := c.Tiers().List(ctx, options.ListOptions{})
