@@ -14,8 +14,8 @@ import (
 )
 
 var excludeImageArch = map[string][]string{
-	"calico/envoy-proxy": {"ppc64le", "s390x"},
-	"calico/whisker":     {"ppc64le", "s390x"},
+	"envoy-proxy": {"ppc64le", "s390x"},
+	"whisker":     {"ppc64le", "s390x"},
 }
 
 func TestImagesPublished(t *testing.T) {
@@ -38,20 +38,23 @@ func TestImagesPublished(t *testing.T) {
 					} else if !ok {
 						t.Fatalf("image (%s) not found", fqImage)
 					}
-					if !strings.HasSuffix(image, "windows") {
-						for _, arch := range linuxArches {
-							if excludeArchs, ok := excludeImageArch[image]; ok && slices.Contains(excludeArchs, arch) {
-								continue
-							}
-							t.Run(fmt.Sprintf("linux %s", arch), func(t *testing.T) {
-								fqArchImage := fmt.Sprintf("%s-%s", fqImage, arch)
-								if ok, err := registry.CheckImage(fqArchImage); err != nil {
-									t.Fatalf("failed to check image %s: %v", fqArchImage, err)
-								} else if !ok {
-									t.Fatalf("image (%s) not found", fqArchImage)
-								}
-							})
+					if strings.HasSuffix(image, "windows") {
+						// Skip testing windows images. TODO: add tests for windows images
+						return
+					}
+					for _, arch := range linuxArches {
+						excludedArchs := excludeImageArch[image]
+						if slices.Contains(excludedArchs, arch) {
+							continue
 						}
+						t.Run(fmt.Sprintf("linux %s", arch), func(t *testing.T) {
+							fqArchImage := fmt.Sprintf("%s-%s", fqImage, arch)
+							if ok, err := registry.CheckImage(fqArchImage); err != nil {
+								t.Fatalf("failed to check image %s: %v", fqArchImage, err)
+							} else if !ok {
+								t.Fatalf("image (%s) not found", fqArchImage)
+							}
+						})
 					}
 				})
 			}
