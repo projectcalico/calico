@@ -21,7 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	collector "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/timeshim"
@@ -122,7 +122,7 @@ func (r *InfoReader) makeConntrackInfo(key KeyInterface, val ValueInterface, dna
 		Bytes:   int(data.B2A.Bytes),
 	}
 
-	if val.Flags()&v3.FlagSrcDstBA != 0 {
+	if val.Flags()&v4.FlagSrcDstBA != 0 {
 		ipSrc, ipDst = ipDst, ipSrc
 		portSrc, portDst = portDst, portSrc
 		coutersSrc, coutersDst = coutersDst, coutersSrc

@@ -701,6 +701,7 @@ func kvpsEqual(actual, expected model.KVPair) bool {
 		// We should ignore the actual value of the field.
 		actual.Value.(*model.AllocationBlock).SequenceNumber = 0
 		actual.Value.(*model.AllocationBlock).SequenceNumberForAllocation = nil
+		actual.Value.(*model.AllocationBlock).AffinityClaimTime = nil
 
 		return reflect.DeepEqual(actual.Value, expected.Value)
 	default:

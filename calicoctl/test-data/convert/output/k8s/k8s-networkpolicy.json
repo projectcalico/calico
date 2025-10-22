@@ -3,8 +3,7 @@
   "apiVersion": "projectcalico.org/v3",
   "metadata": {
     "name": "test-network-policy",
-    "namespace": "default",
-    "creationTimestamp": null
+    "namespace": "default"
   },
   "spec": {
     "order": 1000,
@@ -56,7 +55,6 @@
       {
         "action": "Allow",
         "protocol": "TCP",
-        "source": {},
         "destination": {
           "nets": [
             "10.0.0.0/24"

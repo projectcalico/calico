@@ -90,6 +90,20 @@ func (rs *resourceStore) ReadinessCheck() error {
 	return nil
 }
 
+func (rs *resourceStore) Stats(_ context.Context) (storage.Stats, error) {
+	logrus.Error("STUB: Stats() not supported by Calico client.")
+	return storage.Stats{}, nil
+}
+
+func (rs *resourceStore) SetKeysFunc(_ storage.KeysFunc) {
+	logrus.Error("STUB: SetKeysFunc() not supported by Calico client.")
+}
+
+func (rs *resourceStore) CompactRevision() int64 {
+	logrus.Error("STUB: CompactRevision() not supported by Calico client.")
+	return 0
+}
+
 var _ storage.Interface = (*resourceStore)(nil)
 
 func CreateClientFromConfig() clientv3.Interface {

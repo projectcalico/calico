@@ -149,6 +149,17 @@ var defaultExclusions = []string{
 	"/**/*.md",
 }
 
+// extraPrereqRegexps captures some out-of-band knowledge that helps to weed
+// out false dependencies.  Before emitting a dependency on the key,
+// it checks whether any files in the package match the given regexp.  If they
+// don't the dependency is skipped.
+var extraPrereqRegexps = map[string]*regexp.Regexp{
+	// Every project that imports the libcalico-go client would depend on the
+	// IPAM package due to transitive import.  Only list the IPAM package as a
+	// dependency if it's actually used.
+	"/libcalico-go/lib/ipam": regexp.MustCompile(`\.IPAM\(\)`),
+}
+
 // calculateDeps calculates the file-level dependencies of the input package
 // specs.  Each package spec is a comma-delimited list of directories relative
 // to the root of the repo.  The first entry in the list is the "primary"
@@ -215,33 +226,33 @@ type Deps struct {
 	Exclusions set.Set[string]
 }
 
-func calculateSemDeps(pkgOrPkgList string) (deps *Deps, err error) {
-	parts := strings.Split(pkgOrPkgList, ",")
-	pkgOrPkgList = parts[0]
+func calculateSemDeps(pkgList string) (deps *Deps, err error) {
+	parts := strings.Split(pkgList, ",")
+	primaryPkg := parts[0]
 	otherPkgs := parts[1:]
 	if len(otherPkgs) == 0 {
-		logrus.Infof("Calculating deps for %s package", pkgOrPkgList)
+		logrus.Infof("Calculating deps for %s package", primaryPkg)
 	} else {
-		logrus.Infof("Calculating deps for %s package; including secondary deps: %v", pkgOrPkgList, otherPkgs)
+		logrus.Infof("Calculating deps for %s package; including secondary deps: %v", primaryPkg, otherPkgs)
 	}
 
-	localDirs, err := loadLocalDirs(pkgOrPkgList, false)
+	localDirs, err := loadLocalDirs(primaryPkg, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load local dirs: %w", err)
 	}
 
 	inclusions := set.New[string]()
-	inclusions.Add("/" + pkgOrPkgList + "/**")
+	inclusions.Add("/" + primaryPkg + "/**")
 	inclusions.AddAll(defaultInclusions)
-	inclusions.AddAll(nonGoDeps[pkgOrPkgList])
+	inclusions.AddAll(nonGoDeps[primaryPkg])
 	for _, dir := range localDirs {
-		if strings.HasPrefix(dir+"/", "/"+pkgOrPkgList) {
+		if strings.HasPrefix(dir+"/", "/"+primaryPkg) {
 			continue // covered by the whole-package inclusion.
 		}
 		inclusions.Add(dir + "/*.go")
 	}
 
-	exclusions := set.From(calculateTestExclusionGlobs(pkgOrPkgList, localDirs)...)
+	exclusions := set.From(calculateTestExclusionGlobs(primaryPkg, localDirs)...)
 	exclusions.AddAll(defaultExclusions)
 
 	// Some jobs depend on secondary packages.  For example, the node tests
@@ -263,9 +274,60 @@ func calculateSemDeps(pkgOrPkgList string) (deps *Deps, err error) {
 		inclusions.Add(otherPkg + "/deps.txt")
 		inclusions.Add(otherPkg + "/**/*Dockerfile*")
 		inclusions.AddAll(nonGoDeps[otherPkg])
-		exclusions.AddAll(calculateTestExclusionGlobs(pkgOrPkgList, otherPkgDirs))
+		exclusions.AddAll(calculateTestExclusionGlobs(primaryPkg, otherPkgDirs))
 	}
+
 	return &Deps{inclusions, exclusions}, nil
+}
+
+func filterInclusions(primaryPkg string, inclusions set.Set[string]) set.Typed[string] {
+	out := set.New[string]()
+
+	conditionalIncludes := map[string]*regexp.Regexp{}
+	inclusions.Iter(func(item string) error {
+		if r := extraPrereqRegexps[item]; r != nil {
+			conditionalIncludes[item] = r
+		} else {
+			out.Add(item)
+		}
+		return nil
+	})
+
+	if len(conditionalIncludes) == 0 {
+		return out
+	}
+
+	dirFS := os.DirFS(".").(fs.ReadFileFS)
+	err := fs.WalkDir(dirFS, primaryPkg, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		if data, err := dirFS.ReadFile(path); err != nil {
+			return fmt.Errorf("failed to read file %s: %w", path, err)
+		} else {
+			for in, re := range conditionalIncludes {
+				if re.Match(data) {
+					out.Add(in)
+					delete(conditionalIncludes, in)
+				}
+			}
+		}
+		if len(conditionalIncludes) == 0 {
+			return fs.SkipAll
+		}
+		return nil
+	})
+	if err != nil {
+		logrus.Fatalf("Failed to filter inclusions for %s: %v", primaryPkg, err)
+	}
+
+	return out
 }
 
 func formatSemList(s set.Set[string]) string {
@@ -335,6 +397,8 @@ func loadLocalDirs(pkg string, mainDepsOnly bool) (out []string, err error) {
 			out = append(out, pkg)
 		}
 	}
+
+	out = filterInclusions(pkg, set.FromArray(out)).Slice()
 	sort.Strings(out)
 	return out, nil
 }

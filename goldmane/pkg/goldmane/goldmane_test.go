@@ -1366,12 +1366,28 @@ func TestStreams(t *testing.T) {
 		// Start Goldmane.
 		<-gm.Run(c.Now().Unix())
 
-		// Create many flows.
+		// Create many flows, tracking how many unique flows we create.
+		keys := make(map[types.FlowKey]struct{})
 		for range 5000 {
 			// Ingest some new flow data.
 			fl := testutils.NewRandomFlow(c.Now().Unix() - 5)
+			keys[*types.ProtoToFlowKey(fl.Key)] = struct{}{}
 			gm.Receive(types.ProtoToFlow(fl))
 		}
+
+		// Wait for flows to be received. Depending on test environment speed, this may take a little while.
+		// We just want to ensure that the flows are present before we start streaming. If we don't, then
+		// we may miss them when we start the stream.
+		Eventually(func() error {
+			results, err := gm.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(results.Flows) < len(keys) {
+				return fmt.Errorf("Expected at least %d flows, got %d", len(keys), len(results.Flows))
+			}
+			return nil
+		}, 3*waitTimeout, retryTime).Should(BeNil(), "Goldmane took too long to receive flows")
 
 		// Start a stream, and cancel it immediately after receiving the first flow in order to
 		// "catch it in the act" of iterating flows.
@@ -1407,11 +1423,27 @@ func TestStreams(t *testing.T) {
 		<-gm.Run(c.Now().Unix())
 
 		// Create many flows.
+		keys := make(map[types.FlowKey]struct{})
 		for range 5000 {
 			// Ingest some new flow data.
 			fl := testutils.NewRandomFlow(c.Now().Unix() - 5)
+			keys[*types.ProtoToFlowKey(fl.Key)] = struct{}{}
 			gm.Receive(types.ProtoToFlow(fl))
 		}
+
+		// Wait for flows to be received. Depending on test environment speed, this may take a little while.
+		// We just want to ensure that the flows are present before we start streaming. If we don't, then
+		// we may miss them when we start the stream.
+		Eventually(func() error {
+			results, err := gm.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(results.Flows) < len(keys) {
+				return fmt.Errorf("Expected at least %d flows, got %d", len(keys), len(results.Flows))
+			}
+			return nil
+		}, 3*waitTimeout, retryTime).Should(BeNil(), "Goldmane took too long to receive flows")
 
 		// Start 10 concurrent streams that will act at the same time.
 		var streams []stream.Stream

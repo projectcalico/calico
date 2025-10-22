@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -318,7 +316,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 						Action: api.Allow,
 					},
 				}
-				policy.Spec.Selector = fmt.Sprintf("has(host-endpoint)")
+				policy.Spec.Selector = "has(host-endpoint)"
 				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 			})

@@ -361,8 +361,8 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
-	if (ctx->state->ct_result.flags & CALI_CT_FLAG_CLUSTER_EXTERNAL) {
-		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
+	if (ctx->state->ct_result.flags & CALI_CT_FLAG_SET_DSCP) {
+		ctx->state->flags |= CALI_ST_SET_DSCP;
 	}
 
 	if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
@@ -557,7 +557,7 @@ syn_force_policy:
 		} else {
 			if (cali_rt_flags_should_set_dscp(dst_flags)) {
 				CALI_DEBUG("Remote host or outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
-				ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
+				ctx->state->flags |= CALI_ST_SET_DSCP;
 			}
 		}
 	}
@@ -565,11 +565,11 @@ syn_force_policy:
 	/* If either source or destination is outside cluster, set flag as might need to update DSCP later. */
 	if ((CALI_F_TO_HEP) && (cali_rt_flags_local_host(src_flags)) && cali_rt_flags_should_set_dscp(dst_flags)) {
 		CALI_DEBUG("Remote host or outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
-		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
+		ctx->state->flags |= CALI_ST_SET_DSCP;
 	}
 	if ((CALI_F_FROM_HEP) && cali_rt_flags_should_set_dscp(src_flags)) {
 		CALI_DEBUG("Remote host or outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
-		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
+		ctx->state->flags |= CALI_ST_SET_DSCP;
 	}
 
 	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
@@ -1420,8 +1420,8 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (state->flags & CALI_ST_NAT_OUTGOING) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_NAT_OUT;
 	}
-	if (state->flags & CALI_ST_CLUSTER_EXTERNAL) {
-		ct_ctx_nat->flags |= CALI_CT_FLAG_CLUSTER_EXTERNAL;
+	if (state->flags & CALI_ST_SET_DSCP) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_SET_DSCP;
 	}
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
