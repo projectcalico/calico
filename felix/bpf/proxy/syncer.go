@@ -885,14 +885,12 @@ func (s *Syncer) writeMaglevSvcBackends(skey svcKey, sinfo Service, maglevEPs []
 	port := uint16(sinfo.Port())
 	proto := ProtoV1ToIntPanic(sinfo.Protocol())
 
-	n := time.Now()
 	for i, b := range maglevEPs {
 		mKey := s.newMaglevKey(vip, port, proto, uint32(i))
 		mVal := s.newBackendValue(net.ParseIP(b.IP()), uint16(b.Port()))
 		s.bpfMaglevEps.Desired().Set(mKey, mVal)
 	}
-	dt := time.Since(n)
-	log.Infof("Wrote Maglev service '%s' backends in %fs", skey.sname, dt.Seconds())
+	log.WithField("service", skey.sname).Info("Wrote Maglev service backends to LUT")
 }
 
 func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) error {
