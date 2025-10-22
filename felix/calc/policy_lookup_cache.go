@@ -64,6 +64,7 @@ func NewPolicyLookupsCache() *PolicyLookupsCache {
 		nflogPrefixesProfile: map[model.ProfileRulesKey]set.Set[string]{},
 		nflogPrefixHash:      map[[64]byte]pcRuleID{},
 		tierRefs:             map[string]int{},
+		keyToTier:            map[model.PolicyKey]string{},
 		ids:                  idalloc.New(),
 	}
 	// Add NFLog mappings for the no-profile match.
