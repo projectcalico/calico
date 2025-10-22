@@ -36,8 +36,10 @@ func init() {
 	format.MaxLength = 0
 }
 
-var _ = Describe("Endpoints", endpointRulesTests(false))
-var _ = Describe("Endpoints with flowlogs", endpointRulesTests(true))
+var (
+	_ = Describe("Endpoints", endpointRulesTests(false))
+	_ = Describe("Endpoints with flowlogs", endpointRulesTests(true))
+)
 
 func endpointRulesTests(flowLogsEnabled bool) func() {
 	return func() {
@@ -231,28 +233,28 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a workload endpoint with policy groups", func() {
 					polGrpInABC := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"a", "b", "c"},
-						Selector:    "all()",
+						Tier:      "default",
+						Direction: PolicyDirectionInbound,
+						Policies:  []string{"a", "b", "c"},
+						Selector:  "all()",
 					}
 					polGrpInEF := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"e", "f"},
-						Selector:    "someLabel == 'bar'",
+						Tier:      "default",
+						Direction: PolicyDirectionInbound,
+						Policies:  []string{"e", "f"},
+						Selector:  "someLabel == 'bar'",
 					}
 					polGrpOutAB := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"a", "b"},
-						Selector:    "all()",
+						Tier:      "default",
+						Direction: PolicyDirectionOutbound,
+						Policies:  []string{"a", "b"},
+						Selector:  "all()",
 					}
 					polGrpOutDE := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"d", "e"},
-						Selector:    "someLabel == 'bar'",
+						Tier:      "default",
+						Direction: PolicyDirectionOutbound,
+						Policies:  []string{"d", "e"},
+						Selector:  "someLabel == 'bar'",
 					}
 
 					toWlRules := newRuleBuilder(
@@ -409,16 +411,16 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
 					polGrpIngress := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"staged:ai", "staged:bi"},
-						Selector:    "all()",
+						Tier:      "default",
+						Direction: PolicyDirectionInbound,
+						Policies:  []string{"staged:ai", "staged:bi"},
+						Selector:  "all()",
 					}
 					polGrpEgress := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"staged:ae", "staged:be"},
-						Selector:    "all()",
+						Tier:      "default",
+						Direction: PolicyDirectionOutbound,
+						Policies:  []string{"staged:ae", "staged:be"},
+						Selector:  "all()",
 					}
 					toWlRules := newRuleBuilder(
 						withFlowLogs(flowLogsEnabled),
@@ -996,14 +998,14 @@ func tiersToSinglePolGroups(tiers []*proto.TierInfo) (tierGroups []TierPolicyGro
 		}
 		for _, n := range t.IngressPolicies {
 			tg.IngressPolicies = append(tg.IngressPolicies, &PolicyGroup{
-				Tier:        t.Name,
-				PolicyNames: []string{n},
+				Tier:     t.Name,
+				Policies: []string{n},
 			})
 		}
 		for _, n := range t.EgressPolicies {
 			tg.EgressPolicies = append(tg.EgressPolicies, &PolicyGroup{
-				Tier:        t.Name,
-				PolicyNames: []string{n},
+				Tier:     t.Name,
+				Policies: []string{n},
 			})
 		}
 		tierGroups = append(tierGroups, tg)
@@ -1016,60 +1018,60 @@ var _ = Describe("PolicyGroups", func() {
 	It("should make sensible UIDs", func() {
 		pgs := []PolicyGroup{
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Tier:      "default",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "foo",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Tier:      "foo",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionOutbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Tier:      "default",
+				Direction: PolicyDirectionOutbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"a"},
-				Selector:    "all()",
+				Tier:      "default",
+				Direction: PolicyDirectionInbound,
+				Policies:  []string{"a"},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "a == 'b'",
+				Tier:      "default",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "a == 'b'",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"a", "b"},
-				Selector:    "all()",
+				Tier:      "default",
+				Direction: PolicyDirectionInbound,
+				Policies:  []string{"a", "b"},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"ab"},
-				Selector:    "all()",
+				Tier:      "default",
+				Direction: PolicyDirectionInbound,
+				Policies:  []string{"ab"},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"aaa", "bbb"},
-				Selector:    "all()",
+				Tier:      "default",
+				Direction: PolicyDirectionInbound,
+				Policies:  []string{"aaa", "bbb"},
+				Selector:  "all()",
 			},
 			{
 				Tier:      "default",
 				Direction: PolicyDirectionInbound,
 				// Between this and the entry above, we check that the data
 				// sent to the hasher is delimited somehow.
-				PolicyNames: []string{"aaab", "bb"},
-				Selector:    "all()",
+				Policies: []string{"aaab", "bb"},
+				Selector: "all()",
 			},
 		}
 
@@ -1085,19 +1087,19 @@ var _ = Describe("PolicyGroups", func() {
 		pg := PolicyGroup{
 			Tier:      "default",
 			Direction: PolicyDirectionInbound,
-			PolicyNames: []string{
+			Policies: []string{
 				"namespace/staged:foo",
 			},
 			Selector: "all()",
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeFalse())
 
-		pg.PolicyNames = []string{
+		pg.Policies = []string{
 			"staged:foo",
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeFalse())
 
-		pg.PolicyNames = []string{
+		pg.Policies = []string{
 			"namespace/staged:foo",
 			"namespace/bar",
 		}
@@ -1124,10 +1126,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	},
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionInbound,
+			Policies:  []string{"a"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			jumpToPolicyGroup("cali-pi-default/a", 0),
@@ -1135,10 +1137,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionInbound,
+			Policies:  []string{"a", "b"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			jumpToPolicyGroup("cali-pi-default/a", 0),
@@ -1147,10 +1149,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionInbound,
+			Policies:  []string{"a", "b", "c"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			jumpToPolicyGroup("cali-pi-default/a", 0),
@@ -1160,10 +1162,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionInbound,
+			Policies:  []string{"a", "b", "c", "d"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			jumpToPolicyGroup("cali-pi-default/a", 0),
@@ -1174,10 +1176,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionInbound,
+			Policies:  []string{"a", "b", "c", "d", "e"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			jumpToPolicyGroup("cali-pi-default/a", 0),
@@ -1189,10 +1191,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e", "f"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionInbound,
+			Policies:  []string{"a", "b", "c", "d", "e", "f"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			jumpToPolicyGroup("cali-pi-default/a", 0),
@@ -1212,10 +1214,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e", "f", "g"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionOutbound,
+			Policies:  []string{"a", "b", "c", "d", "e", "f", "g"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			jumpToPolicyGroup("cali-po-default/a", 0),
@@ -1234,10 +1236,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "c", "d", "e", "f", "g", "h", "i"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionOutbound,
+			Policies:  []string{"staged:a", "staged:b", "c", "d", "e", "f", "g", "h", "i"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
@@ -1258,10 +1260,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "staged:c", "d", "staged:e", "f", "g"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionOutbound,
+			Policies:  []string{"staged:a", "staged:b", "staged:c", "d", "staged:e", "f", "g"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
@@ -1273,10 +1275,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "staged:c", "staged:d", "staged:e", "f", "g"},
-			Selector:    "all()",
+			Tier:      "default",
+			Direction: PolicyDirectionOutbound,
+			Policies:  []string{"staged:a", "staged:b", "staged:c", "staged:d", "staged:e", "f", "g"},
+			Selector:  "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the

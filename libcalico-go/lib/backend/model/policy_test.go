@@ -40,7 +40,7 @@ var _ = Describe("Policy functions", func() {
 	})
 
 	It("Policy should identify as staged by name", func() {
-		Expect(model.PolicyIsStaged("staged:policy1")).To(BeTrue())
-		Expect(model.PolicyIsStaged("policy1")).To(BeFalse())
+		Expect(model.KindIsStaged("staged:policy1")).To(BeTrue())
+		Expect(model.KindIsStaged("policy1")).To(BeFalse())
 	})
 })

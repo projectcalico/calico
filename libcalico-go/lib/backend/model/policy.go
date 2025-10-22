@@ -28,32 +28,16 @@ var (
 	typePolicy  = reflect.TypeOf(Policy{})
 )
 
-// Policy names with this prefix are staged rather than enforced. We *could* add an additional field to the Policy
-// key to relay this information and still allow the names to clash (since we want staged policies with the same name
-// as their non-staged counterpart). This approach is less invasive to the existing Felix and dataplane driver code.
-const PolicyNamePrefixStaged = "staged:"
-
-// stagedToEnforcedV1Name converts the v1 name from staged (if it is) to the equivalent enforced name, and returns
-// whether the original name indicated a staged policy.
-func stagedToEnforcedV1Name(name string) (bool, string) {
-	var namespace string
-	var staged bool
-	if parts := strings.Split(name, "/"); len(parts) == 2 {
-		namespace, name = parts[0], parts[1]
+// KindIsStaged returns true if the the policy kind indicates that it is a staged policy.
+func KindIsStaged(kind string) bool {
+	switch kind {
+	case apiv3.KindStagedNetworkPolicy,
+		apiv3.KindStagedGlobalNetworkPolicy,
+		apiv3.KindStagedKubernetesNetworkPolicy:
+		return true
+	default:
+		return false
 	}
-	if staged = strings.HasPrefix(name, PolicyNamePrefixStaged); staged {
-		name = strings.TrimPrefix(name, PolicyNamePrefixStaged)
-	}
-	if namespace == "" {
-		return staged, name
-	}
-	return staged, namespace + "/" + name
-}
-
-// PolicyIsStaged returns true if the name of the policy indicates that it is a staged policy.
-func PolicyIsStaged(name string) bool {
-	staged, _ := stagedToEnforcedV1Name(name)
-	return staged
 }
 
 type PolicyKey struct {

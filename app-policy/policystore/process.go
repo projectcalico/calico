@@ -39,7 +39,7 @@ func (store *PolicyStore) ProcessUpdate(subscriptionType string, update *proto.T
 	case *proto.ToDataplane_ActiveProfileRemove:
 		store.processActiveProfileRemove(payload.ActiveProfileRemove)
 	case *proto.ToDataplane_ActivePolicyUpdate:
-		if !storeStaged && model.PolicyIsStaged(payload.ActivePolicyUpdate.Id.Name) {
+		if !storeStaged && model.KindIsStaged(payload.ActivePolicyUpdate.Id.Name) {
 			log.WithFields(log.Fields{
 				"id": payload.ActivePolicyUpdate.Id,
 			}).Debug("Skipping StagedPolicy ActivePolicyUpdate")
@@ -49,7 +49,7 @@ func (store *PolicyStore) ProcessUpdate(subscriptionType string, update *proto.T
 
 		store.processActivePolicyUpdate(payload.ActivePolicyUpdate)
 	case *proto.ToDataplane_ActivePolicyRemove:
-		if !storeStaged && model.PolicyIsStaged(payload.ActivePolicyRemove.Id.Name) {
+		if !storeStaged && model.KindIsStaged(payload.ActivePolicyRemove.Id.Name) {
 			log.WithFields(log.Fields{
 				"id": payload.ActivePolicyRemove.Id,
 			}).Debug("Skipping StagedPolicy ActivePolicyRemove")
