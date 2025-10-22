@@ -2,8 +2,7 @@
   "kind": "Profile",
   "apiVersion": "projectcalico.org/v3",
   "metadata": {
-    "name": "profile1",
-    "creationTimestamp": null
+    "name": "profile1"
   },
   "spec": {
     "ingress": [
@@ -61,14 +60,12 @@
             4567,
             "8:9"
           ]
-        },
-        "destination": {}
+        }
       }
     ],
     "egress": [
       {
         "action": "Allow",
-        "source": {},
         "destination": {
           "notSelector": "profile == 'system'"
         }
@@ -77,12 +74,10 @@
         "action": "Allow",
         "source": {
           "selector": "something in {'a', 'b'}"
-        },
-        "destination": {}
+        }
       },
       {
         "action": "Allow",
-        "source": {},
         "destination": {
           "selector": "something not in {'a', 'b'}"
         }

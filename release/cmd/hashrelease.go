@@ -119,6 +119,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithOperatorDirectory(operatorDir),
 					operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
 					operator.IsHashRelease(),
+					operator.WithImage(c.String(operatorImageFlag.Name)),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
@@ -145,11 +146,14 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				opts := []calico.Option{
 					calico.WithVersion(data.ProductVersion()),
 					calico.WithOperator(c.String(operatorRegistryFlag.Name), c.String(operatorImageFlag.Name), data.OperatorVersion()),
+					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.IsHashRelease(),
 					calico.WithOutputDir(hashreleaseDir),
+					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithBuildImages(c.Bool(buildHashreleaseImageFlag.Name)),
+					calico.WithArchiveImages(c.Bool(archiveImagesFlag.Name)),
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -316,8 +320,8 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	// CI condtional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
-				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
+				hashreleaseServerBucketFlag.Name)
 		}
 		if c.String(ciTokenFlag.Name) == "" {
 			return fmt.Errorf("%s API token must be set when running on CI, either set \"SEMAPHORE_API_TOKEN\" or use %s flag", semaphoreCI, ciTokenFlag.Name)
@@ -358,8 +362,8 @@ func validateHashreleasePublishFlags(c *cli.Command) error {
 	if c.Bool(publishHashreleaseFlag.Name) {
 		//  check that hashrelease server configuration is set.
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
-				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
+				hashreleaseServerBucketFlag.Name)
 		}
 		if c.Bool(latestFlag.Name) {
 			// If using a custom registry, do not allow setting the hashrelease as latest.
@@ -390,8 +394,7 @@ func ciJobURL(c *cli.Command) string {
 
 func hashreleaseServerConfig(c *cli.Command) *hashreleaseserver.Config {
 	return &hashreleaseserver.Config{
-		BucketName:      c.String(hashreleaseServerBucketFlag.Name),
-		CredentialsFile: c.String(hashreleaseServerCredentialsFlag.Name),
+		BucketName: c.String(hashreleaseServerBucketFlag.Name),
 	}
 }
 

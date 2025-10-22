@@ -17,7 +17,7 @@ package infrastructure
 import (
 	"net"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -109,7 +109,7 @@ func CreateDefaultProfile(c client.Interface, name string, labels map[string]str
 		Source: api.EntityRule{Selector: entityRuleSelector},
 	}}
 	_, err := c.Profiles().Create(utils.Ctx, d, utils.NoOptions)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }
 
 type CreateOption func(DatastoreInfra)

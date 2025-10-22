@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+set +e
 
-source ../.semaphore/vms/vm-tests-common.sh
+source $(pwd)/.semaphore/batches.sh
 
-zone=$1
-vm_name_prefix=$2
+zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
+vm_name_prefix=$1
 repo_dir="."
-artifacts_dir="$repo_dir/artifacts"
+artifacts_dir="./artifacts"
 
 echo
 echo "===== Starting tests ====="
@@ -33,24 +33,19 @@ log_files=()
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   log_file="$artifacts_dir/test-$batch.log"
-  log_files+=( $log_file )
-  case $batch in
-    k8s-test)
-      cmd="make --directory=calico/${REPO_NAME} k8s-test"
-      ;;
-    *)
-      echo "invalid batch name" && exit 1
-      ;;
-  esac
 
-  $my_dir/on-test-vm ${zone} ${vm_name} $cmd >& "$log_file" &
+  $(run_batch "../.semaphore/vms/on-test-vm" $batch $vm_name $log_file) &
   pid=$!
+
+  log_files+=( $log_file )
   pids+=( $pid )
 
   prefix="[batch=${batch} pid=${pid}]"
   echo "$prefix Started test batch in background; monitoring its log ($log_file)."
   (
-    tail -F $log_file | grep --line-buffered \
+    # Redirect tail's stdin from /dev/null to prevent waiting
+    # forever on reads in semaphore CI
+    tail -F $log_file < /dev/null| grep --line-buffered \
       -e "^test.*\.\.\. ok" \
       -e "\.\.\. ERROR$" \
       -e "Failure output:" \
@@ -103,7 +98,7 @@ echo
 echo "===== Retrieving report files ====="
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
-  $my_dir/scp-from-test-vm ${zone} ${vm_name} /home/ubuntu/calico/node/report/* $repo_dir/report/
+  $my_dir/scp-from-test-vm ${vm_name} /home/ubuntu/calico/node/report/* $repo_dir/report/
 done
 echo
 

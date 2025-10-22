@@ -19,7 +19,10 @@ import (
 
 	. "github.com/onsi/gomega"
 	v1 "github.com/tigera/operator/api/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/kubernetes/test/e2e/framework"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
@@ -41,4 +44,13 @@ func ExpectedPodMTU(f *framework.Framework) *int32 {
 		}
 	}
 	return nil
+}
+
+func WhiskerInstalled(cli ctrlclient.Client) (bool, error) {
+	k := ctrlclient.ObjectKey{Name: "whisker", Namespace: "calico-system"}
+	err := cli.Get(context.TODO(), k, &appsv1.Deployment{})
+	if errors.IsNotFound(err) {
+		return false, nil
+	}
+	return true, err
 }

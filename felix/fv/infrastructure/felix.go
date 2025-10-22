@@ -29,7 +29,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -328,7 +330,7 @@ func (f *Felix) Stop() {
 	f.FlowServerStop()
 	f.Container.Stop()
 
-	if CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
 		Expect(f.DataRaces()).To(BeEmpty(), "Test FAILED and data races were detected in the logs at teardown.")
 	} else {
 		Expect(f.DataRaces()).To(BeEmpty(), "Test PASSED but data races were detected in the logs at teardown.")
@@ -355,7 +357,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 	triggerChan := make(chan struct{})
 
 	go func() {
-		defer GinkgoRecover()
+		defer ginkgo.GinkgoRecover()
 		select {
 		case <-time.After(time.Second * 30):
 			logrus.Panic("Restart with delayed startup timed out after 30s")
@@ -442,7 +444,7 @@ func BPFMode() bool {
 
 // AttachTCPDump returns tcpdump attached to the container
 func (f *Felix) AttachTCPDump(iface string) *tcpdump.TCPDump {
-	return tcpdump.Attach(f.Container.Name, "", iface)
+	return tcpdump.Attach(f.Name, "", iface)
 }
 
 func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool) {

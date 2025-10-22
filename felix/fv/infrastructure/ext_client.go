@@ -17,7 +17,7 @@ package infrastructure
 import (
 	"os"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -35,7 +35,7 @@ func RunExtClient(namePrefix string) *containers.Container {
 
 func RunExtClientWithOpts(namePrefix string, opts ExtClientOpts) *containers.Container {
 	wd, err := os.Getwd()
-	Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get working directory")
 
 	image := utils.Config.BusyboxImage
 	if opts.Image != "" {

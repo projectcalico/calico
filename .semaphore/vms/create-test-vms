@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+
+# Copyright (c) 2019 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +16,11 @@
 
 set -e
 
-source ../.semaphore/vms/vm-tests-common.sh
+source $(pwd)/.semaphore/batches.sh
 
-zone=$1
-vm_name_prefix=$2
-disk_size=${VM_DISK_SIZE:-20GB}
+vm_name_prefix=$1
+project=unique-caldron-775
+zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
 repo_dir="."
 artifacts_dir="$repo_dir/artifacts"
@@ -29,7 +30,7 @@ for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   log_file="$artifacts_dir/create-vm-$batch.log"
   echo "Creating test VM $vm_name in background. Redirecting log to $log_file."
-  "${my_dir}/create-test-vm" "$zone" "$vm_name" "$disk_size" >& "$log_file" &
+  "${my_dir}/create-test-vm" "$vm_name" >& "$log_file" &
   pids+=( $! )
   sleep 1
 done

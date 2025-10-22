@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -167,20 +165,35 @@ type iperfReport struct {
 }
 
 var _ = infrastructure.DatastoreDescribe(
-	"QoS controls tests",
+	"_BPF_ _BPF-SAFE_ QoS controls tests",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes, apiconfig.EtcdV3},
 	func(getInfra infrastructure.InfraFactory) {
 		type testConf struct {
-			Encap string
+			Encap       string
+			BPFLogLevel string
 		}
 		for _, testConfig := range []testConf{
-			{Encap: "none"},
-			{Encap: "ipip"},
-			{Encap: "vxlan"},
+			{
+				Encap:       "none",
+				BPFLogLevel: "Debug",
+			},
+			{
+				Encap:       "none",
+				BPFLogLevel: "Info",
+			},
+			{
+				Encap:       "ipip",
+				BPFLogLevel: "Debug",
+			},
+			{
+				Encap:       "vxlan",
+				BPFLogLevel: "Debug",
+			},
 		} {
 			encap := testConfig.Encap
+			bpfLogLevel := testConfig.BPFLogLevel
 
-			Describe(fmt.Sprintf("encap='%s'", encap), func() {
+			Describe(fmt.Sprintf("encap='%s', bpfLogLevel='%s'", encap, bpfLogLevel), func() {
 				var (
 					infra        infrastructure.DatastoreInfra
 					tc           infrastructure.TopologyContainers
@@ -193,6 +206,10 @@ var _ = infrastructure.DatastoreDescribe(
 				BeforeEach(func() {
 					infra = getInfra()
 					topt = infrastructure.DefaultTopologyOptions()
+
+					if bpfLogLevel != "Debug" && !BPFMode() {
+						Skip("Skipping QoS control tests with non-debug bpfLogLevel on iptables/nftables mode (for deduplication).")
+					}
 
 					switch encap {
 					case "none":
@@ -216,6 +233,9 @@ var _ = infrastructure.DatastoreDescribe(
 					topt.UseIPPools = true
 					topt.DelayFelixStart = true
 					topt.TriggerDelayedFelixStart = true
+					if BPFMode() {
+						topt.ExtraEnvVars["FELIX_BPFLogLevel"] = bpfLogLevel
+					}
 
 					if _, ok := infra.(*infrastructure.EtcdDatastoreInfra); ok && BPFMode() {
 						Skip("Skipping QoS control tests on etcd datastore and BPF mode.")
@@ -460,6 +480,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Running iperf2 client on workload 1 with packet rate limit for ingress on workload 0")
 						ingressLimitedPeakrate, err := retryIperf2Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-u", "-l1000", "-b10M", "-t1")
+						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client peakrate with ingress packet rate limit on client (bps): %v", ingressLimitedPeakrate)
 						// Expect the limited peakrate to be below an estimated desired rate (1000 byte packet * 8 bits/byte * (100 packets/s + 200 packet burst) = 2400000bps), with a 20% margin
 						Expect(ingressLimitedPeakrate).To(BeNumerically(">=", 1000*8*100))
@@ -528,6 +549,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Running iperf2 client on workload 1 with packet rate limit for egress on workload 1")
 						egressLimitedPeakrate, err := retryIperf2Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-u", "-l1000", "-b10M", "-t1")
+						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client peakrate with egress packet rate limit on client (bps): %v", egressLimitedPeakrate)
 						// Expect the limited peakrate to be below an estimated desired rate (1000 byte packet * 8 bits/byte * (100 packets/s + 200 packet burst) = 2400000bps), with a 20% margin
 						Expect(egressLimitedPeakrate).To(BeNumerically(">=", 1000*8*100))

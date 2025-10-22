@@ -77,7 +77,7 @@ export K8S_E2E_EXTRA_FLAGS=${K8S_E2E_EXTRA_FLAGS:-" --e2ecfg.calicoctl-opensourc
 export HELM_PATCH=${HELM_PATCH:-"0"}
 export CALICOCTL_INSTALL_TYPE=${CALICOCTL_INSTALL_TYPE:-"binary"}
 export BZ_LOGS_DIR=${BZ_LOGS_DIR:-$HOME/.bz/logs}
-export BZ_HOME=${BZ_HOME:-"${PWD}/${SEMAPHORE_JOB_ID}"}
+export BZ_HOME=${BZ_HOME:-"${HOME}/${SEMAPHORE_JOB_ID}"}
 export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-"${BZ_HOME}/.local"}
 export REPORT_DIR=${REPORT_DIR:-"${BZ_LOCAL_DIR}/report/${TEST_TYPE}"}
 export BZ_GLOBAL_BIN=${BZ_GLOBAL_BIN:-$HOME/.local/bin}
@@ -91,6 +91,8 @@ export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER
 export BANZAI_CORE_BRANCH=${BANZAI_CORE_BRANCH:-""}
 export BZ_TASK_VERSION=${BZ_TASK_VERSION:-"v2.8.1"}
 export SEMAPHORE_AGENT_UPLOAD_JOB_LOGS=${SEMAPHORE_AGENT_UPLOAD_JOB_LOGS:-"when-trimmed"}
+
+export RELEASE_STREAM=${RELEASE_STREAM:-master}
 
 if [[ "${BANZAI_CORE_BRANCH}" != "" ]]; then BANZAI_CORE_BRANCH="--core-branch ${BANZAI_CORE_BRANCH}"; fi
 
@@ -106,6 +108,10 @@ cat /proc/cpuinfo
 echo "-----------"
 echo "Semaphore OS information"
 lsb_release -a
+
+echo "[INFO] overriding DNS..."
+echo "nameserver 208.67.222.222" | sudo tee /etc/resolv.conf
+echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
 
 echo "[INFO] installing google cloud sdk..."
 gcloud_cmd_c1="echo \"deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main\" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list"
@@ -156,6 +162,7 @@ cp ~/secrets/docker_cfg.json "$HOME/.docker/config.json"
 
 mkdir -p "${BZ_LOGS_DIR}"
 
+cd "$HOME" || exit
 std="echo \"[INFO] Initializing Banzai profile...\""
 std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
 std="$std; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"

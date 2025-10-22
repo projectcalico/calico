@@ -451,7 +451,9 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 
 		// Release the block affinity, requiring it to be empty.
 		for i := 0; i < datastoreRetries; i++ {
-			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, block, true); err != nil {
+			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, block, releaseAffinityOpts{
+				RequireEmpty: true,
+			}); err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Not claimed by this host - ignore.
 				} else if _, ok := err.(errBlockNotEmpty); ok {
@@ -1035,11 +1037,10 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	unallocated := []net.IP{}
 
 	// Get IP pools up front so we don't need to query for each IP address.
-	v4Pools, err := c.pools.GetEnabledPools(ctx, 4)
-	if err != nil {
-		return nil, nil, err
-	}
-	v6Pools, err := c.pools.GetEnabledPools(ctx, 6)
+	// When releasing an IP, we get _all_ pools, even disabled ones.  If we
+	// didn't, then deletion from a disabled pool would still succeed, but it'd
+	// go through the "full scan" path which is inefficient.
+	allPools, err := c.pools.GetAllPools(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1047,6 +1048,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	// Group IP addresses by block to minimize the number of writes
 	// to the datastore required to release the given addresses.
 	ipsByBlock := map[string][]ReleaseOptions{}
+	var cachedBlockKVs *model.KVPairList
 	for _, opts := range ips {
 		var blockCIDR string
 
@@ -1055,27 +1057,19 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 			return nil, nil, err
 		}
 
-		// Find the IP pools for this address in the enabled pools if possible.
-		var pool *v3.IPPool
-		switch ip.Version() {
-		case 4:
-			pool, err = c.blockReaderWriter.getPoolForIP(ctx, *ip, v4Pools)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to get pool for IP")
-				return nil, nil, err
-			}
-		case 6:
-			pool, err = c.blockReaderWriter.getPoolForIP(ctx, *ip, v6Pools)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to get pool for IP")
-				return nil, nil, err
-			}
+		// Find the IP pools for this address, if possible.
+		pool, err := c.blockReaderWriter.getPoolForIP(ctx, *ip, allPools)
+		if err != nil {
+			log.WithError(err).Warnf("Failed to get pool for IP")
+			return nil, nil, err
 		}
 
 		if pool == nil {
-			if cidr, err := c.blockReaderWriter.getBlockForIP(ctx, *ip); err != nil {
+			log.Warnf("The IP %s is not in any configured pool, trying to find the block by full scan.", ip.String())
+			if cidr, newCachedKVs, err := c.blockReaderWriter.getBlockForIP(ctx, *ip, cachedBlockKVs); err != nil {
 				return nil, nil, err
 			} else {
+				cachedBlockKVs = newCachedKVs
 				if cidr == nil {
 					// The IP isn't in any block so it's already unallocated.
 					unallocated = append(unallocated, *ip)
@@ -1422,7 +1416,9 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
 		logCtx := log.WithField("cidr", blockCIDR)
 		for i := 0; i < datastoreRetries; i++ {
-			err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, mustBeEmpty)
+			err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, releaseAffinityOpts{
+				RequireEmpty: mustBeEmpty,
+			})
 			if err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Not claimed by this host - ignore.
@@ -1456,7 +1452,9 @@ func (c ipamClient) ReleaseBlockAffinity(ctx context.Context, block *model.Alloc
 		return err
 	}
 
-	err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, block.CIDR, mustBeEmpty)
+	err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, block.CIDR, releaseAffinityOpts{
+		RequireEmpty: mustBeEmpty,
+	})
 	if err != nil {
 		if _, ok := err.(errBlockClaimConflict); ok {
 			// Not claimed by this host - ignore.
@@ -1493,7 +1491,9 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg Affin
 		for _, blockCIDR := range blockCIDRs {
 			logCtx := log.WithField("cidr", blockCIDR)
 			for i := 0; i < datastoreRetries; i++ {
-				err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, blockCIDR, mustBeEmpty)
+				err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, blockCIDR, releaseAffinityOpts{
+					RequireEmpty: mustBeEmpty,
+				})
 				if err != nil {
 					if _, ok := err.(errBlockClaimConflict); ok {
 						// Claimed by a different host. Move to next block.
@@ -1522,7 +1522,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg Affin
 // the specified pool across all hosts.
 func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) error {
 	log.Infof("Releasing block affinities within pool '%s'", pool.String())
-	for i := 0; i < ipamKeyErrRetries; i++ {
+	for range datastoreRetries {
 		retry := false
 		pairs, err := c.affinityConfigsByBlocks(ctx, pool)
 		if err != nil {
@@ -1537,8 +1537,8 @@ func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) e
 		for blockString, affinityCfg := range pairs {
 			_, blockCIDR, _ := net.ParseCIDR(blockString)
 			logCtx := log.WithField("cidr", blockCIDR)
-			for i := 0; i < datastoreRetries; i++ {
-				err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, false)
+			for range datastoreRetries {
+				err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, releaseAffinityOpts{})
 				if err != nil {
 					if _, ok := err.(errBlockClaimConflict); ok {
 						retry = true
@@ -2125,7 +2125,9 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	logCtx.WithField("selector", pool.Spec.NodeSelector).Debug("Pool no longer selects node, releasing block affinity")
 
 	// Pool does not match this node's label, release this block's affinity.
-	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, b.CIDR, true); err != nil {
+	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, b.CIDR, releaseAffinityOpts{
+		RequireEmpty: true,
+	}); err != nil {
 		if _, ok := err.(errBlockClaimConflict); ok {
 			// Not claimed by this host - ignore.
 		} else if _, ok := err.(errBlockNotEmpty); ok {

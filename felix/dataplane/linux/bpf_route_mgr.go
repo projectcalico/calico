@@ -350,7 +350,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 						"Will choose one route.")
 			}
 			wepIDs.Iter(func(wepID types.WorkloadEndpointID) error {
-				// Route is a local workload look up its name and interface details.
+				// Route is a local workload, look up its name and interface details.
 				wepScore := 0
 				wep := m.wepIDToWorkload[wepID]
 				ifaceName := wep.Name

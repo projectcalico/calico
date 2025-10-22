@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-
-# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,4 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-exec gcloud --quiet compute ssh "--zone=${ZONE}" "ubuntu@${VM_NAME}" -- -o ServerAliveInterval=10 "$@"
+set +e
+
+source $(pwd)/.semaphore/batches.sh
+
+zone=${ZONE:-europe-west3-c}
+my_dir="$(dirname $0)"
+vm_name_prefix=$1
+shift 1
+repo_dir="."
+artifacts_dir="./artifacts"
+
+echo
+echo "===== Starting tests ====="
+echo
+
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  VM_NAME="$vm_name" ../.semaphore/vms/on-test-vm "$@"
+done
+
+echo "===== Done, exiting with RC=$final_result ====="

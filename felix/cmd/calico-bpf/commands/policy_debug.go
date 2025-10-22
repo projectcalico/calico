@@ -85,11 +85,11 @@ var policyDumpCmd = &cobra.Command{
 func parseArgs(args []string) (string, string, error) {
 	lenArgs := len(args)
 	if lenArgs != 2 {
-		return "", "", fmt.Errorf("Invalid number of arguments: %d", lenArgs)
+		return "", "", fmt.Errorf("invalid number of arguments: %d", lenArgs)
 	}
 	hookArg := args[1]
 	if hook.StringToHook(hookArg) == hook.Bad && hookArg != "all" {
-		return "", "", fmt.Errorf("Invalid argument: '%s'", hookArg)
+		return "", "", fmt.Errorf("invalid argument: '%s'", hookArg)
 	}
 	return args[0], args[1], nil
 }
@@ -153,7 +153,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 			if strings.Contains(comment, "Rule MatchID") {
 				matchId := getRuleMatchID(comment)
 				cmd.Printf("// count = %d\n", m[matchId])
-			} else if verboseFlagSet || strings.Contains(comment, "Start of policy") || strings.Contains(comment, "Start of rule") || strings.Contains(comment, "IPSets") {
+			} else if verboseFlagSet || strings.Contains(comment, "Start of") || strings.Contains(comment, "End of") || strings.Contains(comment, "IPSets") {
 				cmd.Printf("// %s\n", comment)
 			}
 		}

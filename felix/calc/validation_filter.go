@@ -96,7 +96,7 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 
 func (v *ValidationFilter) validateWorkloadEndpoint(value *model.WorkloadEndpoint) error {
 	if value.Name == "" {
-		return errors.New("Missing workload endpoint name")
+		return errors.New("missing workload endpoint name")
 	}
 	if len(value.AllowSpoofedSourcePrefixes) > 0 && v.config.WorkloadSourceSpoofing != "Any" {
 		return errors.New("source IP spoofing requested but not enabled in Felix configuration")

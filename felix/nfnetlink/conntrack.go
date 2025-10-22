@@ -91,7 +91,7 @@ func (cte *CtEntry) IsDNAT() bool {
 
 func (cte *CtEntry) OriginalTuplePostDNAT() (CtTuple, error) {
 	if !cte.IsDNAT() {
-		return EmptyCtTuple, errors.New("Entry is not DNAT-ed")
+		return EmptyCtTuple, errors.New("entry is not DNAT-ed")
 	}
 
 	switch cte.OriginalTuple.ProtoNum {

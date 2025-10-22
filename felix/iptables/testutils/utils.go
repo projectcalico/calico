@@ -24,7 +24,9 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -130,7 +132,7 @@ func (d *MockDataplane) NewCmd(name string, arg ...string) cmdshim.CmdIface {
 			Dataplane: d,
 		}
 	default:
-		Fail(fmt.Sprintf("Unexpected command %v", name))
+		ginkgo.Fail(fmt.Sprintf("Unexpected command %v", name))
 	}
 
 	d.Cmds = append(d.Cmds, cmd)
@@ -200,22 +202,22 @@ func (d *restoreCmd) SetStderr(w io.Writer) {
 }
 
 func (d *restoreCmd) Output() ([]byte, error) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 	return nil, errors.New("Not implemented")
 }
 
 func (d *restoreCmd) StdoutPipe() (io.ReadCloser, error) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 	return nil, errors.New("Not implemented")
 }
 
 func (d *restoreCmd) Start() error {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 	return errors.New("Not implemented")
 }
 
 func (d *restoreCmd) Wait() error {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 	return errors.New("Not implemented")
 }
 
@@ -243,11 +245,11 @@ func (d *restoreCmd) Run() error {
 	if d.Dataplane.FailNextRestore {
 		log.Warn("Simulating an iptables-restore failure")
 		d.Dataplane.FailNextRestore = false
-		return errors.New("Simulated failure")
+		return errors.New("simulated failure")
 	}
 	if d.Dataplane.FailAllRestores {
 		log.Warn("Simulating an iptables-restore failure")
-		return errors.New("Simulated failure")
+		return errors.New("simulated failure")
 	}
 
 	// Process it line by line.
@@ -387,7 +389,7 @@ func (d *restoreCmd) Run() error {
 			delete(chains, chainName)
 			d.Dataplane.DeletedChains.Add(chainName)
 		default:
-			Fail("Unknown action: " + action)
+			ginkgo.Fail("Unknown action: " + action)
 		}
 		log.Debugf("Updated chain '%s' (len=%v); new contents:\n\t%v",
 			chainName, len(chains[chainName]), strings.Join(chains[chainName], "\n\t"))
@@ -416,15 +418,15 @@ func (d *saveCmd) String() string {
 }
 
 func (d *saveCmd) SetStdin(r io.Reader) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *saveCmd) SetStdout(w io.Writer) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *saveCmd) SetStderr(w io.Writer) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *saveCmd) Start() error {
@@ -458,10 +460,10 @@ func (d *saveCmd) Kill() error {
 func (d *saveCmd) Output() ([]byte, error) {
 	if d.Dataplane.FailNextSaveRead {
 		d.Dataplane.FailNextSaveRead = false
-		return nil, errors.New("Simulated failure")
+		return nil, errors.New("simulated failure")
 	}
 	if d.Dataplane.FailAllSaves {
-		return nil, errors.New("Simulated failure")
+		return nil, errors.New("simulated failure")
 	}
 	var buf bytes.Buffer
 
@@ -488,12 +490,12 @@ func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
 	var readErr error
 	if d.Dataplane.FailNextSaveRead {
 		d.Dataplane.FailNextSaveRead = false
-		readErr = errors.New("Simulated Read() failure.")
+		readErr = errors.New("simulated Read() failure")
 	}
 
 	if d.Dataplane.FailNextSaveStdoutPipe {
 		d.Dataplane.FailNextSaveStdoutPipe = false
-		return nil, errors.New("Simulated StdoutPipe() failure.")
+		return nil, errors.New("simulated StdoutPipe() failure")
 	}
 
 	buf, err := d.Output()
@@ -502,7 +504,7 @@ func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
 	}
 	var closeErr error
 	if d.Dataplane.FailNextPipeClose {
-		closeErr = errors.New("Dummy deferred flush error")
+		closeErr = errors.New("dummy deferred flush error")
 		d.Dataplane.FailNextPipeClose = false
 	}
 	cb := &closableBuffer{
@@ -512,14 +514,14 @@ func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
 	}
 	d.Dataplane.PipeBuffers = append(d.Dataplane.PipeBuffers, cb)
 	if d.stdoutPipe != nil {
-		Fail("StdoutPipe() called more than once")
+		ginkgo.Fail("StdoutPipe() called more than once")
 	}
 	d.stdoutPipe = cb
 	return cb, nil
 }
 
 func (d *saveCmd) Run() error {
-	return errors.New("Not implemented")
+	return errors.New("not implemented")
 }
 
 type versionCmd struct {
@@ -531,15 +533,15 @@ func (d *versionCmd) String() string {
 }
 
 func (d *versionCmd) SetStdin(r io.Reader) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *versionCmd) SetStdout(w io.Writer) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *versionCmd) SetStderr(w io.Writer) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *versionCmd) Start() error {
@@ -551,30 +553,30 @@ func (d *versionCmd) Start() error {
 }
 
 func (d *versionCmd) Wait() error {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 	return nil
 }
 
 func (d *versionCmd) Kill() error {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 	return nil
 }
 
 func (d *versionCmd) Output() ([]byte, error) {
 	if d.Dataplane.FailNextVersion {
 		d.Dataplane.FailNextVersion = false
-		return nil, errors.New("Simulated failure")
+		return nil, errors.New("simulated failure")
 	}
 
 	return []byte(d.Dataplane.Version), nil
 }
 
 func (d *versionCmd) StdoutPipe() (io.ReadCloser, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (d *versionCmd) Run() error {
-	return errors.New("Not implemented")
+	return errors.New("not implemented")
 }
 
 type closableBuffer struct {
@@ -592,7 +594,7 @@ func (b *closableBuffer) Read(p []byte) (n int, err error) {
 
 func (b *closableBuffer) Close() error {
 	if b.Closed {
-		Fail("Already closed")
+		ginkgo.Fail("Already closed")
 	}
 	b.Closed = true
 	return b.CloseErr

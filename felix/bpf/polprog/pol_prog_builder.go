@@ -22,7 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	. "github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/state"
@@ -39,8 +39,8 @@ const (
 )
 
 type Builder struct {
-	blocks          []*Block
-	b               *Block
+	blocks          []*asm.Block
+	b               *asm.Block
 	tierID          int
 	policyID        int
 	ruleID          int
@@ -121,31 +121,31 @@ var (
 
 	// Offsets within the cal_tc_state struct.
 	// WARNING: must be kept in sync with the definitions in bpf-gpl/types.h.
-	stateOffIPSrc          = FieldOffset{Offset: stateEventHdrSize + 0, Field: "state->ip_src"}
-	stateOffIPDst          = FieldOffset{Offset: stateEventHdrSize + 16, Field: "state->ip_dst"}
+	stateOffIPSrc          = asm.FieldOffset{Offset: stateEventHdrSize + 0, Field: "state->ip_src"}
+	stateOffIPDst          = asm.FieldOffset{Offset: stateEventHdrSize + 16, Field: "state->ip_dst"}
 	_                      = stateOffIPDst
-	stateOffPreNATIPDst    = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->pre_nat_ip_dst"}
+	stateOffPreNATIPDst    = asm.FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->pre_nat_ip_dst"}
 	_                      = stateOffPreNATIPDst
-	stateOffPostNATIPDst   = FieldOffset{Offset: stateEventHdrSize + 48, Field: "state->post_nat_ip_dst"}
-	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 84, Field: "state->pol_rc"}
-	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 88, Field: "state->sport"}
-	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->dport"}
+	stateOffPostNATIPDst   = asm.FieldOffset{Offset: stateEventHdrSize + 48, Field: "state->post_nat_ip_dst"}
+	stateOffPolResult      = asm.FieldOffset{Offset: stateEventHdrSize + 84, Field: "state->pol_rc"}
+	stateOffSrcPort        = asm.FieldOffset{Offset: stateEventHdrSize + 88, Field: "state->sport"}
+	stateOffDstPort        = asm.FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->dport"}
 	_                      = stateOffDstPort
-	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->icmp_type"}
-	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 92, Field: "state->pre_nat_dport"}
+	stateOffICMPType       = asm.FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->icmp_type"}
+	stateOffPreNATDstPort  = asm.FieldOffset{Offset: stateEventHdrSize + 92, Field: "state->pre_nat_dport"}
 	_                      = stateOffPreNATDstPort
-	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 94, Field: "state->post_nat_dport"}
-	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 96, Field: "state->ip_proto"}
-	stateOffIPSize         = FieldOffset{Offset: stateEventHdrSize + 98, Field: "state->ip_size"}
+	stateOffPostNATDstPort = asm.FieldOffset{Offset: stateEventHdrSize + 94, Field: "state->post_nat_dport"}
+	stateOffIPProto        = asm.FieldOffset{Offset: stateEventHdrSize + 96, Field: "state->ip_proto"}
+	stateOffIPSize         = asm.FieldOffset{Offset: stateEventHdrSize + 98, Field: "state->ip_size"}
 	_                      = stateOffIPSize
 
-	stateOffRulesHit = FieldOffset{Offset: stateEventHdrSize + 100, Field: "state->rules_hit"}
-	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 104, Field: "state->rule_ids"}
+	stateOffRulesHit = asm.FieldOffset{Offset: stateEventHdrSize + 100, Field: "state->rules_hit"}
+	stateOffRuleIDs  = asm.FieldOffset{Offset: stateEventHdrSize + 104, Field: "state->rule_ids"}
 
-	stateOffFlags = FieldOffset{Offset: stateEventHdrSize + 360, Field: "state->flags"}
+	stateOffFlags = asm.FieldOffset{Offset: stateEventHdrSize + 360, Field: "state->flags"}
 
-	skbCb0 = FieldOffset{Offset: 12*4 + 0*4, Field: "skb->cb[0]"}
-	skbCb1 = FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
+	skbCb0 = asm.FieldOffset{Offset: 12*4 + 0*4, Field: "skb->cb[0]"}
+	skbCb1 = asm.FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
 
 	// Compile-time check that IPSetEntryV6Size hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[32-ipsets.IPSetEntryV6Size]
@@ -227,9 +227,9 @@ const (
 	TierEndPass  TierEndAction = "pass"
 )
 
-func (p *Builder) Instructions(rules Rules) ([]Insns, error) {
+func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	p.xdp = rules.ForXDP
-	p.b = NewBlock(p.policyDebugEnabled)
+	p.b = asm.NewBlock(p.policyDebugEnabled)
 	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	p.writeProgramHeader()
@@ -299,7 +299,7 @@ normalPolicy:
 
 	p.writeProgramFooter()
 
-	var progs []Insns
+	var progs []asm.Insns
 	for i, b := range p.blocks {
 		insns, err := b.Assemble()
 		if err != nil {
@@ -316,35 +316,35 @@ normalPolicy:
 func (p *Builder) writeProgramHeader() {
 	// Preamble to the policy program.
 	p.b.LabelNextInsn("start")
-	p.b.Mov64(R6, R1) // Save R1 (context) in R6.
+	p.b.Mov64(asm.R6, asm.R1) // Save R1 (context) in R6.
 	// Zero-out the map key
-	p.b.MovImm64(R1, 0) // R1 = 0
-	p.b.StoreStack32(R1, offStateKey)
+	p.b.MovImm64(asm.R1, 0) // R1 = 0
+	p.b.StoreStack32(asm.R1, offStateKey)
 	// Get pointer to map key in R2.
-	p.b.Mov64(R2, R10) // R2 = R10
-	p.b.AddImm64(R2, int32(offStateKey))
+	p.b.Mov64(asm.R2, asm.R10) // R2 = R10
+	p.b.AddImm64(asm.R2, int32(offStateKey))
 	// Load map file descriptor into R1.
 	// clang uses a 64-bit load so copy that for now.
 	p.b.AddComment("Load packet metadata saved by previous program")
-	p.b.LoadMapFD(R1, uint32(p.stateMapFD)) // R1 = 0 (64-bit immediate)
-	p.b.Call(HelperMapLookupElem)           // Call helper
+	p.b.LoadMapFD(asm.R1, uint32(p.stateMapFD)) // R1 = 0 (64-bit immediate)
+	p.b.Call(asm.HelperMapLookupElem)           // Call helper
 	// Check return value for NULL.
-	p.b.JumpEqImm64(R0, 0, "exit")
+	p.b.JumpEqImm64(asm.R0, 0, "exit")
 	// Save state pointer in R9.
 	p.b.AddComment("Save state pointer in register R9")
-	p.b.Mov64(R9, R0)
+	p.b.Mov64(asm.R9, asm.R0)
 	p.b.LabelNextInsn("policy")
 }
 
 func (p *Builder) writeJumpIfToOrFromHost(label string) {
 	// Load state flags.
-	p.b.Load64(R1, R9, stateOffFlags)
+	p.b.Load64(asm.R1, asm.R9, stateOffFlags)
 
 	// Mask against host bits.
-	p.b.AndImm64(R1, int32(FlagDestIsHost|FlagSrcIsHost))
+	p.b.AndImm64(asm.R1, int32(FlagDestIsHost|FlagSrcIsHost))
 
 	// If non-zero, jump to specified label.
-	p.b.JumpNEImm64(R1, 0, label)
+	p.b.JumpNEImm64(asm.R1, 0, label)
 }
 
 // writeProgramFooter emits the program exit jump targets.
@@ -353,52 +353,52 @@ func (p *Builder) writeProgramFooter() {
 	p.b.LabelNextInsn("deny")
 
 	// Store the policy result in the state for the next program to see.
-	p.b.MovImm32(R1, int32(state.PolicyDeny))
-	p.b.Store32(R9, R1, stateOffPolResult)
+	p.b.MovImm32(asm.R1, int32(state.PolicyDeny))
+	p.b.Store32(asm.R9, asm.R1, stateOffPolResult)
 
 	// Execute the tail call to drop program
-	p.b.Mov64(R1, R6)                            // First arg is the context.
-	p.b.LoadMapFD(R2, uint32(p.staticJumpMapFD)) // Second arg is the map.
+	p.b.Mov64(asm.R1, asm.R6)                        // First arg is the context.
+	p.b.LoadMapFD(asm.R2, uint32(p.staticJumpMapFD)) // Second arg is the map.
 	if p.useJmps {
 		p.b.AddCommentF("Deny jump to %d", p.denyJmp)
-		p.b.MovImm32(R3, int32(p.denyJmp)) // Third arg is the index (rather than a pointer to the index).
+		p.b.MovImm32(asm.R3, int32(p.denyJmp)) // Third arg is the index (rather than a pointer to the index).
 	} else {
-		p.b.Load32(R3, R6, skbCb1) // Third arg is the index from skb->cb[1]).
+		p.b.Load32(asm.R3, asm.R6, skbCb1) // Third arg is the index from skb->cb[1]).
 	}
-	p.b.Call(HelperTailCall)
+	p.b.Call(asm.HelperTailCall)
 
 	// Fall through if tail call fails.
 	p.writeExitTarget()
 
 	if p.xdp {
 		p.b.LabelNextInsn("xdp_pass")
-		p.b.MovImm64(R0, 2 /* XDP_PASS */)
+		p.b.MovImm64(asm.R0, 2 /* XDP_PASS */)
 		p.b.Exit()
 	}
 
 	if p.b.TargetIsUsed("allow") {
 		p.b.LabelNextInsn("allow")
 		// Store the policy result in the state for the next program to see.
-		p.b.MovImm32(R1, int32(state.PolicyAllow))
-		p.b.Store32(R9, R1, stateOffPolResult)
+		p.b.MovImm32(asm.R1, int32(state.PolicyAllow))
+		p.b.Store32(asm.R9, asm.R1, stateOffPolResult)
 		// Execute the tail call.
-		p.b.Mov64(R1, R6)                            // First arg is the context.
-		p.b.LoadMapFD(R2, uint32(p.staticJumpMapFD)) // Second arg is the map.
+		p.b.Mov64(asm.R1, asm.R6)                        // First arg is the context.
+		p.b.LoadMapFD(asm.R2, uint32(p.staticJumpMapFD)) // Second arg is the map.
 		if p.useJmps {
 			p.b.AddCommentF("Allow jump to %d", p.allowJmp)
-			p.b.MovImm32(R3, int32(p.allowJmp)) // Third arg is the index (rather than a pointer to the index).
+			p.b.MovImm32(asm.R3, int32(p.allowJmp)) // Third arg is the index (rather than a pointer to the index).
 		} else {
-			p.b.Load32(R3, R6, skbCb0) // Third arg is the index from skb->cb[0]).
+			p.b.Load32(asm.R3, asm.R6, skbCb0) // Third arg is the index from skb->cb[0]).
 		}
-		p.b.Call(HelperTailCall)
+		p.b.Call(asm.HelperTailCall)
 
 		// Fall through if tail call fails.
-		p.b.MovImm32(R1, state.PolicyTailCallFailed)
-		p.b.Store32(R9, R1, stateOffPolResult)
+		p.b.MovImm32(asm.R1, state.PolicyTailCallFailed)
+		p.b.Store32(asm.R9, asm.R1, stateOffPolResult)
 		if p.xdp {
-			p.b.MovImm64(R0, 1 /* XDP_DROP */)
+			p.b.MovImm64(asm.R0, 1 /* XDP_DROP */)
 		} else {
-			p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+			p.b.MovImm64(asm.R0, 2 /* TC_ACT_SHOT */)
 		}
 		p.b.Exit()
 	}
@@ -407,33 +407,33 @@ func (p *Builder) writeProgramFooter() {
 func (p *Builder) writeExitTarget() {
 	p.b.LabelNextInsn("exit")
 	if p.xdp {
-		p.b.MovImm64(R0, 1 /* XDP_DROP */)
+		p.b.MovImm64(asm.R0, 1 /* XDP_DROP */)
 	} else {
-		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+		p.b.MovImm64(asm.R0, 2 /* TC_ACT_SHOT */)
 	}
 	p.b.Exit()
 }
 
 func (p *Builder) writeRecordRuleID(id RuleMatchID, skipLabel string) {
 	// Load the hit count
-	p.b.Load8(R1, R9, stateOffRulesHit)
+	p.b.Load8(asm.R1, asm.R9, stateOffRulesHit)
 
 	// Make sure we do not hit too many rules, if so skip to action without
 	// recording the rule ID
-	p.b.JumpGEImm64(R1, state.MaxRuleIDs, skipLabel)
+	p.b.JumpGEImm64(asm.R1, state.MaxRuleIDs, skipLabel)
 
 	// Increment the hit count
-	p.b.Mov64(R2, R1)
-	p.b.AddImm64(R2, 1)
+	p.b.Mov64(asm.R2, asm.R1)
+	p.b.AddImm64(asm.R2, 1)
 	// Store the new count
-	p.b.Store8(R9, R2, stateOffRulesHit)
+	p.b.Store8(asm.R9, asm.R2, stateOffRulesHit)
 
 	// Store the rule ID in the rule ids array
-	p.b.ShiftLImm64(R1, 3) // x8
-	p.b.AddImm64(R1, int32(stateOffRuleIDs.Offset))
-	p.b.LoadImm64(R2, int64(id))
-	p.b.Add64(R1, R9)
-	p.b.Store64(R1, R2, FieldOffset{Offset: 0, Field: ""})
+	p.b.ShiftLImm64(asm.R1, 3) // x8
+	p.b.AddImm64(asm.R1, int32(stateOffRuleIDs.Offset))
+	p.b.LoadImm64(asm.R2, int64(id))
+	p.b.Add64(asm.R1, asm.R9)
+	p.b.Store64(asm.R1, asm.R2, asm.FieldOffset{Offset: 0, Field: ""})
 }
 
 func (p *Builder) writeRecordRuleHit(r Rule, skipLabel string) {
@@ -441,7 +441,7 @@ func (p *Builder) writeRecordRuleHit(r Rule, skipLabel string) {
 	p.writeRecordRuleID(r.MatchID, skipLabel)
 }
 
-func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset int16, ipOffset, portOffset FieldOffset) {
+func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset int16, ipOffset, portOffset asm.FieldOffset) {
 	v6Adjust := int16(0)
 	prefixLen := int32(128)
 
@@ -454,34 +454,34 @@ func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset int16, ipOffset, portO
 
 	// TODO track whether we've already done an initialisation and skip the parts that don't change.
 	// Zero the padding.
-	p.b.MovImm64(R1, 0) // R1 = 0
-	p.b.StoreStack8(R1, keyOffset+ipsKeyPad+v6Adjust)
-	p.b.MovImm64(R1, prefixLen) // R1 = 128
-	p.b.StoreStack32(R1, keyOffset+ipsKeyPrefix)
+	p.b.MovImm64(asm.R1, 0) // R1 = 0
+	p.b.StoreStack8(asm.R1, keyOffset+ipsKeyPad+v6Adjust)
+	p.b.MovImm64(asm.R1, prefixLen) // R1 = 128
+	p.b.StoreStack32(asm.R1, keyOffset+ipsKeyPrefix)
 
 	// Store the IP address, port and protocol.
 	if !p.forIPv6 {
-		p.b.Load32(R1, R9, ipOffset)
-		p.b.StoreStack32(R1, keyOffset+ipsKeyAddr)
+		p.b.Load32(asm.R1, asm.R9, ipOffset)
+		p.b.StoreStack32(asm.R1, keyOffset+ipsKeyAddr)
 	} else {
-		p.b.Load64(R1, R9, ipOffset)
-		p.b.StoreStack64(R1, keyOffset+ipsKeyAddr)
+		p.b.Load64(asm.R1, asm.R9, ipOffset)
+		p.b.StoreStack64(asm.R1, keyOffset+ipsKeyAddr)
 		ipOffset.Offset += 8
-		p.b.Load64(R1, R9, ipOffset)
-		p.b.StoreStack64(R1, keyOffset+ipsKeyAddr+8)
+		p.b.Load64(asm.R1, asm.R9, ipOffset)
+		p.b.StoreStack64(asm.R1, keyOffset+ipsKeyAddr+8)
 	}
-	p.b.Load16(R1, R9, portOffset)
-	p.b.StoreStack16(R1, keyOffset+ipsKeyPort+v6Adjust)
-	p.b.Load8(R1, R9, stateOffIPProto)
-	p.b.StoreStack8(R1, keyOffset+ipsKeyProto+v6Adjust)
+	p.b.Load16(asm.R1, asm.R9, portOffset)
+	p.b.StoreStack16(asm.R1, keyOffset+ipsKeyPort+v6Adjust)
+	p.b.Load8(asm.R1, asm.R9, stateOffIPProto)
+	p.b.StoreStack8(asm.R1, keyOffset+ipsKeyProto+v6Adjust)
 
 	// Store the IP set ID.  It is 64-bit but, since it's a packed struct, we have to write it in two
 	// 32-bit chunks.
 	beIPSetID := bits.ReverseBytes64(ipsetID)
-	p.b.MovImm32(R1, int32(beIPSetID))
-	p.b.StoreStack32(R1, keyOffset+ipsKeyID)
-	p.b.MovImm32(R1, int32(beIPSetID>>32))
-	p.b.StoreStack32(R1, keyOffset+ipsKeyID+4)
+	p.b.MovImm32(asm.R1, int32(beIPSetID))
+	p.b.StoreStack32(asm.R1, keyOffset+ipsKeyID)
+	p.b.MovImm32(asm.R1, int32(beIPSetID>>32))
+	p.b.StoreStack32(asm.R1, keyOffset+ipsKeyID+4)
 }
 
 func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) {
@@ -576,7 +576,7 @@ const (
 	legDestPreNAT matchLeg = "destPreNAT"
 )
 
-func (leg matchLeg) offsetToStateIPAddressField() (offset FieldOffset) {
+func (leg matchLeg) offsetToStateIPAddressField() (offset asm.FieldOffset) {
 	switch leg {
 	case legSource:
 		offset = stateOffIPSrc
@@ -588,7 +588,7 @@ func (leg matchLeg) offsetToStateIPAddressField() (offset FieldOffset) {
 	return
 }
 
-func (leg matchLeg) offsetToStatePortField() (portOffset FieldOffset) {
+func (leg matchLeg) offsetToStatePortField() (portOffset asm.FieldOffset) {
 	switch leg {
 	case legSource:
 		portOffset = stateOffSrcPort
@@ -747,9 +747,9 @@ func (p *Builder) writeStartOfRule() {
 
 func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 	if actionLabel == "log" {
-		p.b.Load64(R1, R9, stateOffFlags)
-		p.b.OrImm64(R1, int32(FlagLogPacket))
-		p.b.Store64(R9, R1, stateOffFlags)
+		p.b.Load64(asm.R1, asm.R9, stateOffFlags)
+		p.b.OrImm64(asm.R1, int32(FlagLogPacket))
+		p.b.Store64(asm.R9, asm.R1, stateOffFlags)
 	} else {
 		// If all the match criteria are met, we fall through to the end of the rule
 		// so all that's left to do is to jump to the relevant action.
@@ -770,12 +770,12 @@ func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
 		p.b.AddCommentF("If protocol != %s, skip to next rule", protocolToName(protocol))
 	}
 
-	p.b.Load8(R1, R9, stateOffIPProto)
+	p.b.Load8(asm.R1, asm.R9, stateOffIPProto)
 	protoNum := protocolToNumber(protocol)
 	if negate {
-		p.b.JumpEqImm64(R1, int32(protoNum), p.endOfRuleLabel())
+		p.b.JumpEqImm64(asm.R1, int32(protoNum), p.endOfRuleLabel())
 	} else {
-		p.b.JumpNEImm64(R1, int32(protoNum), p.endOfRuleLabel())
+		p.b.JumpNEImm64(asm.R1, int32(protoNum), p.endOfRuleLabel())
 	}
 }
 
@@ -785,11 +785,11 @@ func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
 	} else {
 		p.b.AddCommentF("If ICMP type != %d, skip to next rule", icmpType)
 	}
-	p.b.Load8(R1, R9, stateOffICMPType)
+	p.b.Load8(asm.R1, asm.R9, stateOffICMPType)
 	if negate {
-		p.b.JumpEqImm64(R1, int32(icmpType), p.endOfRuleLabel())
+		p.b.JumpEqImm64(asm.R1, int32(icmpType), p.endOfRuleLabel())
 	} else {
-		p.b.JumpNEImm64(R1, int32(icmpType), p.endOfRuleLabel())
+		p.b.JumpNEImm64(asm.R1, int32(icmpType), p.endOfRuleLabel())
 	}
 }
 
@@ -799,11 +799,11 @@ func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) 
 	} else {
 		p.b.AddCommentF("If ICMP type != %d or code != %d, skip to next rule", icmpType, icmpCode)
 	}
-	p.b.Load16(R1, R9, stateOffICMPType)
+	p.b.Load16(asm.R1, asm.R9, stateOffICMPType)
 	if negate {
-		p.b.JumpEqImm64(R1, (int32(icmpCode)<<8)|int32(icmpType), p.endOfRuleLabel())
+		p.b.JumpEqImm64(asm.R1, (int32(icmpCode)<<8)|int32(icmpType), p.endOfRuleLabel())
 	} else {
-		p.b.JumpNEImm64(R1, (int32(icmpCode)<<8)|int32(icmpType), p.endOfRuleLabel())
+		p.b.JumpNEImm64(asm.R1, (int32(icmpCode)<<8)|int32(icmpType), p.endOfRuleLabel())
 	}
 }
 func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
@@ -881,19 +881,19 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 
 			offset := leg.offsetToStateIPAddressField()
 			offset.Offset += int16(section * 4)
-			p.b.Load32(R1, R9, offset)
-			p.b.MovImm32(R2, int32(maskU32[section]))
-			p.b.And32(R2, R1)
+			p.b.Load32(asm.R1, asm.R9, offset)
+			p.b.MovImm32(asm.R2, int32(maskU32[section]))
+			p.b.And32(asm.R2, asm.R1)
 
 			lastAddr = addr
 			// If a 32bits section of an IPv6 does not match, we can skip the rest and jump to the
 			// next CIDR, rather than checking all 4 32bits sections.
 			if section != len(addrU32)-1 {
-				p.b.JumpNEImm32(R2, int32(addr), p.endOfcidrV6Match(cidrIndex))
+				p.b.JumpNEImm32(asm.R2, int32(addr), p.endOfcidrV6Match(cidrIndex))
 			}
 		}
 
-		p.b.JumpEqImm32(R2, int32(lastAddr), onMatchLabel)
+		p.b.JumpEqImm32(asm.R2, int32(lastAddr), onMatchLabel)
 		if p.forIPv6 {
 			p.b.LabelNextInsn(p.endOfcidrV6Match(cidrIndex))
 		}
@@ -955,19 +955,19 @@ func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
 
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
-		p.b.LoadMapFD(R1, uint32(p.ipSetMapFD))
-		p.b.Mov64(R2, R10)
-		p.b.AddImm64(R2, int32(keyOffset))
-		p.b.Call(HelperMapLookupElem)
+		p.b.LoadMapFD(asm.R1, uint32(p.ipSetMapFD))
+		p.b.Mov64(asm.R2, asm.R10)
+		p.b.AddImm64(asm.R2, int32(keyOffset))
+		p.b.Call(asm.HelperMapLookupElem)
 
 		if negate {
 			// Negated; if we got a hit (non-0) then the rule doesn't match.
 			// (Otherwise we fall through to the next match criteria.)
-			p.b.JumpNEImm64(R0, 0, p.endOfRuleLabel())
+			p.b.JumpNEImm64(asm.R0, 0, p.endOfRuleLabel())
 		} else {
 			// Non-negated; if we got a miss (0) then the rule can't match.
 			// (Otherwise we fall through to the next match criteria.)
-			p.b.JumpEqImm64(R0, 0, p.endOfRuleLabel())
+			p.b.JumpEqImm64(asm.R0, 0, p.endOfRuleLabel())
 		}
 	}
 }
@@ -991,14 +991,14 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
-		p.b.LoadMapFD(R1, uint32(p.ipSetMapFD))
-		p.b.Mov64(R2, R10)
-		p.b.AddImm64(R2, int32(keyOffset))
-		p.b.Call(HelperMapLookupElem)
+		p.b.LoadMapFD(asm.R1, uint32(p.ipSetMapFD))
+		p.b.Mov64(asm.R2, asm.R10)
+		p.b.AddImm64(asm.R2, int32(keyOffset))
+		p.b.Call(asm.HelperMapLookupElem)
 
 		// If we got a hit (non-0) then packet matches one of the IP sets.
 		// (Otherwise we fall through to try the next IP set.)
-		p.b.JumpNEImm64(R0, 0, onMatchLabel)
+		p.b.JumpNEImm64(asm.R0, 0, onMatchLabel)
 	}
 
 	// If packet reaches here, it hasn't matched any of the IP sets.
@@ -1038,21 +1038,21 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 		}
 	}
 	// R1 = port to test against.
-	p.b.Load16(R1, R9, leg.offsetToStatePortField())
+	p.b.Load16(asm.R1, asm.R9, leg.offsetToStatePortField())
 	for _, portRange := range ports {
 		if portRange.First == portRange.Last {
 			// Optimisation, single port, just do a comparison.
-			p.b.JumpEqImm64(R1, portRange.First, onMatchLabel)
+			p.b.JumpEqImm64(asm.R1, portRange.First, onMatchLabel)
 		} else {
 			// Port range,
 			var skipToNextPortLabel string
 			if portRange.First > 0 {
 				// If port is too low, skip to next port.
 				skipToNextPortLabel = p.freshPerRuleLabel()
-				p.b.JumpLTImm64(R1, portRange.First, skipToNextPortLabel)
+				p.b.JumpLTImm64(asm.R1, portRange.First, skipToNextPortLabel)
 			}
 			// If port is in range, got a match, otherwise fall through to next port.
-			p.b.JumpLEImm64(R1, portRange.Last, onMatchLabel)
+			p.b.JumpLEImm64(asm.R1, portRange.Last, onMatchLabel)
 			if portRange.First > 0 {
 				p.b.LabelNextInsn(skipToNextPortLabel)
 			}
@@ -1062,7 +1062,7 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 		if p.maybeSplitProgram() {
 			// Program was split so the next instruction goes in the new program.
 			// Need to reload our register(s).
-			p.b.Load16(R1, R9, leg.offsetToStatePortField())
+			p.b.Load16(asm.R1, asm.R9, leg.offsetToStatePortField())
 		}
 	}
 
@@ -1091,12 +1091,12 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 		}
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
-		p.b.LoadMapFD(R1, uint32(p.ipSetMapFD))
-		p.b.Mov64(R2, R10)
-		p.b.AddImm64(R2, int32(keyOffset))
-		p.b.Call(HelperMapLookupElem)
+		p.b.LoadMapFD(asm.R1, uint32(p.ipSetMapFD))
+		p.b.Mov64(asm.R2, asm.R10)
+		p.b.AddImm64(asm.R2, int32(keyOffset))
+		p.b.Call(asm.HelperMapLookupElem)
 
-		p.b.JumpNEImm64(R0, 0, onMatchLabel)
+		p.b.JumpNEImm64(asm.R0, 0, onMatchLabel)
 	}
 
 	if !negate {
@@ -1145,7 +1145,7 @@ func (p *Builder) maybeSplitProgram() bool {
 
 	p.b.SetTrampolinesEnabled(false) // We're about to write a special trampoline...
 	p.b.AddCommentF("Splitting program after %d jumps", p.b.NumJumps)
-	p.b.MovImm64(R0, 0)
+	p.b.MovImm64(asm.R0, 0)
 	p.b.Jump("next-program")
 
 	// Program footer takes care of "allow" "deny" "exit" labels.
@@ -1173,7 +1173,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	}).Debug("Splitting policy program")
 	for i, t := range targets {
 		p.b.LabelNextInsn(t)
-		p.b.MovImm64(R0, int32(i+1))
+		p.b.MovImm64(asm.R0, int32(i+1))
 		if i != len(targets)-1 {
 			p.b.Jump("next-program")
 		}
@@ -1181,7 +1181,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	p.b.LabelNextInsn("next-program")
 	// Stash the trampoline offset in the policy result so the next program
 	// can pick it up.
-	p.b.Store32(R9, R0, stateOffPolResult)
+	p.b.Store32(asm.R9, asm.R0, stateOffPolResult)
 	// Calculate the index of the next program.
 	// With a "stride" of 1000, the first sub-program is at position n, then
 	// the second goes at position 1000+n, then the next at 2000+n and so on.
@@ -1189,28 +1189,28 @@ func (p *Builder) maybeSplitProgram() bool {
 	// on the first time through.
 	jumpIdx := SubProgramJumpIdx(p.policyMapIndex, len(p.blocks), p.policyMapStride)
 
-	p.b.Mov64(R1, R6)                            // First arg is the context.
-	p.b.LoadMapFD(R2, uint32(p.policyJumpMapFD)) // Second arg is the map.
+	p.b.Mov64(asm.R1, asm.R6)                        // First arg is the context.
+	p.b.LoadMapFD(asm.R2, uint32(p.policyJumpMapFD)) // Second arg is the map.
 	p.b.AddCommentF(fmt.Sprintf("Tail call to policy program at index %d * %d + %d = %d", p.policyMapStride, len(p.blocks), p.policyMapIndex, jumpIdx))
-	p.b.MovImm64(R3, int32(jumpIdx)) // Third arg is index to jump to.
-	p.b.Call(HelperTailCall)
+	p.b.MovImm64(asm.R3, int32(jumpIdx)) // Third arg is index to jump to.
+	p.b.Call(asm.HelperTailCall)
 	p.writeExitTarget() // Drop if tail call fails.
 
 	// Now start the new program...
 	p.numRulesInProgram = 0
-	p.b = NewBlock(p.policyDebugEnabled)
+	p.b = asm.NewBlock(p.policyDebugEnabled)
 	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	// Header initialises the long-lived registers.
 	p.b.AddCommentF(fmt.Sprintf("##### Start of program %d #####", len(p.blocks)-1))
 	p.writeProgramHeader()
 	// Then write our trampoline.
-	p.b.Load32(R0, R9, stateOffPolResult)
+	p.b.Load32(asm.R0, asm.R9, stateOffPolResult)
 	// Reset the policy result field to its default value.
-	p.b.MovImm32(R1, 0)
-	p.b.Store32(R9, R1, stateOffPolResult)
+	p.b.MovImm32(asm.R1, 0)
+	p.b.Store32(asm.R9, asm.R1, stateOffPolResult)
 	for i, t := range targets {
-		p.b.JumpEqImm64(R0, int32(i+1), t)
+		p.b.JumpEqImm64(asm.R0, int32(i+1), t)
 	}
 	// If none of the trampoline jumps hit then we fall through.  This
 	// continues whatever code was being written when we were called.

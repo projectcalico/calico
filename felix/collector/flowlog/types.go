@@ -145,11 +145,11 @@ func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool) *FlowSpec {
 }
 
 func (f *FlowSpec) ContainsActiveRefs(mu *metric.Update) bool {
-	return f.FlowStatsByProcess.containsActiveRefs(mu)
+	return f.containsActiveRefs(mu)
 }
 
 func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, includeLabels bool, includePolicies bool) []*FlowLog {
-	stats := f.FlowStatsByProcess.toFlowProcessReportedStats()
+	stats := f.toFlowProcessReportedStats()
 
 	flogs := make([]*FlowLog, 0, len(stats))
 	for _, stat := range stats {
@@ -195,8 +195,8 @@ func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 		// Reset the aggregated data from this metric update.
 		f.FlowEnforcedPolicySets = nil
 		f.FlowPendingPolicySet = nil
-		f.FlowLabels.SrcLabels = uniquelabels.Nil
-		f.FlowLabels.DstLabels = uniquelabels.Nil
+		f.SrcLabels = uniquelabels.Nil
+		f.DstLabels = uniquelabels.Nil
 		f.resetAggrData = false
 	}
 	f.aggregateFlowLabels(*mu)
@@ -230,7 +230,7 @@ func (f *FlowSpec) MergeWith(mu metric.Update, other *FlowSpec) {
 // This also resets policy and label data which will be re-populated from metric updates for the still active
 // flows.
 func (f *FlowSpec) Reset() {
-	f.FlowStatsByProcess.reset()
+	f.reset()
 
 	// Set the reset flag. We'll reset the aggregated data on the next metric update - that way we don't completely
 	// zero out the labels and policies if there is no traffic for an export interval.
@@ -238,7 +238,7 @@ func (f *FlowSpec) Reset() {
 }
 
 func (f *FlowSpec) GetActiveFlowsCount() int {
-	return f.FlowStatsByProcess.getActiveFlowsCount()
+	return f.getActiveFlowsCount()
 }
 
 // GarbageCollect provides a chance to remove process names and corresponding stats that don't have
@@ -246,7 +246,7 @@ func (f *FlowSpec) GetActiveFlowsCount() int {
 // As an added optimization, we also return the remaining active flows so that we don't have to
 // iterate over all the flow stats grouped by processes a second time.
 func (f *FlowSpec) GarbageCollect() int {
-	return f.FlowStatsByProcess.gc()
+	return f.gc()
 }
 
 type FlowLabels struct {

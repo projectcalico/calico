@@ -271,8 +271,8 @@ var _ = Describe("BPF Proxy", func() {
 
 					secondSvcEpsKey := k8sp.ServicePortName{
 						NamespacedName: types.NamespacedName{
-							Namespace: secondSvcEpsSlice.ObjectMeta.Namespace,
-							Name:      secondSvcEpsSlice.ObjectMeta.Name,
+							Namespace: secondSvcEpsSlice.Namespace,
+							Name:      secondSvcEpsSlice.Name,
 						},
 						Port:     *slice.Ports[0].Name,
 						Protocol: v1.ProtocolTCP,
@@ -349,8 +349,8 @@ var _ = Describe("BPF Proxy", func() {
 
 							ep := s.EpsMap[k8sp.ServicePortName{
 								NamespacedName: types.NamespacedName{
-									Namespace: httpSvcEps.ObjectMeta.Namespace,
-									Name:      httpSvcEps.ObjectMeta.Name,
+									Namespace: httpSvcEps.Namespace,
+									Name:      httpSvcEps.Name,
 								},
 								Port:     *port.Name,
 								Protocol: v1.ProtocolTCP,
@@ -618,7 +618,7 @@ var _ = Describe("BPF Proxy", func() {
 					},
 				}
 
-				testSvc.ObjectMeta.Annotations = map[string]string{
+				testSvc.Annotations = map[string]string{
 					proxy.ReapTerminatingUDPAnnotation: proxy.ReapTerminatingUDPImmediatelly,
 				}
 

@@ -1164,7 +1164,6 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rev1 = rc.decoded
         self.assertNotIn('uid', rev1['metadata'])
-        self.assertIsNone(rev1['metadata']['creationTimestamp'])
         self.assertNotIn('namespace', rev1['metadata'])
         self.assertNotIn('resourceVersion', rev1['metadata'])
         self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
@@ -1221,7 +1220,6 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rev1 = rc.decoded
         self.assertNotIn('uid', rev1['metadata'])
-        self.assertIsNone(rev1['metadata']['creationTimestamp'])
         self.assertNotIn('namespace', rev1['metadata'])
         self.assertNotIn('resourceVersion', rev1['metadata'])
         self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
@@ -2433,7 +2431,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.250',
                                 'scope': 'node'}
-                   }, 'cannot unmarshal number into Go value of type string'),
+                   }, 'cannot unmarshal number into Go struct field BGPPeerSpec.spec.asNumber of type string'),
                    ("bgpPeer-invalidIP", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',
@@ -2531,7 +2529,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}
-                   }, 'cannot unmarshal number 65536 into Go value of type uint16'),
+                   }, 'cannot unmarshal number 65536'),
                    # https://github.com/projectcalico/libcalico-go/issues/248
                    ("policy-invalidHighPortinRange", {
                        'apiVersion': API_VERSION,
@@ -2715,7 +2713,7 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'invalid-ipip-1'},
                        'spec': {'disabled': 'True',  # disabled value must be a bool
                                 'cidr': "10.0.1.0/24"}
-                   }, "cannot parse string 'True' into field IPPoolSpec.disabled of type bool"),
+                   }, "cannot unmarshal string into Go struct field IPPoolSpec.spec.disabled of type bool"),
                    ("pool-invalidIpIp2", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -2723,7 +2721,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'disabled': 'Maybe',
                            'cidr': "10.0.1.0/24"}
-                   }, "cannot parse string 'Maybe' into field IPPoolSpec.disabled of type bool"),
+                   }, "cannot unmarshal string into Go struct field IPPoolSpec.spec.disabled of type bool"),
                    ("profile-ICMPtype", {
                        'apiVersion': API_VERSION,
                        'kind': 'Profile',
@@ -2814,18 +2812,13 @@ class InvalidData(TestBase):
         '- apiVersion: %s\n'
         '  kind: %s\n'
         '  metadata:\n'
-        '    creationTimestamp: null\n'
         '    name: projectcalico-default-allow\n'
         '    resourceVersion: "1"\n'
         '  spec:\n'
         '    egress:\n'
         '    - action: Allow\n'
-        '      destination: {}\n'
-        '      source: {}\n'
         '    ingress:\n'
         '    - action: Allow\n'
-        '      destination: {}\n'
-        '      source: {}\n'
         'kind: %sList\n'
         'metadata:\n'
         '  resourceVersion: ' % (API_VERSION, API_VERSION, testdata['kind'], testdata['kind'])

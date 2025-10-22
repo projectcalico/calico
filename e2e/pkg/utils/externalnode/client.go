@@ -17,7 +17,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
 
-type externalNodeClient struct {
+type Client struct {
 	lock sync.Mutex
 
 	extIP   string
@@ -26,14 +26,14 @@ type externalNodeClient struct {
 	intIPs  []string
 }
 
-// NewExternalNodeClient reads external node details from e2ecfg first. When configs are not available,
+// NewClient reads external node details from e2ecfg first. When configs are not available,
 // it will parse information from a predefined list of environment variables.
-func NewExternalNodeClient() *externalNodeClient {
+func NewClient() *Client {
 	if config.ExtNodeIP() == "" || config.ExtNodeSSHKey() == "" || config.ExtNodeUsername() == "" {
 		logrus.Debug("External node details unavailable")
 		return nil
 	}
-	client := &externalNodeClient{
+	client := &Client{
 		extIP:   config.ExtNodeIP(),
 		extKey:  config.ExtNodeSSHKey(),
 		extUser: config.ExtNodeUsername(),
@@ -41,15 +41,15 @@ func NewExternalNodeClient() *externalNodeClient {
 	return client
 }
 
-func NewExternalNodeClientManualConfig(ip, key, user string) *externalNodeClient {
-	return &externalNodeClient{extIP: ip, extKey: key, extUser: user}
+func NewClientManualConfig(ip, key, user string) *Client {
+	return &Client{extIP: ip, extKey: key, extUser: user}
 }
 
-func (e *externalNodeClient) IP() string {
+func (e *Client) IP() string {
 	return e.IPs()[0]
 }
 
-func (e *externalNodeClient) IPs() []string {
+func (e *Client) IPs() []string {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -89,18 +89,18 @@ func (e *externalNodeClient) IPs() []string {
 	return e.intIPs
 }
 
-func (e *externalNodeClient) MustExec(shell, opt, cmd string) string {
+func (e *Client) MustExec(shell, opt, cmd string) string {
 	out, err := e.Exec(shell, opt, cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf(
 		"failed to execute command %q %q %q on external node: %s", shell, opt, cmd, err))
 	return out
 }
 
-func (e *externalNodeClient) Exec(shell, opt, cmd string) (string, error) {
+func (e *Client) Exec(shell, opt, cmd string) (string, error) {
 	return e.ExecTimeout(5, shell, opt, cmd)
 }
 
-func (e *externalNodeClient) ExecTimeout(timeoutSecs int, shell, opt, cmd string) (string, error) {
+func (e *Client) ExecTimeout(timeoutSecs int, shell, opt, cmd string) (string, error) {
 	dest := fmt.Sprintf("%v@%v", e.extUser, e.extIP)
 	command := exec.Command(
 		"timeout", fmt.Sprint(timeoutSecs+10),
@@ -123,7 +123,7 @@ func (e *externalNodeClient) ExecTimeout(timeoutSecs int, shell, opt, cmd string
 	return outstr, err
 }
 
-func (e *externalNodeClient) Get(target string, length int) string {
+func (e *Client) Get(target string, length int) string {
 	// This is actually just trying to run something on the external node like:
 	//   curl -m2 -w "\n%{time_total}" http://172.16.101.14:32517/length/20
 	// So 2 special things needed here:
@@ -134,11 +134,11 @@ func (e *externalNodeClient) Get(target string, length int) string {
 	return fmt.Sprintf(`curl -m2 -w \"\n%%{time_total}\" http://%v/length/%v`, target, length)
 }
 
-func (e *externalNodeClient) Post(target string, postdata string) string {
+func (e *Client) Post(target string, postdata string) string {
 	return fmt.Sprintf(`curl -m2 -w \"\n%%{time_total}\" -d "%v" -X POST http://%v/post`, postdata, target)
 }
 
-func (e *externalNodeClient) UDP(target string, postdata string) string {
+func (e *Client) UDP(target string, postdata string) string {
 	// If target[0] != '[', this is an ipv4 address.
 	if target[0] != '[' {
 		target = strings.ReplaceAll(target, ":", " ")
@@ -154,7 +154,7 @@ func (e *externalNodeClient) UDP(target string, postdata string) string {
 	return fmt.Sprintf(`echo %v | nc -6 -u -w1 %v`, postdata, target)
 }
 
-func (e *externalNodeClient) TestCanConnect(target string) {
+func (e *Client) TestCanConnect(target string) {
 	command := fmt.Sprintf(`curl -s -m2 %v`, target)
 	tryConnect := func() error {
 		_, err := e.Exec("sh", "-c", command)
@@ -172,7 +172,7 @@ func (e *externalNodeClient) TestCanConnect(target string) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func (e *externalNodeClient) TestCannotConnect(target string) {
+func (e *Client) TestCannotConnect(target string) {
 	command := fmt.Sprintf(`curl -s -m2 %v`, target)
 	tryConnect := func() error {
 		_, err := e.Exec("sh", "-c", command)
@@ -190,15 +190,15 @@ func (e *externalNodeClient) TestCannotConnect(target string) {
 	Expect(err).To(HaveOccurred())
 }
 
-func (e *externalNodeClient) SetupIperf() {
+func (e *Client) SetupIperf() {
 	shell := "/bin/sh"
 	opt := "-c"
-	cmd := fmt.Sprintf("sudo docker run --rm -d --network host --name iperf %s", images.Iperf)
+	cmd := fmt.Sprintf("sudo docker run --rm -d --network host --name iperf %s", images.Agnhost)
 	_, err := e.Exec(shell, opt, cmd)
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func (e *externalNodeClient) CleanupIperf() {
+func (e *Client) CleanupIperf() {
 	shell := "/bin/sh"
 	opt := "-c"
 	cmd := "sudo docker stop iperf"
@@ -206,7 +206,7 @@ func (e *externalNodeClient) CleanupIperf() {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func (e *externalNodeClient) RunIperfCmd(iperfCmd string, timeoutSecs int) string {
+func (e *Client) RunIperfCmd(iperfCmd string, timeoutSecs int) string {
 	shell := "/bin/sh"
 	opt := "-c"
 	cmd := fmt.Sprintf("sudo docker exec -t iperf %s", iperfCmd)
@@ -216,7 +216,7 @@ func (e *externalNodeClient) RunIperfCmd(iperfCmd string, timeoutSecs int) strin
 	return output
 }
 
-func (e *externalNodeClient) TestCalicoServiceReady(service string) error {
+func (e *Client) TestCalicoServiceReady(service string) error {
 	// Wait for the service to be active.
 	cmd := fmt.Sprintf("systemctl is-active %s.service", service)
 	output, err := e.Exec("/bin/sh", "-c", cmd)

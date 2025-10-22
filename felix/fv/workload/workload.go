@@ -29,6 +29,8 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -254,11 +256,11 @@ func (w *Workload) Start() error {
 	w.runCmd = utils.Command("docker", "exec", w.C.Name, "sh", "-c", command)
 	w.outPipe, err = w.runCmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Getting StdoutPipe failed: %v", err)
+		return fmt.Errorf("getting StdoutPipe failed: %v", err)
 	}
 	w.errPipe, err = w.runCmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("Getting StderrPipe failed: %v", err)
+		return fmt.Errorf("getting StderrPipe failed: %v", err)
 	}
 	err = w.runCmd.Start()
 	if err != nil {
@@ -551,7 +553,7 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 	return meanRtt, out
 }
 
-func (w *Workload) SendPacketsTo(ip string, count int, size int) (error, string) {
+func (w *Workload) SendPacketsTo(ip string, count int, size int) (string, error) {
 	c := fmt.Sprintf("%d", count)
 	s := fmt.Sprintf("%d", size)
 	_, err := w.ExecOutput("ping", "-c", c, "-W", "1", "-s", s, ip)
@@ -560,7 +562,7 @@ func (w *Workload) SendPacketsTo(ip string, count int, size int) (error, string)
 	if errors.As(err, &exitErr) {
 		stderr = string(exitErr.Stderr)
 	}
-	return err, stderr
+	return stderr, err
 }
 
 type SideService struct {
@@ -770,12 +772,12 @@ type SpoofedWorkload struct {
 
 func (s *SpoofedWorkload) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	opts = s.appendSourceIPOpt(opts)
-	s.Workload.preRetryCleanupInner(ip, port, protocol, "(spoofed)", opts...)
+	s.preRetryCleanupInner(ip, port, protocol, "(spoofed)", opts...)
 }
 
 func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	opts = s.appendSourceIPOpt(opts)
-	return s.Workload.canConnectToInner(ip, port, protocol, "(spoofed)", opts...)
+	return s.canConnectToInner(ip, port, protocol, "(spoofed)", opts...)
 }
 
 func (s *SpoofedWorkload) appendSourceIPOpt(opts []connectivity.CheckOption) []connectivity.CheckOption {
@@ -801,14 +803,14 @@ func (p *Port) SourceIPs() []string {
 
 func (p *Port) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	opts = p.maybeAppendPortOpt(opts)
-	p.Workload.preRetryCleanupInner(ip, port, protocol, "(with source port)", opts...)
+	p.preRetryCleanupInner(ip, port, protocol, "(with source port)", opts...)
 }
 
 // Return if a connection is good and packet loss string "PacketLoss[xx]".
 // If it is not a packet loss test, packet loss string is "".
 func (p *Port) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	opts = p.maybeAppendPortOpt(opts)
-	return p.Workload.canConnectToInner(ip, port, protocol, "(with source port)", opts...)
+	return p.canConnectToInner(ip, port, protocol, "(with source port)", opts...)
 }
 
 func (p *Port) maybeAppendPortOpt(opts []connectivity.CheckOption) []connectivity.CheckOption {
@@ -854,10 +856,10 @@ func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 		return p.Workload.ToMatcher(explicitPort...)
 	}
 	return &connectivity.Matcher{
-		IP:         p.Workload.IP,
+		IP:         p.IP,
 		Port:       fmt.Sprint(p.Port),
-		TargetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
-		IP6:        p.Workload.IP6,
+		TargetName: fmt.Sprintf("%s on port %d", p.Name, p.Port),
+		IP6:        p.IP6,
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,6 +34,20 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+var (
+	// Components that do not produce images.
+	noImageComponents = []string{
+		"calico",
+		"api",
+		"networking-calico",
+	}
+
+	// Components to ignore when generating the operator components file.
+	operatorIgnoreComponents = []string{
+		flannelComponentName,
+	}
+)
+
 //go:embed templates/calico-versions.yaml.gotmpl
 var calicoTemplate string
 
@@ -41,14 +56,9 @@ const (
 	operatorComponentsFileName = "pinned_components.yml"
 )
 
-const calicoImageNamespace = "calico/"
-
-var excludedComponents = []string{
-	utils.Calico,
-	"calico/api",
-	"networking-calico",
-	"flannel",
-}
+const (
+	flannelComponentName = "flannel"
+)
 
 type PinnedVersions interface {
 	GenerateFile() (version.Versions, error)
@@ -84,6 +94,41 @@ type PinnedVersion struct {
 	Hash           string                        `yaml:"full_hash,omitempty"`
 	TigeraOperator registry.Component            `yaml:"tigera-operator"`
 	Components     map[string]registry.Component `yaml:"components"`
+}
+
+// operatorComponents returns a map of the Tigera operator and its init image components.
+func (p *PinnedVersion) operatorComponents() map[string]registry.Component {
+	op := registry.OperatorComponent{Component: p.TigeraOperator}
+	opInit := op.InitImage()
+	return map[string]registry.Component{
+		op.Image:     op.Component,
+		opInit.Image: opInit,
+	}
+}
+
+// ImageComponents returns a map of all components that produce images
+// including Tigera operator and its init image if includeOperator is true.
+func (p *PinnedVersion) ImageComponents(includeOperator bool) map[string]registry.Component {
+	components := make(map[string]registry.Component)
+	for name, component := range p.Components {
+		// Remove components that should be excluded. Either because they do not have an image, or not built by Calico.
+		if slices.Contains(noImageComponents, name) {
+			continue
+		}
+		if img := registry.ImageMap[name]; img != "" {
+			component.Image = img
+		} else if component.Image == "" {
+			component.Image = name
+		}
+		components[name] = component
+	}
+
+	if includeOperator {
+		for name, component := range p.operatorComponents() {
+			components[name] = component
+		}
+	}
+	return components
 }
 
 // calicoTemplateData is used to generate the pinned version file from the template.
@@ -211,9 +256,13 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 	if err != nil {
 		return op, "", err
 	}
-	for name, component := range pinnedVersion.Components {
-		pinnedVersion.Components[name] = normalizeComponent(name, component)
+
+	// Remove components that are not needed in the operator components file.
+	// These either do not produce images or are not used by the operator.
+	for _, c := range operatorIgnoreComponents {
+		delete(pinnedVersion.Components, c)
 	}
+
 	logrus.Info("Generating operator components file")
 	operatorComponentsFilePath := filepath.Join(srcDir, operatorComponentsFileName)
 	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
@@ -286,25 +335,21 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 	}, nil
 }
 
+// RetrieveImageComponents retrieves the images from Calico components in the pinned version file that produce images.
+// It also adds the Tigera operator and its init image to the returned map.
+//
+// Images returned from this function are expected to be in the format "<registry>/<image-name>" where <registry> includes the registry and image path.
+// However, the versions.yml file represents images differently, including the image path as the first part of the image name instead of as part of the registry.
+// As a result, the image path is stripped from the image name to only return the image name so that images are properly formatted.
+//
+// For example, if the image name is "calico/node", this allows the fully qualified image to be "quay.io/calico/node" when a registry of `quay.io/calico` is prepended.
+// and prevents duplication of the image path(i.e. "quay.io/calico/calico/node").
 func RetrieveImageComponents(outputDir string) (map[string]registry.Component, error) {
 	pinnedVersion, err := retrievePinnedVersion(outputDir)
 	if err != nil {
 		return nil, err
 	}
-	components := pinnedVersion.Components
-	for name, component := range components {
-		// Remove components that do not produce images.
-		if utils.Contains(excludedComponents, name) {
-			delete(components, name)
-			continue
-		}
-		components[name] = normalizeComponent(name, component)
-	}
-	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
-	components[operator.Image] = operator.Component
-	initImage := operator.InitImage()
-	components[initImage.Image] = operator.InitImage()
-	return components, nil
+	return pinnedVersion.ImageComponents(true), nil
 }
 
 func RetrieveVersions(outputDir string) (version.Versions, error) {
@@ -314,20 +359,4 @@ func RetrieveVersions(outputDir string) (version.Versions, error) {
 	}
 
 	return version.NewHashreleaseVersions(version.New(pinnedVersion.Title), pinnedVersion.TigeraOperator.Version), nil
-}
-
-// normalizeComponent normalizes the component image name.
-// It checks if the component name is in the registry.ImageMap and replaces it with the mapped value.
-// If the image name is not found in the map, it sets it to the component name.
-// The image name is also stripped of the calico namespace prefix.
-func normalizeComponent(componentName string, c registry.Component) registry.Component {
-	img := registry.ImageMap[componentName]
-	if img == "" {
-		img = componentName
-	}
-	c.Image = img
-	if strings.HasPrefix(img, calicoImageNamespace) {
-		c.Image = strings.TrimPrefix(img, calicoImageNamespace)
-	}
-	return c
 }

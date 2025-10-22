@@ -95,8 +95,7 @@ func convertVersionToIntSlice(s string) ([]int, error) {
 	for index, element := range parts {
 		val, err := strconv.Atoi(element)
 		if err != nil {
-			return nil, fmt.Errorf(
-				"Error parsing version: %s", err)
+			return nil, fmt.Errorf("error parsing version: %s", err)
 		}
 		intSlice[index] = val
 	}
@@ -111,7 +110,7 @@ func GetVersionFromString(s string) (*Version, error) {
 	log.WithField("rawVersion", s).Debug("Raw kernel version")
 	matches := kernelVersionRegexp.FindStringSubmatch(s)
 	if len(matches) == 0 {
-		msg := "Failed to parse kernel version string"
+		msg := "failed to parse kernel version string"
 		log.WithField("rawVersion", s).Warn(msg)
 		return nil, errors.New(msg)
 	}

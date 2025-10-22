@@ -65,6 +65,7 @@ sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
 sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
+sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
 sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
 sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
 sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
@@ -249,6 +250,8 @@ keystone_client = mock.Mock()
 keystone_client.projects.list.side_effect = mock_projects_list
 mech_calico.KeystoneClient = mock.Mock()
 mech_calico.KeystoneClient.return_value = keystone_client
+mech_calico.TrackTask = mock.Mock()
+mech_calico.TrackTask.return_value = None
 
 REAL_EVENTLET_SLEEP_TIME = 0.01
 

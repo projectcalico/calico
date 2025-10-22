@@ -42,7 +42,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
-	"github.com/projectcalico/calico/felix/bpf/maps"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -326,8 +325,8 @@ type mockProgMapDP struct {
 func (m *mockProgMapDP) loadPolicyProgram(progName string,
 	ipFamily proto.IPVersion,
 	rules polprog.Rules,
-	staticProgsMap maps.Map,
-	polProgsMap maps.Map,
+	staticProgsMap bpfmaps.Map,
+	polProgsMap bpfmaps.Map,
 	opts ...polprog.Option,
 ) ([]fileDescriptor, []asm.Insns, error) {
 	if m.jitHarden {

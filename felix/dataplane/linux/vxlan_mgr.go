@@ -390,6 +390,6 @@ func parseMacForIPVersion(vtep *proto.VXLANTunnelEndpointUpdate, ipVersion uint8
 	case 6:
 		return net.ParseMAC(vtep.MacV6)
 	default:
-		return nil, fmt.Errorf("Invalid IP version")
+		return nil, fmt.Errorf("invalid IP version")
 	}
 }

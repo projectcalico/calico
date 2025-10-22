@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 24
+	MaxCounterNumber    int = 25
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -83,6 +83,7 @@ const (
 	DroppedFragReorder
 	DroppedFragUnsupported
 	DroppedQoS
+	Reserved1
 )
 
 type Description struct {

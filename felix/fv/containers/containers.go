@@ -31,6 +31,8 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -630,10 +632,7 @@ func (c *Container) ListedInDockerPS() bool {
 func (c *Container) WaitNotRunning(timeout time.Duration) {
 	log.Info("Wait for container not to be listed in docker ps")
 	start := time.Now()
-	for {
-		if !c.ListedInDockerPS() {
-			break
-		}
+	for c.ListedInDockerPS() {
 		if time.Since(start) > timeout {
 			log.Panic("Timed out waiting for container not to be listed.")
 		}

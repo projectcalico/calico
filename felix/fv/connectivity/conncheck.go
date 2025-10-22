@@ -29,9 +29,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/onsi/ginkgo"
+	log "github.com/sirupsen/logrus"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"

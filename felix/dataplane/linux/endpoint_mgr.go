@@ -1706,13 +1706,13 @@ func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
 	if m.ifaceIsForLocalBGPPeer(name) {
 		if len(m.localBGPPeerIP) == 0 {
 			logCtx.Warning("no peer ip is defined trying to configure local BGP peer ip on interface")
-			return fmt.Errorf("interface belongs to a local BGP peer but peer IP is not defined yet.")
+			return fmt.Errorf("interface belongs to a local BGP peer but peer IP is not defined yet")
 		}
 
 		ipAddr := ip.FromString(m.localBGPPeerIP)
 		if ipAddr == nil {
 			logCtx.WithField("localBGPPeerIP", m.localBGPPeerIP).Error("Failed to parse peer ip")
-			return fmt.Errorf("Failed to parse peer ip")
+			return fmt.Errorf("failed to parse peer ip")
 		}
 
 		var ipCIDR ip.CIDR

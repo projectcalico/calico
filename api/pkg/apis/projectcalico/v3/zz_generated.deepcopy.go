@@ -494,6 +494,11 @@ func (in *BGPPeerSpec) DeepCopyInto(out *BGPPeerSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.KeepaliveTime != nil {
+		in, out := &in.KeepaliveTime, &out.KeepaliveTime
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.NumAllowedLocalASNumbers != nil {
 		in, out := &in.NumAllowedLocalASNumbers, &out.NumAllowedLocalASNumbers
 		*out = new(int32)
@@ -1349,6 +1354,26 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.PrometheusMetricsCAFile != nil {
+		in, out := &in.PrometheusMetricsCAFile, &out.PrometheusMetricsCAFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsCertFile != nil {
+		in, out := &in.PrometheusMetricsCertFile, &out.PrometheusMetricsCertFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsKeyFile != nil {
+		in, out := &in.PrometheusMetricsKeyFile, &out.PrometheusMetricsKeyFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsClientAuth != nil {
+		in, out := &in.PrometheusMetricsClientAuth, &out.PrometheusMetricsClientAuth
+		*out = new(PrometheusMetricsClientAuthType)
+		**out = **in
+	}
 	if in.FailsafeInboundHostPorts != nil {
 		in, out := &in.FailsafeInboundHostPorts, &out.FailsafeInboundHostPorts
 		*out = new([]ProtoPort)
@@ -1558,6 +1583,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.BPFKubeProxyMinSyncPeriod != nil {
 		in, out := &in.BPFKubeProxyMinSyncPeriod, &out.BPFKubeProxyMinSyncPeriod
 		*out = new(v1.Duration)
+		**out = **in
+	}
+	if in.BPFKubeProxyHealthzPort != nil {
+		in, out := &in.BPFKubeProxyHealthzPort, &out.BPFKubeProxyHealthzPort
+		*out = new(int)
 		**out = **in
 	}
 	if in.BPFKubeProxyEndpointSlicesEnabled != nil {

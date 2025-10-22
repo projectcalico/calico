@@ -475,7 +475,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *generi
 func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *generictables.Chain {
 	rules := []generictables.Rule{}
 
-	for _, protoPort := range r.Config.FailsafeInboundHostPorts {
+	for _, protoPort := range r.FailsafeInboundHostPorts {
 		rule := generictables.Rule{
 			Match: r.NewMatch().
 				Protocol(protoPort.Protocol).
@@ -506,7 +506,7 @@ func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *ge
 		// Otherwise, it could fall through to some doNotTrack policy and half of the connection
 		// would get untracked.  If we ACCEPT here then the traffic falls through to the filter
 		// table, where it'll only be accepted if there's a conntrack entry.
-		for _, protoPort := range r.Config.FailsafeOutboundHostPorts {
+		for _, protoPort := range r.FailsafeOutboundHostPorts {
 			rule := generictables.Rule{
 				Match: r.NewMatch().
 					Protocol(protoPort.Protocol).
@@ -542,7 +542,7 @@ func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *ge
 func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *generictables.Chain {
 	rules := []generictables.Rule{}
 
-	for _, protoPort := range r.Config.FailsafeOutboundHostPorts {
+	for _, protoPort := range r.FailsafeOutboundHostPorts {
 		rule := generictables.Rule{
 			Match: r.NewMatch().
 				Protocol(protoPort.Protocol).
@@ -573,7 +573,7 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *g
 		// Otherwise, it could fall through to some doNotTrack policy and half of the connection
 		// would get untracked.  If we ACCEPT here then the traffic falls through to the filter
 		// table, where it'll only be accepted if there's a conntrack entry.
-		for _, protoPort := range r.Config.FailsafeInboundHostPorts {
+		for _, protoPort := range r.FailsafeInboundHostPorts {
 			rule := generictables.Rule{
 				Match: r.NewMatch().
 					Protocol(protoPort.Protocol).
@@ -1322,7 +1322,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *generic
 	)
 
 	// Set a mark on encapsulated packets coming from WireGuard to ensure the RPF check allows it
-	if ((r.WireguardEnabled && len(r.WireguardInterfaceName) > 0) || (r.WireguardEnabledV6 && len(r.WireguardInterfaceNameV6) > 0)) && r.Config.WireguardEncryptHostTraffic {
+	if ((r.WireguardEnabled && len(r.WireguardInterfaceName) > 0) || (r.WireguardEnabledV6 && len(r.WireguardInterfaceNameV6) > 0)) && r.WireguardEncryptHostTraffic {
 		log.Debug("Adding Wireguard iptables rule")
 		rules = append(rules, generictables.Rule{
 			Match:  nil,

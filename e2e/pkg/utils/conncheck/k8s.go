@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
 )
 
-func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace, podName string, ports []int, labels map[string]string, podCustomizer func(pod *v1.Pod), serviceCustomizer func(svc *v1.Service)) (*v1.Pod, *v1.Service) {
+func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace, podName string, ports []int, labels map[string]string, podCustomizer func(pod *v1.Pod), serviceCustomizer func(svc *v1.Service), autoCreateSvc bool) (*v1.Pod, *v1.Service) {
 	// Because we have a variable amount of ports, we'll first loop through and generate our Containers for our pod,
 	// and ServicePorts.for our Service.
 	var image string
@@ -121,6 +121,12 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	pod, err := f.ClientSet.CoreV1().Pods(namespace.Name).Create(ctx, pod, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	logrus.Infof("Created pod %v", pod.ObjectMeta.Name)
+
+	// Only create service if autoCreateSvc is true
+	if !autoCreateSvc {
+		// Return the pod with nil service when service creation is disabled
+		return pod, nil
+	}
 
 	svcName := fmt.Sprintf("svc-%s", podName)
 	By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))

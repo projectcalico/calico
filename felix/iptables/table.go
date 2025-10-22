@@ -1551,7 +1551,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	// For non-cali chains, get the rule by number but delete using the full rule instead of rule number.
 	rules, ok := t.chainToFullRules[chainName]
 	if !ok || ruleNum >= len(rules) {
-		return "", fmt.Errorf("Rendering delete for nonexistent rule: Rule %d in %q", ruleNum, chainName)
+		return "", fmt.Errorf("rendering delete for nonexistent rule: Rule %d in %q", ruleNum, chainName)
 	}
 
 	rule := rules[ruleNum]
