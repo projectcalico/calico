@@ -433,6 +433,7 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 			log.Info("Trying to start metrics https server.")
 			go func() {
 				err := metricsserver.ServePrometheusMetricsHTTPS(
+					prometheus.DefaultGatherer,
 					t.ConfigParams.PrometheusMetricsHost,
 					t.ConfigParams.PrometheusMetricsPort,
 					t.ConfigParams.PrometheusMetricsCertFile,
@@ -447,6 +448,7 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 		} else {
 			log.Info("Starting metrics http server.")
 			go metricsserver.ServePrometheusMetricsHTTP(
+				prometheus.DefaultGatherer,
 				t.ConfigParams.PrometheusMetricsHost,
 				t.ConfigParams.PrometheusMetricsPort,
 			)

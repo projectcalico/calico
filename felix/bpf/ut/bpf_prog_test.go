@@ -394,25 +394,13 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		defer o.Close()
 	}
 
-	log.Infof("Patching binary %s", obj+".o")
-
-	bin, err := bpf.BinaryFromFile(obj + ".o")
-	Expect(err).NotTo(HaveOccurred())
-	// XXX for now we both path the mark here and include it in the context as
-	// well. This needs to be done for as long as we want to run the tests on
-	// older kernels.
-	bin.PatchSkbMark(skbMark)
-	tempObj := tempDir + "bpf.o"
-	err = bin.WriteToFile(tempObj)
-	Expect(err).NotTo(HaveOccurred())
-
 	if loglevel == "debug" {
 		ipFamily += " debug"
 	}
 
-	var o *libbpf.Obj
+	obj += ".o"
 
-	o, err = objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true)
+	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
 
@@ -760,7 +748,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
-			if strings.HasPrefix(m.Name(), ".rodata") {
+			if ipFamily != "preamble" {
+				continue
+			}
+			if !strings.HasSuffix(m.Name(), ".rodata") {
 				continue
 			}
 			if forXDP {
@@ -928,6 +919,9 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
+			if !strings.HasSuffix(m.Name(), ".rodata") {
+				continue
+			}
 			globals := libbpf.TcGlobalData{
 				Tmtu:       natTunnelMTU,
 				VxlanPort:  testVxlanPort,
@@ -1565,8 +1559,8 @@ var ipv4Default = &layers.IPv4{
 	Protocol: layers.IPProtocolUDP,
 }
 
-var srcIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
-var dstIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2})
+var srcIPv6 = net.IP([]byte{0x20, 0x1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+var dstIPv6 = net.IP([]byte{0x20, 0x1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2})
 var srcV6CIDR = ip.CIDRFromNetIP(srcIPv6).(ip.V6CIDR)
 var dstV6CIDR = ip.CIDRFromNetIP(dstIPv6).(ip.V6CIDR)
 

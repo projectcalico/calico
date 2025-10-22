@@ -3,8 +3,8 @@
 #################################################################################################
 
 # The version of calico/go-build and calico/base to use.
-GO_BUILD_VER=1.25.1-llvm18.1.8-k8s1.33.5
-CALICO_BASE_VER=ubi9-1757635857
+GO_BUILD_VER=1.25.3-llvm18.1.8-k8s1.33.5
+CALICO_BASE_VER=ubi9-1760470891
 
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
@@ -25,8 +25,8 @@ KIND_VERSION=v0.29.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
-ORGANIZATION = projectcalico
-GIT_REPO = calico
+ORGANIZATION  ?= projectcalico
+GIT_REPO      ?= calico
 
 RELEASE_BRANCH_PREFIX ?=release
 DEV_TAG_SUFFIX        ?= 0.dev
@@ -67,7 +67,9 @@ LIBBPF_VERSION=v1.4.6
 BPFTOOL_IMAGE=calico/bpftool:v7.5.0
 
 # The operator branch corresponding to this branch.
-OPERATOR_BRANCH=master
+OPERATOR_BRANCH       ?= master
+OPERATOR_ORGANIZATION ?= tigera
+OPERATOR_GIT_REPO     ?= operator
 
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90

@@ -53,8 +53,12 @@ var _ = describe.CalicoDescribe(
 		BeforeEach(func() {
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
-
 			checker = conncheck.NewConnectionTester(f)
+
+			// These tests rely on Whisker - if Whisker is not installed, short-circuit the tests.
+			installed, err := utils.WhiskerInstalled(cli)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(installed).To(BeTrue(), "Whisker is not installed in the cluster")
 		})
 
 		Context("Test presence in flow logs", func() {

@@ -74,6 +74,15 @@ func WithOperator(registry, image, version string) Option {
 	}
 }
 
+func WithOperatorGit(org, repo, branch string) Option {
+	return func(r *CalicoManager) error {
+		r.operatorGithubOrg = org
+		r.operatorRepo = repo
+		r.operatorBranch = branch
+		return nil
+	}
+}
+
 func WithOperatorVersion(version string) Option {
 	return func(r *CalicoManager) error {
 		r.operatorVersion = version
@@ -205,6 +214,13 @@ func WithGithubToken(token string) Option {
 func WithArchiveImages(archive bool) Option {
 	return func(r *CalicoManager) error {
 		r.archiveImages = archive
+		return nil
+	}
+}
+
+func WithOperatorBranch(branch string) Option {
+	return func(r *CalicoManager) error {
+		r.operatorBranch = branch
 		return nil
 	}
 }

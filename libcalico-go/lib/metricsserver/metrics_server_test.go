@@ -17,6 +17,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // TestServePrometheusMetricsHTTPS unit test for ServePrometheusMetricsHTTPS.
@@ -139,7 +140,7 @@ func TestServePrometheusMetricsHTTPS(t *testing.T) {
 
 			done := make(chan error, 1)
 			go func() {
-				err = ServePrometheusMetricsHTTPS(host, port, tt.certFile, tt.keyFile, tt.clientAuthType, tt.caFile)
+				err = ServePrometheusMetricsHTTPS(prometheus.DefaultGatherer, host, port, tt.certFile, tt.keyFile, tt.clientAuthType, tt.caFile)
 				done <- err
 			}()
 
@@ -396,10 +397,10 @@ func rotateCertificates(certFile, keyFile, caFile, caKeyFile string) error {
 	}
 
 	// Write new certificates to the specified files
-	if err := os.WriteFile(certFile, newCert, 0644); err != nil {
+	if err := os.WriteFile(certFile, newCert, 0o644); err != nil {
 		return fmt.Errorf("failed to write new certificate: %w", err)
 	}
-	if err := os.WriteFile(keyFile, newKey, 0644); err != nil {
+	if err := os.WriteFile(keyFile, newKey, 0o644); err != nil {
 		return fmt.Errorf("failed to write new key: %w", err)
 	}
 

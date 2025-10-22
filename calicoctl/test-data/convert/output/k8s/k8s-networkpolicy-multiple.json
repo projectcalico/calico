@@ -61,7 +61,6 @@
           {
             "action": "Allow",
             "protocol": "TCP",
-            "source": {},
             "destination": {
               "nets": [
                 "10.0.0.0/24"
@@ -105,9 +104,7 @@
         "order": 1000,
         "egress": [
           {
-            "action": "Allow",
-            "source": {},
-            "destination": {}
+            "action": "Allow"
           }
         ],
         "selector": "projectcalico.org/orchestrator == 'k8s'",

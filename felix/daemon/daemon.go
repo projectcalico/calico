@@ -742,6 +742,7 @@ configRetry:
 			log.Info("Trying to start metrics https server.")
 			go func() {
 				err := metricsserver.ServePrometheusMetricsHTTPS(
+					prometheus.DefaultGatherer,
 					configParams.PrometheusMetricsHost,
 					configParams.PrometheusMetricsPort,
 					configParams.PrometheusMetricsCertFile,
@@ -756,6 +757,7 @@ configRetry:
 		} else {
 			log.Info("Starting metrics http server.")
 			go metricsserver.ServePrometheusMetricsHTTP(
+				prometheus.DefaultGatherer,
 				configParams.PrometheusMetricsHost,
 				configParams.PrometheusMetricsPort,
 			)

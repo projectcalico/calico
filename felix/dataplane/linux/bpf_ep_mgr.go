@@ -1717,7 +1717,8 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		var err error
 		if m.v6 != nil {
 			err = m.v6.CtMap.CopyDeltaFromOldMap()
-		} else {
+		}
+		if m.v4 != nil {
 			err = m.v4.CtMap.CopyDeltaFromOldMap()
 		}
 		if err != nil {

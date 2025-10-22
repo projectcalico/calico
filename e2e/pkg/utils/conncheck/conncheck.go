@@ -315,11 +315,19 @@ func (c *connectionTester) Execute() {
 		framework.Fail("Execute() called before Deploy()", 1)
 	}
 	By(fmt.Sprintf("Testing %d connections in parallel", len(c.expectations)))
+
+	// Channel to collect results.
 	resultChan := make(chan connectionResult, len(c.expectations))
+
+	// Context to control overall timeout for all connections. After it times out, we'll forcefully
+	// terminate any remaining connections. This avoids deadlocking the test waiting for results if
+	// something goes wrong.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Launch all of the connections in parallel. We'll wait for them all to finish at the end and report on success / failure.
 	for _, expectation := range c.expectations {
-		go c.runConnection(expectation, resultChan)
+		go c.runConnection(ctx, expectation, resultChan)
 	}
 
 	// Wait for all of the connections to finish.
@@ -334,6 +342,10 @@ func (c *connectionTester) Execute() {
 		}
 	}
 
+	// Only close the result channel after all connections have finished to avoid
+	// connection goroutines attempting to write to a closed channel.
+	close(resultChan)
+
 	// If we had any errors, log out the per-test diags and then fail the test.
 	if failed {
 		logDiagsForNamespace(c.f, c.f.Namespace)
@@ -342,7 +354,7 @@ func (c *connectionTester) Execute() {
 	}
 }
 
-func (c *connectionTester) runConnection(exp *Expectation, results chan<- connectionResult) {
+func (c *connectionTester) runConnection(ctx context.Context, exp *Expectation, results chan<- connectionResult) {
 	// Exec into the client pod and try to connect to the server.
 	cmd := c.command(exp.Target)
 
@@ -355,18 +367,19 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 
 	// First attempt.
 	out, result, err := c.execCommandInPod(exp.Client, cmd)
+	if err != nil {
+		logCtx.WithError(err).Warn("Connection attempt returned an error")
+	}
 
-	// Retry up to 10 seconds if we didn't get the expected result. This helps to avoid flakes due to transient issues.
+	// Retry until the context expires if we didn't get the expected result. This helps to avoid flakes due to transient issues.
 	// We don't want to retry too many times, as that could mask real issues and slow down tests. However, we know that
 	// especially on CPU constrained environments such as CI, there can be a delay between making changes (e.g., applying a NetworkPolicy) and
 	// those changes taking effect. So a short retry loop is helpful.
-	timeout := time.After(10 * time.Second)
-loop:
-	for result != exp.ExpectedResult {
 
+loop:
+	for err != nil || result != exp.ExpectedResult {
 		select {
-		case <-timeout:
-			// Timed out.
+		case <-ctx.Done():
 			break loop
 		default:
 			// Not timed out yet.
@@ -379,7 +392,11 @@ loop:
 		}).Warn("Connection attempt did not get expected result. Retrying...")
 
 		time.Sleep(1 * time.Second)
+
 		out, result, err = c.execCommandInPod(exp.Client, cmd)
+		if err != nil {
+			logCtx.WithError(err).Warn("Connection attempt returned an error")
+		}
 	}
 
 	logCtx.WithFields(logrus.Fields{
@@ -623,12 +640,6 @@ func logDiagsForConnection(f *framework.Framework, res connectionResult) {
 		logrus.WithError(err).Error("Error getting pod description")
 	}
 	logrus.Infof("[DIAGS] Pod %s/%s describe:\n%s", res.clientPod.Namespace, res.clientPod.Name, podDesc)
-
-	// // Collect/log Calico diags.
-	// err = calico.LogCalicoDiagsForPodNode(f, res.clientPod.Namespace, res.clientPod.Name)
-	// if err != nil {
-	// 	logrus.WithError(err).Error("Error getting Calico diags")
-	// }
 }
 
 func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
@@ -714,5 +725,8 @@ func randomString(length int) string {
 
 // ExecInPod executes a kubectl command in a pod. Returns the response as a string, or an error upon failure.
 func ExecInPod(pod *v1.Pod, sh, opt, cmd string) (string, error) {
-	return kubectl.RunKubectl(pod.Namespace, "exec", pod.Name, "--", sh, opt, cmd)
+	args := []string{"exec", pod.Name, "--", sh, opt, cmd}
+	return kubectl.NewKubectlCommand(pod.Namespace, args...).
+		WithTimeout(time.After(5 * time.Second)).
+		Exec()
 }

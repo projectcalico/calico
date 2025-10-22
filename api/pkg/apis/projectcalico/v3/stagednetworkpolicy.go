@@ -156,8 +156,8 @@ func ConvertStagedPolicyToEnforced(staged *StagedNetworkPolicy) (StagedAction, *
 	_ = copier.Copy(&enforced.Spec, &staged.Spec)
 
 	// Clear fields that should not be copied onto new objects.
-	enforced.ObjectMeta.ResourceVersion = ""
-	enforced.ObjectMeta.UID = ""
+	enforced.ResourceVersion = ""
+	enforced.UID = ""
 
 	return staged.Spec.StagedAction, enforced
 }

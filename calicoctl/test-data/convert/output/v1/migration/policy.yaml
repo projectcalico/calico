@@ -12,12 +12,10 @@ items:
   spec:
     egress:
     - action: Allow
-      destination: {}
       icmp:
         code: 25
         type: 25
       protocol: ICMP
-      source: {}
     ingress:
     - action: Allow
       destination:
@@ -29,7 +27,6 @@ items:
         notSelector: role != 'something' && thing in {'one', 'two'}
         selector: role == 'frontend' && thing not in {'three', 'four'}
     - action: Allow
-      destination: {}
       protocol: TCP
       source:
         notSelector: role != 'something' && thing in {'one', 'two'}
@@ -41,25 +38,20 @@ items:
         - 22
         - 443
       protocol: TCP
-      source: {}
     - action: Allow
-      destination: {}
       source:
         nets:
         - 172.18.18.200/32
         - 172.18.19.0/24
     - action: Allow
-      destination: {}
       source:
         nets:
         - 172.18.18.100/32
     - action: Deny
-      destination: {}
       source:
         notNets:
         - 172.19.19.100/32
     - action: Deny
-      destination: {}
       source:
         notNets:
         - 172.18.0.0/16

@@ -123,8 +123,8 @@ func ConvertStagedKubernetesPolicyToK8SEnforced(staged *StagedKubernetesNetworkP
 	enforced.TypeMeta = metav1.TypeMeta{APIVersion: "networking.k8s.io/v1", Kind: "NetworkPolicy"}
 
 	// Clear fields that should not be copied onto new objects.
-	enforced.ObjectMeta.ResourceVersion = ""
-	enforced.ObjectMeta.UID = ""
+	enforced.ResourceVersion = ""
+	enforced.UID = ""
 
 	return staged.Spec.StagedAction, &enforced
 }
