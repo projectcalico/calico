@@ -75,29 +75,6 @@ func (ch *ConsistentHash) AddBackend(kep k8sp.Endpoint) {
 	ch.backendNames = append(ch.backendNames, name)
 }
 
-func (ch *ConsistentHash) RemoveBackend(kep k8sp.Endpoint) {
-	name := kep.String()
-	if kep == nil {
-		logrus.Warn("Ignoring RemoveBackend for nil endpoint")
-		return
-	}
-
-	b, exists := ch.backendsByName[name]
-	if !exists {
-		logrus.WithField("backend", name).Warn("Ignoring RemoveBackend for non-existent backend")
-		return
-	}
-
-	b.endpoint = nil
-	delete(ch.backendsByName, name)
-
-	for i, b := range ch.backendNames {
-		if b == name {
-			slices.Delete(ch.backendNames, i, i)
-		}
-	}
-}
-
 // Generate sorts the list of backends and then generates a ConsistentHash LUT.
 func (ch *ConsistentHash) Generate() []k8sp.Endpoint {
 	if len(ch.backendNames) == 0 {
