@@ -17,6 +17,7 @@ package bgp
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -235,5 +236,57 @@ var _ = describe.CalicoDescribe(
 			checker.ExpectFailure(client1, server1.ClusterIPs()...)
 			checker.ExpectFailure(client2, server1.ClusterIPs()...)
 			checker.Execute()
+		})
+
+		It("should support graceful transition to route reflectors", func() {
+			// Start a continuous connectivity check in the background.
+			checkpoint := checker.ExpectContinuously(client1, server1.ICMP(), server1.ClusterIP())
+			defer checkpoint.Stop()
+			checkpoint.ExpectSuccess("at the start of the test")
+
+			// Select a node to act as a route reflector. Give it a RR cluster ID, as well
+			// as a label identifying it as a route reflector.
+			nodes := corev1.NodeList{}
+			err = cli.List(context.Background(), &nodes)
+			Expect(err).NotTo(HaveOccurred(), "Error querying nodes in the cluster")
+			Expect(nodes.Items).NotTo(BeEmpty(), "No nodes found in the cluster")
+			setNodeAsRouteReflector(cli, &nodes.Items[0], "225.0.0.4")
+
+			// Create BGP peer that causes all non-RR nodes to peer with the RR.
+			By("Creating a BGPPeer to enable peerings to the RR")
+			peer := &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-rrs"},
+				Spec: v3.BGPPeerSpec{
+					NodeSelector: fmt.Sprintf("!has(%s)", resources.RouteReflectorClusterIDAnnotation),
+					PeerSelector: fmt.Sprintf("has(%s)", resources.RouteReflectorClusterIDAnnotation),
+				},
+			}
+			err = cli.Create(context.Background(), peer)
+			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
+			DeferCleanup(func() {
+				err := cli.Delete(context.Background(), peer)
+				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
+			})
+
+			// Wait until BGP has converged.
+			//
+			// TODO: Replace this sleep with a proper check for BGP convergence. We don't have a good way to do
+			// this via the API today, so for now we just wait a fixed time. This could be flaky, though.
+			time.Sleep(10 * time.Second)
+			checkpoint.ExpectSuccess("after enabling route reflectors")
+
+			// Now disable full mesh BGP - connectivity should be maintained via the RR.
+			disableFullMesh(cli)
+
+			// Wait a short time to verify that connectivity is maintained.
+			// TODO: Replace this sleep with a proper check for BGP convergence.
+			time.Sleep(5 * time.Second)
+
+			checkpoint.ExpectSuccess("after disabling full mesh")
+
+			// Deleting the route reflector role should cause connectivity to be lost.
+			setNodeAsNotRouteReflector(cli, &nodes.Items[0])
+
+			checkpoint.ExpectFailure("after removing route reflector role")
 		})
 	})
