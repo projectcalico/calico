@@ -19,6 +19,7 @@ import (
 	"net"
 	"time"
 
+	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,25 @@ const (
 	nodeBgpIpv4IPIPTunnelAddrAnnotation  = "projectcalico.org/IPv4IPIPTunnelAddr"
 	nodeBgpIpv4VXLANTunnelAddrAnnotation = "projectcalico.org/IPv4VXLANTunnelAddr"
 )
+
+func RequireNodeCount(f *framework.Framework, count int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	nodes, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Error listing nodes")
+
+	// Count the number of ready nodes.
+	numReady := 0
+	for _, node := range nodes.Items {
+		for _, condition := range node.Status.Conditions {
+			if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
+				numReady++
+			}
+		}
+	}
+
+	ExpectWithOffset(1, numReady).To(BeNumerically(">=", count), "Test requires at least %d nodes, found %d", count, numReady)
+}
 
 type NodesInfoGetter interface {
 	GetNames() []string
