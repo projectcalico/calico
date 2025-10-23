@@ -330,7 +330,10 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCf
 	// Check that the block affinity matches the given affinity.
 	if b.Affinity != nil && !affinityMatches(affinityCfg, b.AllocationBlock) {
 		// This means the affinity is stale - we can delete it.
-		logCtx.Errorf("Mismatched affinity: %s != %s - try to delete stale affinity", *b.Affinity, "host:"+affinityCfg.Host)
+		logCtx.Errorf("Mismatched affinity: %s != %s - try to delete stale affinity",
+			*b.Affinity,
+			fmt.Sprintf("%s:%s", affinityCfg.AffinityType, affinityCfg.Host),
+		)
 		if err := rw.deleteAffinity(ctx, aff); err != nil {
 			logCtx.Warn("Failed to delete stale affinity")
 		}
