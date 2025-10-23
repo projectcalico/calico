@@ -190,31 +190,6 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
 
-			By("Creating the adminnetworkpolicy tier with an invalid order")
-			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
-				Spec:       spec1,
-			}, options.SetOptions{})
-			Expect(res).To(BeNil())
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("adminnetworkpolicy tier order must be 1000"))
-
-			By("Cannot delete the adminnetworkpolicy Tier")
-			_, outError = c.Tiers().Delete(ctx, names.AdminNetworkPolicyTierName, options.DeleteOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("operation Delete is not supported on adminnetworkpolicy: Cannot delete adminnetworkpolicy tier"))
-
-			By("Getting adminnetworkpolicy Tier")
-			defRes, outError = c.Tiers().Get(ctx, names.AdminNetworkPolicyTierName, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			Expect(defRes).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
-
-			By("Cannot update the adminnetworkpolicy Tier")
-			defRes.Spec = spec1
-			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("adminnetworkpolicy tier order must be 1000"))
-
 			By("Updating the Tier before it is created")
 			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
@@ -466,7 +441,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
 
-			By("Listing all Tiers and expecting only the default and adminnetworkpolicy tiers")
+			By("Listing all Tiers and expecting only the default tier")
 			outList, outError = c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			nonDefaultTiers = checkAndFilterDefaultTiers(outList)

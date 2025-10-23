@@ -6,11 +6,6 @@ LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
-NETPOL_TAG = v0.1.5
-NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/experimental
-NETPOL_ANP_CRD = policy.networking.k8s.io_adminnetworkpolicies.yaml
-NETPOL_BANP_CRD = policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
-
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -65,9 +60,6 @@ gen-crds:
 	rm -f config/crd/_nodes.yaml
 	# Remove the first yaml separator line.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
-	# Add K8S AdminNetworkPolicy CRD
-	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
-	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_BANP_CRD) -o ./config/crd/$(NETPOL_BANP_CRD)
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 	# Patch in manual tweaks to the generated CRDs.
