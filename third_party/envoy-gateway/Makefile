@@ -31,13 +31,11 @@ $(ENVOY_GATEWAY_DOWNLOADED):
 # 	This code checks for the presence of a patches directory corresponding to ENVOY_GATEWAY_VERSION.
 # 	If the directory exists, it iterates over all .patch files within it.
 # 	For each valid patch file, it applies the patch to the envoy-gateway directory using patch -p1.
-	if [ -d patches ]; then \
-		for patch in patches/$*.patch; do \
-			if [ -f "$$patch" ]; then \
-				patch -d envoy-gateway -p1 < "$$patch"; \
-			fi; \
-		done; \
-	fi
+	for patch in patches/*.patch; do \
+		if [ -f "$$patch" ]; then \
+			patch -d envoy-gateway -p1 < "$$patch"; \
+		fi; \
+	done; \
 
 	touch $@
 
