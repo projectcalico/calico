@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -27,16 +29,12 @@ func TestImagesPublished(t *testing.T) {
 
 		for _, reg := range registry.DefaultCalicoRegistries {
 			for _, image := range strings.Split(images, " ") {
-				if strings.Contains(image, operator.DefaultImage) {
-					// Operator images are checked separately
-					continue
-				}
-				fqImage := fmt.Sprintf("%s/%s:%s", reg, image, releaseVersion)
-				t.Run(fqImage, func(t *testing.T) {
+				t.Run(image, func(t *testing.T) {
+					fqImage := fmt.Sprintf("%s/%s:%s", reg, image, releaseVersion)
 					if ok, err := registry.CheckImage(fqImage); err != nil {
 						t.Fatalf("failed to check image %s: %v", fqImage, err)
 					} else if !ok {
-						t.Fatalf("image (%s) not found", fqImage)
+						t.Fatalf("image %q not found", fqImage)
 					}
 					if !strings.HasSuffix(image, "windows") {
 						for _, arch := range linuxArches {
@@ -103,20 +101,17 @@ func TestImagesInMetadata(t *testing.T) {
 	checkImages(t, images)
 
 	var expectedImages []string
-	addOperator := true
 	for _, image := range strings.Split(images, " ") {
-		if strings.Contains(image, operator.DefaultImage) {
-			addOperator = false
-			expectedImages = append(expectedImages, fmt.Sprintf("%s/%s:%s", operator.DefaultRegistry, operator.DefaultImage, operatorVersion))
+		registry := registry.DefaultCalicoRegistry
+		if registry != "" {
+			registry += "/"
 		}
-		expectedImages = append(expectedImages, fmt.Sprintf("%s:%s", image, releaseVersion))
+		expectedImages = append(expectedImages, fmt.Sprintf("%s%s:%s", registry, image, releaseVersion))
 	}
 	if len(expectedImages) == 0 {
 		t.Fatal("no images provided")
 	}
-	if addOperator {
-		expectedImages = append(expectedImages, fmt.Sprintf("%s/%s:%s", operator.DefaultRegistry, operator.DefaultImage, operatorVersion))
-	}
+	expectedImages = append(expectedImages, fmt.Sprintf("%s/%s:%s", operator.DefaultRegistry, operator.DefaultImage, operatorVersion))
 	t.Logf("expected images: %v", expectedImages)
 
 	metadataImages, err := getMetadataImages()
@@ -125,17 +120,8 @@ func TestImagesInMetadata(t *testing.T) {
 	}
 	t.Logf("metadata images: %v", metadataImages)
 
-	if len(metadataImages) != len(expectedImages) {
-		t.Errorf("expected %d images in metadata, got %d", len(expectedImages), len(metadataImages))
-	}
-	var diff []string
-	for _, expectedImage := range expectedImages {
-		if !slices.Contains(metadataImages, expectedImage) {
-			diff = append(diff, expectedImage)
-		}
-	}
-	if len(diff) > 0 {
-		t.Fatalf("images in metadata missing the following: %v", diff)
+	if diff := cmp.Diff(expectedImages, metadataImages, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+		t.Errorf("images in metadata do not match (-expected +actual):\n%s", diff)
 	}
 }
 

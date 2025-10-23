@@ -1,74 +1,54 @@
 # Releasing Calico
 
-> **NOTE:** These instructions apply only to Calico versions v3.21 or greater.
+> **NOTE:** These instructions apply only to this branch.
 > For older releases, refer to the instructions in the corresponding `release-vX.Y` branch.
 
 ## Table of contents
 
-1. [Prerequisites](#1-prerequisites)
-1. [Verify the code is ready for release](#2-verify-the-code-is-ready-for-release)
-1. [Create a release branch](#3-create-a-release-branch)
-1. [Performing a release](#4-performing-a-release)
-1. [Post-release](#5-post-release)
+- [Releasing Calico](#releasing-calico)
+  - [Table of contents](#table-of-contents)
+  - [1. Prerequisites](#1-prerequisites)
+  - [2. Verify the code is ready for release](#2-verify-the-code-is-ready-for-release)
+  - [3. Create a release branch](#3-create-a-release-branch)
+    - [Setting up the branch](#setting-up-the-branch)
+    - [Updating milestones for the new branch](#updating-milestones-for-the-new-branch)
+  - [4. Performing a release](#4-performing-a-release)
+    - [4.a Create a temporary branch for this release against origin](#4a-create-a-temporary-branch-for-this-release-against-origin)
+    - [4.b Build and publish the repository in Semaphore](#4b-build-and-publish-the-repository-in-semaphore)
+    - [4.c Build and publish tigera/operator](#4c-build-and-publish-tigeraoperator)
+    - [4.d Publish the release on Github](#4d-publish-the-release-on-github)
+    - [4.e Update the docs with the new version](#4e-update-the-docs-with-the-new-version)
+  - [5. Post-release](#5-post-release)
+    - [Update milestones](#update-milestones)
+    - [Post-release verification](#post-release-verification)
+    - [Update API repository](#update-api-repository)
+- [Release notes](#release-notes)
 
 ## 1. Prerequisites
 
-Generally, the release environment is managed through Semaphore and will already meet these requirements. However, if you must run
-the process locally then the following requirements must be met.
+Generally, the release environment is managed through Semaphore and will already meet these requirements.
+
+However, parts of the process will still require that the following requirements must be met.
 
 To publish Calico, you need **the following permissions**:
 
-- Write access to the projectcalico/calico GitHub repository. You can create a [personal access token](https://github.com/settings/tokens) for GitHub and export it as the `GITHUB_TOKEN` env var (for example by adding it to your `.profile`).
-
-- Push access to the Calico DockerHub repositories. Assuming you've been granted access by an admin:
-
-    ```sh
-    docker login
-    ```
-
-- Push access to the Calico quay.io repositories. Assuming you've been granted access by an admin:
-
-    ```sh
-    docker login quay.io
-    ```
-
-- Push access to the gcr.io/projectcalico-org repositories. **Note:** Some of the repos do not yet support credential helpers, you must use one of the token-based logins.  For example, assuming you've been granted access, this will configure a short-lived auth token:
-
-    ```sh
-    gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
-    ```
-
+- Write access to the projectcalico/calico GitHub repository.
+  - Generate a GitHub personal access token and export it as `GITHUB_TOKEN` in your environment.
+- Push access to the following repositories
+  - Calico DockerHub
+  - Calico Quay
+  - Tigera Quay
+  - projectcalico-org GAR
 - You must be a member of the Project Calico team on Launchpad, and have uploaded a GPG identity to your account, for which you have the secret key.
-
-- You must be able to access binaries.projectcalico.org.
-
-- To publish the helm release to the repo, you’ll need an AWS helm profile:
-  Add this to your `~/.aws/config`
-
-  ```sh
-  [profile helm]
-  role_arn = arn:aws:iam::<production_account_id>:role/CalicoDevHelmAdmin
-  mfa_serial = arn:aws:iam::<tigera-dev_account_id>:mfa/myusername
-  source_profile = default
-  region = us-east-2
-  ```
-
-  Your user will need permission for assuming the helm admin role in the production account.
-
-You'll also need **several GB of disk space**.
-
-Finally, the release process **assumes that your repos are checked out with name `origin`** as the git remote
-for the main Calico repo.
 
 ## 2. Verify the code is ready for release
 
-To verify that the code and GitHub are in the right state for releasing the chosen version.
+To verify that the code and GitHub are in the right state for releasing the chosen version (vX.Y.Z).
 
-1. [Make sure the Milestone is empty](https://github.com/projectcalico/calico/pulls?q=is%3Aopen+is%3Apr+milestone%3A%22Calico+v3.21.3%22) either by merging PRs, or kicking them out of the Milestone.
-1. [Make sure that there are no pending cherry-pick PRs](https://github.com/projectcalico/calico/pulls?q=is%3Aopen+is%3Apr+label%3Acherry-pick-candidate+) relevant to the release.
-1. [Make sure there are no pending PRs which need docs](https://github.com/projectcalico/calico/pulls?q=is%3Apr+label%3Adocs-pr-required+is%3Aclosed+milestone%3A%22Calico+v3.21.3%22) for this release.
-1. [Make sure each PR with a release note is within a Milestone](https://github.com/projectcalico/calico/pulls?q=is%3Apr+label%3Arelease-note-required+is%3Aclosed+milestone%3A%22Calico+v3.21.3%22+).
-1. [Make sure CI is passing](https://tigera.semaphoreci.com/projects/calico) for the target release branch.
+1. [Make sure the Milestone is empty](https://github.com/projectcalico/calico/pulls?q=is:open+is:pr+milestone:%22Calico+vX.Y.Z%22) either by merging PRs, or kicking them out of the Milestone.
+2. [Make sure that there are no pending cherry-pick PRs](https://github.com/projectcalico/calico/pulls?q=is%3Aopen+is%3Apr+label%3Acherry-pick-candidate+) relevant to the release.
+3. [Make sure CI is passing](https://tigera.semaphoreci.com/projects/calico) for the target release branch.
+4. Make sure release notes has been drafted and reviewed. See [Release notes](#release-notes) for more information.
 
 Check the status of each of these items daily in the week leading up to the release.
 
@@ -84,13 +64,13 @@ Create a new branch off of the latest master and publish it, along with a dev ta
 The new release branch is typically `release-vX.Y` where `X.Y` is the new minor version and all the files
 in the repository are updated to reflect the new version.
 
-   ```sh
-   git checkout master && git pull origin master
-   ```
+  ```sh
+  git checkout master && git pull origin master
+  ```
 
-   ```sh
-   make create-release-branch
-    ```
+  ```sh
+  make create-release-branch
+  ```
 
 ### Updating milestones for the new branch
 
@@ -100,7 +80,7 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 1. Create a new release of the form `Calico vX.Y+1.0`. Leave the existing `Calico vX.Y.0` milestone open.
 
-1. Move any open PRs in the `Calico vX.Y.0` milestone into the new milestone.
+1. Move any open PRs in the `Calico vX.Y.0` milestone into the new milestone `Calico vX.Y+1.0`.
 
 ## 4. Performing a release
 
@@ -135,10 +115,13 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
    git add release-notes/<VERSION>-release-notes.md
    ```
 
+   > [!TIP]
+   > You likely have a draft from [step 2.4](#2-verify-the-code-is-ready-for-release) that you can edit and finalize.
+
 1. Commit your changes. For example:
 
    ```sh
-   git commit -m "Updates for vX.Y.Z"
+   git commit -m "build: vX.Y.Z release"
    ```
 
 1. Push the branch to `github.com/projectcalico/calico` and create a pull request. Get it reviewed and ensure it passes CI before moving to the next step.
@@ -154,7 +137,11 @@ Wait for this job to complete before moving on to the next step.
 
 ### 4.c Build and publish tigera/operator
 
-Follow [the tigera/operator release instructions](https://github.com/tigera/operator/blob/master/RELEASING.md).
+Follow the tigera/operator release instructions in the Operator version (vA.B.C) corresponding to the release
+
+```txt
+https://github.com/tigera/operator/blob/release-vA.B/RELEASING.md
+```
 
 ### 4.d Publish the release on Github
 
@@ -164,23 +151,23 @@ Go to the [Calico release page](https://github.com/projectcalico/calico/releases
 
 1. Merge the PR branch created in step 4.a - `build-vX.Y.Z` and delete the branch from the repository.
 
+  > [!WARNING]
+  > Do not merge using "Squash and merge" as this will lose the version bump commit history.
+
 ## 5. Post-release
 
 ### Update milestones
 
 1. Go to the [Calico milestones page](https://github.com/projectcalico/calico/milestones)
 
-1. Open a new milestone of the form `Calico vX.Y.Z` for the next patch release in the series if it does not yet exist.
+1. Open a new milestone of the form `Calico vX.Y.Z+1` for the next patch release in the series if it does not yet exist.
 
 1. Close out the milestone for the release that was just published, moving any remaining open issues and PRs to the newly created milestone.
 
 ### Post-release verification
 
-1. Run the post-release checks. The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
-
-   ```sh
-   make VERSION=... FLANNEL_VERSION=... OPERATOR_VERSION=... postrelease-checks
-   ```
+1. Using the [post-release task in Semaphore](https://tigera.semaphoreci.com/projects/calico/schedulers/5eedc2d9-fbbb-4595-b7a5-50fac8068cf2/just_run),
+  Specify either the tag `vX.Y.Z` or the `build-vX.Y.Z` branch and click "Run".
 
 1. Check the output of the tests - if any test failed, dig in and understand why.
 
@@ -242,9 +229,9 @@ Release notes for a Calico release contain notable changes across Calico reposit
 
    - It is in the correct `Calico vX.Y.Z` GitHub milestone
    - It has the `release-note-required` label
-   - It has one or more release notes included in the description (Optional).
+   - It has one or more release notes included in the description.
 
-1. Run the following command to collect all release notes for the given version.
+2. Run the following command to collect all release notes for the given version.
 
    ```sh
    make release-notes
@@ -252,17 +239,16 @@ Release notes for a Calico release contain notable changes across Calico reposit
 
    A file called `release-notes/<VERSION>-release-notes.md` will be created with the raw release note content.
 
-1. Edit the generated file.
+3. Edit the generated file.
 
-   The release notes should be edited to highlight a few major enhancements and their value to the user. Bug fixes and other changes should be summarized in a
-   bulleted list at the end of the release notes. Any limitations or incompatible changes in behavior should be explicitly noted.
+   The release notes should be edited to highlight a few major enhancements and their value to the user. Bug fixes and other changes should be summarized in a bulleted list at the end of the release notes. Any breaking changes, limitations or incompatible changes in behavior should be explicitly noted.
 
    Consistent release note formatting is important. Here are some examples for reference:
 
-   - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.28.0/release-notes/v3.28.0-release-notes.md)
-   - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/v3.28.2/release-notes/v3.28.1-release-notes.md)
+   - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/release-v3.30/release-notes/v3.30.0-release-notes.md)
+   - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/release-v3.30/release-notes/v3.30.4-release-notes.md)
 
-1. Add the generated file to git.
+4. Add the generated file to git.
 
    ```sh
    git add release-notes/

@@ -56,6 +56,7 @@ func TestImageList(t *testing.T) {
 		"envoy-ratelimit",
 		"pod2daemon-flexvol",
 		"key-cert-provisioner",
+		"test-signer",
 		"csi",
 		"node-driver-registrar",
 		"cni-windows",
