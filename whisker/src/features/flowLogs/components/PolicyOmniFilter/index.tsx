@@ -13,19 +13,10 @@ import {
     OmniFilterProperties,
     SelectedOmniFilters,
 } from '@/utils/omniFilter';
-import { Flex, FormControl, FormLabel, Text } from '@chakra-ui/react';
+import { Flex, Text } from '@chakra-ui/react';
 import React from 'react';
-import PolicyListOmniFilter from '../TagListOmniFilter';
-import { FilterHintValues } from '@/types/render';
 import OmniFilterFooter from '../OmniFilterFooter';
-
-const filters = [
-    FilterKey.policyV2,
-    FilterKey.policyV2Namespace,
-    FilterKey.policyV2Tier,
-    FilterKey.policyV2Kind,
-] as const;
-type PolicyFilters = (typeof filters)[number];
+import FilterTabs, { PolicyFilters } from './FilterTabs';
 
 type PolicyOmniFilterProps = {
     onChange: (change: Partial<Record<FilterKey, string[]>>) => void;
@@ -106,42 +97,22 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                             </Flex>
                         }
                     />
-                    <OmniFilterContent width='500px'>
-                        <OmniFilterBody py={4}>
-                            {filters.map((filterId, index) => (
-                                <FormControl
-                                    mt={index === 0 ? 0 : 4}
-                                    key={filterId}
-                                >
-                                    <FormLabel
-                                        fontSize='sm'
-                                        htmlFor={`${filterId}-taglist`}
-                                    >
-                                        {OmniFilterProperties[filterId].label}
-                                    </FormLabel>
-                                    <PolicyListOmniFilter
-                                        filterId={filterId}
-                                        label={
-                                            OmniFilterProperties[filterId].label
-                                        }
-                                        selectedValues={values[filterId] ?? []}
-                                        filterQuery={
-                                            {
-                                                ...filterQuery,
-                                                ...values,
-                                            } as FilterHintValues
-                                        }
-                                        onChange={handleChange}
-                                        onClear={handleClear}
-                                    />
-                                </FormControl>
-                            ))}
+                    <OmniFilterContent width='600px'>
+                        <OmniFilterBody p={0}>
+                            <FilterTabs
+                                filterId={FilterKey.policyV2}
+                                values={values}
+                                filterQuery={filterQuery}
+                                onChange={handleChange}
+                                onClear={handleClear}
+                            />
                         </OmniFilterBody>
 
                         <OmniFilterFooter
                             testId={testId}
                             clearButtonProps={{
                                 onClick: () => onClearFilter(onClose),
+                                children: 'Clear all',
                             }}
                             submitButtonProps={{
                                 onClick: () => onSubmitFilter(onClose),

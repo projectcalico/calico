@@ -1,26 +1,26 @@
-import { useDebouncedCallback, useFeature } from '@/hooks';
+import PortOmniFilter from '@/features/flowLogs/components/PortOmniFilter';
+import { useDebouncedCallback } from '@/hooks';
 import {
     OmniFilter,
     OmniFilterList,
 } from '@/libs/tigera/ui-components/components/common';
 import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/common/OmniFilter';
-import PortOmniFilter from '@/features/flowLogs/components/PortOmniFilter';
 import { OmniFilterDataQuery } from '@/types/api';
 import {
+    CustomOmniFilterKeys,
     DataListOmniFilterParam,
-    OmniFilterProperties,
+    FilterKey,
+    ListOmniFilterKeys,
     ListOmniFiltersData,
+    OmniFilterKeys,
+    OmniFilterProperties,
     SelectedOmniFilterOptions,
     SelectedOmniFilters,
-    OmniFilterKeys,
-    CustomOmniFilterKeys,
-    ListOmniFilterKeys,
-    FilterKey,
 } from '@/utils/omniFilter';
 import React from 'react';
+import ActionOmniFilter from '../ActionOmniFilter';
 import PolicyOmniFilter from '../PolicyOmniFilter';
 import StartTimeOmniFilter from '../StartTimeOmniFilter';
-import ActionOmniFilter from '../ActionOmniFilter';
 
 const listOmniFilterIds = Object.values(ListOmniFilterKeys);
 
@@ -52,7 +52,6 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
     onRequestNextPage,
     startTime,
 }) => {
-    const showFiltersV2 = useFeature('fitlersV2');
     const handleClear = (filterId: string) =>
         onChange({
             filterId: filterId,
@@ -91,24 +90,22 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                 onChangeVisible={() => undefined}
                 onResetVisible={onReset}
             >
-                {showFiltersV2 && (
-                    <PolicyOmniFilter
-                        key='policy-omni-filter-v2'
-                        onChange={onMultiChange}
-                        filterId={CustomOmniFilterKeys.policyV2}
-                        filterLabel={
-                            OmniFilterProperties[OmniFilterKeys.policyV2].label
-                        }
-                        selectedValues={{
-                            policyV2: selectedValues.policyV2,
-                            policyV2Namespace: selectedValues.policyV2Namespace,
-                            policyV2Tier: selectedValues.policyV2Tier,
-                            policyV2Kind: selectedValues.policyV2Kind,
-                        }}
-                        selectedFilters={policyV2Filters}
-                        filterQuery={selectedValues}
-                    />
-                )}
+                <PolicyOmniFilter
+                    key='policy-omni-filter-v2'
+                    onChange={onMultiChange}
+                    filterId={CustomOmniFilterKeys.policyV2}
+                    filterLabel={
+                        OmniFilterProperties[OmniFilterKeys.policyV2].label
+                    }
+                    selectedValues={{
+                        policyV2: selectedValues.policyV2,
+                        policyV2Namespace: selectedValues.policyV2Namespace,
+                        policyV2Tier: selectedValues.policyV2Tier,
+                        policyV2Kind: selectedValues.policyV2Kind,
+                    }}
+                    selectedFilters={policyV2Filters}
+                    filterQuery={selectedValues}
+                />
 
                 {listOmniFilterIds.map((id) => {
                     const filterId = id as DataListOmniFilterParam;

@@ -1,31 +1,24 @@
 import {
-    Box,
     BoxProps,
     Button,
-    Center,
     Flex,
     PopoverContentProps,
-    Text,
     useDisclosure,
-    VStack,
 } from '@chakra-ui/react';
 import React, { useEffect } from 'react';
+import SearchInput from '../SearchInput';
 import OmniCheckboxList, {
     OmniCheckboxListProps,
 } from './components/OmniCheckboxList';
-import { useOmniFilterUrlState } from './hooks';
-import SearchInput from '../SearchInput';
 import OmniFilterOperatorSelect from './components/OmniFilterOperatorSelect';
-import { CheckboxListLoadingSkeleton } from './components/CheckboxLoadingSkeleton';
-import {
-    OmniFilterOption,
-    OmniInternalListComponentProps,
-    OperatorType,
-} from './types';
+import OmniInternalList from './components/OmniInternalList';
 import OmniRadioList from './components/OmniRadioList';
 import OmniRangeList from './components/OmniRangeList';
 import OmniSwitchList from './components/OmniSwitchList';
-import { totalItemsLabelStyles } from './styles';
+import OmniTagListTrigger, {
+    OmniTagListTriggerPartsProps,
+} from './components/OmniTagListTrigger';
+import { useOmniFilterUrlState } from './hooks';
 import {
     OmniFilterBody,
     OmniFilterContainer,
@@ -34,10 +27,12 @@ import {
     OmniFilterHeader,
     OmniFilterTrigger,
 } from './parts';
-import { AddIcon } from '@chakra-ui/icons';
-import OmniTagListTrigger, {
-    OmniTagListTriggerPartsProps,
-} from './components/OmniTagListTrigger';
+import {
+    OmniFilterOption,
+    OmniInternalListComponentProps,
+    OperatorType,
+} from './types';
+import PageCounter from './components/PageCounter';
 
 // Handle calling onReady for lazy loaded content
 const LazyOnReady: React.FC<{ onReady?: () => void }> = ({ onReady }) => {
@@ -341,88 +336,32 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                     )}
 
                     <OmniFilterBody
-                        px={hasFilters && !isLoading ? 0 : 3}
+                        px={3}
                         pt={!showOperatorSelect && !showSearch ? 2 : 0}
                         pb={hasFilters ? 2 : 0}
                         data-testid={`popover-body`}
                     >
-                        {isLoading && !isLoadingMore ? (
-                            <CheckboxListLoadingSkeleton
-                                numberOfLines={8}
-                                data-testid={`${testId}-list-skeleton`}
-                            />
-                        ) : hasFilters ? (
-                            InternalListComponent ? (
-                                <InternalListComponent
-                                    {...listComponentProps}
-                                    {...internalListComponentProps}
-                                />
-                            ) : listType === 'checkbox' ? (
-                                <OmniCheckboxList
-                                    {...listComponentProps}
-                                    {...internalListComponentProps}
-                                />
-                            ) : (
-                                <OmniRadioList {...listComponentProps} />
-                            )
-                        ) : isCreatable ? (
-                            <Box py={2}>
-                                {!searchInput && filteredData.length === 0 && (
-                                    <Center>
-                                        <Text py={4}>{labelNoData}</Text>
-                                    </Center>
-                                )}
-
-                                {searchInput && filteredData.length === 0 && (
-                                    <VStack py={4}>
-                                        <Text>
-                                            We couldn't find any matches
-                                        </Text>
-                                        <Button
-                                            variant='ghost'
-                                            _hover={{
-                                                _dark: {
-                                                    bg: 'tigeraGrey.800',
-                                                },
-                                            }}
-                                            leftIcon={
-                                                <AddIcon fontSize='2xs' />
-                                            }
-                                            fontSize='sm'
-                                            onClick={() => {
-                                                setSearchInput('');
-                                                listComponentProps.onChange([
-                                                    ...selectedFilters,
-                                                    {
-                                                        label: searchInput,
-                                                        value: searchInput,
-                                                    },
-                                                ]);
-                                                if (onRequestSearch) {
-                                                    onRequestSearch(
-                                                        filterId,
-                                                        '',
-                                                    );
-                                                }
-                                            }}
-                                            data-testid={`${testId}-create-filter-button`}
-                                        >
-                                            {formatCreatableLabel ? (
-                                                formatCreatableLabel(
-                                                    searchInput,
-                                                )
-                                            ) : (
-                                                <>Add "{searchInput}"</>
-                                            )}
-                                        </Button>
-                                    </VStack>
-                                )}
-                            </Box>
-                        ) : (
-                            <Center>
-                                <Text py={4}>{labelNoData}</Text>
-                            </Center>
-                        )}
+                        <OmniInternalList
+                            {...listComponentProps}
+                            InternalListComponent={InternalListComponent}
+                            listType={listType}
+                            internalListComponentProps={
+                                internalListComponentProps
+                            }
+                            ref={initialFocusRef}
+                            isCreatable={isCreatable}
+                            searchInput={searchInput}
+                            filteredData={filteredData}
+                            selectedFilters={selectedFilters}
+                            labelNoData={labelNoData}
+                            testId={testId}
+                            onClearSearch={() => setSearchInput('')}
+                            isLoading={isLoading}
+                            hasFilters={hasFilters}
+                            filterId={filterId}
+                            onRequestSearch={onRequestSearch}
+                            formatCreatableLabel={formatCreatableLabel}
+                        />
                     </OmniFilterBody>
 
                     <OmniFilterFooter>
@@ -450,12 +389,12 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                         </Button>
 
                         {totalItems ? (
-                            <Text sx={totalItemsLabelStyles}>
+                            <PageCounter>
                                 {formatListCountLabel(
                                     filteredData.length,
                                     totalItems,
                                 )}
-                            </Text>
+                            </PageCounter>
                         ) : (
                             ''
                         )}
@@ -470,8 +409,11 @@ export default OmniFilter;
 
 export {
     OmniCheckboxList,
+    OmniInternalList,
     OmniRadioList,
     OmniRangeList,
     OmniSwitchList,
+    LazyOnReady,
     useOmniFilterUrlState,
+    PageCounter,
 };

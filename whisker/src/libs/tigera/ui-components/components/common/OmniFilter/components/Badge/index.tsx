@@ -1,7 +1,11 @@
 import { Badge as ChakraBadge, BadgeProps } from '@chakra-ui/react';
 
-const Badge: React.FC<React.PropsWithChildren & BadgeProps> = ({
+type Props = {
+    showPlus?: boolean;
+};
+const Badge: React.FC<React.PropsWithChildren & BadgeProps & Props> = ({
     children,
+    showPlus = true,
     ...rest
 }) => (
     <ChakraBadge
@@ -11,7 +15,8 @@ const Badge: React.FC<React.PropsWithChildren & BadgeProps> = ({
         fontSize='sm'
         {...rest}
     >
-        +{children}
+        {showPlus && '+'}
+        {children}
     </ChakraBadge>
 );
 

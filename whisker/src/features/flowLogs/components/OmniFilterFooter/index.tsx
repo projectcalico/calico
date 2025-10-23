@@ -14,10 +14,10 @@ const FilterFooter: React.FC<OmniFilterFooterProps> = ({
 }) => (
     <OmniFilterFooter data-testid={`${testId}-popover-footer`}>
         <Button variant='ghost' {...clearButtonProps}>
-            Clear
+            {clearButtonProps.children ?? 'Clear'}
         </Button>
         <Button ml='auto' {...submitButtonProps}>
-            Update
+            {submitButtonProps.children ?? 'Update'}
         </Button>
     </OmniFilterFooter>
 );

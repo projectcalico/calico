@@ -3,16 +3,12 @@ import PolicyOmniFilter from '..';
 
 const MockTagListOmniFilter: any = {};
 
-jest.mock(
-    '../../TagListOmniFilter',
-    () =>
-        ({ onChange, filterId, onClear }: any) => {
-            if (filterId === 'policyV2') {
-                MockTagListOmniFilter[filterId] = { onChange, onClear };
-            }
-            return <div>TagListOmniFilter - {filterId}</div>;
-        },
-);
+jest.mock('../FilterTabs', () => ({ onChange, filterId, onClear }: any) => {
+    if (filterId === 'policyV2') {
+        MockTagListOmniFilter[filterId] = { onChange, onClear };
+    }
+    return <div>FilterTabs - {filterId}</div>;
+});
 
 describe('<PolicyOmniFilter />', () => {
     const defaultProps = {
@@ -116,7 +112,9 @@ describe('<PolicyOmniFilter />', () => {
             screen.getByRole('button', { name: 'Policy V2 +4' }),
         );
 
-        await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
+        await userEvent.click(
+            screen.getByRole('button', { name: 'Clear all' }),
+        );
 
         expect(defaultProps.onChange).toHaveBeenCalledWith({
             policyV2: [],

@@ -10,20 +10,21 @@ export const useDebouncedCallback = () => {
         null,
     );
     const callback = React.useRef<() => void>(() => undefined);
+    const handler = React.useRef<any>(null);
 
     React.useEffect(() => {
-        if (debouncedValue !== null && callback.current) {
-            const handler = setTimeout(() => {
+        if (callback.current) {
+            handler.current = setTimeout(() => {
                 callback.current();
             }, DEBOUNCE_TIME);
 
             return () => {
-                clearTimeout(handler);
+                clearTimeout(handler.current);
             };
         }
     }, [debouncedValue]);
 
-    return (value: string, debouncedFn: () => void) => {
+    return (value: string | null, debouncedFn: () => void) => {
         setDebouncedValue(value);
         callback.current = debouncedFn;
     };

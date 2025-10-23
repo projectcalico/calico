@@ -1,4 +1,3 @@
-import { useFeature } from '@/hooks';
 import { act, fireEvent, render, screen, within } from '@/test-utils/helper';
 import { OmniFilterKeys } from '@/utils/omniFilter';
 import OmniFilters from '..';
@@ -73,11 +72,6 @@ jest.mock(
             return <div>Mock ActionOmniFilter</div>;
         },
 );
-
-jest.mock('@/hooks', () => ({
-    ...jest.requireActual('@/hooks'),
-    useFeature: jest.fn(),
-}));
 
 const defaultProps = {
     omniFilterData: {
@@ -242,22 +236,6 @@ describe('<OmniFilters />', () => {
         );
 
         expect(screen.getByText(`Port ${port} ${protocol}`));
-    });
-
-    it('should not show the policy v2 filter', () => {
-        jest.mocked(useFeature).mockReturnValue(false);
-
-        render(<OmniFilters {...defaultProps} />);
-
-        expect(screen.queryByText('Policy V2 filter')).not.toBeInTheDocument();
-    });
-
-    it('should show the policy v2 filter', () => {
-        jest.mocked(useFeature).mockReturnValue(true);
-
-        render(<OmniFilters {...defaultProps} />);
-
-        expect(screen.getByText('Policy V2 filter')).toBeInTheDocument();
     });
 
     it('should handle when action values are provided', () => {
