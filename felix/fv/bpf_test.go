@@ -2043,10 +2043,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						allowIngressFromExtClient.Spec.Selector = allowIngressFromExtClientSelector
 						allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
 
-						// cmd = append(ipRoute, "route", "add", "local", extIP, "dev", "eth0")
-						// tc.Felixes[1].Exec(cmd...)
-						// tc.Felixes[2].Exec(cmd...)
-
 						// Create service with maglev annotation
 						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0,
 							testOpts.protocol, []string{externalIP})
