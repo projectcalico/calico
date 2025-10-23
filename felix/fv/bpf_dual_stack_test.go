@@ -206,8 +206,8 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					currBpfepsV6  []nat.BackendMapMemV6
 				)
 
-				currBpfsvcsV6, currBpfepsV6 = dumpNATmapsV6(tc.Felixes)
-				currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
+				currBpfsvcsV6, currBpfepsV6, _ = dumpNATmapsV6(tc.Felixes)
+				currBpfsvcs, currBpfeps, _ = dumpNATmaps(tc.Felixes)
 
 				for i, felix := range tc.Felixes {
 					if NFTMode() {
