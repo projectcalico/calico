@@ -164,15 +164,19 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 
 	b.StopTimer()
 	state := makeState(svcCnt, epCnt, opts...)
-
+	maglevLUTSize := 31
+	maglevMaxSvcs := 30
 	if mockMaps {
 		syncer, err = NewSyncer(4,
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
 			&mock.DummyMap{},
 			&mock.DummyMap{},
 			&mock.DummyMap{},
+			&mock.DummyMap{},
 			NewRTCache(),
 			nil,
+			maglevLUTSize,
+			maglevMaxSvcs,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 	} else {
@@ -188,8 +192,11 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 			&mock.DummyMap{},
 			&mock.DummyMap{},
 			&mock.DummyMap{},
+			&mock.DummyMap{},
 			NewRTCache(),
 			nil,
+			maglevLUTSize,
+			maglevMaxSvcs,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 	}

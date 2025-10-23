@@ -41,14 +41,17 @@ type KubeProxy struct {
 	exiting       chan struct{}
 	wg            sync.WaitGroup
 
-	k8s         kubernetes.Interface
-	hostname    string
-	frontendMap maps.MapWithExistsCheck
-	backendMap  maps.MapWithExistsCheck
-	affinityMap maps.Map
-	ctMap       maps.Map
-	rt          *RTCache
-	opts        []Option
+	k8s           kubernetes.Interface
+	hostname      string
+	frontendMap   maps.MapWithExistsCheck
+	backendMap    maps.MapWithExistsCheck
+	MaglevMap     maps.MapWithExistsCheck
+	maglevLUTSize int
+	maglevMaxSvcs int
+	affinityMap   maps.Map
+	ctMap         maps.Map
+	rt            *RTCache
+	opts          []Option
 
 	excludedCIDRs *ip.CIDRTrie
 
@@ -60,15 +63,18 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	bpfMaps *bpfmap.IPMaps, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
-		k8s:         k8s,
-		ipFamily:    4,
-		hostname:    hostname,
-		frontendMap: bpfMaps.FrontendMap.(maps.MapWithExistsCheck),
-		backendMap:  bpfMaps.BackendMap.(maps.MapWithExistsCheck),
-		affinityMap: bpfMaps.AffinityMap,
-		ctMap:       bpfMaps.CtMap,
-		opts:        opts,
-		rt:          NewRTCache(),
+		k8s:           k8s,
+		ipFamily:      4,
+		hostname:      hostname,
+		frontendMap:   bpfMaps.FrontendMap.(maps.MapWithExistsCheck),
+		backendMap:    bpfMaps.BackendMap.(maps.MapWithExistsCheck),
+		MaglevMap:     bpfMaps.MaglevMap.(maps.MapWithExistsCheck),
+		maglevMaxSvcs: 100,
+		maglevLUTSize: 1009,
+		affinityMap:   bpfMaps.AffinityMap,
+		ctMap:         bpfMaps.CtMap,
+		opts:          opts,
+		rt:            NewRTCache(),
 
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
@@ -131,8 +137,8 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap,
-		kp.rt, kp.excludedCIDRs)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap,
+		kp.rt, kp.excludedCIDRs, kp.maglevLUTSize, kp.maglevMaxSvcs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -154,7 +160,7 @@ func (kp *KubeProxy) start() error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.maglevLUTSize, kp.maglevMaxSvcs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

@@ -95,6 +95,19 @@ func WithIPFamily(ipFamily int) Option {
 	}
 }
 
+func WithMaglevLUTSizeAndMaxSvcs(size, svcs int) Option {
+	return func(P Proxy) error {
+		p, ok := P.(*KubeProxy)
+		if !ok {
+			return nil
+		}
+
+		p.maglevLUTSize = size
+		p.maglevMaxSvcs = svcs
+		return nil
+	}
+}
+
 var excludeCIDRsMatch = 1
 
 func WithExcludedCIDRs(cidrs []string) Option {
