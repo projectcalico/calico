@@ -119,7 +119,7 @@ promotions:
 blocks:
   - name: Check images availability
     run:
-      when: "true or change_in(['/charts/', '/manifests/'], {pipeline_file: 'ignore'})"
+      when: "true or (branch !~ 'build-v.*' and change_in(['/charts/', '/manifests/'], {pipeline_file: 'ignore'}))"
     dependencies: []
     task:
       jobs:
