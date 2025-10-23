@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
 var podNPIPStr = "255.255.255.255"
@@ -121,6 +122,7 @@ type Syncer struct {
 	nextSvcID uint32
 
 	nodePortIPs []net.IP
+	nodeLabels  map[string]string
 	rt          Routes
 
 	// new maps are valid during the Apply()'s runtime to provide easy access
@@ -209,11 +211,28 @@ func uniqueIPs(ips []net.IP) []net.IP {
 	return ret
 }
 
+// nodeMatchesSelector checks if the current node matches the given selector expression.
+// Returns true if the selector is empty or if the node labels match the selector.
+func (s *Syncer) nodeMatchesSelector(selectorStr string) bool {
+	if selectorStr == "" {
+		return true
+	}
+
+	sel, err := selector.Parse(selectorStr)
+	if err != nil {
+		log.WithError(err).WithField("selector", selectorStr).Error("Failed to parse node selector, ignoring")
+		return true // Default to allowing on parse error to avoid breaking services
+	}
+
+	return sel.Evaluate(s.nodeLabels)
+}
+
 // NewSyncer returns a new Syncer
 func NewSyncer(family int, nodePortIPs []net.IP,
 	frontendMap maps.MapWithExistsCheck, backendMap maps.MapWithExistsCheck,
 	affmap maps.Map, rt Routes,
 	excludedCIDRs *ip.CIDRTrie,
+	nodeLabels map[string]string,
 ) (*Syncer, error) {
 
 	s := &Syncer{
@@ -221,6 +240,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 		bpfAff:        affmap,
 		rt:            rt,
 		nodePortIPs:   uniqueIPs(nodePortIPs),
+		nodeLabels:    nodeLabels,
 		prevSvcMap:    make(map[svcKey]svcInfo),
 		prevEpsMap:    make(k8sp.EndpointsMap),
 		stop:          make(chan struct{}),
@@ -649,25 +669,38 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		}
 
 		if nport := svc.NodePort(); nport != 0 {
-			for _, npip := range s.nodePortIPs {
-				npInfo := serviceInfoFromK8sServicePort(svc)
-				npInfo.clusterIP = npip
-				npInfo.port = nport
-				if svc.InternalPolicyLocal() &&
-					((s.ipFamily == 4 && npip.Equal(podNPIP)) || (s.ipFamily == 6 && npip.Equal(podNPIPV6))) {
-					// do not program the meta entry, program each node
-					// separately
-					continue
-				}
-				err := s.applyDerived(sname, svcTypeNodePort, npInfo)
-				if err != nil {
-					log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)
-					continue
-				}
+			// Check if this node matches the service's node selector (if any)
+			nodeSelector := ""
+			if svcAnnotated, ok := svc.(Service); ok {
+				nodeSelector = svcAnnotated.NodeSelector()
 			}
-			if svc.InternalPolicyLocal() {
-				if miss := s.expandAndApplyNodePorts(sname, svc, eps, nport, s.rt.Lookup); miss != nil {
-					expNPMisses = append(expNPMisses, miss)
+
+			if !s.nodeMatchesSelector(nodeSelector) {
+				log.WithFields(log.Fields{
+					"service":  sname,
+					"selector": nodeSelector,
+				}).Debug("Node does not match selector, skipping NodePort programming")
+			} else {
+				for _, npip := range s.nodePortIPs {
+					npInfo := serviceInfoFromK8sServicePort(svc)
+					npInfo.clusterIP = npip
+					npInfo.port = nport
+					if svc.InternalPolicyLocal() &&
+						((s.ipFamily == 4 && npip.Equal(podNPIP)) || (s.ipFamily == 6 && npip.Equal(podNPIPV6))) {
+						// do not program the meta entry, program each node
+						// separately
+						continue
+					}
+					err := s.applyDerived(sname, svcTypeNodePort, npInfo)
+					if err != nil {
+						log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)
+						continue
+					}
+				}
+				if svc.InternalPolicyLocal() {
+					if miss := s.expandAndApplyNodePorts(sname, svc, eps, nport, s.rt.Lookup); miss != nil {
+						expNPMisses = append(expNPMisses, miss)
+					}
 				}
 			}
 		}
@@ -1557,4 +1590,24 @@ func K8sSvcWithReapTerminatingUDP() K8sServicePortOption {
 	return func(s interface{}) {
 		s.(*servicePort).reapTerminatingUDP = true
 	}
+}
+
+// NewK8sServicePortWithSelector creates a new k8s ServicePort with a node selector
+func NewK8sServicePortWithSelector(clusterIP net.IP, port int, proto v1.Protocol,
+	nodeSelector string, opts ...K8sServicePortOption) k8sp.ServicePort {
+
+	x := &servicePort{
+		ServicePort: &serviceInfo{
+			clusterIP: clusterIP,
+			port:      port,
+			protocol:  proto,
+		},
+	}
+
+	x.nodeSelector = nodeSelector
+
+	for _, o := range opts {
+		o(x)
+	}
+	return x
 }

@@ -2936,6 +2936,7 @@ func startBPFDataplaneComponents(
 
 		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
+		bpfRTMgr.setNodeLabelsUpdateCallBack(kp.OnNodeLabelsUpdate)
 		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))
 	} else {
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")

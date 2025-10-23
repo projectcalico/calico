@@ -407,16 +407,19 @@ const (
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
 	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
+	NodeSelectorAnnotation   = "projectcalico.org/nodeSelector"
 )
 
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
+	NodeSelector() string
 }
 
 type servicePortAnnotations struct {
 	reapTerminatingUDP bool
 	excludeService     bool
+	nodeSelector       string
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -425,6 +428,10 @@ func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
 
 func (s *servicePortAnnotations) ExcludeService() bool {
 	return s.excludeService
+}
+
+func (s *servicePortAnnotations) NodeSelector() string {
+	return s.nodeSelector
 }
 
 type servicePort struct {
@@ -446,6 +453,10 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		if v, ok := s.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
 			svc.reapTerminatingUDP = true
 		}
+	}
+
+	if v, ok := s.Annotations[NodeSelectorAnnotation]; ok {
+		svc.nodeSelector = strings.TrimSpace(v)
 	}
 
 out:

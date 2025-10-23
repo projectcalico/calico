@@ -15,11 +15,14 @@
 package proxy
 
 import (
+	"context"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
@@ -43,6 +46,8 @@ type KubeProxy struct {
 
 	k8s         kubernetes.Interface
 	hostname    string
+	nodeLabels  map[string]string
+	lastHostIPs []net.IP
 	frontendMap maps.MapWithExistsCheck
 	backendMap  maps.MapWithExistsCheck
 	affinityMap maps.Map
@@ -107,6 +112,29 @@ func (kp *KubeProxy) Stop() {
 	})
 }
 
+func (kp *KubeProxy) fetchNodeLabels() map[string]string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	node, err := kp.k8s.CoreV1().Nodes().Get(ctx, kp.hostname, metav1.GetOptions{})
+	if err != nil {
+		log.WithError(err).WithField("hostname", kp.hostname).Warn("Failed to fetch node labels, using empty labels")
+		return make(map[string]string)
+	}
+
+	labels := make(map[string]string, len(node.Labels))
+	for k, v := range node.Labels {
+		labels[k] = v
+	}
+
+	log.WithFields(log.Fields{
+		"hostname": kp.hostname,
+		"labels":   labels,
+	}).Debug("Fetched node labels")
+
+	return labels
+}
+
 func (kp *KubeProxy) run(hostIPs []net.IP) error {
 
 	ips := make([]net.IP, 0, len(hostIPs))
@@ -123,6 +151,9 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	kp.lock.Lock()
 	defer kp.lock.Unlock()
 
+	kp.lastHostIPs = hostIPs
+	kp.nodeLabels = kp.fetchNodeLabels()
+
 	withLocalNP := make([]net.IP, len(hostIPs), len(hostIPs)+1)
 	copy(withLocalNP, hostIPs)
 	if kp.ipFamily == 4 {
@@ -132,7 +163,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	}
 
 	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap,
-		kp.rt, kp.excludedCIDRs)
+		kp.rt, kp.excludedCIDRs, kp.nodeLabels)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -154,7 +185,8 @@ func (kp *KubeProxy) start() error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs)
+	// Node labels will be fetched in run() when we have the actual host IPs
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, nil)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -217,6 +249,45 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 		kp.hostIPUpdates <- IPs
 	}
 	log.Debugf("kube-proxy OnHostIPsUpdate: %+v", IPs)
+}
+
+// OnNodeLabelsUpdate should be used by an external user to update the node's labels.
+// This will trigger a resync to update NodePort service programming based on the new labels.
+func (kp *KubeProxy) OnNodeLabelsUpdate(labels map[string]string) {
+	kp.lock.Lock()
+	oldLabels := kp.nodeLabels
+	kp.nodeLabels = labels
+	hostIPs := kp.lastHostIPs
+	kp.lock.Unlock()
+
+	// Check if labels actually changed
+	labelsChanged := len(oldLabels) != len(labels)
+	if !labelsChanged {
+		for k, v := range labels {
+			if oldLabels[k] != v {
+				labelsChanged = true
+				break
+			}
+		}
+	}
+
+	if !labelsChanged {
+		log.Debug("Node labels unchanged, skipping resync")
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"oldLabels": oldLabels,
+		"newLabels": labels,
+	}).Info("Node labels changed, triggering kube-proxy resync")
+
+	// Trigger a resync with the current host IPs
+	// This will recreate the syncer with updated node labels
+	if len(hostIPs) > 0 {
+		kp.OnHostIPsUpdate(hostIPs)
+	} else {
+		log.Warn("No host IPs available for resync after label update")
+	}
 }
 
 // OnRouteUpdate should be used to update the internal state of routing tables
