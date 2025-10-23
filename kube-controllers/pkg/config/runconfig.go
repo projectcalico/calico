@@ -399,7 +399,7 @@ func mergeLoadBalancer(status *v3.KubeControllersConfigurationStatus, rCfg *RunC
 			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
 		}
 	} else {
-		// We can enable the loadbalancer controller as it won't be assigning any IPs if ippool for loadbalancer is not set
+		// We can enable the LoadBalancer controller as it won't be assigning any IPs if IPPool for LoadBalancer is not set
 		rCfg.Controllers.LoadBalancer = &LoadBalancerControllerConfig{
 			AssignIPs: v3.AllServices,
 		}
