@@ -1,5 +1,3 @@
-//go:build fvtests
-
 // Copyright (c) 2017,2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -91,7 +89,10 @@ var _ = Describe("with running container", func() {
 		// Send an interrupt to ensure that docker gracefully shuts down the container.
 		// If we kill the docker process then it detaches the container.
 		log.Info("Stopping Felix container")
-		felixCmd.Process.Signal(os.Interrupt)
+		err := felixCmd.Process.Signal(os.Interrupt)
+		if err != nil {
+			log.WithError(err).Error("Failed to interrupt Felix container")
+		}
 	})
 
 	Describe("with the lock being held for 2s", func() {
@@ -103,7 +104,7 @@ var _ = Describe("with running container", func() {
 			lockCmd = cmdInContainer("/codebase/bin/iptables-locker", "2s")
 			stdErr, err := lockCmd.StderrPipe()
 			Expect(err).NotTo(HaveOccurred())
-			lockCmd.Start()
+			Expect(lockCmd.Start()).To(Succeed())
 
 			// Wait for the iptables-locker to tell us that it actually acquired the
 			// lock.

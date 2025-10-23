@@ -8,7 +8,6 @@
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
         "name": "default.allow-tcp-6379",
-        "creationTimestamp": null,
         "labels": {
           "projectcalico.org/tier": "default"
         },
@@ -110,7 +109,6 @@
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
         "name": "default.allow-tcp-555-donottrack",
-        "creationTimestamp": null,
         "labels": {
           "projectcalico.org/tier": "default"
         }

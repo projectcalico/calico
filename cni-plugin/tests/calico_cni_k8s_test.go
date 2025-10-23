@@ -827,7 +827,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					    ]
 					  },
 					  "kubernetes": {
-                                           "kubeconfig": "/home/user/certs/kubeconfig"
+					    "kubeconfig": "/home/user/certs/kubeconfig"
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"debug",

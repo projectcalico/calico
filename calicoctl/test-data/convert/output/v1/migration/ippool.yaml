@@ -1,7 +1,6 @@
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
-  creationTimestamp: null
   name: 10-1-0-0-16
 spec:
   allowedUses:
