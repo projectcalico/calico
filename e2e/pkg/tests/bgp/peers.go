@@ -22,6 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "github.com/tigera/operator/api/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -125,8 +127,53 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
 			DeferCleanup(func() {
 				err := cli.Delete(context.Background(), peer)
-				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
+				if !errors.IsNotFound(err) {
+					Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
+				}
 			})
+
+			// Verify connectivity is restored.
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.Execute()
+
+			// Delete the BGPPeer to disable connectivity again.
+			By("Deleting the BGPPeer to disable connectivity again")
+			err = cli.Delete(context.Background(), peer)
+			Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource")
+
+			// Verify connectivity is lost again.
+			checker.ResetExpectations()
+			checker.ExpectFailure(client1, server1.ClusterIPs()...)
+			checker.Execute()
+
+			// Create per-node BGPPeers to re-enable connectivity.
+			By("Creating per-node BGPPeers to re-enable connectivity")
+			nodes := &corev1.NodeList{}
+			err = cli.List(context.Background(), nodes)
+			Expect(err).NotTo(HaveOccurred(), "Error querying nodes in the cluster")
+			for _, node := range nodes.Items {
+				for _, node2 := range nodes.Items {
+					if node.Name == node2.Name {
+						continue
+					}
+					peer := &v3.BGPPeer{
+						ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("peer-%s-to-%s", node.Name, node2.Name)},
+						Spec: v3.BGPPeerSpec{
+							Node:         node.Name,
+							PeerSelector: fmt.Sprintf("kubernetes.io/hostname == '%s'", node2.Name),
+						},
+					}
+					err = cli.Create(context.Background(), peer)
+					Expect(err).NotTo(HaveOccurred(), "Error creating per-node BGPPeer resource")
+					DeferCleanup(func() {
+						err := cli.Delete(context.Background(), peer)
+						if !errors.IsNotFound(err) {
+							Expect(err).NotTo(HaveOccurred(), "Error deleting per-node BGPPeer resource during cleanup")
+						}
+					})
+				}
+			}
 
 			// Verify connectivity is restored.
 			checker.ResetExpectations()

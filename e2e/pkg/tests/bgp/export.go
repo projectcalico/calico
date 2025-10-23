@@ -91,8 +91,9 @@ var _ = describe.CalicoDescribe(
 			// - Create a server pod and corresponding service in the main namespace for the test.
 			// - Create a client pod and assert that it can connect to the service.
 			By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
-			// Use cuztomizers to ensure pods use the test IP pool and avoid landing on the same node.
-			cusomtizer := conncheck.CombineCustomizers(
+
+			// Use customizers to ensure pods use the test IP pool and avoid landing on the same node.
+			customtizer := conncheck.CombineCustomizers(
 				conncheck.UseV4IPPool(pool.Name),
 				conncheck.AvoidEachOther,
 			)
@@ -100,12 +101,12 @@ var _ = describe.CalicoDescribe(
 				"server",
 				f.Namespace,
 				conncheck.WithServerLabels(map[string]string{"role": "server"}),
-				conncheck.WithServerPodCustomizer(cusomtizer),
+				conncheck.WithServerPodCustomizer(customtizer),
 			)
 			client1 = conncheck.NewClient(
 				"client",
 				f.Namespace,
-				conncheck.WithClientCustomizer(cusomtizer),
+				conncheck.WithClientCustomizer(customtizer),
 			)
 			checker.AddServer(server1)
 			checker.AddClient(client1)

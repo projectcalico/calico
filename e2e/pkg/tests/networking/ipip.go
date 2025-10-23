@@ -100,8 +100,9 @@ var _ = describe.CalicoDescribe(
 			// - Create a server pod and corresponding service in the main namespace for the test.
 			// - Create a client pod and assert that it can connect to the service.
 			By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
-			// Use cuztomizers to ensure pods use the test IP pool and avoid landing on the same node.
-			cusomtizer := conncheck.CombineCustomizers(
+
+			// Use customizers to ensure pods use the test IP pool and avoid landing on the same node.
+			customizer := conncheck.CombineCustomizers(
 				conncheck.UseV4IPPool(pool.Name),
 				conncheck.AvoidEachOther,
 			)
@@ -109,12 +110,12 @@ var _ = describe.CalicoDescribe(
 				"server",
 				f.Namespace,
 				conncheck.WithServerLabels(map[string]string{"role": "server"}),
-				conncheck.WithServerPodCustomizer(cusomtizer),
+				conncheck.WithServerPodCustomizer(customizer),
 			)
 			client1 = conncheck.NewClient(
 				"client",
 				f.Namespace,
-				conncheck.WithClientCustomizer(cusomtizer),
+				conncheck.WithClientCustomizer(customizer),
 			)
 			checker.AddServer(server1)
 			checker.AddClient(client1)
@@ -222,7 +223,7 @@ var _ = describe.CalicoDescribe(
 
 				out, err := conncheck.ExecInPod(&p, "sh", "-c", "ip addr show tunl0")
 				Expect(err).NotTo(HaveOccurred(), "Error querying tunl0 interface in pod %s", p.Name)
-				Expect(out).To(ContainSubstring(expectedIP), "tunl0 interface in pod %s does not have an IPIP address", p.Name)
+				Expect(out).To(ContainSubstring(expectedIP), "tunl0 interface in pod %s does not have the expected IPIP address", p.Name)
 			}
 		})
 	})

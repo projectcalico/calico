@@ -18,7 +18,7 @@ import (
 )
 
 // ensureInitialBGPConfig checks for an existing BGPConfiguration resource and ensures that full mesh BGP is enabled.
-// It returns the initial configuration (if any) and a cleanup function to restore the original state after the test.
+// It returns a cleanup function to restore the original state after the test.
 func ensureInitialBGPConfig(cli ctrlclient.Client) func() {
 	// Ensure full mesh BGP is functioning before each test.
 	initialConfig := &v3.BGPConfiguration{}
@@ -40,12 +40,12 @@ func ensureInitialBGPConfig(cli ctrlclient.Client) func() {
 			err := cli.Delete(context.Background(), &v3.BGPConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error deleting BGPConfiguration resource")
 		}
-	} else {
-		By("Ensuring full mesh BGP is enabled in existing BGPConfiguration")
-		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying BGPConfiguration resource")
-		ExpectWithOffset(1, initialConfig.Spec.NodeToNodeMeshEnabled).NotTo(BeNil(), "nodeToNodeMeshEnabled is not configured in BGPConfiguration")
-		ExpectWithOffset(1, *initialConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
 	}
+
+	By("Ensuring full mesh BGP is enabled in existing BGPConfiguration")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying BGPConfiguration resource")
+	ExpectWithOffset(1, initialConfig.Spec.NodeToNodeMeshEnabled).NotTo(BeNil(), "nodeToNodeMeshEnabled is not configured in BGPConfiguration")
+	ExpectWithOffset(1, *initialConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
 
 	return func() {
 		By("Restoring initial BGPConfiguration")
@@ -69,7 +69,7 @@ func disableFullMesh(cli ctrlclient.Client) {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error updating BGPConfiguration resource")
 }
 
-func setASNumber(cli ctrlclient.Client, asn int32) {
+func setASNumber(cli ctrlclient.Client, asn numorstring.ASNumber) {
 	By("Setting AS number in BGPConfiguration")
 	config := &v3.BGPConfiguration{}
 	err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, config)
@@ -82,18 +82,24 @@ func setASNumber(cli ctrlclient.Client, asn int32) {
 func setNodeAsRouteReflector(cli ctrlclient.Client, rrNode *corev1.Node, rrClusterID string) {
 	By(fmt.Sprintf("Using node %s as a route reflector", rrNode.Name))
 	prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
+
+	// Adding the cluster ID as an annotation tells Calico to configure the node as a route reflector.
+	if rrNode.Annotations == nil {
+		rrNode.Annotations = map[string]string{}
+	}
+
+	// Adding it as a label allows us to select the node in a BGPPeer.
+	if rrNode.Labels == nil {
+		rrNode.Labels = map[string]string{}
+	}
+
 	rrNode.Labels[resources.RouteReflectorClusterIDAnnotation] = rrClusterID
 	rrNode.Annotations[resources.RouteReflectorClusterIDAnnotation] = rrClusterID
 	err := cli.Patch(context.Background(), rrNode, prePatch)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error marking node as route reflector")
 
 	DeferCleanup(func() {
-		// Remove the label and annotation from the node.
-		prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
-		delete(rrNode.Labels, resources.RouteReflectorClusterIDAnnotation)
-		delete(rrNode.Annotations, resources.RouteReflectorClusterIDAnnotation)
-		err = cli.Patch(context.Background(), rrNode, prePatch)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error removing route reflector label from node during cleanup")
+		setNodeAsNotRouteReflector(cli, rrNode)
 	})
 }
 
@@ -104,4 +110,18 @@ func setNodeAsNotRouteReflector(cli ctrlclient.Client, rrNode *corev1.Node) {
 	delete(rrNode.Annotations, resources.RouteReflectorClusterIDAnnotation)
 	err := cli.Patch(context.Background(), rrNode, prePatch)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error removing route reflector label from node")
+}
+
+func deleteCalicoNode(cli ctrlclient.Client, node *corev1.Node) {
+	By(fmt.Sprintf("Simulating failure of node %s by deleting calico-node Pod", node.Name))
+
+	// Get the calico/node Pod on the node.
+	podList := &corev1.PodList{}
+	err := cli.List(context.Background(), podList, ctrlclient.MatchingLabels{"k8s-app": "calico-node"}, ctrlclient.MatchingFields{"spec.nodeName": node.Name})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error listing calico-node Pods on node")
+	ExpectWithOffset(1, len(podList.Items)).To(BeNumerically(">", 0), "No calico-node Pod found on node")
+
+	// Delete the calico/node Pod to simulate failure.
+	err = cli.Delete(context.Background(), &podList.Items[0])
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error deleting calico-node Pod to simulate node failure")
 }

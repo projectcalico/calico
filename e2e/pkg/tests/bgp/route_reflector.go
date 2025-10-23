@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	v1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -118,10 +119,13 @@ var _ = describe.CalicoDescribe(
 			// Disable full mesh BGP.
 			disableFullMesh(cli)
 
-			// Set the AS number for the cluster to a non-default value.
-			setASNumber(cli, 64514)
+			// Set the AS number for the cluster to a non-default value. We do this to get
+			// coverage of changing the AS number, but it is not strictly required for this test.
+			asn, err := numorstring.ASNumberFromString("4294.566")
+			Expect(err).NotTo(HaveOccurred(), "Error converting AS number from string")
+			setASNumber(cli, asn)
 
-			// Verify connectivity is lost.
+			// Verify connectivity is lost because the full mesh is disabled.
 			checker.ResetExpectations()
 			checker.ExpectFailure(client1, server1.ClusterIPs()...)
 			checker.ExpectFailure(client2, server1.ClusterIPs()...)
@@ -162,7 +166,8 @@ var _ = describe.CalicoDescribe(
 			// Disable full mesh BGP.
 			disableFullMesh(cli)
 
-			// Set the AS number for the cluster to a non-default value.
+			// Set the AS number for the cluster to a non-default value. We do this to get
+			// coverage of changing the AS number, but it is not strictly required for this test.
 			setASNumber(cli, 64514)
 
 			// Verify connectivity is lost.
@@ -201,11 +206,21 @@ var _ = describe.CalicoDescribe(
 			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
 			checker.Execute()
 
+			// By bringing down one of the nodes acting as a route reflector, we can verify that
+			// route reflection is functioning correctly.
+			deleteCalicoNode(cli, &nodes.Items[1])
+
+			// Verify connectivity is maintained.
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
+			checker.Execute()
+
 			// Now, remove one of the RRs and verify connectivity is maintained.
 			By("Removing one of the route reflectors")
 			setNodeAsNotRouteReflector(cli, &nodes.Items[1])
 
-			// Verify c nnectivity is maintained.
+			// Verify connectivity is maintained.
 			checker.ResetExpectations()
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
 			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
