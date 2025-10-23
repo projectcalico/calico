@@ -78,7 +78,7 @@ int calico_tc_main(struct __sk_buff *skb)
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS &&
 			/* If we are on vxlan and we do not have the key set, we cannot short-cirquit */
-			!(CALI_F_VXLAN &&
+			!(CALI_F_TUNNEL &&
 			 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
 		if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
