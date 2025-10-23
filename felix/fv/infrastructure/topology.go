@@ -31,7 +31,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -177,37 +176,6 @@ func DeleteIPPoolByName(ctx context.Context, client client.Interface, name strin
 
 func DeleteDefaultIPPool(ctx context.Context, client client.Interface) (*api.IPPool, error) {
 	return DeleteIPPoolByName(ctx, client, DefaultIPPoolName)
-}
-
-// StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
-// the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology(options TopologyOptions) (tc TopologyContainers, etcd *containers.Container, calicoClient client.Interface, infra DatastoreInfra) {
-	tc, etcd, calicoClient, infra = StartNNodeEtcdTopology(1, options)
-	return
-}
-
-// StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
-// up IPIP, otherwise this is skipped.
-//
-//   - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
-//     but (for simplicity) we don't actually use IPAM to assign IPs.
-//   - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
-//     index in the returned array.  When creating workloads, use IPs from the relevant block.
-//   - Configures the Tunnel IP for each host as 10.65.x.1.
-func StartNNodeEtcdTopology(
-	n int,
-	opts TopologyOptions,
-) (tc TopologyContainers, etcd *containers.Container, client client.Interface, infra DatastoreInfra) {
-	log.Infof("Starting a %d-node etcd topology.", n)
-
-	eds, err := GetEtcdDatastoreInfra()
-	Expect(err).ToNot(HaveOccurred())
-	etcd = eds.etcdContainer
-	infra = eds
-
-	tc, client = StartNNodeTopology(n, opts, eds)
-
-	return
 }
 
 // StartSingleNodeTopology starts an etcd container and a single Felix container; it initialises

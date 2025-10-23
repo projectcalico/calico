@@ -59,15 +59,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-
-		tc.Stop()
-		infra.Stop()
-	})
-
 	It("should clean up programs when BPFDataIfacePattern changes", func() {
 		By("Starting Felix")
 		felix.TriggerDelayedStart()

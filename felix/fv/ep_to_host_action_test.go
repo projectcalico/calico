@@ -68,30 +68,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		cc = &connectivity.Checker{}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	entry := func(chainPolicy string, epToHostPol string, hep string, hepPolicy api.Action, expectedConn connectivity.Expected) table.TableEntry {
 		return table.Entry(
 			fmt.Sprintf("INPUT=%s, ep-to-host=%s, HEP=%s, HEP-pol=%s, expected connectivity=%v",

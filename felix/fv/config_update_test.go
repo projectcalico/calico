@@ -24,10 +24,9 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
-	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -38,14 +37,12 @@ const (
 	kubeProxyModeIptables = "iptables"
 )
 
-var _ = Context("Config update tests, after starting felix", func() {
+var _ = infrastructure.DatastoreDescribe("Config update tests, after starting felix", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd          *containers.Container
 		tc            infrastructure.TopologyContainers
 		felixPID      int
 		client        client.Interface
 		infra         infrastructure.DatastoreInfra
-		w             [3]*workload.Workload
 		cfgChangeTime time.Time
 	)
 
@@ -53,26 +50,10 @@ var _ = Context("Config update tests, after starting felix", func() {
 		if NFTMode() {
 			Skip("TODO: Implement for NFT")
 		}
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
+		_ = infra
 		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
-			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	shouldStayUp := func() {
