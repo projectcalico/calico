@@ -47,6 +47,7 @@ type KubeProxy struct {
 	backendMap    maps.MapWithExistsCheck
 	MaglevMap     maps.MapWithExistsCheck
 	maglevLUTSize int
+	maglevMaxSvcs int
 	affinityMap   maps.Map
 	ctMap         maps.Map
 	rt            *RTCache
@@ -62,16 +63,18 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	bpfMaps *bpfmap.IPMaps, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
-		k8s:         k8s,
-		ipFamily:    4,
-		hostname:    hostname,
-		frontendMap: bpfMaps.FrontendMap.(maps.MapWithExistsCheck),
-		backendMap:  bpfMaps.BackendMap.(maps.MapWithExistsCheck),
-		MaglevMap:   bpfMaps.MaglevMap.(maps.MapWithExistsCheck),
-		affinityMap: bpfMaps.AffinityMap,
-		ctMap:       bpfMaps.CtMap,
-		opts:        opts,
-		rt:          NewRTCache(),
+		k8s:           k8s,
+		ipFamily:      4,
+		hostname:      hostname,
+		frontendMap:   bpfMaps.FrontendMap.(maps.MapWithExistsCheck),
+		backendMap:    bpfMaps.BackendMap.(maps.MapWithExistsCheck),
+		MaglevMap:     bpfMaps.MaglevMap.(maps.MapWithExistsCheck),
+		maglevMaxSvcs: 100,
+		maglevLUTSize: 1009,
+		affinityMap:   bpfMaps.AffinityMap,
+		ctMap:         bpfMaps.CtMap,
+		opts:          opts,
+		rt:            NewRTCache(),
 
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
@@ -135,7 +138,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	}
 
 	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap,
-		kp.rt, kp.excludedCIDRs, kp.maglevLUTSize)
+		kp.rt, kp.excludedCIDRs, kp.maglevLUTSize, kp.maglevMaxSvcs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -157,7 +160,7 @@ func (kp *KubeProxy) start() error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.maglevLUTSize)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.maglevLUTSize, kp.maglevMaxSvcs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

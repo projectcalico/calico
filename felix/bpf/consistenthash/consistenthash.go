@@ -48,24 +48,25 @@ func New(lutSize int, hash1, hash2 hash.Hash) *ConsistentHash {
 
 // AddBackend generates and stores a permutation for the given backend name,
 // to be factored into the LUT generation.
-func (ch *ConsistentHash) AddBackend(kep k8sp.Endpoint) {
+func (ch *ConsistentHash) AddBackend(kep k8sp.Endpoint) error {
 	var b backend
 
+	if (len(ch.backendNames) * 2) == ch.m {
+		return fmt.Errorf("Configured LUT size %d insufficient for # backends (%d)", ch.m, len(ch.backendNames))
+	}
+
 	if kep == nil {
-		logrus.Warn("Ignoring AddBackend for nil endpoint")
-		return
+		return fmt.Errorf("Cannot add nil backend to consistent-hash")
 	}
 
 	name := kep.String()
 	if _, exists := ch.backendsByName[name]; exists {
-		logrus.WithField("backend", name).Info("Will not regenerate permutation for pre-existing backend")
-		return
+		return fmt.Errorf("Will not regenerate permutation for pre-existing backend '%s'", name)
 	}
 
 	permutation, err := ch.permutation(name)
 	if err != nil {
-		logrus.WithError(err).WithField("backend", name).Error("Failed to generate permutation for backend")
-		return
+		return fmt.Errorf("Failed to generate permutation for backend '%s': %w", name, err)
 	}
 
 	b.endpoint = kep
@@ -73,6 +74,8 @@ func (ch *ConsistentHash) AddBackend(kep k8sp.Endpoint) {
 
 	ch.backendsByName[name] = b
 	ch.backendNames = append(ch.backendNames, name)
+
+	return nil
 }
 
 // Generate sorts the list of backends and then generates a ConsistentHash LUT.

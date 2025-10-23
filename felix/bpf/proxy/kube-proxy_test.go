@@ -88,7 +88,7 @@ var _ = Describe("BPF kube-proxy", func() {
 		}
 
 		k8s := fake.NewClientset(testSvc, testSvcEps)
-		p, _ = proxy.StartKubeProxy(k8s, "test-node", maps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", maps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSizeAndMaxSvcs(maglevLUTSize, maglevMaxSvcs))
 	})
 
 	AfterEach(func() {

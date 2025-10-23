@@ -87,7 +87,7 @@ func WithIPFamily(ipFamily int) Option {
 	}
 }
 
-func WithMaglevLUTSize(size int) Option {
+func WithMaglevLUTSizeAndMaxSvcs(size, svcs int) Option {
 	return func(P Proxy) error {
 		p, ok := P.(*KubeProxy)
 		if !ok {
@@ -95,6 +95,7 @@ func WithMaglevLUTSize(size int) Option {
 		}
 
 		p.maglevLUTSize = size
+		p.maglevMaxSvcs = svcs
 		return nil
 	}
 }

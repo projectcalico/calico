@@ -391,6 +391,7 @@ func StartDataplaneDriver(
 			BPFMapSizeIfState:                  configParams.BPFMapSizeIfState,
 			BPFMapSizeMaglev:                   configParams.BPFMapSizeMaglev(),
 			BPFMaglevLUTSize:                   configParams.BPFLUTSizeMaglev(),
+			BPFMaglevMaxServices:               configParams.BPFMaglevMaxServices,
 			BPFEnforceRPF:                      configParams.BPFEnforceRPF,
 			BPFDisableGROForIfaces:             configParams.BPFDisableGROForIfaces,
 			BPFExportBufferSizeMB:              configParams.BPFExportBufferSizeMB,

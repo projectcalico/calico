@@ -100,7 +100,7 @@ var _ = Describe("BPF service type change", func() {
 	var p *proxy.KubeProxy
 
 	BeforeEach(func() {
-		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMaps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMaps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSizeAndMaxSvcs(maglevLUTSize, maglevMaxSvcs))
 		p.OnHostIPsUpdate([]net.IP{initIP})
 	})
 

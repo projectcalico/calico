@@ -135,6 +135,7 @@ type Syncer struct {
 	prevEpsMap k8sp.EndpointsMap
 
 	maglevLUTSize int
+	maglevMaxSvcs int
 
 	// active Maps contain all active svcs endpoints at the end of an iteration
 	activeSvcsMap map[ipPortProto]uint32
@@ -222,6 +223,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 	affmap maps.Map, rt Routes,
 	excludedCIDRs *ip.CIDRTrie,
 	maglevLUTSize int,
+	maglevMaxSvcs int,
 ) (*Syncer, error) {
 
 	s := &Syncer{
@@ -234,6 +236,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 		stop:          make(chan struct{}),
 		excludedCIDRs: excludedCIDRs,
 		maglevLUTSize: maglevLUTSize,
+		maglevMaxSvcs: maglevMaxSvcs,
 	}
 
 	switch family {
@@ -637,6 +640,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	s.bpfMaglevEps.Desired().DeleteAll()
 
 	// insert or update existing services
+	numMaglevSvcs := 0
 	for sname, sinfo := range state.SvcMap {
 		svc := sinfo.(Service)
 		log.WithField("service", sname).Debug("Applying service")
@@ -659,10 +663,14 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 		var maglevEPs []k8sp.Endpoint
 		if svc.UseMaglev() {
+			numMaglevSvcs++
 			ch := s.newConsistentHash()
 			for _, ep := range eps {
 				if ep.IsReady() {
-					ch.AddBackend(ep)
+					err := ch.AddBackend(ep)
+					if err != nil {
+						log.WithError(err).Warn("Encountered error while generating maglev endpoint lookup-table")
+					}
 				}
 			}
 			maglevEPs = ch.Generate()
@@ -720,6 +728,9 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				}
 			}
 		}
+	}
+	if ((numMaglevSvcs / 10) + numMaglevSvcs) > s.maglevMaxSvcs {
+		log.Warn("Approaching the maximum configured number of Maglev services. Consider increasing FelixConfig field 'BPFMaglevMaxServices'")
 	}
 
 	// Delete any front-ends first so the backends become unreachable.
@@ -881,6 +892,9 @@ func (s *Syncer) newConsistentHash() *consistenthash.ConsistentHash {
 
 // writeMaglevBackends takes frontend info, and a pre-populated CH module (backends already programmed).
 func (s *Syncer) writeMaglevSvcBackends(skey svcKey, sinfo Service, maglevEPs []k8sp.Endpoint) {
+	if len(maglevEPs)*2 > s.maglevLUTSize {
+		log.Warn("Maglev service endpoints have exceeded ideal limits for the current size lookup-table. It's recommended that you increase FelixConfig field: 'BPFMaglevMaxEndpointsPerService'")
+	}
 	vip := sinfo.ClusterIP()
 	port := uint16(sinfo.Port())
 	proto := ProtoV1ToIntPanic(sinfo.Protocol())

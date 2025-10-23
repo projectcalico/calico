@@ -244,6 +244,7 @@ type Config struct {
 	BPFMapSizeIfState                  int
 	BPFMapSizeMaglev                   int
 	BPFMaglevLUTSize                   int
+	BPFMaglevMaxServices               int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
@@ -2849,7 +2850,7 @@ func startBPFDataplaneComponents(
 
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
-		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
+		bpfproxy.WithMaglevLUTSizeAndMaxSvcs(config.BPFMaglevLUTSize, config.BPFMaglevMaxServices),
 	}
 
 	if config.bpfProxyHealthzServer != nil {

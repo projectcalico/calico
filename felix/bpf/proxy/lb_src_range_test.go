@@ -48,7 +48,7 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 	externalIP := makeIPs([]net.IP{net.IPv4(35, 0, 0, 2)})
 	twoExternalIPs := makeIPs([]net.IP{net.IPv4(35, 0, 0, 2), net.IPv4(45, 0, 1, 2)})
 
-	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, mglv, aff, rt, nil, maglevLUTSize)
+	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, mglv, aff, rt, nil, maglevLUTSize, maglevMaxSvcs)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -211,7 +211,7 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&ipnet}),
 			)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mglv, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mglv, aff, rt, nil, maglevLUTSize, maglevMaxSvcs)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(3))
@@ -224,7 +224,7 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 				v1.ProtocolTCP,
 				externalIP,
 			)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mglv, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mglv, aff, rt, nil, maglevLUTSize, maglevMaxSvcs)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(2))
@@ -255,7 +255,7 @@ func test0000SourceRange() {
 
 	externalIP := net.IPv4(35, 0, 0, 2)
 
-	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, mglv, aff, rt, nil, maglevLUTSize)
+	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, mglv, aff, rt, nil, maglevLUTSize, maglevMaxSvcs)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
