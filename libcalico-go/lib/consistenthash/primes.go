@@ -665,7 +665,11 @@ var pr = []uint16{
 	65519, 65521,
 }
 
-// NextPrimeUint16 finds the next prime number after i.
+// NextPrimeUint16 finds the next prime number after i, up to the max uint16 prime.
+// An int input resulting in a result exceeding uint16's size will cause a panic.
+// This is a very limited func designed only to pick
+// an arbitrary prime number for Maglev-style loadbalancing.
+// It should not be used for cryptography or anything else remotely security-related.
 func NextPrimeUint16(i int) uint16 {
 	if i > 65521 {
 		logrus.WithField("i", i).Panic("Integer has no next prime uint16")
