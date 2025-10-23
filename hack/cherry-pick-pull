@@ -1,0 +1,391 @@
+#!/usr/bin/env bash
+
+# Copyright 2015 The Kubernetes Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Checkout a PR from GitHub. (Yes, this is sitting in a Git tree. How
+# meta.) Assumes you care about pulls from remote "upstream" and
+# checks them out to a branch named:
+#  automated-cherry-pick-of-<pr>-<target branch>-<timestamp>
+#
+# For example:
+#  cherry_pick_pull.sh release-v3.12 3320
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+function init-vars() {
+  THIS_SCRIPT=$(basename "$0")
+  REPO_ROOT="$(git rev-parse --show-toplevel)"
+  declare -rg REPO_ROOT
+  cd "${REPO_ROOT}"
+  
+  STARTINGBRANCH=$(git symbolic-ref --short HEAD)
+  declare -rg STARTINGBRANCH
+  declare -rg REBASEMAGIC="${REPO_ROOT}/.git/rebase-apply"
+  DRY_RUN=${DRY_RUN:-""}
+  REGENERATE_DOCS=${REGENERATE_DOCS:-""}
+  SRC_UPSTREAM_REMOTE=${SRC_UPSTREAM_REMOTE:-upstream}
+  DST_UPSTREAM_REMOTE=${DST_UPSTREAM_REMOTE:-upstream}
+  FORK_REMOTE=${FORK_REMOTE:-origin}
+  SRC_MAIN_REPO_ORG=${SRC_MAIN_REPO_ORG:-$(git remote get-url "$SRC_UPSTREAM_REMOTE" | awk '{gsub(/http[s]:\/\/|git@|ssh:\/\//,"")}1' | awk -F'[@:./]' 'NR==1{print $3}')}
+  SRC_MAIN_REPO_NAME=${SRC_MAIN_REPO_NAME:-$(git remote get-url "$SRC_UPSTREAM_REMOTE" | awk '{gsub(/http[s]:\/\/|git@|ssh:\/\//,"")}1' | awk -F'[@:./]' 'NR==1{print $4}')}
+  if [[ -z ${SRC_MAIN_REPO_ORG:-} || -z ${SRC_MAIN_REPO_NAME:-} ]]; then
+    echo "Can't parse $SRC_UPSTREAM_REMOTE URL to set SRC_MAIN_REPO_ORG or SRC_MAIN_REPO_NAME."
+    exit 1
+  fi
+  DST_MAIN_REPO_ORG=${DST_MAIN_REPO_ORG:-$(git remote get-url "$DST_UPSTREAM_REMOTE" | awk '{gsub(/http[s]:\/\/|git@|ssh:\/\//,"")}1' | awk -F'[@:./]' 'NR==1{print $3}')}
+  DST_MAIN_REPO_NAME=${DST_MAIN_REPO_NAME:-$(git remote get-url "$DST_UPSTREAM_REMOTE" | awk '{gsub(/http[s]:\/\/|git@|ssh:\/\//,"")}1' | awk -F'[@:./]' 'NR==1{print $4}')}
+  if [[ -z ${DST_MAIN_REPO_ORG:-} || -z ${DST_MAIN_REPO_NAME:-} ]]; then
+    echo "Can't parse $DST_UPSTREAM_REMOTE URL to set DST_MAIN_REPO_ORG or DST_MAIN_REPO_NAME."
+    exit 1
+  fi
+  SQUASH_COMMITS=${SQUASH_COMMITS:-""}
+
+  if [[ -z ${GITHUB_USER:-} ]]; then
+    echo "Please export GITHUB_USER=<your-user> (or GH organization, if that's where your fork lives)"
+    exit 1
+  fi
+  
+  if ! which gh > /dev/null; then
+    echo "Can't find 'gh' tool in PATH, please install: https://cli.github.com/"
+    exit 1
+  fi
+  
+  if [[ "$#" -lt 2 ]]; then
+    echo "${0} <remote branch> <pr-number>...: cherry pick one or more PRs onto <remote branch> and propose pull request"
+    echo
+    echo "  Checks out <remote branch> and handles the cherry-pick of <pr> (possibly multiple) for you."
+    echo "  Examples:"
+    echo "    ${THIS_SCRIPT} upstream/release-3.14 12345        # Cherry-picks PR 12345 onto upstream/release-3.14 and proposes that as a PR."
+    echo "    ${THIS_SCRIPT} upstream/release-3.14 12345 56789  # Cherry-picks PR 12345, then 56789 and proposes the combination as a single PR."
+    echo "    SRC_UPSTREAM_REMOTE=open-source DST_UPSTREAM_REMOTE=upstream ${THIS_SCRIPT} upstream/release-3.14 12345"
+    echo "    # ^- Cherry-picks PR 12345 from the 'open-source' remote to the 'upstream' remote, to the upstream/release-3.14 base branch and proposes that as a PR."
+    echo
+    echo "  Set the DRY_RUN environment var to skip git push and creating PR."
+    echo "  This is useful for creating patches to a release branch without making a PR."
+    echo "  When DRY_RUN is set the script will leave you in a branch containing the commits you cherry-picked."
+    echo
+    echo "  Set the REGENERATE_DOCS environment var to regenerate documentation for the target branch after picking the specified commits."
+    echo "  This is useful when picking commits containing changes to API documentation."
+    echo
+    echo " Set SRC_UPSTREAM_REMOTE and DST_UPSTREAM_REMOTE (default for both: upstream) and FORK_REMOTE (default: origin)"
+    echo " To override the default remote names to what you have locally."
+    echo
+    echo " Use a different SRC_UPSTREAM_REMOTE and DST_UPSTREAM_REMOTE if you would like to cherry-pick a pull request"
+    echo " across different repos. For example, to cherry-pick a pull request from the repo defined as the 'open-source'"
+    echo " remote into the repo defined as 'upstream', use SRC_UPSTREAM_REMOTE=open-source DST_UPSTREAM_REMOTE=upstream."
+    echo
+    echo " Use SQUASH_COMMITS=1 if you want to have all original PR diffs consolidated into a single patch and applied with 'git apply',"
+    echo " otherwise all original commits in 'git format-patch' style will be applied with 'git am'"    
+    exit 2
+  fi
+  
+  if git_status=$(git status --porcelain --untracked=no 2>/dev/null) && [[ -n "${git_status}" ]]; then
+    echo "!!! Dirty tree. Clean up and try again."
+    exit 1
+  fi
+  
+  if [[ -e "${REBASEMAGIC}" ]]; then
+    echo "!!! 'git rebase' or 'git am' in progress. Clean up and try again."
+    exit 1
+  fi
+
+  declare -rg BRANCH="$1"
+  shift 1
+  declare -rg PULLS=( "$@" )
+
+  function join { local IFS="$1"; shift; echo "$*"; }
+  declare -rg PULLDASH=$(join - "${PULLS[@]/#/#}") # Generates something like "#12345-#56789"
+  
+  # Pre-compute markdown links for each PR.
+  declare -ag PULLLINK
+  for pull in "${PULLS[@]}"; do
+    PULLLINK+=(  "${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}#${pull}" )
+  done
+  
+  echo "+++ Updating remotes..."
+  git remote update "${SRC_UPSTREAM_REMOTE}" "${DST_UPSTREAM_REMOTE}" "${FORK_REMOTE}"
+  
+  if ! git log -n1 --format=%H "${BRANCH}" >/dev/null 2>&1; then
+    echo "!!! '${BRANCH}' not found. The second argument should be something like ${DST_UPSTREAM_REMOTE}/release-0.21."
+    echo "    (In particular, it needs to be a valid, existing remote branch that I can 'git checkout'.)"
+    exit 1
+  fi
+
+  declare -rg NEWBRANCHREQ="auto-pick-of-${PULLDASH}" # "Required" portion for tools.
+  declare -rg NEWBRANCH="$(echo "${NEWBRANCHREQ}-${BRANCH}" | sed 's/\//-/g')"
+  declare -rg NEWBRANCHUNIQ="${NEWBRANCH}-$(date +%s)" # Unique branch name to avoid collisions.
+}
+
+cleanbranch=""
+pr_body_file=""
+gitamcleanup=false
+function return_to_kansas {
+  if [[ "${gitamcleanup}" == "true" ]]; then
+    echo
+    echo "+++ Aborting in-progress git am."
+    git am --abort >/dev/null 2>&1 || true
+  fi
+
+  # return to the starting branch and delete the PR text file
+  if [[ -z "${DRY_RUN:-}" ]]; then
+    if [[ -n "${STARTINGBRANCH:-}" ]]; then
+      echo
+      echo "+++ Returning you to the ${STARTINGBRANCH} branch and cleaning up."
+      git checkout -f "${STARTINGBRANCH}" >/dev/null 2>&1 || true
+      if [[ -n "${cleanbranch}" ]]; then
+        git branch -D "${cleanbranch}" >/dev/null 2>&1 || true
+      fi
+      if [[ -n "${pr_body_file}" ]]; then
+        rm "${pr_body_file}"
+      fi
+    fi
+  fi
+}
+trap return_to_kansas EXIT
+
+function make-a-pr() {
+  echo
+  echo "+++ Creating a pull request on GitHub at ${GITHUB_USER}:${NEWBRANCH}"
+  
+  local rel="$(basename "${BRANCH}")"
+  
+  # Shorten release-calient-v3.xx to v3.xx.
+  local relshort="${rel#release-}"
+  relshort="${relshort#calient-}"
+
+  # Build up the PR text.
+  local new_labels=""
+  local new_body=""
+  local new_header=$'## Cherry-pick history\n'
+  local new_title=""
+  local idx=0
+
+  if [[ "${#PULLS[@]}" -gt 1 ]]; then
+    new_header+="- Pick onto **$rel**:"$'\n'
+  fi
+  for pullnumber in "${PULLS[@]}"; do
+    local pull_json=$(gh pr view -R "${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}" "${pullnumber}" --json title,body,labels)
+    local pull_title=$(echo "${pull_json}" | jq -r '.title')
+    local pull_body=$(echo "${pull_json}" | jq -r '.body')
+    local pull_labels=$(echo "${pull_json}" | jq -r '.labels[].name' | paste -sd$'\n')
+    new_labels+="${pull_labels}"$'\n'
+    local stripped_title=$(echo "${pull_title}" | sed 's/^\[.*\] //') # Remove any previous branch tag prefix [...]
+
+    if [ "$SRC_MAIN_REPO_ORG" != "$DST_MAIN_REPO_ORG" ] || [ "$SRC_MAIN_REPO_NAME" != "$DST_MAIN_REPO_NAME" ]; then
+      # Prefix bare PR/issue numbers with source repo to ensure correct GitHub links
+      # when picking between repos. Only match PR tags that are not already prefixed with org/repo.
+      pull_body=$(echo "$pull_body" | sed "s/\([^a-zA-Z0-9_.-]\|^\)#\([0-9]\+\)/\1${SRC_MAIN_REPO_ORG}\/${SRC_MAIN_REPO_NAME}#\2/g")
+    fi
+
+    # Remove sections that are not relevant to cherry-picked PRs.
+    for section in "Todos" "Reminder for the reviewer"; do
+       pull_body=$(echo "$pull_body" | awk '
+        /^## '"$section"'/ { skip=1; next }
+        /^#/ && skip { skip=0 }
+        !skip
+      ')
+    done
+
+    if [[ "${#PULLS[@]}" -gt 1 ]]; then
+      new_header+="  - ${PULLLINK[idx]}"$'\n'
+    else
+      new_header+="- Pick onto **$rel**: ${PULLLINK[idx]}"$'\n'
+    fi
+
+    if [[ -n "${new_title}" ]]; then
+      new_title+="; "
+    fi
+    new_title+="${stripped_title}"
+    if [[ "${#PULLS[@]}" -gt 1 ]]; then
+      # Picking multiple PRs, so use a separator and link to each PR.
+      new_body+=$'\n---\n'
+      new_body+="# $pull_title (${PULLLINK[idx]})"$'\n'
+    else
+      # If there's only one PR, strip off any previous cherry-pick title.
+      # This gives a nice result when cherry-picking a previous pick.
+      pull_body=$(echo "${pull_body}" | head -n 1 | grep -v "## Cherry-pick history"; 
+                  echo "${pull_body}" | tail -n +2 )
+    fi
+    new_body+="${pull_body}"
+    idx=$((idx + 1))
+  done
+
+  new_labels=$(echo -e "${new_labels}" | sort -u | grep '.' | grep -v 'cherry-pick-candidate' | paste -sd,)
+  if [[ -n "${EXTRA_LABELS:-}" ]]; then
+    if [[ -n "${new_labels}" ]]; then
+      new_labels+=",${EXTRA_LABELS}"
+    else
+      new_labels="${EXTRA_LABELS}"
+    fi
+  fi
+
+  pr_body_file="$(mktemp -t prtext.XXXX)" # cleaned in return_to_kansas
+  
+  cat >"${pr_body_file}" <<EOF
+[${relshort}] ${new_title}
+
+${META_BLOCK:-}${new_header}${new_body}
+EOF
+
+  if [[ -n "${DRY_RUN}" ]]; then
+    echo "!!! Skipping PR creation. PR text would have been:"
+    echo
+    cat "${pr_body_file}"
+  else 
+    if gh repo set-default --view 2>&1 | grep -q "No default remote"; then
+      echo "+++ Default repo must be set. Running: gh repo set-default"
+      gh repo set-default
+    fi
+    echo "+++ Creating PR. Running: gh pr create -t \"[${relshort}] ${new_title}\" -F \"${pr_body_file}\" -H \"${GITHUB_USER}:${NEWBRANCH}\" -B \"${DST_MAIN_REPO_ORG}:${rel}\" -l \"${new_labels}\""
+    gh pr create \
+      -t "[${relshort}] ${new_title}" \
+      -F "${pr_body_file}" \
+      -H "${GITHUB_USER}:${NEWBRANCH}" \
+      -B "${rel}" \
+      -l "${new_labels}"
+  fi
+}
+
+function create-branch-and-pr() {
+  echo "+++ Creating local branch ${NEWBRANCHUNIQ}"
+  git checkout -b "${NEWBRANCHUNIQ}" "${BRANCH}"
+  cleanbranch="${NEWBRANCHUNIQ}"
+  
+  gitamcleanup=true
+  for pull in "${PULLS[@]}"; do
+    echo "+++ Downloading patch to /tmp/${pull}.patch (in case you need to do this again)"
+    if [[ -n "${SQUASH_COMMITS}" ]]; then
+      gh pr diff --repo ${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME} ${pull} > /tmp/${pull}.patch
+    else
+      gh api -H "Accept: application/vnd.github.v3.patch" /repos/${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}/pulls/${pull} > /tmp/${pull}.patch
+    fi
+
+    apply_cmd="git am --empty=keep -3 \"/tmp/${pull}.patch\""
+    add_cmd="git add / git am --continue"
+    if [[ -n "${SQUASH_COMMITS}" ]]; then
+      apply_cmd="git apply -p1 -3 \"/tmp/${pull}.patch\""
+      add_cmd="git add"
+    fi
+
+    echo
+    echo "+++ About to attempt cherry pick of PR. To reattempt:"
+    echo "  $ ${apply_cmd}"
+    echo
+
+    if (eval "${apply_cmd}"); then
+      # If patch is applied cleanly, add files, they will be committed later
+      git add .
+    else
+      # If there are conflicts, prompt user to resolve them in another window and continue
+      conflicts=false
+      while unmerged=$(git status --porcelain | grep ^U) && [[ -n ${unmerged} ]] \
+        || [[ -e "${REBASEMAGIC}" ]]; do
+        conflicts=true # <-- We should have detected conflicts once
+        echo
+        echo "+++ Conflicts detected:"
+        echo
+        (git status --porcelain | grep ^U) || echo "!!! None. Did you '${add_cmd}'?"
+        echo
+        echo "+++ Please resolve the conflicts in another window (and remember to '${add_cmd}')"
+        read -p "+++ Proceed (anything but 'y' aborts the cherry-pick)? [y/n] " -r
+        echo
+        if ! [[ "${REPLY}" =~ ^[yY]$ ]]; then
+          echo "Aborting." >&2
+          exit 1
+        fi
+      done
+  
+      if [[ "${conflicts}" != "true" ]]; then
+        echo "!!! git am / git apply failed, likely because of an in-progress 'git am' or 'git rebase'"
+        exit 1
+      fi
+    fi
+  
+    # When squashing, commit patch changes with the same message as the merge commit from the original PR
+    if [[ -n "${SQUASH_COMMITS}" ]]; then
+      merge_commit_hash=$(gh pr view --repo "${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}" ${pull}  --json mergeCommit -q .mergeCommit.oid)
+      git commit -C ${merge_commit_hash}
+    fi
+
+    # remove the patch file from /tmp
+    rm -f "/tmp/${pull}.patch"
+  done
+  gitamcleanup=false
+  
+  # Re-generate docs (if needed)
+  if [[ -n "${REGENERATE_DOCS}" ]]; then
+    echo
+    echo "Regenerating docs..."
+    if ! hack/generate-docs.sh; then
+      echo
+      echo "hack/generate-docs.sh FAILED to complete."
+      exit 1
+    fi
+  fi
+  
+  if [[ -n "${DRY_RUN}" ]]; then
+    # Output the PR text to the console.
+    make-a-pr
+  
+    echo "!!! Skipping git push and PR creation because you set DRY_RUN."
+    echo "To return to the branch you were in when you invoked this script:"
+    echo
+    echo "  git checkout ${STARTINGBRANCH}"
+    echo
+    echo "To delete this branch:"
+    echo
+    echo "  git branch -D ${NEWBRANCHUNIQ}"
+    exit 0
+  fi
+  
+  if git remote -v | grep ^"${FORK_REMOTE}" | grep \<"${DST_MAIN_REPO_ORG}"/"${DST_MAIN_REPO_NAME}".git; then
+    echo "!!! You have ${FORK_REMOTE} configured as your ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}.git"
+    echo "This isn't normal. Leaving you with push instructions:"
+    echo
+    echo "+++ First manually push the branch this script created:"
+    echo
+    echo "  git push REMOTE ${NEWBRANCHUNIQ}:${NEWBRANCH}"
+    echo
+    echo "where REMOTE is your personal fork (maybe ${DST_UPSTREAM_REMOTE}? Consider swapping those.)."
+    echo "OR consider setting SRC_UPSTREAM_REMOTE, DST_UPSTREAM_REMOTE, and FORK_REMOTE to different values."
+    echo
+    make-a-pr
+    cleanbranch=""
+    exit 0
+  fi
+  
+  echo
+  echo "+++ I'm about to do the following to push to GitHub (and I'm assuming ${FORK_REMOTE} is your personal fork):"
+  echo
+  echo "  git push ${FORK_REMOTE} ${NEWBRANCHUNIQ}:${NEWBRANCH}"
+  echo
+  read -p "+++ Proceed (anything but 'y' aborts the cherry-pick)? [y/n] " -r
+  if ! [[ "${REPLY}" =~ ^[yY]$ ]]; then
+    echo "Aborting." >&2
+    exit 1
+  fi
+  
+  git push "${FORK_REMOTE}" -f "${NEWBRANCHUNIQ}:${NEWBRANCH}"
+  make-a-pr
+}
+
+# Check if the script is being executed directly (not sourced).
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # This script is being executed directly, should call its functions.
+    init-vars "$@"
+    create-branch-and-pr
+fi
