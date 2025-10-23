@@ -33,6 +33,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Calico Networking for CNI includes a CNI networking plugin and CNI IPAM plugin"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Networking for CNI"
+LABEL release=1
+LABEL summary="Calico Networking for CNI includes a CNI networking plugin and CNI IPAM plugin"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 ENV PATH=/opt/cni/bin:$PATH
 
 COPY --from=source / /
