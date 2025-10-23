@@ -149,12 +149,6 @@ var (
 		Sources: cli.EnvVars("BUILD_CONTAINER_IMAGES"), // avoid BUILD_IMAGES as it is already used by the build system (lib.Makefile).
 		Value:   true,
 	}
-	buildHashreleaseImageFlag = &cli.BoolFlag{
-		Name:    buildImagesFlag.Name,
-		Usage:   buildImagesFlag.Usage,
-		Sources: buildImagesFlag.Sources,
-		Value:   false,
-	}
 
 	publishImagesFlag = &cli.BoolFlag{
 		Name:    "publish-images",
@@ -162,18 +156,18 @@ var (
 		Sources: cli.EnvVars("PUBLISH_IMAGES"),
 		Value:   true,
 	}
-	publishHashreleaseImageFlag = &cli.BoolFlag{
-		Name:    publishImagesFlag.Name,
-		Usage:   publishImagesFlag.Usage,
-		Sources: publishImagesFlag.Sources,
-		Value:   false,
-	}
 
 	archiveImagesFlag = &cli.BoolFlag{
 		Name:    "archive-images",
 		Usage:   "Archive images in the release tarball",
 		Sources: cli.EnvVars("ARCHIVE_IMAGES"),
 		Value:   true,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if b && !c.Bool(buildImagesFlag.Name) {
+				return fmt.Errorf("cannot archive images without building them; set --%s to true", buildImagesFlag.Name)
+			}
+			return nil
+		},
 	}
 )
 
@@ -347,14 +341,15 @@ var (
 		Sources: cli.EnvVars("IMAGE_SCANNER_SELECT"),
 		Value:   "all",
 	}
-	skipImageScanFlag = &cli.BoolFlag{
-		Name:    "skip-image-scan",
+	skipImageScanFlagName = "skip-image-scan"
+	skipImageScanFlag     = &cli.BoolFlag{
+		Name:    skipImageScanFlagName,
 		Usage:   "Skip sending the image to the image scan service",
 		Sources: cli.EnvVars("SKIP_IMAGE_SCAN"),
 		Value:   false,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if !b && (c.String(imageScannerAPIFlag.Name) == "" || c.String(imageScannerTokenFlag.Name) == "") {
-				return fmt.Errorf("image scanner configuration is required, ensure %s and %s flags are set", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name)
+			if !b && !imageScanningAPIConfig(c).Valid() {
+				return fmt.Errorf("invalid configuration for image scanning. Either set --%s and --%s or set --%s to 'true'", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name, skipImageScanFlagName)
 			}
 			return nil
 		},
