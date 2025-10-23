@@ -3280,6 +3280,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"bpfKubeProxyHealthzPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"bpfKubeProxyEndpointSlicesEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF kube-proxy always accepts endpoint slices. This option will be removed in the next release.",
@@ -6488,7 +6495,7 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 					},
 					"interfaceCIDRs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint. If specified, only addresses within these CIDRs will be included in the expected IPs. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
+							Description: "InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint. If specified, only addresses within these CIDRs will be included in the expected IPs. At least one of InterfaceCIDRs and InterfacePattern must be specified.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6501,9 +6508,9 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 							},
 						},
 					},
-					"interfaceSelector": {
+					"interfacePattern": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceSelector contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
+							Description: "InterfacePattern contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node. At least one of InterfaceCIDRs and InterfacePattern must be specified.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

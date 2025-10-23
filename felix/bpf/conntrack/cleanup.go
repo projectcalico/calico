@@ -248,7 +248,7 @@ again:
 
 		if sns.natChecker.ConntrackDestIsService(ip, port, proto) {
 			log.WithField("key", k).Debugf("TypeNormal to UDP service IP is stale")
-			return ScanVerdictDelete, lastSeen
+			return ScanVerdictDeleteImmediate, lastSeen
 		}
 
 	case TypeNATReverse:

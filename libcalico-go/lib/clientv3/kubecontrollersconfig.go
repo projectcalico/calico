@@ -98,12 +98,12 @@ func (r kubeControllersConfiguration) validateAndFillDefaults(res *apiv3.KubeCon
 				}
 				templateName[template.GenerateName] = true
 
-				// At least InterfaceCIDRs or InterfaceSelector has to be set
-				if len(template.InterfaceCIDRs) == 0 && template.InterfaceSelector == "" {
+				// At least InterfaceCIDRs or InterfacePattern has to be set
+				if len(template.InterfaceCIDRs) == 0 && template.InterfacePattern == "" {
 					return cerrors.ErrorValidation{
 						ErroredFields: []cerrors.ErroredField{{
 							Name:   "KubeControllersConfiguration.Node.HostEndpoint.Templates." + template.GenerateName,
-							Reason: "InterfaceCIDRs or InterfaceSelector must be specified",
+							Reason: "InterfaceCIDRs or InterfacePattern must be specified",
 						}},
 					}
 				}

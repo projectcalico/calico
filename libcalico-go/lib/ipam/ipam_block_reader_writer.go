@@ -602,13 +602,18 @@ func randomBlockGenerator(ipPool v3.IPPool, hostName string) func() *cnet.IPNet 
 }
 
 // Find the block for a given IP (without needing a pool)
-func (rw blockReaderWriter) getBlockForIP(ctx context.Context, ip cnet.IP) (*cnet.IPNet, error) {
-	// Lookup all blocks by providing an empty BlockListOptions to the List operation.
-	opts := model.BlockListOptions{IPVersion: ip.Version()}
-	datastoreObjs, err := rw.client.List(ctx, opts, "")
-	if err != nil {
-		log.Errorf("Error getting affine blocks: %v", err)
-		return nil, err
+func (rw blockReaderWriter) getBlockForIP(ctx context.Context, ip cnet.IP, cachedKVList *model.KVPairList) (*cnet.IPNet, *model.KVPairList, error) {
+	datastoreObjs := cachedKVList
+
+	if datastoreObjs == nil {
+		// Lookup all blocks by providing an empty BlockListOptions to the List operation.
+		opts := model.BlockListOptions{IPVersion: ip.Version()}
+		var err error
+		datastoreObjs, err = rw.client.List(ctx, opts, "")
+		if err != nil {
+			log.Errorf("Error getting affine blocks: %v", err)
+			return nil, nil, err
+		}
 	}
 
 	// Iterate through and extract the block CIDRs.
@@ -616,11 +621,11 @@ func (rw blockReaderWriter) getBlockForIP(ctx context.Context, ip cnet.IP) (*cne
 		k := o.Key.(model.BlockKey)
 		if k.CIDR.IPNet.Contains(ip.IP) {
 			log.Debugf("Found IP %s in block %s", ip.String(), k.String())
-			return &k.CIDR, nil
+			return &k.CIDR, datastoreObjs, nil
 		}
 	}
 
 	// No blocks found.
 	log.Debugf("IP %s could not be found in any blocks", ip.String())
-	return nil, nil
+	return nil, datastoreObjs, nil
 }

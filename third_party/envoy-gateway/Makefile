@@ -27,6 +27,7 @@ $(ENVOY_GATEWAY_DOWNLOADED):
 	mkdir -p envoy-gateway
 	curl -sfL https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz | tar xz --strip-components 1 -C envoy-gateway
 	patch -d envoy-gateway -p1 < patches/0001-Bumping-x-net-and-containerd.patch
+	patch -d envoy-gateway -p1 < patches/0001-Bump-xz-to-0.5.15-to-address-CVE-2025-58058.patch
 	touch $@
 
 .PHONY: build

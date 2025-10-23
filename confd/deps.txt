@@ -2,7 +2,7 @@
 This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
-go 1.24.6
+go 1.24.9
 github.com/BurntSushi/toml v1.5.0
 github.com/beorn7/perks v1.0.1
 github.com/cespare/xxhash/v2 v2.3.0
@@ -54,14 +54,14 @@ go.etcd.io/etcd/client/v3 v3.6.4
 go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.2
-golang.org/x/crypto v0.41.0
-golang.org/x/net v0.43.0
-golang.org/x/oauth2 v0.30.0
-golang.org/x/sync v0.16.0
-golang.org/x/sys v0.35.0
-golang.org/x/term v0.34.0
-golang.org/x/text v0.28.0
-golang.org/x/time v0.12.0
+golang.org/x/crypto v0.43.0
+golang.org/x/net v0.46.0
+golang.org/x/oauth2 v0.32.0
+golang.org/x/sync v0.17.0
+golang.org/x/sys v0.37.0
+golang.org/x/term v0.36.0
+golang.org/x/text v0.30.0
+golang.org/x/time v0.14.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 google.golang.org/genproto v0.0.0-20250603155806-513f23925822
@@ -74,9 +74,9 @@ gopkg.in/go-playground/validator.v9 v9.30.2
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/yaml.v2 v2.4.0
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.33.3
-k8s.io/apimachinery v0.33.3
-k8s.io/client-go v0.33.3
+k8s.io/api v0.33.5
+k8s.io/apimachinery v0.33.5
+k8s.io/client-go v0.33.5
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
 k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff

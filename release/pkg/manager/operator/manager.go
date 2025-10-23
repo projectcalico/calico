@@ -75,10 +75,10 @@ type OperatorManager struct {
 	// outputDir is the absolute path to the output directory
 	outputDir string
 
-	// productRegistry is the registry to use for product images
+	// registry is the registry to use for operator (e.g. quay.io)
 	registry string
 
-	// productRegistry is the registry to use for product images
+	// productRegistry is the registry to use for product images (e.g. quay.io/calico)
 	productRegistry string
 
 	// origin remote repository
@@ -152,8 +152,10 @@ func (o *OperatorManager) modifyComponentsImagesFile() error {
 	}
 
 	if err := tmpl.Execute(dest, map[string]string{
-		"Registry":        o.registry,
-		"ProductRegistry": o.productRegistry,
+		"Registry": o.registry,
+		// Trim "/calico" from the product registry since operator expects the registry only.
+		// The image path "calico" is part of image name and this template adds "/" after the registry.
+		"ProductRegistry": strings.TrimSuffix(o.productRegistry, "/calico"),
 		"Year":            time.Now().Format("2006"),
 	}); err != nil {
 		logrus.WithError(err).Errorf("Failed to write to file %s", destFilePath)
@@ -167,7 +169,7 @@ func (o *OperatorManager) Build() error {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	if o.validate {
-		if err := o.PreBuildValidation(o.tmpDir); err != nil {
+		if err := o.PreBuildValidation(); err != nil {
 			return err
 		}
 	}
@@ -216,7 +218,7 @@ func (o *OperatorManager) Build() error {
 	return o.docker.TagImage(currentTag, newTag)
 }
 
-func (o *OperatorManager) PreBuildValidation(outputDir string) error {
+func (o *OperatorManager) PreBuildValidation() error {
 	if o.dir == "" {
 		logrus.Fatal("No repository root specified")
 	}
@@ -246,7 +248,7 @@ func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	if len(o.architectures) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
+	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
 	if err != nil {
 		return fmt.Errorf("failed to get operator component: %s", err)
 	}

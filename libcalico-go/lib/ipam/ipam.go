@@ -1035,11 +1035,10 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	unallocated := []net.IP{}
 
 	// Get IP pools up front so we don't need to query for each IP address.
-	v4Pools, err := c.pools.GetEnabledPools(ctx, 4)
-	if err != nil {
-		return nil, nil, err
-	}
-	v6Pools, err := c.pools.GetEnabledPools(ctx, 6)
+	// When releasing an IP, we get _all_ pools, even disabled ones.  If we
+	// didn't, then deletion from a disabled pool would still succeed, but it'd
+	// go through the "full scan" path which is inefficient.
+	allPools, err := c.pools.GetAllPools(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1047,6 +1046,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	// Group IP addresses by block to minimize the number of writes
 	// to the datastore required to release the given addresses.
 	ipsByBlock := map[string][]ReleaseOptions{}
+	var cachedBlockKVs *model.KVPairList
 	for _, opts := range ips {
 		var blockCIDR string
 
@@ -1055,27 +1055,19 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 			return nil, nil, err
 		}
 
-		// Find the IP pools for this address in the enabled pools if possible.
-		var pool *v3.IPPool
-		switch ip.Version() {
-		case 4:
-			pool, err = c.blockReaderWriter.getPoolForIP(ctx, *ip, v4Pools)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to get pool for IP")
-				return nil, nil, err
-			}
-		case 6:
-			pool, err = c.blockReaderWriter.getPoolForIP(ctx, *ip, v6Pools)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to get pool for IP")
-				return nil, nil, err
-			}
+		// Find the IP pools for this address, if possible.
+		pool, err := c.blockReaderWriter.getPoolForIP(ctx, *ip, allPools)
+		if err != nil {
+			log.WithError(err).Warnf("Failed to get pool for IP")
+			return nil, nil, err
 		}
 
 		if pool == nil {
-			if cidr, err := c.blockReaderWriter.getBlockForIP(ctx, *ip); err != nil {
+			log.Warnf("The IP %s is not in any configured pool, trying to find the block by full scan.", ip.String())
+			if cidr, newCachedKVs, err := c.blockReaderWriter.getBlockForIP(ctx, *ip, cachedBlockKVs); err != nil {
 				return nil, nil, err
 			} else {
+				cachedBlockKVs = newCachedKVs
 				if cidr == nil {
 					// The IP isn't in any block so it's already unallocated.
 					unallocated = append(unallocated, *ip)
