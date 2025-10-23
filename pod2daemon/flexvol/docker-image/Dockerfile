@@ -57,6 +57,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico FlexVolume driver installer"
+LABEL release=1
+LABEL summary="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 COPY --from=source / /
 
 ENTRYPOINT ["/usr/local/bin/flexvol.sh"]

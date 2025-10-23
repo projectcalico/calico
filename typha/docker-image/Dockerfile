@@ -35,6 +35,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Calico Typha is a fan-out datastore proxy"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Typha"
+LABEL release=1
+LABEL summary="Calico Typha is a fan-out datastore proxy"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 COPY --from=source / /
 
 USER 999
