@@ -110,6 +110,10 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 				UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
 			})
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
+				ListInterface:   model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy},
+				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
+			})
+			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
 				ListInterface:   model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy},
 				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
 			})

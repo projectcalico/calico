@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 package conversion
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -24,63 +22,28 @@ import (
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
-var _ = Describe("Test AdminNetworkPolicy conversion", func() {
-	// Use a single instance of the Converter for these tests.
-	c := NewConverter()
-
-	convertToGNP := func(
-		anp *adminpolicy.AdminNetworkPolicy,
-		order float64,
-		expectedErr *cerrors.ErrorClusterNetworkPolicyConversion,
-	) *apiv3.GlobalNetworkPolicy {
-		// Parse the policy.
-		pol, err := c.K8sAdminNetworkPolicyToCalico(anp)
-
-		if expectedErr == nil {
-			Expect(err).To(BeNil())
-		} else {
-			Expect(err).To(Equal(*expectedErr))
-		}
-
-		// Assert key fields are correct.
-		policyName := fmt.Sprintf("%v%v", names.K8sAdminNetworkPolicyNamePrefix, anp.Name)
-		Expect(pol.Key.(model.ResourceKey).Name).To(Equal(policyName))
-
-		gnp, ok := pol.Value.(*apiv3.GlobalNetworkPolicy)
-		Expect(ok).To(BeTrue())
-
-		// Make sure the type information is correct.
-		Expect(gnp.Kind).To(Equal(apiv3.KindGlobalNetworkPolicy))
-		Expect(gnp.APIVersion).To(Equal(apiv3.GroupVersionCurrent))
-
-		// Assert value fields are correct.
-		Expect(*gnp.Spec.Order).To(Equal(order))
-		Expect(gnp.Spec.Tier).To(Equal(names.AdminNetworkPolicyTierName))
-
-		return gnp
-	}
-
-	It("should parse a basic k8s AdminNetworkPolicy to a GlobalNetworkPolicy", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{{
-			PortNumber: &adminpolicy.Port{
+var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
+	It("should parse a basic k8s ClusterNetworkPolicy to a GlobalNetworkPolicy", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{{
+			PortNumber: &clusternetpol.Port{
 				Port: 80,
 			},
 		}}
-		anp := adminpolicy.AdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 100,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -88,12 +51,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "The first ingress rule",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -109,7 +72,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(100.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		// Check the selector is correct, and that the matches are sorted.
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
@@ -132,23 +95,24 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
 	})
 
-	It("should drop rules with invalid action in a k8s AdminNetworkPolicy", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{
+	It("should drop rules with invalid action in a k8s ClusterNetworkPolicy", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 			{
-				PortRange: &adminpolicy.PortRange{Start: 2000, End: 3000},
+				PortRange: &clusternetpol.PortRange{Start: 2000, End: 3000},
 			},
 		}
-		anp := adminpolicy.AdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 300,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -156,11 +120,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Log",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -173,9 +137,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					},
 					{
 						Name:   "A random ingress rule 2",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -187,12 +151,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &ports,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -206,7 +170,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					{
 						Name:   "A random egress rule 2",
 						Action: "Drop",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -226,10 +190,10 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
-					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
+					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Name:   "A random ingress rule",
 						Action: "Log",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
@@ -239,14 +203,14 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: unsupported admin network policy action Log",
+					Reason: "k8s rule couldn't be converted: unsupported cluster network policy action Log",
 				},
 				{
 					IngressRule: nil,
-					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
+					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
 						Name:   "A random egress rule 2",
 						Action: "Drop",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k30": "v30", "k40": "v40"},
@@ -256,13 +220,13 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: unsupported admin network policy action Drop",
+					Reason: "k8s rule couldn't be converted: unsupported cluster network policy action Drop",
 				},
 			},
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(300.0), &expectedErr)
+		gnp := convertToGNP(&cnp, &expectedErr)
 
 		protoTCP := numorstring.ProtocolFromString("TCP")
 
@@ -296,15 +260,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 	})
 
-	It("should parse a k8s AdminNetworkPolicy with no ports", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse a k8s ClusterNetworkPolicy with no ports", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 200,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -312,11 +277,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -328,11 +293,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -348,7 +313,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(200.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
@@ -370,32 +335,33 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 	})
 
-	It("should drop rules with invalid ports in a k8s AdminNetworkPolicy", func() {
-		goodPorts := []adminpolicy.AdminNetworkPolicyPort{
+	It("should drop rules with invalid ports in a k8s ClusterNetworkPolicy", func() {
+		goodPorts := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 			{
-				PortRange: &adminpolicy.PortRange{Start: 2000, End: 3000},
+				PortRange: &clusternetpol.PortRange{Start: 2000, End: 3000},
 			},
 		}
-		badPorts := []adminpolicy.AdminNetworkPolicyPort{
+		badPorts := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 			{
-				PortRange: &adminpolicy.PortRange{Start: 1000, End: 10},
+				PortRange: &clusternetpol.PortRange{Start: 1000, End: 10},
 			},
 		}
 
-		anp := adminpolicy.AdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 300,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -403,12 +369,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &badPorts,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -423,7 +389,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						Name:   "A random ingress rule 2",
 						Action: "Pass",
 						Ports:  &goodPorts,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -435,12 +401,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &goodPorts,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -453,9 +419,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					},
 					{
 						Name:   "A random egress rule 2",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &badPorts,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -475,11 +441,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
-					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
+					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Name:   "A random ingress rule",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &badPorts,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
@@ -493,11 +459,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				},
 				{
 					IngressRule: nil,
-					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
+					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
 						Name:   "A random egress rule 2",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &badPorts,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k30": "v30", "k40": "v40"},
@@ -513,7 +479,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(300.0), &expectedErr)
+		gnp := convertToGNP(&cnp, &expectedErr)
 
 		protoTCP := numorstring.ProtocolFromString("TCP")
 
@@ -553,15 +519,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 	})
 
-	It("should parse an AdminNetworkPolicy with no rules", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with no rules", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 500,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -573,7 +540,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(500.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		// Assert value fields are correct.
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
@@ -583,15 +550,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
 	})
 
-	It("should parse an AdminNetworkPolicy with Namespaces subject and multiple peers", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with Namespaces subject and multiple peers", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -599,11 +567,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -612,7 +580,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									PodSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"k2": "v2",
@@ -623,11 +591,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -636,7 +604,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									NamespaceSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"k4": "v4",
@@ -655,7 +623,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
@@ -676,16 +644,17 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[1]).To(Equal(apiv3.PolicyTypeEgress))
 	})
 
-	It("should parse an AdminNetworkPolicy with Pods subject and multiple peers", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with Pods subject and multiple peers", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label2": "value2",
@@ -693,11 +662,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -706,7 +675,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									PodSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"k2": "v2",
@@ -717,11 +686,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -730,7 +699,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									NamespaceSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"k4": "v4",
@@ -749,7 +718,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label2 == 'value2'"))
@@ -770,21 +739,22 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[1]).To(Equal(apiv3.PolicyTypeEgress))
 	})
 
-	It("should parse a k8s AdminNetworkPolicy with a DoesNotExist expression ", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{
+	It("should parse a k8s ClusterNetworkPolicy with a DoesNotExist expression ", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 		}
-		anp := adminpolicy.AdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label":  "value",
@@ -793,14 +763,14 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									PodSelector: metav1.LabelSelector{
 										MatchExpressions: []metav1.LabelSelectorRequirement{
 											{Key: "toast", Operator: metav1.LabelSelectorOpDoesNotExist},
@@ -814,7 +784,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		// Check the selector is correct, and that the matches are sorted.
 		Expect(gnp.Spec.Selector).To(Equal(
@@ -843,23 +813,24 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 
-	It("should parse an AdminNetworkPolicy with multiple peers and ports", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{
+	It("should parse an ClusterNetworkPolicy with multiple peers and ports", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 			{
-				PortRange: &adminpolicy.PortRange{Start: 20, End: 30, Protocol: kapiv1.ProtocolUDP},
+				PortRange: &clusternetpol.PortRange{Start: 20, End: 30, Protocol: kapiv1.ProtocolUDP},
 			},
 		}
-		anp := adminpolicy.AdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -867,12 +838,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -881,7 +852,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									PodSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"k2": "v2",
@@ -892,12 +863,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &ports,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -906,7 +877,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									NamespaceSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"k4": "v4",
@@ -925,7 +896,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
 
@@ -965,22 +936,23 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[1]).To(Equal(apiv3.PolicyTypeEgress))
 	})
 
-	It("should parse an AdminNetworkPolicy with empty namespaces in Subject", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with empty namespaces in Subject", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 500,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{},
 				},
 			},
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(500.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
@@ -988,16 +960,17 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
 	})
 
-	It("should parse an AdminNetworkPolicy with empty podSelector in Subject", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with empty podSelector in Subject", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{},
 					},
 				},
@@ -1005,7 +978,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
@@ -1013,16 +986,17 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
 	})
 
-	It("should parse an AdminNetworkPolicy with a rule with namespaceSelector", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with a rule with namespaceSelector", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label": "value",
@@ -1030,11 +1004,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Allow",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						Action: "Accept",
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1049,7 +1023,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
@@ -1066,16 +1040,17 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 
-	It("should parse an AdminNetworkPolicy with a rule with podSelector", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with a rule with podSelector", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label": "value",
@@ -1083,13 +1058,13 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
-						Action: "Allow",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						Action: "Accept",
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									PodSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"namespaceRole": "dev",
@@ -1104,7 +1079,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
@@ -1121,16 +1096,17 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeEgress))
 	})
 
-	It("should faild parsing an AdminNetworkPolicy with a rule with neither namespaces or pods set", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should faild parsing an ClusterNetworkPolicy with a rule with neither namespaces or pods set", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label": "value",
@@ -1138,11 +1114,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Allow",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						Action: "Accept",
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: nil,
 								Pods:       nil,
@@ -1150,11 +1126,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Pass",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: nil,
 								Pods:       nil,
@@ -1170,10 +1146,10 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
-					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
+					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Name:   "A random ingress rule",
-						Action: "Allow",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						Action: "Accept",
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: nil,
 								Pods:       nil,
@@ -1184,10 +1160,10 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				},
 				{
 					IngressRule: nil,
-					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
+					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
 						Name:   "A random egress rule",
 						Action: "Pass",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: nil,
 								Pods:       nil,
@@ -1199,7 +1175,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), &expectedErr)
+		gnp := convertToGNP(&cnp, &expectedErr)
 
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
@@ -1212,16 +1188,17 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Ingress).To(HaveLen(0))
 	})
 
-	It("should parse an AdminNetworkPolicy with a rule with empty namespaceSelector", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with a rule with empty namespaceSelector", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label": "value",
@@ -1229,11 +1206,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Allow",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						Action: "Accept",
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{},
@@ -1245,7 +1222,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
@@ -1262,16 +1239,17 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 
-	It("should parse an AdminNetworkPolicy with a rule with empty podSelector", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with a rule with empty podSelector", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label": "value",
@@ -1279,13 +1257,13 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Pass",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									NamespaceSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{},
 									},
@@ -1300,7 +1278,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
@@ -1317,16 +1295,17 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeEgress))
 	})
 
-	It("should parse an AdminNetworkPolicy with a rule with a rule with both Namespaces and Pods", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with a rule with a rule with both Namespaces and Pods", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 1000,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label": "value",
@@ -1334,13 +1313,13 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Deny",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
-								Pods: &adminpolicy.NamespacedPod{
+								Pods: &clusternetpol.NamespacedPod{
 									NamespaceSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"namespaceRole": "dev",
@@ -1361,7 +1340,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(1000.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
@@ -1378,15 +1357,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 
-	It("should parse an AdminNetworkPolicy with a Subject with MatchExpressions", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse an ClusterNetworkPolicy with a Subject with MatchExpressions", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 500,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{
@@ -1401,7 +1381,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(500.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		// Assert value fields are correct.
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("k in { 'v1', 'v2' }"))
@@ -1412,25 +1392,26 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
 	})
 
-	It("should replace an unsupported AdminNeworkPolicy rule with Deny action with a deny-all one", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{
+	It("should replace an unsupported ClusterNetworkPolicy rule with Deny action with a deny-all one", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 		}
-		badPorts := []adminpolicy.AdminNetworkPolicyPort{
+		badPorts := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortRange: &adminpolicy.PortRange{Start: 40, End: 20, Protocol: kapiv1.ProtocolUDP},
+				PortRange: &clusternetpol.PortRange{Start: 40, End: 20, Protocol: kapiv1.ProtocolUDP},
 			},
 		}
-		anp := adminpolicy.AdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 600,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -1438,12 +1419,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
 						Ports:  &badPorts,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1455,9 +1436,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					},
 					{
 						Name:   "A random ingress rule 2",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &badPorts,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1468,12 +1449,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &badPorts,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1487,7 +1468,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						Name:   "A random egress rule 2",
 						Action: "Deny",
 						Ports:  &ports,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1506,11 +1487,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					EgressRule: nil,
-					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
+					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Name:   "A random ingress rule",
 						Action: "Pass",
 						Ports:  &badPorts,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k": "v"},
@@ -1524,11 +1505,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				},
 				{
 					EgressRule: nil,
-					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
+					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Name:   "A random ingress rule 2",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &badPorts,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k": "v"},
@@ -1542,11 +1523,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				},
 				{
 					IngressRule: nil,
-					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
+					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &badPorts,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k3": "v3"},
@@ -1561,7 +1542,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		}
 
-		gnp := convertToGNP(&anp, float64(600.0), &expectedErr)
+		gnp := convertToGNP(&cnp, &expectedErr)
 
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
 
@@ -1583,15 +1564,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[1]).To(Equal(apiv3.PolicyTypeEgress))
 	})
 
-	It("should parse a k8s AdminNetworkPolicy with a Networks peer", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse a k8s ClusterNetworkPolicy with a Networks peer", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 200,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -1599,11 +1581,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1614,11 +1596,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1627,7 +1609,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/32"},
+								Networks: []clusternetpol.CIDR{"10.10.10.0/24", "1.1.1.1/32"},
 							},
 						},
 					},
@@ -1636,7 +1618,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(200.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
@@ -1665,15 +1647,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 	})
 
-	It("should parse a k8s AdminNetworkPolicy with an any address Network peer", func() {
-		anp := adminpolicy.AdminNetworkPolicy{
+	It("should parse a k8s ClusterNetworkPolicy with an any address Network peer", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 200,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -1681,11 +1664,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1696,11 +1679,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1709,7 +1692,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Networks: []adminpolicy.CIDR{"0.0.0.0/0", "::/0"},
+								Networks: []clusternetpol.CIDR{"0.0.0.0/0", "::/0"},
 							},
 						},
 					},
@@ -1718,7 +1701,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(200.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
@@ -1747,20 +1730,21 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 	})
 
-	It("should parse a k8s AdminNetworkPolicy with a Networks peer and ports", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{
+	It("should parse a k8s ClusterNetworkPolicy with a Networks peer and ports", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 		}
-		anp := adminpolicy.AdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 200,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -1768,12 +1752,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1784,12 +1768,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &ports,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1798,7 +1782,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/32"},
+								Networks: []clusternetpol.CIDR{"10.10.10.0/24", "1.1.1.1/32"},
 							},
 						},
 					},
@@ -1807,7 +1791,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(200.0), nil)
+		gnp := convertToGNP(&cnp, nil)
 
 		protocolTCP := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
@@ -1851,20 +1835,21 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 	})
 
-	It("should parse a k8s AdminNetworkPolicy with an invalid networks peer", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{
+	It("should parse a k8s ClusterNetworkPolicy with an invalid networks peer", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 		}
-		anp := adminpolicy.AdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.AdminNetworkPolicySpec{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier:     clusternetpol.AdminTier,
 				Priority: 200,
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -1872,12 +1857,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1888,12 +1873,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &ports,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1902,7 +1887,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
+								Networks: []clusternetpol.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
 							},
 						},
 					},
@@ -1915,11 +1900,11 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					IngressRule: nil,
-					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
+					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &ports,
-						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k3": "v3"},
@@ -1927,7 +1912,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
+								Networks: []clusternetpol.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
 							},
 						},
 					},
@@ -1937,7 +1922,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, float64(200.0), &expectedErr)
+		gnp := convertToGNP(&cnp, &expectedErr)
 
 		protocolTCP := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
@@ -1963,55 +1948,22 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 // Most of the conversion logic is shared with ANP, so only testing a few
 // cases for BANP.
-var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
-	// Use a single instance of the Converter for these tests.
-	c := NewConverter()
-
-	convertToGNP := func(
-		banp *adminpolicy.BaselineAdminNetworkPolicy,
-		expectedErr *cerrors.ErrorClusterNetworkPolicyConversion,
-	) *apiv3.GlobalNetworkPolicy {
-		// Parse the policy.
-		pol, err := c.K8sBaselineAdminNetworkPolicyToCalico(banp)
-
-		if expectedErr == nil {
-			Expect(err).To(BeNil())
-		} else {
-			Expect(err).To(Equal(*expectedErr))
-		}
-
-		// Assert key fields are correct.
-		policyName := fmt.Sprintf("%v%v", names.K8sBaselineAdminNetworkPolicyNamePrefix, banp.Name)
-		Expect(pol.Key.(model.ResourceKey).Name).To(Equal(policyName))
-
-		gnp, ok := pol.Value.(*apiv3.GlobalNetworkPolicy)
-		Expect(ok).To(BeTrue())
-
-		// Make sure the type information is correct.
-		Expect(gnp.Kind).To(Equal(apiv3.KindGlobalNetworkPolicy))
-		Expect(gnp.APIVersion).To(Equal(apiv3.GroupVersionCurrent))
-
-		// Assert value fields are correct.  Order is always 1000 for a BANP.
-		Expect(*gnp.Spec.Order).To(Equal(1000.0))
-		Expect(gnp.Spec.Tier).To(Equal(names.BaselineAdminNetworkPolicyTierName))
-
-		return gnp
-	}
-
-	It("should parse a basic k8s BaselineAdminNetworkPolicy to a GlobalNetworkPolicy", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{{
-			PortNumber: &adminpolicy.Port{
+var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() {
+	It("should parse a basic k8s ClusterNetworkPolicy to a GlobalNetworkPolicy", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{{
+			PortNumber: &clusternetpol.Port{
 				Port: 80,
 			},
 		}}
-		banp := adminpolicy.BaselineAdminNetworkPolicy{
+		bcnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.BaselineAdminNetworkPolicySpec{
-				Subject: adminpolicy.AdminNetworkPolicySubject{
-					Pods: &adminpolicy.NamespacedPod{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier: clusternetpol.BaselineTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Pods: &clusternetpol.NamespacedPod{
 						NamespaceSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"label":  "value",
@@ -2025,12 +1977,12 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.BaselineAdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Name:   "The first ingress rule",
-						Action: "Allow",
+						Action: "Accept",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -2042,21 +1994,21 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []adminpolicy.BaselineAdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "The first egress rule",
 						Action: "Deny",
-						To: []adminpolicy.BaselineAdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
-								Networks: []adminpolicy.CIDR{"10.0.0.0/8"},
+								Networks: []clusternetpol.CIDR{"10.0.0.0/8"},
 							},
 						},
 					},
 					{
-						Action: "Allow",
-						To: []adminpolicy.BaselineAdminNetworkPolicyEgressPeer{
+						Action: "Accept",
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
-								Networks: []adminpolicy.CIDR{"0.0.0.0/0"},
+								Networks: []clusternetpol.CIDR{"0.0.0.0/0"},
 							},
 						},
 					},
@@ -2065,7 +2017,7 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&banp, nil)
+		gnp := convertToGNP(&bcnp, nil)
 
 		// Check the selector is correct, and that the matches are sorted.
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
@@ -2103,19 +2055,20 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 		))
 	})
 
-	It("should parse a k8s BaselineAdminNetworkPolicy with an invalid networks peer", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{
+	It("should parse a k8s ClusterNetworkPolicy with an invalid networks peer", func() {
+		ports := []clusternetpol.ClusterNetworkPolicyPort{
 			{
-				PortNumber: &adminpolicy.Port{Port: 80},
+				PortNumber: &clusternetpol.Port{Port: 80},
 			},
 		}
-		anp := adminpolicy.BaselineAdminNetworkPolicy{
+		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
-			Spec: adminpolicy.BaselineAdminNetworkPolicySpec{
-				Subject: adminpolicy.AdminNetworkPolicySubject{
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Tier: clusternetpol.BaselineTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
 					Namespaces: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"label":  "value",
@@ -2123,21 +2076,21 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Ingress: []adminpolicy.BaselineAdminNetworkPolicyIngressRule{
+				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
 						Action: "Deny",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{},
 						},
 					},
 				},
-				Egress: []adminpolicy.BaselineAdminNetworkPolicyEgressRule{
+				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &ports,
-						To: []adminpolicy.BaselineAdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -2146,7 +2099,7 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
+								Networks: []clusternetpol.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
 							},
 						},
 					},
@@ -2158,21 +2111,21 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 			PolicyName: "default",
 			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
-					IngressRule: &adminpolicy.BaselineAdminNetworkPolicyIngressRule{
+					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
 						Action: "Deny",
 						Ports:  &ports,
-						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{},
 						},
 					},
 					Reason: "k8s rule couldn't be converted: none of supported fields in 'From' is set.",
 				},
 				{
-					EgressRule: &adminpolicy.BaselineAdminNetworkPolicyEgressRule{
+					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
 						Name:   "A random egress rule",
 						Action: "Deny",
 						Ports:  &ports,
-						To: []adminpolicy.BaselineAdminNetworkPolicyEgressPeer{
+						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
 									MatchLabels:      map[string]string{"k3": "v3"},
@@ -2180,7 +2133,7 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 								},
 							},
 							{
-								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
+								Networks: []clusternetpol.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
 							},
 						},
 					},
@@ -2190,7 +2143,7 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 		}
 
 		// Convert the policy
-		gnp := convertToGNP(&anp, &expectedErr)
+		gnp := convertToGNP(&cnp, &expectedErr)
 
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
@@ -2204,3 +2157,37 @@ var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
 		))
 	})
 })
+
+func convertToGNP(
+	cnp *clusternetpol.ClusterNetworkPolicy,
+	expectedErr *cerrors.ErrorClusterNetworkPolicyConversion,
+) *apiv3.GlobalNetworkPolicy {
+	// Use a single instance of the Converter for these tests.
+	c := NewConverter()
+
+	// Parse the policy.
+	pol, err := c.K8sClusterNetworkPolicyToCalico(cnp)
+
+	if expectedErr == nil {
+		ExpectWithOffset(1, err).To(BeNil())
+	} else {
+		ExpectWithOffset(1, err).To(Equal(*expectedErr))
+	}
+
+	// Assert key fields are correct.
+	policyName, tier := k8sClusterNetPolNameAndTier(cnp)
+	Expect(pol.Key.(model.ResourceKey).Name).To(Equal(policyName))
+
+	gnp, ok := pol.Value.(*apiv3.GlobalNetworkPolicy)
+	Expect(ok).To(BeTrue())
+
+	// Make sure the type information is correct.
+	Expect(gnp.Kind).To(Equal(apiv3.KindGlobalNetworkPolicy))
+	Expect(gnp.APIVersion).To(Equal(apiv3.GroupVersionCurrent))
+
+	// Assert value fields are correct.
+	Expect(*gnp.Spec.Order).To(Equal(float64(cnp.Spec.Priority)))
+	Expect(gnp.Spec.Tier).To(Equal(tier))
+
+	return gnp
+}

@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -64,8 +65,9 @@ type KubeClient struct {
 	// Client for interacting with CustomResourceDefinition.
 	crdClientV1 *rest.RESTClient
 
-	// Client for interacting with K8S Admin Network Policy, and BaselineAdminNetworkPolicy.
-	k8sAdminPolicyClient *adminpolicyclient.PolicyV1alpha1Client
+	// Client for interacting with K8S Cluster Network Policy.
+	k8sAdminPolicyClient   *adminpolicyclient.PolicyV1alpha1Client
+	k8sClusterPolicyClient *netpolicyclient.PolicyV1alpha2Client
 
 	disableNodePoll bool
 
@@ -98,15 +100,20 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build K8S Admin Network Policy client: %v", err)
 	}
+	k8sClusterPolicyClient, err := buildK8SCNPClient(config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to build K8S Cluster Network Policy client: %v", err)
+	}
 
 	kubeClient := &KubeClient{
-		ClientSet:             cs,
-		crdClientV1:           crdClientV1,
-		k8sAdminPolicyClient:  k8sAdminPolicyClient,
-		disableNodePoll:       ca.K8sDisableNodePoll,
-		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
-		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
-		clientsByListType:     make(map[reflect.Type]resources.K8sResourceClient),
+		ClientSet:              cs,
+		crdClientV1:            crdClientV1,
+		k8sAdminPolicyClient:   k8sAdminPolicyClient,
+		k8sClusterPolicyClient: k8sClusterPolicyClient,
+		disableNodePoll:        ca.K8sDisableNodePoll,
+		clientsByResourceKind:  make(map[string]resources.K8sResourceClient),
+		clientsByKeyType:       make(map[reflect.Type]resources.K8sResourceClient),
+		clientsByListType:      make(map[reflect.Type]resources.K8sResourceClient),
 	}
 
 	// Create the Calico sub-clients and register them.
@@ -133,6 +140,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindStagedGlobalNetworkPolicy,
 		resources.NewStagedGlobalNetworkPolicyClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		model.KindKubernetesClusterNetworkPolicy,
+		resources.NewKubernetesClusterNetworkPolicyClient(k8sClusterPolicyClient),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -642,6 +655,11 @@ func (c *KubeClient) Close() error {
 // buildK8SAdminPolicyClient builds a RESTClient configured to interact (Baseline) Admin Network Policy.
 func buildK8SAdminPolicyClient(cfg *rest.Config) (*adminpolicyclient.PolicyV1alpha1Client, error) {
 	return adminpolicyclient.NewForConfig(cfg)
+}
+
+// buildK8SCNPClient builds a RESTClient configured to interact Cluster Network Policy.
+func buildK8SCNPClient(cfg *rest.Config) (*netpolicyclient.PolicyV1alpha2Client, error) {
+	return netpolicyclient.NewForConfig(cfg)
 }
 
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions

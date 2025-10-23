@@ -46,7 +46,7 @@ const (
 
 	// AdminPolicyRuleNameLabel is a label that show a rule's name before conversion to Calico data model.
 	// As an example, it holds an admin network policy rule name before conversion to GNPs.
-	AdminPolicyRuleNameLabel = "name"
+	K8sCNPRuleNameLabel = "name"
 
 	// QoSControls related annotations
 	AnnotationK8sQoSIngressBandwidth   = "kubernetes.io/ingress-bandwidth"
