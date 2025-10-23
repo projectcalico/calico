@@ -18,10 +18,8 @@ blocks:
           - ssh-add ~/.keys/*
           - checkout
           - retry git fetch --quiet --unshallow
+          - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
       jobs:
         - name: "Post release checks"
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make postrelease-checks; fi
-          env_vars:
-            - name: GITHUB_TOKEN
-              value: ${MARVIN_GITHUB_TOKEN}
