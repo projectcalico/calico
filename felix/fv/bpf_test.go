@@ -2140,15 +2140,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						externalClient.Exec(ipRouteReplace...)
 
 						lastPongCount := pc.PongCount()
-						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
 
-						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
-						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on Felix[2] for failover traffic. Did the failover actually occur?")
+						checkCTExistsFn := func() bool {
+							_, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
+							return ctExists
+						}
+						Eventually(checkCTExistsFn, "10s").Should(BeTrue(), "Conntrack didn't exist on Felix[2] for failover traffic. Did the failover actually occur?")
 
 						// Check the backing node updated conntrack tun_ip to the new loadbalancer node.
 						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[0], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
 						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on backing Felix[0].")
 						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
+
+						// Connection should persist after the changeover.
+						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
+
 					}
 
 					It("should maintain connections to a cluster IP across loadbalancer failure using maglev", func() { testFailover(clusterIP) })
