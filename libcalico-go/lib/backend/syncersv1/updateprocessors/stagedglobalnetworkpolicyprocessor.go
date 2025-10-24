@@ -22,7 +22,6 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // NewStagedGlobalNetworkPolicyUpdateProcessor create a new SyncerUpdateProcessor to sync StagedGlobalNetworkPolicy data
@@ -39,15 +38,11 @@ func ConvertStagedGlobalNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.K
 	if v3key.Name == "" {
 		return model.PolicyKey{}, errors.New("Missing Name field to create a v1 NetworkPolicy Key")
 	}
-	tier, err := names.TierFromPolicyName(v3key.Name)
-	if err != nil {
-		return model.PolicyKey{}, err
-	}
 	return model.PolicyKey{
-		Name: model.PolicyNamePrefixStaged + v3key.Name,
-		Tier: tier,
+		Name:      v3key.Name,
+		Namespace: "",
+		Kind:      apiv3.KindStagedGlobalNetworkPolicy,
 	}, nil
-
 }
 
 func ConvertStagedGlobalNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
