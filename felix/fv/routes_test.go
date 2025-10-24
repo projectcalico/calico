@@ -60,26 +60,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 		cc = &connectivity.Checker{}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				felix.Exec("ip", "r")
-			}
-		}
-
-		for _, wls := range w {
-			for _, wl := range wls {
-				wl.Stop()
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	Describe("with a workload", func() {
 		BeforeEach(func() {
 			w[0][0] = workload.Run(tc.Felixes[0],

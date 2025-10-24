@@ -21,9 +21,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -32,18 +30,15 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		infra          infrastructure.DatastoreInfra
-		tc             infrastructure.TopologyContainers
-		client         client.Interface
-		dumpedDiags    bool
-		externalClient *containers.Container
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
 	)
 
 	BeforeEach(func() {
 		var err error
 		infra = getInfra()
 
-		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.IPIPMode = api.IPIPModeNever
 		opts.EnableIPv6 = true
@@ -65,32 +60,6 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 		ippool.Spec.NATOutgoing = true
 		ippool, err = client.IPPools().Create(ctx, ippool, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-	})
-
-	// Utility function to dump diags if the test failed.  Should be called in the inner-most
-	// AfterEach() to dump diags before the test is torn down.  Only the first call for a given
-	// test has any effect.
-	dumpDiags := func() {
-		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
-			return
-		}
-		if NFTMode() {
-			logNFTDiags(tc.Felixes[0])
-		} else {
-			iptSave, err := tc.Felixes[0].ExecOutput("iptables-save", "-c")
-			if err == nil {
-				log.Info("iptables-save:\n" + iptSave)
-			}
-		}
-		dumpedDiags = true
-		infra.DumpErrorData()
-	}
-
-	AfterEach(func() {
-		dumpDiags()
-		tc.Stop()
-		infra.Stop()
-		externalClient.Stop()
 	})
 
 	It("should have expected restriction on the nat outgoing rule", func() {

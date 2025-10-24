@@ -93,21 +93,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ host-port tests", []apiconf
 		}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-			tc.Felixes[0].Exec("ip", "r")
-			tc.Felixes[0].Exec("ip", "a")
-		}
-		tc.Stop()
-		infra.Stop()
-	})
-
 	It("with no endpoints or policy, port should be reachable", func() {
 		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 	})

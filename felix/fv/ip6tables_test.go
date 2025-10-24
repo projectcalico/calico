@@ -70,38 +70,6 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 		}
 	})
 
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				}
-				for _, table := range []string{"filter", "mangle", "raw", "nat"} {
-					felix.Exec("ip6tables-save", "-c", "-t", table)
-				}
-				felix.Exec("conntrack", "-L")
-				felix.Exec("ip", "-6", "link")
-				felix.Exec("ip", "-6", "addr")
-				felix.Exec("ip", "-6", "rule")
-				felix.Exec("ip", "-6", "route")
-				felix.Exec("ip", "-6", "route", "show", "table", "1")
-				felix.Exec("ip", "-6", "neigh")
-			}
-		}
-	})
-
-	AfterEach(func() {
-		log.Info("AfterEach starting")
-		for _, f := range tc.Felixes {
-			f.Stop()
-		}
-		log.Info("AfterEach done")
-	})
-
-	AfterEach(func() {
-		infra.Stop()
-	})
-
 	var w [2][2]*workload.Workload
 
 	setupCluster := func() {
@@ -122,7 +90,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 
 			w.WorkloadEndpoint.Labels = labels
 			if run {
-				err := w.Start()
+				err := w.Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 				w.ConfigureInInfra(infra)
 			}

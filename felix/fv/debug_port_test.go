@@ -77,13 +77,5 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Debug port tests", []apicon
 			Expect(get("debug/pprof/heap")).NotTo(HaveOccurred())
 			Expect(get("metrics")).To(HaveOccurred(), "Metrics on the debug port?")
 		})
-
-		AfterEach(func() {
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
-		})
 	})
 })

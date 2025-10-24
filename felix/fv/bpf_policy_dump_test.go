@@ -64,14 +64,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w[0].InterfaceName, "all")
-			infra.DumpErrorData()
 		}
-
-		for i := 0; i < 2; i++ {
-			w[i].Stop()
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
