@@ -19,6 +19,7 @@ blocks:
         - name: oss-release-secrets
         - name: google-service-account-for-gce
         - name: openstack-signing-publishing
+        - name: iss-image-scanning
       prologue:
         commands:
           # Load the github access secrets.  First fix the permissions.
