@@ -15,9 +15,7 @@
 package pinnedversion
 
 import (
-	_ "embed"
 	"fmt"
-	"html/template"
 	"os"
 	"path/filepath"
 	"slices"
@@ -37,20 +35,35 @@ import (
 var (
 	// Components that do not produce images.
 	noImageComponents = []string{
-		"calico",
-		"api",
-		"networking-calico",
+		apiComponentName,
+		calicoComponentName,
+		networkingCalicoComponentName,
 	}
 
 	// Components to ignore when generating the operator components file.
 	operatorIgnoreComponents = []string{
 		flannelComponentName,
-		"test-signer",
+		testSignerComponentName,
+		flannelMigrationController,
 	}
 )
 
-//go:embed templates/calico-versions.yaml.gotmpl
-var calicoTemplate string
+var FlannelComponent = registry.Component{
+	Registry: "quay.io",
+	Image:    "coreos/flannel",
+	Version:  "v0.12.0",
+}
+
+var (
+	// Map of component names to their image names.
+	componentImageMap = map[string]string{
+		"calicoctl":                 "ctl",
+		"flexvol":                   "pod2daemon-flexvol",
+		"csi-node-driver-registrar": "node-driver-registrar",
+	}
+	// Map of image names to their component names.
+	imageComponentMap = map[string]string{}
+)
 
 const (
 	pinnedVersionFileName      = "pinned_versions.yml"
@@ -58,11 +71,19 @@ const (
 )
 
 const (
-	flannelComponentName = "flannel"
+	apiComponentName              = "api"
+	calicoComponentName           = "calico"
+	flannelComponentName          = "flannel"
+	networkingCalicoComponentName = "networking-calico"
+	testSignerComponentName       = "test-signer"
+	flannelMigrationController    = "flannel-migration-controller"
 )
 
-type PinnedVersions interface {
-	GenerateFile() (version.Versions, error)
+func init() {
+	// Initialize the image to component map.
+	for c, img := range componentImageMap {
+		imageComponentMap[img] = c
+	}
 }
 
 type OperatorConfig struct {
@@ -116,7 +137,7 @@ func (p *PinnedVersion) ImageComponents(includeOperator bool) map[string]registr
 		if slices.Contains(noImageComponents, name) {
 			continue
 		}
-		if img := registry.ImageMap[name]; img != "" {
+		if img, found := componentImageMap[name]; found {
 			component.Image = img
 		} else if component.Image == "" {
 			component.Image = name
@@ -130,24 +151,6 @@ func (p *PinnedVersion) ImageComponents(includeOperator bool) map[string]registr
 		}
 	}
 	return components
-}
-
-// calicoTemplateData is used to generate the pinned version file from the template.
-type calicoTemplateData struct {
-	ReleaseName    string
-	BaseDomain     string
-	ProductVersion string
-	Operator       registry.Component
-	Note           string
-	Hash           string
-	ReleaseBranch  string
-}
-
-func (d *calicoTemplateData) ReleaseURL() string {
-	if d.ReleaseName == "" || d.BaseDomain == "" {
-		return ""
-	}
-	return fmt.Sprintf("https://%s.%s", d.ReleaseName, d.BaseDomain)
 }
 
 // PinnedVersionFilePath returns the path of the pinned version file.
@@ -173,6 +176,11 @@ type CalicoPinnedVersions struct {
 
 	// OperatorCfg is the configuration for the operator.
 	OperatorCfg OperatorConfig
+
+	releaseName    string
+	productBranch  string
+	operatorBranch string
+	versionData    version.Versions
 }
 
 // GenerateFile generates the pinned version file.
@@ -181,44 +189,31 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
 
 	productBranch, err := utils.GitBranch(p.RootDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot get current branch: %w", err)
 	}
+	p.productBranch = productBranch
 	productVer, err := command.GitVersion(p.RootDir, true)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to determine product git version")
-		return nil, err
+		return nil, fmt.Errorf("failed to determine product version: %w", err)
 	}
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, productVer), RandomWord())
-	releaseName = strings.ReplaceAll(releaseName, ".", "-")
+	p.releaseName = strings.ReplaceAll(releaseName, ".", "-")
 	operatorBranch, err := p.OperatorCfg.GitBranch()
+	p.operatorBranch = operatorBranch
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot get current operator branch: %w", err)
 	}
 	operatorVer, err := p.OperatorCfg.GitVersion()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to determine operator version: %w", err)
 	}
-	versionData := version.NewHashreleaseVersions(version.New(productVer), operatorVer)
-	tmplData := &calicoTemplateData{
-		ReleaseName:    releaseName,
-		BaseDomain:     hashreleaseserver.BaseDomain,
-		ProductVersion: versionData.ProductVersion(),
-		Operator: registry.Component{
-			Version:  versionData.OperatorVersion(),
-			Image:    p.OperatorCfg.Image,
-			Registry: p.OperatorCfg.Registry,
-		},
-		Hash: versionData.Hash(),
-		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
-			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
-		ReleaseBranch: versionData.ReleaseBranch(p.ReleaseBranchPrefix),
-	}
-	if err := generatePinnedVersionFile(tmplData, p.Dir); err != nil {
+	p.versionData = version.NewHashreleaseVersions(version.New(productVer), operatorVer)
+	if err := generatePinnedVersionFile(p); err != nil {
 		return nil, err
 	}
 
 	if p.BaseHashreleaseDir != "" {
-		hashreleaseDir := filepath.Join(p.BaseHashreleaseDir, versionData.Hash())
+		hashreleaseDir := filepath.Join(p.BaseHashreleaseDir, p.versionData.Hash())
 		if err := os.MkdirAll(hashreleaseDir, utils.DirPerms); err != nil {
 			return nil, err
 		}
@@ -227,25 +222,62 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
 		}
 	}
 
-	return versionData, nil
+	return p.versionData, nil
 }
 
-func generatePinnedVersionFile(data *calicoTemplateData, outputDir string) error {
-	tmpl, err := template.New("pinnedversion").Parse(calicoTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to parse template: %w", err)
+func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
+	pinnedVersionPath := PinnedVersionFilePath(p.Dir)
+	components := map[string]registry.Component{
+		apiComponentName: {
+			Version: p.versionData.ProductVersion(),
+		},
+		calicoComponentName: {
+			Version: p.versionData.ProductVersion(),
+		},
+		networkingCalicoComponentName: {
+			Version: p.versionData.ReleaseBranch(p.ReleaseBranchPrefix),
+		},
+		flannelComponentName: FlannelComponent,
 	}
-	pinnedVersionPath := PinnedVersionFilePath(outputDir)
+	for _, img := range utils.ReleaseImages {
+		if compName, found := imageComponentMap[img]; found {
+			components[compName] = registry.Component{
+				Version: p.versionData.ProductVersion(),
+			}
+		} else {
+			components[img] = registry.Component{
+				Version: p.versionData.ProductVersion(),
+			}
+		}
+	}
+	pinned := PinnedVersion{
+		Title:       p.versionData.ProductVersion(),
+		ManifestURL: fmt.Sprintf("https://%s.%s", p.releaseName, hashreleaseserver.BaseDomain),
+		ReleaseName: p.releaseName,
+		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
+			p.releaseName, time.Now().Format(time.RFC1123), p.productBranch, p.operatorBranch),
+		Hash: p.versionData.Hash(),
+		TigeraOperator: registry.Component{
+			Image:    p.OperatorCfg.Image,
+			Registry: p.OperatorCfg.Registry,
+			Version:  p.versionData.OperatorVersion(),
+		},
+		Components: components,
+	}
+
 	logrus.WithField("file", pinnedVersionPath).Info("Creating pinned version file")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
 	if err != nil {
-		return fmt.Errorf("failed to create pinned version file: %w", err)
+		return fmt.Errorf("cannot create pinned version file: %w", err)
 	}
 	defer func() { _ = pinnedVersionFile.Close() }()
-	if err := tmpl.Execute(pinnedVersionFile, data); err != nil {
-		return fmt.Errorf("failed to execute template: %w", err)
+	enc := yaml.NewEncoder(pinnedVersionFile)
+	enc.SetIndent(2)
+	defer func() { _ = enc.Close() }()
+
+	if err := enc.Encode([]PinnedVersion{pinned}); err != nil {
+		return fmt.Errorf("failed to encode pinned version file: %w", err)
 	}
-	logrus.WithField("file", pinnedVersionPath).Info("Pinned version file generated successfully")
 	return nil
 }
 
@@ -338,13 +370,6 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 
 // RetrieveImageComponents retrieves the images from Calico components in the pinned version file that produce images.
 // It also adds the Tigera operator and its init image to the returned map.
-//
-// Images returned from this function are expected to be in the format "<registry>/<image-name>" where <registry> includes the registry and image path.
-// However, the versions.yml file represents images differently, including the image path as the first part of the image name instead of as part of the registry.
-// As a result, the image path is stripped from the image name to only return the image name so that images are properly formatted.
-//
-// For example, if the image name is "calico/node", this allows the fully qualified image to be "quay.io/calico/node" when a registry of `quay.io/calico` is prepended.
-// and prevents duplication of the image path(i.e. "quay.io/calico/calico/node").
 func RetrieveImageComponents(outputDir string) (map[string]registry.Component, error) {
 	pinnedVersion, err := retrievePinnedVersion(outputDir)
 	if err != nil {
