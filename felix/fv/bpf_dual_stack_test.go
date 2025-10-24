@@ -39,8 +39,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -94,7 +92,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			opts.AutoHEPsEnabled = false
 			// Simulate BIRD noEncap routes since IPIP is not supported with IPv6.
 			opts.IPIPMode = api.IPIPModeNever
-			opts.SimulateBIRDRoutes = true
 			opts.DelayFelixStart = true
 
 			if ipv6Dataplane {
@@ -124,10 +121,14 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				}
 
 				wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+				wIPv6 := fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)
 				wName := fmt.Sprintf("w%d%d", ii, wi)
 
+				infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+				infrastructure.AssignIPPoolAddr(wName, wIPv6, tc.Felixes[ii].Hostname, calicoClient)
+
 				w := workload.New(tc.Felixes[ii], wName, "default",
-					wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()))
+					wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(wIPv6))
 
 				labels["name"] = w.Name
 				labels["workload"] = "regular"
@@ -137,28 +138,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					err := w.Start()
 					Expect(err).NotTo(HaveOccurred())
 					w.ConfigureInInfra(infra)
-				}
-
-				if opts.UseIPPools {
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(w.IP),
-						HandleID: &w.Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: tc.Felixes[ii].Hostname,
-						},
-						Hostname: tc.Felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
-					err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(w.IP6),
-						HandleID: &w.Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: tc.Felixes[ii].Hostname,
-						},
-						Hostname: tc.Felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
 				}
 
 				return w
