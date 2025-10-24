@@ -315,8 +315,15 @@ rules:
       - delete
       - get
       - list
-      - update
       - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+    resourceNames:
+      - envoy-gateway-topology-injector.tigera-gateway
+    verbs:
+      - update
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
