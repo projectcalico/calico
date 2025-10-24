@@ -115,17 +115,11 @@ type proxy struct {
 	// event recorder to update node events
 	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
-	healthzServer   healthcheckIntf
+	healthzServer   Healthcheck
 
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
-}
-
-type healthcheckIntf interface {
-	Health() healthcheck.ProxyHealth
-	QueuedUpdate(v1.IPFamily)
-	Updated(v1.IPFamily)
 }
 
 type stoppableRunner interface {
@@ -451,12 +445,3 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 out:
 	return svc
 }
-
-type alwaysHealthy struct{}
-
-func (a *alwaysHealthy) Health() healthcheck.ProxyHealth {
-	return healthcheck.ProxyHealth{Healthy: true}
-}
-
-func (a *alwaysHealthy) QueuedUpdate(v1.IPFamily) {}
-func (a *alwaysHealthy) Updated(v1.IPFamily)      {}
