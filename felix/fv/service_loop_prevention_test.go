@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -131,14 +129,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		externalGW.Exec("sysctl", "-w", "net.ipv4.ip_forward=1")
 
 		// Also tell Felix to route that CIDR to the external gateway.
-		tc.Felixes[0].ExecMayFail("ip", "r", "d", "10.96.0.0/17")
+		_ = tc.Felixes[0].ExecMayFail("ip", "r", "d", "10.96.0.0/17")
 		tc.Felixes[0].Exec("ip", "r", "a", "10.96.0.0/17", "via", externalGW.IP)
 		tc.Felixes[0].Exec("iptables", "-P", "FORWARD", "ACCEPT")
 
 		// Start monitoring all packets, on the Felix, to or from a specific (but
 		// unused) service IP.
 		tcpdumpF := tc.Felixes[0].AttachTCPDump("eth0")
-		tcpdumpF.AddMatcher("serviceIPPackets", regexp.MustCompile("10\\.96\\.0\\.19"))
+		tcpdumpF.AddMatcher("serviceIPPackets", regexp.MustCompile(`10\.96\.0\.19`))
 		tcpdumpF.Start()
 		defer tcpdumpF.Stop()
 

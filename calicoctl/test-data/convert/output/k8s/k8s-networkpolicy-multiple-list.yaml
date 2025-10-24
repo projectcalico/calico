@@ -3,7 +3,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: NetworkPolicy
   metadata:
-    creationTimestamp: null
     name: allow-all-egress
     namespace: default
   spec:
@@ -17,7 +16,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: NetworkPolicy
   metadata:
-    creationTimestamp: null
     name: default-deny-ingress
     namespace: default
   spec:
@@ -29,7 +27,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: NetworkPolicy
   metadata:
-    creationTimestamp: null
     name: test-network-policy1
     namespace: test-ns
   spec:

@@ -137,7 +137,7 @@ spec:
                   type: string
                 bpfKubeProxyEndpointSlicesEnabled:
                   type: boolean
-                bpfKubeProxyHealtzPort:
+                bpfKubeProxyHealthzPort:
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   type: boolean
@@ -401,6 +401,10 @@ spec:
                 logSeveritySys:
                   pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
+                maglevMaxEndpointsPerService:
+                  type: integer
+                maglevMaxService:
+                  type: integer
                 maxIpsetSize:
                   type: integer
                 metadataAddr:

@@ -8,8 +8,7 @@
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
         "name": "test-network-policy1",
-        "namespace": "test-ns",
-        "creationTimestamp": null
+        "namespace": "test-ns"
       },
       "spec": {
         "tier": "default",
@@ -83,8 +82,7 @@
       "kind": "NetworkPolicy",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
-        "name": "default-deny-ingress",
-        "creationTimestamp": null
+        "name": "default-deny-ingress"
       },
       "spec": {
         "tier": "default",
@@ -99,8 +97,7 @@
       "kind": "NetworkPolicy",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
-        "name": "allow-all-egress",
-        "creationTimestamp": null
+        "name": "allow-all-egress"
       },
       "spec": {
         "tier": "default",

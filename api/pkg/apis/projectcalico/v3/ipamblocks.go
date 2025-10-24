@@ -46,6 +46,10 @@ type IPAMBlockSpec struct {
 	// +optional
 	Affinity *string `json:"affinity,omitempty"`
 
+	// Time at which affinity was claimed.
+	// +optional
+	AffinityClaimTime *metav1.Time `json:"affinityClaimTime,omitempty"`
+
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.
 	// For non-nil entries at index i, the index is the ordinal of the allocation within this block
 	// and the value is the index of the associated attributes in the Attributes array.

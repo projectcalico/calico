@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -148,9 +146,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		BeforeEach(func() {
 			for ii := range w {
 				iiStr := strconv.Itoa(ii)
-				var ports string
-
-				ports = "3000"
+				ports := "3000"
 				w[ii] = workload.Run(
 					tc.Felixes[0],
 					"w"+iiStr,

@@ -1613,8 +1613,8 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
-	if in.BPFKubeProxyHealtzPort != nil {
-		in, out := &in.BPFKubeProxyHealtzPort, &out.BPFKubeProxyHealtzPort
+	if in.BPFKubeProxyHealthzPort != nil {
+		in, out := &in.BPFKubeProxyHealthzPort, &out.BPFKubeProxyHealthzPort
 		*out = new(int)
 		**out = **in
 	}
@@ -1838,6 +1838,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.RequireMTUFile != nil {
 		in, out := &in.RequireMTUFile, &out.RequireMTUFile
 		*out = new(bool)
+		**out = **in
+	}
+	if in.BPFMaglevMaxEndpointsPerService != nil {
+		in, out := &in.BPFMaglevMaxEndpointsPerService, &out.BPFMaglevMaxEndpointsPerService
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMaglevMaxServices != nil {
+		in, out := &in.BPFMaglevMaxServices, &out.BPFMaglevMaxServices
+		*out = new(int)
 		**out = **in
 	}
 	return
@@ -2282,6 +2292,10 @@ func (in *IPAMBlockSpec) DeepCopyInto(out *IPAMBlockSpec) {
 		in, out := &in.Affinity, &out.Affinity
 		*out = new(string)
 		**out = **in
+	}
+	if in.AffinityClaimTime != nil {
+		in, out := &in.AffinityClaimTime, &out.AffinityClaimTime
+		*out = (*in).DeepCopy()
 	}
 	if in.Allocations != nil {
 		in, out := &in.Allocations, &out.Allocations

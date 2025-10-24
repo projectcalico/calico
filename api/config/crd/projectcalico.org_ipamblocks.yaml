@@ -38,6 +38,9 @@ spec:
                 affinity:
                   pattern: ^(host|virtual):[a-zA-Z0-9\.\-_]+$
                   type: string
+                affinityClaimTime:
+                  format: date-time
+                  type: string
                 allocations:
                   items:
                     type: integer

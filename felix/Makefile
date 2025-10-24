@@ -292,9 +292,15 @@ ut combined.coverprofile: $(SRC_FILES)  $(LIBBPF_A) build-bpf
 # FV Tests
 ###############################################################################
 fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
-	# We pre-build the FV test binaries so that we can run them
-	# outside a container and allow them to interact with docker.
-	$(DOCKER_GO_BUILD_CGO) go test ./fv -c --tags fvtests -o $@
+	@# We pre-build the FV test binaries so that we can run them
+	@# outside a container and allow them to interact with docker.
+	@# We no longer separate FV tests with a build tag; make sure it's gone
+	@# so that we don't miss any tests.
+	@if grep '//go:build.*fvtests' -r fv; then \
+	  echo "Found fvtests build tag, please remove."; \
+	  exit 1; \
+	fi
+	$(DOCKER_GO_BUILD_CGO) go test ./fv -c -o $@
 
 REMOTE_DEPS=build-typha
 
