@@ -43,6 +43,10 @@ const (
 	maxNameLength          = 63
 	randomLength           = 5
 	maxGeneratedNameLength = maxNameLength - randomLength
+
+	roleLabel  = "e2e.projectcalico.org/role"
+	roleClient = "client"
+	roleServer = "server"
 )
 
 type connectionTester struct {
@@ -571,6 +575,7 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	mergedLabels := make(map[string]string)
 	maps.Copy(mergedLabels, labels)
 	mergedLabels["pod-name"] = baseName
+	mergedLabels[roleLabel] = roleClient
 
 	// Create the pod.
 	zero := int64(0)
