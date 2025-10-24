@@ -541,6 +541,10 @@ func NewBPFEndpointManager(
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceNameV6)
 	}
 
+	if config.RulesConfig.IPIPEnabled || config.RulesConfig.WireguardEnabled || config.RulesConfig.WireguardEnabledV6 {
+		m.overlayTunnelID = 1
+	}
+
 	for i, d := range specialInterfaces {
 		specialInterfaces[i] = "^" + regexp.QuoteMeta(d) + "$"
 	}

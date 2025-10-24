@@ -172,7 +172,7 @@ type routeCmd struct {
 func newAddCmd() *cobra.Command {
 	rc := &routeCmd{}
 	cmd := &cobra.Command{
-		Use:   "add <ip> [--nexthop <ip>] [--ifindex <idx>] [--workload <local|remote>|--host <local|remote>] [--tunneled]",
+		Use:   "add <ip|cidr> [--nexthop <ip>] [--ifindex <idx>] [--workload <local|remote>|--host <local|remote>] [--tunneled]",
 		Short: "Add an entry to the BPF routes map",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -194,7 +194,7 @@ func newAddCmd() *cobra.Command {
 func newDelCmd() *cobra.Command {
 	rc := &routeCmd{}
 	cmd := &cobra.Command{
-		Use:   "del <ip>",
+		Use:   "del <ip|cidr>",
 		Short: "Delete an entry from the BPF routes map (by CIDR only)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

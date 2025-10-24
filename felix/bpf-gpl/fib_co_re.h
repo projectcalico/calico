@@ -171,11 +171,8 @@ skip_redir_ifindex:
 			}
 		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
 			struct bpf_tunnel_key key = {
-				.tunnel_id = 1,
+				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
-			if (cali_rt_is_vxlan(dest_rt)) {
-				key.tunnel_id = OVERLAY_TUNNEL_ID;
-			}
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
@@ -218,13 +215,9 @@ skip_redir_ifindex:
 			}
 
 			struct bpf_tunnel_key key = {
-				.tunnel_id = 1,
+				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
 			
-			if (cali_rt_is_vxlan(dest_rt)) {
-				key.tunnel_id = OVERLAY_TUNNEL_ID;
-			}
-
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
