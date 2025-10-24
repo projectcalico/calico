@@ -425,13 +425,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 			externalClient.Exec("ip", "addr", "add", "dev", "tunl0", "10.65.222.1")
 			externalClient.Exec("ip", "route", "add", "10.65.0.0/24", "via",
 				tc.Felixes[0].IP, "dev", "tunl0", "onlink")
-
-			tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-				externalClient.IP, "dev", "tunl0", "onlink")
-			if BPFMode() {
-				tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
-			}
-
 		})
 
 		JustAfterEach(func() {
@@ -499,6 +492,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 				} else {
 					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 				}
+			}
+
+			tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
+				externalClient.IP, "dev", "tunl0", "onlink")
+
+			if BPFMode() {
+				tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
 			}
 
 			By("testing that the ext client can connect via ipip")
