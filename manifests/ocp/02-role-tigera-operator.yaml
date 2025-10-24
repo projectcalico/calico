@@ -487,6 +487,7 @@ rules:
       - tlsroutes.gateway.networking.k8s.io
       - udproutes.gateway.networking.k8s.io
       - xbackendtrafficpolicies.gateway.networking.x-k8s.io
+      - xlistenersets.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
       - clienttrafficpolicies.gateway.envoyproxy.io
