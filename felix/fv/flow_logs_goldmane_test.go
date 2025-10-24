@@ -469,7 +469,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	}
 
-	It("should get expected flow logs", func() {
+	It("pepper should get expected flow logs", func() {
 		checkFlowLogs()
 	})
 
