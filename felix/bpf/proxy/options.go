@@ -135,7 +135,9 @@ func WithExcludedCIDRs(cidrs []string) Option {
 
 func WithHealthCheck(hc Healthcheck) Option {
 	return makeOption(func(p *proxy) error {
-		p.healthzServer = hc
+		if hc != nil {
+			p.healthzServer = hc
+		}
 		return nil
 	})
 }
