@@ -547,15 +547,27 @@ func (r *RuleID) GetDeniedPacketRuleName() string {
 
 func (r *RuleID) setFlowLogPolicyName() {
 	if !r.IsNamespaced() {
-		r.fpName = fmt.Sprintf(
-			"%s|%s.%s|%s",
-			r.TierString(),
-			r.TierString(),
-			r.NameString(),
-			r.ActionString(),
-		)
-	} else if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) || r.Kind == v3.KindStagedKubernetesNetworkPolicy {
+		if model.KindIsStaged(r.Kind) {
+			// Staged GlobalNetworkPolicy.
+			r.fpName = fmt.Sprintf(
+				"%s|%s.staged:%s|%s",
+				r.TierString(),
+				r.TierString(),
+				r.NameString(),
+				r.ActionString(),
+			)
+		} else {
+			// GlobalNetworkPolicy or Profile.
+			r.fpName = fmt.Sprintf(
+				"%s|%s|%s",
+				r.TierString(),
+				r.NameString(),
+				r.ActionString(),
+			)
+		}
+	} else if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) {
 		// TODO: Use Kind field to determine policy kind.
+		// Kubernetes NetworkPolicy.
 		r.fpName = fmt.Sprintf(
 			"%s|%s/%s|%s",
 			r.TierString(),
@@ -563,12 +575,22 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.NameString(),
 			r.ActionString(),
 		)
-	} else {
+	} else if model.KindIsStaged(r.Kind) {
+		// StagedNetworkPolicy.
 		r.fpName = fmt.Sprintf(
-			"%s|%s/%s.%s|%s",
+			"%s|%s/%s.staged:%s|%s",
 			r.TierString(),
 			r.Namespace,
 			r.TierString(),
+			r.NameString(),
+			r.ActionString(),
+		)
+	} else {
+		// Calico namespaced NetworkPolicy.
+		r.fpName = fmt.Sprintf(
+			"%s|%s/%s|%s",
+			r.TierString(),
+			r.Namespace,
 			r.NameString(),
 			r.ActionString(),
 		)
