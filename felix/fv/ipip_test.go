@@ -39,6 +39,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -92,6 +94,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 			wName := fmt.Sprintf("w%d", ii)
 			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].ConfigureInInfra(infra)
+
+			if topologyOptions.UseIPPools {
+				// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+				err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+					IP:       cnet.MustParseIP(wIP),
+					HandleID: &wName,
+					Attrs: map[string]string{
+						ipam.AttributeNode: tc.Felixes[ii].Hostname,
+					},
+					Hostname: tc.Felixes[ii].Hostname,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
 
 			hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
 		}
@@ -410,9 +425,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 			externalClient.Exec("ip", "addr", "add", "dev", "tunl0", "10.65.222.1")
 			externalClient.Exec("ip", "route", "add", "10.65.0.0/24", "via",
 				tc.Felixes[0].IP, "dev", "tunl0", "onlink")
-
-			tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-				externalClient.IP, "dev", "tunl0", "onlink")
 		})
 
 		JustAfterEach(func() {
@@ -480,6 +492,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 				} else {
 					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 				}
+			}
+
+			tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
+				externalClient.IP, "dev", "tunl0", "onlink")
+
+			if BPFMode() {
+				tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
 			}
 
 			By("testing that the ext client can connect via ipip")

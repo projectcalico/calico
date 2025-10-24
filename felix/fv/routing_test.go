@@ -874,6 +874,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
 						externalClient.IP, "dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", "90")
 
+					if BPFMode() {
+						tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
+					}
 					By("testing that the ext client can connect via ipip")
 					cc.ResetExpectations()
 					cc.ExpectSome(externalClient, w[0])
