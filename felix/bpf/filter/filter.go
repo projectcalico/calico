@@ -180,6 +180,73 @@ func fromBE(b *asm.Block, size uint8) {
 	b.FromBE(asm.R1, sz)
 }
 
+// MaxPacketOffset analyzes a classic BPF program and returns the largest offset
+// (in bytes) that the program may access in a network packet. This is useful for
+// determining how much of the packet needs to be pulled into linear memory before
+// running the BPF program.
+//
+// The function considers:
+// - Absolute loads (LdABS): direct offset K + access size
+// - Indexed loads (LdIND): offset X+K + access size (assumes worst-case X=255)
+// - MSH loads (LdxMSH): loads IP header length from offset K
+//
+// Returns the maximum offset in bytes, or 0 if no packet accesses are found.
+func MaxPacketOffset(insns []pcap.BPFInstruction) int {
+	maxOffset := 0
+
+	for _, inst := range insns {
+		code := uint8(inst.Code)
+		class := bpfClass(code)
+		K := int(inst.K)
+
+		switch class {
+		case bpfClassLd:
+			mode := bpfMode(code)
+			size := bpfSize(code)
+
+			// Determine access size in bytes
+			accessSize := 1
+			switch asm.OpCode(size) {
+			case asm.MemOpSize16:
+				accessSize = 2
+			case asm.MemOpSize32:
+				accessSize = 4
+			}
+
+			switch mode {
+			case bpfModeABS:
+				// Absolute load: pkt[K]
+				offset := K + accessSize
+				if offset > maxOffset {
+					maxOffset = offset
+				}
+			case bpfModeIND:
+				// Indexed load: pkt[X+K]
+				// X can vary, but for safety we assume worst-case X value.
+				// In practice, X is often a header length (e.g., IP header = 20-60 bytes)
+				// We use 255 as a conservative upper bound for X.
+				offset := 255 + K + accessSize
+				if offset > maxOffset {
+					maxOffset = offset
+				}
+			}
+
+		case bpfClassLdx:
+			// LdxMSH: Load IP header length from pkt[K] & 0xf
+			if inst.Code == uint16(bpfClassLdx|bpfModeMSH|bpfSizeB) {
+				K := int(inst.K)
+				// This loads 1 byte from offset K
+				offset := K + 1
+				if offset > maxOffset {
+					maxOffset = offset
+				}
+			}
+		}
+	}
+
+	return maxOffset
+}
+
 func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkType) error {
 	for i, cbpf := range pcap {
 		code := uint8(cbpf.Code)
