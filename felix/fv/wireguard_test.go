@@ -42,7 +42,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -1774,8 +1773,6 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 
 	if ipipEnabled && !wireguardIPv6Enabled {
 		topologyOptions.IPIPMode = api.IPIPModeAlways
-		topologyOptions.SimulateBIRDRoutes = false
-		topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	} else {
 		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.SimulateBIRDRoutes = true
@@ -1889,21 +1886,9 @@ func createWorkloadWithAssignedIP(
 		mtu = wireguardMTUV6Default
 	}
 
+	infrastructure.AssignIPPoolAddr(wlName, wlIP, felix.Hostname, *client)
 	wl := workload.Run(felix, wlName, "default", wlIP, defaultWorkloadPort, "tcp", workload.WithMTU(mtu))
 	wl.ConfigureInInfra(*infra)
-
-	if infraOpts.UseIPPools {
-		err := (*client).IPAM().AssignIP(utils.Ctx, ipam.AssignIPArgs{
-			IP:       ip,
-			HandleID: &wlName,
-			Attrs: map[string]string{
-				ipam.AttributeNode: felix.Hostname,
-			},
-			Hostname: felix.Hostname,
-		})
-		Expect(err).NotTo(HaveOccurred())
-	}
-
 	return wl
 }
 
