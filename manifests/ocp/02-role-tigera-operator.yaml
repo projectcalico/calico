@@ -311,9 +311,11 @@ rules:
     resources:
       - mutatingwebhookconfigurations
     verbs:
+      - create
       - delete
       - get
       - list
+      - update
       - watch
   # Needed for operator lock
   - apiGroups:
@@ -477,6 +479,7 @@ rules:
       - tcproutes.gateway.networking.k8s.io
       - tlsroutes.gateway.networking.k8s.io
       - udproutes.gateway.networking.k8s.io
+      - xbackendtrafficpolicies.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
       - clienttrafficpolicies.gateway.envoyproxy.io
