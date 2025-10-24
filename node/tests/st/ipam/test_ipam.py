@@ -179,63 +179,6 @@ class MultiHostIpam(TestBase):
                 assert str(ip) not in workload_ips, \
                     "ipam show says IP %s is not assigned when it is!" % ip
 
-    @parameterized.expand([
-        (False,),
-        (True,),
-    ])
-    def test_pool_wrap(self, make_static_workload):
-        """
-        Repeatedly create and delete workloads until the system re-assigns an IP.
-        """
-
-        ipv4_subnet = netaddr.IPNetwork("192.168.46.0/29")
-
-        # Create a new IP pool, but use a smaller blocksize so that it doesn't
-        # take as many iterations to complete the test.
-        new_pool = {'apiVersion': 'projectcalico.org/v3',
-                    'kind': 'IPPool',
-                    'metadata': {'name': 'ippool-name-4'},
-                    'spec': {'cidr': str(ipv4_subnet.ipv4()), 'blockSize': 30},
-                    }
-        self.hosts[0].writejson("newpool.json", new_pool)
-        self.hosts[0].calicoctl("create -f newpool.json")
-
-        host = self.hosts[0]
-        i = 0
-        if make_static_workload:
-            static_workload = host.create_workload("static",
-                                                   image="workload",
-                                                   network=self.network)
-            i += 1
-
-        new_workload = host.create_workload("wldw-%s" % i,
-                                            image="workload",
-                                            network=self.network)
-        assert netaddr.IPAddress(new_workload.ip) in ipv4_subnet
-        original_ip = new_workload.ip
-        while True:
-            self.delete_workload(host, new_workload)
-            i += 1
-            new_workload = host.create_workload("wldw-%s" % i,
-                                                image="workload",
-                                                network=self.network)
-            assert netaddr.IPAddress(new_workload.ip) in ipv4_subnet
-            if make_static_workload:
-                assert new_workload.ip != static_workload.ip, "IPAM assigned an IP which is " \
-                                                              "still in use!"
-
-            if new_workload.ip == original_ip:
-                # Used a /30 block size - so 4 addresses.
-                poolsize = 4
-                # But if we're using one for a static workload, there will be one less
-                if make_static_workload:
-                    poolsize -= 1
-                assert i >= poolsize, "Original IP was re-assigned before entire host pool " \
-                                      "was cycled through.  Hit after %s times" % i
-                break
-            if i > (len(ipv4_subnet) * 2):
-                assert False, "Cycled twice through pool - original IP still not assigned."
-
     @staticmethod
     def delete_workload(host, workload):
         host.calicoctl("ipam release --ip=%s" % workload.ip)

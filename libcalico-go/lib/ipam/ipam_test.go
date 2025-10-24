@@ -491,6 +491,44 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 		})
 
+		It("should wrap IP allocations correctly", func() {
+			// Create a small pool and assign / release IPs until we wrap around to the beginning.
+			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+			applyNode(bc, kc, "wrap-node", map[string]string{"foo": "bar"})
+			allocatedIPs := map[string]bool{}
+			ipsInOrder := []string{}
+
+			// A /30 block has 4 addresses, so after allocating and releasing 4 addresses, the 5th allocation
+			// should wrap back to the first address.
+			totalIPs := 4
+			for range totalIPs {
+				args := AutoAssignArgs{Num4: 1, Hostname: "wrap-node", IntendedUse: v3.IPPoolAllowedUseWorkload}
+				v4, _, err := ic.AutoAssign(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(v4.IPs)).To(Equal(1))
+
+				ipStr := v4.IPs[0].IP.String()
+				_, allocated := allocatedIPs[ipStr]
+				Expect(allocated).To(BeFalse(), "IP %s was already allocated!", ipStr)
+				allocatedIPs[ipStr] = true
+				ipsInOrder = append(ipsInOrder, ipStr)
+
+				// Release the IP again.
+				u, rel, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ipStr})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(u)).To(Equal(0))
+				Expect(len(rel)).To(Equal(1))
+			}
+
+			// Now, allocate one more IP - should wrap to the first one.
+			args := AutoAssignArgs{Num4: 1, Hostname: "wrap-node", IntendedUse: v3.IPPoolAllowedUseWorkload}
+			v4, _, err := ic.AutoAssign(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4.IPs)).To(Equal(1))
+			ipStr := v4.IPs[0].IP.String()
+			Expect(ipStr).To(Equal(ipsInOrder[0]), "Expected wrapped allocation to return first IP again")
+		})
+
 		It("should handle when an IP is released causing block deletion, then reallocated with the same handle", func() {
 			// This test simulates a scenario where client A queries the allocation and determines that the
 			// IP should be released. In the meantime, client B releases and re-allocates the address with the same IP and handle, thus
