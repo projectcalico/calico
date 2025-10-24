@@ -211,7 +211,7 @@ func MaxPacketOffset(insns []pcap.BPFInstruction) int {
 				accessSize = 2
 			case bpfSizeW: // 32-bit
 				accessSize = 4
-				// bpfSizeB (8-bit) is handled by default accessSize = 1
+			// Default case: bpfSizeB (8-bit) uses accessSize = 1
 			}
 
 			switch mode {

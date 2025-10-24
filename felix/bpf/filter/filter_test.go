@@ -23,6 +23,9 @@ import (
 )
 
 // Test constants - these match the unexported constants in filter.go
+// We duplicate them here rather than exporting them to keep the filter package's
+// internal BPF constants private. These values are defined by the BPF specification
+// and are unlikely to change.
 const (
 	testBpfClassLd  uint8 = 0x0
 	testBpfClassLdx uint8 = 0x1
