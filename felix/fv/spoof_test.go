@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -30,10 +31,11 @@ import (
 
 var _ = Describe("Spoof tests", func() {
 	var (
-		infra infrastructure.DatastoreInfra
-		tc    infrastructure.TopologyContainers
-		w     [3]*workload.Workload
-		cc    *connectivity.Checker
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		w      [3]*workload.Workload
+		cc     *connectivity.Checker
+		client client.Interface
 	)
 
 	teardownInfra := func() {
@@ -135,7 +137,7 @@ var _ = Describe("Spoof tests", func() {
 			opts := infrastructure.DefaultTopologyOptions()
 			opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
 			opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
-			tc, _ = infrastructure.StartNNodeTopology(3, opts, infra)
+			tc, client = infrastructure.StartNNodeTopology(3, opts, infra)
 			// Install a default profile allowing all ingress and egress,
 			// in the absence of policy.
 			infra.AddDefaultAllow()
@@ -144,6 +146,7 @@ var _ = Describe("Spoof tests", func() {
 			for ii := range w {
 				wIP := fmt.Sprintf("10.65.%d.2", ii)
 				wName := fmt.Sprintf("w%d", ii)
+				infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, client)
 				w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 				w[ii].ConfigureInInfra(infra)
 			}
