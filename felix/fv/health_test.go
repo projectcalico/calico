@@ -186,6 +186,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 				utils.Config.TyphaImage,
 				"calico-typha")...)
 		Expect(typhaContainer).NotTo(BeNil())
+		k8sInfra.AddCleanup(typhaContainer.Stop)
 		typhaReady = healthStatusFn(typhaContainer.IP, "9098", "readiness")
 		typhaLiveness = healthStatusFn(typhaContainer.IP, "9098", "liveness")
 	}
