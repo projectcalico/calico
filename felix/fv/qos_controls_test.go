@@ -224,12 +224,10 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 						topt.VXLANMode = apiv3.VXLANModeNever
 						topt.IPIPMode = apiv3.IPIPModeAlways
-						topt.SimulateBIRDRoutes = true
 					case "vxlan":
 						topt.IPIPMode = apiv3.IPIPModeNever
 						topt.VXLANMode = apiv3.VXLANModeAlways
 						topt.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(topt.IPPoolCIDR, topt.IPv6PoolCIDR)
-						topt.SimulateBIRDRoutes = false
 					}
 
 					topt.UseIPPools = true
