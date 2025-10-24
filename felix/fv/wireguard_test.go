@@ -1774,8 +1774,6 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 
 	if ipipEnabled && !wireguardIPv6Enabled {
 		topologyOptions.IPIPMode = api.IPIPModeAlways
-		topologyOptions.SimulateBIRDRoutes = false
-		topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	} else {
 		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.SimulateBIRDRoutes = true
