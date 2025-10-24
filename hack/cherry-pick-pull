@@ -242,9 +242,8 @@ function make-a-pr() {
   pr_body_file="$(mktemp -t prtext.XXXX)" # cleaned in return_to_kansas
   
   cat >"${pr_body_file}" <<EOF
-[${relshort}] ${new_title}
-
-${META_BLOCK:-}${new_header}${new_body}
+${new_header}${new_body}
+${META_BLOCK:-}
 EOF
 
   if [[ -n "${DRY_RUN}" ]]; then
