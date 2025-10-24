@@ -17,7 +17,6 @@ package fv_test
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -469,7 +468,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	}
 
-	It("pepper should get expected flow logs", func() {
+	It("should get expected flow logs", func() {
 		checkFlowLogs()
 	})
 
@@ -559,33 +558,33 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
-		addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
+		addWorkload := func(hostname string, ii, wi, port int, labels map[string]string) *workload.Workload {
 			if labels == nil {
 				labels = make(map[string]string)
 			}
 
 			wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+			wIPv6 := fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)
 			wName := fmt.Sprintf("w%d%d", ii, wi)
 
+			infrastructure.AssignIPPoolAddr(wName, wIP, hostname, client)
+			infrastructure.AssignIPPoolAddr(wName, wIPv6, hostname, client)
 			w := workload.New(tc.Felixes[ii], wName, "default",
-				wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()))
+				wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(wIPv6))
 
 			labels["name"] = w.Name
 			labels["workload"] = "regular"
-
 			w.WorkloadEndpoint.Labels = labels
-			if run {
-				err := w.Start()
-				Expect(err).NotTo(HaveOccurred())
-				w.ConfigureInInfra(infra)
-			}
+			err := w.Start()
+			Expect(err).NotTo(HaveOccurred())
+			w.ConfigureInInfra(infra)
 			return w
 		}
 
 		for ii := range tc.Felixes {
 			// Two workloads on each host so we can check the same host and other host cases.
-			w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
-			w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
+			w[ii][0] = addWorkload(tc.Felixes[ii].Hostname, ii, 0, 8055, map[string]string{"port": "8055"})
+			w[ii][1] = addWorkload(tc.Felixes[ii].Hostname, ii, 1, 8056, nil)
 		}
 
 		err = infra.AddDefaultDeny()
