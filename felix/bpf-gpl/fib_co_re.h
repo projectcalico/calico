@@ -137,7 +137,6 @@ skip_redir_ifindex:
 			goto try_fib_external;
 		}
 
-		CALI_DEBUG("Found route for " IP_FMT " to forward from WEP", &ctx->state->ip_dst);
 		if (cali_rt_flags_local_host(dest_rt->flags)) {
 			goto skip_fib;
 		}
@@ -164,10 +163,6 @@ skip_redir_ifindex:
 
 			rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), 0);
 			state->ct_result.ifindex_fwd = fib_params(ctx)->ifindex;
-			CALI_DEBUG("FIB lookup result %d, ifindex_fwd %d", rc, state->ct_result.ifindex_fwd);
-			CALI_DEBUG("Route tunneled %d same subnet %d",
-					cali_rt_is_tunneled(dest_rt),
-					cali_rt_is_same_subnet(dest_rt));
 		}
 
 		if (cali_rt_flags_local_workload(dest_rt->flags)) {
@@ -175,7 +170,6 @@ skip_redir_ifindex:
 				goto skip_fib;
 			}
 		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
-			CALI_DEBUG("Setting tunnel key for vxlan forwarding");
 			struct bpf_tunnel_key key = {
 				.tunnel_id = 1,
 			};
@@ -219,11 +213,10 @@ skip_redir_ifindex:
 				goto deny;
 			}
 			if (!cali_rt_is_tunneled(dest_rt)) {
-				CALI_DEBUG("Not a vxlan route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
+				CALI_DEBUG("Not a tunnel route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
 				goto deny;
 			}
 
-			CALI_DEBUG("Setting tunnel key");
 			struct bpf_tunnel_key key = {
 				.tunnel_id = 1,
 			};
