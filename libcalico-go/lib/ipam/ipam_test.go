@@ -529,6 +529,33 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(ipStr).To(Equal(ipsInOrder[0]), "Expected wrapped allocation to return first IP again")
 		})
 
+		It("should not assign from deleted IP pools", func() {
+			// Create an IP pool, allocate an IP, delete the pool and create a new IP pool.
+			// Assert new allocations do not come from the deleted pool.
+			applyPool("10.0.0.0/24", true, "all()")
+			applyNode(bc, kc, "deletion-node", map[string]string{"foo": "bar"})
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: "deletion-node", IntendedUse: v3.IPPoolAllowedUseWorkload})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4.IPs)).To(Equal(1))
+			allocatedIP := v4.IPs[0].IP.String()
+
+			// Assert the allocated IP is from the first pool.
+			Expect(strings.HasPrefix(allocatedIP, "10.0.0.")).To(BeTrue(), "Expected allocation to come from first pool")
+
+			// Delete the pool.
+			deleteAllPools()
+
+			// Create a new pool.
+			applyPool("11.0.0.0/24", true, "all()")
+
+			// Allocate a new IP - should not come from the deleted pool.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: "deletion-node", IntendedUse: v3.IPPoolAllowedUseWorkload})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4.IPs)).To(Equal(1))
+			newAllocatedIP := v4.IPs[0].IP.String()
+			Expect(strings.HasPrefix(newAllocatedIP, "11.0.0.")).To(BeTrue(), "Expected new allocation to come from new pool")
+		})
+
 		It("should handle when an IP is released causing block deletion, then reallocated with the same handle", func() {
 			// This test simulates a scenario where client A queries the allocation and determines that the
 			// IP should be released. In the meantime, client B releases and re-allocates the address with the same IP and handle, thus
