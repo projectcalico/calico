@@ -39,10 +39,6 @@ type ResourceType struct {
 	// UpdateProcessor converts the raw KVPairs returned from the datastore into the appropriate
 	// KVPairs required for the syncer.  This is optional.
 	UpdateProcessor SyncerUpdateProcessor
-
-	// SendDeletesOnConnFail will send deletes for all resources (and therefore do a full resync) if
-	// the connection fails at any point.
-	SendDeletesOnConnFail bool
 }
 
 // Error indicating a problem with a watcher communicating with the backend.
