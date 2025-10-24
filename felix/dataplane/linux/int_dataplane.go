@@ -2828,12 +2828,16 @@ func startBPFDataplaneComponents(
 	ctVal := bpfconntrack.ValueFromBytes
 
 	if config.bpfProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
-		config.bpfProxyHealthCheck, _ = bpfproxy.NewHealthCheck(
+		var err error
+		config.bpfProxyHealthCheck, err = bpfproxy.NewHealthCheck(
 			config.KubeClientSet,
 			config.Hostname,
 			config.KubeProxyHealtzPort,
 			config.KubeProxyMinSyncPeriod,
 		)
+		if err != nil {
+			log.WithError(err).Error("Failed to initialize BPF kube-proxy health check")
+		}
 	}
 
 	bpfproxyOpts := []bpfproxy.Option{
