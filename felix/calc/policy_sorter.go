@@ -237,8 +237,20 @@ func (m *policyMetadata) ApplyOnForward() bool {
 	return m != nil && m.Flags&policyMetaApplyOnForward != 0
 }
 
+func (poc *PolicySorter) tierForPolicy(key model.PolicyKey, meta *policyMetadata) string {
+	if meta != nil {
+		return meta.Tier
+	}
+	for tierName, tierInfo := range poc.tiers {
+		if _, ok := tierInfo.Policies[key]; ok {
+			return tierName
+		}
+	}
+	return ""
+}
+
 func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMetadata) (dirty bool) {
-	tierName := newPolicy.Tier
+	tierName := poc.tierForPolicy(key, newPolicy)
 	tierInfo := poc.tiers[tierName]
 	var tiKey tierInfoKey
 	var oldPolicy *policyMetadata
