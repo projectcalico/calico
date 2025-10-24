@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-	const nodeCount = 1
-
 	var (
 		infra                    infrastructure.DatastoreInfra
 		topologyOptions          infrastructure.TopologyOptions
@@ -52,7 +50,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 		topologyOptions.FelixLogSeverity = "Debug"
 		topologyOptions.FelixDebugFilenameRegex = "status_file_reporter"
 
-		tc, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
+		tc, _ = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		tc.Felixes[0].Exec("rm", "-rf", "/tmp/endpoint-status")
 		dataplaneInSyncReceivedC = tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("DataplaneInSync received from upstream"))
 	})

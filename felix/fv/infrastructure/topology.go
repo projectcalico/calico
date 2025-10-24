@@ -552,5 +552,5 @@ func AssignIPPoolAddr(workload, addr, hostname string, client client.Interface) 
 		},
 		Hostname: hostname,
 	})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }

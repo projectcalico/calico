@@ -87,7 +87,6 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 			iiStr := strconv.Itoa(ii)
 			wName := fmt.Sprintf("w%v", iiStr)
 			wIP := fmt.Sprintf("10.65.0.1%v", iiStr)
-			infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[0].Hostname, calicoClient)
 			w[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
 			w[ii].WorkloadEndpoint.Spec.Endpoint = "eth0"
 			w[ii].WorkloadEndpoint.Spec.Orchestrator = "k8s"
