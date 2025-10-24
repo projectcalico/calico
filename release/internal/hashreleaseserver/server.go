@@ -114,16 +114,7 @@ func Publish(productCode string, h *Hashrelease, cfg *Config) error {
 }
 
 func publishFiles(h *Hashrelease, cfg *Config) error {
-	logrus.WithFields(logrus.Fields{
-		"hashrelease": h.Name,
-		"srcDir":      h.Source,
-	}).Info("Publishing hashrelease files")
 	// publish to cloud storage
-	account, err := cfg.credentialsAccount()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get credentials email for hashrelease server")
-		return fmt.Errorf("failed to get credentials email for hashrelease publishing: %w", err)
-	}
 	logrus.WithFields(logrus.Fields{
 		"hashrelease": h.Name,
 		"srcDir":      h.Source,
@@ -132,7 +123,6 @@ func publishFiles(h *Hashrelease, cfg *Config) error {
 		"storage", "rsync",
 		h.Source, fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name),
 		"--recursive", "--delete-unmatched-destination-objects",
-		fmt.Sprintf("--account=%s", account),
 	}
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		args = append(args, "--verbosity=debug")
