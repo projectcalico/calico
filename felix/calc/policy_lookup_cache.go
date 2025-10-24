@@ -421,6 +421,7 @@ func NewRuleID(kind, tier, name, namespace string, ruleIndex int, ruleDirection 
 			Namespace: namespace,
 			Kind:      kind,
 		},
+		Tier:      tier,
 		Direction: ruleDirection,
 		Index:     ruleIndex,
 		IndexStr:  strconv.Itoa(ruleIndex),

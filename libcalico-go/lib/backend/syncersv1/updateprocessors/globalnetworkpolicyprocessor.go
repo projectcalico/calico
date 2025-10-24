@@ -69,6 +69,7 @@ func ConvertGlobalNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error)
 
 	v1value := &model.Policy{
 		Namespace:        "", // Empty string used to signal a GlobalNetworkPolicy.
+		Tier:             tierOrDefault(spec.Tier),
 		Order:            spec.Order,
 		InboundRules:     RulesAPIV3ToBackend(spec.Ingress, ""),
 		OutboundRules:    RulesAPIV3ToBackend(spec.Egress, ""),

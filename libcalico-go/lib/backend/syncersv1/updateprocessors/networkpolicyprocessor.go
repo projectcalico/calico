@@ -69,6 +69,7 @@ func ConvertNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
 
 	v1value := &model.Policy{
 		Namespace:        v3res.Namespace,
+		Tier:             tierOrDefault(spec.Tier),
 		Order:            spec.Order,
 		InboundRules:     RulesAPIV3ToBackend(spec.Ingress, v3res.Namespace),
 		OutboundRules:    RulesAPIV3ToBackend(spec.Egress, v3res.Namespace),
@@ -93,4 +94,11 @@ func policyTypesAPIV3ToBackend(ptypes []apiv3.PolicyType) []string {
 
 func policyTypeAPIV3ToBackend(ptype apiv3.PolicyType) string {
 	return strings.ToLower(string(ptype))
+}
+
+func tierOrDefault(tier string) string {
+	if tier == "" {
+		return "default"
+	}
+	return tier
 }
