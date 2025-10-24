@@ -544,6 +544,7 @@ func describeBPFDualStackProxyHealthTests() bool {
 			opts.EnableIPv6 = true
 			opts.NATOutgoingEnabled = true
 			opts.BPFProxyHealthzPort = 10256
+			opts.IPIPMode = api.IPIPModeNever
 
 			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 		})
