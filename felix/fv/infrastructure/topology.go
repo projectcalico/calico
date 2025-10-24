@@ -34,6 +34,8 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
@@ -539,4 +541,16 @@ func mustInitDatastore(client client.Interface) {
 		log.WithError(err).Info("EnsureInitialized result")
 		return err
 	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
+}
+
+func AssignIPPoolAddr(workload, addr, hostname string, client client.Interface) {
+	err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+		IP:       cnet.MustParseIP(addr),
+		HandleID: &workload,
+		Attrs: map[string]string{
+			ipam.AttributeNode: hostname,
+		},
+		Hostname: hostname,
+	})
+	Expect(err).NotTo(HaveOccurred())
 }
