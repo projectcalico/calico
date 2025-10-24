@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/defaults"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -58,7 +59,10 @@ func (r globalNetworkPolicies) Create(ctx context.Context, res *apiv3.GlobalNetw
 		resCopy := *res
 		res = &resCopy
 	}
-	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
+
+	if _, err := defaults.Default(res); err != nil {
+		return nil, err
+	}
 
 	if err := validator.Validate(res); err != nil {
 		return nil, err
@@ -66,11 +70,6 @@ func (r globalNetworkPolicies) Create(ctx context.Context, res *apiv3.GlobalNetw
 	err := names.ValidateTieredPolicyName(res.Name, tier)
 	if err != nil {
 		return nil, err
-	}
-
-	// Add tier labels to policy for lookup.
-	if tier != "default" {
-		res.GetObjectMeta().SetLabels(addTierLabel(res.GetObjectMeta().GetLabels(), tier))
 	}
 
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindGlobalNetworkPolicy, res)
@@ -95,7 +94,10 @@ func (r globalNetworkPolicies) Update(ctx context.Context, res *apiv3.GlobalNetw
 		resCopy := *res
 		res = &resCopy
 	}
-	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
+
+	if _, err := defaults.Default(res); err != nil {
+		return nil, err
+	}
 
 	if err := validator.Validate(res); err != nil {
 		return nil, err

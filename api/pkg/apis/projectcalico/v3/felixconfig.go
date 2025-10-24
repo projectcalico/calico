@@ -21,6 +21,8 @@ import (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:shortName={felixconfig,felixconfigs}
 
 // FelixConfigurationList contains a list of FelixConfiguration object.
 type FelixConfigurationList struct {
@@ -33,6 +35,7 @@ type FelixConfigurationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type FelixConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -46,6 +49,7 @@ const (
 	KindFelixConfigurationList = "FelixConfigurationList"
 )
 
+// +kubebuilder:validation:Enum=Legacy;NFT;Auto
 type IptablesBackend string
 
 const (
@@ -56,6 +60,7 @@ const (
 
 // NFTablesMode is the enum used to enable/disable nftables mode.
 // +enum
+// +kubebuilder:validation:Enum=Enabled;Disabled
 type NFTablesMode string
 
 const (

@@ -190,7 +190,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			Expect(err).NotTo(HaveOccurred())
 			pol = api.NewGlobalNetworkPolicy()
 			pol.Namespace = "fv"
-			pol.Name = "policy-1"
+			pol.Name = "default.policy-1"
 			pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
 			pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 			pol.Spec.Selector = "all()"
@@ -263,7 +263,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					w[i][j].Stop()
 				}
 			}
-			_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-1", options2.DeleteOptions{})
+			_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "default.policy-1", options2.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			tc.Stop()
 			infra.Stop()

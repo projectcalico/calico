@@ -215,9 +215,11 @@ func (kds *K8sDatastoreInfra) runK8sApiserver() {
 	if err != nil {
 		panic(err)
 	}
+	crdPath := os.Getenv("CALICO_CRD_PATH")
+
 	args := []string{
 		"-v", os.Getenv("CERTS_PATH") + ":/home/user/certs", // Mount in location of certificates.
-		"-v", pwd + "/../../libcalico-go/config/crd:/crds", // Mount in location of CRDs.
+		"-v", fmt.Sprintf("%s/../../%s:/crds", pwd, crdPath), // Mount in location of CRDs.
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
@@ -419,9 +421,10 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 	kds.BadEndpoint = fmt.Sprintf("https://%s:1234", kds.containerGetIPForURL(kds.k8sApiContainer))
 
 	start = time.Now()
+	groupVersion := os.Getenv("CALICO_API_GROUP")
 	for {
 		var resp *http.Response
-		resp, err = insecureHTTPClient.Get(kds.Endpoint + "/apis/crd.projectcalico.org/v1/felixconfigurations")
+		resp, err = insecureHTTPClient.Get(fmt.Sprintf("%s/apis/%s/felixconfigurations", kds.Endpoint, groupVersion))
 		if resp.StatusCode != 200 {
 			err = fmt.Errorf("bad status (%v) for CRD GET request", resp.StatusCode)
 		}
@@ -470,6 +473,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 					K8sAPIEndpoint:           kds.Endpoint,
 					K8sInsecureSkipTLSVerify: true,
 					K8sClientQPS:             100,
+					CalicoAPIGroup:           os.Getenv("CALICO_API_GROUP"),
 				},
 			},
 		})
@@ -628,6 +632,10 @@ func (kds *K8sDatastoreInfra) GetBadEndpointDockerArgs() []string {
 
 func (kds *K8sDatastoreInfra) GetCalicoClient() client.Interface {
 	return kds.calicoClient
+}
+
+func (kds *K8sDatastoreInfra) UseV3API() bool {
+	return os.Getenv("CALICO_API_GROUP") == "projectcalico.org/v3"
 }
 
 func (kds *K8sDatastoreInfra) GetClusterGUID() string {
@@ -855,7 +863,7 @@ func (kds *K8sDatastoreInfra) AddAllowToDatastore(selector string) error {
 	// Create a policy to allow egress from the host so that we don't cut off Felix's datastore connection
 	// when we enable the host endpoint.
 	policy := api.NewGlobalNetworkPolicy()
-	policy.Name = "allow-egress"
+	policy.Name = "default.allow-egress"
 	policy.Spec.Selector = selector
 	policy.Spec.Egress = []api.Rule{{
 		Action: api.Allow,

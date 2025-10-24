@@ -35,6 +35,8 @@ type NetworkPolicyList struct {
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName={cnp,caliconetworkpolicy}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -49,19 +51,24 @@ type NetworkPolicySpec struct {
 	// security policies within the tier, the "default" tier is created automatically if it
 	// does not exist, this means for deployments requiring only a single Tier, the tier name
 	// may be omitted on all policy management requests.
+	// +kubebuilder:default:="default"
 	Tier string `json:"tier,omitempty" validate:"omitempty,name"`
+
 	// Order is an optional field that specifies the order in which the policy is applied.
 	// Policies with higher "order" are applied after those with lower
 	// order within the same tier.  If the order is omitted, it may be considered to be "infinite" - i.e. the
 	// policy will be applied last.  Policies with identical order will be applied in
 	// alphanumerical order based on the Policy "Name" within the tier.
 	Order *float64 `json:"order,omitempty"`
+
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
+
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
+
 	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
 	//
@@ -88,6 +95,7 @@ type NetworkPolicySpec struct {
 	// 	deployment != "dev"
 	// 	! has(label_name)
 	Selector string `json:"selector,omitempty" validate:"selector"`
+
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
 	// Types according to what Ingress and Egress are present in the policy.  The
@@ -120,6 +128,7 @@ type NetworkPolicySpec struct {
 	PerformanceHints []PolicyPerformanceHint `json:"performanceHints,omitempty" validate:"omitempty,unique,dive,oneof=AssumeNeededOnEveryNode"`
 }
 
+// +kubebuilder:validation:Enum=AssumeNeededOnEveryNode
 type PolicyPerformanceHint string
 
 const (
