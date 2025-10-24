@@ -206,11 +206,12 @@ func MaxPacketOffset(insns []pcap.BPFInstruction) int {
 
 			// Determine access size in bytes
 			accessSize := 1
-			switch asm.OpCode(size) {
-			case asm.MemOpSize16:
+			switch size {
+			case bpfSizeH: // 16-bit
 				accessSize = 2
-			case asm.MemOpSize32:
+			case bpfSizeW: // 32-bit
 				accessSize = 4
+				// bpfSizeB (8-bit) is handled by default accessSize = 1
 			}
 
 			switch mode {
