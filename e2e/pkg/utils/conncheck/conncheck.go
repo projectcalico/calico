@@ -20,6 +20,7 @@ import (
 	"maps"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -58,13 +59,27 @@ type connectionTester struct {
 }
 
 type ConnectionTester interface {
+	// Methods for setup and teardown.
 	AddClient(client *Client)
 	AddServer(server *Server)
 	Deploy()
+	Stop()
+
+	// Methods for one-shot execution.
 	ExpectSuccess(client *Client, targets ...Target)
 	ExpectFailure(client *Client, targets ...Target)
 	Execute()
 	ResetExpectations()
+
+	// Methods for continuous execution.
+	ExpectContinuously(client *Client, targets ...Target) Checkpointer
+}
+
+// Checkpointer provides a way to checkpoint continuous connection tests at specific points in time
+// during a test to verify that all connections are as expected up to that point.
+type Checkpointer interface {
+	ExpectSuccess(msg string)
+	ExpectFailure(msg string)
 	Stop()
 }
 
@@ -284,6 +299,21 @@ func (c *connectionTester) expectSuccess(client *Client, target Target) {
 		framework.Fail(fmt.Sprintf("Test bug: duplicate expectation: %s", e.String()), 2)
 	}
 	c.expectations[e.String()] = e
+}
+
+// ExpectContinuously starts continuous connection tests from the given client to the given targets.
+// It returns a Checkpointer that can be used to checkpoint and verify the results at specific points in time.
+// Callers must call Stop() on the returned Checkpointer when done.
+func (c *connectionTester) ExpectContinuously(client *Client, targets ...Target) Checkpointer {
+	checkpointer := &checkpointer{
+		results: make(chan connectionResult, 1000),
+		done:    make(chan struct{}),
+		client:  client,
+		targets: targets,
+		tester:  c,
+	}
+	checkpointer.start()
+	return checkpointer
 }
 
 func (c *connectionTester) ExpectFailure(client *Client, targets ...Target) {
@@ -734,4 +764,116 @@ func ExecInPod(pod *v1.Pod, sh, opt, cmd string) (string, error) {
 	return kubectl.NewKubectlCommand(pod.Namespace, args...).
 		WithTimeout(time.After(5 * time.Second)).
 		Exec()
+}
+
+// checkpointer implements the Checkpointer interface.
+// It runs continuous connection checks in the background, and allows
+// the test to checkpoint and verify the results at specific points in time.
+type checkpointer struct {
+	results               chan connectionResult
+	done                  chan struct{}
+	client                *Client
+	targets               []Target
+	routinesDone          sync.WaitGroup
+	expectationInProgress sync.WaitGroup
+	requestsInProgress    sync.WaitGroup
+	tester                *connectionTester
+}
+
+func (c *checkpointer) Stop() {
+	close(c.done)
+	c.routinesDone.Wait()
+	close(c.results)
+}
+
+func (c *checkpointer) ExpectSuccess(reason string) {
+	c.expect(reason, false)
+}
+
+func (c *checkpointer) ExpectFailure(reason string) {
+	c.expect(reason, true)
+}
+
+func (c *checkpointer) start() {
+	// Start goroutines running continuous checks for each target.
+	for _, target := range c.targets {
+		c.routinesDone.Add(1)
+
+		go func(t Target) {
+			for {
+				select {
+				case <-c.done:
+					// Stop the goroutine, and mark it as done.
+					c.routinesDone.Done()
+					return
+				default:
+				}
+
+				// Block if we are currently performing an expectation check.
+				c.expectationInProgress.Wait()
+
+				c.requestsInProgress.Add(1)
+				_, result, err := c.tester.execCommandInPod(c.tester.clients[c.client.ID()].pod, c.tester.command(t))
+				if err != nil {
+					logrus.WithError(err).Warn("Continuous connection attempt returned an error")
+				}
+
+				c.results <- connectionResult{
+					clientPod: c.tester.clients[c.client.ID()].pod,
+					target:    t,
+					expected:  Success,
+					actual:    result,
+					err:       err,
+				}
+				c.requestsInProgress.Done()
+				time.Sleep(10 * time.Millisecond)
+			}
+		}(target)
+	}
+}
+
+func (c *checkpointer) expect(reason string, expectFailure bool) {
+	By(fmt.Sprintf("Checking continuous connection results %s", reason))
+
+	checkResult := func(res connectionResult) string {
+		if !expectFailure && res.Failed() {
+			return fmt.Sprintf("Continuous connection check failure %s\n\n%s", reason, buildFailureMessage([]connectionResult{res}))
+		} else if expectFailure && !res.Failed() {
+			return fmt.Sprintf("Continuous connection check unexpectedly succeeded %s\n\n%s", reason, buildFailureMessage([]connectionResult{res}))
+		}
+		return ""
+	}
+
+	// Wait for at least one result to be available.
+	select {
+	case res := <-c.results:
+		if msg := checkResult(res); msg != "" {
+			framework.Fail(msg, 2)
+		}
+	case <-time.After(10 * time.Second):
+		framework.Fail("Timeout waiting for continuous connection results", 2)
+	}
+
+	// Block new connection attempts, and wait for any in-progress attempts to complete before
+	// draining the results channel. This ensures we have a consistent view of all connection attempts
+	// up to this point in time, and prevents possible races where new attempts are started while we are
+	// checking results.
+	c.expectationInProgress.Add(1)
+	defer c.expectationInProgress.Done()
+
+	// Wait for any in-progress requests to complete.
+	c.requestsInProgress.Wait()
+
+	// Drain the results channel and log any failures.
+	for {
+		select {
+		case res := <-c.results:
+			if msg := checkResult(res); msg != "" {
+				framework.Fail(msg, 2)
+			}
+		default:
+			// No more results to process.
+			return
+		}
+	}
 }
