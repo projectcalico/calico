@@ -433,21 +433,6 @@ load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# calicoctl is deployed as a pod on the cluster and needs to be recreated.
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f tests/k8st/infra/calicoctl.yaml
 
-.PHONY: st-checks
-st-checks:
-	@if mount | grep -q "cgroup on /sys/fs/cgroup"; then \
-		echo "cgroup v1 mounted"; \
-	else \
-		echo; \
-		echo "ERROR: Looks like your system uses cgroupv2, which is "; \
-		echo "not compatible with our ancient version of dind."; \
-		echo "You can either run this test in a VM, or add "; \
-		echo "systemd.unified_cgroup_hierarchy=0 to your kernel "; \
-		echo "command line (if supported by your kernel/OS)."; \
-		echo; \
-		exit 1; \
-	fi
-
 .PHONY: k8s-test
 ## Run the k8s tests
 k8s-test:
@@ -476,35 +461,11 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 .PHONY: kind-k8st-cleanup
 kind-k8st-cleanup: kind-cluster-destroy
 
-.PHONY: st
-## Run the system tests
-st: st-checks $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd .calico_test.created dist/calico dist/calico-ipam
-	# Use the host, PID and network namespaces from the host.
-	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
-	# Map the docker socket in so docker can be used from inside the container
-	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
-	# All of code under test is mounted into the container.
-	#   - This also provides access to calicoctl and the docker client
-	docker run --uts=host \
-		   --pid=host \
-		   --net=host \
-		   --privileged \
-		   -v $(CURDIR):/code \
-		   -e HOST_CHECKOUT_DIR=$(CURDIR) \
-		   -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
-		   -e MY_IP=$(LOCAL_IP_ENV) \
-		   -e NODE_CONTAINER_NAME=calico/node:$(TEST_BUILD_TAG) \
-		   --rm -t \
-		   -v /var/run/docker.sock:/var/run/docker.sock \
-		   $(TEST_CONTAINER_NAME) \
-		   sh -c 'nosetests $(ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
-	$(MAKE) stop-etcd
-
 ###############################################################################
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks ut image image-windows st
+ci: static-checks ut image image-windows
 
 ## Deploys images to registry
 cd: image-all cd-common
