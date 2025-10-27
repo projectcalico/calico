@@ -196,6 +196,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			Expect(out.Status.RunningConfig.HealthChecks).To(Equal(v3.Enabled))
 			Expect(out.Status.RunningConfig.LogSeverityScreen).To(Equal("Info"))
 			Expect(out.Status.RunningConfig.EtcdV3CompactionPeriod).To(Equal(&metav1.Duration{Duration: time.Minute * 10}))
+			Expect(out.Status.RunningConfig.Controllers.LoadBalancer.AssignIPs).To(Equal(v3.AllServices))
 		})
 	})
 
