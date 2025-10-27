@@ -370,9 +370,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			case "none":
 				// Felix must program unencap routes.
 			case "ipip":
+				options.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
+				options.IPIPMode = api.IPIPModeAlways
 				if testOpts.ipv6 {
-					// IPIP is not supported in IPv6. We need to mimic routes in FVs.
-					options.IPIPMode = api.IPIPModeAlways
 					options.SimulateBIRDRoutes = true
 				}
 			case "vxlan":

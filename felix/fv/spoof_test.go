@@ -15,7 +15,6 @@
 package fv_test
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 
@@ -28,28 +27,15 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-<<<<<<< HEAD
-=======
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
->>>>>>> open-source/master
 )
 
 var _ = Describe("Spoof tests", func() {
 	var (
-<<<<<<< HEAD
-		infra  infrastructure.DatastoreInfra
-		tc     infrastructure.TopologyContainers
-		w      [3]*workload.Workload
-		cc     *connectivity.Checker
-		client client.Interface
-=======
 		infra        infrastructure.DatastoreInfra
 		tc           infrastructure.TopologyContainers
 		w            [3]*workload.Workload
 		cc           *connectivity.Checker
 		calicoClient client.Interface
->>>>>>> open-source/master
 	)
 
 	teardownInfra := func() {
@@ -151,11 +137,7 @@ var _ = Describe("Spoof tests", func() {
 			opts := infrastructure.DefaultTopologyOptions()
 			opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
 			opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
-<<<<<<< HEAD
-			tc, client = infrastructure.StartNNodeTopology(3, opts, infra)
-=======
 			tc, calicoClient = infrastructure.StartNNodeTopology(3, opts, infra)
->>>>>>> open-source/master
 			// Install a default profile allowing all ingress and egress,
 			// in the absence of policy.
 			infra.AddDefaultAllow()
@@ -164,22 +146,9 @@ var _ = Describe("Spoof tests", func() {
 			for ii := range w {
 				wIP := fmt.Sprintf("10.65.%d.2", ii)
 				wName := fmt.Sprintf("w%d", ii)
-				infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, client)
+				infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
 				w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 				w[ii].ConfigureInInfra(infra)
-				if opts.UseIPPools {
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(wIP),
-						HandleID: &wName,
-						Attrs: map[string]string{
-							ipam.AttributeNode: tc.Felixes[ii].Hostname,
-						},
-						Hostname: tc.Felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
-				}
-
 			}
 
 			if BPFMode() {
