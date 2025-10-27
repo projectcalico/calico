@@ -19,55 +19,55 @@ import (
 	"testing"
 )
 
-// The main suite of tests in kube-proxy_test.go use a real syncer, making it
+// The main suite of tests in kube-proxy_test.go use a real proxy, making it
 // hard to check for the start of day race between the CheckXXX methods and the
-// initial sync.  These tests hack in a mock syncer so we can test the low
+// initial sync.  These tests hack in a mock proxy so we can test the low
 // level logic
 
 func TestConntrackFrontendHasBackendChecksHasSynced(t *testing.T) {
-	m := &mockSyncer{}
+	m := &mockProxy{}
 	kp := KubeProxy{
-		syncer: m,
+		proxy: m,
 	}
 
 	if !kp.ConntrackFrontendHasBackend(nil, 0, nil, 0, 0) {
-		t.Errorf("ConntrackFrontendHasBackend should return true when syncer has not synced")
+		t.Errorf("ConntrackFrontendHasBackend should return true when proxy has not synced")
 	}
 	m.synced = true
 	if kp.ConntrackFrontendHasBackend(nil, 0, nil, 0, 0) {
-		t.Errorf("ConntrackFrontendHasBackend should return false when syncer has synced")
+		t.Errorf("ConntrackFrontendHasBackend should return false when proxy has synced")
 	}
 }
 
 func TestConntrackDestIsServiceChecksHasSynced(t *testing.T) {
-	m := &mockSyncer{}
+	m := &mockProxy{}
 	kp := KubeProxy{
-		syncer: m,
+		proxy: m,
 	}
 
 	if kp.ConntrackDestIsService(nil, 0, 0) {
-		t.Errorf("ConntrackDestIsService should return false when syncer has not synced")
+		t.Errorf("ConntrackDestIsService should return false when proxy has not synced")
 	}
 	m.synced = true
 	if !kp.ConntrackDestIsService(nil, 0, 0) {
-		t.Errorf("ConntrackDestIsService should return true when syncer has synced")
+		t.Errorf("ConntrackDestIsService should return true when proxy has synced")
 	}
 }
 
-type mockSyncer struct {
-	DPSyncer
+type mockProxy struct {
+	ProxyFrontend
 	synced bool
 }
 
-func (s *mockSyncer) HasSynced() bool {
-	return s.synced
+func (p *mockProxy) HasSynced() bool {
+	return p.synced
 }
 
-func (s *mockSyncer) ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP,
+func (p *mockProxy) ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP,
 	backendPort uint16, proto uint8) bool {
 	return false
 }
 
-func (s *mockSyncer) ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool {
+func (p *mockProxy) ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool {
 	return true
 }
