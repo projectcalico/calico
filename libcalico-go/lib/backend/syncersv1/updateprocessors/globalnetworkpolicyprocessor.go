@@ -23,7 +23,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // Create a new SyncerUpdateProcessor to sync GlobalNetworkPolicy data in v1 format for
@@ -40,15 +39,11 @@ func convertGlobalNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, er
 	if v3key.Name == "" {
 		return model.PolicyKey{}, errors.New("Missing Name field to create a v1 NetworkPolicy Key")
 	}
-	tier, err := names.TierFromPolicyName(v3key.Name)
-	if err != nil {
-		return model.PolicyKey{}, err
-	}
 	return model.PolicyKey{
-		Name: v3key.Name,
-		Tier: tier,
+		Name:      v3key.Name,
+		Namespace: "",
+		Kind:      apiv3.KindGlobalNetworkPolicy,
 	}, nil
-
 }
 
 func ConvertGlobalNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
@@ -74,6 +69,7 @@ func ConvertGlobalNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error)
 
 	v1value := &model.Policy{
 		Namespace:        "", // Empty string used to signal a GlobalNetworkPolicy.
+		Tier:             tierOrDefault(spec.Tier),
 		Order:            spec.Order,
 		InboundRules:     RulesAPIV3ToBackend(spec.Ingress, ""),
 		OutboundRules:    RulesAPIV3ToBackend(spec.Egress, ""),
