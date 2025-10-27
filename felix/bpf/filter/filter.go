@@ -180,6 +180,81 @@ func fromBE(b *asm.Block, size uint8) {
 	b.FromBE(asm.R1, sz)
 }
 
+// MaxPacketOffset analyzes a classic BPF program and returns the largest offset
+// (in bytes) that the program may access in a network packet. This is useful for
+// determining how much of the packet needs to be pulled into linear memory before
+// running the BPF program.
+//
+// The function considers:
+// - Absolute loads (LdABS): direct offset K + access size
+// - Indexed loads (LdIND): offset X+K + access size (tracks X from MSH loads)
+// - MSH loads (LdxMSH): loads IP header length from offset K
+//
+// Returns the maximum offset in bytes, or 0 if no packet accesses are found.
+func MaxPacketOffset(insns []pcap.BPFInstruction) int {
+	maxOffset := 0
+	// Track the maximum value X can have. X is typically loaded via LdxMSH which
+	// computes 4*(pkt[K]&0xf). The maximum value is 4*15 = 60 (max IPv4 header with options).
+	// If we don't see an LdxMSH instruction, we use a conservative default.
+	maxX := 60 // Conservative default for IP header with options
+	seenLdxMSH := false
+
+	for _, inst := range insns {
+		code := uint8(inst.Code)
+		class := bpfClass(code)
+		K := int(inst.K)
+
+		switch class {
+		case bpfClassLd:
+			mode := bpfMode(code)
+			size := bpfSize(code)
+
+			// Determine access size in bytes
+			accessSize := 1
+			switch size {
+			case bpfSizeH: // 16-bit
+				accessSize = 2
+			case bpfSizeW: // 32-bit
+				accessSize = 4
+				// Default case: bpfSizeB (8-bit) uses accessSize = 1
+			}
+
+			switch mode {
+			case bpfModeABS:
+				// Absolute load: pkt[K]
+				offset := K + accessSize
+				if offset > maxOffset {
+					maxOffset = offset
+				}
+			case bpfModeIND:
+				// Indexed load: pkt[X+K]
+				// X is loaded by LdxMSH instructions which compute 4*(pkt[K]&0xf)
+				// The maximum value is 60 bytes (IPv4 header with maximum options)
+				offset := maxX + K + accessSize
+				if offset > maxOffset {
+					maxOffset = offset
+				}
+			}
+
+		case bpfClassLdx:
+			// LdxMSH: Load IP header length from pkt[K] & 0xf, multiply by 4
+			if inst.Code == uint16(bpfClassLdx|bpfModeMSH|bpfSizeB) {
+				seenLdxMSH = true
+				K := int(inst.K)
+				// This loads 1 byte from offset K to compute the header length
+				offset := K + 1
+				if offset > maxOffset {
+					maxOffset = offset
+				}
+				// X will be set to 4 * (pkt[K] & 0xf), maximum value is 60
+				// We already initialized maxX to 60, so no need to update it
+			}
+		}
+	}
+
+	return maxOffset
+}
+
 func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkType) error {
 	for i, cbpf := range pcap {
 		code := uint8(cbpf.Code)
