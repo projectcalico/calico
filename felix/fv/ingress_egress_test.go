@@ -15,7 +15,6 @@
 package fv_test
 
 import (
-	"fmt"
 	"strconv"
 
 	. "github.com/onsi/ginkgo"
@@ -48,9 +47,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		// Create three workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			wName := fmt.Sprintf("w%v", iiStr)
-			wIP := fmt.Sprintf("10.65.0.1%v", iiStr)
-			w[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[0], "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].Configure(client)
 		}
 
@@ -244,9 +241,7 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 		// Create three workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			wName := fmt.Sprintf("w%v", iiStr)
-			wIP := fmt.Sprintf("10.65.0.1%v", iiStr)
-			w[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[0], "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].Configure(client)
 		}
 
@@ -348,9 +343,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		// Create three workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			wName := fmt.Sprintf("w%v", iiStr)
-			wIP := fmt.Sprintf("10.65.0.1%v", iiStr)
-			w[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[0], "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].Configure(client)
 		}
 

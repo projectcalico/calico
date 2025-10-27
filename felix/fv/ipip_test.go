@@ -39,8 +39,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -97,16 +95,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 			w[ii].ConfigureInInfra(infra)
 
 			if topologyOptions.UseIPPools {
-				// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-				err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-					IP:       cnet.MustParseIP(wIP),
-					HandleID: &wName,
-					Attrs: map[string]string{
-						ipam.AttributeNode: tc.Felixes[ii].Hostname,
-					},
-					Hostname: tc.Felixes[ii].Hostname,
-				})
-				Expect(err).NotTo(HaveOccurred())
+				infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, client)
 			}
 
 			hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")

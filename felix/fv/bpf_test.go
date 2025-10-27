@@ -374,6 +374,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.IPIPMode = api.IPIPModeAlways
 				if testOpts.ipv6 {
 					options.SimulateBIRDRoutes = true
+					options.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
 				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
@@ -1255,7 +1256,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		setupCluster := func() {
 			if !options.UseIPPools {
 				options.SimulateBIRDRoutes = true
-				options.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
 			}
 
 			tc, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)

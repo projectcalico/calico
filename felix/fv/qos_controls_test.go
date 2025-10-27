@@ -228,7 +228,6 @@ var _ = infrastructure.DatastoreDescribe(
 						topt.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(topt.IPPoolCIDR, topt.IPv6PoolCIDR)
 					}
 
-					topt.UseIPPools = true
 					topt.DelayFelixStart = true
 					topt.TriggerDelayedFelixStart = true
 					if BPFMode() {

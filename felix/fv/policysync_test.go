@@ -54,6 +54,7 @@ func init() {
 }
 
 var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
+
 	var (
 		etcd              *containers.Container
 		tc                infrastructure.TopologyContainers
@@ -85,9 +86,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		// Create three workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			wName := fmt.Sprintf("w%v", iiStr)
-			wIP := fmt.Sprintf("10.65.0.1%v", iiStr)
-			w[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[0], "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].WorkloadEndpoint.Spec.Endpoint = "eth0"
 			w[ii].WorkloadEndpoint.Spec.Orchestrator = "k8s"
 			w[ii].WorkloadEndpoint.Spec.Pod = "fv-pod-" + iiStr
