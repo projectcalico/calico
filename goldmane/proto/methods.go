@@ -116,7 +116,7 @@ func makeNamePart(h *PolicyHit) (string, error) {
 	case PolicyKind_StagedGlobalNetworkPolicy:
 		namePart = fmt.Sprintf("%s.staged:%s", h.Tier, h.Name)
 	case PolicyKind_StagedNetworkPolicy:
-		namePart = fmt.Sprintf("%s/%s.staged:%s", h.Namespace, h.Tier, h.Name) // TODO: DOESN"T FOLLOW PATTERN AHHH
+		namePart = fmt.Sprintf("%s/%s.staged:%s", h.Namespace, h.Tier, h.Name)
 	case PolicyKind_AdminNetworkPolicy:
 		namePart = fmt.Sprintf("kanp.adminnetworkpolicy.%s", h.Name)
 	case PolicyKind_BaselineAdminNetworkPolicy:
