@@ -94,33 +94,43 @@ func TestMaxPacketOffset(t *testing.T) {
 			insns: []pcap.BPFInstruction{
 				{Code: uint16(testBpfClassLd | testBpfModeIND | testBpfSizeB), K: 0},
 			},
-			expected: 61, // 60 (max X for IP header) + 0 + 1 byte
+			expected: 21, // 20 (default X for IP header) + 0 + 1 byte
 		},
 		{
 			name: "indexed load with K offset",
 			insns: []pcap.BPFInstruction{
 				{Code: uint16(testBpfClassLd | testBpfModeIND | testBpfSizeW), K: 10},
 			},
-			expected: 74, // 60 (max X for IP header) + 10 + 4 bytes
+			expected: 34, // 20 (default X for IP header) + 10 + 4 bytes
 		},
 		{
-			name: "MSH load (IP header length)",
+			name: "MSH load (IP header length) at K=14",
 			insns: []pcap.BPFInstruction{
 				{Code: uint16(testBpfClassLdx | testBpfModeMSH | testBpfSizeB), K: 14},
 			},
 			expected: 15, // offset 14 + 1 byte
 		},
 		{
-			name: "typical Ethernet + IP filter",
+			name: "MSH load at non-standard offset",
+			insns: []pcap.BPFInstruction{
+				{Code: uint16(testBpfClassLdx | testBpfModeMSH | testBpfSizeB), K: 20},
+				{Code: uint16(testBpfClassLd | testBpfModeIND | testBpfSizeW), K: 10},
+			},
+			expected: 74, // 60 (variable X) + 10 + 4 bytes from IND load
+		},
+		{
+			name: "typical Ethernet + IP filter with MSH at K=14",
 			insns: []pcap.BPFInstruction{
 				// Load ethertype at offset 12 (2 bytes)
 				{Code: uint16(testBpfClassLd | testBpfModeABS | testBpfSizeH), K: 12},
+				// MSH load at K=14 (Ethernet case)
+				{Code: uint16(testBpfClassLdx | testBpfModeMSH | testBpfSizeB), K: 14},
 				// Load IP protocol at offset 23 (1 byte) - after 14-byte Ethernet + 9 bytes into IP
 				{Code: uint16(testBpfClassLd | testBpfModeABS | testBpfSizeB), K: 23},
 				// Load destination port (2 bytes) at IP header + 2
 				{Code: uint16(testBpfClassLd | testBpfModeIND | testBpfSizeH), K: 2},
 			},
-			expected: 64, // 60 + 2 + 2 from the IND load
+			expected: 24, // 20 (fixed X for K=14) + 2 + 2 from the IND load
 		},
 		{
 			name: "non-load instructions ignored",
@@ -155,8 +165,8 @@ func TestMaxPacketOffsetWithRealBPFFilter(t *testing.T) {
 		{
 			name:       "tcp port 80",
 			expression: "tcp port 80",
-			// TCP port check needs: Ethernet (14) + IP header (max 60) + TCP dest port (2 bytes at offset 2) = 14+60+2+2 = 78
-			maxExpected: 78,
+			// TCP port check needs: Ethernet (14) + IP header (20 fixed for K=14) + TCP dest port (2 bytes at offset 2) = 14+20+2+2 = 38
+			maxExpected: 38,
 		},
 		{
 			name:       "icmp",

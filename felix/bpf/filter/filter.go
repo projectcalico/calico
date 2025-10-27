@@ -190,13 +190,19 @@ func fromBE(b *asm.Block, size uint8) {
 // - Indexed loads (LdIND): offset X+K + access size (tracks X from MSH loads)
 // - MSH loads (LdxMSH): loads IP header length from offset K
 //
+// For X register tracking, the function matches the logic in cBPF2eBPF:
+// - When MSH loads at K==14 (Ethernet) or K==0 (IPv4), X is fixed at 20 bytes
+// - When MSH loads at other offsets, X can be up to 60 bytes (max IPv4 header with options)
+// - Default (no MSH): assumes 20 bytes
+//
 // Returns the maximum offset in bytes, or 0 if no packet accesses are found.
 func MaxPacketOffset(insns []pcap.BPFInstruction) int {
 	maxOffset := 0
-	// Track the maximum value X can have. X is typically loaded via LdxMSH which
-	// computes 4*(pkt[K]&0xf). The maximum value is 4*15 = 60 (max IPv4 header with options).
-	// If we don't see an LdxMSH instruction, we use a conservative default.
-	maxX := 60 // Conservative default for IP header with options
+	// Track the maximum value X can have. X is loaded via LdxMSH instructions.
+	// For common cases (K==14 for Ethernet or K==0 for IPv4), cBPF2eBPF fixes
+	// the IP header length at 20 bytes (no IP options).
+	// For other cases, it computes 4*(pkt[K]&0xf) which can be up to 60 bytes.
+	maxX := 20 // Default: fixed IP header without options
 	seenLdxMSH := false
 
 	for _, inst := range insns {
@@ -228,8 +234,7 @@ func MaxPacketOffset(insns []pcap.BPFInstruction) int {
 				}
 			case bpfModeIND:
 				// Indexed load: pkt[X+K]
-				// X is loaded by LdxMSH instructions which compute 4*(pkt[K]&0xf)
-				// The maximum value is 60 bytes (IPv4 header with maximum options)
+				// X is loaded by LdxMSH instructions
 				offset := maxX + K + accessSize
 				if offset > maxOffset {
 					maxOffset = offset
@@ -246,8 +251,14 @@ func MaxPacketOffset(insns []pcap.BPFInstruction) int {
 				if offset > maxOffset {
 					maxOffset = offset
 				}
-				// X will be set to 4 * (pkt[K] & 0xf), maximum value is 60
-				// We already initialized maxX to 60, so no need to update it
+				// Matching cBPF2eBPF logic:
+				// - K==14 (Ethernet) or K==0 (IPv4): fixed at 20 bytes
+				// - Other K values: variable, maximum 60 bytes
+				if K == 14 || K == 0 {
+					maxX = 20
+				} else {
+					maxX = 60
+				}
 			}
 		}
 	}
