@@ -133,11 +133,17 @@ function init-vars() {
 cleanbranch=""
 pr_body_file=""
 gitamcleanup=false
+gitcherrycleanup=false
 function return_to_kansas {
   if [[ "${gitamcleanup}" == "true" ]]; then
     echo
     echo "+++ Aborting in-progress git am."
     git am --abort >/dev/null 2>&1 || true
+  fi
+  if [[ "${gitcherrycleanup}" == "true" ]]; then
+    echo
+    echo "+++ Aborting in-progress git cherry-pick."
+    git cherry-pick --abort >/dev/null 2>&1 || true
   fi
 
   # return to the starting branch and delete the PR text file
@@ -236,9 +242,8 @@ function make-a-pr() {
   pr_body_file="$(mktemp -t prtext.XXXX)" # cleaned in return_to_kansas
   
   cat >"${pr_body_file}" <<EOF
-[${relshort}] ${new_title}
-
-${META_BLOCK:-}${new_header}${new_body}
+${new_header}${new_body}
+${META_BLOCK:-}
 EOF
 
   if [[ -n "${DRY_RUN}" ]]; then
@@ -264,31 +269,42 @@ function create-branch-and-pr() {
   echo "+++ Creating local branch ${NEWBRANCHUNIQ}"
   git checkout -b "${NEWBRANCHUNIQ}" "${BRANCH}"
   cleanbranch="${NEWBRANCHUNIQ}"
-  
-  gitamcleanup=true
-  for pull in "${PULLS[@]}"; do
-    echo "+++ Downloading patch to /tmp/${pull}.patch (in case you need to do this again)"
-    if [[ -n "${SQUASH_COMMITS}" ]]; then
-      gh pr diff --repo ${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME} ${pull} > /tmp/${pull}.patch
-    else
-      gh api -H "Accept: application/vnd.github.v3.patch" /repos/${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}/pulls/${pull} > /tmp/${pull}.patch
-    fi
 
-    apply_cmd="git am --empty=keep -3 \"/tmp/${pull}.patch\""
-    add_cmd="git add / git am --continue"
-    if [[ -n "${SQUASH_COMMITS}" ]]; then
+  for pull in "${PULLS[@]}"; do
+    if [[ -n "${CHERRY_PICK}" ]]; then
+      echo "+++ Cherry-picking PR ${pull} from ${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}"
+      local merge_commit=$(gh pr view --repo ${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME} ${pull} --json mergeCommit -q .mergeCommit.oid)
+      if [[ -z "${merge_commit}" || "${merge_commit}" == "null" ]]; then
+        echo "!!! PR ${pull} has bad/missing merge commit (perhaps it's not merged yet?), cannot cherry-pick."
+        exit 1
+      fi
+      apply_cmd="git cherry-pick -x --mainline=1 ${merge_commit}"
+      add_cmd_msg="git add / git cherry-pick --continue"
+      add_cmd="true" # No-op, cherry-pick commits for us
+      gitcherrycleanup=true
+    elif [[ -n "${SQUASH_COMMITS}" ]]; then
+      echo "+++ Downloading patch to /tmp/${pull}.patch (in case you need to do this again)"
+      gh pr diff --repo ${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME} ${pull} > /tmp/${pull}.patch
       apply_cmd="git apply -p1 -3 \"/tmp/${pull}.patch\""
+      add_cmd_msg="git add"
       add_cmd="git add"
+    else
+      echo "+++ Downloading patch to /tmp/${pull}.patch (in case you need to do this again)"
+      gh pr diff --repo ${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME} ${pull} --patch > /tmp/${pull}.patch
+      apply_cmd="git am --empty=keep -3 \"/tmp/${pull}.patch\""
+      add_cmd_msg="git add / git am --continue"
+      add_cmd="true" # No-op, am commits for us
+      gitamcleanup=true
     fi
 
     echo
-    echo "+++ About to attempt cherry pick of PR. To reattempt:"
+    echo "+++ About to attempt cherry pick of PR using:"
     echo "  $ ${apply_cmd}"
     echo
 
     if (eval "${apply_cmd}"); then
       # If patch is applied cleanly, add files, they will be committed later
-      git add .
+      eval "$add_cmd"
     else
       # If there are conflicts, prompt user to resolve them in another window and continue
       conflicts=false
@@ -298,9 +314,9 @@ function create-branch-and-pr() {
         echo
         echo "+++ Conflicts detected:"
         echo
-        (git status --porcelain | grep ^U) || echo "!!! None. Did you '${add_cmd}'?"
+        (git status --porcelain | grep ^U) || echo "!!! None. Did you '${add_cmd_msg}'?"
         echo
-        echo "+++ Please resolve the conflicts in another window (and remember to '${add_cmd}')"
+        echo "+++ Please resolve the conflicts in another window (and remember to '${add_cmd_msg}')"
         read -p "+++ Proceed (anything but 'y' aborts the cherry-pick)? [y/n] " -r
         echo
         if ! [[ "${REPLY}" =~ ^[yY]$ ]]; then
@@ -310,7 +326,7 @@ function create-branch-and-pr() {
       done
   
       if [[ "${conflicts}" != "true" ]]; then
-        echo "!!! git am / git apply failed, likely because of an in-progress 'git am' or 'git rebase'"
+        echo "!!! git cherry-pick / am / git apply failed, likely because of an in-progress 'git am' or 'git rebase'"
         exit 1
       fi
     fi
