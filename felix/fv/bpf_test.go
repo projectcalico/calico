@@ -1253,6 +1253,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		)
 
 		setupCluster := func() {
+			if !options.UseIPPools {
+				options.SimulateBIRDRoutes = true
+				options.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
+			}
+
 			tc, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
 
 			addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
@@ -1266,7 +1271,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 				wName := fmt.Sprintf("w%d%d", ii, wi)
 
-				infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+				if options.UseIPPools {
+					infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+				}
 				w := workload.New(tc.Felixes[ii], wName, "default",
 					wIP, strconv.Itoa(port), testOpts.protocol)
 
