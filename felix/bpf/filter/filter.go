@@ -187,12 +187,17 @@ func fromBE(b *asm.Block, size uint8) {
 //
 // The function considers:
 // - Absolute loads (LdABS): direct offset K + access size
-// - Indexed loads (LdIND): offset X+K + access size (assumes worst-case X=255)
+// - Indexed loads (LdIND): offset X+K + access size (tracks X from MSH loads)
 // - MSH loads (LdxMSH): loads IP header length from offset K
 //
 // Returns the maximum offset in bytes, or 0 if no packet accesses are found.
 func MaxPacketOffset(insns []pcap.BPFInstruction) int {
 	maxOffset := 0
+	// Track the maximum value X can have. X is typically loaded via LdxMSH which
+	// computes 4*(pkt[K]&0xf). The maximum value is 4*15 = 60 (max IPv4 header with options).
+	// If we don't see an LdxMSH instruction, we use a conservative default.
+	maxX := 60 // Conservative default for IP header with options
+	seenLdxMSH := false
 
 	for _, inst := range insns {
 		code := uint8(inst.Code)
@@ -211,7 +216,7 @@ func MaxPacketOffset(insns []pcap.BPFInstruction) int {
 				accessSize = 2
 			case bpfSizeW: // 32-bit
 				accessSize = 4
-			// Default case: bpfSizeB (8-bit) uses accessSize = 1
+				// Default case: bpfSizeB (8-bit) uses accessSize = 1
 			}
 
 			switch mode {
@@ -223,24 +228,26 @@ func MaxPacketOffset(insns []pcap.BPFInstruction) int {
 				}
 			case bpfModeIND:
 				// Indexed load: pkt[X+K]
-				// X can vary, but for safety we assume worst-case X value.
-				// In practice, X is often a header length (e.g., IP header = 20-60 bytes)
-				// We use 255 as a conservative upper bound for X.
-				offset := 255 + K + accessSize
+				// X is loaded by LdxMSH instructions which compute 4*(pkt[K]&0xf)
+				// The maximum value is 60 bytes (IPv4 header with maximum options)
+				offset := maxX + K + accessSize
 				if offset > maxOffset {
 					maxOffset = offset
 				}
 			}
 
 		case bpfClassLdx:
-			// LdxMSH: Load IP header length from pkt[K] & 0xf
+			// LdxMSH: Load IP header length from pkt[K] & 0xf, multiply by 4
 			if inst.Code == uint16(bpfClassLdx|bpfModeMSH|bpfSizeB) {
+				seenLdxMSH = true
 				K := int(inst.K)
-				// This loads 1 byte from offset K
+				// This loads 1 byte from offset K to compute the header length
 				offset := K + 1
 				if offset > maxOffset {
 					maxOffset = offset
 				}
+				// X will be set to 4 * (pkt[K] & 0xf), maximum value is 60
+				// We already initialized maxX to 60, so no need to update it
 			}
 		}
 	}

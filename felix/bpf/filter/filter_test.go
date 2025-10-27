@@ -94,14 +94,14 @@ func TestMaxPacketOffset(t *testing.T) {
 			insns: []pcap.BPFInstruction{
 				{Code: uint16(testBpfClassLd | testBpfModeIND | testBpfSizeB), K: 0},
 			},
-			expected: 256, // 255 (max X) + 0 + 1 byte
+			expected: 61, // 60 (max X for IP header) + 0 + 1 byte
 		},
 		{
 			name: "indexed load with K offset",
 			insns: []pcap.BPFInstruction{
 				{Code: uint16(testBpfClassLd | testBpfModeIND | testBpfSizeW), K: 10},
 			},
-			expected: 269, // 255 (max X) + 10 + 4 bytes
+			expected: 74, // 60 (max X for IP header) + 10 + 4 bytes
 		},
 		{
 			name: "MSH load (IP header length)",
@@ -120,7 +120,7 @@ func TestMaxPacketOffset(t *testing.T) {
 				// Load destination port (2 bytes) at IP header + 2
 				{Code: uint16(testBpfClassLd | testBpfModeIND | testBpfSizeH), K: 2},
 			},
-			expected: 259, // 255 + 2 + 2 from the IND load
+			expected: 64, // 60 + 2 + 2 from the IND load
 		},
 		{
 			name: "non-load instructions ignored",
@@ -150,22 +150,25 @@ func TestMaxPacketOffsetWithRealBPFFilter(t *testing.T) {
 	tests := []struct {
 		name        string
 		expression  string
-		minExpected int // minimum expected offset
+		maxExpected int // maximum expected offset
 	}{
 		{
-			name:        "tcp port 80",
-			expression:  "tcp port 80",
-			minExpected: 1, // should at least read some bytes
+			name:       "tcp port 80",
+			expression: "tcp port 80",
+			// TCP port check needs: Ethernet (14) + IP header (max 60) + TCP dest port (2 bytes at offset 2) = 14+60+2+2 = 78
+			maxExpected: 78,
 		},
 		{
-			name:        "icmp",
-			expression:  "icmp",
-			minExpected: 1,
+			name:       "icmp",
+			expression: "icmp",
+			// ICMP check needs: Ethernet (14) + IP protocol field (1 byte at offset 9) = 14+9+1 = 24
+			maxExpected: 24,
 		},
 		{
-			name:        "ip dst 192.168.1.1",
-			expression:  "dst host 192.168.1.1",
-			minExpected: 1,
+			name:       "ip dst 192.168.1.1",
+			expression: "dst host 192.168.1.1",
+			// IP dst check needs: Ethernet (14) + IP dst (4 bytes at offset 16) = 14+16+4 = 34
+			maxExpected: 34,
 		},
 	}
 
@@ -179,13 +182,22 @@ func TestMaxPacketOffsetWithRealBPFFilter(t *testing.T) {
 			}
 
 			result := MaxPacketOffset(insns)
-			if result < tt.minExpected {
-				t.Errorf("MaxPacketOffset() = %d, expected at least %d for filter '%s'",
-					result, tt.minExpected, tt.expression)
+
+			// The result should not exceed our expected maximum
+			// (it might be less if the filter is optimized differently)
+			if result > tt.maxExpected {
+				t.Errorf("MaxPacketOffset() = %d, expected at most %d for filter '%s'",
+					result, tt.maxExpected, tt.expression)
+			}
+
+			// But it should be at least 1 (some packet data must be accessed)
+			if result < 1 {
+				t.Errorf("MaxPacketOffset() = %d, expected at least 1 for filter '%s'",
+					result, tt.expression)
 			}
 
 			// Log the result for informational purposes
-			t.Logf("Filter '%s' has max offset: %d bytes", tt.expression, result)
+			t.Logf("Filter '%s' has max offset: %d bytes (expected max: %d)", tt.expression, result, tt.maxExpected)
 		})
 	}
 }
