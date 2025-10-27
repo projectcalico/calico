@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // Create a new SyncerUpdateProcessor to sync NetworkPolicy data in v1 format for
@@ -41,13 +40,10 @@ func convertNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 	if v3key.Name == "" || v3key.Namespace == "" {
 		return model.PolicyKey{}, errors.New("Missing Name or Namespace field to create a v1 NetworkPolicy Key")
 	}
-	tier, err := names.TierFromPolicyName(v3key.Name)
-	if err != nil {
-		return model.PolicyKey{}, err
-	}
 	return model.PolicyKey{
-		Name: v3key.Namespace + "/" + v3key.Name,
-		Tier: tier,
+		Name:      v3key.Name,
+		Namespace: v3key.Namespace,
+		Kind:      apiv3.KindNetworkPolicy, // TODO: We need to indicate the kind of Kubernetes NPs distinctly.
 	}, nil
 }
 
@@ -73,6 +69,7 @@ func ConvertNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
 
 	v1value := &model.Policy{
 		Namespace:        v3res.Namespace,
+		Tier:             tierOrDefault(spec.Tier),
 		Order:            spec.Order,
 		InboundRules:     RulesAPIV3ToBackend(spec.Ingress, v3res.Namespace),
 		OutboundRules:    RulesAPIV3ToBackend(spec.Egress, v3res.Namespace),
@@ -97,4 +94,11 @@ func policyTypesAPIV3ToBackend(ptypes []apiv3.PolicyType) []string {
 
 func policyTypeAPIV3ToBackend(ptype apiv3.PolicyType) string {
 	return strings.ToLower(string(ptype))
+}
+
+func tierOrDefault(tier string) string {
+	if tier == "" {
+		return "default"
+	}
+	return tier
 }
