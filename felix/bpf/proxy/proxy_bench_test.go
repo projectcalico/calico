@@ -61,7 +61,8 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 
 		b.StartTimer()
 
-		proxy, err := proxy.New(k8s, &benchS, "somename", proxy.WithImmediateSync())
+		frontendMap, backendMap, maglevMap, affinityMap, rt, excludedCIDRs, maglevLUTSize := createMockMaps()
+		proxy, err := proxy.New(k8s, "somename", frontendMap, backendMap, maglevMap, affinityMap, rt, excludedCIDRs, maglevLUTSize, proxy.WithImmediateSync())
 		Expect(err).ShouldNot(HaveOccurred())
 		// Wait for the initial sync to complete
 		<-benchS.syncC

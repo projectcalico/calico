@@ -43,7 +43,8 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		By("creating proxy with fake client and mock syncer", func() {
 			var err error
 
-			p, err = proxy.New(k8s, &mockDummySyncer{}, testNodeName,
+			frontendMap, backendMap, maglevMap, affinityMap, rt, excludedCIDRs, maglevLUTSize := createMockMaps()
+			p, err = proxy.New(k8s, testNodeName, frontendMap, backendMap, maglevMap, affinityMap, rt, excludedCIDRs, maglevLUTSize,
 				proxy.WithMinSyncPeriod(200*time.Millisecond), proxy.WithMaxSyncPeriod(1*time.Second))
 			Expect(err).NotTo(HaveOccurred())
 		})
