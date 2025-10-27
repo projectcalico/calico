@@ -5030,8 +5030,9 @@ func schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref common.Re
 				Properties: map[string]spec.Schema{
 					"assignIPs": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "AssignIPs controls which LoadBalancer Service gets IP assigned from Calico IPAM.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

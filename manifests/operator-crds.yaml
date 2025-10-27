@@ -31464,6 +31464,7 @@ spec:
                     loadBalancer:
                       properties:
                         assignIPs:
+                          default: AllServices
                           type: string
                       type: object
                     namespace:
@@ -31550,6 +31551,7 @@ spec:
                         loadBalancer:
                           properties:
                             assignIPs:
+                              default: AllServices
                               type: string
                           type: object
                         namespace:
