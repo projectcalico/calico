@@ -234,41 +234,41 @@ func (kp *KubeProxy) OnRouteDelete(k routes.KeyInterface) {
 	log.WithField("key", k).Debug("kube-proxy: OnRouteDelete")
 }
 
-// ConntrackScanStart to satisfy conntrack.NATChecker - forwards to syncer.
+// ConntrackScanStart to satisfy conntrack.NATChecker - forwards to proxy.
 func (kp *KubeProxy) ConntrackScanStart() {
 	kp.lock.RLock()
-	if kp.syncer != nil {
-		kp.syncer.ConntrackScanStart()
+	if kp.proxy != nil {
+		kp.proxy.ConntrackScanStart()
 	}
 }
 
-// ConntrackScanEnd to satisfy conntrack.NATChecker - forwards to syncer.
+// ConntrackScanEnd to satisfy conntrack.NATChecker - forwards to proxy.
 func (kp *KubeProxy) ConntrackScanEnd() {
-	if kp.syncer != nil {
-		kp.syncer.ConntrackScanEnd()
+	if kp.proxy != nil {
+		kp.proxy.ConntrackScanEnd()
 	}
 	kp.lock.RUnlock()
 }
 
-// ConntrackFrontendHasBackend to satisfy conntrack.NATChecker - forwards to syncer.
+// ConntrackFrontendHasBackend to satisfy conntrack.NATChecker - forwards to proxy.
 func (kp *KubeProxy) ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP,
 	backendPort uint16, proto uint8) bool {
 
 	// Thanks to holding the lock since ConntrackScanStart, this condition holds for the
-	// whole iteration. So if we started without syncer, we will also finish without it.
-	// And if we had a syncer, we will have the same until the end.
-	if kp.syncer != nil && kp.syncer.HasSynced() {
-		return kp.syncer.ConntrackFrontendHasBackend(ip, port, backendIP, backendPort, proto)
+	// whole iteration. So if we started without proxy, we will also finish without it.
+	// And if we had a proxy, we will have the same until the end.
+	if kp.proxy != nil && kp.proxy.HasSynced() {
+		return kp.proxy.ConntrackFrontendHasBackend(ip, port, backendIP, backendPort, proto)
 	}
 
 	// We cannot say yet, so do not break anything
 	return true
 }
 
-// ConntrackDestIsService to satisfy conntrack.NATChecker - forwards to syncer.
+// ConntrackDestIsService to satisfy conntrack.NATChecker - forwards to proxy.
 func (kp *KubeProxy) ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool {
-	if kp.syncer != nil && kp.syncer.HasSynced() {
-		return kp.syncer.ConntrackDestIsService(ip, port, proto)
+	if kp.proxy != nil && kp.proxy.HasSynced() {
+		return kp.proxy.ConntrackDestIsService(ip, port, proto)
 	}
 
 	// We cannot say yet, so do not break anything
