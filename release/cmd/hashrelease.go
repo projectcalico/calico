@@ -301,8 +301,8 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	// CI condtional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
-				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
+				hashreleaseServerBucketFlag.Name)
 		}
 	} else {
 		// If building images, log a warning if no registry is specified.
@@ -340,8 +340,8 @@ func validateHashreleasePublishFlags(c *cli.Command) error {
 	if c.Bool(publishHashreleaseFlag.Name) {
 		//  check that hashrelease server configuration is set.
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
-				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
+				hashreleaseServerBucketFlag.Name)
 		}
 		if c.Bool(latestFlag.Name) {
 			// If using a custom registry, do not allow setting the hashrelease as latest.
@@ -372,8 +372,7 @@ func ciJobURL(c *cli.Command) string {
 
 func hashreleaseServerConfig(c *cli.Command) *hashreleaseserver.Config {
 	return &hashreleaseserver.Config{
-		BucketName:      c.String(hashreleaseServerBucketFlag.Name),
-		CredentialsFile: c.String(hashreleaseServerCredentialsFlag.Name),
+		BucketName: c.String(hashreleaseServerBucketFlag.Name),
 	}
 }
 
