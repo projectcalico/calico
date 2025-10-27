@@ -31,8 +31,7 @@ import (
 // KubeProxy is a wrapper of Proxy that deals with higher level issue like
 // configuration, restarting etc.
 type KubeProxy struct {
-	proxy  ProxyFrontend
-	syncer DPSyncer
+	proxy ProxyFrontend
 
 	ipFamily      int
 	hostIPUpdates chan []net.IP
@@ -110,72 +109,20 @@ func (kp *KubeProxy) Stop() {
 	})
 }
 
-func (kp *KubeProxy) run(hostIPs []net.IP) error {
-
-	ips := make([]net.IP, 0, len(hostIPs))
-	for _, ip := range hostIPs {
-		if kp.ipFamily == 4 && ip.To4() != nil {
-			ips = append(ips, ip)
-		} else if kp.ipFamily == 6 && ip.To4() == nil {
-			ips = append(ips, ip)
-		}
-	}
-
-	hostIPs = ips
-
-	kp.lock.Lock()
-	defer kp.lock.Unlock()
-
-	withLocalNP := make([]net.IP, len(hostIPs), len(hostIPs)+1)
-	copy(withLocalNP, hostIPs)
-	if kp.ipFamily == 4 {
-		withLocalNP = append(withLocalNP, podNPIP)
-	} else {
-		withLocalNP = append(withLocalNP, podNPIPV6)
-	}
-
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap,
-		kp.rt, kp.excludedCIDRs, kp.maglevLUTSize)
-	if err != nil {
-		return errors.WithMessage(err, "new bpf syncer")
-	}
-
-	kp.proxy.SetSyncer(syncer)
-
-	log.Infof("kube-proxy v%d node info updated, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)
-
-	kp.syncer = syncer
-
-	return nil
-}
-
 func (kp *KubeProxy) start() error {
-	var withLocalNP []net.IP
-	if kp.ipFamily == 4 {
-		withLocalNP = append(withLocalNP, podNPIP)
-	} else {
-		withLocalNP = append(withLocalNP, podNPIPV6)
-	}
-
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.maglevLUTSize)
-	if err != nil {
-		return errors.WithMessage(err, "new bpf syncer")
-	}
-
-	proxy, err := New(kp.k8s, syncer, kp.hostname, kp.opts...)
+	proxy, err := New(kp.k8s, kp.hostname, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.maglevLUTSize, kp.opts...)
 	if err != nil {
 		return errors.WithMessage(err, "new proxy")
 	}
 
 	kp.lock.Lock()
 	kp.proxy = proxy
-	kp.syncer = syncer
 	kp.lock.Unlock()
 
 	// wait for the initial update
 	hostIPs := <-kp.hostIPUpdates
 
-	err = kp.run(hostIPs)
+	err = proxy.OnHostIPsUpdate(hostIPs)
 	if err != nil {
 		return err
 	}
@@ -190,7 +137,7 @@ func (kp *KubeProxy) start() error {
 					log.Error("kube-proxy: hostIPUpdates closed")
 					return
 				}
-				err = kp.run(hostIPs)
+				err = kp.proxy.OnHostIPsUpdate(hostIPs)
 				if err != nil {
 					log.Panic("kube-proxy failed to resync after host IPs update")
 				}

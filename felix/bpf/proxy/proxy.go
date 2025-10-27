@@ -43,6 +43,9 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"k8s.io/kubernetes/pkg/proxy/runner"
 	"k8s.io/kubernetes/pkg/proxy/util"
+
+	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 // Proxy watches for updates of Services and Endpoints, maintains their mapping
@@ -56,7 +59,7 @@ type Proxy interface {
 
 type ProxyFrontend interface {
 	Proxy
-	SetSyncer(DPSyncer)
+	OnHostIPsUpdate([]net.IP) error
 	ConntrackScanStart()
 	ConntrackScanEnd()
 	ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP, backendPort uint16, proto uint8) bool
@@ -125,6 +128,15 @@ type proxy struct {
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
+
+	// Fields needed for creating syncers
+	frontendMap   maps.MapWithExistsCheck
+	backendMap    maps.MapWithExistsCheck
+	maglevMap     maps.MapWithExistsCheck
+	affinityMap   maps.Map
+	rt            Routes
+	excludedCIDRs *ip.CIDRTrie
+	maglevLUTSize int
 }
 
 type healthcheckIntf interface {
@@ -138,23 +150,30 @@ type stoppableRunner interface {
 }
 
 // New returns a new Proxy for the given k8s interface
-func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option) (ProxyFrontend, error) {
+func New(k8s kubernetes.Interface, hostname string,
+	frontendMap, backendMap, maglevMap maps.MapWithExistsCheck,
+	affinityMap maps.Map, rt Routes,
+	excludedCIDRs *ip.CIDRTrie,
+	maglevLUTSize int,
+	opts ...Option) (ProxyFrontend, error) {
 
 	if k8s == nil {
 		return nil, errors.New("no k8s client")
 	}
 
-	if dp == nil {
-		return nil, errors.New("no dataplane syncer")
-	}
-
 	p := &proxy{
-		k8s:      k8s,
-		dpSyncer: dp,
-		hostname: hostname,
-		ipFamily: 4,
-		svcMap:   make(k8sp.ServicePortMap),
-		epsMap:   make(k8sp.EndpointsMap),
+		k8s:           k8s,
+		hostname:      hostname,
+		ipFamily:      4,
+		svcMap:        make(k8sp.ServicePortMap),
+		epsMap:        make(k8sp.EndpointsMap),
+		frontendMap:   frontendMap,
+		backendMap:    backendMap,
+		maglevMap:     maglevMap,
+		affinityMap:   affinityMap,
+		rt:            rt,
+		excludedCIDRs: excludedCIDRs,
+		maglevLUTSize: maglevLUTSize,
 
 		recorder: new(loggerRecorder),
 
@@ -173,11 +192,25 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		}
 	}
 
+	// Create initial syncer with empty host IPs
+	var withLocalNP []net.IP
+	if p.ipFamily == 4 {
+		withLocalNP = append(withLocalNP, podNPIP)
+	} else {
+		withLocalNP = append(withLocalNP, podNPIPV6)
+	}
+
+	syncer, err := NewSyncer(p.ipFamily, withLocalNP, frontendMap, backendMap, maglevMap, affinityMap, rt, excludedCIDRs, maglevLUTSize)
+	if err != nil {
+		return nil, errors.WithMessage(err, "new bpf syncer")
+	}
+	p.dpSyncer = syncer
+
 	// We need to create the runner first as once we start getting updates, they
 	// will kick it
 	p.runner = runner.NewBoundedFrequencyRunner("dp-sync-runner",
 		p.invokeDPSyncer, p.minDPSyncPeriod, p.retryDPSyncPeriod, p.maxDPSyncPeriod)
-	dp.SetTriggerFn(p.runner.Run)
+	syncer.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
@@ -362,13 +395,47 @@ func (p *proxy) OnEndpointSlicesSynced() {
 	p.forceSyncDP()
 }
 
-func (p *proxy) SetSyncer(s DPSyncer) {
+// OnHostIPsUpdate creates a new syncer with the updated host IPs
+func (p *proxy) OnHostIPsUpdate(hostIPs []net.IP) error {
+	// Filter IPs based on IP family
+	ips := make([]net.IP, 0, len(hostIPs))
+	for _, ip := range hostIPs {
+		if p.ipFamily == 4 && ip.To4() != nil {
+			ips = append(ips, ip)
+		} else if p.ipFamily == 6 && ip.To4() == nil {
+			ips = append(ips, ip)
+		}
+	}
+	hostIPs = ips
+
+	// Add local nodeport IP
+	withLocalNP := make([]net.IP, len(hostIPs), len(hostIPs)+1)
+	copy(withLocalNP, hostIPs)
+	if p.ipFamily == 4 {
+		withLocalNP = append(withLocalNP, podNPIP)
+	} else {
+		withLocalNP = append(withLocalNP, podNPIPV6)
+	}
+
+	// Create new syncer
+	syncer, err := NewSyncer(p.ipFamily, withLocalNP, p.frontendMap, p.backendMap, p.maglevMap, p.affinityMap,
+		p.rt, p.excludedCIDRs, p.maglevLUTSize)
+	if err != nil {
+		return errors.WithMessage(err, "new bpf syncer")
+	}
+
+	// Update the syncer
 	p.syncerLck.Lock()
 	p.dpSyncer.Stop()
-	p.dpSyncer = s
+	p.dpSyncer = syncer
 	p.syncerLck.Unlock()
 
+	syncer.SetTriggerFn(p.runner.Run)
+
+	log.Infof("proxy v%d node info updated, hostname=%q hostIPs=%+v", p.ipFamily, p.hostname, hostIPs)
+
 	p.forceSyncDP()
+	return nil
 }
 
 // ConntrackScanStart forwards to dpSyncer
