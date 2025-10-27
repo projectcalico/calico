@@ -41,6 +41,8 @@ data:
   # Configure the backend to use.
 {{- if or (.Values.flannel_migration) (.Values.vxlan) }}
   calico_backend: "vxlan"
+{{- else if eq .Values.network "felix" }}
+  calico_backend: "vxlan"
 {{- else }}
   calico_backend: "bird"
 {{- end }}
