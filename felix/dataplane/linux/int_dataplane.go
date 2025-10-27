@@ -242,6 +242,8 @@ type Config struct {
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
 	BPFMapSizeIfState                  int
+	BPFMapSizeMaglev                   int
+	BPFMaglevLUTSize                   int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
@@ -893,7 +895,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
-	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity)
+	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeMaglev)
 	bpfroutes.SetMapSize(config.BPFMapSizeRoute)
 	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
@@ -958,12 +960,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
-		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
 		bpfEndpointManager, err = NewBPFEndpointManager(
 			nil,
 			&config,
 			bpfMaps,
-			fibLookupEnabled,
+			true,
 			workloadIfaceRegex,
 			ipSetIDAllocatorV4,
 			ipSetIDAllocatorV6,
@@ -2848,6 +2849,7 @@ func startBPFDataplaneComponents(
 
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
+		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
 	}
 
 	if config.bpfProxyHealthzServer != nil {

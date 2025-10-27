@@ -401,7 +401,8 @@ type bpfEndpointManager struct {
 	healthAggregator     *health.HealthAggregator
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
-	QoSMap maps.MapWithUpdateWithFlags
+	QoSMap        maps.MapWithUpdateWithFlags
+	maglevLUTSize int
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -519,7 +520,8 @@ func NewBPFEndpointManager(
 		profiling:        config.BPFProfiling,
 		bpfAttachType:    config.BPFAttachType,
 
-		QoSMap: bpfmaps.CommonMaps.QoSMap,
+		QoSMap:        bpfmaps.CommonMaps.QoSMap,
+		maglevLUTSize: config.BPFMaglevLUTSize,
 	}
 
 	m.policyTrampolineStride.Store(int32(asm.TrampolineStrideDefault))
@@ -539,6 +541,10 @@ func NewBPFEndpointManager(
 	}
 	if config.RulesConfig.WireguardEnabledV6 {
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceNameV6)
+	}
+
+	if config.RulesConfig.IPIPEnabled || config.RulesConfig.WireguardEnabled || config.RulesConfig.WireguardEnabledV6 {
+		m.overlayTunnelID = 1
 	}
 
 	for i, d := range specialInterfaces {
@@ -3043,6 +3049,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		AttachPoint: bpf.AttachPoint{
 			Iface: ifaceName,
 		},
+		MaglevLUTSize: uint32(m.maglevLUTSize),
 	}
 
 	ap.Type = m.getEndpointType(ifaceName)
