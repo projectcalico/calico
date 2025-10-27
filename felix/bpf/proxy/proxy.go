@@ -57,6 +57,11 @@ type Proxy interface {
 type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
+	ConntrackScanStart()
+	ConntrackScanEnd()
+	ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP, backendPort uint16, proto uint8) bool
+	ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool
+	HasSynced() bool
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -364,6 +369,44 @@ func (p *proxy) SetSyncer(s DPSyncer) {
 	p.syncerLck.Unlock()
 
 	p.forceSyncDP()
+}
+
+// ConntrackScanStart forwards to dpSyncer
+func (p *proxy) ConntrackScanStart() {
+	p.syncerLck.Lock()
+	p.dpSyncer.ConntrackScanStart()
+}
+
+// ConntrackScanEnd forwards to dpSyncer
+func (p *proxy) ConntrackScanEnd() {
+	p.dpSyncer.ConntrackScanEnd()
+	p.syncerLck.Unlock()
+}
+
+// ConntrackFrontendHasBackend forwards to dpSyncer
+func (p *proxy) ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP, backendPort uint16, proto uint8) bool {
+	if p.dpSyncer != nil && p.dpSyncer.HasSynced() {
+		return p.dpSyncer.ConntrackFrontendHasBackend(ip, port, backendIP, backendPort, proto)
+	}
+	// We cannot say yet, so do not break anything
+	return true
+}
+
+// ConntrackDestIsService forwards to dpSyncer
+func (p *proxy) ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool {
+	if p.dpSyncer != nil && p.dpSyncer.HasSynced() {
+		return p.dpSyncer.ConntrackDestIsService(ip, port, proto)
+	}
+	// We cannot say yet, so do not break anything
+	return false
+}
+
+// HasSynced forwards to dpSyncer
+func (p *proxy) HasSynced() bool {
+	if p.dpSyncer != nil {
+		return p.dpSyncer.HasSynced()
+	}
+	return false
 }
 
 func (p *proxy) IPFamily() discovery.AddressType {
