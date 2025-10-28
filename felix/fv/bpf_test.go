@@ -5967,12 +5967,43 @@ func k8sServiceWithExtIP(name, clusterIP string, w *workload.Workload, port,
 }
 
 func k8sGetEpsForService(k8s kubernetes.Interface, svc *v1.Service) []v1.EndpointSubset { //nolint:staticcheck
-	ep, _ := k8s.CoreV1().
-		Endpoints(svc.Namespace).
-		Get(context.Background(), svc.Name, metav1.GetOptions{})
+	eps, _ := k8s.DiscoveryV1().
+		EndpointSlices(svc.Namespace).
+		List(context.Background(), metav1.ListOptions{
+			LabelSelector: "kubernetes.io/service-name=" + svc.Name,
+		})
+
 	log.WithField("endpoints",
-		spew.Sprint(ep)).Infof("Got endpoints for %s", svc.Name)
-	return ep.Subsets
+		spew.Sprint(eps)).Infof("Got endpoints for %s", svc.Name)
+	var subsets []v1.EndpointSubset
+	var addresses, notReadyAddresses []v1.EndpointAddress
+	for _, slice := range eps.Items {
+		for _, ep := range slice.Endpoints {
+			addrs := make([]v1.EndpointAddress, len(ep.Addresses))
+			for i, addr := range ep.Addresses {
+				addrs[i] = v1.EndpointAddress{IP: addr}
+			}
+			if ep.Conditions.Ready != nil && *ep.Conditions.Ready {
+				addresses = append(addresses, addrs...)
+			} else {
+				notReadyAddresses = append(notReadyAddresses, addrs...)
+			}
+		}
+		ports := make([]v1.EndpointPort, len(slice.Ports))
+		for i, port := range slice.Ports {
+			ports[i] = v1.EndpointPort{
+				Name:     *port.Name,
+				Port:     *port.Port,
+				Protocol: *port.Protocol,
+			}
+		}
+		subsets = append(subsets, v1.EndpointSubset{
+			Addresses:         addresses,
+			NotReadyAddresses: notReadyAddresses,
+			Ports:             ports,
+		})
+	}
+	return subsets
 }
 
 func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() []v1.EndpointSubset { //nolint:staticcheck
