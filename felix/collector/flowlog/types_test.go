@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/rules"
@@ -74,10 +75,10 @@ func setEgressTraceAndMetrics(mu metric.Update, egress, pendingEgress []*calc.Ru
 var _ = Describe("FlowPolicySets", func() {
 	var ca *Aggregator
 
-	egress1Staged := calc.NewRuleID("tier1", "staged:policy1", "namespace1", 0, rules.RuleDirEgress, rules.RuleActionAllow)
-	egress2 := calc.NewRuleID("tier2", "policy2", "namespace2", 1, rules.RuleDirEgress, rules.RuleActionAllow)
-	egress3 := calc.NewRuleID("tier3", "policy3", "namespace3", 3, rules.RuleDirEgress, rules.RuleActionAllow)
-	egress4 := calc.NewRuleID("tier4", "policy4", "namespace4", 1, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress1Staged := calc.NewRuleID(v3.KindStagedNetworkPolicy, "tier1", "staged:policy1", "namespace1", 0, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress2 := calc.NewRuleID(v3.KindNetworkPolicy, "tier2", "policy2", "namespace2", 1, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress3 := calc.NewRuleID(v3.KindNetworkPolicy, "tier3", "policy3", "namespace3", 3, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress4 := calc.NewRuleID(v3.KindNetworkPolicy, "tier4", "policy4", "namespace4", 1, rules.RuleDirEgress, rules.RuleActionAllow)
 
 	BeforeEach(func() {
 		ca = NewAggregator()
@@ -85,7 +86,7 @@ var _ = Describe("FlowPolicySets", func() {
 
 	DescribeTable("splits up FlowStore into multiple FlowLogs for multiple items in the FlowPolicySets",
 		func(mus []*metric.Update, aggregation AggregationKind, expected TraceAndMetrics) {
-			//ca.AggregateOver(aggregation)
+			// ca.AggregateOver(aggregation)
 			ca.IncludePolicies(true)
 			for _, mu := range mus {
 				Expect(ca.FeedUpdate(mu)).NotTo(HaveOccurred())

@@ -133,7 +133,7 @@ func TestToString(t *testing.T) {
 	tests := []testCase{
 		{
 			name:   "Valid base case",
-			strVal: "0|tier|tier.name|allow|0",
+			strVal: "0|tier|name|allow|0",
 			hit: &PolicyHit{
 				Kind:        PolicyKind_GlobalNetworkPolicy,
 				Tier:        "tier",
