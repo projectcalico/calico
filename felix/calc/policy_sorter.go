@@ -160,18 +160,20 @@ func TierLess(i, j tierInfoKey) bool {
 }
 
 func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
-	var tierInfo *TierInfo
-	var found bool
-	if tierInfo, found = poc.tiers[key.Tier]; found {
-		_, found = tierInfo.Policies[key]
+	for _, tierInfo := range poc.tiers {
+		if _, ok := tierInfo.Policies[key]; ok {
+			return true
+		}
 	}
-	return found
+	return false
 }
 
 var polMetaDefaultOrder = math.Inf(1)
 
 func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
-	m := policyMetadata{}
+	m := policyMetadata{
+		Tier: policy.Tier, // TODO: Intern string for occupancy reduction?
+	}
 	if policy.Order == nil {
 		m.Order = polMetaDefaultOrder
 	} else {
@@ -203,6 +205,7 @@ func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
 type policyMetadata struct {
 	Order float64 // Set to +Inf for default order.
 	Flags policyMetadataFlags
+	Tier  string
 }
 
 type policyMetadataFlags uint8
@@ -234,8 +237,20 @@ func (m *policyMetadata) ApplyOnForward() bool {
 	return m != nil && m.Flags&policyMetaApplyOnForward != 0
 }
 
+func (poc *PolicySorter) tierForPolicy(key model.PolicyKey, meta *policyMetadata) (string, *TierInfo) {
+	if meta != nil {
+		return meta.Tier, poc.tiers[meta.Tier]
+	}
+	for tierName, tierInfo := range poc.tiers {
+		if _, ok := tierInfo.Policies[key]; ok {
+			return tierName, tierInfo
+		}
+	}
+	return "", nil
+}
+
 func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMetadata) (dirty bool) {
-	tierInfo := poc.tiers[key.Tier]
+	tierName, tierInfo := poc.tierForPolicy(key, newPolicy)
 	var tiKey tierInfoKey
 	var oldPolicy *policyMetadata
 	if tierInfo != nil {
@@ -248,11 +263,11 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMeta
 	}
 	if newPolicy != nil {
 		if tierInfo == nil {
-			tierInfo = NewTierInfo(key.Tier)
+			tierInfo = NewTierInfo(tierName)
 			tiKey.Name = tierInfo.Name
 			tiKey.Valid = tierInfo.Valid
 			tiKey.Order = tierInfo.Order
-			poc.tiers[key.Tier] = tierInfo
+			poc.tiers[tierName] = tierInfo
 			poc.sortedTiers.ReplaceOrInsert(tiKey)
 		}
 		if oldPolicy == nil || !oldPolicy.Equals(newPolicy) {
@@ -273,7 +288,7 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMeta
 			delete(tierInfo.Policies, key)
 			if len(tierInfo.Policies) == 0 && !tierInfo.Valid {
 				poc.sortedTiers.Delete(tiKey)
-				delete(poc.tiers, key.Tier)
+				delete(poc.tiers, tierName)
 			}
 			dirty = true
 		}
@@ -359,7 +374,7 @@ func (t TierInfo) String() string {
 				polType = "p"
 			}
 
-			//Append ApplyOnForward flag.
+			// Append ApplyOnForward flag.
 			if pol.Value.ApplyOnForward() {
 				polType = polType + "f"
 			}

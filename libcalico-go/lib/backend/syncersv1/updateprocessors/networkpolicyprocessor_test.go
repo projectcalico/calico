@@ -66,14 +66,18 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 	allSASelector.Spec.ServiceAccountSelector = "all()"
 
 	Context("test processing of a valid NetworkPolicy from V3 to V1", func() {
-		up := updateprocessors.NewNetworkPolicyUpdateProcessor()
+		up := updateprocessors.NewNetworkPolicyUpdateProcessor(apiv3.KindNetworkPolicy)
 
 		It("should accept a NetworkPolicy with a minimal configuration", func() {
 			kvps, err := up.Process(&model.KVPair{Key: minimalNPKey, Value: minimalNP, Revision: testRev})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
 
-			v1Key := model.PolicyKey{Tier: "default", Name: ns1 + "/minimal"}
+			v1Key := model.PolicyKey{
+				Name:      "minimal",
+				Namespace: ns1,
+				Kind:      apiv3.KindNetworkPolicy,
+			}
 			Expect(kvps[0]).To(Equal(&model.KVPair{
 				Key: v1Key,
 				Value: &model.Policy{
@@ -92,7 +96,11 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			policy := fullNPv1(ns2)
 			policy.Selector = fmt.Sprintf("(mylabel == 'selectme') && projectcalico.org/namespace == '%s'", ns2)
 
-			v1Key := model.PolicyKey{Tier: "default", Name: ns2 + "/full"}
+			v1Key := model.PolicyKey{
+				Name:      "full",
+				Namespace: ns2,
+				Kind:      apiv3.KindNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 
 			By("should be able to delete the full network policy")
@@ -114,7 +122,11 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			kvps, err := up.Process(&model.KVPair{Key: emptyNPKey, Value: apiv3.NewHostEndpoint(), Revision: testRev})
 			Expect(err).NotTo(HaveOccurred())
 
-			v1Key := model.PolicyKey{Tier: "default", Name: ns1 + "/empty"}
+			v1Key := model.PolicyKey{
+				Name:      "empty",
+				Namespace: ns1,
+				Kind:      apiv3.KindNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: nil}}))
 		})
 
@@ -124,7 +136,11 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 
 			policy := fullNPv1(ns2)
 			policy.Selector = `((mylabel == 'selectme') && projectcalico.org/namespace == 'namespace2') && pcsa.role == "development"`
-			v1Key := model.PolicyKey{Tier: "default", Name: ns2 + "/valid-sa-selector"}
+			v1Key := model.PolicyKey{
+				Name:      "valid-sa-selector",
+				Namespace: ns2,
+				Kind:      apiv3.KindNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -134,7 +150,11 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 
 			policy := fullNPv1(ns2)
 			policy.Selector = `(mylabel == 'selectme') && projectcalico.org/namespace == 'namespace2'`
-			v1Key := model.PolicyKey{Tier: "default", Name: ns2 + "/invalid-sa-selector"}
+			v1Key := model.PolicyKey{
+				Namespace: ns2,
+				Name:      "invalid-sa-selector",
+				Kind:      apiv3.KindNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -144,7 +164,11 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 
 			policy := fullNPv1(ns2)
 			policy.Selector = `((mylabel == 'selectme') && projectcalico.org/namespace == 'namespace2') && all()`
-			v1Key := model.PolicyKey{Tier: "default", Name: ns2 + "/all-sa-selector"}
+			v1Key := model.PolicyKey{
+				Namespace: ns2,
+				Name:      "all-sa-selector",
+				Kind:      apiv3.KindNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 	})
@@ -185,7 +209,11 @@ var (
 	tcp       = numorstring.ProtocolFromStringV1("tcp")
 	expected1 = []*model.KVPair{
 		{
-			Key: model.PolicyKey{Tier: "default", Name: "default/knp.default.test.policy"},
+			Key: model.PolicyKey{
+				Name:      "knp.default.test.policy",
+				Namespace: "default",
+				Kind:      apiv3.KindNetworkPolicy,
+			},
 			Value: &model.Policy{
 				Namespace:      "default",
 				Order:          &testDefaultPolicyOrder,
@@ -231,8 +259,9 @@ var np2 = networkingv1.NetworkPolicy{
 var expected2 = []*model.KVPair{
 	{
 		Key: model.PolicyKey{
-			Name: "default/knp.default.test.policy",
-			Tier: "default",
+			Name:      "knp.default.test.policy",
+			Namespace: "default",
+			Kind:      apiv3.KindNetworkPolicy,
 		},
 		Value: &model.Policy{
 			Namespace:      "default",
@@ -254,7 +283,7 @@ var expected2 = []*model.KVPair{
 }
 
 var _ = Describe("Test the NetworkPolicy update processor + conversion", func() {
-	up := updateprocessors.NewNetworkPolicyUpdateProcessor()
+	up := updateprocessors.NewNetworkPolicyUpdateProcessor(apiv3.KindNetworkPolicy)
 
 	DescribeTable("NetworkPolicy update processor + conversion tests",
 		func(np networkingv1.NetworkPolicy, expected []*model.KVPair) {
@@ -278,7 +307,7 @@ var _ = Describe("Test the NetworkPolicy update processor + conversion", func() 
 
 var _ = Describe("Test end-to-end pod and network policy processing", func() {
 	// Define processors to use in the test.
-	npProcessor := updateprocessors.NewNetworkPolicyUpdateProcessor()
+	npProcessor := updateprocessors.NewNetworkPolicyUpdateProcessor(apiv3.KindNetworkPolicy)
 	wepProcessor := updateprocessors.NewWorkloadEndpointUpdateProcessor()
 
 	It("should handle a basic pod and network policy", func() {

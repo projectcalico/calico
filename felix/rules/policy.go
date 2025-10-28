@@ -34,7 +34,7 @@ import (
 // ruleRenderer defined in rules_defs.go.
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
-	if model.PolicyIsStaged(policyID.Name) {
+	if model.KindIsStaged(policyID.Name) {
 		logrus.Debugf("Skip programming staged policy %v", policyID.Name)
 		return nil
 	}
@@ -953,7 +953,7 @@ func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bo
 	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
-		polID.Tier+"/"+polID.Name,
+		polID.String(),
 		maxLen,
 	)
 }
