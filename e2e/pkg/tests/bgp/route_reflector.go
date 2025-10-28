@@ -201,6 +201,9 @@ var _ = describe.CalicoDescribe(
 				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
 			})
 
+			// Wait for BGP to converge.
+			waitForBGPEstablished(cli, nodes.Items...)
+
 			// Verify connectivity is restored.
 			checker.ResetExpectations()
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
@@ -217,9 +220,15 @@ var _ = describe.CalicoDescribe(
 			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
 			checker.Execute()
 
+			// Wait for BGP to converge again after the node restarts.
+			waitForBGPEstablished(cli, nodes.Items...)
+
 			// Now, remove one of the RRs and verify connectivity is maintained.
 			By("Removing one of the route reflectors")
 			setNodeAsNotRouteReflector(cli, &nodes.Items[1])
+
+			// Wait for BGP to converge.
+			waitForBGPEstablished(cli, nodes.Items...)
 
 			// Verify connectivity is maintained.
 			checker.ResetExpectations()
@@ -269,17 +278,17 @@ var _ = describe.CalicoDescribe(
 			})
 
 			// Wait until BGP has converged.
-			//
-			// TODO: Replace this sleep with a proper check for BGP convergence. We don't have a good way to do
-			// this via the API today, so for now we just wait a fixed time. This could be flaky, though.
-			time.Sleep(10 * time.Second)
+			waitForBGPEstablished(cli, nodes.Items...)
+
+			// At this point, both full mesh and route reflection are enabled, so connectivity
+			// should be fine.
 			checkpoint.ExpectSuccess("after enabling route reflectors")
 
 			// Now disable full mesh BGP - connectivity should be maintained via the RR.
 			disableFullMesh(cli)
 
-			// Wait a short time to verify that connectivity is maintained.
-			// TODO: Replace this sleep with a proper check for BGP convergence.
+			// Wait until BGP has converged again, plus a little extra time to ensure stability.
+			waitForBGPEstablished(cli, nodes.Items...)
 			time.Sleep(5 * time.Second)
 
 			checkpoint.ExpectSuccess("after disabling full mesh")
