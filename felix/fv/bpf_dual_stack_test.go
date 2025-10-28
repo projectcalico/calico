@@ -90,7 +90,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			opts.EnableIPv6 = true
 			opts.NATOutgoingEnabled = true
 			opts.AutoHEPsEnabled = false
-			// Simulate BIRD noEncap routes since IPIP is not supported with IPv6.
 			opts.IPIPMode = api.IPIPModeNever
 			opts.DelayFelixStart = true
 
@@ -365,7 +364,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				// when trying to reach w[0][0] from workloads in felix-1. This will impact subsequent
 				// tests. This does not seem to be a problem with ubuntu 22+ but is on ubuntu 20.
 				// Hence cleaning up the neighbor entry.
-				tc.Felixes[0].Exec("ip", "-6", "neigh", "del", w[0][0].IP6, "dev", w[0][0].InterfaceName)
+				tc.Felixes[0].ExecMayFail("ip", "-6", "neigh", "del", w[0][0].IP6, "dev", w[0][0].InterfaceName)
 
 				// Add the node IPv6 address
 				node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
