@@ -78,6 +78,7 @@ var _ = Context("etcd connection interruption", func() {
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
+			infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, client)
 			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].Configure(client)
 		}
