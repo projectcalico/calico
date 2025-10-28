@@ -3777,6 +3777,9 @@ spec:
                       controller. Enabled by default, set to nil to disable.
                     properties:
                       assignIPs:
+                        default: AllServices
+                        description: AssignIPs controls which LoadBalancer Service
+                          gets IP assigned from Calico IPAM.
                         type: string
                     type: object
                   namespace:
@@ -3926,6 +3929,9 @@ spec:
                           controller. Enabled by default, set to nil to disable.
                         properties:
                           assignIPs:
+                            default: AllServices
+                            description: AssignIPs controls which LoadBalancer Service
+                              gets IP assigned from Calico IPAM.
                             type: string
                         type: object
                       namespace:
