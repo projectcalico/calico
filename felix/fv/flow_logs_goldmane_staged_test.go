@@ -111,15 +111,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		infra.AddDefaultAllow()
 
 		// Create workload on host 1.
+		infrastructure.AssignIPPoolAddr("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
 		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
 		ep1_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIPPoolAddr("ep2-1", "10.65.1.0", tc.Felixes[1].Hostname, client)
 		ep2_1 = workload.Run(tc.Felixes[1], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIPPoolAddr("ep2-2", "10.65.1.1", tc.Felixes[1].Hostname, client)
 		ep2_2 = workload.Run(tc.Felixes[1], "ep2-2", "default", "10.65.1.1", wepPortStr, "tcp")
 		ep2_2.ConfigureInInfra(infra)
 
+		infrastructure.AssignIPPoolAddr("ep2-3", "10.65.1.2", tc.Felixes[1].Hostname, client)
 		ep2_3 = workload.Run(tc.Felixes[1], "ep2-3", "default", "10.65.1.2", wepPortStr, "tcp")
 		ep2_3.ConfigureInInfra(infra)
 
@@ -756,9 +760,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		infra.AddDefaultAllow()
 
 		// Create workload on host 1.
+		infrastructure.AssignIPPoolAddr("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
 		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
 		ep1_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIPPoolAddr("ep2-1", "10.65.1.0", tc.Felixes[1].Hostname, client)
 		ep2_1 = workload.Run(tc.Felixes[1], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
 
@@ -1410,9 +1416,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		infra.AddDefaultAllow()
 
 		// Create workload on host 1.
+		infrastructure.AssignIPPoolAddr("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
 		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
 		ep1_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIPPoolAddr("ep2-1", "10.65.1.0", tc.Felixes[1].Hostname, client)
 		ep2_1 = workload.Run(tc.Felixes[1], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
 
