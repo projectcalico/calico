@@ -11,10 +11,6 @@
 
 static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
 {
-	if (!CALI_F_L3_DEV) {
-		return 0;
-	}
-
 	int rc = bpf_skb_change_head(ctx->skb, ETH_HLEN, 0);
 	if (rc < 0) {
 		CALI_DEBUG("bpf_skb_change_head failed %d.", rc);
@@ -40,9 +36,11 @@ static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
-		rc = make_room_for_l2_header(ctx);
-		if (rc < 0) {
-			return TC_ACT_UNSPEC;
+		if (CALI_F_L3_DEV) {
+			rc = make_room_for_l2_header(ctx);
+			if (rc < 0) {
+				return TC_ACT_UNSPEC;
+			}
 		}
 		rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 		if (rc == TC_ACT_REDIRECT) {
@@ -301,9 +299,11 @@ try_fib_external:
 				nh_params.nh_family = 2 /* AF_INET */;
 				nh_params.ipv4_nh = state->ip_dst;
 #endif
-				rc = make_room_for_l2_header(ctx);
-				if (rc < 0) {
-					goto cancel_fib;
+				if (CALI_F_L3_DEV) {
+					rc = make_room_for_l2_header(ctx);
+					if (rc < 0) {
+						goto cancel_fib;
+					}
 				}
 				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
 				if (rc == TC_ACT_REDIRECT) {
@@ -405,9 +405,11 @@ try_fib_external:
 
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 
-			rc = make_room_for_l2_header(ctx);
-			if (rc < 0) {
-				goto cancel_fib;
+			if (CALI_F_L3_DEV) {
+				rc = make_room_for_l2_header(ctx);
+				if (rc < 0) {
+					goto cancel_fib;
+				}
 			}
 			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 			break;

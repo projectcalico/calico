@@ -60,7 +60,7 @@ func newBPFTestEpMgr(
 	bpfmaps *bpfmap.Maps,
 	workloadIfaceRegex *regexp.Regexp,
 ) (linux.ManagerWithHEPUpdate, error) {
-	return linux.NewBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(), idalloc.New(),
+	return linux.NewBPFEndpointManager(nil, config, bpfmaps, workloadIfaceRegex, idalloc.New(), idalloc.New(),
 		rules.NewRenderer(rules.Config{
 			BPFEnabled:             true,
 			IPIPEnabled:            true,
@@ -1467,7 +1467,6 @@ func BenchmarkAttachProgram(b *testing.B) {
 		},
 		Type:     tcdefs.EpTypeWorkload,
 		ToOrFrom: tcdefs.FromEp,
-		FIB:      true,
 		HostIPv4: net.IPv4(1, 1, 1, 1),
 		IntfIPv4: net.IPv4(1, 1, 1, 1),
 	}

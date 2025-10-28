@@ -964,7 +964,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nil,
 			&config,
 			bpfMaps,
-			true,
 			workloadIfaceRegex,
 			ipSetIDAllocatorV4,
 			ipSetIDAllocatorV6,
