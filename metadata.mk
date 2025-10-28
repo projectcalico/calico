@@ -14,6 +14,7 @@ K8S_VERSION=v1.32.4
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
+CRANE_VERSION := v0.20.6
 ETCD_VERSION=v3.5.6
 GHR_VERSION=v0.17.0
 HELM_VERSION=v3.11.3
