@@ -2157,8 +2157,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					}
 
-					It("should maintain connections to a cluster IP across loadbalancer failure using maglev", func() { testFailover(clusterIP) })
-					It("should maintain connections to an external IP across loadbalancer failure using maglev", func() { testFailover(externalIP) })
+					It("should maintain connections to a cluster IP across loadbalancer failover using maglev", func() { testFailover(clusterIP) })
+					It("should maintain connections to an external IP across loadbalancer failover using maglev", func() { testFailover(externalIP) })
 				})
 
 				Describe("Test Load balancer service with external IP", func() {
