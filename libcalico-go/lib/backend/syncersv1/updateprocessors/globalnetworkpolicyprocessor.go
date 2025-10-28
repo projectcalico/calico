@@ -48,7 +48,6 @@ func convertGlobalNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, er
 		Name: v3key.Name,
 		Tier: tier,
 	}, nil
-
 }
 
 func ConvertGlobalNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {

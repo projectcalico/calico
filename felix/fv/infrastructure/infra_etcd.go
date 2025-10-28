@@ -94,6 +94,10 @@ func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
 	return eds.client
 }
 
+func (eds *EtcdDatastoreInfra) UseV3API() bool {
+	return false
+}
+
 func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
 	ci, err := eds.GetCalicoClient().ClusterInformation().Get(
 		context.Background(),
@@ -190,7 +194,7 @@ func (eds *EtcdDatastoreInfra) AddAllowToDatastore(selector string) error {
 	// Create a policy to allow egress from the host so that we don't cut off Felix's datastore connection
 	// when we enable the host endpoint.
 	policy := api.NewGlobalNetworkPolicy()
-	policy.Name = "allow-egress"
+	policy.Name = "default.allow-egress"
 	policy.Spec.Selector = selector
 	policy.Spec.Egress = []api.Rule{{
 		Action: api.Allow,

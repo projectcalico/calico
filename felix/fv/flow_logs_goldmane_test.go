@@ -632,6 +632,16 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, np, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
+		// The names of the policies as they appear in iptables/ipsets or BPF maps. This varies based on the API
+		// group in use, as crd.projectcalico.org/v1 prefixes the policy name with the tier name "default.", but
+		// projectcalico.org/v3 does not.
+		policyName1 := "default.gnp-1"
+		policyName2 := "default.gnp-2"
+		if infra.UseV3API() {
+			policyName1 = "gnp-1"
+			policyName2 = "gnp-2"
+		}
+
 		if !BPFMode() {
 			rulesProgrammed := func() bool {
 				var out string
@@ -642,10 +652,10 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 					out, err = tc.Felixes[0].ExecOutput("iptables-save", "-t", "filter")
 				}
 				Expect(err).NotTo(HaveOccurred())
-				if strings.Count(out, "default.gnp-1") == 0 {
+				if strings.Count(out, policyName1) == 0 {
 					return false
 				}
-				if strings.Count(out, "default.gnp-2") == 0 {
+				if strings.Count(out, policyName2) == 0 {
 					return false
 				}
 				return true
@@ -654,19 +664,19 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", "default.gnp-1", "allow", true)
+				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", policyName1, "allow", true)
 			}, "15s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "ingress", "default.gnp-1", "allow", true)
+				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "ingress", policyName1, "allow", true)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "egress", "default.gnp-2", "deny", true)
+				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "egress", policyName2, "deny", true)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "ingress", "default.gnp-2", "deny", true)
+				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "ingress", policyName2, "deny", true)
 			}, "5s", "200ms").Should(BeTrue())
 		}
 

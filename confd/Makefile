@@ -56,6 +56,8 @@ test-kdd: bin/confd-$(ARCH) bin/kubectl bin/bird bin/bird6 bin/calico-node bin/c
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
+		-e CALICO_CRD_PATH=$(CALICO_CRD_PATH) \
+		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
