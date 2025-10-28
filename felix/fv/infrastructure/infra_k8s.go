@@ -708,7 +708,10 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 	}
 	if len(felix.IPv6) > 0 && v6CIDR != nil {
 		nodeIn.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
-		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx))
+		ipv6CIDR := fmt.Sprintf("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%04x::/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], idx)
+		_, n, err := net.ParseCIDR(ipv6CIDR)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, n.String())
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
 			Address: felix.IPv6,
 			Type:    v1.NodeInternalIP,
