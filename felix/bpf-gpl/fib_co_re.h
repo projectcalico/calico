@@ -169,7 +169,7 @@ skip_redir_ifindex:
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if (cali_rt_is_vxlan(dest_rt) && !(cali_rt_is_same_subnet(dest_rt))) {
+		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
@@ -197,7 +197,7 @@ skip_redir_ifindex:
 				goto skip_fib;
 			}
 		}
-	} else if (CALI_F_VXLAN && CALI_F_TO_HEP) {
+	} else if (CALI_F_TUNNEL && CALI_F_TO_HEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) ||
 			!skb_mark_equals(ctx->skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET)) {
 			/* packet to vxlan from the host, needs to set tunnel key. Either
@@ -206,18 +206,18 @@ skip_redir_ifindex:
 			 */
 			struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
 			if (dest_rt == NULL) {
-				CALI_DEBUG("No route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
+				CALI_DEBUG("No route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
 				goto deny;
 			}
-			if (!cali_rt_is_vxlan(dest_rt)) {
-				CALI_DEBUG("Not a vxlan route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
+			if (!cali_rt_is_tunneled(dest_rt)) {
+				CALI_DEBUG("Not a tunnel route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
 				goto deny;
 			}
 
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
-
+	
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6

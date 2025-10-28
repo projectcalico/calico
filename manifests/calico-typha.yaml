@@ -3064,6 +3064,7 @@ spec:
                     loadBalancer:
                       properties:
                         assignIPs:
+                          default: AllServices
                           enum:
                             - AllServices
                             - RequestedServicesOnly
@@ -3176,6 +3177,7 @@ spec:
                         loadBalancer:
                           properties:
                             assignIPs:
+                              default: AllServices
                               enum:
                                 - AllServices
                                 - RequestedServicesOnly
