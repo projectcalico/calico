@@ -85,7 +85,7 @@ var _ = Describe("FlowPolicySets", func() {
 
 	DescribeTable("splits up FlowStore into multiple FlowLogs for multiple items in the FlowPolicySets",
 		func(mus []*metric.Update, aggregation AggregationKind, expected TraceAndMetrics) {
-			//ca.AggregateOver(aggregation)
+			// ca.AggregateOver(aggregation)
 			ca.IncludePolicies(true)
 			for _, mu := range mus {
 				Expect(ca.FeedUpdate(mu)).NotTo(HaveOccurred())

@@ -21,24 +21,27 @@ import (
 )
 
 type PolicyID struct {
-	Tier string
-	Name string
+	Name      string
+	Namespace string
+	Kind      string
 }
 
 func (p PolicyID) String() string {
-	return fmt.Sprintf("{Tier: %s, Name: %s}", p.Tier, p.Name)
+	return fmt.Sprintf("{Name: %s, Namespace: %s, Kind: %s}", p.Name, p.Namespace, p.Kind)
 }
 
 func ProtoToPolicyID(p *proto.PolicyID) PolicyID {
 	return PolicyID{
-		Tier: p.GetTier(),
-		Name: p.GetName(),
+		Name:      p.GetName(),
+		Namespace: p.GetNamespace(),
+		Kind:      p.GetKind(),
 	}
 }
 
 func PolicyIDToProto(p PolicyID) *proto.PolicyID {
 	return &proto.PolicyID{
-		Tier: p.Tier,
-		Name: p.Name,
+		Name:      p.Name,
+		Namespace: p.Namespace,
+		Kind:      p.Kind,
 	}
 }
