@@ -1254,10 +1254,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		)
 
 		setupCluster := func() {
-			if !options.UseIPPools {
-				options.SimulateBIRDRoutes = true
-			}
-
 			tc, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
 
 			addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
@@ -5072,6 +5068,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// To mimic 3rd party CNI, we do not install IPPools and set the source to
 				// learn routes to WorkloadIPs as IPAM/CNI is not going to provide either.
 				options.UseIPPools = false
+				options.SimulateBIRDRoutes = true
 				options.ExtraEnvVars["FELIX_ROUTESOURCE"] = "WorkloadIPs"
 				setupCluster()
 			})
