@@ -204,10 +204,10 @@ func HitFromString(s string) (*PolicyHit, error) {
 		// Name format for K8s policies is "(staged:)knp.default.name".
 		n := nameParts[1]
 		ns = nameParts[0]
-		if strings.HasPrefix(n, "staged:knp.") {
+		if strings.HasPrefix(n, "staged:knp.default.") {
 			// StagedKubernetesNetworkPolicy.
 			kind = PolicyKind_StagedKubernetesNetworkPolicy
-			n = strings.TrimPrefix(n, "staged:knp.")
+			n = strings.TrimPrefix(n, "staged:knp.default.")
 		} else if strings.HasPrefix(n, "knp.") {
 			// KubernetesNetworkPolicy.
 			kind = PolicyKind_NetworkPolicy

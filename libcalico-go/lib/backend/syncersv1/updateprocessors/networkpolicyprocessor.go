@@ -28,26 +28,31 @@ import (
 
 // Create a new SyncerUpdateProcessor to sync NetworkPolicy data in v1 format for
 // consumption by Felix.
-func NewNetworkPolicyUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
+func NewNetworkPolicyUpdateProcessor(keyKind string) watchersyncer.SyncerUpdateProcessor {
 	return NewSimpleUpdateProcessor(
 		apiv3.KindNetworkPolicy,
-		convertNetworkPolicyV3ToV1Key,
+		npKeyConverter(keyKind),
 		ConvertNetworkPolicyV3ToV1Value,
 	)
 }
 
-func convertNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
-	if v3key.Name == "" || v3key.Namespace == "" {
-		return model.PolicyKey{}, errors.New("Missing Name or Namespace field to create a v1 NetworkPolicy Key")
+// npKeyConverter returns a function that converts a v3 ResourceKey to a v1 Key
+// of the specified kind. We multiplex several kinds of policies into the same model.PolicyKey,
+// and so callers must specify the exact kind to use.
+func npKeyConverter(kind string) func(model.ResourceKey) (model.Key, error) {
+	return func(v3key model.ResourceKey) (model.Key, error) {
+		if v3key.Name == "" || v3key.Namespace == "" {
+			return model.PolicyKey{}, errors.New("Missing Name or Namespace field to create a v1 NetworkPolicy Key")
+		}
+		return model.PolicyKey{
+			Name:      v3key.Name,
+			Namespace: v3key.Namespace,
+			Kind:      kind,
+		}, nil
 	}
-	return model.PolicyKey{
-		Name:      v3key.Name,
-		Namespace: v3key.Namespace,
-		Kind:      apiv3.KindNetworkPolicy, // TODO: We need to indicate the kind of Kubernetes NPs distinctly.
-	}, nil
 }
 
-func ConvertNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
+func ConvertNetworkPolicyV3ToV1Value(val any) (any, error) {
 	v3res, ok := val.(*apiv3.NetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid NetworkPolicy resource value")

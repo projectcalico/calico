@@ -93,7 +93,7 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 	noSelWithSAandNSSelector.Spec.NamespaceSelector = "name == 'testing'"
 
 	Context("test processing of a valid GlobalNetworkPolicy from V3 to V1", func() {
-		up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor()
+		up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(apiv3.KindGlobalNetworkPolicy)
 
 		// Basic tests with minimal and full GlobalNetworkPolicies.
 		It("should accept a GlobalNetworkPolicy with a minimal configuration", func() {
@@ -420,7 +420,7 @@ var expectedModel2 = []*model.KVPair{
 }
 
 var _ = Describe("Test the AdminNetworkPolicy update processor + conversion", func() {
-	up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor()
+	up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(model.KindKubernetesAdminNetworkPolicy)
 
 	DescribeTable("GlobalNetworkPolicy update processor + conversion tests",
 		func(anp adminpolicy.AdminNetworkPolicy, expected []*model.KVPair) {

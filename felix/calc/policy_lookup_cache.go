@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -557,7 +556,7 @@ func (r *RuleID) setFlowLogPolicyName() {
 				r.ActionString(),
 			)
 		} else {
-			// GlobalNetworkPolicy or Profile.
+			// GlobalNetworkPolicy, AdminNetworkPolicy, BaselineAdminNetworkPolicy.
 			r.fpName = fmt.Sprintf(
 				"%s|%s|%s",
 				r.TierString(),
@@ -565,8 +564,7 @@ func (r *RuleID) setFlowLogPolicyName() {
 				r.ActionString(),
 			)
 		}
-	} else if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) {
-		// TODO: Use Kind field to determine policy kind.
+	} else if r.Kind == model.KindKubernetesNetworkPolicy {
 		// Kubernetes NetworkPolicy.
 		r.fpName = fmt.Sprintf(
 			"%s|%s/%s|%s",
@@ -575,7 +573,16 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.NameString(),
 			r.ActionString(),
 		)
-	} else if model.KindIsStaged(r.Kind) {
+	} else if r.Kind == v3.KindStagedKubernetesNetworkPolicy {
+		// StagedKubernetesNetworkPolicy.
+		r.fpName = fmt.Sprintf(
+			"%s|%s/staged:%s|%s",
+			r.TierString(),
+			r.Namespace,
+			r.NameString(),
+			r.ActionString(),
+		)
+	} else if r.Kind == v3.KindStagedNetworkPolicy {
 		// StagedNetworkPolicy.
 		r.fpName = fmt.Sprintf(
 			"%s|%s/%s.staged:%s|%s",

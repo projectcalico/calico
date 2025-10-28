@@ -66,7 +66,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 	allSASelector.Spec.ServiceAccountSelector = "all()"
 
 	Context("test processing of a valid NetworkPolicy from V3 to V1", func() {
-		up := updateprocessors.NewNetworkPolicyUpdateProcessor()
+		up := updateprocessors.NewNetworkPolicyUpdateProcessor(apiv3.KindNetworkPolicy)
 
 		It("should accept a NetworkPolicy with a minimal configuration", func() {
 			kvps, err := up.Process(&model.KVPair{Key: minimalNPKey, Value: minimalNP, Revision: testRev})
@@ -283,7 +283,7 @@ var expected2 = []*model.KVPair{
 }
 
 var _ = Describe("Test the NetworkPolicy update processor + conversion", func() {
-	up := updateprocessors.NewNetworkPolicyUpdateProcessor()
+	up := updateprocessors.NewNetworkPolicyUpdateProcessor(apiv3.KindNetworkPolicy)
 
 	DescribeTable("NetworkPolicy update processor + conversion tests",
 		func(np networkingv1.NetworkPolicy, expected []*model.KVPair) {
@@ -307,7 +307,7 @@ var _ = Describe("Test the NetworkPolicy update processor + conversion", func() 
 
 var _ = Describe("Test end-to-end pod and network policy processing", func() {
 	// Define processors to use in the test.
-	npProcessor := updateprocessors.NewNetworkPolicyUpdateProcessor()
+	npProcessor := updateprocessors.NewNetworkPolicyUpdateProcessor(apiv3.KindNetworkPolicy)
 	wepProcessor := updateprocessors.NewWorkloadEndpointUpdateProcessor()
 
 	It("should handle a basic pod and network policy", func() {

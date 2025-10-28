@@ -27,26 +27,28 @@ import (
 
 // Create a new SyncerUpdateProcessor to sync GlobalNetworkPolicy data in v1 format for
 // consumption by Felix.
-func NewGlobalNetworkPolicyUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
+func NewGlobalNetworkPolicyUpdateProcessor(keyKind string) watchersyncer.SyncerUpdateProcessor {
 	return NewSimpleUpdateProcessor(
 		apiv3.KindGlobalNetworkPolicy,
-		convertGlobalNetworkPolicyV3ToV1Key,
+		gnpKeyConverter(keyKind),
 		ConvertGlobalNetworkPolicyV3ToV1Value,
 	)
 }
 
-func convertGlobalNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
-	if v3key.Name == "" {
-		return model.PolicyKey{}, errors.New("Missing Name field to create a v1 NetworkPolicy Key")
+func gnpKeyConverter(kind string) func(model.ResourceKey) (model.Key, error) {
+	return func(v3key model.ResourceKey) (model.Key, error) {
+		if v3key.Name == "" {
+			return model.PolicyKey{}, errors.New("Missing Name field to create a model.PolicyKey")
+		}
+		return model.PolicyKey{
+			Name:      v3key.Name,
+			Namespace: "",
+			Kind:      kind,
+		}, nil
 	}
-	return model.PolicyKey{
-		Name:      v3key.Name,
-		Namespace: "",
-		Kind:      apiv3.KindGlobalNetworkPolicy,
-	}, nil
 }
 
-func ConvertGlobalNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
+func ConvertGlobalNetworkPolicyV3ToV1Value(val any) (any, error) {
 	v3res, ok := val.(*apiv3.GlobalNetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid GlobalNetworkPolicy resource value")
