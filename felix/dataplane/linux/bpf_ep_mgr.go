@@ -3066,8 +3066,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		ap.RedirectPeer = true
 		if m.bpfRedirectToPeer == "Disabled" {
 			ap.RedirectPeer = false
-		} else if (ap.Type == tcdefs.EpTypeIPIP || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
-			ap.RedirectPeer = false
 		}
 	} else {
 		ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
