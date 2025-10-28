@@ -51,7 +51,6 @@ type AttachPoint struct {
 	HostTunnelIPv6              net.IP
 	IntfIPv4                    net.IP
 	IntfIPv6                    net.IP
-	FIB                         bool
 	ToHostDrop                  bool
 	DSR                         bool
 	DSROptoutCIDRs              bool
