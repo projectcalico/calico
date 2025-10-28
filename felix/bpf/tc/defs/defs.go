@@ -159,11 +159,10 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 
 	// Should match CALI_FIB_LOOKUP_ENABLED in bpf.h
 	if fib {
-		toHost := (epType == EpTypeWorkload || epType == EpTypeHost || epType == EpTypeLO ||
-			epType == EpTypeVXLAN) && toOrFrom == FromEp
+		toHost := epType != EpTypeNAT && toOrFrom == FromEp
 		toHEP := (epType == EpTypeHost || epType == EpTypeLO) && toOrFrom == ToEp
 
-		realFIB := epType != EpTypeL3Device && (toHost || toHEP)
+		realFIB := (toHost || toHEP)
 
 		if !realFIB {
 			// FIB lookup only makes sense for traffic towards the host.
