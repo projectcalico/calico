@@ -1061,8 +1061,8 @@ var endpointSlice2NewIPs2 = discovery.EndpointSlice{
 }
 
 var (
-	servicePolicyKey  = model.PolicyKey{Name: "svc-policy"}
-	servicePolicyKey2 = model.PolicyKey{Name: "svc-policy2"}
+	servicePolicyKey  = model.PolicyKey{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy}
+	servicePolicyKey2 = model.PolicyKey{Name: "svc-policy2", Kind: v3.KindGlobalNetworkPolicy}
 	servicePolicy     = model.Policy{
 		Tier:      "default",
 		Namespace: "default",

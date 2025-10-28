@@ -171,7 +171,7 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 func TestPolicySorter_OnUpdate_Basic(t *testing.T) {
 	poc := NewPolicySorter()
 
-	policy := model.Policy{}
+	policy := model.Policy{Tier: "default"}
 	kvp := model.KVPair{
 		Key: model.PolicyKey{
 			Name: "test-policy",
@@ -207,7 +207,9 @@ func TestPolicySorter_OnUpdate_Basic(t *testing.T) {
 func TestPolicySorter_OnUpdate_RemoveFromNonExistent(t *testing.T) {
 	ps := NewPolicySorter()
 	key := model.PolicyKey{Name: "foo", Kind: v3.KindGlobalNetworkPolicy}
-	pol := &model.Policy{}
+	pol := &model.Policy{
+		Tier: "default",
+	}
 	ps.OnUpdate(api.Update{
 		KVPair: model.KVPair{
 			Key:   key,

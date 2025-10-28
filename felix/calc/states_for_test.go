@@ -56,9 +56,9 @@ var initialisedStore = empty.withKVUpdates(
 
 // withPolicy adds a tier and policy containing selectors for all and b=="b"
 var (
-	pol1KVPair         = KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20}
-	pol1KVPairAlways   = KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_always}
-	pol1KVPairOnDemand = KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_ondemand}
+	pol1KVPair         = KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20}
+	pol1KVPairAlways   = KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_always}
+	pol1KVPairOnDemand = KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_ondemand}
 )
 
 var withPolicy = initialisedStore.withKVUpdates(
@@ -74,35 +74,35 @@ var withPolicyAlways = initialisedStore.withKVUpdates(
 
 // withPolicyIngressOnly adds a tier and ingress policy containing selectors for all
 var withPolicyIngressOnly = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_ingress_only},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_ingress_only},
 ).withName("with ingress-only policy")
 
 // withPolicyEgressOnly adds a tier and egress policy containing selectors for b=="b"
 var withPolicyEgressOnly = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_egress_only},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_egress_only},
 ).withName("with egress-only policy")
 
 // withUntrackedPolicy adds a tier and policy containing selectors for all and b=="b"
 var withUntrackedPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_untracked},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_untracked},
 ).withName("with untracked policy")
 
 // withPreDNATPolicy adds a tier and policy containing selectors for all and a=="a"
 var withPreDNATPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pre-dnat-pol-1"}, Value: &policy1_order20_pre_dnat},
+	KVPair{Key: PolicyKey{Name: "pre-dnat-pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_pre_dnat},
 ).withName("with pre-DNAT policy")
 
 // withHttpMethodPolicy adds a policy containing http method selector.
 var withHttpMethodPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_http_match},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_http_match},
 ).withTotalALPPolicies(
 	1,
 ).withName("with http-method policy")
 
 // withServiceAccountPolicy adds two policies containing service account selector.
 var withServiceAccountPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_src_service_account},
-	KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policy1_order20_dst_service_account},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_src_service_account},
+	KVPair{Key: PolicyKey{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_dst_service_account},
 ).withTotalALPPolicies(
 	2,
 ).withName("with service-account policy")
@@ -195,7 +195,7 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 // withPolicyAndTier adds a tier and policy containing selectors for all and b=="b"
 var withPolicyAndTier = initialisedStore.withKVUpdates(
 	KVPair{Key: TierKey{Name: "tier-1"}, Value: &tier1_order20},
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_tier1_order20},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_tier1_order20},
 ).withName("with policy")
 
 // localEp1WithPolicyAndTier adds a local endpoint to the mix.  It matches all and b=="b".
@@ -310,9 +310,9 @@ func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]types.
 	state := initialisedStore.withKVUpdates(
 		KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 		KVPair{Key: TierKey{Name: "tier-1"}, Value: &tier1_order20},
-		KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policies[0]},
-		KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policies[1]},
-		KVPair{Key: PolicyKey{Name: "pol-3"}, Value: &policies[2]},
+		KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[0]},
+		KVPair{Key: PolicyKey{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[1]},
+		KVPair{Key: PolicyKey{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[2]},
 	).withIPSet(allSelectorId, []string{
 		"10.0.0.1/32", // ep1
 		"fc00:fe11::1/128",
@@ -398,11 +398,11 @@ func tierOrderState(tierOrders [3]float64, expectedOrder [3]string) State {
 	state := initialisedStore.withKVUpdates(
 		KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 		KVPair{Key: TierKey{Name: "tier-1"}, Value: &tiers[0]},
-		KVPair{Key: PolicyKey{Name: "tier-1-pol"}, Value: &pol1Tier1},
+		KVPair{Key: PolicyKey{Name: "tier-1-pol", Kind: v3.KindGlobalNetworkPolicy}, Value: &pol1Tier1},
 		KVPair{Key: TierKey{Name: "tier-2"}, Value: &tiers[1]},
-		KVPair{Key: PolicyKey{Name: "tier-2-pol"}, Value: &pol1Tier2},
+		KVPair{Key: PolicyKey{Name: "tier-2-pol", Kind: v3.KindGlobalNetworkPolicy}, Value: &pol1Tier2},
 		KVPair{Key: TierKey{Name: "tier-3"}, Value: &tiers[2]},
-		KVPair{Key: PolicyKey{Name: "tier-3-pol"}, Value: &pol1Tier3},
+		KVPair{Key: PolicyKey{Name: "tier-3-pol", Kind: v3.KindGlobalNetworkPolicy}, Value: &pol1Tier3},
 	).withIPSet(
 		allSelectorId, ep1IPs,
 	).withIPSet(
@@ -508,7 +508,7 @@ var localEp1WithPolicyOnDemand = localEp1WithPolicy.withKVUpdates(
 
 // localEp1WithNamedPortPolicy as above but with named port in the policy.
 var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(namedPortAllTCPID, []string{
 	"10.0.0.1,tcp:8080",
 	"10.0.0.2,tcp:8080",
@@ -519,7 +519,7 @@ var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
 // localEp1WithNamedPortPolicy as above but with negated named port in the policy.
 var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_negated_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_negated_named_port_tcpport},
 ).withIPSet(namedPortAllLessFoobarTCPID, []string{
 	"10.0.0.1,tcp:8080",
 	"10.0.0.2,tcp:8080",
@@ -556,7 +556,7 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 // As above but using the destination fields in the policy instead of source.
 var localEp1WithNegatedNamedPortPolicyDest = localEp1WithNegatedNamedPortPolicy.withKVUpdates(
 	KVPair{
-		Key:   PolicyKey{Name: "pol-1"},
+		Key:   PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 		Value: &policy1_order20_with_selector_and_negated_named_port_tcpport_dest,
 	},
 ).withName("ep1 local, negated named port policy in destination fields")
@@ -564,7 +564,7 @@ var localEp1WithNegatedNamedPortPolicyDest = localEp1WithNegatedNamedPortPolicy.
 // A host endpoint with a named port
 var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithNamedPorts},
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(namedPortAllTCPID, []string{
 	"10.0.0.1,tcp:8080",
 	"10.0.0.2,tcp:8080",
@@ -592,12 +592,12 @@ var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 
 // As above but with no selector in the rules.
 var localEp1WithNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_named_port_tcpport},
 ).withName("ep1 local, named port only")
 
 // As above but with negated named port.
 var localEp1WithNegatedNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport_negated},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_named_port_tcpport_negated},
 ).withName("ep1 local, negated named port only")
 
 // localEp1WithIngressPolicy is as above except ingress policy only.
@@ -633,7 +633,7 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 
 // localEp1WithNamedPortPolicy as above but with UDP named port in the policy.
 var localEp1WithNamedPortPolicyUDP = localEp1WithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_udpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_udpport},
 ).withIPSet(namedPortAllUDPID, []string{
 	"10.0.0.1,udp:9091",
 	"10.0.0.2,udp:9091",
@@ -780,7 +780,7 @@ var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
 ).withName("host ep1, pre-DNAT policy")
 
 var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policy1_order20},
+	KVPair{Key: PolicyKey{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20},
 ).withActivePolicies(
 	types.PolicyID{Name: "pol-1"},
 	types.PolicyID{Name: "pol-2"},
@@ -868,9 +868,9 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]types.PolicyID) 
 	}
 	state := initialisedStore.withKVUpdates(
 		KVPair{Key: localWlEpKey1, Value: &localWlEp1},
-		KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policies[0]},
-		KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policies[1]},
-		KVPair{Key: PolicyKey{Name: "pol-3"}, Value: &policies[2]},
+		KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[0]},
+		KVPair{Key: PolicyKey{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[1]},
+		KVPair{Key: PolicyKey{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[2]},
 	).withIPSet(allSelectorId, []string{
 		"10.0.0.1/32", // ep1
 		"fc00:fe11::1/128",
@@ -992,7 +992,7 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 ).withName("2 local, overlapping IPs & a policy")
 
 var localEpsWithNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(
 	allSelectorId, nil,
 ).withIPSet(namedPortAllTCPID, []string{
@@ -1005,7 +1005,7 @@ var localEpsWithNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
 }).withName("2 local, overlapping IPs & a named port policy")
 
 var localEpsWithNamedPortsPolicyTCPPort2 = localEpsWithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport2},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_tcpport2},
 ).withIPSet(
 	allSelectorId, nil,
 ).withIPSet(namedPortAllTCP2ID, []string{
@@ -1024,7 +1024,7 @@ var localEpsWithNamedPortsPolicyTCPPort2 = localEpsWithPolicy.withKVUpdates(
 // localEpsWithMismatchedNamedPortsPolicy contains a policy that has named port matches where the
 // rule has a protocol that doesn't match that in the named port definitions in the endpoint.
 var localEpsWithMismatchedNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_mismatched_protocol},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_named_port_mismatched_protocol},
 ).withIPSet(
 	allSelectorId, nil,
 ).withIPSet(
@@ -1066,7 +1066,7 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 // Building on the above, we add a policy to match on the inherited label, which should produce
 // a named port.
 var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlappingIPsAndInheritedLabels.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "inherit-pol"}, Value: &policy_with_named_port_inherit},
+	KVPair{Key: PolicyKey{Name: "inherit-pol", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy_with_named_port_inherit},
 ).withActivePolicies(
 	types.PolicyID{Name: "inherit-pol"},
 ).withEndpoint(
