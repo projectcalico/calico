@@ -125,3 +125,49 @@ func deleteCalicoNode(cli ctrlclient.Client, node *corev1.Node) {
 	err = cli.Delete(context.Background(), &podList.Items[0])
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error deleting calico-node Pod to simulate node failure")
 }
+
+// waitForBGPEstablished waits until the expected number of BGPPeers are established for the given nodes
+// using CalicoNodeStatus resources.
+func waitForBGPEstablished(cli ctrlclient.Client, nodes ...corev1.Node) {
+	for _, node := range nodes {
+		waitForBGPEstablishedForNode(cli, node.Name)
+	}
+}
+
+func waitForBGPEstablishedForNode(cli ctrlclient.Client, node string) {
+	// Create a CalicoNodeStatus resource to verify BGPPeer status.
+	status := &v3.CalicoNodeStatus{
+		ObjectMeta: metav1.ObjectMeta{Name: node},
+		Spec: v3.CalicoNodeStatusSpec{
+			Node:    node,
+			Classes: []v3.NodeStatusClassType{v3.NodeStatusClassTypeBGP},
+
+			// Set a short update period to speed up the test.
+			UpdatePeriodSeconds: ptr.To[uint32](1),
+		},
+	}
+	err := cli.Create(context.Background(), status)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error creating CalicoNodeStatus resource")
+
+	// Make sure we clean up the CalicoNodeStatus resource after we're done.
+	defer func() {
+		err := cli.Delete(context.Background(), status)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error deleting CalicoNodeStatus resource")
+	}()
+
+	// Expect the CalicoNodeStatus to report all BGPPeers as established.
+	EventuallyWithOffset(1, func() error {
+		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: node}, status)
+		if err != nil {
+			return err
+		}
+		if status.Status.BGP.NumberEstablishedV4+status.Status.BGP.NumberEstablishedV6 == 0 {
+			return fmt.Errorf("no BGPPeers are established yet")
+		}
+		if status.Status.BGP.NumberNotEstablishedV4+status.Status.BGP.NumberNotEstablishedV6 > 0 {
+			return fmt.Errorf("not all BGPPeers are established (not established: v4=%d, v6=%d)",
+				status.Status.BGP.NumberNotEstablishedV4, status.Status.BGP.NumberNotEstablishedV6)
+		}
+		return nil
+	}, "1m", "1s").ShouldNot(HaveOccurred(), "BGPPeer count did not reach expected value")
+}
