@@ -123,8 +123,8 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				wIPv6 := fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)
 				wName := fmt.Sprintf("w%d%d", ii, wi)
 
-				infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
-				infrastructure.AssignIPPoolAddr(wName, wIPv6, tc.Felixes[ii].Hostname, calicoClient)
+				infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+				infrastructure.AssignIP(wName, wIPv6, tc.Felixes[ii].Hostname, calicoClient)
 
 				w := workload.New(tc.Felixes[ii], wName, "default",
 					wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(wIPv6))

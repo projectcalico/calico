@@ -111,7 +111,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 
 			wIP := net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()
 			wName := fmt.Sprintf("w%d%d", ii, wi)
-			infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
 
 			w := workload.New(tc.Felixes[ii], wName, "default",
 				wIP, strconv.Itoa(port), "tcp")

@@ -115,7 +115,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		for ii := range wlHost1 {
 			wIP := fmt.Sprintf("10.65.0.%d", ii)
 			wName := fmt.Sprintf("wl-host1-%d", ii)
-			infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[0].Hostname, client)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[0].Hostname, client)
 			wlHost1[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
 			wlHost1[ii].WorkloadEndpoint.GenerateName = "wl-host1-"
 			wlHost1[ii].ConfigureInInfra(infra)
@@ -125,7 +125,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		for ii := range wlHost2 {
 			wIP := fmt.Sprintf("10.65.1.%d", ii)
 			wName := fmt.Sprintf("wl-host2-%d", ii)
-			infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[1].Hostname, client)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[1].Hostname, client)
 			wlHost2[ii] = workload.Run(tc.Felixes[1], wName, "default", wIP, "8055", "tcp")
 			wlHost2[ii].WorkloadEndpoint.GenerateName = "wl-host2-"
 			wlHost2[ii].ConfigureInInfra(infra)
@@ -567,8 +567,8 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 			wIPv6 := fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)
 			wName := fmt.Sprintf("w%d%d", ii, wi)
 
-			infrastructure.AssignIPPoolAddr(wName, wIP, hostname, client)
-			infrastructure.AssignIPPoolAddr(wName, wIPv6, hostname, client)
+			infrastructure.AssignIP(wName, wIP, hostname, client)
+			infrastructure.AssignIP(wName, wIPv6, hostname, client)
 			w := workload.New(tc.Felixes[ii], wName, "default",
 				wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(wIPv6))
 
@@ -767,7 +767,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 		for ii := range wlHost1 {
 			wIP := fmt.Sprintf("10.65.0.%d", ii)
 			wName := fmt.Sprintf("wl-host1-%d", ii)
-			infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[0].Hostname, client)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[0].Hostname, client)
 			wlHost1[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
 			wlHost1[ii].WorkloadEndpoint.GenerateName = "wl-host1-"
 			wlHost1[ii].ConfigureInInfra(infra)
@@ -777,7 +777,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 		for ii := range wlHost2 {
 			wIP := fmt.Sprintf("10.65.1.%d", ii)
 			wName := fmt.Sprintf("wl-host2-%d", ii)
-			infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[1].Hostname, client)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[1].Hostname, client)
 			wlHost2[ii] = workload.Run(tc.Felixes[1], wName, "default", wIP, "8055", "tcp")
 			wlHost2[ii].WorkloadEndpoint.GenerateName = "wl-host2-"
 			wlHost2[ii].ConfigureInInfra(infra)

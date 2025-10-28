@@ -52,7 +52,7 @@ func describeBPFMultiHomedTests() bool {
 			tc, calicoClient = infrastructure.StartNNodeTopology(2, opts, infra)
 			Felix = tc.Felixes[0]
 
-			infrastructure.AssignIPPoolAddr("workload", "10.65.0.2", Felix.Hostname, calicoClient)
+			infrastructure.AssignIP("workload", "10.65.0.2", Felix.Hostname, calicoClient)
 			w = workload.New(Felix, "workload", "default", "10.65.0.2", "8055", "tcp")
 			err := w.Start()
 			Expect(err).NotTo(HaveOccurred())
@@ -152,7 +152,7 @@ func describeBPFMultiHomedTests() bool {
 			_, err = w.RunCmd("ip", "route", "add", "blackhole", w.IP+"/32")
 			Expect(err).NotTo(HaveOccurred())
 
-			infrastructure.AssignIPPoolAddr(w.Name, "10.65.1.3", tc.Felixes[1].Hostname, calicoClient)
+			infrastructure.AssignIP(w.Name, "10.65.1.3", tc.Felixes[1].Hostname, calicoClient)
 
 			dump20 := Felix.AttachTCPDump("eth20")
 			dump20.SetLogEnabled(true)

@@ -95,7 +95,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 			w[ii].ConfigureInInfra(infra)
 
 			if topologyOptions.UseIPPools {
-				infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, client)
+				infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, client)
 			}
 
 			hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")

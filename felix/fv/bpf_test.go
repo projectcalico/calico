@@ -1268,7 +1268,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				wName := fmt.Sprintf("w%d%d", ii, wi)
 
 				if options.UseIPPools {
-					infrastructure.AssignIPPoolAddr(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+					infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
 				}
 				w := workload.New(tc.Felixes[ii], wName, "default",
 					wIP, strconv.Itoa(port), testOpts.protocol)

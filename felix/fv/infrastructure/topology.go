@@ -543,7 +543,7 @@ func mustInitDatastore(client client.Interface) {
 	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
 }
 
-func AssignIPPoolAddr(workload, addr, hostname string, client client.Interface) {
+func AssignIP(workload, addr, hostname string, client client.Interface) {
 	// Assign the workload's IP in IPAM, this will trigger calculation of routes.
 	err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 		IP:       cnet.MustParseIP(addr),
