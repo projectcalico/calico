@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017,2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 		if update.Value == nil {
 			log.WithField("update", update).Debug("Passing-through HostIP deletion")
 			delete(h.hostIPs, hostname)
-			h.callbacks.OnHostIPRemove(hostname)
+			h.callbacks.OnHostMetadataRemove(hostname)
 		} else {
 			ip := update.Value.(*net.IP)
 			oldIP := h.hostIPs[hostname]
