@@ -2201,10 +2201,10 @@ Use Enabled with caution.
 | --- | --- |
 | Environment variable | `FELIX_BPFRedirectToPeer` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code> (case insensitive) |
-| Default value (above encoding) | `L2Only` |
+| Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfRedirectToPeer` (YAML) `BPFRedirectToPeer` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"L2Only"</code>. |
-| Default value (YAML) | `L2Only` |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
 ## <a id="dataplane-windows">Dataplane: Windows
