@@ -321,7 +321,7 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 		logrus.Warnf("Images are built but not archived; to archive images set --%s to 'true'", archiveHashreleaseImagesFlag.Name)
 	}
 
-	// CI condtional checks.
+	// CI conditional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
 			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
