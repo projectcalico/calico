@@ -2438,10 +2438,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polA1"},
-						Selector:    "has(a)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polA1"},
+						Selector:  "has(a)",
 					},
 				}))
 			})
@@ -2452,10 +2452,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polA1", "polA2"},
-						Selector:    "has(a)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polA1", "polA2"},
+						Selector:  "has(a)",
 					},
 				}))
 			})
@@ -2466,16 +2466,16 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polA1"},
-						Selector:    "has(a)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polA1"},
+						Selector:  "has(a)",
 					},
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polB1"},
-						Selector:    "has(b)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polB1"},
+						Selector:  "has(b)",
 					},
 				}))
 			})
@@ -2486,16 +2486,16 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polA1", "polA2"},
-						Selector:    "has(a)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polA1", "polA2"},
+						Selector:  "has(a)",
 					},
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polB1", "polB2"},
-						Selector:    "has(b)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polB1", "polB2"},
+						Selector:  "has(b)",
 					},
 				}))
 			})
@@ -2506,22 +2506,22 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polA1"},
-						Selector:    "has(a)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polA1"},
+						Selector:  "has(a)",
 					},
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polB1", "polB2"},
-						Selector:    "has(b)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polB1", "polB2"},
+						Selector:  "has(b)",
 					},
 					{
-						Tier:        "default",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polA2"},
-						Selector:    "has(a)",
+						Tier:      "default",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polA2"},
+						Selector:  "has(a)",
 					},
 				}))
 			})
@@ -2533,22 +2533,22 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
-						Tier:        "tier2",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polA1"},
-						Selector:    "has(a)",
+						Tier:      "tier2",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polA1"},
+						Selector:  "has(a)",
 					},
 					{
-						Tier:        "tier2",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polB1", "polB2"},
-						Selector:    "has(b)",
+						Tier:      "tier2",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polB1", "polB2"},
+						Selector:  "has(b)",
 					},
 					{
-						Tier:        "tier2",
-						Direction:   rules.PolicyDirectionInbound,
-						PolicyNames: []string{"polA2"},
-						Selector:    "has(a)",
+						Tier:      "tier2",
+						Direction: rules.PolicyDirectionInbound,
+						Policies:  []string{"polA2"},
+						Selector:  "has(a)",
 					},
 				}))
 			})
