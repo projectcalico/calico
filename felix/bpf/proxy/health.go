@@ -38,10 +38,12 @@ type Healthcheck interface {
 func NewHealthCheck(k8s kubernetes.Interface, nodeName string, port int,
 	minSyncPeriod time.Duration) (Healthcheck, error) {
 
-	nodeMgr, err := k8sp.NewNodeManager(context.Background(), k8s, minSyncPeriod, nodeName, false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create NodeManager for healthcheck: %w", err)
+	nodeMgr := new(k8sp.NodeManager)
+	node := &v1.Node{
+		Spec: v1.NodeSpec{},
 	}
+
+	nodeMgr.OnNodeChange(node)
 
 	healthzAddr := fmt.Sprintf(":%d", port)
 	server := healthcheck.NewProxyHealthServer(healthzAddr, minSyncPeriod, nodeMgr)
