@@ -33,7 +33,6 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T1",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -43,7 +42,6 @@ var (
 		IndexStr: "2",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
-			Tier: "T2",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -53,7 +51,6 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T3",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -63,7 +60,6 @@ var (
 		IndexStr: "2",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
-			Tier: "T4",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -73,7 +69,6 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
-			Tier: "T5",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -83,7 +78,6 @@ var (
 		IndexStr: "3",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T6",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -93,7 +87,6 @@ var (
 		IndexStr: "4",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
-			Tier: "T7",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -103,7 +96,6 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T8",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -113,7 +105,6 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T9",
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -124,7 +115,6 @@ var (
 		IndexStr: "2",
 		PolicyID: calc.PolicyID{
 			Name: "P4",
-			Tier: "T10",
 		},
 		Direction: rules.RuleDirEgress,
 	}
@@ -134,7 +124,6 @@ var (
 		IndexStr: "3",
 		PolicyID: calc.PolicyID{
 			Name: "P3",
-			Tier: "T11",
 		},
 		Direction: rules.RuleDirEgress,
 	}
@@ -295,7 +284,7 @@ var _ = Describe("Rule Trace", func() {
 			It("should have not have action set", func() {
 				Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionAllow))
 				Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionDeny))
-				//Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionPass))
+				// Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionPass))
 			})
 		})
 		Context("Replacing a rule tracepoint that was conflicting", func() {
@@ -363,5 +352,4 @@ var _ = Describe("Rule Trace", func() {
 			})
 		})
 	})
-
 })
