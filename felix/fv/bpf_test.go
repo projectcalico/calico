@@ -592,7 +592,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				pol := api.NewGlobalNetworkPolicy()
 				pol.Namespace = "fv"
-				pol.Name = "policy-1"
+				pol.Name = "default.policy-1"
 				if true || testOpts.bpfLogLevel == "info" {
 					pol.Spec.Ingress = []api.Rule{{Action: "Log"}, {Action: "Allow"}}
 					pol.Spec.Egress = []api.Rule{{Action: "Log"}, {Action: "Allow"}}
@@ -1011,7 +1011,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// Add a policy to block traffic.
 						By("Adding deny policy")
 						denyPol := api.NewGlobalNetworkPolicy()
-						denyPol.Name = "policy-2"
+						denyPol.Name = "default.policy-2"
 						var one float64 = 1
 						denyPol.Spec.Order = &one
 						denyPol.Spec.Ingress = []api.Rule{{Action: "Deny"}}
@@ -1025,7 +1025,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 
 						By("Removing deny policy")
-						_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-2", options2.DeleteOptions{})
+						_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "default.policy-2", options2.DeleteOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
 						cc.Expect(Some, w[0], w[1])
@@ -1544,7 +1544,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				BeforeEach(func() {
 					pol = api.NewGlobalNetworkPolicy()
 					pol.Namespace = "fv"
-					pol.Name = "policy-1"
+					pol.Name = "default.policy-1"
 					pol.Spec.Ingress = []api.Rule{
 						{
 							Action: "Allow",
@@ -1584,7 +1584,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							pol := api.NewGlobalNetworkPolicy()
 							pol.Namespace = "fv"
-							pol.Name = "host-0-1"
+							pol.Name = "default.host-0-1"
 							pol.Spec.Egress = []api.Rule{
 								{
 									Action: "Deny",
@@ -1608,7 +1608,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							pol := api.NewGlobalNetworkPolicy()
 							pol.Namespace = "fv"
-							pol.Name = "host-0-1-forward"
+							pol.Name = "default.host-0-1-forward"
 							pol.Spec.Egress = []api.Rule{
 								{
 									Action: "Allow",
@@ -1625,6 +1625,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						bpfWaitForPolicy(tc.Felixes[0], "eth0", "egress", "default.host-0-1")
 					})
+
 					It("should handle NAT outgoing", func() {
 						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
@@ -3603,7 +3604,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							BeforeEach(func() {
 								pol = api.NewGlobalNetworkPolicy()
 								pol.Namespace = "fv"
-								pol.Name = "policy-host-eps"
+								pol.Name = "default.policy-host-eps"
 								pol.Spec.Ingress = []api.Rule{
 									{
 										Action: "Allow",
@@ -3703,7 +3704,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								By("Allow ingress from external client", func() {
 									pol = api.NewGlobalNetworkPolicy()
 									pol.Namespace = "fv"
-									pol.Name = "policy-ext-client"
+									pol.Name = "default.policy-ext-client"
 									pol.Spec.Ingress = []api.Rule{
 										{
 											Action: "Allow",
@@ -4796,7 +4797,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							})
 						}
 
-						It("should get port unreachable workload to workload", func() {
+						It("FOCUS should get port unreachable workload to workload", func() {
 							tcpdump := w[1][1].AttachTCPDump()
 							tcpdump.SetLogEnabled(true)
 
@@ -4819,7 +4820,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Should(BeNumerically(">", 0), matcher)
 						})
 
-						It("should get port unreachable workload to workload through NP", func() {
+						It("FOCUS should get port unreachable workload to workload through NP", func() {
 							tcpdump := w[1][1].AttachTCPDump()
 							tcpdump.SetLogEnabled(true)
 
@@ -4855,7 +4856,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					})
 				})
-
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
@@ -4971,7 +4971,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Default to Allow...
 				pol := api.NewGlobalNetworkPolicy()
 				pol.Namespace = "fv"
-				pol.Name = "policy-1"
+				pol.Name = "default.policy-1"
 				pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
 				pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 				pol.Spec.Selector = "all()"
@@ -5094,7 +5094,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("allowing any traffic", func() {
 						pol := api.NewGlobalNetworkPolicy()
 						pol.Namespace = "fv"
-						pol.Name = "policy-1"
+						pol.Name = "default.policy-1"
 						pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
 						pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 						pol.Spec.Selector = "all()"
@@ -5134,20 +5134,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Expect(err).NotTo(HaveOccurred())
 
 				pol := api.NewGlobalNetworkPolicy()
-				pol.Name = "allow-all"
+				pol.Name = "default.allow-all"
 				pol.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 				pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 				pol.Spec.Selector = "all()"
 
 				pol = createPolicy(pol)
-
 			})
 
 			if testOpts.protocol == "udp" || testOpts.tunnel == "ipip" || testOpts.ipv6 {
 				return
 			}
 			It("should allow traffic from workload to this host device", func() {
-
 				var (
 					test30            *workload.Workload
 					test30IP          string
@@ -5224,7 +5222,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					By("allowing any traffic", func() {
 						pol := api.NewGlobalNetworkPolicy()
-						pol.Name = "allow-all"
+						pol.Name = "default.allow-all"
 						pol.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 						pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 						pol.Spec.Selector = "all()"

@@ -189,7 +189,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			Expect(err).NotTo(HaveOccurred())
 			pol = api.NewGlobalNetworkPolicy()
 			pol.Namespace = "fv"
-			pol.Name = "policy-1"
+			pol.Name = "default.policy-1"
 			pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
 			pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 			pol.Spec.Selector = "all()"

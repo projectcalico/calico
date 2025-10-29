@@ -47,6 +47,11 @@ var (
 	egress        = []apiv3.PolicyType{apiv3.PolicyTypeEgress}
 )
 
+// If true, run the tests in v3 CRD mode. Otherwise, run against crd.projectcalico.org/v1
+var (
+	v3CRD bool
+)
+
 var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	ctx := context.Background()
 	order1 := 99.999
@@ -95,6 +100,8 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 
 		err = c.EnsureInitialized(ctx, "", "")
 		Expect(err).NotTo(HaveOccurred())
+
+		v3CRD = k8s.UsingV3CRDs(&config.Spec)
 	})
 
 	DescribeTable("GlobalNetworkPolicy e2e CRUD tests",
@@ -369,12 +376,16 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			By("Creating the policy with incorrect prefix name")
-			_, err = c.GlobalNetworkPolicies().Create(ctx,
-				&apiv3.GlobalNetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName},
-				}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
+			if !v3CRD {
+				// In v3 CRD mode, the name field is always as-is. There is no semantic meaning or validation
+				// applied to the name field. So, skip this part of the test.
+				By("Creating the policy with incorrect prefix name")
+				_, err = c.GlobalNetworkPolicies().Create(ctx,
+					&apiv3.GlobalNetworkPolicy{
+						ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName},
+					}, options.SetOptions{})
+				Expect(err).To(HaveOccurred())
+			}
 
 			By("Getting the policy")
 			returnedPolicy, err = c.GlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
@@ -408,6 +419,11 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 
 	Describe("GlobalNetworkPolicy without name on the projectcalico.org annotation", func() {
 		It("Should return the name without default prefix", func() {
+			if v3CRD {
+				// This test is not relevant in v3 CRD mode as the annotation is not used.
+				Skip("Skipping test for v3 CRD mode")
+			}
+
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
 				Expect(err).NotTo(HaveOccurred())
@@ -421,7 +437,8 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 				policy := &apiv3.GlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Annotations: annotations,
-						Name:        "default.prefix-test-policy"},
+						Name:        "default.prefix-test-policy",
+					},
 					Spec: apiv3.GlobalNetworkPolicySpec{},
 				}
 				err = cli.Create(context.Background(), policy)
@@ -450,7 +467,8 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			_, err := c.GlobalNetworkPolicies().Create(ctx,
 				&apiv3.GlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: policyName},
+						Name: policyName,
+					},
 					Spec: apiv3.GlobalNetworkPolicySpec{
 						Tier: tier,
 					},
