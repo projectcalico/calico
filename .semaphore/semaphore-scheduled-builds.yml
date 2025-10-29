@@ -330,7 +330,7 @@ blocks:
             - name: BGP_CONFIG
               value: "Disabled"
             - name: E2E_FOCUS
-              value: "sig-network\.\*Conformance\|sig-calico\.\*Conformance"
+              value: "sig-network.*Conformance|sig-calico.*Conformance"
             - name: E2E_SKIP
               value: "BGP"
   - name: envoy-gateway
