@@ -1663,7 +1663,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		time.Sleep(5 * time.Second)
 	}
 
-	It("pepper get expected flow logs with pending policies", func() {
+	It("get expected flow logs with pending policies", func() {
 		// Describe the connectivity that we now expect.
 		// For ep1_1 -> ep2_1 we use the service cluster IP to test service info in the flow log
 		cc = &connectivity.Checker{}
