@@ -1174,7 +1174,7 @@ spec:
                 bpfRedirectToPeer:
                   description: |-
                     BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device.
-                    Note that the legacy "L2Only" option is now deprecated — it used to permit direct redirection only for host L2 devices.
+                    Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
                     Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
                     which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
                     As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]
