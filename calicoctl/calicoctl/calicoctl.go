@@ -48,7 +48,7 @@ func main() {
     version      Display the version of this binary.
     datastore    Calico datastore management.
     cluster      Access cluster information.
-    optimize     Optimize certain resource types (such as global netowrk policies).
+    optimize     Optimize certain resource types (such as global network policies).
 
 Options:
   -h --help                    Show this screen.
