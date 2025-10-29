@@ -594,6 +594,7 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllTiers,
 		cleanupAllHostEndpoints,
 		cleanupAllNetworkSets,
+		cleanupAllGlobalNetworkSets,
 		cleanupAllFelixConfigurations,
 		cleanupAllServices,
 	}
@@ -1210,12 +1211,29 @@ func cleanupAllNetworkSets(clientset *kubernetes.Clientset, client client.Interf
 	}
 	log.WithField("count", len(ns.Items)).Info("networksets present")
 	for _, n := range ns.Items {
-		_, err = client.HostEndpoints().Delete(ctx, n.Name, options.DeleteOptions{})
+		_, err = client.NetworkSets().Delete(ctx, n.Name, n.Namespace, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
 		}
 	}
-	log.Info("Cleaned up host networksets")
+	log.Info("Cleaned up networksets")
+}
+
+func cleanupAllGlobalNetworkSets(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up global network sets")
+	ctx := context.Background()
+	gns, err := client.GlobalNetworkSets().List(ctx, options.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("count", len(gns.Items)).Info("global networksets present")
+	for _, gn := range gns.Items {
+		_, err = client.GlobalNetworkSets().Delete(ctx, gn.Name, options.DeleteOptions{})
+		if err != nil {
+			panic(err)
+		}
+	}
+	log.Info("Cleaned up global network sets")
 }
 
 func cleanupAllHostEndpoints(clientset *kubernetes.Clientset, client client.Interface) {
