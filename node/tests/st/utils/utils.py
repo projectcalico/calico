@@ -364,13 +364,11 @@ def wipe_etcd(ip):
     if ETCD_SCHEME == "https":
         # Etcd is running with SSL/TLS, require key/certificates
         etcd_container_name = "calico-etcd-ssl"
-        tls_vars = ("ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
-                    "ETCDCTL_CERT=/etc/calico/certs/client.pem " +
-                    "ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
+        tls_vars = ("-e ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
+                    "-e ETCDCTL_CERT=/etc/calico/certs/client.pem " +
+                    "-e ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
 
-    check_output("docker exec " + etcd_container_name + " sh -c '" + tls_vars +
-                 "ETCDCTL_API=3 etcdctl del --prefix /calico" +
-                 "'", shell=True)
+    check_output("docker exec " + tls_vars + etcd_container_name + " etcdctl del --prefix /calico", shell=True)
 
 
 on_failure_fns = []
@@ -414,10 +412,8 @@ def dump_etcdv3():
     if ETCD_SCHEME == "https":
         # Etcd is running with SSL/TLS, require key/certificates
         etcd_container_name = "calico-etcd-ssl"
-        tls_vars = ("ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
-                    "ETCDCTL_CERT=/etc/calico/certs/client.pem " +
-                    "ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
+        tls_vars = ("-e ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
+                    "-e ETCDCTL_CERT=/etc/calico/certs/client.pem " +
+                    "-e ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
 
-    log_and_run("docker exec " + etcd_container_name + " sh -c '" + tls_vars +
-                 "ETCDCTL_API=3 etcdctl get --prefix /calico" +
-                 "'")
+    log_and_run("docker exec " + tls_vars + etcd_container_name + " etcdctl get --prefix /calico")
