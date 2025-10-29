@@ -1,6 +1,3 @@
-//go:build fvtests
-// +build fvtests
-
 // Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -131,11 +128,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		tier.Name = "tier1"
 		tier.Spec.Order = &float1_0
 		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		tier = api.NewTier()
 		tier.Name = "tier2"
 		tier.Spec.Order = &float2_0
 		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Allow all traffic to/from ep1-1
 		gnp := api.NewGlobalNetworkPolicy()
@@ -284,7 +283,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		svcName := "test-service"
 		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 		tSvc := k8sService(svcName, clusterIP, ep2_1, svcPort, wepPort, 0, "tcp")
-		tSvcNamespace := tSvc.ObjectMeta.Namespace
+		tSvcNamespace := tSvc.Namespace
 		_, err = k8sClient.CoreV1().Services(tSvcNamespace).Create(context.Background(), tSvc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -661,38 +660,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			return nil
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_2.InterfaceName, "all", "--asm")
-			}
-		}
-
-		ep1_1.Stop()
-		ep2_1.Stop()
-		ep2_2.Stop()
-		ep2_3.Stop()
-		for _, felix := range tc.Felixes {
-			if bpfEnabled {
-				felix.Exec("calico-bpf", "connect-time", "clean")
-			}
-			felix.Stop()
-		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })
 
 // Felix1             Felix2
@@ -768,11 +735,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		tier.Name = "tier1"
 		tier.Spec.Order = &float1_0
 		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		tier = api.NewTier()
 		tier.Name = "tier2"
 		tier.Spec.Order = &float2_0
 		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		// np1-1  egress/ingress pass
 		np := api.NewNetworkPolicy()
@@ -1319,36 +1288,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			return nil
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_1.InterfaceName, "all", "--asm")
-			}
-		}
-
-		ep1_1.Stop()
-		ep2_1.Stop()
-		for _, felix := range tc.Felixes {
-			if bpfEnabled {
-				felix.Exec("calico-bpf", "connect-time", "clean")
-			}
-			felix.Stop()
-		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })
 
 // Felix1             Felix2
@@ -1420,11 +1359,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		tier.Name = "tier1"
 		tier.Spec.Order = &float1_0
 		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		tier = api.NewTier()
 		tier.Name = "tier2"
 		tier.Spec.Order = &float2_0
 		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		// np1-1  egress/ingress pass
 		np := api.NewNetworkPolicy()
@@ -1971,33 +1912,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_1.InterfaceName, "all", "--asm")
-			}
-		}
-
-		ep1_1.Stop()
-		ep2_1.Stop()
 		for _, felix := range tc.Felixes {
 			if bpfEnabled {
+				// FIXME
 				felix.Exec("calico-bpf", "connect-time", "clean")
 			}
-			felix.Stop()
 		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })
 

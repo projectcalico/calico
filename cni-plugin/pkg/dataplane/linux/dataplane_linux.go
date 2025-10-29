@@ -33,18 +33,24 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
-type linuxDataplane struct {
+var (
+	hostSideMAC         = net.HardwareAddr{0xee, 0xee, 0xee, 0xee, 0xee, 0xee}
+	hostSideMACAsIPv6LL = cnet.MustMACToIPv6LinkLocal(hostSideMAC)
+)
+
+type LinuxDataplane struct {
 	allowIPForwarding bool
 	mtu               int
 	queues            int
 	logger            *logrus.Entry
 }
 
-func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane {
-	return &linuxDataplane{
+func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *LinuxDataplane {
+	return &LinuxDataplane{
 		allowIPForwarding: conf.ContainerSettings.AllowIPForwarding,
 		mtu:               conf.MTU,
 		queues:            conf.NumQueues,
@@ -55,7 +61,7 @@ func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane
 // DoNetworking sets up the network for the container's netns.  It creates the
 // veth pair with one end in the host network namespace and the other in the
 // container's network namespace.  It also sets up addresses and routes.
-func (d *linuxDataplane) DoNetworking(
+func (d *LinuxDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
 	args *skel.CmdArgs,
@@ -105,7 +111,7 @@ func (d *linuxDataplane) DoNetworking(
 //
 // Note: this method is also used by the Felix FV test-workload to create
 // a simulated workload.
-func (d *linuxDataplane) DoWorkloadNetnsSetUp(
+func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 	hostNlHandle *netlink.Handle,
 	netnsPath string,
 	ipAddrs []*cniv1.IPConfig,
@@ -145,14 +151,21 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 			return err
 		}
 
-		if mac, err := net.ParseMAC("EE:EE:EE:EE:EE:EE"); err != nil {
-			d.logger.Infof("failed to parse MAC Address: %v. Using kernel generated MAC.", err)
+		// We create the veth with random MAC address because the kernel sometimes
+		// fails to honor a MAC that we set on the LinkAdd request.  However,
+		// we want a fixed MAC address so try to set that now.  A fixed MAC
+		// address makes ARP programming easier/static, and it paves the way for
+		// live migration of workloads in the future.
+		var expectedHostSideIPv6Addr net.IP
+		if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, hostSideMAC); err != nil {
+			d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
 		} else {
-			// Set the MAC address on the host side interface so the kernel does not
-			// have to generate a persistent address which fails some times.
-			if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, mac); err != nil {
-				d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
-			}
+			// We've seen the kernel use the old MAC to calculate the link-local
+			// address.  Presumably because we bring the link "up" before the
+			// MAC has reached all parts of the kernel.  Give it a bit of time
+			// to settle in hopes of making that less likely.
+			time.Sleep(10 * time.Millisecond)
+			expectedHostSideIPv6Addr = hostSideMACAsIPv6LL
 		}
 
 		// Figure out whether we have IPv4 and/or IPv6 addresses.
@@ -256,7 +269,7 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 					d.logger.WithField("route", r).Debug("Skipping non-IPv4 route")
 					continue
 				}
-				d.logger.WithField("route", r).Debug("Adding IPv4 route")
+				d.logger.WithField("route", r).Info("Adding IPv4 route (inside container)")
 				if err = ip.AddRoute(r, gw, contVeth); err != nil {
 					return fmt.Errorf("failed to add IPv4 route for %v via %v: %v", r, gw, err)
 				}
@@ -284,6 +297,10 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 			var err error
 			var addresses []netlink.Addr
 			for i := 0; i < 10; i++ {
+				if i > 0 {
+					time.Sleep(50 * time.Millisecond)
+					d.logger.Info("Retry lookup of host-side IPv6 link local address...")
+				}
 				// No need to add a dummy next hop route as the host veth device will already have an IPv6
 				// link local address that can be used as a next hop.
 				// Just fetch the address of the host end of the veth and use it as the next hop.
@@ -297,16 +314,41 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 					// support IPv6. Since a IPv6 address has been allocated that can't be used,
 					// return an error.
 					err = fmt.Errorf("failed to get IPv6 addresses for host side of the veth pair")
-				}
-				if err == nil {
-					break
+				} else {
+					if expectedHostSideIPv6Addr != nil && !expectedHostSideIPv6Addr.Equal(addresses[0].IP) {
+						// [Shaun] I think we hit this case if the kernel hasn't finished processing
+						// the MAC update above when we bring the device up.  It uses the original
+						// random MAC to generate the IPv6 link local address.  To work around that,
+						// toggle the device down/up, which refreshes the calculation of the address.
+						d.logger.Warnf("Host-side veth received unexpected link-local IP; toggling it down/up to reset the IP.")
+						if err = hostNlHandle.LinkSetDown(hostVeth); err != nil {
+							return fmt.Errorf("failed to set %q down: %w", hostVethName, err)
+						}
+						// Defensive: try to set the MAC again in case it silently failed/got reverted somehow.
+						if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, hostSideMAC); err != nil {
+							// Surprising to hit this because we must have succeeded above.
+							d.logger.Warnf("Failed to set the host-side MAC (while trying to reset the link local IP).")
+						}
+						// Let's give the kernel time to settle this time.
+						time.Sleep(50 * time.Millisecond)
+						if err = hostNlHandle.LinkSetUp(hostVeth); err != nil {
+							return fmt.Errorf("failed to set %q down: %w", hostVethName, err)
+						}
+						// Leave an error behind so that we retry the loop.
+						err = fmt.Errorf("host-side veth got wrong link-local IP address: %s", addresses[0].IP)
+					}
 				}
 
-				d.logger.Infof("No IPv6 set on interface, retrying..")
-				time.Sleep(50 * time.Millisecond)
+				if err != nil {
+					continue
+				}
+
+				d.logger.Infof("Host-side veth link-local IP found: %s", addresses[0].IP.String())
+				break
 			}
 
 			if err != nil {
+				d.logger.Errorf("Gave up waiting for host-side link local address: %s.", err)
 				return err
 			}
 
@@ -317,7 +359,7 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 					d.logger.WithField("route", r).Debug("Skipping non-IPv6 route")
 					continue
 				}
-				d.logger.WithField("route", r).Debug("Adding IPv6 route")
+				d.logger.WithField("route", r).Info("Adding IPv6 route (inside container)")
 				if err = ip.AddRoute(r, hostIPv6Addr, contVeth); err != nil {
 					return fmt.Errorf("failed to add IPv6 route for %v via %v: %v", r, hostIPv6Addr, err)
 				}
@@ -427,7 +469,7 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 }
 
 // configureSysctls configures necessary sysctls required for the host side of the veth pair for IPv4 and/or IPv6.
-func (d *linuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
+func (d *LinuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 	var err error
 
 	if hasIPv4 {
@@ -496,7 +538,7 @@ func (d *linuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 
 }
 
 // configureContainerSysctls configures necessary sysctls required inside the container netns.
-func (d *linuxDataplane) configureContainerSysctls(hasIPv4, hasIPv6 bool) error {
+func (d *LinuxDataplane) configureContainerSysctls(hasIPv4, hasIPv6 bool) error {
 	// If an IPv4 address is assigned, then configure IPv4 sysctls.
 	if hasIPv4 {
 		if d.allowIPForwarding {
@@ -545,7 +587,7 @@ func writeProcSys(path, value string) error {
 	return err
 }
 
-func (d *linuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
+func (d *LinuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	// Only try to delete the device if a namespace was passed in.
 	logCtx := d.logger.WithFields(logrus.Fields{
 		"netns": args.Netns,

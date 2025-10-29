@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -82,7 +80,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
-				timeout         time.Duration = time.Second * 30
+				timeout         = time.Second * 30
 			)
 
 			BeforeEach(func() {
@@ -98,46 +96,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				felixes = tc.Felixes
 
 				cc = &connectivity.Checker{}
-			})
-
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range tc.Felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ip", "r")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-						}
-						felix.Exec("ip", "a")
-						if BPFMode() {
-							felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-						}
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
 			})
 
 			// Only applicable to IPIP encap
@@ -273,14 +231,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Expect(err).NotTo(HaveOccurred())
 					lines := strings.Split(strings.Trim(defaultRoute, "\n "), "\n")
 					Expect(lines).To(HaveLen(1))
-					defaultRouteArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+					defaultRouteArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 					// Assuming the subnet route will be "proto kernel" and that will be the only such route.
 					subnetRoute, err := felix.ExecOutput("ip", "route", "show", "proto", "kernel")
 					Expect(err).NotTo(HaveOccurred())
 					lines = strings.Split(strings.Trim(subnetRoute, "\n "), "\n")
 					Expect(lines).To(HaveLen(1), "expected only one proto kernel route, has docker's routing set-up changed?")
-					subnetArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+					subnetArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
 					// Add the bond, replacing eth0.
 					felix.Exec("ip", "addr", "del", felix.IP, "dev", "eth0")
@@ -522,7 +480,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 								Action: api.Allow,
 							},
 						}
-						policy.Spec.Selector = fmt.Sprintf("has(host-endpoint)")
+						policy.Spec.Selector = "has(host-endpoint)"
 						_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred())
 					})
@@ -611,6 +569,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 
 					node.Spec.BGP = nil
 					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
@@ -780,7 +739,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				var externalClient *containers.Container
 
 				BeforeEach(func() {
-					externalClient = infrastructure.RunExtClient("ext-client")
+					externalClient = infrastructure.RunExtClient(infra, "ext-client")
 
 					Eventually(func() error {
 						err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
@@ -802,10 +761,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						externalClient.Exec("ip", "l")
 						externalClient.Exec("ip", "a")
 					}
-				})
-
-				AfterEach(func() {
-					externalClient.Stop()
 				})
 
 				It("should allow IPIP to external client if it is in ExternalNodesCIDRList", func() {
@@ -875,6 +830,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
 						externalClient.IP, "dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", "90")
 
+					if BPFMode() {
+						tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
+					}
 					By("testing that the ext client can connect via ipip")
 					cc.ResetExpectations()
 					cc.ExpectSome(externalClient, w[0])
@@ -891,11 +849,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
-				timeout         time.Duration = time.Second * 30
+				timeout         = time.Second * 30
 			)
 
 			BeforeEach(func() {
@@ -913,51 +869,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
 				assignTunnelAddresses(infra, tc, client)
-			})
-
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ipset", "list")
-						felix.Exec("ip", "r")
-						felix.Exec("ip", "a")
-						felix.Exec("calico-bpf", "routes", "dump")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-							felix.Exec("calico-bpf", "-6", "routes", "dump")
-						}
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
 			})
 
 			It("should have host to workload connectivity", func() {
@@ -994,7 +910,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
-				timeout         time.Duration = time.Second * 30
+				timeout         = time.Second * 30
 			)
 
 			BeforeEach(func() {
@@ -1133,7 +1049,7 @@ func createK8sServiceWithoutKubeProxy(args createK8sServiceWithoutKubeProxyArgs)
 	if BPFMode() {
 		k8sClient := args.infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 		testSvc := k8sService(args.svcName, args.serviceIP, args.w, args.port, args.tgtPort, 0, "tcp")
-		testSvcNamespace := testSvc.ObjectMeta.Namespace
+		testSvcNamespace := testSvc.Namespace
 		_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
@@ -1207,5 +1123,5 @@ func allHostsIPSetSize(felixes []*infrastructure.Felix, ipipMode api.IPIPMode) i
 }
 
 func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
-	return !(ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs")
+	return ipipMode != api.IPIPModeAlways || routeSource != "WorkloadIPs"
 }

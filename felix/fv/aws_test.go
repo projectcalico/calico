@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -57,16 +55,8 @@ var _ = infrastructure.DatastoreDescribe("AWS-ec2-srcdstcheck", []apiconfig.Data
 		tc.Felixes[0].TriggerDelayedStart()
 	})
 
-	AfterEach(func() {
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	getHTTPStatus := func(url string) (string, error) {
-		op, err := tc.Felixes[0].Container.ExecOutput("wget", "-S", "-T", "2", "-O", "-", "-o", "/dev/stdout", url)
+		op, err := tc.Felixes[0].ExecOutput("wget", "-S", "-T", "2", "-O", "-", "-o", "/dev/stdout", url)
 		// Return output even when the error is set.
 		// this is useful when wget sets err, in case of bad health status.
 		return op, err

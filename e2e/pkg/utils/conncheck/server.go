@@ -16,6 +16,7 @@ package conncheck
 
 import (
 	"fmt"
+	"strings"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -115,6 +116,52 @@ func (s *Server) ClusterIP(opts ...TargetOption) Target {
 		}
 	}
 	return t
+}
+
+func (s *Server) ClusterIPv4(opts ...TargetOption) Target {
+	for _, ip := range s.Service().Spec.ClusterIPs {
+		if strings.Contains(ip, ":") {
+			continue
+		}
+		t := &target{
+			server:      s,
+			targetType:  TypeClusterIP,
+			destination: ip,
+			protocol:    TCP,
+		}
+		for _, opt := range opts {
+			if err := opt(t); err != nil {
+				framework.ExpectNoError(err)
+			}
+		}
+		return t
+	}
+	msg := fmt.Sprintf("No IPv4 ClusterIP found for server %s/%s", s.namespace.Name, s.name)
+	framework.Fail(msg, 1)
+	return nil
+}
+
+func (s *Server) ClusterIPv6(opts ...TargetOption) Target {
+	for _, ip := range s.Service().Spec.ClusterIPs {
+		if !strings.Contains(ip, ":") {
+			continue
+		}
+		t := &target{
+			server:      s,
+			targetType:  TypeClusterIP,
+			destination: ip,
+			protocol:    TCP,
+		}
+		for _, opt := range opts {
+			if err := opt(t); err != nil {
+				framework.ExpectNoError(err)
+			}
+		}
+		return t
+	}
+	msg := fmt.Sprintf("No IPv6 ClusterIP found for server %s/%s", s.namespace.Name, s.name)
+	framework.Fail(msg, 1)
+	return nil
 }
 
 // HostPorts returns a list of targets that can be used to connect to the pod's host IPs on the given port.

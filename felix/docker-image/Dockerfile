@@ -20,8 +20,6 @@ FROM ${BPFTOOL_IMAGE} AS bpftool
 
 FROM debian:12-slim AS source
 
-LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
-
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \
     ipset \
@@ -75,6 +73,23 @@ FROM scratch
 COPY --from=source / /
 
 WORKDIR /code
+
+LABEL org.opencontainers.image.description="Calico's per-host daemon"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico Felix"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+# Labels for RedHat OCP certification
+LABEL description="Calico's per-host daemon"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Felix"
+LABEL release=1
+LABEL summary="Calico's per-host daemon"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
 
 # Run felix (via the wrapper script) by default
 CMD ["/usr/bin/calico-felix-wrapper"]

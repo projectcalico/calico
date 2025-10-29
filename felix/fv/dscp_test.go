@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -97,7 +95,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		extClientOpts := infrastructure.ExtClientOpts{
 			Image: utils.Config.FelixImage,
 		}
-		extClient = infrastructure.RunExtClientWithOpts("ext-client1", extClientOpts)
+		extClient = infrastructure.RunExtClientWithOpts(infra, "ext-client1", extClientOpts)
 		extWorkload = &workload.Workload{
 			C:        extClient,
 			Name:     "ext-workload",
@@ -106,7 +104,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			IP:       extClient.IP,
 			IP6:      extClient.IPv6,
 		}
-		err := extWorkload.Start()
+		err := extWorkload.Start(infra)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

@@ -221,6 +221,7 @@ func IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 		Value: &model.AllocationBlock{
 			CIDR:                        *cidr,
 			Affinity:                    ab.Spec.Affinity,
+			AffinityClaimTime:           ab.Spec.AffinityClaimTime,
 			Allocations:                 ab.Spec.Allocations,
 			Unallocated:                 ab.Spec.Unallocated,
 			Attributes:                  attrs,
@@ -266,6 +267,7 @@ func IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 				Allocations:                 ab.Allocations,
 				Unallocated:                 ab.Unallocated,
 				Affinity:                    ab.Affinity,
+				AffinityClaimTime:           ab.AffinityClaimTime,
 				Attributes:                  attrs,
 				Deleted:                     ab.Deleted,
 				SequenceNumber:              ab.SequenceNumber,

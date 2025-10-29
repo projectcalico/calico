@@ -3,7 +3,6 @@
   "apiVersion": "projectcalico.org/v3",
   "metadata": {
     "name": "default.policy1",
-    "creationTimestamp": null,
     "labels": {
       "projectcalico.org/tier": "default"
     }
@@ -16,8 +15,7 @@
         "action": "Deny",
         "source": {
           "selector": "type=='application'"
-        },
-        "destination": {}
+        }
       }
     ],
     "selector": "type=='database'",

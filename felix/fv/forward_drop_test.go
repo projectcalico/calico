@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -66,18 +64,6 @@ var _ = infrastructure.DatastoreDescribe("Base FORWARD behaviour", []apiconfig.D
 		tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.neigh."+w[1].InterfaceName+".proxy_delay=0")
 
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			tc.Felixes[0].Exec("iptables-save", "-c")
-			tc.Felixes[0].Exec("ipset", "list")
-			tc.Felixes[0].Exec("ip", "r")
-			tc.Felixes[0].Exec("ip", "a")
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("should not forward because of FORWARD DROP policy", func() {

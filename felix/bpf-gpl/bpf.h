@@ -107,11 +107,13 @@
 #error CALI_RES_ values need to be increased above TC_ACT_VALUE_MAX
 #endif
 
+#define HAS_MAGLEV        (CALI_F_FROM_HEP && CALI_F_MAIN)
+
 #ifndef CALI_FIB_LOOKUP_ENABLED
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
-#define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && (CALI_F_TO_HOST || CALI_F_TO_HEP))
+#define CALI_FIB_ENABLED (CALI_FIB_LOOKUP_ENABLED && (CALI_F_TO_HOST || CALI_F_TO_HEP))
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {

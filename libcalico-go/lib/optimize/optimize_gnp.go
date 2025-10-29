@@ -23,9 +23,9 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
