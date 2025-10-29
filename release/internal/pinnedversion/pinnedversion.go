@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -79,11 +80,15 @@ const (
 	flannelMigrationController    = "flannel-migration-controller"
 )
 
+var once sync.Once
+
 func init() {
-	// Initialize the image to component map.
-	for c, img := range componentToImageMap {
-		imageToComponentMap[img] = c
-	}
+	once.Do(func() {
+		// Initialize the image to component map.
+		for c, img := range componentToImageMap {
+			imageToComponentMap[img] = c
+		}
+	})
 }
 
 type PinnedVersions[T version.Versions] interface {

@@ -43,7 +43,7 @@ var (
 	defaultRegistries = registry.DefaultCalicoRegistries
 
 	// Directories that publish images.
-	defaultImageReleaseDirs = utils.ImageReleaseDirs
+	imageReleaseDirs = utils.ImageReleaseDirs
 
 	// Directories that publish windows images.
 	windowsReleaseDirs = []string{
@@ -1015,7 +1015,7 @@ func (r *CalicoManager) buildContainerImages() error {
 		logrus.Info("Skip building container images")
 		return nil
 	}
-	releaseDirs := append(defaultImageReleaseDirs, "felix")
+	releaseDirs := append(imageReleaseDirs, "felix")
 
 	logrus.Info("Building container images")
 
@@ -1131,7 +1131,7 @@ func (r *CalicoManager) publishContainerImages() error {
 	// We allow for a certain number of retries when publishing each directory, since
 	// network flakes can occasionally result in images failing to push.
 	maxRetries := 1
-	for _, dir := range defaultImageReleaseDirs {
+	for _, dir := range imageReleaseDirs {
 		attempt := 0
 		for {
 			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-publish", env...)
@@ -1253,7 +1253,10 @@ func (r *CalicoManager) git(args ...string) (string, error) {
 }
 
 func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	return r.runner.RunInDir(dir, "make", strings.Fields(target), env)
+	targets := strings.Split(target, " ")
+	args := []string{"-C", dir}
+	args = append(args, targets...)
+	return r.runner.Run("make", args, env)
 }
 
 func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {

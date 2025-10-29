@@ -77,11 +77,11 @@ var (
 func initReleaseImages() {
 	rootDir, err := command.GitDir()
 	if err != nil {
-		logrus.Panicf("Failed to get root dir: %v", err)
+		logrus.Panicf("Cannot determine root git dir: %v", err)
 	}
 	images, err := BuildReleaseImageList(rootDir, ImageReleaseDirs...)
 	if err != nil {
-		logrus.Panicf("Failed to get images for release dirs: %v", err)
+		logrus.Panicf("Cannot build release images list for release dirs[%s]: %v", strings.Join(ImageReleaseDirs, ","), err)
 	}
 	releaseImages = images
 }
@@ -104,7 +104,7 @@ func buildImages(dir string) ([]string, error) {
 // BuildReleaseImageList builds a list of images to be released from the given directories.
 func BuildReleaseImageList(rootDir string, dirs ...string) ([]string, error) {
 	if len(dirs) == 0 {
-		logrus.WithField("dir", rootDir).Warn("No image release dirs specified, will proceed with rootDir")
+		logrus.WithField("root_dir", rootDir).Warnf("No image release dirs specified, will get images from root dir instead")
 		return buildImages(rootDir)
 	}
 	combinedImages := []string{}
