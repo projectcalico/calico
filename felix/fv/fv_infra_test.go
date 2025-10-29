@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -70,18 +68,6 @@ func describeConnCheckTests(protocol string) bool {
 
 				cc = &connectivity.Checker{}
 				cc.Protocol = protocol
-			})
-
-			AfterEach(func() {
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
 			})
 
 			It("should have host-to-host on right port only", func() {
@@ -159,14 +145,6 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 		JustBeforeEach(func() {
 			infra = getInfra()
 			tc, _ = infrastructure.StartNNodeTopology(1, options, infra)
-		})
-
-		AfterEach(func() {
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 
 		It("should only report that existing files actually exist", func() {

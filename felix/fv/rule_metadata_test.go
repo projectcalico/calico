@@ -12,56 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
-	"math/rand"
+	cryptorand "crypto/rand"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
-var _ = Describe("Rule Metadata tests", func() {
+var _ = infrastructure.DatastoreDescribe("Rule Metadata tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
-		etcd   *containers.Container
 		wl0    *workload.Workload
 		wl1    *workload.Workload
 	)
 
 	BeforeEach(func() {
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
 
 		wl0 = workload.Run(tc.Felixes[0], "test0", "default", "10.65.0.1", "80", "tcp")
 		wl0.Configure(client)
 
 		wl1 = workload.Run(tc.Felixes[0], "test1", "default", "10.65.0.2", "80", "tcp")
 		wl1.Configure(client)
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-			}
-		}
-		wl0.Stop()
-		wl1.Stop()
-		tc.Stop()
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	Context("With a GlobalNetworkPolicy with rule metadata", func() {
@@ -142,7 +127,7 @@ var _ = Describe("Rule Metadata tests", func() {
 		BeforeEach(func() {
 			// build some random bytes to try to break annotation processing
 			rv := make([]byte, 200)
-			_, err := rand.Read(rv)
+			_, err := cryptorand.Read(rv)
 			Expect(err).ToNot(HaveOccurred())
 			// the profile should allow the workloads to communicate
 			p = api.NewProfile()

@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 
@@ -28,14 +27,18 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = Describe("Spoof tests", func() {
 	var (
-		infra infrastructure.DatastoreInfra
-		tc    infrastructure.TopologyContainers
-		w     [3]*workload.Workload
-		cc    *connectivity.Checker
+		infra        infrastructure.DatastoreInfra
+		tc           infrastructure.TopologyContainers
+		w            [3]*workload.Workload
+		cc           *connectivity.Checker
+		calicoClient client.Interface
 	)
 
 	teardownInfra := func() {
@@ -69,7 +72,7 @@ var _ = Describe("Spoof tests", func() {
 		It("should drop spoofed traffic", func() {
 			cc = &connectivity.Checker{}
 			// Setup a spoofed workload. Make w[0] spoof w[2] by making it
-			// use w[2]'s IP to test connections.
+			// use w[2]'s IP to test connections
 			spoofed := &workload.SpoofedWorkload{
 				Workload:        w[0],
 				SpoofedSourceIP: w[2].IP,
@@ -103,12 +106,9 @@ var _ = Describe("Spoof tests", func() {
 				externalClient *containers.Container
 			)
 			BeforeEach(func() {
-				externalClient = infrastructure.RunExtClient("ext-client")
+				externalClient = infrastructure.RunExtClient(infra, "ext-client")
 				err := externalClient.CopyFileIntoContainer("../bin/pktgen", "pktgen")
 				Expect(err).NotTo(HaveOccurred())
-			})
-			AfterEach(func() {
-				externalClient.Stop()
 			})
 
 			It("should send RST for a stray TCP packet", func() {
@@ -137,7 +137,7 @@ var _ = Describe("Spoof tests", func() {
 			opts := infrastructure.DefaultTopologyOptions()
 			opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
 			opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
-			tc, _ = infrastructure.StartNNodeTopology(3, opts, infra)
+			tc, calicoClient = infrastructure.StartNNodeTopology(3, opts, infra)
 			// Install a default profile allowing all ingress and egress,
 			// in the absence of policy.
 			infra.AddDefaultAllow()
@@ -148,6 +148,19 @@ var _ = Describe("Spoof tests", func() {
 				wName := fmt.Sprintf("w%d", ii)
 				w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 				w[ii].ConfigureInInfra(infra)
+				if opts.UseIPPools {
+					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+						IP:       cnet.MustParseIP(wIP),
+						HandleID: &wName,
+						Attrs: map[string]string{
+							ipam.AttributeNode: tc.Felixes[ii].Hostname,
+						},
+						Hostname: tc.Felixes[ii].Hostname,
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
 			}
 
 			if BPFMode() {

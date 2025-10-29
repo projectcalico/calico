@@ -1,7 +1,6 @@
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  creationTimestamp: null
   labels:
     projectcalico.org/tier: default
   name: default.policy1

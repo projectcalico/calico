@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -76,7 +75,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		routeEntriesV4     [nodeCount]string
 		routeEntriesV6     [nodeCount]string
 		dmesgCmd           *exec.Cmd
-		dmesgBuf           bytes.Buffer
 		dmesgKill          func()
 
 		wgBootstrapEvents chan struct{}
@@ -112,12 +110,36 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 				// Start a process tailing the dmesg log.
 				ctx, cancel := context.WithCancel(context.Background())
-				dmesgCmd = exec.CommandContext(ctx, "sudo", "dmesg", "-wH")
-				dmesgCmd.Stdout = &dmesgBuf
-				dmesgCmd.Stderr = &dmesgBuf
-				err := dmesgCmd.Start()
+				dmesgCmd = exec.CommandContext(ctx, "sudo", "dmesg", "-WH")
+				dmesgCmd.WaitDelay = time.Second
+				dmesgIn, err := dmesgCmd.StdinPipe()
 				Expect(err).NotTo(HaveOccurred())
+				dmesgOut, err := dmesgCmd.StdoutPipe()
+				Expect(err).NotTo(HaveOccurred())
+				dmesgErr, err := dmesgCmd.StderrPipe()
+				Expect(err).NotTo(HaveOccurred())
+				err = dmesgCmd.Start()
+				Expect(err).NotTo(HaveOccurred())
+				copyOutputToLog := func(name string, pipe io.ReadCloser) {
+					scanner := bufio.NewScanner(pipe)
+					scanner.Buffer(nil, 10*1024*1024) // Increase maximum buffer size (but don't pre-alloc).
+					for scanner.Scan() {
+						line := scanner.Text()
+						line = strings.TrimRight(line, " \n")
+						_, _ = fmt.Fprintf(GinkgoWriter, "dmesg[%v] %v\n", name, line)
+					}
+					err := scanner.Err()
+					if err != nil && !errors.Is(err, io.EOF) {
+						log.WithError(err).Errorf("Error reading %v", name)
+					}
+				}
+				go copyOutputToLog("out", dmesgOut)
+				go copyOutputToLog("err", dmesgErr)
 				dmesgKill = cancel
+				// close stdin to make sure sudo fails fast if it's asking for
+				// password or something.
+				Expect(dmesgIn.Close()).NotTo(HaveOccurred())
+
 				log.Info("Started dmesg log capture")
 
 				infra = getInfra()
@@ -191,44 +213,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				if dmesgKill != nil {
 					log.Info("Stop dmesg log capture")
 					dmesgKill()
-					log.Infof("Captured dmesg log:\n%v", dmesgBuf.String())
+					_ = dmesgCmd.Wait()
+					dmesgKill = nil
 				}
 
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range topologyContainers.Felixes {
-						felix.Exec("ip", "link")
-						felix.Exec("ip", "addr")
-						felix.Exec("ip", "rule", "list")
-						felix.Exec("ip", "route", "show", "table", "all")
-						felix.Exec("ip", "route", "show", "cached")
-						felix.Exec("wg")
-						felix.Exec("wg", "show", "all", "private-key")
-						if BPFMode() {
-							felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-							felix.Exec("calico-bpf", "policy", "-6", "dump", "eth0", "all", "--asm")
-						}
-					}
-				}
-
-				if wireguardEnabledV4 {
-					for _, wl := range wlsV4 {
-						wl.Stop()
-					}
-				}
-				if wireguardEnabledV6 {
-					for _, wl := range wlsV6 {
-						wl.Stop()
-					}
-				}
 				for _, tcpdump := range tcpdumps {
 					tcpdump.Stop()
 				}
-				topologyContainers.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
 			})
 
 			Context("with Wireguard enabled", func() {
@@ -1120,20 +1111,6 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 				tc.Felixes[0].TriggerDelayedStart()
 			})
 
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					tc.Felixes[0].Exec("ip", "link")
-					tc.Felixes[0].Exec("wg")
-				}
-
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
-			})
-
 			It("no Wireguard device exists", func() {
 				Eventually(func() error {
 					out, err := tc.Felixes[0].ExecOutput("ip", "link", "show")
@@ -1285,7 +1262,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 		for i := range []int{0, 1} {
 			Eventually(func() string {
 				return getWireguardRoutingRule(tc.Felixes[i], 4)
-			}, "10s", "100ms").Should(MatchRegexp(fmt.Sprintf("\\d+:\\s+not from all fwmark 0x\\d+/0x\\d+ lookup \\d+")))
+			}, "10s", "100ms").Should(MatchRegexp(`\d+:\s+not from all fwmark 0x\d+/0x\d+ lookup \d+`))
 		}
 		// 3. by checking, Wireguard route table exist.
 		for i := range []int{0, 1} {
@@ -1341,7 +1318,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 				// Check the rule exists.
 				Eventually(func() string {
 					return getWireguardRoutingRule(tc.Felixes[i], 4)
-				}, "10s", "100ms").Should(MatchRegexp(fmt.Sprintf("\\d+:\\s+not from all fwmark 0x\\d+/0x\\d+ lookup \\d+")))
+				}, "10s", "100ms").Should(MatchRegexp(`\d+:\s+not from all fwmark 0x\d+/0x\d+ lookup \d+`))
 			}
 			for i := range []int{0, 1} {
 				// Check the route entry exists.
@@ -1491,7 +1468,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		// initialise external client
-		externalClient = infrastructure.RunExtClient("ext-client")
+		externalClient = infrastructure.RunExtClient(infra, "ext-client")
 		externalClient.Exec("ip", "route", "add", wlsByHost[0][0].IP, "via", tc.Felixes[0].IP)
 
 		for i := range tc.Felixes {
@@ -1565,42 +1542,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				felix.Exec("ip", "addr")
-				felix.Exec("ip", "rule", "list")
-				felix.Exec("ip", "route", "show", "table", "all")
-				felix.Exec("ip", "route", "show", "cached")
-				felix.Exec("wg")
-				felix.Exec("cat", "/proc/sys/net/ipv4/conf/all/src_valid_mark")
-
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c", "-t", "raw")
-					felix.Exec("iptables", "-L", "-vx")
-				}
-			}
-		}
-
-		for felixIdx, felixWls := range wlsByHost {
-			for i := range felixWls {
-				wlsByHost[felixIdx][i].Stop()
-			}
-		}
-
-		externalClient.Stop()
-
 		for _, tcpdump := range tcpdumps {
 			tcpdump.Stop()
 		}
-
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 
 	It("should pass basic connectivity scenarios", func() {
@@ -1623,7 +1567,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		for _, felix := range tc.Felixes {
 			Eventually(func() string {
 				return getWireguardRoutingRule(felix, 4)
-			}, "10s", "100ms").Should(MatchRegexp(fmt.Sprintf("\\d+:\\s+not from all fwmark 0x\\d+/0x\\d+ lookup \\d+")))
+			}, "10s", "100ms").Should(MatchRegexp(`\d+:\s+not from all fwmark 0x\d+/0x\d+ lookup \d+`))
 		}
 
 		By("Checking the routing table entries exist")

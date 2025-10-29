@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -61,21 +59,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			w[i].ConfigureInInfra(infra)
 		}
 		ensureBPFProgramsAttached(tc.Felixes[0])
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			for _, felix := range tc.Felixes {
-				felix.Exec("calico-bpf", "counters", "dump")
-			}
-		}
-
-		for i := 0; i < 2; i++ {
-			w[i].Stop()
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {

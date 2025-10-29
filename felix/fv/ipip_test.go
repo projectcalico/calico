@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -41,6 +39,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -95,6 +95,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].ConfigureInInfra(infra)
 
+			if topologyOptions.UseIPPools {
+				// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+				err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+					IP:       cnet.MustParseIP(wIP),
+					HandleID: &wName,
+					Attrs: map[string]string{
+						ipam.AttributeNode: tc.Felixes[ii].Hostname,
+					},
+					Hostname: tc.Felixes[ii].Hostname,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 			hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
 		}
 
@@ -103,37 +116,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		}
 
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ipset", "list")
-				}
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-				if BPFMode() {
-					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-				}
-			}
-		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 
 	It("should fully randomize MASQUERADE rules", func() {
@@ -318,7 +300,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 						Action: api.Allow,
 					},
 				}
-				policy.Spec.Selector = fmt.Sprintf("has(host-endpoint)")
+				policy.Spec.Selector = "has(host-endpoint)"
 				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -398,7 +380,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		var externalClient *containers.Container
 
 		BeforeEach(func() {
-			externalClient = infrastructure.RunExtClient("ext-client")
+			externalClient = infrastructure.RunExtClient(infra, "ext-client")
 
 			Eventually(func() error {
 				err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
@@ -412,20 +394,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 			externalClient.Exec("ip", "addr", "add", "dev", "tunl0", "10.65.222.1")
 			externalClient.Exec("ip", "route", "add", "10.65.0.0/24", "via",
 				tc.Felixes[0].IP, "dev", "tunl0", "onlink")
-
-			tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-				externalClient.IP, "dev", "tunl0", "onlink")
-		})
-
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				externalClient.Exec("ip", "r")
-				externalClient.Exec("ip", "l")
-				externalClient.Exec("ip", "a")
-			}
-		})
-		AfterEach(func() {
-			externalClient.Stop()
 		})
 
 		It("should allow IPIP to external client iff it is in ExternalNodesCIDRList", func() {
@@ -482,6 +450,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 				} else {
 					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 				}
+			}
+
+			tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
+				externalClient.IP, "dev", "tunl0", "onlink")
+
+			if BPFMode() {
+				tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
 			}
 
 			By("testing that the ext client can connect via ipip")

@@ -1,5 +1,3 @@
-//go:build fvtests
-
 // Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,12 +35,12 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -55,10 +53,9 @@ func init() {
 	resolver.SetDefaultScheme("passthrough")
 }
 
-var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
+var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		etcd              *containers.Container
 		tc                infrastructure.TopologyContainers
 		calicoClient      client.Interface
 		infra             infrastructure.DatastoreInfra
@@ -82,7 +79,8 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		// options.ExtraEnvVars["FELIX_DebugDisableLogDropping"] = "true"
 		// options.FelixLogSeverity = "debug"
 		options.ExtraVolumes[tempDir] = "/var/run/calico/policysync"
-		tc, etcd, calicoClient, infra = infrastructure.StartSingleNodeEtcdTopology(options)
+		infra = getInfra()
+		tc, calicoClient = infrastructure.StartSingleNodeTopology(options, infra)
 		infrastructure.CreateDefaultProfile(calicoClient, "default", map[string]string{"default": ""}, "default == ''")
 
 		// Create three workloads, using that profile.
@@ -96,19 +94,6 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		}
 
 		hostMgmtCredsPath = filepath.Join(tempDir, binder.CredentialsSubdir)
-	})
-
-	AfterEach(func() {
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	AfterEach(func() {
@@ -131,7 +116,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		createWorkloadDirectory := func(wl *workload.Workload) (string, string) {
 			dirName := dirNameForWorkload(wl)
 			hostWlDir := filepath.Join(tempDir, dirName)
-			os.MkdirAll(hostWlDir, 0777)
+			Expect(os.MkdirAll(hostWlDir, 0777)).To(Succeed())
 			return hostWlDir, filepath.Join("/var/run/calico/policysync", dirName)
 		}
 
@@ -214,7 +199,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 				createWorkloadConn := func(i int) (*grpc.ClientConn, proto.PolicySyncClient) {
 					var opts []grpc.DialOption
 					opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-					opts = append(opts, grpc.WithDialer(unixDialer))
+					opts = append(opts, grpc.WithContextDialer(unixDialer))
 					var conn *grpc.ClientConn
 					conn, err = grpc.NewClient(hostWlSocketPath[i], opts...)
 					Expect(err).NotTo(HaveOccurred())
@@ -283,7 +268,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 							Eventually(mockWlClient[2].InSync, "10s").Should(BeTrue())
 
 							// Close it and wait for the client to shut down.
-							wlConn[2].Close()
+							_ = wlConn[2].Close()
 							Eventually(mockWlClient[2].Done, "10s").Should(BeClosed())
 						})
 
@@ -603,7 +588,9 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 					// Then create a new mock client with a new connection.
 					newWlConn, newWlClient := createWorkloadConn(0)
-					defer newWlConn.Close()
+					defer func() {
+						_ = newWlConn.Close()
+					}()
 					client := newMockWorkloadClient("workload-0 second client")
 					client.StartSyncing(ctx, newWlClient)
 
@@ -623,12 +610,14 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 					// Workload should be sent over the API.
 					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
-					wlConn[0].Close()
+					_ = wlConn[0].Close()
 					Eventually(client.Done).Should(BeClosed())
 
 					// Then create a new mock client with a new connection.
 					newWlConn, newWlClient := createWorkloadConn(0)
-					defer newWlConn.Close()
+					defer func() {
+						_ = newWlConn.Close()
+					}()
 					client = newMockWorkloadClient("workload-0 second client")
 					client.StartSyncing(ctx, newWlClient)
 
@@ -654,7 +643,9 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 					// Then create a new mock client with a new connection.
 					newWlConn, newWlClient := createWorkloadConn(0)
-					defer newWlConn.Close()
+					defer func() {
+						_ = newWlConn.Close()
+					}()
 					client := newMockWorkloadClient("workload-0 second client")
 					client.StartSyncing(ctx, newWlClient)
 
@@ -684,8 +675,11 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 	})
 })
 
-func unixDialer(target string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("unix", target, timeout)
+func unixDialer(ctx context.Context, target string) (net.Conn, error) {
+	if deadline, ok := ctx.Deadline(); ok {
+		return net.DialTimeout("unix", target, time.Until(deadline))
+	}
+	return net.DialTimeout("unix", target, 0)
 }
 
 type mockWorkloadClient struct {

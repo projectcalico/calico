@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -54,11 +52,6 @@ var _ = infrastructure.DatastoreDescribe(
 
 		JustBeforeEach(func() {
 			tc, calicoClient = infrastructure.StartNNodeTopology(1, options, infra)
-		})
-
-		AfterEach(func() {
-			tc.Stop()
-			infra.Stop()
 		})
 
 		Context("With Felix configuration set GRO disabled on eth0", func() {

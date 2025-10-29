@@ -121,7 +121,6 @@ var _ = Describe("ResourcePrinterYAML tests", func() {
 			`apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  creationTimestamp: null
   name: foo
 spec:
   ingress:
@@ -151,7 +150,6 @@ var _ = Describe("ResourcePrinterJSON tests", func() {
   "apiVersion": "projectcalico.org/v3",
   "kind": "GlobalNetworkPolicy",
   "metadata": {
-    "creationTimestamp": null,
     "name": "foo"
   },
   "spec": {
