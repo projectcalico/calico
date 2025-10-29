@@ -17,6 +17,7 @@ package proxy_test
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -33,7 +34,7 @@ import (
 )
 
 var _ = Describe("BPF Proxy healthCheckNodeport", func() {
-	var p proxy.Proxy
+	var p proxy.ProxyFrontend
 	k8s := fake.NewClientset()
 
 	testNodeName := "testnode"
@@ -46,6 +47,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			p, err = proxy.New(k8s, &mockDummySyncer{}, testNodeName,
 				proxy.WithMinSyncPeriod(200*time.Millisecond), proxy.WithMaxSyncPeriod(1*time.Second))
 			Expect(err).NotTo(HaveOccurred())
+			p.SetHostIPs([]net.IP{net.ParseIP("127.0.0.1")})
 		})
 	})
 
