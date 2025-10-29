@@ -897,8 +897,8 @@ type FelixConfigurationSpec struct {
 	// it on ingress. Value of Enabled also allows redirection from L3 host devices like
 	// IPIP tunnel or Wireguard directly to the peer side of the workload's device. This
 	// makes redirection faster, however, it breaks tools like tcpdump on the peer side.
-	// Use Enabled with caution. [Default: L2Only]
-	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
+	// Use Enabled with caution. [Default: Enabled]
+	//+kubebuilder:validation:Enum=Enabled;Disabled;Enabled
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
 	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
