@@ -18,7 +18,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 	"golang.org/x/sys/unix"
 
