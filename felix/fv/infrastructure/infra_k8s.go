@@ -1281,7 +1281,7 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 			panic(err)
 		}
 		for _, ep := range endpointSlices.Items {
-			if ep.Name == "kubernetes" {
+			if ep.Labels["kubernetes.io/service-name"] == "kubernetes" {
 				// Skip cleaning up the Kubernetes API service.
 				continue
 			}
