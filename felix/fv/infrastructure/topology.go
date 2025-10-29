@@ -238,7 +238,7 @@ func StartNNodeTopology(
 	var err error
 
 	if opts.EnableIPv6 && opts.IPIPMode != api.IPIPModeNever && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		log.Errorf("IPIP not supported in BPF with ipv6!")
+		ginkgo.Fail("IPIP not supported in BPF with ipv6!")
 		return
 	}
 
