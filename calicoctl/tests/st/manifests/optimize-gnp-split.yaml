@@ -1,0 +1,75 @@
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: gnp-split
+spec:
+  selector: has(bar)
+  namespaceSelector: name == 'foo'
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: "app == 'a'"
+    destination:
+      selector: "app == 'a'"
+      ports:
+      - 80
+      - 443
+    metadata: {annotations: {idx: "0"}}
+  - action: Allow
+    source:
+      selector: "app == 'a'"
+    destination:
+      selector: "app == 'b'"
+    metadata: {annotations: {idx: "1"}}
+  - action: Allow
+    destination:
+      selector: "app == 'b'"
+    metadata: {annotations: {idx: "2"}}
+  - action: Allow
+    destination:
+      namespaceSelector: name == 'foo'
+    metadata: {annotations: {idx: "3"}}
+  - action: Allow
+    destination:
+      namespaceSelector: name == 'foo'
+    metadata: {annotations: {idx: "4"}}
+  - action: Allow
+    destination:
+      namespaceSelector: name == 'foo'
+    source:
+      selector: a == 'b'
+      namespaceSelector: e == 'g'
+    metadata: {annotations: {idx: "5"}}
+  - action: Allow
+    protocol: TCP
+    destination:
+      namespaceSelector: name == 'foo'
+      ports:
+      - 80
+      - 443
+    metadata: {annotations: {idx: "6"}}
+  - action: Allow
+    protocol: TCP
+    destination:
+      namespaceSelector: name == 'foo'
+      ports:
+      - 1234
+    metadata: {annotations: {idx: "7"}}
+  - action: Allow
+    destination:
+      selector: app == 'jazz'
+      namespaceSelector: name == 'foo'
+    metadata: {annotations: {idx: "8"}}
+  - action: Allow
+    destination:
+      namespaceSelector: name == 'foo'
+    metadata: {annotations: {idx: "9"}}
+  egress:
+  - action: Allow
+    destination:
+      selector: "app == 'a'"
+    metadata: {annotations: {idx: "0"}}
