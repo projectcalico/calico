@@ -134,21 +134,6 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-
-				pinnedCfg := pinnedversion.CalicoReleaseVersions{
-					Dir:                 cfg.TmpDir,
-					ProductVersion:      ver.FormattedString(),
-					ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
-					OperatorVersion:     operatorVer.FormattedString(),
-					OperatorCfg: pinnedversion.OperatorConfig{
-						Image:    operator.DefaultImage,
-						Registry: operator.DefaultRegistry,
-					},
-				}
-				if _, err := pinnedCfg.GenerateFile(); err != nil {
-					return fmt.Errorf("failed to generate pinned version file: %w", err)
-				}
-
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersion(ver.FormattedString()),
@@ -162,16 +147,10 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithPublishGitTag(c.Bool(publishGitTagFlag.Name)),
 					calico.WithPublishGithubRelease(c.Bool(publishGitHubReleaseFlag.Name)),
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
-					calico.WithImageScanning(!c.Bool(skipImageScanFlag.Name), *imageScanningAPIConfig(c)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
-				components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
-				if err != nil {
-					return fmt.Errorf("failed to retrieve images for release: %w", err)
-				}
-				opts = append(opts, calico.WithComponents(components))
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},
@@ -249,7 +228,6 @@ func releasePublishFlags() []cli.Flag {
 		publishGitHubReleaseFlag,
 		githubTokenFlag,
 		skipValidationFlag)
-	f = append(f, imageScannerAPIFlags...)
 	return f
 }
 
