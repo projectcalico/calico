@@ -35,12 +35,12 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -53,10 +53,9 @@ func init() {
 	resolver.SetDefaultScheme("passthrough")
 }
 
-var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
+var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		etcd              *containers.Container
 		tc                infrastructure.TopologyContainers
 		calicoClient      client.Interface
 		infra             infrastructure.DatastoreInfra
@@ -80,7 +79,8 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		// options.ExtraEnvVars["FELIX_DebugDisableLogDropping"] = "true"
 		// options.FelixLogSeverity = "debug"
 		options.ExtraVolumes[tempDir] = "/var/run/calico/policysync"
-		tc, etcd, calicoClient, infra = infrastructure.StartSingleNodeEtcdTopology(options)
+		infra = getInfra()
+		tc, calicoClient = infrastructure.StartSingleNodeTopology(options, infra)
 		infrastructure.CreateDefaultProfile(calicoClient, "default", map[string]string{"default": ""}, "default == ''")
 
 		// Create three workloads, using that profile.
@@ -94,19 +94,6 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		}
 
 		hostMgmtCredsPath = filepath.Join(tempDir, binder.CredentialsSubdir)
-	})
-
-	AfterEach(func() {
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	AfterEach(func() {

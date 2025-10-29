@@ -55,26 +55,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ipset", "list")
-				}
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-		}
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	updateBGPConfig := func(deltaFn func(*api.BGPConfiguration)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -110,11 +90,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 	tryRoutingLoop := func(expectLoop bool, count int) {
 		// Run containers to model a default gateway, and an external client connecting to
 		// services within the cluster via that gateway.
-		externalGW := infrastructure.RunExtClient("ext-gw")
-		defer externalGW.Stop()
-
-		externalClient := infrastructure.RunExtClient("ext-client")
-		defer externalClient.Stop()
+		externalGW := infrastructure.RunExtClient(infra, "ext-gw")
+		externalClient := infrastructure.RunExtClient(infra, "ext-client")
 
 		// Add a service CIDR route in those containers, similar to the routes that they
 		// would have via BGP per our service advertisement feature.  (This should really be

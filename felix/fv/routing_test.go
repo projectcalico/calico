@@ -98,46 +98,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				cc = &connectivity.Checker{}
 			})
 
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range tc.Felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ip", "r")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-						}
-						felix.Exec("ip", "a")
-						if BPFMode() {
-							felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-						}
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
-			})
-
 			// Only applicable to IPIP encap
 			if ipipMode != api.IPIPModeNever {
 				if brokenXSum {
@@ -779,7 +739,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				var externalClient *containers.Container
 
 				BeforeEach(func() {
-					externalClient = infrastructure.RunExtClient("ext-client")
+					externalClient = infrastructure.RunExtClient(infra, "ext-client")
 
 					Eventually(func() error {
 						err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
@@ -801,10 +761,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						externalClient.Exec("ip", "l")
 						externalClient.Exec("ip", "a")
 					}
-				})
-
-				AfterEach(func() {
-					externalClient.Stop()
 				})
 
 				It("should allow IPIP to external client if it is in ExternalNodesCIDRList", func() {
@@ -893,8 +849,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 				timeout         = time.Second * 30
@@ -915,51 +869,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
 				assignTunnelAddresses(infra, tc, client)
-			})
-
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ipset", "list")
-						felix.Exec("ip", "r")
-						felix.Exec("ip", "a")
-						felix.Exec("calico-bpf", "routes", "dump")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-							felix.Exec("calico-bpf", "-6", "routes", "dump")
-						}
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
 			})
 
 			It("should have host to workload connectivity", func() {
