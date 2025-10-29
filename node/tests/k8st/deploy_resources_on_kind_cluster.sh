@@ -69,7 +69,7 @@ echo "Install additional permissions for BGP password"
 ${kubectl} apply -f $TEST_DIR/infra/additional-rbac.yaml
 echo
 
-BGP_CONFIG=${BGP_CONFIG:"Enabled"}
+BGP_CONFIG=${BGP_CONFIG:-"Enabled"}
 if [[ "$BGP_CONFIG" == "Disabled" ]]; then
   echo "Install Calico using the helm chart with BGP disabled"
   $HELM install calico $CHART -f $TEST_DIR/infra/values_no_bgp.yaml -n tigera-operator --create-namespace
