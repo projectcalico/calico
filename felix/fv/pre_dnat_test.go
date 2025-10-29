@@ -80,25 +80,8 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
-		externalClient = infrastructure.RunExtClient("ext-client")
+		externalClient = infrastructure.RunExtClient(infra, "ext-client")
 		externalClient.Exec("ip", "r", "add", "10.65.0.0/24", "via", tc.Felixes[0].IP)
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			tc.Felixes[0].Exec("iptables-save", "-c")
-			tc.Felixes[0].Exec("ip", "r")
-			tc.Felixes[0].Exec("ip", "a")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		infra.Stop()
-		externalClient.Stop()
 	})
 
 	Context("with node port DNATs", func() {

@@ -277,19 +277,9 @@ var _ = infrastructure.DatastoreDescribe(
 				})
 
 				AfterEach(func() {
-					for _, felix := range tc.Felixes {
-						felix.Exec("ip", "route")
-						if BPFMode() {
-							felix.Exec("calico-bpf", "counters", "dump")
-							felix.Exec("calico-bpf", "ifstate", "dump")
-						}
-					}
-
-					tc.Stop()
-					infra.Stop()
-
 					if cancel != nil {
 						cancel()
+						cancel = nil
 					}
 				})
 

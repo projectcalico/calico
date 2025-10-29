@@ -106,12 +106,9 @@ var _ = Describe("Spoof tests", func() {
 				externalClient *containers.Container
 			)
 			BeforeEach(func() {
-				externalClient = infrastructure.RunExtClient("ext-client")
+				externalClient = infrastructure.RunExtClient(infra, "ext-client")
 				err := externalClient.CopyFileIntoContainer("../bin/pktgen", "pktgen")
 				Expect(err).NotTo(HaveOccurred())
-			})
-			AfterEach(func() {
-				externalClient.Stop()
 			})
 
 			It("should send RST for a stray TCP packet", func() {

@@ -81,33 +81,6 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		cc254 = &connectivity.Checker{Protocol: "ip4:254"}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				}
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	expectHostToHostTraffic := func() {
 		cc.ExpectSome(tc.Felixes[0], hostW[1])
 		cc.ExpectSome(tc.Felixes[1], hostW[0])
@@ -623,34 +596,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled
 			}
 
 			cc = &connectivity.Checker{}
-		})
-
-		AfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				for _, felix := range tc.Felixes {
-					if NFTMode() {
-						logNFTDiags(felix)
-					}
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ipset", "list")
-					felix.Exec("ip", "r")
-					felix.Exec("ip", "a")
-					felix.Exec("sysctl", "-a")
-				}
-			}
-
-			for _, wl := range w {
-				wl.Stop()
-			}
-			for _, wl := range hostW {
-				wl.Stop()
-			}
-			tc.Stop()
-
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 
 		if BPFMode() {

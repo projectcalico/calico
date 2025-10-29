@@ -28,10 +28,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -90,9 +90,8 @@ func (c netsetsConfig) workloadFullLengthCIDR(workloadIdx int, namespaced bool) 
 	return addr + "/128"
 }
 
-var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", func() {
+var _ = infrastructure.DatastoreDescribe("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
 		felixPID int
 		client   client.Interface
@@ -101,25 +100,9 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		felixPID = tc.Felixes[0].GetFelixPID()
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	describeConnTests := func(c netsetsConfig) {
@@ -1049,15 +1032,6 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 					It("should have expected connectivity", assertBaselineNetsetsConnectivity)
 				})
 			})
-		})
-
-		AfterEach(func() {
-			for ii := range w {
-				w[ii].Stop()
-			}
-			for ii := range nw {
-				nw[ii].Stop()
-			}
 		})
 	}
 
