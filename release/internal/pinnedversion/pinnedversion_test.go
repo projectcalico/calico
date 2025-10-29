@@ -42,11 +42,11 @@ func TestImageComponents(t *testing.T) {
 		OperatorCfg: OperatorConfig{
 			Image:    "tigera/operator",
 			Registry: "docker.io",
+			Branch:   "release-v1.40",
 		},
-		releaseName:    "test-release",
-		productBranch:  "release-v3.31",
-		operatorBranch: "release-v1.40",
-		versionData:    version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
+		releaseName:   "test-release",
+		productBranch: "release-v3.31",
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
 	}
 	if err := generatePinnedVersionFile(c); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)
@@ -135,11 +135,11 @@ func TestGeneratePinnedVersionFile(t *testing.T) {
 		OperatorCfg: OperatorConfig{
 			Image:    "tigera/operator",
 			Registry: "docker.io",
+			Branch:   "release-v1.40",
 		},
-		releaseName:    "test-release",
-		productBranch:  "release-v3.31",
-		operatorBranch: "release-v1.40",
-		versionData:    version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
+		releaseName:   "test-release",
+		productBranch: "release-v3.31",
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
 	}
 	if err := generatePinnedVersionFile(p); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)
@@ -168,11 +168,11 @@ func TestGenerateOperatorComponents(t *testing.T) {
 		OperatorCfg: OperatorConfig{
 			Image:    "tigera/operator",
 			Registry: "docker.io",
+			Branch:   "release-v1.40",
 		},
-		releaseName:    "test-release",
-		productBranch:  "release-v3.31",
-		operatorBranch: "release-v1.40",
-		versionData:    version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
+		releaseName:   "test-release",
+		productBranch: "release-v3.31",
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
 	}
 	if err := generatePinnedVersionFile(p); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)

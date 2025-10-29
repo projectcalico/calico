@@ -86,6 +86,10 @@ func init() {
 	}
 }
 
+type PinnedVersions[T version.Versions] interface {
+	GenerateFile() (T, error)
+}
+
 type OperatorConfig struct {
 	Dir      string
 	Branch   string
@@ -101,10 +105,6 @@ func (c OperatorConfig) GitVersion() (string, error) {
 	}
 	logrus.WithField("out", tag).Info("Current git describe")
 	return tag, nil
-}
-
-func (c OperatorConfig) GitBranch() (string, error) {
-	return command.GitInDir(c.Dir, "rev-parse", "--abbrev-ref", "HEAD")
 }
 
 // PinnedVersion represents an entry in pinned version file.
@@ -177,14 +177,13 @@ type CalicoPinnedVersions struct {
 	// OperatorCfg is the configuration for the operator.
 	OperatorCfg OperatorConfig
 
-	releaseName    string
-	productBranch  string
-	operatorBranch string
-	versionData    version.Versions
+	releaseName   string
+	productBranch string
+	versionData   *version.HashreleaseVersions
 }
 
 // GenerateFile generates the pinned version file.
-func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
+func (p *CalicoPinnedVersions) GenerateFile() (*version.HashreleaseVersions, error) {
 	pinnedVersionPath := PinnedVersionFilePath(p.Dir)
 
 	productBranch, err := utils.GitBranch(p.RootDir)
@@ -198,11 +197,6 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
 	}
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, productVer), RandomWord())
 	p.releaseName = strings.ReplaceAll(releaseName, ".", "-")
-	operatorBranch, err := p.OperatorCfg.GitBranch()
-	p.operatorBranch = operatorBranch
-	if err != nil {
-		return nil, fmt.Errorf("cannot get current operator branch: %w", err)
-	}
 	operatorVer, err := p.OperatorCfg.GitVersion()
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine operator version: %w", err)
@@ -256,7 +250,7 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 		ManifestURL: fmt.Sprintf("https://%s.%s", p.releaseName, hashreleaseserver.BaseDomain),
 		ReleaseName: p.releaseName,
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
-			p.releaseName, time.Now().Format(time.RFC1123), p.productBranch, p.operatorBranch),
+			p.releaseName, time.Now().Format(time.RFC1123), p.productBranch, p.OperatorCfg.Branch),
 		Hash: p.versionData.Hash(),
 		TigeraOperator: registry.Component{
 			Image:    p.OperatorCfg.Image,
