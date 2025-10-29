@@ -12,3 +12,13 @@
       - name: Conformance e2e tests
         commands:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
+      - name: Conformance e2e tests (BGP Disabled)
+        commands:
+          - .semaphore/run-and-monitor e2e-test-no-bgp.log make e2e-test
+        env_vars:
+          - name: BGP_CONFIG
+            value: "Disabled"
+          - name: E2E_FOCUS
+            value: "sig-network.*Conformance|sig-calico.*Conformance"
+          - name: E2E_SKIP
+            value: "BGP"
