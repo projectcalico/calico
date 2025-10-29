@@ -1299,6 +1299,7 @@ func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
 	podIPs := []v1.PodIP{}
 	for _, ipnet := range wep.Spec.IPNetworks {
 		podIP := strings.Split(ipnet, "/")[0]
+		podIP = net.ParseIP(podIP).String() // Normalise the IP.
 		podIPs = append(podIPs, v1.PodIP{IP: podIP})
 	}
 	podStatus := v1.PodStatus{
