@@ -1,0 +1,43 @@
+installation:
+  enabled: true
+  registry: docker.io
+
+  # Disable HA control plane.
+  controlPlaneReplicas: 1
+
+  # Diable CSI / flexVolume as they are not used by these tests.
+  kubeletVolumePluginPath: "None"
+  flexVolumePath: "None"
+
+  # Configure CIDRs to match kubeadm cluster.
+  calicoNetwork:
+    bgp: Disabled
+    ipPools:
+    - cidr: 192.168.0.0/16
+    - cidr: fd00:10:244::/64
+
+apiServer:
+  enabled: true
+  apiServerDeployment:
+    spec:
+      template:
+        spec:
+          # Run apiserver on control-plane node so connectivity with k8s apiserver is not
+          # impacted by tests that disable / re-enable networking.
+          nodeSelector:
+            kubernetes.io/hostname: kind-control-plane
+
+goldmane:
+  enabled: true
+
+whisker:
+  enabled: true
+
+# CRDs are installed by `make kind-cluster-create` in lib.Makefile ($(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd;)
+manageCRDs: false
+
+# Configuration for the tigera operator
+tigeraOperator:
+  image: tigera/operator
+  version: test-build
+  registry: docker.io
