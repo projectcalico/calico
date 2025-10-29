@@ -171,9 +171,7 @@ func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
 var polMetaDefaultOrder = math.Inf(1)
 
 func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
-	m := policyMetadata{
-		Tier: policy.Tier, // TODO: Intern string for occupancy reduction?
-	}
+	m := policyMetadata{Tier: policy.Tier}
 	if policy.Order == nil {
 		m.Order = polMetaDefaultOrder
 	} else {

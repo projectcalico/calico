@@ -761,7 +761,7 @@ var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
 }).withActivePolicies(
 	types.PolicyID{Name: "pre-dnat-pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withPreDNATPolicies(
-	types.PolicyID{Name: "pre-dnat-pol-1"},
+	types.PolicyID{Name: "pre-dnat-pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -2974,7 +2974,7 @@ var endpointSliceActiveSpecPortsAndNoPorts = endpointSliceActiveSpecNoPorts.with
 		{
 			Name:            "default",
 			IngressPolicies: []types.PolicyID{{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy}},
-			EgressPolicies:  []types.PolicyID{{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "svc-policy2", Kind: v3.KindGlobalNetworkPolicy}},
 		},
 	},
 )

@@ -224,7 +224,7 @@ func (pc *PolicyLookupsCache) removePolicyRulesNFLOGPrefixes(key model.PolicyKey
 func (pc *PolicyLookupsCache) updateProfileRulesNFLOGPrefixes(key model.ProfileRulesKey, profile *model.ProfileRules) {
 	oldPrefixes := pc.nflogPrefixesProfile[key]
 	pc.nflogPrefixesProfile[key] = pc.updateRulesNFLOGPrefixes(
-		v3.KindProfile,
+		"",
 		"",
 		"",
 		key.Name,

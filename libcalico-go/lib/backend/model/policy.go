@@ -98,6 +98,9 @@ type Policy struct {
 
 func (p Policy) String() string {
 	parts := make([]string, 0)
+	if p.Tier != "" {
+		parts = append(parts, fmt.Sprintf("tier:%v", p.Tier))
+	}
 	if p.Order != nil {
 		parts = append(parts, fmt.Sprintf("order:%v", *p.Order))
 	}

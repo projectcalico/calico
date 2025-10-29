@@ -246,6 +246,7 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 			name := pol.Key.Name
 			namespace := pol.Key.Namespace
 			kind := pol.Key.Kind
+
 			if pol.GovernsIngress() {
 				// Add an ingress tier default action lookup.
 				rid := NewRuleID(kind, tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, tierDefaultAction)
@@ -266,7 +267,7 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 				rid := NewRuleID(kind, tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, tierDefaultAction)
 				ed.Egress.PolicyMatches[rid.PolicyID] = policyMatchIdxEgress
 
-				if model.KindIsStaged(pol.Key.Name) {
+				if model.KindIsStaged(kind) {
 					// Increment the match index. We don't do this for non-staged policies because they replace the
 					// subsequent staged policy in the results.
 					policyMatchIdxEgress++

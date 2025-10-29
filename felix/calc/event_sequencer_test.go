@@ -162,6 +162,7 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 	var (
 		fullyLoadedParsedRules = calc.ParsedRules{
 			Namespace: "namespace",
+			Tier:      "default",
 			OutboundRules: []*calc.ParsedRule{
 				{Action: "Allow"},
 			},

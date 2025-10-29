@@ -1076,28 +1076,28 @@ var (
 		Types:    []string{"egress"},
 		Selector: "all()",
 	}
-)
 
-var servicePolicyNoPorts = model.Policy{
-	Tier:      "default",
-	Namespace: "default",
-	InboundRules: []model.Rule{
-		{
-			Action:              "Allow",
-			SrcService:          "svc",
-			SrcServiceNamespace: "default",
-			Protocol:            &protoTCP,
-			SrcPorts: []numorstring.Port{
-				{
-					MinPort: 80,
-					MaxPort: 80,
+	servicePolicyNoPorts = model.Policy{
+		Tier:      "default",
+		Namespace: "default",
+		InboundRules: []model.Rule{
+			{
+				Action:              "Allow",
+				SrcService:          "svc",
+				SrcServiceNamespace: "default",
+				Protocol:            &protoTCP,
+				SrcPorts: []numorstring.Port{
+					{
+						MinPort: 80,
+						MaxPort: 80,
+					},
 				},
 			},
 		},
-	},
-	Types:    []string{"ingress"},
-	Selector: "all()",
-}
+		Types:    []string{"ingress"},
+		Selector: "all()",
+	}
+)
 
 func intPtr(i int) *int {
 	return &i
