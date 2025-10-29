@@ -22,8 +22,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	. "github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/rules"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"

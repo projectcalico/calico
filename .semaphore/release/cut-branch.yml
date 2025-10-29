@@ -9,13 +9,12 @@ execution_time_limit:
 
 global_job_config:
   secrets:
-    # Secret for GitHub access
     - name: marvin-github-ssh-private-key
   prologue:
     commands:
       - chmod 0600 ~/.keys/*
-      - ssh-add ~/
-      # Unshallow the git repository to get latest tags
+      - ssh-add ~/.keys/*
+      - checkout
       - retry git fetch --quiet --unshallow
 
 blocks:

@@ -57,3 +57,5 @@
       version: vX.Y.Z
     whisker-backend:
       version: vX.Y.Z
+    test-signer:
+      version: vX.Y.Z

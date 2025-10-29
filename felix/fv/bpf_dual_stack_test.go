@@ -41,13 +41,14 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var (
 	_ = describeBPFDualStackTests(false, true)
 	_ = describeBPFDualStackTests(true, true)
 	_ = describeBPFDualStackTests(false, false)
+
+	_ = describeBPFDualStackProxyHealthTests()
 )
 
 func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
@@ -132,7 +133,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				w.WorkloadEndpoint.Labels = labels
 				if run {
-					err := w.Start()
+					err := w.Start(infra)
 					Expect(err).NotTo(HaveOccurred())
 					w.ConfigureInInfra(infra)
 				}
@@ -204,43 +205,10 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					currBpfepsV6  []nat.BackendMapMemV6
 				)
 
-				currBpfsvcsV6, currBpfepsV6 = dumpNATmapsV6(tc.Felixes)
-				currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
+				currBpfsvcsV6, currBpfepsV6, _ = dumpNATmapsV6(tc.Felixes)
+				currBpfsvcs, currBpfeps, _ = dumpNATmaps(tc.Felixes)
 
 				for i, felix := range tc.Felixes {
-					if NFTMode() {
-						logNFTDiags(felix)
-					} else {
-						felix.Exec("ip6tables-save", "-c")
-						felix.Exec("iptables-save", "-c")
-					}
-
-					felix.Exec("conntrack", "-L")
-					felix.Exec("ip", "-6", "link")
-					felix.Exec("ip", "-6", "addr")
-					felix.Exec("ip", "-6", "rule")
-					felix.Exec("ip", "-6", "route")
-					felix.Exec("ip", "-6", "neigh")
-					felix.Exec("calico-bpf", "-6", "ipsets", "dump")
-					felix.Exec("calico-bpf", "-6", "routes", "dump")
-					felix.Exec("calico-bpf", "-6", "nat", "dump")
-					felix.Exec("calico-bpf", "-6", "nat", "aff")
-					felix.Exec("calico-bpf", "-6", "conntrack", "dump")
-					felix.Exec("calico-bpf", "-6", "arp", "dump")
-					felix.Exec("ip", "link")
-					felix.Exec("ip", "addr")
-					felix.Exec("ip", "rule")
-					felix.Exec("ip", "route")
-					felix.Exec("ip", "neigh")
-					felix.Exec("arp")
-					felix.Exec("calico-bpf", "ipsets", "dump")
-					felix.Exec("calico-bpf", "routes", "dump")
-					felix.Exec("calico-bpf", "nat", "dump")
-					felix.Exec("calico-bpf", "nat", "aff")
-					felix.Exec("calico-bpf", "conntrack", "dump")
-					felix.Exec("calico-bpf", "arp", "dump")
-					felix.Exec("calico-bpf", "counters", "dump")
-					felix.Exec("calico-bpf", "ifstate", "dump")
 					log.Infof("[%d]FrontendMapV6: %+v", i, currBpfsvcsV6[i])
 					log.Infof("[%d]NATBackendV6: %+v", i, currBpfepsV6[i])
 					log.Infof("[%d]SendRecvMapV6: %+v", i, dumpSendRecvMapV6(felix))
@@ -249,22 +217,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
 				}
 			}
-		})
-
-		AfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-
-			for i := 0; i < 2; i++ {
-				for j := 0; j < 2; j++ {
-					w[i][j].Stop()
-				}
-			}
-			_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-1", options2.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			tc.Stop()
-			infra.Stop()
 		})
 
 		if !ipv6Dataplane {
@@ -408,7 +360,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 			It("should be able to ping external client from w[0][0]", func() {
 				tc.TriggerDelayedStart()
-				externalClient := infrastructure.RunExtClient("ext-client")
+				externalClient := infrastructure.RunExtClient(infra, "ext-client")
 				_ = externalClient
 				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
@@ -426,7 +378,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
 					Should(BeNumerically(">", 0), matcher)
-				externalClient.Stop()
 			})
 
 			It("should have both IPv4 and IPv6 routes for a dual stack UDP service", func() {
@@ -516,6 +467,51 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				cc.CheckConnectivity()
 			})
+		})
+	})
+}
+
+func describeBPFDualStackProxyHealthTests() bool {
+	if !BPFMode() {
+		return true
+	}
+	desc := "_BPF_ _BPF-SAFE_ BPF dual stack kube-proxy health checking tests"
+	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+		var (
+			infra infrastructure.DatastoreInfra
+			tc    infrastructure.TopologyContainers
+		)
+
+		BeforeEach(func() {
+			iOpts := []infrastructure.CreateOption{
+				infrastructure.K8sWithDualStack(),
+				infrastructure.K8sWithAPIServerBindAddress("::"),
+				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"),
+			}
+			infra = getInfra(iOpts...)
+			opts := infrastructure.DefaultTopologyOptions()
+			opts.EnableIPv6 = true
+			opts.IPIPMode = api.IPIPModeNever
+			opts.NATOutgoingEnabled = true
+			opts.BPFProxyHealthzPort = 10256
+
+			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+		})
+
+		AfterEach(func() {
+			tc.Stop()
+			infra.Stop()
+		})
+
+		It("should have kube-proxy health check working over both IPv4 and IPv6", func() {
+			felix := tc.Felixes[0]
+
+			felixReady := func(ip string) int {
+				return healthStatus(ip, "10256", "healthz")
+			}
+
+			Eventually(func() int { return felixReady(felix.IP) }, "10s", "330ms").Should(BeGood())
+			Eventually(func() int { return felixReady(felix.IPv6) }, "10s", "330ms").Should(BeGood())
 		})
 	})
 }

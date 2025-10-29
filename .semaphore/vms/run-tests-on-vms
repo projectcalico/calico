@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+# Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,32 @@
 set +e
 
 source $(pwd)/.semaphore/batches.sh
+
+log_monitor_regexps=(
+  "(?<!Decode)Failure"
+  "SUCCESS"
+  "Parallel test node"
+  "Test batch"
+  "FV-TEST-START"
+  "^test.*\.\.\. ok"
+  "\.\.\. ERROR$"
+  "Failure output:"
+  "^ERROR:"
+  "^Traceback"
+  "^FAILED"
+  "^OK$"
+  "^XML:"
+  "^\[success\]"
+  "^\[error\]"
+)
+
+# Combine the regexps; in Perl mode, grep only supports one
+# pattern so we combine them with '|'.
+monitor_pattern=""
+for r in "${log_monitor_regexps[@]}"; do
+  monitor_pattern="${monitor_pattern}|$r"
+done
+monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 
 zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
@@ -45,18 +71,9 @@ for batch in "${batches[@]}"; do
   (
     # Redirect tail's stdin from /dev/null to prevent waiting
     # forever on reads in semaphore CI
-    tail -F $log_file < /dev/null| grep --line-buffered \
-      -e "^test.*\.\.\. ok" \
-      -e "\.\.\. ERROR$" \
-      -e "Failure output:" \
-      -e "^ERROR:" \
-      -e "^Traceback" \
-      -e "^FAILED" \
-      -e "^OK$" \
-      -e "^XML:" \
-      -e "^\[success\]" \
-      -e "^\[error\]" \
-      -C10 | sed 's/.*/'"${prefix}"' &/';
+    tail -F $log_file < /dev/null | \
+      grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
+      sed 's/.*/'"${prefix}"' &/';
   ) &
   mon_pid=$!
   monitor_pids+=( $mon_pid )

@@ -242,6 +242,8 @@ type Config struct {
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
 	BPFMapSizeIfState                  int
+	BPFMapSizeMaglev                   int
+	BPFMaglevLUTSize                   int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
@@ -893,7 +895,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
-	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity)
+	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeMaglev)
 	bpfroutes.SetMapSize(config.BPFMapSizeRoute)
 	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
@@ -937,11 +939,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ipSetIDAllocatorV4 = idalloc.New()
 
 		// Start IPv4 BPF dataplane components
-		conntrackScannerV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, config, ipsetsManager, dp)
+		conntrackScannerV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
 			ipSetIDAllocatorV6 = idalloc.New()
-			conntrackScannerV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, config, ipsetsManagerV6, dp)
+			conntrackScannerV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp)
 		}
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
@@ -958,12 +960,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
-		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
 		bpfEndpointManager, err = NewBPFEndpointManager(
 			nil,
 			&config,
 			bpfMaps,
-			fibLookupEnabled,
+			true,
 			workloadIfaceRegex,
 			ipSetIDAllocatorV4,
 			ipSetIDAllocatorV6,
@@ -2814,7 +2815,7 @@ func startBPFDataplaneComponents(
 	ipFamily proto.IPVersion,
 	maps *bpfmap.IPMaps,
 	ipSetIDAllocator *idalloc.IDAllocator,
-	config Config,
+	config *Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
 ) *bpfconntrack.Scanner {
@@ -2835,6 +2836,7 @@ func startBPFDataplaneComponents(
 
 		// We cannot wait for the healthz server as we cannot stop it.
 		go func() {
+			log.Infof("Starting BPF Proxy Healthz server on %s", healthzAddr)
 			for {
 				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
 				if err != nil {
@@ -2847,6 +2849,7 @@ func startBPFDataplaneComponents(
 
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
+		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
 	}
 
 	if config.bpfProxyHealthzServer != nil {
@@ -2896,7 +2899,7 @@ func startBPFDataplaneComponents(
 	)
 	dp.RegisterManager(failsafeMgr)
 
-	bpfRTMgr := newBPFRouteManager(&config, maps, ipFamily, dp.loopSummarizer)
+	bpfRTMgr := newBPFRouteManager(config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
 	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)

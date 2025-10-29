@@ -86,13 +86,5 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Prometheus metrics tests", 
 			Expect(get(debugServer, debugPath)).NotTo(HaveOccurred())
 			Expect(get(metricsServer, debugPath)).To(HaveOccurred())
 		})
-
-		AfterEach(func() {
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
-		})
 	})
 })

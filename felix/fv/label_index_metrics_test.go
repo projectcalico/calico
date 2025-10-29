@@ -145,12 +145,4 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ label index metrics tests",
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_num_active_selectors{optimized=\"false\"}")).To(BeNumerically("==", 1))
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_num_active_selectors{optimized=\"true\"}")).To(BeNumerically("==", 2))
 	})
-
-	AfterEach(func() {
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })

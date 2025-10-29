@@ -256,7 +256,7 @@ var _ = describe.CalicoDescribe(
 					})
 
 					// enforce the policy
-					_, enforced := v3.ConvertStagedKubernetesPolicyToK8SEnforced(policy)
+					_, enforced := ConvertStagedKubernetesPolicyToK8SEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 					DeferCleanup(func() {
 						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
@@ -283,7 +283,7 @@ var _ = describe.CalicoDescribe(
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
 
 					// enforce the policy
-					_, enforced := v3.ConvertStagedPolicyToEnforced(policy)
+					_, enforced := ConvertStagedPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 
 					// test connection from client to server - it should fail
@@ -311,7 +311,7 @@ var _ = describe.CalicoDescribe(
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
 
 					// enforce the policy
-					_, enforced := v3.ConvertStagedGlobalPolicyToEnforced(policy)
+					_, enforced := ConvertStagedGlobalPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 
 					// test connection from client to server - it should fail

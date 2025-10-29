@@ -68,7 +68,7 @@ check-go-mod:
 go-vet:
 	# Go vet will check that libbpf headers can be found; make sure they're available.
 	$(MAKE) -C felix clone-libbpf
-	$(DOCKER_GO_BUILD) go vet ./...
+	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
@@ -164,7 +164,7 @@ image:
 # Run local e2e smoke test against the checked-out code
 # using a local kind cluster.
 ###############################################################################
-E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance"
+E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
 E2E_SKIP ?= ""
 ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
 ADMINPOLICY_UNSUPPORTED_FEATURES ?= ""
@@ -172,7 +172,7 @@ e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
-	
+
 	# Disabling ANP/BANP conformance tests due to being replaced by ClusterNetworkPolicy (and also being flaky).
 	#KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
 	# -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
