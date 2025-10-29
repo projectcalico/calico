@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -96,8 +97,8 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	pr, recorder := createPolicyResolver()
 
 	polKey := model.PolicyKey{
-		Tier: "default",
 		Name: "test-policy",
+		Kind: v3.KindNetworkPolicy,
 	}
 
 	pol := ExtractPolicyMetadata(&model.Policy{})
@@ -166,8 +167,8 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 	pr.OnDatamodelStatus(api.InSync)
 
 	polKey := model.PolicyKey{
-		Tier: "default",
 		Name: "test-policy",
+		Kind: v3.KindNetworkPolicy,
 	}
 
 	pol := policyMetadata{}

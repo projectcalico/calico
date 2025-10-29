@@ -24,12 +24,10 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -341,7 +339,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 	)
 
 	DescribeTable("StagedGlobalNetworkPolicy default tier name test",
-		func(policyName string, incorrectPrefixPolicyName string) {
+		func(policyName string, prefixPolicyName string) {
 			By("Getting the policy before it was created")
 			_, err := c.StagedGlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
 			Expect(err).To(HaveOccurred())
@@ -363,12 +361,12 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			By("Creating the policy with incorrect prefix name")
+			By("Creating the policy with prefix name")
 			_, err = c.StagedGlobalNetworkPolicies().Create(ctx,
 				&apiv3.StagedGlobalNetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName},
+					ObjectMeta: metav1.ObjectMeta{Name: prefixPolicyName},
 				}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting the policy")
 			returnedPolicy, err = c.StagedGlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
@@ -380,53 +378,20 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			By("Getting the policy with incorrect prefix")
-			_, err = c.StagedGlobalNetworkPolicies().Get(ctx, incorrectPrefixPolicyName, options.GetOptions{})
-			Expect(err).To(HaveOccurred())
-
-			By("Updating the policy with incorrect prefix")
-			_, err = c.StagedGlobalNetworkPolicies().Update(ctx, &apiv3.StagedGlobalNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
-				Spec:       spec1,
-			}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
+			By("Getting the policy with prefix")
+			_, err = c.StagedGlobalNetworkPolicies().Get(ctx, prefixPolicyName, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Deleting policy")
 			returnedPolicy, err = c.StagedGlobalNetworkPolicies().Delete(ctx, policyName, options.DeleteOptions{})
 			Expect(returnedPolicy.Name).To(Equal(policyName))
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.StagedGlobalNetworkPolicies().Delete(ctx, prefixPolicyName, options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 		},
 		Entry("StagedGlobalNetworkPolicy without default tier prefix", "netpol", "default.netpol"),
 		Entry("StagedGlobalNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
-
-	Describe("StagedGlobalNetworkPolicy without name on the projectcalico.org annotation", func() {
-		It("Should return the name without default prefix", func() {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
-				Expect(err).NotTo(HaveOccurred())
-				config.ContentType = "application/json"
-				cli, err := ctrlclient.New(config, ctrlclient.Options{})
-				Expect(err).NotTo(HaveOccurred())
-
-				// Create v1 crd with empty metadata annotation name
-				annotations := map[string]string{}
-				annotations["projectcalico.org/metadata"] = "{}"
-				policy := &apiv3.StagedGlobalNetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						Annotations: annotations,
-						Name:        "default.prefix-test-policy"},
-					Spec: apiv3.StagedGlobalNetworkPolicySpec{},
-				}
-				err = cli.Create(context.Background(), policy)
-				Expect(err).NotTo(HaveOccurred())
-
-				// We should be able to get it without the default. prefix
-				_, err = c.StagedGlobalNetworkPolicies().Get(ctx, "prefix-test-policy", options.GetOptions{})
-				Expect(err).ToNot(HaveOccurred())
-			}
-		})
-	})
 
 	DescribeTable("StagedGlobalNetworkPolicy name validation tests",
 		func(policyName string, tier string, expectError bool) {
@@ -444,7 +409,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			_, err := c.StagedGlobalNetworkPolicies().Create(ctx,
 				&apiv3.StagedGlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: policyName},
+						Name: policyName,
+					},
 					Spec: apiv3.StagedGlobalNetworkPolicySpec{
 						Tier: tier,
 					},
@@ -456,11 +422,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				Expect(err).ToNot(HaveOccurred())
 			}
 		},
+
+		// We don't enforce any name restrictions.
 		Entry("StagedGlobalNetworkPolicy in default tier without prefix", "netpol", "default", false),
 		Entry("StagedGlobalNetworkPolicy in default tier with prefix", "default.netpol", "default", false),
-		Entry("StagedGlobalNetworkPolicy in custom tier with correct prefix", "tier1.netpol", "tier1", false),
-		Entry("StagedGlobalNetworkPolicy in custom tier without prefix", "netpol", "tier1", true),
-		Entry("StagedGlobalNetworkPolicy in custom tier with incorrect prefix", "tier1.netpol", "tier2", true),
+		Entry("StagedGlobalNetworkPolicy in custom tier with tier prefix", "tier1.netpol", "tier1", false),
+		Entry("StagedGlobalNetworkPolicy in custom tier without prefix", "netpol", "tier1", false),
+		Entry("StagedGlobalNetworkPolicy in custom tier with mismatched prefix", "tier1.netpol", "tier2", false),
 	)
 
 	Describe("StagedGlobalNetworkPolicy watch functionality", func() {

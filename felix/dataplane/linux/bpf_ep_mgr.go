@@ -2379,7 +2379,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			// Ingress packet rate is configured
 			ap.IngressPacketRateConfigured = true
 
-			qosKey := qos.NewKey(uint32(ifindex), 1) //ingress=1
+			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
 			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving ingress entry from QoS map.")
@@ -3166,14 +3166,14 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 				Policies: make([]polprog.Policy, len(directionalPols)),
 			}
 
-			for i, polName := range directionalPols {
-				if model.PolicyIsStaged(polName) {
-					logrus.Debugf("Skipping staged policy %v", polName)
+			for i, polID := range directionalPols {
+				if model.KindIsStaged(polID.Kind) {
+					logrus.Debugf("Skipping staged policy %v", polID)
 					continue
 				}
 				stagedOnly = false
 
-				pol := m.policies[types.PolicyID{Tier: tier.Name, Name: polName}]
+				pol := m.policies[types.ProtoToPolicyID(polID)]
 				if pol == nil {
 					logrus.WithField("tier", tier).Warn("Tier refers to unknown policy!")
 					continue
@@ -3185,14 +3185,16 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 					prules = pol.OutboundRules
 				}
 				policy := polprog.Policy{
-					Name:  polName,
-					Rules: make([]polprog.Rule, len(prules)),
+					Name:      polID.Name,
+					Namespace: polID.Namespace,
+					Kind:      polID.Kind,
+					Rules:     make([]polprog.Rule, len(prules)),
 				}
 
 				for ri, r := range prules {
 					policy.Rules[ri] = polprog.Rule{
 						Rule:    r,
-						MatchID: m.ruleMatchID(dir, r.Action, rules.RuleOwnerTypePolicy, ri, polName),
+						MatchID: m.ruleMatchID(dir, r.Action, rules.RuleOwnerTypePolicy, ri, policyName(polID)),
 					}
 				}
 
@@ -3305,9 +3307,9 @@ func (m *bpfEndpointManager) addWEPToIndexes(wlID types.WorkloadEndpointID, wl *
 	m.addProfileToEPMappings(wl.ProfileIds, wlID)
 }
 
-func (m *bpfEndpointManager) addPolicyToEPMappings(tier string, polNames []string, id interface{}) {
-	for _, pol := range polNames {
-		polID := types.PolicyID{Tier: tier, Name: pol}
+func (m *bpfEndpointManager) addPolicyToEPMappings(tier string, policies []*proto.PolicyID, id interface{}) {
+	for _, p := range policies {
+		polID := types.ProtoToPolicyID(p)
 		if m.policiesToWorkloads[polID] == nil {
 			m.policiesToWorkloads[polID] = set.New[any]()
 		}
@@ -3345,9 +3347,9 @@ func (m *bpfEndpointManager) removeWEPFromIndexes(wlID types.WorkloadEndpointID,
 	})
 }
 
-func (m *bpfEndpointManager) removePolicyToEPMappings(tier string, polNames []string, id interface{}) {
-	for _, pol := range polNames {
-		polID := types.PolicyID{Tier: tier, Name: pol}
+func (m *bpfEndpointManager) removePolicyToEPMappings(tier string, policies []*proto.PolicyID, id interface{}) {
+	for _, pol := range policies {
+		polID := types.ProtoToPolicyID(pol)
 		polSet := m.policiesToWorkloads[polID]
 		if polSet == nil {
 			continue
@@ -3867,13 +3869,13 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	}
 
 	// Clean up QoS map
-	qosIngressKey := qos.NewKey(uint32(ap.IfaceIndex()), 1) //ingress=1
+	qosIngressKey := qos.NewKey(uint32(ap.IfaceIndex()), 1) // ingress=1
 	qosErr := m.QoSMap.Delete(qosIngressKey.AsBytes())
 	if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
 		err = qosErr
 		logrus.WithError(err).Warn("QoS map may leak.")
 	}
-	qosEgressKey := qos.NewKey(uint32(ap.IfaceIndex()), 0) //ingress=0
+	qosEgressKey := qos.NewKey(uint32(ap.IfaceIndex()), 0) // ingress=0
 	qosErr = m.QoSMap.Delete(qosEgressKey.AsBytes())
 	if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
 		err = qosErr
@@ -4488,9 +4490,7 @@ func (m *bpfEndpointManager) updatePolicyCache(name string, owner string, inboun
 	m.polNameToMatchIDs[name] = ruleIds
 }
 
-func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int,
-	owner string, direction PolDirection, polName string,
-) polprog.RuleMatchID {
+func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int, owner string, direction PolDirection, polName string) polprog.RuleMatchID {
 	ruleOwner := rules.RuleOwnerTypePolicy
 	if owner == "Profile" {
 		ruleOwner = rules.RuleOwnerTypeProfile
@@ -4499,6 +4499,10 @@ func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int,
 	m.dirtyRules.Discard(matchID)
 
 	return matchID
+}
+
+func policyName(id *proto.PolicyID) string {
+	return fmt.Sprintf("%s/%s/%s", id.Kind, id.Namespace, id.Name)
 }
 
 func (m *bpfEndpointManager) ruleMatchID(
@@ -4524,6 +4528,7 @@ func (m *bpfEndpointManager) ruleMatchID(
 		logrus.WithField("action", action).Panic("Unknown rule action")
 	}
 
+	// TODO: CASEY Revisit this.
 	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNFLOGPrefixStr(a, owner, dir, idx, name))
 }
 
