@@ -103,7 +103,7 @@ var _ = infrastructure.DatastoreDescribe(
 					InterfaceName: "eth20",
 					MTU:           1500, // Need to match host MTU or felix will restart.
 				}
-				err := external.Start()
+				err := external.Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 
 				// assign address to eth20 and add route to the .20 network
@@ -122,32 +122,6 @@ var _ = infrastructure.DatastoreDescribe(
 				cc.Expect(Some, external, w)
 				cc.CheckConnectivity()
 			})
-		})
-
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				for _, felix := range tc.Felixes {
-					if NFTMode() {
-						logNFTDiags(felix)
-					} else {
-						felix.Exec("iptables-save", "-c")
-					}
-					felix.Exec("ip", "link")
-					felix.Exec("ip", "addr")
-					felix.Exec("ip", "rule")
-					felix.Exec("ip", "route")
-				}
-			}
-		})
-
-		AfterEach(func() {
-			log.Info("AfterEach starting")
-			for _, f := range tc.Felixes {
-				f.Exec("calico-bpf", "connect-time", "clean")
-				f.Stop()
-			}
-			infra.Stop()
-			log.Info("AfterEach done")
 		})
 
 		Context("With BPFEnforceRPF=Disabled", func() {

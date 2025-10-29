@@ -112,26 +112,6 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 		cc = &connectivity.Checker{Protocol: proto}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c")
-				}
-			}
-		}
-
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		infra.Stop()
-	})
-
 	clnt, srvr := 0, 1
 
 	expectNoConnectivity := func(cc *connectivity.Checker) {
