@@ -58,7 +58,7 @@
 - name: "Node: kind-cluster tests"
   run:
     # KinD tests also build and run all the other images.
-    when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend)}"
+    when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,non-go:/.semaphore/vms/)}"
   dependencies:
     - Prerequisites
   task:
