@@ -43,59 +43,12 @@ var (
 	defaultRegistries = registry.DefaultCalicoRegistries
 
 	// Directories that publish images.
-	imageReleaseDirs = []string{
-		"third_party/envoy-gateway",
-		"third_party/envoy-proxy",
-		"third_party/envoy-ratelimit",
-		"apiserver",
-		"app-policy",
-		"calicoctl",
-		"cni-plugin",
-		"key-cert-provisioner",
-		"kube-controllers",
-		"node",
-		"pod2daemon",
-		"typha",
-		"goldmane",
-		"whisker",
-		"whisker-backend",
-		"guardian",
-	}
+	imageReleaseDirs = utils.ImageReleaseDirs
 
-	// Directories for Windows.
+	// Directories that publish windows images.
 	windowsReleaseDirs = []string{
 		"node",
 		"cni-plugin",
-	}
-
-	// images that should be expected for a release.
-	// This list needs to be kept up-to-date
-	// with the actual release artifacts produced for a release
-	// as images are added or removed.
-	images = []string{
-		"apiserver",
-		"cni",
-		"csi",
-		"ctl",
-		"dikastes",
-		"envoy-gateway",
-		"envoy-proxy",
-		"envoy-ratelimit",
-		"guardian",
-		"key-cert-provisioner",
-		"kube-controllers",
-		"node",
-		"node-driver-registrar",
-		"pod2daemon-flexvol",
-		"test-signer",
-		"typha",
-		"goldmane",
-		"whisker",
-		"whisker-backend",
-	}
-	windowsImages = []string{
-		"cni-windows",
-		"node-windows",
 	}
 
 	metadataFileName = "metadata.yaml"
@@ -363,13 +316,13 @@ type metadata struct {
 func (r *CalicoManager) BuildMetadata(dir string) error {
 	registry, err := r.getRegistryFromManifests()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get registry from manifests: %w", err)
 	}
 
 	m := metadata{
 		Version:          r.calicoVersion,
 		OperatorVersion:  r.operatorVersion,
-		Images:           releaseImages(append(images, windowsImages...), r.calicoVersion, registry, r.operatorImage, r.operatorVersion, r.operatorRegistry),
+		Images:           releaseImages(utils.ReleaseImages(), r.calicoVersion, registry, r.operatorImage, r.operatorVersion, r.operatorRegistry),
 		HelmChartVersion: r.helmChartVersion(),
 	}
 
@@ -741,7 +694,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 func (r *CalicoManager) assertImageVersions() error {
 	logrus.Info("Checking built images exists with the correct version")
 	buildInfoVersionRegex := regexp.MustCompile(`(?m)^Version:\s+(.*)$`)
-	for _, img := range images {
+	for _, img := range utils.ReleaseImages() {
 		switch img {
 		case "apiserver":
 			for _, reg := range r.imageRegistries {
@@ -765,6 +718,8 @@ func (r *CalicoManager) assertImageVersions() error {
 					}
 				}
 			}
+		case "cni-windows", "node-windows":
+			// Skip windows images
 		case "csi", "dikastes", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "goldmane", "node-driver-registrar", "pod2daemon-flexvol", "whisker", "whisker-backend":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
@@ -1082,15 +1037,15 @@ func (r *CalicoManager) buildContainerImages() error {
 			return fmt.Errorf("failed to build %s: %s", dir, err)
 		}
 		logrus.Info(out)
-	}
+		if slices.Contains(windowsReleaseDirs, dir) {
+			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
+			if err != nil {
+				logrus.Error(out)
+				return fmt.Errorf("failed to build %s windows images: %s", dir, err)
+			}
+			logrus.Info(out)
 
-	for _, dir := range windowsReleaseDirs {
-		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
-		if err != nil {
-			logrus.Error(out)
-			return fmt.Errorf("failed to build %s: %s", dir, err)
 		}
-		logrus.Info(out)
 	}
 	return nil
 }
@@ -1194,24 +1149,24 @@ func (r *CalicoManager) publishContainerImages() error {
 			logrus.Info(out)
 			break
 		}
-	}
-	for _, dir := range windowsReleaseDirs {
-		attempt := 0
-		for {
-			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-windows", env...)
-			if err != nil {
-				if attempt < maxRetries {
-					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
-					attempt++
-					continue
+		if slices.Contains(windowsReleaseDirs, dir) {
+			attempt := 0
+			for {
+				out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-windows", env...)
+				if err != nil {
+					if attempt < maxRetries {
+						logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
+						attempt++
+						continue
+					}
+					logrus.Error(out)
+					return fmt.Errorf("failed to publish %s windows images: %s", dir, err)
 				}
-				logrus.Error(out)
-				return fmt.Errorf("failed to publish %s: %s", dir, err)
-			}
 
-			// Success - move on to the next directory.
-			logrus.Info(out)
-			break
+				// Success - move on to the next directory.
+				logrus.Info(out)
+				break
+			}
 		}
 	}
 	return nil
