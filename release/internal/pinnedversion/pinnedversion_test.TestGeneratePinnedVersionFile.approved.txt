@@ -1,61 +1,67 @@
-- title: vX.Y.Z
-  manifests_url: https://test-release.example.com
+- title: v3.31.0
+  manifest_url: https://test-release.docs.eng.tigera.net
   release_name: test-release
-  note: Test note
-  full_hash: vX.Y.Z-vA.B.C
+  note: test-release - generated at [Date1] using release-v3.31 release branch with release-v1.40 operator branch
+  full_hash: v3.31.0-v1.40.0
   tigera-operator:
-    version: vA.B.C
+    version: v1.40.0-v3.31.0
     image: tigera/operator
     registry: docker.io
   components:
-    calico:
-      version: vX.Y.Z
-    typha:
-      version: vX.Y.Z
-    calicoctl:
-      version:  vX.Y.Z
-    node:
-      version:  vX.Y.Z
-    cni:
-      version:  vX.Y.Z
-    apiserver:
-      version: vX.Y.Z
-    kube-controllers:
-      version: vX.Y.Z
     api:
-      version: vX.Y.Z
-    goldmane:
-      version: vX.Y.Z
-    networking-calico:
-      version: release-v1.0
+      version: v3.31.0
+    apiserver:
+      version: v3.31.0
+    calico:
+      version: v3.31.0
+    calicoctl:
+      version: v3.31.0
+      image: ctl
+    cni:
+      version: v3.31.0
+    cni-windows:
+      version: v3.31.0
+    csi:
+      version: v3.31.0
+    csi-node-driver-registrar:
+      version: v3.31.0
+      image: node-driver-registrar
+    dikastes:
+      version: v3.31.0
+    envoy-gateway:
+      version: v3.31.0
+    envoy-proxy:
+      version: v3.31.0
+    envoy-ratelimit:
+      version: v3.31.0
     flannel:
       version: v0.12.0
+      image: coreos/flannel
       registry: quay.io
-    dikastes:
-      version: vX.Y.Z
-    envoy-gateway:
-      version: vX.Y.Z
-    envoy-proxy:
-      version: vX.Y.Z
-    envoy-ratelimit:
-      version: vX.Y.Z
+    flannel-migration-controller:
+      version: v3.31.0
     flexvol:
-      version: vX.Y.Z
-    key-cert-provisioner:
-      version: vX.Y.Z
-    csi:
-      version: vX.Y.Z
-    csi-node-driver-registrar:
-      version: vX.Y.Z
-    cni-windows:
-      version: vX.Y.Z
-    node-windows:
-      version: vX.Y.Z
+      version: v3.31.0
+      image: pod2daemon-flexvol
+    goldmane:
+      version: v3.31.0
     guardian:
-      version: vX.Y.Z
-    whisker:
-      version: vX.Y.Z
-    whisker-backend:
-      version: vX.Y.Z
+      version: v3.31.0
+    key-cert-provisioner:
+      version: v3.31.0
+    kube-controllers:
+      version: v3.31.0
+    networking-calico:
+      version: release-v3.31
+    node:
+      version: v3.31.0
+    node-windows:
+      version: v3.31.0
     test-signer:
-      version: vX.Y.Z
+      version: v3.31.0
+    typha:
+      version: v3.31.0
+    whisker:
+      version: v3.31.0
+    whisker-backend:
+      version: v3.31.0
