@@ -171,7 +171,7 @@ func compareTopLevelVsRuleSelectors(topSel, topNS, ruleSel, ruleNS string) bool 
 // splitPolicyOnSelectors scans the ingress rules for destination selectors
 // and the egress rules for source selectors.  If found, it breaks the policy
 // up into chunks based on those selectors and moves the selector into the
-// top-level subject selector.  If therea are no such selectors, it returns the
+// top-level subject selector.  If there are no such selectors, it returns the
 // policy unmodified.
 func splitPolicyOnSelectors(gnp *apiv3.GlobalNetworkPolicy) (out []*apiv3.GlobalNetworkPolicy) {
 	if gnp.Spec.ApplyOnForward || gnp.Spec.PreDNAT || gnp.Spec.DoNotTrack {
