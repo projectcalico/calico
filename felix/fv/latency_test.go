@@ -27,10 +27,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -48,9 +48,8 @@ func (c latencyConfig) workloadIP(workloadIdx int) string {
 	return fmt.Sprintf("fdc6:3dbc:e983:cbc%x::1", workloadIdx)
 }
 
-var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", func() {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
@@ -62,8 +61,8 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.ExtraEnvVars["FELIX_BPFLOGLEVEL"] = "off" // For best perf.
-
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		_ = tc.Felixes[0].GetFelixPID()
 
 		var err error
@@ -76,21 +75,6 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		if err != nil {
 			log.WithError(err).Error("Close returned error")
 		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	describeLatencyTests := func(c latencyConfig) {
@@ -212,12 +196,6 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
-		})
-
-		AfterEach(func() {
-			for ii := range w {
-				w[ii].Stop()
-			}
 		})
 	}
 
