@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/klauspost/compress/zstd"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -104,6 +105,7 @@ const (
 	defaultDropInterval                   = 1 * time.Second
 	defaultShutdownTimeout                = 300 * time.Second
 	defaultMaxConns                       = math.MaxInt32
+	defaultCompressionAlgorithmOrder      = "snappy,zstd"
 	PortRandom                            = -1
 )
 
@@ -154,6 +156,8 @@ type Config struct {
 	ClientCN                       string
 	ClientURISAN                   string
 	WriteBufferSize                int
+
+	PreferredCompressionAlgorithmOrder []syncproto.CompressionAlgorithm
 
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
@@ -263,6 +267,13 @@ func (c *Config) ApplyDefaults() {
 		}).Info("Defaulting Port.")
 		c.Port = syncproto.DefaultPort
 	}
+	if len(c.PreferredCompressionAlgorithmOrder) == 0 {
+		log.WithFields(log.Fields{
+			"value":   c.PreferredCompressionAlgorithmOrder,
+			"default": defaultCompressionAlgorithmOrder,
+		}).Info("Defaulting PreferredCompressionAlgorithmOrder.")
+		c.PreferredCompressionAlgorithmOrder = c.parseCompressionOrder(defaultCompressionAlgorithmOrder)
+	}
 }
 
 func (c *Config) ListenPort() int {
@@ -275,6 +286,23 @@ func (c *Config) ListenPort() int {
 func (c *Config) requiringTLS() bool {
 	// True if any of the TLS parameters are set.  This must match config.Config.requiringTLS().
 	return c.KeyFile+c.CertFile+c.CAFile+c.ClientCN+c.ClientURISAN != ""
+}
+
+func (c *Config) parseCompressionOrder(s string) []syncproto.CompressionAlgorithm {
+	var order []syncproto.CompressionAlgorithm
+	parts := strings.SplitSeq(s, ",")
+	for part := range parts {
+		alg := strings.ToLower(strings.TrimSpace(part))
+		switch alg {
+		case "snappy":
+			order = append(order, syncproto.CompressionSnappy)
+		case "zstd":
+			order = append(order, syncproto.CompressionZstd)
+		default:
+			log.WithField("algorithm", alg).Warn("ignoring unknown compression algorithm")
+		}
+	}
+	return order
 }
 
 func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
@@ -293,9 +321,11 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 	}
 
 	s.binSnapCaches[syncproto.CompressionSnappy] = map[syncproto.SyncerType]snapshotCache{}
+	s.binSnapCaches[syncproto.CompressionZstd] = map[syncproto.SyncerType]snapshotCache{}
 	for st, cache := range caches {
 		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
 		s.binSnapCaches[syncproto.CompressionSnappy][st] = NewSnappySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
+		s.binSnapCaches[syncproto.CompressionZstd][st] = NewZstdSnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
 	}
 
 	// Register that we will report liveness.
@@ -924,10 +954,14 @@ func (h *connection) doHandshake() error {
 	}
 	h.cache = desiredSyncerCache
 
+	clientSupportedCompressionAlgorithms := make(map[syncproto.CompressionAlgorithm]bool, len(hello.SupportedCompressionAlgorithms))
 	for _, alg := range hello.SupportedCompressionAlgorithms {
-		switch alg {
-		case syncproto.CompressionSnappy:
-			h.chosenCompression = syncproto.CompressionSnappy
+		clientSupportedCompressionAlgorithms[alg] = true
+	}
+	for _, alg := range h.config.PreferredCompressionAlgorithmOrder {
+		if clientSupportedCompressionAlgorithms[alg] {
+			h.chosenCompression = alg
+			break
 		}
 	}
 	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
@@ -1003,8 +1037,19 @@ func (h *connection) waitForAckAndRestartEncoder() error {
 		w := snappy.NewBufferedWriter(bw)
 		h.encoder = gob.NewEncoder(w) // Need a new Encoder, there's no way to change out the Writer.
 		h.flushWriter = func() error {
-			err := w.Flush()
-			if err != nil {
+			if err := w.Flush(); err != nil {
+				return err
+			}
+			return bw.Flush()
+		}
+	case syncproto.CompressionZstd:
+		w, err := zstd.NewWriter(bw, zstd.WithEncoderLevel(zstd.SpeedFastest))
+		if err != nil {
+			return err
+		}
+		h.encoder = gob.NewEncoder(w)
+		h.flushWriter = func() error {
+			if err := w.Flush(); err != nil {
 				return err
 			}
 			return bw.Flush()
