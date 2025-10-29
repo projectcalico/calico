@@ -157,25 +157,9 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 		epToHostDrop = false
 	}
 
-	// Should match CALI_FIB_LOOKUP_ENABLED in bpf.h
-	toHost := epType != EpTypeNAT && toOrFrom == FromEp
-	toHEP := (epType == EpTypeHost || epType == EpTypeLO) && toOrFrom == ToEp
-
-	realFIB := (toHost || toHEP)
-
-	if !realFIB {
-		// FIB lookup only makes sense for traffic towards the host.
-		logrus.Debug("Ignoring fib enabled, doesn't apply to this target")
-	}
-	fib := realFIB
-
 	var hostDropPart string
 	if epType == EpTypeWorkload && epToHostDrop {
 		hostDropPart = "host_drop_"
-	}
-	fibPart := ""
-	if fib {
-		fibPart = "fib_"
 	}
 	dsrPart := ""
 	if dsr && ((epType == EpTypeWorkload && toOrFrom == FromEp) || (epType == EpTypeHost)) {
@@ -211,7 +195,7 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 		corePart += "_v6"
 	}
 
-	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v%s.o",
-		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel, corePart)
+	oFileName := fmt.Sprintf("%v_%v_%s%s%v%s.o",
+		toOrFrom, epTypeShort, hostDropPart, dsrPart, logLevel, corePart)
 	return oFileName
 }

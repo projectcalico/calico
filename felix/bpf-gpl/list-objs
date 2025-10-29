@@ -11,11 +11,11 @@
 
 emit_filename() {
   if [ "${core_support}" = "legacy" ]; then
-    echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}.o"
-    echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}_v6.o"
+    echo "bin/${from_or_to}_${ep_type}_${host_drop}${extra}${log_level}.o"
+    echo "bin/${from_or_to}_${ep_type}_${host_drop}${extra}${log_level}_v6.o"
   else
-    echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}_${core_support}.o"
-    echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}_${core_support}_v6.o"
+    echo "bin/${from_or_to}_${ep_type}_${host_drop}${extra}${log_level}_${core_support}.o"
+    echo "bin/${from_or_to}_${ep_type}_${host_drop}${extra}${log_level}_${core_support}_v6.o"
   fi
 }
 
@@ -36,27 +36,12 @@ for log_level in debug no_log; do
       if [ "${host_drop}" = "host_drop_" ]; then
         # The workload-to-host drop setting only applies to the from-workload hook.
         ep_types="wep"
+	directons="from"
       else
         ep_types="wep hep ipip l3 nat lo vxlan"
       fi
       for ep_type in $ep_types; do
         for from_or_to in $directions; do
-          toHost="false"
-          toHEP="false"
-          fib="fib_"
-	  if [ "${ep_type}" != "nat" ] && [ "$from_or_to" = "from" ]; then
-            toHost="true"
-	  fi
-	  if { [ "${ep_type}" = "hep" ] || [ "${ep_type}" = "lo" ]; } && [ "$from_or_to" = "to" ]; then
-	    toHEP="true"
-	  fi
-	  if [ "${toHost}" = "false" ] && [ "${toHEP}" = "false" ]; then
-	    fib=""
-	  fi
-	  if [ "${host_drop}" = "host_drop_" ] && [ "${from_or_to}" = "to" ]; then
-	    # No host drop for to-workload direction.
-	    continue
-	  fi
           extra="dsr_"
           if [ "${ep_type}" = "hep" ]; then
             emit_filename
