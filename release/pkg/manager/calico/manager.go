@@ -1253,7 +1253,10 @@ func (r *CalicoManager) git(args ...string) (string, error) {
 }
 
 func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	return r.runner.RunInDir(dir, "make", strings.Fields(target), env)
+	targets := strings.Split(target, " ")
+	args := []string{"-C", dir}
+	args = append(args, targets...)
+	return r.runner.Run("make", args, env)
 }
 
 func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {
