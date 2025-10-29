@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket/layers"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
