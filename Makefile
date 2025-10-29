@@ -170,8 +170,8 @@ BGP_CONFIG ?= "Enabled"
 ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
 ADMINPOLICY_UNSUPPORTED_FEATURES ?= ""
 e2e-test:
-	#$(MAKE) -C e2e build
-	#$(MAKE) -C node kind-k8st-setup
+	$(MAKE) -C e2e build
+	$(MAKE) -C node kind-k8st-setup
 	KUBECONFIG=$(KIND_KUBECONFIG) BGP_CONFIG=$(BGP_CONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
 
 	# Disabling ANP/BANP conformance tests due to being replaced by ClusterNetworkPolicy (and also being flaky).
