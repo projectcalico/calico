@@ -242,6 +242,7 @@ type CompressionAlgorithm string
 
 const (
 	CompressionSnappy CompressionAlgorithm = "snappy"
+	CompressionZstd   CompressionAlgorithm = "zstd"
 )
 
 // MsgClientHello is the first message sent by the client after it opens the connection.  It begins the handshake.
