@@ -179,24 +179,6 @@ var _ = infrastructure.DatastoreDescribe("policy grouping tests", []apiconfig.Da
 			}
 		}
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					_ = felix.ExecMayFail("iptables-save", "-c")
-					_ = felix.ExecMayFail("ipset", "list")
-				}
-			}
-		}
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })
 
 func floatPtr(f float64) *float64 {

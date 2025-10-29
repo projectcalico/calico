@@ -806,27 +806,4 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			Eventually(checkFlowLogs, "30s", "3s").ShouldNot(HaveOccurred())
 		})
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-		}
-
-		ep1_1.Stop()
-		ep2_1.Stop()
-		ep2_2.Stop()
-		ep2_3.Stop()
-		ep2_4.Stop()
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })

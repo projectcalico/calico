@@ -66,18 +66,6 @@ var _ = infrastructure.DatastoreDescribe("Base FORWARD behaviour", []apiconfig.D
 		cc = &connectivity.Checker{}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			tc.Felixes[0].Exec("iptables-save", "-c")
-			tc.Felixes[0].Exec("ipset", "list")
-			tc.Felixes[0].Exec("ip", "r")
-			tc.Felixes[0].Exec("ip", "a")
-		}
-		tc.Stop()
-		infra.Stop()
-	})
-
 	It("should not forward because of FORWARD DROP policy", func() {
 		cc.ExpectNone(w[0], w[1])
 		cc.ExpectNone(w[1], w[0])
