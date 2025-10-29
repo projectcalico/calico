@@ -34,7 +34,7 @@ import (
 // ruleRenderer defined in rules_defs.go.
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
-	if model.KindIsStaged(policyID.Name) {
+	if model.KindIsStaged(policyID.Kind) {
 		logrus.Debugf("Skip programming staged policy %v", policyID.Name)
 		return nil
 	}

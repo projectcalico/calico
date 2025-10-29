@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -33,6 +34,7 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -42,6 +44,7 @@ var (
 		IndexStr: "2",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -51,6 +54,7 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -60,6 +64,7 @@ var (
 		IndexStr: "2",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -69,6 +74,7 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -78,6 +84,7 @@ var (
 		IndexStr: "3",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -87,6 +94,7 @@ var (
 		IndexStr: "4",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -96,6 +104,7 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -105,6 +114,7 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirIngress,
 	}
@@ -124,6 +134,7 @@ var (
 		IndexStr: "3",
 		PolicyID: calc.PolicyID{
 			Name: "P3",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Direction: rules.RuleDirEgress,
 	}

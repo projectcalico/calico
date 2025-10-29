@@ -133,7 +133,7 @@ func (t *RuleTrace) Path() []*calc.RuleID {
 			return t.verdictIdx
 		}
 
-		if model.KindIsStaged(r.Name) {
+		if model.KindIsStaged(r.Kind) {
 			// This is a staged policy. If the rule is an implicitly applied the tier action then we only include it if the end-of-tier
 			// pass action has also been hit.
 			if r.IsTierDefaultActionRule() {
@@ -254,7 +254,7 @@ func (t *RuleTrace) addRuleID(rid *calc.RuleID, matchIdx, numPkts, numBytes int)
 	// Set as dirty and increment the match revision number for this tier.
 	t.dirty = true
 
-	if !model.KindIsStaged(rid.Name) && rid.Action != rules.RuleActionPass {
+	if !model.KindIsStaged(rid.Kind) && rid.Action != rules.RuleActionPass {
 		// This is a verdict action, so increment counters and set our verdict index.
 		t.pktsCtr.Increase(numPkts)
 		t.bytesCtr.Increase(numBytes)

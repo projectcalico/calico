@@ -151,7 +151,7 @@ func (m *endpointManager) OnUpdate(msg interface{}) {
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		m.pendingWlEpUpdates[id] = nil
 	case *proto.ActivePolicyUpdate:
-		if model.KindIsStaged(msg.Id.Name) {
+		if model.KindIsStaged(msg.Id.Kind) {
 			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
 			return
 		}
