@@ -24,17 +24,6 @@ import (
 
 const TigeraOperatorImage = "tigera/operator"
 
-// ImageMap maps the image name to the repository.
-// Calico images include only the image name (no image path)
-// as the image path is currently part of the registry instead.
-// Non-Calico images include the full image name (image path and image name).
-var ImageMap = map[string]string{
-	"calicoctl":                 "ctl",
-	"flexvol":                   "pod2daemon-flexvol",
-	"csi-node-driver-registrar": "node-driver-registrar",
-	"flannel":                   "coreos/flannel",
-}
-
 func CheckImage(image string) (bool, error) {
 	ref, err := name.ParseReference(image)
 	if err != nil {
