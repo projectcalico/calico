@@ -1084,10 +1084,8 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions.IPIPMode = ipipMode
 	topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.VXLANMode = api.VXLANModeNever
-	topologyOptions.SimulateBIRDRoutes = false
 	topologyOptions.EnableIPv6 = enableIPv6
 	topologyOptions.FelixLogSeverity = "Debug"
-	topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
