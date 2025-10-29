@@ -86,22 +86,4 @@ var _ = infrastructure.DatastoreDescribe("iptables disruption tests", []apiconfi
 
 		Eventually(findRule, "20s", "100ms").Should(Not(BeEmpty()))
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					_ = felix.ExecMayFail("iptables-save", "-c")
-					_ = felix.ExecMayFail("ipset", "list")
-				}
-			}
-		}
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })

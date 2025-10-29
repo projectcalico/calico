@@ -34,11 +34,12 @@ import (
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
-var _ = Context("etcd connection interruption", func() {
+var _ = infrastructure.DatastoreDescribe("etcd connection interruption", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -52,7 +53,9 @@ var _ = Context("etcd connection interruption", func() {
 		if NFTMode() {
 			Skip("Test is dataplane independent, skip for nftables")
 		}
-		tc, etcd, client, infra = infrastructure.StartNNodeEtcdTopology(2, infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
+		etcd = infra.(*infrastructure.EtcdDatastoreInfra).EtcdContainer
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "")
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
@@ -83,27 +86,6 @@ var _ = Context("etcd connection interruption", func() {
 		}
 
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-			}
-		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	It("shouldn't use excessive CPU when etcd is stopped", func() {

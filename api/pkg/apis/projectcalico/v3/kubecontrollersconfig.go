@@ -174,6 +174,8 @@ type NamespaceControllerConfig struct {
 }
 
 type LoadBalancerControllerConfig struct {
+	// AssignIPs controls which LoadBalancer Service gets IP assigned from Calico IPAM.
+	// +kubebuilder:default=AllServices
 	AssignIPs AssignIPs `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
 }
 
