@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -69,10 +70,11 @@ var (
 		"whisker",
 		"whisker-backend",
 	}
-	ReleaseImages = []string{}
+	releaseImages = []string{}
+	once          sync.Once
 )
 
-func init() {
+func initReleaseImages() {
 	rootDir, err := command.GitDir()
 	if err != nil {
 		logrus.Panicf("Failed to get root dir: %v", err)
@@ -81,7 +83,12 @@ func init() {
 	if err != nil {
 		logrus.Panicf("Failed to get images for release dirs: %v", err)
 	}
-	ReleaseImages = images
+	releaseImages = images
+}
+
+func ReleaseImages() []string {
+	once.Do(initReleaseImages)
+	return releaseImages
 }
 
 func buildImages(dir string) ([]string, error) {

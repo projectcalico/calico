@@ -259,7 +259,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				fmt.Sprintf("-github-org=%s", c.String(orgFlag.Name)),
 				fmt.Sprintf("-github-repo=%s", c.String(repoFlag.Name)),
 				fmt.Sprintf("-github-repo-remote=%s", c.String(repoRemoteFlag.Name)),
-				fmt.Sprintf("-images=%s", strings.Join(utils.ReleaseImages, " ")),
+				fmt.Sprintf("-images=%s", strings.Join(utils.ReleaseImages(), " ")),
 			}
 			if c.String(githubTokenFlag.Name) != "" {
 				args = append(args, fmt.Sprintf("-github-token=%s", c.String(githubTokenFlag.Name)))

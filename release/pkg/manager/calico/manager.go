@@ -322,7 +322,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	m := metadata{
 		Version:          r.calicoVersion,
 		OperatorVersion:  r.operatorVersion,
-		Images:           releaseImages(utils.ReleaseImages, r.calicoVersion, registry, r.operatorImage, r.operatorVersion, r.operatorRegistry),
+		Images:           releaseImages(utils.ReleaseImages(), r.calicoVersion, registry, r.operatorImage, r.operatorVersion, r.operatorRegistry),
 		HelmChartVersion: r.helmChartVersion(),
 	}
 
@@ -694,7 +694,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 func (r *CalicoManager) assertImageVersions() error {
 	logrus.Info("Checking built images exists with the correct version")
 	buildInfoVersionRegex := regexp.MustCompile(`(?m)^Version:\s+(.*)$`)
-	for _, img := range utils.ReleaseImages {
+	for _, img := range utils.ReleaseImages() {
 		switch img {
 		case "apiserver":
 			for _, reg := range r.imageRegistries {
@@ -1041,7 +1041,7 @@ func (r *CalicoManager) buildContainerImages() error {
 			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
 			if err != nil {
 				logrus.Error(out)
-				return fmt.Errorf("failed to build %s: %s", dir, err)
+				return fmt.Errorf("failed to build %s windows images: %s", dir, err)
 			}
 			logrus.Info(out)
 
@@ -1160,7 +1160,7 @@ func (r *CalicoManager) publishContainerImages() error {
 						continue
 					}
 					logrus.Error(out)
-					return fmt.Errorf("failed to publish %s: %s", dir, err)
+					return fmt.Errorf("failed to publish %s windows images: %s", dir, err)
 				}
 
 				// Success - move on to the next directory.

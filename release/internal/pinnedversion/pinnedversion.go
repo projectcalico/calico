@@ -56,13 +56,13 @@ var FlannelComponent = registry.Component{
 
 var (
 	// Map of component names to their image names.
-	componentImageMap = map[string]string{
+	componentToImageMap = map[string]string{
 		"calicoctl":                 "ctl",
 		"flexvol":                   "pod2daemon-flexvol",
 		"csi-node-driver-registrar": "node-driver-registrar",
 	}
 	// Map of image names to their component names.
-	imageComponentMap = map[string]string{}
+	imageToComponentMap = map[string]string{}
 )
 
 const (
@@ -81,8 +81,8 @@ const (
 
 func init() {
 	// Initialize the image to component map.
-	for c, img := range componentImageMap {
-		imageComponentMap[img] = c
+	for c, img := range componentToImageMap {
+		imageToComponentMap[img] = c
 	}
 }
 
@@ -137,7 +137,7 @@ func (p *PinnedVersion) ImageComponents(includeOperator bool) map[string]registr
 		if slices.Contains(noImageComponents, name) {
 			continue
 		}
-		if img, found := componentImageMap[name]; found {
+		if img, found := componentToImageMap[name]; found {
 			component.Image = img
 		} else if component.Image == "" {
 			component.Image = name
@@ -233,8 +233,8 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 		},
 		flannelComponentName: FlannelComponent,
 	}
-	for _, img := range utils.ReleaseImages {
-		if compName, found := imageComponentMap[img]; found {
+	for _, img := range utils.ReleaseImages() {
+		if compName, found := imageToComponentMap[img]; found {
 			components[compName] = registry.Component{
 				Version: p.versionData.ProductVersion(),
 				Image:   img,
