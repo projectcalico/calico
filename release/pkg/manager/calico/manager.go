@@ -113,7 +113,6 @@ func NewManager(opts ...Option) *CalicoManager {
 		archiveImages:     true,
 		publishTag:        true,
 		publishGithub:     true,
-		imageScanning:     true,
 		imageRegistries:   defaultRegistries,
 		operatorRegistry:  operator.DefaultRegistry,
 		operatorImage:     operator.DefaultImage,
