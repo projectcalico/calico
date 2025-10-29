@@ -63,6 +63,7 @@ var (
 		"csi-node-driver-registrar": "node-driver-registrar",
 	}
 	// Map of image names to their component names.
+	// It is initialized lazily and should be accessed via mapImageToComponent.
 	imageToComponentMap = map[string]string{}
 )
 
@@ -81,15 +82,6 @@ const (
 )
 
 var once sync.Once
-
-func init() {
-	once.Do(func() {
-		// Initialize the image to component map.
-		for c, img := range componentToImageMap {
-			imageToComponentMap[img] = c
-		}
-	})
-}
 
 type PinnedVersions[T version.Versions] interface {
 	GenerateFile() (T, error)
@@ -224,6 +216,22 @@ func (p *CalicoPinnedVersions) GenerateFile() (*version.HashreleaseVersions, err
 	return p.versionData, nil
 }
 
+func mapImageToComponent(imageName, version string) (string, registry.Component) {
+	once.Do(func() {
+		// Initialize the enterprise image to component map.
+		for c, img := range componentToImageMap {
+			imageToComponentMap[img] = c
+		}
+	})
+	if compName, found := imageToComponentMap[imageName]; found {
+		return compName, registry.Component{
+			Version: version,
+			Image:   imageName,
+		}
+	}
+	return imageName, registry.Component{Version: version}
+}
+
 func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 	pinnedVersionPath := PinnedVersionFilePath(p.Dir)
 	components := map[string]registry.Component{
@@ -239,16 +247,8 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 		flannelComponentName: FlannelComponent,
 	}
 	for _, img := range utils.ReleaseImages() {
-		if compName, found := imageToComponentMap[img]; found {
-			components[compName] = registry.Component{
-				Version: p.versionData.ProductVersion(),
-				Image:   img,
-			}
-		} else {
-			components[img] = registry.Component{
-				Version: p.versionData.ProductVersion(),
-			}
-		}
+		name, c := mapImageToComponent(img, p.versionData.ProductVersion())
+		components[name] = c
 	}
 	pinned := PinnedVersion{
 		Title:       p.versionData.ProductVersion(),

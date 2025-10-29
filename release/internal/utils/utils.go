@@ -51,6 +51,8 @@ const (
 	TigeraOrg = "tigera"
 )
 
+var once sync.Once
+
 var (
 	ImageReleaseDirs = []string{
 		"apiserver",
@@ -71,7 +73,6 @@ var (
 		"whisker-backend",
 	}
 	releaseImages = []string{}
-	once          sync.Once
 )
 
 func initReleaseImages() {
