@@ -528,6 +528,118 @@ var _ = Describe("With an in-process Server", func() {
 	})
 })
 
+var _ = Describe("With explicit compression algorithm", func() {
+	// Test both compression algorithms explicitly by setting the server's
+	// preferred compression order so the desired algorithm is first.
+
+	DescribeTable("should pass through KVs and status with",
+		func(compressionAlgorithm syncproto.CompressionAlgorithm) {
+			log.SetLevel(log.DebugLevel)
+			h := NewHarness()
+			h.Config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{compressionAlgorithm}
+			h.Start()
+			defer h.Stop()
+
+			h.CreateClients(1)
+			recorder := h.ClientStates[0].recorder
+
+			h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
+			h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+			h.Decoupler.OnStatusUpdated(api.InSync)
+			Eventually(recorder.Status).Should(Equal(api.InSync))
+			Eventually(recorder.KVs).Should(Equal(map[string]api.Update{
+				"/calico/v1/config/foobar": configFoobarBazzBiff,
+			}))
+		},
+		Entry("snappy compression", syncproto.CompressionSnappy),
+		Entry("zstd compression", syncproto.CompressionZstd),
+	)
+
+	DescribeTable("should pass through many KVs with",
+		func(compressionAlgorithm syncproto.CompressionAlgorithm) {
+			log.SetLevel(log.InfoLevel)
+			h := NewHarness()
+			h.Config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{compressionAlgorithm}
+			h.Start()
+			defer h.Stop()
+
+			h.CreateClients(1)
+			expectedEndState := h.SendInitialSnapshotPods(1000)
+			h.ExpectAllClientsToReachState(api.InSync, expectedEndState)
+		},
+		Entry("snappy compression", syncproto.CompressionSnappy),
+		Entry("zstd compression", syncproto.CompressionZstd),
+	)
+
+	DescribeTable("should handle updates and deletes with",
+		func(compressionAlgorithm syncproto.CompressionAlgorithm) {
+			log.SetLevel(log.DebugLevel)
+			h := NewHarness()
+			h.Config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{compressionAlgorithm}
+			h.Start()
+			defer h.Stop()
+
+			h.CreateClients(1)
+			recorder := h.ClientStates[0].recorder
+
+			h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
+			h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+			h.Decoupler.OnStatusUpdated(api.InSync)
+			Eventually(recorder.Status).Should(Equal(api.InSync))
+			Eventually(recorder.KVs).Should(Equal(map[string]api.Update{
+				"/calico/v1/config/foobar": configFoobarBazzBiff,
+			}))
+
+			// Now send a delete and verify it propagates.
+			h.Decoupler.OnUpdates([]api.Update{configFoobarDeleted})
+			Eventually(recorder.KVs).Should(Equal(map[string]api.Update{}))
+		},
+		Entry("snappy compression", syncproto.CompressionSnappy),
+		Entry("zstd compression", syncproto.CompressionZstd),
+	)
+
+	DescribeTable("should handle delta updates after snapshot with",
+		func(compressionAlgorithm syncproto.CompressionAlgorithm) {
+			log.SetLevel(log.InfoLevel)
+			h := NewHarness()
+			h.Config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{compressionAlgorithm}
+			h.Start()
+			defer h.Stop()
+
+			// Send an initial snapshot.
+			expState := h.SendInitialSnapshotPods(100)
+			h.CreateClients(1)
+			h.ExpectAllClientsToReachState(api.InSync, expState)
+
+			// Now send additional delta updates (these go through the
+			// second zstd/snappy frame, after the snapshot).
+			expState2 := h.SendPodUpdates(50)
+			for k, v := range expState2 {
+				expState[k] = v
+			}
+			h.ExpectAllClientsToReachState(api.InSync, expState)
+		},
+		Entry("snappy compression", syncproto.CompressionSnappy),
+		Entry("zstd compression", syncproto.CompressionZstd),
+	)
+
+	DescribeTable("should handle multiple clients with",
+		func(compressionAlgorithm syncproto.CompressionAlgorithm) {
+			log.SetLevel(log.InfoLevel)
+			h := NewHarness()
+			h.Config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{compressionAlgorithm}
+			h.Start()
+			defer h.Stop()
+
+			h.CreateClients(5)
+			expectedEndState := h.SendInitialSnapshotPods(200)
+			h.ExpectAllClientsToReachState(api.InSync, expectedEndState)
+		},
+		Entry("snappy compression", syncproto.CompressionSnappy),
+		Entry("zstd compression", syncproto.CompressionZstd),
+	)
+})
+
 var _ = Describe("with no client connections", func() {
 	var h *ServerHarness
 
