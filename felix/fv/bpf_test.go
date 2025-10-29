@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -2032,9 +2031,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-							"Service endpoint didn't get created. Is controller-manager happy?")
+							"Service endpoints didn't get created? Is controller-manager happy?")
 
-						Expect(k8sGetEpsForService(k8sClient, testSvc)[0].Addresses).Should(HaveLen(1),
+						Expect(k8sGetEpsForService(k8sClient, testSvc)[0].Endpoints[0].Addresses).Should(HaveLen(1),
 							"Service endpoint didn't have the expected number of addresses.")
 
 						Expect(testSvc.Spec.ExternalIPs).To(HaveLen(1))
@@ -5944,17 +5943,18 @@ func k8sServiceWithExtIP(name, clusterIP string, w *workload.Workload, port,
 	}
 }
 
-func k8sGetEpsForService(k8s kubernetes.Interface, svc *v1.Service) []v1.EndpointSubset { //nolint:staticcheck
-	ep, _ := k8s.CoreV1().
-		Endpoints(svc.Namespace).
-		Get(context.Background(), svc.Name, metav1.GetOptions{})
-	log.WithField("endpoints",
-		spew.Sprint(ep)).Infof("Got endpoints for %s", svc.Name)
-	return ep.Subsets
+func k8sGetEpsForService(k8s kubernetes.Interface, svc *v1.Service) []discovery.EndpointSlice {
+	eps, err := k8s.DiscoveryV1().
+		EndpointSlices(svc.Namespace).
+		List(context.Background(), metav1.ListOptions{
+			LabelSelector: "kubernetes.io/service-name=" + svc.Name,
+		})
+	Expect(err).NotTo(HaveOccurred())
+	return eps.Items
 }
 
-func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() []v1.EndpointSubset { //nolint:staticcheck
-	return func() []v1.EndpointSubset { //nolint:staticcheck
+func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() []discovery.EndpointSlice {
+	return func() []discovery.EndpointSlice {
 		return k8sGetEpsForService(k8s, svc)
 	}
 }
@@ -5968,8 +5968,16 @@ func k8sUpdateService(k8sClient kubernetes.Interface, nameSpace, svcName string,
 	newsvc.ResourceVersion = svc.ResourceVersion
 	_, err = k8sClient.CoreV1().Services(nameSpace).Update(context.Background(), newsvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	Eventually(k8sGetEpsForServiceFunc(k8sClient, oldsvc), "10s").Should(HaveLen(1),
-		"Service endpoints didn't get created? Is controller-manager happy?")
+	Eventually(func() int {
+		slices := k8sGetEpsForService(k8sClient, oldsvc)
+		cnt := 0
+		for _, es := range slices {
+			for _, ep := range es.Endpoints {
+				cnt += len(ep.Addresses)
+			}
+		}
+		return cnt
+	}, "10s").Should(Equal(1), "Service endpoints didn't get created? Is controller-manager happy?")
 
 	updatedSvc, err := k8sClient.CoreV1().Services(nameSpace).Get(context.Background(), svcName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
@@ -5994,8 +6002,16 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 	testSvcNamespace = testSvc.Namespace
 	_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
-		"Service endpoints didn't get created? Is controller-manager happy?")
+	Eventually(func() int {
+		slices := k8sGetEpsForService(k8sClient, testSvc)
+		cnt := 0
+		for _, es := range slices {
+			for _, ep := range es.Endpoints {
+				cnt += len(ep.Addresses)
+			}
+		}
+		return cnt
+	}, "10s").Should(Equal(epslen), "Service endpoints didn't get created? Is controller-manager happy?")
 	return testSvc
 }
 
