@@ -118,37 +118,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		cc = &connectivity.Checker{}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ipset", "list")
-				}
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-				if BPFMode() {
-					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-				}
-			}
-		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	It("should fully randomize MASQUERADE rules", func() {
 		for _, felix := range tc.Felixes {
 			if NFTMode() {
@@ -411,7 +380,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		var externalClient *containers.Container
 
 		BeforeEach(func() {
-			externalClient = infrastructure.RunExtClient("ext-client")
+			externalClient = infrastructure.RunExtClient(infra, "ext-client")
 
 			Eventually(func() error {
 				err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
@@ -425,17 +394,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 			externalClient.Exec("ip", "addr", "add", "dev", "tunl0", "10.65.222.1")
 			externalClient.Exec("ip", "route", "add", "10.65.0.0/24", "via",
 				tc.Felixes[0].IP, "dev", "tunl0", "onlink")
-		})
-
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				externalClient.Exec("ip", "r")
-				externalClient.Exec("ip", "l")
-				externalClient.Exec("ip", "a")
-			}
-		})
-		AfterEach(func() {
-			externalClient.Stop()
 		})
 
 		It("should allow IPIP to external client iff it is in ExternalNodesCIDRList", func() {

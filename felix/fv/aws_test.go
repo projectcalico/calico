@@ -55,14 +55,6 @@ var _ = infrastructure.DatastoreDescribe("AWS-ec2-srcdstcheck", []apiconfig.Data
 		tc.Felixes[0].TriggerDelayedStart()
 	})
 
-	AfterEach(func() {
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	getHTTPStatus := func(url string) (string, error) {
 		op, err := tc.Felixes[0].ExecOutput("wget", "-S", "-T", "2", "-O", "-", "-o", "/dev/stdout", url)
 		// Return output even when the error is set.

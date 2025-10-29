@@ -229,7 +229,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
   run:
-    when: "${CHANGE_IN(felix,typha)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - Prerequisites
   task:
@@ -269,7 +269,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF tests on Ubuntu 25.04"
   run:
-    when: "${CHANGE_IN(felix,typha)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - Prerequisites
   task:
@@ -312,7 +312,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF tests with bpf_jit_harden=2"
   run:
-    when: "${CHANGE_IN(felix,typha)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - Prerequisites
   task:

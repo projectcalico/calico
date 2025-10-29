@@ -86,32 +86,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
-		externalClient = infrastructure.RunExtClient("ext-client")
+		externalClient = infrastructure.RunExtClient(infra, "ext-client")
 		err = infra.AddDefaultDeny()
 		Expect(err).To(BeNil())
-	})
-
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ip6tables-save", "-c")
-				}
-				felix.Exec("ip", "r")
-				felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-				felix.Exec("calico-bpf", "-6", "policy", "dump", "eth0", "all", "--asm")
-				felix.Exec("calico-bpf", "counters", "dump")
-			}
-		}
-	})
-
-	AfterEach(func() {
-		tc.Stop()
-		infra.Stop()
-		externalClient.Stop()
 	})
 
 	expectFullConnectivity := func(opts ...ExpectationOption) {

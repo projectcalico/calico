@@ -25,21 +25,20 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF policy scale tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	if !BPFMode() {
 		// Non-BPF run.
 		return
 	}
 
 	var (
-		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
 		felixPID int
 		client   client.Interface
@@ -49,31 +48,19 @@ var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
 	)
 
 	BeforeEach(func() {
+		infra = getInfra()
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.FelixLogSeverity = "Info"
 		topologyOptions.EnableIPv6 = false
 		topologyOptions.ExtraEnvVars["FELIX_BPFLogLevel"] = "off"
 		topologyOptions.ExtraEnvVars["FELIX_BPFMapSizeIPSets"] = "10000000"
 		logrus.SetLevel(logrus.InfoLevel)
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		felixPID = tc.Felixes[0].GetFelixPID()
 		_ = felixPID
 		w[0] = workload.Run(tc.Felixes[0], "w0", "default", "10.65.0.2", "8085", "tcp")
 		w[1] = workload.Run(tc.Felixes[0], "w1", "default", "10.65.0.3", "8085", "tcp")
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		for _, wl := range w {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	addW0NetSet := func(numSets int) {

@@ -67,6 +67,8 @@ for batch in ${FV_BATCHES_TO_RUN}; do
   fi
 done
 
+docker ps
+
 if [ $result -eq 0 ]; then
   echo "All tests passed"
 else
