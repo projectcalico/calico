@@ -318,6 +318,7 @@ func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *p
 			Kind:      key.Kind,
 		},
 		Policy: &proto.Policy{
+			Tier:      rules.Tier,
 			Namespace: rules.Namespace,
 			InboundRules: parsedRulesToProtoRules(
 				rules.InboundRules,

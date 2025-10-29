@@ -15,6 +15,8 @@
 package calc_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -209,7 +211,8 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 			Expect(r.RuleId).ToNot(Equal(""))
 			r.RuleId = ""
 		}
-		Expect(googleproto.Equal(protoUpdate, &fullyLoadedProtoRules)).To(BeTrue())
+		msg := fmt.Sprintf("Converted protoUpdate \n\n %s \n\n did not match expected \n\n %s", protoUpdate.String(), fullyLoadedProtoRules.String())
+		Expect(googleproto.Equal(protoUpdate, &fullyLoadedProtoRules)).To(BeTrue(), msg)
 	})
 })
 

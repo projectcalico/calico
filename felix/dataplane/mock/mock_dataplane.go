@@ -530,13 +530,13 @@ type TierInfo struct {
 }
 
 func convertPolicyIDs(in []*proto.PolicyID) []types.PolicyID {
-	out := make([]types.PolicyID, len(in))
-	for i, pid := range in {
-		out[i] = types.PolicyID{
+	var out []types.PolicyID
+	for _, pid := range in {
+		out = append(out, types.PolicyID{
 			Kind:      pid.Kind,
 			Name:      pid.Name,
 			Namespace: pid.Namespace,
-		}
+		})
 	}
 	return out
 }

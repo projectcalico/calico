@@ -4528,7 +4528,7 @@ func (m *bpfEndpointManager) ruleMatchID(
 		logrus.WithField("action", action).Panic("Unknown rule action")
 	}
 
-	// TODO: Revisit this.
+	// TODO: CASEY Revisit this.
 	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNFLOGPrefixStr(a, owner, dir, idx, name))
 }
 

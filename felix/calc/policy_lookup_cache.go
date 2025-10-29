@@ -250,6 +250,16 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 ) set.Set[string] {
 	newPrefixes := set.New[string]()
 
+	// Build an ID string that identifies this policy.
+	//
+	// TODO: We are relying on the name being unique across kinds here.
+	// This is only true because we prefix the real polcicy name with special identifiers when passing
+	// to Felix. If we remove those IDs, we'll need to include the `kind` in the idStr.
+	idStr := name
+	if namespace != "" {
+		idStr = fmt.Sprintf("%s/%s", namespace, name)
+	}
+
 	convertAction := func(a string) rules.RuleAction {
 		switch a {
 		case "allow":
@@ -267,7 +277,7 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	}
 	for ii, rule := range ingress {
 		action := convertAction(rule.Action)
-		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirIngress, ii, name)
+		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirIngress, ii, idStr)
 		pc.addNFLogPrefixEntry(
 			prefix,
 			NewRuleID(kind, tier, name, namespace, ii, rules.RuleDirIngress, action),
@@ -276,7 +286,7 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	}
 	for ii, rule := range egress {
 		action := convertAction(rule.Action)
-		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirEgress, ii, name)
+		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirEgress, ii, idStr)
 		pc.addNFLogPrefixEntry(
 			prefix,
 			NewRuleID(kind, tier, name, namespace, ii, rules.RuleDirEgress, action),
@@ -440,8 +450,8 @@ func (r *RuleID) Equals(r2 *RuleID) bool {
 
 func (r *RuleID) String() string {
 	return fmt.Sprintf(
-		"Rule(Tier=%s,Name=%s,Namespace=%s,Direction=%s,Index=%s,Action=%s)",
-		r.TierString(), r.NameString(), r.NamespaceString(), r.DirectionString(), r.IndexStr, r.ActionString(),
+		"Rule(Tier=%s,Kind=%s,Name=%s,Namespace=%s,Direction=%s,Index=%s,Action=%s)",
+		r.TierString(), r.Kind, r.NameString(), r.NamespaceString(), r.DirectionString(), r.IndexStr, r.ActionString(),
 	)
 }
 
