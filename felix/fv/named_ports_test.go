@@ -234,6 +234,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	// Baseline test with no named ports policy.
 	Context("with no named port policy", func() {
 		It("should give full connectivity to and from workload 0", func() {
+			cc.ResetExpectations()
 			// Outbound, w0 should be able to reach all ports on w1 & w2
 			cc.ExpectSome(w[0], w[1].Port(sharedPort))
 			cc.ExpectSome(w[0], w[2].Port(sharedPort))
@@ -322,6 +323,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			createPolicy(pol)
 
+			cc.ResetExpectations()
 			if negated {
 				// Only traffic _not_ going to listed ports is allowed.
 
@@ -479,6 +481,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		// This spec establishes a baseline for the connectivity, then the specs below run
 		// with tweaked versions of the policy.
 		expectBaselineConnectivity := func() {
+			cc.ResetExpectations()
 			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // Allowed by named port in list.
 			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // Allowed by named port in list.
 			cc.ExpectSome(w[3], w[1].Port(sharedPort)) // Allowed by named port in list.
@@ -507,6 +510,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			})
 
 			It("should have expected connectivity", func() {
+				cc.ResetExpectations()
 				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
 				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change.
 				cc.ExpectNone(w[3], w[2].Port(sharedPort)) // Disallowed by negative selector.
@@ -534,6 +538,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			})
 
 			It("should have expected connectivity", func() {
+				cc.ResetExpectations()
 				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
 				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change.
 				cc.ExpectNone(w[3], w[2].Port(sharedPort)) // Disallowed by negative selector.
@@ -551,6 +556,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		})
 
 		expectW2AndW3Blocked := func() {
+			cc.ResetExpectations()
 			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // No change
 			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // No change
 
@@ -672,6 +678,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				})
 
 				It("should give expected connectivity", func() {
+					cc.ResetExpectations()
 					cc.ExpectSome(w[0], w[1].Port(sharedPort)) // No change.
 					cc.ExpectSome(w[1], w[0].Port(sharedPort)) // No change.
 					cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
@@ -706,6 +713,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			})
 
 			It("should have expected connectivity", func() {
+				cc.ResetExpectations()
 				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change
 				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change
 				cc.ExpectNone(w[2], w[3].Port(sharedPort)) // No change
@@ -836,6 +844,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 	})
 
 	It("HTTP port policy should open up nginx port", func() {
+		cc.ResetExpectations()
 		// The profile has a default allow so we should start with connectivity.
 		cc.ExpectSome(nginxClient, nginx.Port(80))
 		cc.ExpectSome(nginxClient, nginx.Port(81))
@@ -945,21 +954,21 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 	})
 
 	expectNoConnectivity := func() {
+		cc.ResetExpectations()
 		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8055))
 		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8055))
 		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8056))
 		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8056))
 		cc.CheckConnectivityOffset(1)
-		cc.ResetExpectations()
 	}
 
 	expectNamedPortOpen := func() {
+		cc.ResetExpectations()
 		cc.ExpectSome(tc.Felixes[0], hostW[1].Port(8055))
 		cc.ExpectSome(tc.Felixes[1], hostW[0].Port(8055))
 		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8056))
 		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8056))
 		cc.CheckConnectivityOffset(1)
-		cc.ResetExpectations()
 	}
 
 	It("should have expected initial connectivity", func() {
@@ -1161,11 +1170,13 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	})
 
 	It("shouldn't confuse TCP and UDP ports", func() {
+		tcpCC.ResetExpectations()
 		// The profile has a default allow so we should start with connectivity.
 		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(80))
 		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(81))
 		tcpCC.CheckConnectivity()
 
+		udpCC.ResetExpectations()
 		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(80))
 		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(81))
 		udpCC.CheckConnectivity()
@@ -1177,6 +1188,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(80))
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(81))
 		tcpCC.CheckConnectivity()
+
 		udpCC.ResetExpectations()
 		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(80))
 		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(81))

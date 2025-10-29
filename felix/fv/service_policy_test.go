@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 package fv_test
 
 import (
-	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
@@ -32,8 +31,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -60,16 +57,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
-			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-				IP:       net.MustParseIP(wIP),
-				HandleID: &wName,
-				Attrs: map[string]string{
-					ipam.AttributeNode: tc.Felixes[ii].Hostname,
-				},
-				Hostname: tc.Felixes[ii].Hostname,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, client)
 			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "80,81", "tcp")
 			w[ii].ConfigureInInfra(infra)
 
