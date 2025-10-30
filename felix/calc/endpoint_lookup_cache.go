@@ -671,6 +671,16 @@ func (ec *EndpointLookupsCache) IsEndpointDeleted(ep EndpointData) bool {
 	return false
 }
 
+// MarkEndpointForDeletion marks the given endpoint for deletion.
+func (ec *EndpointLookupsCache) MarkEndpointForDeletion(ep EndpointData) {
+	ec.epMutex.Lock()
+	defer ec.epMutex.Unlock()
+
+	if key, ok := ep.Key().(model.EndpointKey); ok {
+		ec.markedForDeletion[key] = true
+	}
+}
+
 // reportEndpointCacheMetrics reports endpoint cache performance metrics to prometheus
 func (ec *EndpointLookupsCache) reportEndpointCacheMetrics() {
 	gaugeEndpointCacheLength.Set(float64(len(ec.remoteEndpointData) + len(ec.localEndpointData)))

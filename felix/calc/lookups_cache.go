@@ -87,9 +87,7 @@ func (lc *LookupsCache) IsEndpointDeleted(ep EndpointData) bool {
 // MarkEndpointDeleted marks an endpoint as deleted for testing purposes.
 // This should not be called from any mainline code.
 func (lc *LookupsCache) MarkEndpointDeleted(ep EndpointData) {
-	if key, ok := ep.Key().(model.EndpointKey); ok {
-		lc.epCache.markedForDeletion[key] = true
-	}
+	lc.epCache.MarkEndpointForDeletion(ep)
 }
 
 // GetRuleIDFromNFLOGPrefix returns the RuleID associated with the supplied NFLOG prefix.
