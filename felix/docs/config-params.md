@@ -2201,7 +2201,7 @@ As a result, packet‑capture tools on the host side of the workload device (for
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code> (case insensitive) |
 | Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfRedirectToPeer` (YAML) `BPFRedirectToPeer` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"Enabled"</code>. |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 

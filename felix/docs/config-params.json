@@ -3943,13 +3943,12 @@
           "ParsedDefaultJSON": "\"Enabled\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`, `\"Enabled\"`.",
+          "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`.",
           "YAMLEnumValues": [
             "`\"Disabled\"`",
-            "`\"Enabled\"`",
             "`\"Enabled\"`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Disabled\"</code>, <code>\"Enabled\"</code>, <code>\"Enabled\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
           "YAMLDefault": "Enabled",
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",

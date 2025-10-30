@@ -1078,7 +1078,6 @@ spec:
                   enum:
                     - Enabled
                     - Disabled
-                    - Enabled
                   type: string
                 cgroupV2Path:
                   description:
