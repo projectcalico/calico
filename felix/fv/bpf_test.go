@@ -2085,13 +2085,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					testFailover := func(serviceIP string) {
 						By("making a connection over a loadbalancer and then switching off routing to it")
 						pc := &PersistentConnection{
-							Runtime:             externalClient,
-							RuntimeName:         externalClient.Name,
-							IP:                  serviceIP,
-							Port:                int(port),
-							SourcePort:          50000,
-							Protocol:            testOpts.protocol,
-							MonitorConnectivity: true,
+							Runtime:              externalClient,
+							RuntimeName:          externalClient.Name,
+							IP:                   serviceIP,
+							Port:                 int(port),
+							SourcePort:           50000,
+							Protocol:             testOpts.protocol,
+							MonitorConnectivity:  true,
+							ProbeLoopFileTimeout: 15 * time.Second,
 						}
 						err := pc.Start()
 						Expect(err).NotTo(HaveOccurred())
