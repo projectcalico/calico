@@ -36,10 +36,10 @@ func init() {
 	format.MaxLength = 0
 }
 
-var _ = Describe("Endpoints", endpointRulesTests(false))
-var _ = Describe("Endpoints with flowlogs", endpointRulesTests(true))
+var _ = Describe("Endpoints", endpointRulesTests(false, "DROP"))
+var _ = Describe("Endpoints with flowlogs", endpointRulesTests(true, "DROP"))
 
-func endpointRulesTests(flowLogsEnabled bool) func() {
+func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() {
 	return func() {
 		const (
 			ProtoUDP          = 17
@@ -114,12 +114,13 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a minimal workload endpoint", func() {
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 					).build()
-
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -153,6 +154,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a disabled workload endpoint", func() {
 					rules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withDenyAction(denyAction),
 						withFlowLogs(flowLogsEnabled),
 						withDisabledEndpoint(),
@@ -183,6 +185,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a fully-loaded workload endpoint", func() {
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -191,6 +194,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -256,6 +260,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					}
 
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -264,6 +269,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -313,6 +319,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -321,6 +328,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -361,6 +369,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -369,6 +378,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -421,6 +431,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						Selector:    "all()",
 					}
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -429,6 +440,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -472,6 +484,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -481,6 +494,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -537,6 +551,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						[]string{"prof1", "prof2"},
 					)
 					toHostRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -547,6 +562,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromHostRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -556,6 +572,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					toHostFWRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -566,6 +583,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromHostFWRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -601,6 +619,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render host endpoint raw chains with untracked policies", func() {
 					toHostRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -611,6 +630,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromHostRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -640,6 +660,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
 					fromHostRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -664,6 +685,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a workload endpoint with packet rate limiting QoSControls", func() {
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -671,6 +693,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -710,6 +733,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a workload endpoint with connection limiting QoSControls", func() {
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -717,6 +741,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -762,6 +787,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a minimal workload endpoint", func() {
 					toWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -769,6 +795,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -804,6 +831,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
 					fromHostRules := newRuleBuilder(
+						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
@@ -838,12 +866,14 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
 						toWlRules := newRuleBuilder(
+							withDropActionOverride(dropActionOverride),
 							withFlowLogs(flowLogsEnabled),
 							withDenyAction(denyAction),
 							withDenyActionString(denyActionString),
 						).build()
 
 						fromWlRules := newRuleBuilder(
+							withDropActionOverride(dropActionOverride),
 							withFlowLogs(flowLogsEnabled),
 							withDenyAction(denyAction),
 							withDenyActionString(denyActionString),
@@ -891,12 +921,14 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						)
 
 						toWlRules := newRuleBuilder(
+							withDropActionOverride(dropActionOverride),
 							withFlowLogs(flowLogsEnabled),
 							withDenyAction(denyAction),
 							withDenyActionString(denyActionString),
 						).build()
 
 						fromWlRules := newRuleBuilder(
+							withDropActionOverride(dropActionOverride),
 							withFlowLogs(flowLogsEnabled),
 							withDenyAction(denyAction),
 							withDenyActionString(denyActionString),
@@ -931,12 +963,14 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
 						toWlRules := newRuleBuilder(
+							withDropActionOverride(dropActionOverride),
 							withFlowLogs(flowLogsEnabled),
 							withDenyAction(denyAction),
 							withDenyActionString(denyActionString),
 						).build()
 
 						fromWlRules := newRuleBuilder(
+							withDropActionOverride(dropActionOverride),
 							withFlowLogs(flowLogsEnabled),
 							withDenyAction(denyAction),
 							withDenyActionString(denyActionString),
@@ -1409,6 +1443,12 @@ func withDisabledEndpoint() ruleBuilderOpt {
 	}
 }
 
+func withDropActionOverride(action string) ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.dropActionOverride = action
+	}
+}
+
 func forHostEndpoint() ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.forHostEndpoint = true
@@ -1445,6 +1485,8 @@ type ruleBuilder struct {
 	qosMaxConn         int64
 
 	flowLogsEnabled bool
+
+	dropActionOverride string
 }
 
 func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
@@ -1463,11 +1505,7 @@ func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
 func (b *ruleBuilder) build() []generictables.Rule {
 	var rules []generictables.Rule
 	if b.disabled {
-		return []generictables.Rule{{
-			Match:   Match(),
-			Action:  b.denyAction,
-			Comment: []string{"Endpoint admin disabled"},
-		}}
+		return b.getDropActionOverrideRules(Match(), "Endpoint admin disabled")
 	}
 	// Add rules only if endpoint is not disabled.
 
@@ -1735,18 +1773,12 @@ func (b *ruleBuilder) matchPolicies() []generictables.Rule {
 		endOfTierDrop = false
 	}
 
+	ruleComment := fmt.Sprintf("End of tier default. %s if no policies passed packet", b.denyActionString)
 	if b.flowLogsEnabled {
 		rules = append(rules, b.nflogAction(endOfTierDrop, false))
 	}
 	if endOfTierDrop {
-		rules = append(rules,
-			generictables.Rule{
-				Match:  Match().MarkClear(0x10),
-				Action: b.denyAction,
-				Comment: []string{fmt.Sprintf("End of tier default. %s if no policies passed packet",
-					b.denyActionString,
-				)},
-			})
+		rules = append(rules, b.getDropActionOverrideRules(Match().MarkClear(0x10), ruleComment)...)
 	}
 	return rules
 }
@@ -1770,16 +1802,42 @@ func (b *ruleBuilder) matchProfiles() []generictables.Rule {
 			},
 		)
 	}
+
+	ruleComment := fmt.Sprintf("%s if no profiles matched", b.denyActionString)
 	if b.flowLogsEnabled {
 		rules = append(rules, b.nflogAction(true, true))
 	}
-	rules = append(rules,
-		generictables.Rule{
-			Match:   Match(),
-			Action:  b.denyAction,
-			Comment: []string{fmt.Sprintf("%s if no profiles matched", b.denyActionString)},
-		},
-	)
+
+	rules = append(rules, b.getDropActionOverrideRules(Match(), ruleComment)...)
+
+	return rules
+}
+
+func (b *ruleBuilder) getDropActionOverrideRules(matchCriteria generictables.MatchCriteria, comment string) []generictables.Rule {
+	var rules []generictables.Rule
+	if strings.HasPrefix(b.dropActionOverride, "LOG") {
+		rules = append(rules,
+			generictables.Rule{
+				Match:   matchCriteria,
+				Action:  Actions().Log("calico-drop"),
+				Comment: []string{comment},
+			})
+	}
+	if strings.HasSuffix(b.dropActionOverride, "ACCEPT") {
+		rules = append(rules,
+			generictables.Rule{
+				Match:   matchCriteria,
+				Action:  Actions().Allow(),
+				Comment: []string{comment},
+			})
+	} else {
+		rules = append(rules,
+			generictables.Rule{
+				Match:   matchCriteria,
+				Action:  b.denyAction,
+				Comment: []string{comment},
+			})
+	}
 	return rules
 }
 
