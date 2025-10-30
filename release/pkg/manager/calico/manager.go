@@ -562,9 +562,9 @@ func (r *CalicoManager) PublishRelease() error {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(r.imageScanningConfig)
-		err := imageScanner.Scan(r.productCode, imageList, r.hashrelease.Stream, false, r.tmpDir)
+		err := imageScanner.Scan(r.productCode, imageList, r.hashrelease.Stream, !r.isHashRelease, r.tmpDir)
 		if err != nil {
-			// Error is logged and ignored as this is not considered a fatal error
+			// Error is logged and ignored as a failure from ISS should not halt the release process.
 			logrus.WithError(err).Error("Failed to scan images")
 		}
 	}
