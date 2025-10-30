@@ -70,7 +70,7 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 	 * and jump to the filter.
 	 */
 	if (globals->data.log_filter_jmp != (__u32)-1) {
-		skb->cb[0] = JUMP_DEBUG(PROG_INDEX_MAIN);
+		skb->cb[0] = JUMP(PROG_INDEX_MAIN);
 		skb->cb[1] = JUMP_DEBUG(PROG_INDEX_MAIN);
 		bpf_tail_call(skb, &cali_jump_prog_map, globals->data.log_filter_jmp);
 		CALI_LOG("tc_preamble iface %s failed to call log filter %d",
