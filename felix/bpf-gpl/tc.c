@@ -256,6 +256,9 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	case PARSING_ERROR:
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+		if (CALI_F_FROM_HEP && ctx->state->ip_proto == IPPROTO_IPIP) {
+			fwd_fib_set(&(ctx->fwd), false);
+		}
 		goto allow;
 	}
 
