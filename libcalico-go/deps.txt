@@ -55,10 +55,10 @@ github.com/tchap/go-patricia/v2 v2.3.3
 github.com/vishvananda/netlink v1.3.1
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
-go.etcd.io/etcd/api/v3 v3.6.4
-go.etcd.io/etcd/client/pkg/v3 v3.6.4
+go.etcd.io/etcd/api/v3 v3.6.5
+go.etcd.io/etcd/client/pkg/v3 v3.6.5
 go.etcd.io/etcd/client/v2 v2.305.22
-go.etcd.io/etcd/client/v3 v3.6.4
+go.etcd.io/etcd/client/v3 v3.6.5
 go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.2

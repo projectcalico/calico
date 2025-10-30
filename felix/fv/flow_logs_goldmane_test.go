@@ -470,58 +470,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 	It("should get expected flow logs", func() {
 		checkFlowLogs()
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				for _, felix := range tc.Felixes {
-					felix.Exec("calico-bpf", "ipsets", "dump")
-					felix.Exec("calico-bpf", "routes", "dump")
-					felix.Exec("calico-bpf", "nat", "dump")
-					felix.Exec("calico-bpf", "nat", "aff")
-					felix.Exec("calico-bpf", "conntrack", "dump")
-					felix.Exec("calico-bpf", "arp", "dump")
-					felix.Exec("calico-bpf", "counters", "dump")
-					felix.Exec("calico-bpf", "ifstate", "dump")
-					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
-				}
-				for _, w := range wlHost1 {
-					tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
-				}
-				for _, w := range wlHost1 {
-					tc.Felixes[1].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
-				}
-			}
-		}
-
-		for _, wl := range wlHost1 {
-			wl.Stop()
-		}
-		for _, wl := range wlHost2 {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		for _, felix := range tc.Felixes {
-			if bpfEnabled {
-				felix.Exec("calico-bpf", "connect-time", "clean")
-			}
-			felix.Stop()
-		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })
 
 var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
@@ -574,7 +522,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 
 			w.WorkloadEndpoint.Labels = labels
 			if run {
-				err := w.Start()
+				err := w.Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 				w.ConfigureInInfra(infra)
 			}
@@ -676,22 +624,6 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		cc.Expect(connectivity.Some, w[0][0], w[1][0], connectivity.ExpectWithIPVersion(6))
 		cc.Expect(connectivity.None, w[0][1], w[1][0], connectivity.ExpectWithIPVersion(6))
 		cc.CheckConnectivity()
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("ip6tables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "-6", "r")
-				felix.Exec("ip", "a")
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ip", "r")
-			}
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("Should report the ipv6 flow logs", func() {
@@ -853,52 +785,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				for _, felix := range tc.Felixes {
-					felix.Exec("calico-bpf", "ipsets", "dump")
-					felix.Exec("calico-bpf", "routes", "dump")
-					felix.Exec("calico-bpf", "nat", "dump")
-					felix.Exec("calico-bpf", "nat", "aff")
-					felix.Exec("calico-bpf", "conntrack", "dump")
-					felix.Exec("calico-bpf", "arp", "dump")
-					felix.Exec("calico-bpf", "counters", "dump")
-					felix.Exec("calico-bpf", "ifstate", "dump")
-					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
-				}
-				for _, w := range wlHost1 {
-					tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
-				}
-				for _, w := range wlHost1 {
-					tc.Felixes[1].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
-				}
-			}
-		}
+		//FIXME
 
-		for _, wl := range wlHost1 {
-			wl.Stop()
-		}
-		for _, wl := range wlHost2 {
-			wl.Stop()
-		}
 		for _, felix := range tc.Felixes {
 			if bpfEnabled {
 				felix.Exec("calico-bpf", "connect-time", "clean")
 			}
-			felix.Stop()
 		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })
 

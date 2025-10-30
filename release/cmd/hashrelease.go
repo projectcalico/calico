@@ -152,8 +152,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.IsHashRelease(),
 					calico.WithOutputDir(hashreleaseDir),
 					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithBuildImages(c.Bool(buildHashreleaseImageFlag.Name)),
-					calico.WithArchiveImages(c.Bool(archiveImagesFlag.Name)),
+					calico.WithBuildImages(c.Bool(buildHashreleaseImagesFlag.Name)),
+					calico.WithArchiveImages(c.Bool(archiveHashreleaseImagesFlag.Name)),
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -248,7 +248,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithHashrelease(*hashrel, *serverCfg),
-					calico.WithPublishImages(c.Bool(publishHashreleaseImageFlag.Name)),
+					calico.WithPublishImages(c.Bool(publishHashreleaseImagesFlag.Name)),
 					calico.WithPublishHashrelease(c.Bool(publishHashreleaseFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
@@ -259,15 +259,11 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				} else {
 					opts = append(opts, calico.WithImageScanning(!c.Bool(skipImageScanFlag.Name), *imageScanningAPIConfig(c)))
 				}
-				// Note: We only need to check that the correct images exist if we haven't built them ourselves.
-				// So, skip this check if we're configured to build and publish images from the local codebase.
-				if !c.Bool(publishHashreleaseImageFlag.Name) {
-					components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
-					if err != nil {
-						return fmt.Errorf("failed to retrieve images for the hashrelease: %v", err)
-					}
-					opts = append(opts, calico.WithComponents(components))
+				components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
+				if err != nil {
+					return fmt.Errorf("failed to retrieve images for hashrelease: %w", err)
 				}
+				opts = append(opts, calico.WithComponents(components))
 				r := calico.NewManager(opts...)
 				if err := r.PublishRelease(); err != nil {
 					return err
@@ -299,13 +295,14 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 func hashreleaseBuildFlags() []cli.Flag {
 	f := append(productFlags,
 		registryFlag,
+		buildHashreleaseImagesFlag,
+		archiveHashreleaseImagesFlag,
 		archFlag)
 	f = append(f, operatorBuildFlags...)
 	f = append(f,
 		skipOperatorFlag,
 		skipBranchCheckFlag,
 		skipValidationFlag,
-		buildHashreleaseImageFlag,
 		githubTokenFlag)
 	return f
 }
@@ -317,7 +314,14 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 		return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, registryFlag)
 	}
 
-	// CI condtional checks.
+	if c.Bool(archiveHashreleaseImagesFlag.Name) && !c.Bool(buildHashreleaseImagesFlag.Name) {
+		return fmt.Errorf("cannot archive images without building them; set --%s to 'true'", buildHashreleaseImagesFlag.Name)
+	}
+	if !c.Bool(archiveHashreleaseImagesFlag.Name) && c.Bool(buildHashreleaseImagesFlag.Name) {
+		logrus.Warnf("Images are built but not archived; to archive images set --%s to 'true'", archiveHashreleaseImagesFlag.Name)
+	}
+
+	// CI conditional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
 			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
@@ -328,7 +332,7 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 		}
 	} else {
 		// If building images, log a warning if no registry is specified.
-		if c.Bool(buildHashreleaseImageFlag.Name) && len(c.StringSlice(registryFlag.Name)) == 0 {
+		if c.Bool(buildHashreleaseImagesFlag.Name) && len(c.StringSlice(registryFlag.Name)) == 0 {
 			logrus.Warn("Building images without specifying a registry will result in images being built with the default registries")
 		}
 
@@ -345,8 +349,8 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 func hashreleasePublishFlags() []cli.Flag {
 	f := append(gitFlags,
 		registryFlag,
+		publishHashreleaseImagesFlag,
 		archFlag,
-		publishHashreleaseImageFlag,
 		publishHashreleaseFlag,
 		latestFlag,
 		skipOperatorFlag,
@@ -410,7 +414,7 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	if !c.Bool(ciFlag.Name) {
 		return nil
 	}
-	if c.Bool(buildImagesFlag.Name) {
+	if c.Bool(buildHashreleaseImagesFlag.Name) {
 		logrus.Info("Building images in hashrelease, skipping images promotions check...")
 		return nil
 	}
