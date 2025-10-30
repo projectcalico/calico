@@ -117,6 +117,9 @@ func programHeader(b *asm.Block, minLen int) {
 	b.LabelNextInsn("use_skb_len")
 	// R4 now contains min(skb->len, minLen)
 
+	// Save the actual length to load in R9 (callee-saved) before calling helper
+	b.Mov64(asm.R9, asm.R4)
+
 	// Prepare arguments for bpf_skb_load_bytes
 	// R1 = skb (context)
 	// R2 = offset (0 - start from beginning)
@@ -135,9 +138,9 @@ func programHeader(b *asm.Block, minLen int) {
 	// Set up R7 to point to the loaded data on stack
 	b.Mov64(asm.R7, asm.R10)
 	b.AddImm64(asm.R7, int32(-minLen))
-	// Set up R8 to point to the end of loaded data
+	// Set up R8 to point to the end of actually loaded data (R7 + actual length)
 	b.Mov64(asm.R8, asm.R7)
-	b.AddImm64(asm.R8, int32(minLen))
+	b.Add64(asm.R8, asm.R9)
 
 	b.LabelNextInsn("filter")
 	// Zero R1 (A) and R2 (X)
