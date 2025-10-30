@@ -72,7 +72,6 @@ type AttachType struct {
 	Family     int
 	Type       tcdefs.EndpointType
 	LogLevel   string
-	FIB        bool
 	ToHostDrop bool
 	DSR        bool
 }
@@ -151,48 +150,43 @@ func initObjectFiles() {
 		for _, logLevel := range []string{"off", "debug"} {
 			for _, epToHostDrop := range []bool{false, true} {
 				epToHostDrop := epToHostDrop
-				for _, fibEnabled := range []bool{false, true} {
-					fibEnabled := fibEnabled
-					epTypes := []tcdefs.EndpointType{
-						tcdefs.EpTypeWorkload,
-						tcdefs.EpTypeHost,
-						tcdefs.EpTypeIPIP,
-						tcdefs.EpTypeL3Device,
-						tcdefs.EpTypeNAT,
-						tcdefs.EpTypeLO,
-						tcdefs.EpTypeVXLAN,
-					}
-					for _, epType := range epTypes {
-						epType := epType
-						for _, hook := range []Hook{Ingress, Egress} {
-							hook := hook
-							for _, dsr := range []bool{false, true} {
-								toOrFrom := tcdefs.ToEp
-								if hook == Ingress {
-									toOrFrom = tcdefs.FromEp
-								}
-
-								attachType := AttachType{
-									Family:     family,
-									Type:       epType,
-									Hook:       hook,
-									ToHostDrop: epToHostDrop,
-									FIB:        fibEnabled,
-									DSR:        dsr,
-									LogLevel:   logLevel,
-								}
-								filename := tcdefs.ProgFilename(
-									family,
-									epType,
-									toOrFrom,
-									epToHostDrop,
-									fibEnabled,
-									dsr,
-									logLevel,
-									bpfutils.BTFEnabled,
-								)
-								SetObjectFile(attachType, filename)
+				epTypes := []tcdefs.EndpointType{
+					tcdefs.EpTypeWorkload,
+					tcdefs.EpTypeHost,
+					tcdefs.EpTypeIPIP,
+					tcdefs.EpTypeL3Device,
+					tcdefs.EpTypeNAT,
+					tcdefs.EpTypeLO,
+					tcdefs.EpTypeVXLAN,
+				}
+				for _, epType := range epTypes {
+					epType := epType
+					for _, hook := range []Hook{Ingress, Egress} {
+						hook := hook
+						for _, dsr := range []bool{false, true} {
+							toOrFrom := tcdefs.ToEp
+							if hook == Ingress {
+								toOrFrom = tcdefs.FromEp
 							}
+
+							attachType := AttachType{
+								Family:     family,
+								Type:       epType,
+								Hook:       hook,
+								ToHostDrop: epToHostDrop,
+								DSR:        dsr,
+								LogLevel:   logLevel,
+							}
+							filename := tcdefs.ProgFilename(
+								family,
+								epType,
+								toOrFrom,
+								epToHostDrop,
+								dsr,
+								logLevel,
+								bpfutils.BTFEnabled,
+							)
+							SetObjectFile(attachType, filename)
 						}
 					}
 				}
