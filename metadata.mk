@@ -14,7 +14,7 @@ K8S_VERSION=v1.34.1
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-CRANE_VERSION := v0.20.6
+CRANE_VERSION=v0.20.6
 ETCD_VERSION=v3.5.24
 GHR_VERSION=v0.17.0
 GITHUB_CLI_VERSION=2.76.2
