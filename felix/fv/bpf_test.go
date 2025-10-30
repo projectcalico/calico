@@ -58,8 +58,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -365,15 +363,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
 			options.IPIPMode = api.IPIPModeNever
-			options.SimulateBIRDRoutes = false
 			switch testOpts.tunnel {
 			case "none":
-				// Enable adding simulated routes.
-				options.SimulateBIRDRoutes = true
+				// Felix must program unencap routes.
 			case "ipip":
-				// IPIP is not supported in IPv6. We need to mimic routes in FVs.
+				options.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
 				options.IPIPMode = api.IPIPModeAlways
-				options.SimulateBIRDRoutes = true
+				if testOpts.ipv6 {
+					options.SimulateBIRDRoutes = true
+					options.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
+				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 				options.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
@@ -1248,6 +1247,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 				wName := fmt.Sprintf("w%d%d", ii, wi)
 
+				if options.UseIPPools {
+					infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+				}
 				w := workload.New(tc.Felixes[ii], wName, "default",
 					wIP, strconv.Itoa(port), testOpts.protocol)
 
@@ -1260,19 +1262,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					Expect(err).NotTo(HaveOccurred())
 					w.ConfigureInInfra(infra)
 				}
-				if options.UseIPPools {
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(wIP),
-						HandleID: &w.Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: tc.Felixes[ii].Hostname,
-						},
-						Hostname: tc.Felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
-				}
-
 				return w
 			}
 
@@ -5058,6 +5047,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// To mimic 3rd party CNI, we do not install IPPools and set the source to
 				// learn routes to WorkloadIPs as IPAM/CNI is not going to provide either.
 				options.UseIPPools = false
+				options.SimulateBIRDRoutes = true
 				options.ExtraEnvVars["FELIX_ROUTESOURCE"] = "WorkloadIPs"
 				setupCluster()
 			})
