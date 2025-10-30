@@ -51,8 +51,14 @@ func createEtcdDatastoreInfra(opts ...CreateOption) DatastoreInfra {
 	return infra
 }
 
-func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
+func GetEtcdDatastoreInfra() (_ *EtcdDatastoreInfra, err error) {
 	eds := &EtcdDatastoreInfra{}
+	defer func() {
+		if err != nil {
+			log.Warn("Failed to get etcd datastore infra, running cleanups.")
+			eds.Stop()
+		}
+	}()
 
 	// Start etcd.
 	eds.EtcdContainer = RunEtcd()
