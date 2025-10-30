@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -24,16 +25,24 @@ import (
 )
 
 func TestReleaseDirsImages(t *testing.T) {
+	repoRoot, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("failed to get repo root dir: %v", err)
+	}
 	for _, tc := range []struct {
 		name           string
+		repoRoot       string
 		releaseDirs    []string
 		wantErr        bool
 		expectedImages []string
 	}{
 		{
-			name:           "no release dirs",
-			wantErr:        false,
-			expectedImages: []string{},
+			name:     "no release dirs",
+			repoRoot: filepath.Join(repoRoot, "apiserver"),
+			wantErr:  false,
+			expectedImages: []string{
+				"apiserver",
+			},
 		},
 		{
 			name: "single release dir",
@@ -68,16 +77,14 @@ func TestReleaseDirsImages(t *testing.T) {
 			releaseDirs: []string{
 				"api",
 			},
-			expectedImages: []string{},
+			wantErr: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			repoRoot, err := command.GitDir()
-			if err != nil {
-				t.Fatalf("failed to get repo root dir: %v", err)
+			if tc.repoRoot == "" {
+				tc.repoRoot = repoRoot
 			}
-
-			images, err := BuildReleaseImageList(repoRoot, tc.releaseDirs...)
+			images, err := BuildReleaseImageList(tc.repoRoot, tc.releaseDirs...)
 			if err != nil && !tc.wantErr {
 				t.Fatalf("unexpected error: %v", err)
 			}

@@ -1073,7 +1073,7 @@ var-require-one-of-%:
 
 # build-images echos the images that would be built.
 # If WINDOWS_IMAGE is set then it echos the windows image that would be built as well.
-build-images:
+build-images: var-require-all-BUILD_IMAGES
 	$(if $(WINDOWS_IMAGE),\
 		@echo $(BUILD_IMAGES) $(WINDOWS_IMAGE),\
 		@echo $(BUILD_IMAGES)\

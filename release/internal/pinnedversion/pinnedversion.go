@@ -127,6 +127,10 @@ func (p *PinnedVersion) operatorComponents() map[string]registry.Component {
 
 // ImageComponents returns a map of all components that produce images
 // including Tigera operator and its init image if includeOperator is true.
+//
+// Images returned from this function are expected to eventually be in the format "<registry>/<image-name>"
+// e.g. "quay.io/calico/node" where <registry> is "quay.io/calico" and <image-name> is "node".
+// NOTE: this only sets the image name portion (i.e. "node"), the registry is set elsewhere.
 func (p *PinnedVersion) ImageComponents(includeOperator bool) map[string]registry.Component {
 	components := make(map[string]registry.Component)
 	for name, component := range p.Components {
@@ -218,7 +222,7 @@ func (p *CalicoPinnedVersions) GenerateFile() (*version.HashreleaseVersions, err
 
 func mapImageToComponent(imageName, version string) (string, registry.Component) {
 	once.Do(func() {
-		// Initialize the enterprise image to component map.
+		// Initialize the image to component map.
 		for c, img := range componentToImageMap {
 			imageToComponentMap[img] = c
 		}

@@ -17,6 +17,7 @@ package utils
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -89,16 +90,17 @@ func initReleaseImages() {
 
 func ReleaseImages() []string {
 	once.Do(initReleaseImages)
-	return releaseImages
+	return slices.Clone(releaseImages)
 }
 
+// buildImages returns the list of images built by the given directory.
+// It does this by calling a make target that returns the values of BUILD_IMAGES and WINDOWS_IMAGE (if set).
 func buildImages(dir string) ([]string, error) {
 	out, err := command.MakeInDir(dir, []string{"-s", "build-images"}, nil)
 	if err != nil {
 		logrus.Error(out)
 		return nil, fmt.Errorf("failed to get images for release dir %s: %w", dir, err)
 	}
-
 	return strings.Fields(out), nil
 }
 
