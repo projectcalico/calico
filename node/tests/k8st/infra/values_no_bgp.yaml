@@ -11,6 +11,7 @@ installation:
 
   # Configure CIDRs to match kubeadm cluster.
   calicoNetwork:
+    bgp: Disabled
     ipPools:
     - cidr: 192.168.0.0/16
     - cidr: fd00:10:244::/64
