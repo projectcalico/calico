@@ -80,6 +80,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 					Namespace:      ns1,
 					Selector:       "projectcalico.org/namespace == 'namespace1'",
 					ApplyOnForward: false,
+					Types:          []string{"ingress"},
 				},
 				Revision: testRev,
 			}))

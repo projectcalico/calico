@@ -35,12 +35,10 @@ type pcRuleID struct {
 	id64   uint64
 }
 
-var (
-	gaugePolicyCacheLength = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_collector_lookups_cache_policies",
-		Help: "Total number of entries currently residing in the endpoints lookup cache.",
-	})
-)
+var gaugePolicyCacheLength = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "felix_collector_lookups_cache_policies",
+	Help: "Total number of entries currently residing in the endpoints lookup cache.",
+})
 
 // PolicyLookupsCache provides an API to lookup policy to NFLOG prefix mapping.
 // To do this, the PolicyLookupsCache hooks into the calculation graph
@@ -164,7 +162,7 @@ func (pc *PolicyLookupsCache) updatePolicyRulesNFLOGPrefixes(key model.PolicyKey
 	}
 	pc.tierRefs[key.Tier] = count + 1
 
-	namespace, tier, name, err := names.DeconstructPolicyName(key.Name)
+	namespace, tier, name, err := names.DeconstructPolicyName(key.Name, key.Tier)
 	if err != nil {
 		log.WithError(err).Error("Unable to parse policy name")
 		return

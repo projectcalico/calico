@@ -1,0 +1,87 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: ippools.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: IPPool
+    listKind: IPPoolList
+    plural: ippools
+    singular: ippool
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - additionalPrinterColumns:
+        - description: The pool CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+      name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                allowedUses:
+                  items:
+                    enum:
+                      - Workload
+                      - Tunnel
+                      - LoadBalancer
+                    type: string
+                  type: array
+                  x-kubernetes-list-type: set
+                assignmentMode:
+                  default: Automatic
+                  enum:
+                    - Automatic
+                    - Manual
+                  type: string
+                blockSize:
+                  maximum: 128
+                  minimum: 0
+                  type: integer
+                cidr:
+                  format: cidr
+                  type: string
+                disableBGPExport:
+                  type: boolean
+                disabled:
+                  type: boolean
+                ipipMode:
+                  enum:
+                    - Never
+                    - Always
+                    - CrossSubnet
+                  type: string
+                namespaceSelector:
+                  type: string
+                natOutgoing:
+                  type: boolean
+                nodeSelector:
+                  type: string
+                vxlanMode:
+                  enum:
+                    - Never
+                    - Always
+                    - CrossSubnet
+                  type: string
+              required:
+                - cidr
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+      subresources: {}

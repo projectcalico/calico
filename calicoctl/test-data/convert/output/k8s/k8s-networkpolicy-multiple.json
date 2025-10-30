@@ -11,6 +11,7 @@
         "namespace": "test-ns"
       },
       "spec": {
+        "tier": "default",
         "order": 1000,
         "ingress": [
           {
@@ -84,6 +85,7 @@
         "name": "default-deny-ingress"
       },
       "spec": {
+        "tier": "default",
         "order": 1000,
         "selector": "projectcalico.org/orchestrator == 'k8s'",
         "types": [
@@ -98,6 +100,7 @@
         "name": "allow-all-egress"
       },
       "spec": {
+        "tier": "default",
         "order": 1000,
         "egress": [
           {

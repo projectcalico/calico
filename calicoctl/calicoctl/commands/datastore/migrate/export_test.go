@@ -85,6 +85,7 @@ var _ = Describe("Etcd to KDD Migration Export handling", func() {
 		allPlurals.Discard("caliconodestatuses")
 		// Handled by IPAM migration code.
 		allPlurals.Discard("ipamconfigs")
+		allPlurals.Discard("ipamconfigurations")
 		allPlurals.Discard("blockaffinities")
 
 		allPlurals.Iter(func(resource string) error {

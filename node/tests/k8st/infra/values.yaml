@@ -16,7 +16,7 @@ installation:
     - cidr: fd00:10:244::/64
 
 apiServer:
-  enabled: true
+  enabled: false
   apiServerDeployment:
     spec:
       template:

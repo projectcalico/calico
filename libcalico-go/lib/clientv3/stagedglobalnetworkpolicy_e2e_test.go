@@ -78,6 +78,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 	var be bapi.Client
 
 	BeforeEach(func() {
+		v3CRD = k8s.UsingV3CRDs(&config.Spec)
 		var err error
 		c, err = clientv3.New(config)
 		Expect(err).NotTo(HaveOccurred())
@@ -363,12 +364,16 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			By("Creating the policy with incorrect prefix name")
-			_, err = c.StagedGlobalNetworkPolicies().Create(ctx,
-				&apiv3.StagedGlobalNetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName},
-				}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
+			if !v3CRD {
+				// In v3 CRD mode, the name field is always as-is. There is no semantic meaning or validation
+				// applied to the name field. So, skip this part of the test.
+				By("Creating the policy with incorrect prefix name")
+				_, err = c.StagedGlobalNetworkPolicies().Create(ctx,
+					&apiv3.StagedGlobalNetworkPolicy{
+						ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName},
+					}, options.SetOptions{})
+				Expect(err).To(HaveOccurred())
+			}
 
 			By("Getting the policy")
 			returnedPolicy, err = c.StagedGlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
@@ -402,6 +407,10 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 
 	Describe("StagedGlobalNetworkPolicy without name on the projectcalico.org annotation", func() {
 		It("Should return the name without default prefix", func() {
+			if v3CRD {
+				Skip("Skipping test for v3 CRD mode")
+			}
+
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
 				Expect(err).NotTo(HaveOccurred())
@@ -415,7 +424,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				policy := &apiv3.StagedGlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Annotations: annotations,
-						Name:        "default.prefix-test-policy"},
+						Name:        "default.prefix-test-policy",
+					},
 					Spec: apiv3.StagedGlobalNetworkPolicySpec{},
 				}
 				err = cli.Create(context.Background(), policy)
@@ -444,7 +454,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			_, err := c.StagedGlobalNetworkPolicies().Create(ctx,
 				&apiv3.StagedGlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: policyName},
+						Name: policyName,
+					},
 					Spec: apiv3.StagedGlobalNetworkPolicySpec{
 						Tier: tier,
 					},

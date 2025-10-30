@@ -40,6 +40,7 @@ spec:
       selector: projectcalico.org/orchestrator == 'k8s' && role == 'frontend'
   order: 1000
   selector: projectcalico.org/orchestrator == 'k8s' && role == 'db'
+  tier: default
   types:
   - Ingress
   - Egress

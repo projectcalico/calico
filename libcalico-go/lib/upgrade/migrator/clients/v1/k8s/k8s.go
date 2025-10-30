@@ -17,8 +17,9 @@ package k8s
 import (
 	"fmt"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/runtime"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes"
@@ -27,10 +28,12 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	capi "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients/v1/k8s/custom"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients/v1/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
@@ -51,7 +54,7 @@ type KubeClient struct {
 func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
 	configOverrides := &clientcmd.ConfigOverrides{}
-	var overridesMap = []struct {
+	overridesMap := []struct {
 		variable *string
 		value    string
 	}{
@@ -94,9 +97,13 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	}
 	log.Debugf("Created k8s clientSet: %+v", cs)
 
-	crdClientV1, err := buildCRDClientV1(*config)
+	apiCfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build V1 CRD client: %s", err)
+		return nil, fmt.Errorf("error loading API config: %s", err)
+	}
+	crdClientV1, err := restClient(*config, k8s.UsingV3CRDs(&apiCfg.Spec))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build CRD client: %s", err)
 	}
 
 	kubeClient := &KubeClient{
@@ -116,15 +123,16 @@ func (c *KubeClient) IsKDD() bool {
 	return true
 }
 
-// buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
-func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
+// restClient builds a RESTClient configured to interact with Calico CustomResourceDefinitions
+func restClient(cfg rest.Config, v3 bool) (*rest.RESTClient, error) {
 	// Generate config using the base config.
-	cfg.GroupVersion = &schema.GroupVersion{
-		Group:   "crd.projectcalico.org",
-		Version: "v1",
+	if v3 {
+		cfg.GroupVersion = &schema.GroupVersion{Group: "projectcalico.org", Version: "v3"}
+	} else {
+		cfg.GroupVersion = &schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"}
 	}
 	cfg.APIPath = "/apis"
-	cfg.ContentType = runtime.ContentTypeJSON
+	cfg.ContentType = k8sruntime.ContentTypeJSON
 	cfg.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
 
 	cli, err := rest.RESTClientFor(&cfg)
@@ -132,20 +140,12 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 		return nil, err
 	}
 
-	// We also need to register resources.
-	schemeBuilder := runtime.NewSchemeBuilder(
-		func(scheme *runtime.Scheme) error {
-			scheme.AddKnownTypes(
-				*cfg.GroupVersion,
-				&custom.GlobalFelixConfig{},
-				&custom.GlobalFelixConfigList{},
-				&custom.GlobalBGPConfig{},
-				&custom.GlobalBGPConfigList{},
-			)
-			return nil
-		})
-
-	schemeBuilder.AddToScheme(scheme.Scheme)
+	// Add the correct scheme mappings to the client.
+	if v3 {
+		apiv3.AddToGlobalScheme()
+	} else {
+		v1scheme.AddCalicoResourcesToGlobalScheme()
+	}
 
 	return cli, nil
 }

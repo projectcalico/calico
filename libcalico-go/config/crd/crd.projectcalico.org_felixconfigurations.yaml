@@ -795,6 +795,10 @@ spec:
 
                     Warning: changing this on a running system can leave "orphaned" rules in the "other" backend. These
                     should be cleaned up to avoid confusing interactions.
+                  enum:
+                    - Legacy
+                    - NFT
+                    - Auto
                   pattern: ^(?i)(Auto|Legacy|NFT)?$
                   type: string
                 iptablesFilterAllowAction:
@@ -1024,13 +1028,17 @@ spec:
                   format: int32
                   type: integer
                 nftablesMode:
+                  allOf:
+                    - enum:
+                        - Enabled
+                        - Disabled
+                    - enum:
+                        - Disabled
+                        - Enabled
+                        - Auto
                   description:
                     "NFTablesMode configures nftables support in Felix. [Default:
                     Disabled]"
-                  enum:
-                    - Disabled
-                    - Enabled
-                    - Auto
                   type: string
                 nftablesRefreshInterval:
                   description:

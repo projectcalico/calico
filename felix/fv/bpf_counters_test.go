@@ -35,7 +35,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
-
 	if !BPFMode() {
 		return
 	}
@@ -80,19 +79,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		By("installing a deny policy between workloads")
 		pol := api.NewGlobalNetworkPolicy()
 		pol.Namespace = "default"
-		pol.Name = "drop-workload0-to-workload1"
+		pol.Name = "default.drop-workload0-to-workload1"
 		pol.Spec.Selector = "all()"
-		pol.Spec.Ingress = []api.Rule{{
-			Action: "Deny",
-			Source: api.EntityRule{
-				Nets: []string{fmt.Sprintf("%s/32", w[0].IP)},
+		pol.Spec.Ingress = []api.Rule{
+			{
+				Action: "Deny",
+				Source: api.EntityRule{
+					Nets: []string{fmt.Sprintf("%s/32", w[0].IP)},
+				},
+				Destination: api.EntityRule{
+					Nets: []string{fmt.Sprintf("%s/32", w[1].IP)},
+				},
 			},
-			Destination: api.EntityRule{
-				Nets: []string{fmt.Sprintf("%s/32", w[1].IP)},
-			}},
 			{
 				Action: api.Allow,
-			}}
+			},
+		}
 		pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 		pol = createPolicy(pol)
 
@@ -112,10 +114,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 	})
 
 	It("should update rule counters", func() {
-
 		pol := api.NewGlobalNetworkPolicy()
 		pol.Namespace = "fv"
-		pol.Name = "policy-test"
+		pol.Name = "default.policy-test"
 		pol.Spec.Selector = "all()"
 		pol.Spec.Ingress = []api.Rule{{Action: "Deny"}}
 		pol.Spec.Egress = []api.Rule{{Action: "Deny"}}

@@ -1001,7 +1001,7 @@ Configures nftables support in Felix.
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `nftablesMode` (YAML) `NFTablesMode` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| `FelixConfiguration` schema | `string` |
 | Default value (YAML) | `Disabled` |
 
 ### `NetlinkTimeoutSecs` (config file) / `netlinkTimeout` (YAML)
@@ -1236,8 +1236,8 @@ should be cleaned up to avoid confusing interactions.
 | Encoding (env var/config file) | One of: <code>auto</code>, <code>legacy</code>, <code>nft</code> (case insensitive) |
 | Default value (above encoding) | `auto` |
 | `FelixConfiguration` field | `iptablesBackend` (YAML) `IptablesBackend` (Go API) |
-| `FelixConfiguration` schema | One of: <code>Auto</code>, <code>Legacy</code>, <code>NFT</code>. |
-| Default value (YAML) | `Auto` |
+| `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Legacy"</code>, <code>"NFT"</code>. |
+| Default value (YAML) | `auto` |
 
 ### `IptablesFilterAllowAction` (config file) / `iptablesFilterAllowAction` (YAML)
 

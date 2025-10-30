@@ -26,32 +26,31 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 func init() {
 	// We need some pointers to ints, so just define as values here.
-	var Vneg1 = -1
-	var V0 = 0
-	var V4 = 4
-	var V6 = 6
-	var V128 = 128
-	var V254 = 254
-	var V255 = 255
-	var V256 = 256
-	var Vffffffff = 0xffffffff
-	var V100000000 = 0x100000000
-	var tierOrder = float64(100.0)
-	var defaultTierOrder = api.DefaultTierOrder
-	var anpTierOrder = api.AdminNetworkPolicyTierOrder
-	var banpTierOrder = api.BaselineAdminNetworkPolicyTierOrder
-	var defaultTierBadOrder = float64(10.0)
+	Vneg1 := -1
+	V0 := 0
+	V4 := 4
+	V6 := 6
+	V128 := 128
+	V254 := 254
+	V255 := 255
+	V256 := 256
+	Vffffffff := 0xffffffff
+	V100000000 := 0x100000000
+	tierOrder := float64(100.0)
+	defaultTierOrder := api.DefaultTierOrder
+	anpTierOrder := api.AdminNetworkPolicyTierOrder
+	banpTierOrder := api.BaselineAdminNetworkPolicyTierOrder
+	defaultTierBadOrder := float64(10.0)
 
 	// We need pointers to bools, so define the values here.
-	var Vtrue = true
-	var Vfalse = false
+	Vtrue := true
+	Vfalse := false
 
 	// Set up some values we use in various tests.
 	ipv4_1 := "1.2.3.4"
@@ -974,15 +973,18 @@ func init() {
 
 		// (API) IPPool
 		Entry("should accept IP pool with IPv4 CIDR /26",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
-				Spec: api.IPPoolSpec{CIDR: netv4_3},
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec:       api.IPPoolSpec{CIDR: netv4_3},
 			}, true),
 		Entry("should accept IP pool with IPv4 CIDR /10",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
-				Spec: api.IPPoolSpec{CIDR: netv4_4},
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec:       api.IPPoolSpec{CIDR: netv4_4},
 			}, true),
 		Entry("should accept IP pool with IPv6 CIDR /122",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:      netv6_3,
 					IPIPMode:  api.IPIPModeNever,
@@ -990,7 +992,8 @@ func init() {
 				},
 			}, true),
 		Entry("should accept IP pool with IPv6 CIDR /10",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:      netv6_4,
 					IPIPMode:  api.IPIPModeNever,
@@ -1002,7 +1005,8 @@ func init() {
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:     netv4_5,
-					Disabled: true},
+					Disabled: true,
+				},
 			}, true),
 		Entry("should accept a disabled IP pool with IPv6 CIDR /128",
 			api.IPPool{
@@ -1011,7 +1015,8 @@ func init() {
 					CIDR:      netv6_1,
 					IPIPMode:  api.IPIPModeNever,
 					VXLANMode: api.VXLANModeNever,
-					Disabled:  true},
+					Disabled:  true,
+				},
 			}, true),
 		Entry("should reject IP pool with IPv4 CIDR /27", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv4_5}}, false),
 		Entry("should reject IP pool with IPv6 CIDR /128", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv6_1}}, false),
@@ -1305,16 +1310,6 @@ func init() {
 		Entry("should accept VXLAN mode Never ", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "Never"}, true),
 		Entry("should reject VXLAN mode never", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "never"}, false),
 		Entry("should reject VXLAN mode badVal", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "badVal"}, false),
-
-		// (API) IPIP APIv1 backwards compatibility. Read-only field IPIP
-		Entry("should accept a nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: nil}, true),
-		Entry("should accept it when the IPIP field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
-		Entry("should reject a non-nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: &api.IPIPConfiguration{Enabled: true, Mode: encap.Always}}, false),
-
-		// (API) NatOutgoing APIv1 backwards compatibility. Read-only field NatOutgoingV1
-		Entry("should accept NATOutgoingV1 field set to true", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", NATOutgoingV1: false}, true),
-		Entry("should accept it when the NATOutgoingV1 field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
-		Entry("should reject NATOutgoingV1 field set to true", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", NATOutgoingV1: true}, false),
 
 		// (API) ICMPFields
 		Entry("should accept ICMP with no config", api.ICMPFields{}, true),
@@ -2664,67 +2659,80 @@ func init() {
 			ObjectMeta: v1.ObjectMeta{Name: "foo"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: valid name with dash", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "fo-o"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: disallow dot in name", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "fo.o"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: allow valid name of 63 chars", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: string(value63)},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: disallow a name of 64 chars", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: string(value64)},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: disallow other chars", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: disallow default tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: allow default tier with the predefined order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: disallow adminnetworkpolicy tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: allow adminnetworkpolicy tier with the predefined order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
 			Spec: api.TierSpec{
 				Order: &anpTierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: disallow baselineadminnetworkpolicy tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: allow baselineadminnetworkpolicy tier with the predefined order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
 			Spec: api.TierSpec{
 				Order: &banpTierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: allow a tier with a valid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "platform"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, true),
+			},
+		}, true),
 
 		// NetworkPolicySpec Types field checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
@@ -3697,15 +3705,15 @@ func init() {
 		}, false),
 
 		// Block Affinities validation in BlockAffinitySpec
-		Entry("should accept non-deleted block affinities", libapiv3.BlockAffinitySpec{
-			Deleted: "false",
+		Entry("should accept non-deleted block affinities", api.BlockAffinitySpec{
+			Deleted: false,
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
 			Type:    "host",
 		}, true),
-		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
-			Deleted: "true",
+		Entry("should not accept deleted block affinities", api.BlockAffinitySpec{
+			Deleted: true,
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
