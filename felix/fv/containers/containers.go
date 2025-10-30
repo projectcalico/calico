@@ -686,7 +686,7 @@ func (c *Container) ExecMayFail(cmd ...string) error {
 func (c *Container) ExecBestEffort(cmd ...string) {
 	err := c.ExecMayFail(cmd...)
 	if err != nil {
-		log.WithError(err).Error("Command (%s) failed, ignoring.", strings.Join(cmd, " "))
+		log.WithError(err).Errorf("Command (%s) failed, ignoring.", strings.Join(cmd, " "))
 	}
 }
 
