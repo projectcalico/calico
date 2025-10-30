@@ -36,7 +36,7 @@ for log_level in debug no_log; do
       if [ "${host_drop}" = "host_drop_" ]; then
         # The workload-to-host drop setting only applies to the from-workload hook.
         ep_types="wep"
-        directons="from"
+        directions="from"
       else
         ep_types="wep hep ipip l3 nat lo vxlan"
       fi
