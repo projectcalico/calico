@@ -1125,9 +1125,11 @@ func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
 }
 
 func ensureRoutesProgrammed(felixes []*infrastructure.Felix) {
-	expectedRoute := "blackhole"
+	expectedRoute := "proto 80" // Default proto number used in Felix
 	for _, felix := range felixes {
-		Eventually(felix.ExecOutputFn("ip", "route", "show"), "15s").Should(ContainSubstring(expectedRoute))
-		Consistently(felix.ExecOutputFn("ip", "route", "show"), "3s").Should(ContainSubstring(expectedRoute))
+		EventuallyWithOffset(1, felix.ExecOutputFn("ip", "route", "show"), "15s", "200ms").
+			Should(ContainSubstring(expectedRoute))
+		ConsistentlyWithOffset(1, felix.ExecOutputFn("ip", "route", "show"), "3s", "200ms").
+			Should(ContainSubstring(expectedRoute))
 	}
 }
