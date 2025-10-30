@@ -36,7 +36,6 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
-	k8shealthcheck "k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -198,11 +197,11 @@ type Config struct {
 	ConfigChangedRestartCallback func()
 	FatalErrorRestartCallback    func(error)
 
-	PostInSyncCallback    func()
-	HealthAggregator      *health.HealthAggregator
-	WatchdogTimeout       time.Duration
-	RouteTableManager     *idalloc.IndexAllocator
-	bpfProxyHealthzServer *k8shealthcheck.ProxyHealthServer
+	PostInSyncCallback  func()
+	HealthAggregator    *health.HealthAggregator
+	WatchdogTimeout     time.Duration
+	RouteTableManager   *idalloc.IndexAllocator
+	bpfProxyHealthCheck bpfproxy.Healthcheck
 
 	DebugSimulateDataplaneHangAfter  time.Duration
 	DebugSimulateDataplaneApplyDelay time.Duration
@@ -2829,22 +2828,17 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
-	if config.bpfProxyHealthzServer == nil && config.KubeProxyHealtzPort != 0 {
-		healthzAddr := fmt.Sprintf(":%d", config.KubeProxyHealtzPort)
-		config.bpfProxyHealthzServer = k8shealthcheck.NewProxyHealthServer(
-			healthzAddr, config.KubeProxyMinSyncPeriod, nil)
-
-		// We cannot wait for the healthz server as we cannot stop it.
-		go func() {
-			log.Infof("Starting BPF Proxy Healthz server on %s", healthzAddr)
-			for {
-				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
-				if err != nil {
-					log.WithError(err).Error("BPF Proxy Healthz server failed, restarting in 1s")
-					time.Sleep(time.Second)
-				}
-			}
-		}()
+	if config.bpfProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
+		var err error
+		config.bpfProxyHealthCheck, err = bpfproxy.NewHealthCheck(
+			config.KubeClientSet,
+			config.Hostname,
+			config.KubeProxyHealtzPort,
+			config.KubeProxyMinSyncPeriod,
+		)
+		if err != nil {
+			log.WithError(err).Error("Failed to initialize BPF kube-proxy health check")
+		}
 	}
 
 	bpfproxyOpts := []bpfproxy.Option{
@@ -2852,8 +2846,8 @@ func startBPFDataplaneComponents(
 		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
 	}
 
-	if config.bpfProxyHealthzServer != nil {
-		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthzServer(config.bpfProxyHealthzServer))
+	if config.bpfProxyHealthCheck != nil {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthCheck(config.bpfProxyHealthCheck))
 	} else {
 		log.Info("No healthz server configured for BPF kube-proxy.")
 	}
