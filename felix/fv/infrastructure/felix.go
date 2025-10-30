@@ -423,9 +423,17 @@ func (f *Felix) Ready() (bool, error) {
 		healthAddr = f.TopologyOptions.ExtraEnvVars["FELIX_HEALTHHOST"]
 	}
 
-	resp, err := http.Get("http://" + healthAddr + ":9099/readiness")
+	url := "http://" + healthAddr + ":9099/readiness"
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		logrus.WithError(err).Debug("HTTP GET for readiness failed")
+		logrus.WithError(err).Error("Forming HTTP request for readiness failed")
+		return false, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logrus.WithError(err).Warn("HTTP GET for readiness failed")
 		return false, err
 	}
 	ok := resp.StatusCode == http.StatusOK
