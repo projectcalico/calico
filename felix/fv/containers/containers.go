@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/stacktrace"
 )
 
 type Container struct {
@@ -683,31 +683,15 @@ func (c *Container) ExecMayFail(cmd ...string) error {
 	return utils.RunMayFail("docker", arg...)
 }
 
-// miniStackTrace returns a short stack trace showing the first couple of callers
-// outside this package.  Handy for telling where in a test an Exec call was
-// initiated.
-func miniStackTrace() string {
-	// Find the first/second caller outside this package.
-	for i := 2; ; i++ {
-		_, file, line, ok := runtime.Caller(i)
-		if !ok {
-			return "unknown:0"
-		}
-		if !strings.Contains(file, "/containers/") {
-			parts := strings.Split(file, "/")
-			file = parts[len(parts)-1]
-			firstCaller := fmt.Sprintf("%s:%d", file, line)
-
-			_, file, line, ok := runtime.Caller(i + 1)
-			if !ok || !strings.Contains(file, "/calico/") {
-				return firstCaller
-			} else {
-				parts := strings.Split(file, "/")
-				file = parts[len(parts)-1]
-				return fmt.Sprintf("%s:%d>%s", file, line, firstCaller)
-			}
-		}
+func (c *Container) ExecBestEffort(cmd ...string) {
+	err := c.ExecMayFail(cmd...)
+	if err != nil {
+		log.WithError(err).Errorf("Command (%s) failed, ignoring.", strings.Join(cmd, " "))
 	}
+}
+
+func miniStackTrace() string {
+	return stacktrace.MiniStackStrace("/containers/")
 }
 
 func (c *Container) ExecOutput(args ...string) (string, error) {
