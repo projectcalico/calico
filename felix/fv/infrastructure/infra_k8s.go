@@ -555,7 +555,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 	kds.needsCleanup = true
 	kds.runningTest = ""
 
-	// We do run the per-test cleanup stack, this tears down the resoruces that
+	// We do run the per-test cleanup stack, this tears down the resources that
 	// the test created.
 	if ginkgo.CurrentGinkgoTestDescription().Failed {
 		// Queue up the diags dump so that the cleanupStack will handle any
