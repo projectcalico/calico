@@ -75,7 +75,8 @@ type Option func(b *Builder)
 func NewBuilder(
 	ipSetIDProvider ipSetIDProvider,
 	ipsetMapFD, stateMapFD, staticProgsMapFD, policyJumpMapFD maps.FD,
-	opts ...Option) *Builder {
+	opts ...Option,
+) *Builder {
 	b := &Builder{
 		ipSetIDProvider:    ipSetIDProvider,
 		ipSetMapFD:         ipsetMapFD,
@@ -172,8 +173,10 @@ type Rule struct {
 }
 
 type Policy struct {
-	Name  string
-	Rules []Rule
+	Name      string
+	Namespace string
+	Kind      string
+	Rules     []Rule
 }
 
 type Tier struct {
@@ -806,6 +809,7 @@ func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) 
 		p.b.JumpNEImm64(asm.R1, (int32(icmpCode)<<8)|int32(icmpType), p.endOfRuleLabel())
 	}
 }
+
 func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 	if p.policyDebugEnabled {
 		cidrStrings := "{"
@@ -974,7 +978,6 @@ func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
 
 // Match if packet matches ANY of the given IP sets.
 func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
-
 	onMatchLabel := p.freshPerRuleLabel()
 
 	for _, ipSetID := range ipSets {
