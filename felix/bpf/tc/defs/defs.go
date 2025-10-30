@@ -150,35 +150,16 @@ func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
 }
 
-func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, btf bool) string {
+func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, dsr bool, logLevel string, btf bool) string {
 	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
 		// epToHostDrop only makes sense in the from-workload program.
 		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
 		epToHostDrop = false
 	}
 
-	// Should match CALI_FIB_LOOKUP_ENABLED in bpf.h
-	if fib {
-		toHost := (epType == EpTypeWorkload || epType == EpTypeHost || epType == EpTypeLO ||
-			epType == EpTypeVXLAN) && toOrFrom == FromEp
-		toHEP := (epType == EpTypeHost || epType == EpTypeLO) && toOrFrom == ToEp
-
-		realFIB := epType != EpTypeL3Device && (toHost || toHEP)
-
-		if !realFIB {
-			// FIB lookup only makes sense for traffic towards the host.
-			logrus.Debug("Ignoring fib enabled, doesn't apply to this target")
-		}
-		fib = realFIB
-	}
-
 	var hostDropPart string
 	if epType == EpTypeWorkload && epToHostDrop {
 		hostDropPart = "host_drop_"
-	}
-	fibPart := ""
-	if fib {
-		fibPart = "fib_"
 	}
 	dsrPart := ""
 	if dsr && ((epType == EpTypeWorkload && toOrFrom == FromEp) || (epType == EpTypeHost)) {
@@ -214,7 +195,7 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 		corePart += "_v6"
 	}
 
-	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v%s.o",
-		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel, corePart)
+	oFileName := fmt.Sprintf("%v_%v_%s%s%v%s.o",
+		toOrFrom, epTypeShort, hostDropPart, dsrPart, logLevel, corePart)
 	return oFileName
 }
