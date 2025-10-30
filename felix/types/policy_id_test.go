@@ -28,7 +28,7 @@ func TestPolicyID_String(t *testing.T) {
 		p    PolicyID
 		want string
 	}{
-		{"empty", PolicyID{}, "{Name: , Namespace: Kind: }"},
+		{"empty", PolicyID{}, "{Name: , Namespace: , Kind: }"},
 		{"non-empty", PolicyID{"foo", "bar", "baz"}, "{Name: foo, Namespace: bar, Kind: baz}"},
 	}
 	for _, tt := range tests {
