@@ -379,7 +379,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 			log.WithField("hostIP", hostIP).Info("Host IP")
 			log.WithField("intfIP", intfIP).Info("Intf IP")
 		}
-		obj += fmt.Sprintf("fib_%s", loglevel)
+		obj += loglevel
 
 		if strings.Contains(section, "_dsr") {
 			obj += "_dsr"
