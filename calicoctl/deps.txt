@@ -48,9 +48,9 @@ github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 github.com/tklauser/go-sysconf v0.3.15
 github.com/tklauser/numcpus v0.10.0
 github.com/x448/float16 v0.8.4
-go.etcd.io/etcd/api/v3 v3.6.4
-go.etcd.io/etcd/client/pkg/v3 v3.6.4
-go.etcd.io/etcd/client/v3 v3.6.4
+go.etcd.io/etcd/api/v3 v3.6.5
+go.etcd.io/etcd/client/pkg/v3 v3.6.5
+go.etcd.io/etcd/client/v3 v3.6.5
 go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.2
