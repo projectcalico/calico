@@ -69,6 +69,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 			hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
 		}
 
+		ensureRoutesProgrammed(tc.Felixes)
+
 		cc = &connectivity.Checker{}
 	})
 

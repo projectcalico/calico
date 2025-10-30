@@ -90,7 +90,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		ep2_2 = workload.Run(tc.Felixes[1], "ep2-2", "default", "10.65.1.1", wepPortStr, "tcp", ep2_2Opts)
 		ep2_2.ConfigureInInfra(infra)
 
-		cc = &connectivity.Checker{}
+		ensureRoutesProgrammed(tc.Felixes)
 
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
@@ -112,6 +112,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 		err := extWorkload.Start(infra)
 		Expect(err).NotTo(HaveOccurred())
+
+		cc = &connectivity.Checker{}
 	})
 
 	AfterEach(func() {

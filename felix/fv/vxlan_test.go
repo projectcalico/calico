@@ -1135,6 +1135,7 @@ func setupWorkloadsWithOffset(infra infrastructure.DatastoreInfra, tc infrastruc
 		}
 	}
 
+	ensureRoutesProgrammed(tc.Felixes)
 	if BPFMode() {
 		ensureAllNodesBPFProgramsAttached(tc.Felixes)
 	}

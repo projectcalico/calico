@@ -121,6 +121,8 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		ep2_4 = workload.Run(tc.Felixes[1], "ep2-4", "default", "10.65.1.3", wepPortStr, "tcp")
 		ep2_4.ConfigureInInfra(infra)
 
+		ensureRoutesProgrammed(tc.Felixes)
+
 		// Create tiers tier1 and tier2
 		tier := api.NewTier()
 		tier.Name = "tier1"

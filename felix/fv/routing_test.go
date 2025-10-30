@@ -1123,3 +1123,11 @@ func allHostsIPSetSize(felixes []*infrastructure.Felix, ipipMode api.IPIPMode) i
 func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
 	return ipipMode != api.IPIPModeAlways || routeSource != "WorkloadIPs"
 }
+
+func ensureRoutesProgrammed(felixes []*infrastructure.Felix) {
+	expectedRoute := "blackhole"
+	for _, felix := range felixes {
+		Eventually(felix.ExecOutputFn("ip", "route", "show"), "15s").Should(ContainSubstring(expectedRoute))
+		Consistently(felix.ExecOutputFn("ip", "route", "show"), "3s").Should(ContainSubstring(expectedRoute))
+	}
+}
