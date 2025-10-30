@@ -2189,22 +2189,20 @@ Disabled or Enabled.
 
 ### `BPFRedirectToPeer` (config file) / `bpfRedirectToPeer` (YAML)
 
-Controls which whether it is allowed to forward straight to the
-peer side of the workload devices. It is allowed for any host L2 devices by default
-(L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
-it on ingress. Value of Enabled also allows redirection from L3 host devices like
-IPIP tunnel or Wireguard directly to the peer side of the workload's device. This
-makes redirection faster, however, it breaks tools like tcpdump on the peer side.
-Use Enabled with caution.
+Controls whether traffic may be forwarded directly to the peer side of a workload’s device.
+Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
+which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
+As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFRedirectToPeer` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code> (case insensitive) |
-| Default value (above encoding) | `L2Only` |
+| Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfRedirectToPeer` (YAML) `BPFRedirectToPeer` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"L2Only"</code>. |
-| Default value (YAML) | `L2Only` |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
 ## <a id="dataplane-windows">Dataplane: Windows

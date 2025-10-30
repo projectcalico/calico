@@ -891,14 +891,12 @@ type FelixConfigurationSpec struct {
 	// [Default: Continuous]
 	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
 
-	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
-	// peer side of the workload devices. It is allowed for any host L2 devices by default
-	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
-	// it on ingress. Value of Enabled also allows redirection from L3 host devices like
-	// IPIP tunnel or Wireguard directly to the peer side of the workload's device. This
-	// makes redirection faster, however, it breaks tools like tcpdump on the peer side.
-	// Use Enabled with caution. [Default: L2Only]
-	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
+	// BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device.
+	// Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+	// Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
+	// which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
+	// As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]
+	//+kubebuilder:validation:Enum=Enabled;Disabled
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
 	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
