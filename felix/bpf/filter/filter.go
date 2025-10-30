@@ -105,27 +105,42 @@ func programHeader(b *asm.Block, minLen int) {
 	b.LabelNextInsn("start")
 	b.Mov64(asm.R6, asm.R1) // Save R1 (context) in R6.
 
-	b.AddComment("Make sure enough data is accessible")
-	b.Load32(asm.R1, asm.R6, asm.SkbuffOffsetLen)
-	b.JumpLTImm64(asm.R1, int32(minLen), "exit")
+	b.AddComment("Load packet bytes to stack buffer")
+	// Load skb->len to determine how many bytes to load
+	b.Load32(asm.R4, asm.R6, asm.SkbuffOffsetLen)
 
-	// Load data pointer to R7
-	b.Load32(asm.R7, asm.R6, asm.SkbuffOffsetData)
-	b.Load32(asm.R8, asm.R6, asm.SkbuffOffsetDataEnd)
-	b.Mov64(asm.R3, asm.R7)
-	b.AddImm64(asm.R3, int32(minLen))
-	b.JumpLE64(asm.R3, asm.R8, "filter")
+	// Calculate min(skb->len, minLen) and store in R4
+	b.MovImm64(asm.R1, int32(minLen))
+	b.JumpLE64(asm.R4, asm.R1, "use_skb_len")
+	// If skb->len > minLen, use minLen
+	b.Mov64(asm.R4, asm.R1)
+	b.LabelNextInsn("use_skb_len")
+	// R4 now contains min(skb->len, minLen)
 
-	// Pull data if do not have enough
-	b.Mov64(asm.R1, asm.R6) // ctx -> R1
-	b.LoadImm64(asm.R2, int64(minLen))
-	b.Call(asm.HelperSkbPullData)
+	// Save the actual length to load in R9 (callee-saved) before calling helper
+	b.Mov64(asm.R9, asm.R4)
+
+	// Prepare arguments for bpf_skb_load_bytes
+	// R1 = skb (context)
+	// R2 = offset (0 - start from beginning)
+	// R3 = destination buffer (stack pointer)
+	// R4 = length (already set to min(skb->len, minLen))
+	b.Mov64(asm.R1, asm.R6)            // ctx -> R1
+	b.MovImm64(asm.R2, 0)              // offset = 0 (start from beginning)
+	b.Mov64(asm.R3, asm.R10)           // stack pointer -> R3
+	b.AddImm64(asm.R3, int32(-minLen)) // allocate space on stack
+	// R4 already contains the length to load
+	b.Call(asm.HelperSkbLoadBytes)
+
+	// Check if bpf_skb_load_bytes succeeded (returns 0 on success)
 	b.JumpNEImm64(asm.R0, 0, "exit")
-	b.Load32(asm.R7, asm.R6, asm.SkbuffOffsetData)
-	b.Load32(asm.R8, asm.R6, asm.SkbuffOffsetDataEnd)
-	b.Mov64(asm.R3, asm.R7)
-	b.AddImm64(asm.R3, int32(minLen))
-	b.JumpGT64(asm.R3, asm.R8, "exit")
+
+	// Set up R7 to point to the loaded data on stack
+	b.Mov64(asm.R7, asm.R10)
+	b.AddImm64(asm.R7, int32(-minLen))
+	// Set up R8 to point to the end of actually loaded data (R7 + actual length)
+	b.Mov64(asm.R8, asm.R7)
+	b.Add64(asm.R8, asm.R9)
 
 	b.LabelNextInsn("filter")
 	// Zero R1 (A) and R2 (X)
