@@ -65,7 +65,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 			ginkgo.AfterEach(func() {
 				// Always stop the infra after each test (collects diags on failure and cleans up).
-				logrus.Info("DatastoreDescribe AfterEach: stopping infrastructure.")
+				logrus.WithField("test", ginkgo.CurrentGinkgoTestDescription().FullTestText).Info("DatastoreDescribe AfterEach: stopping infrastructure.")
 				if len(currentInfra) > 0 {
 					for i := len(currentInfra) - 1; i >= 0; i-- {
 						if currentInfra[i] != nil {
@@ -78,7 +78,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 			ginkgo.AfterEach(func() {
 				// Then, perform the core file check.
-				logrus.Info("DatastoreDescribe AfterEach: checking for core files.")
+				logrus.WithField("test", ginkgo.CurrentGinkgoTestDescription().FullTestText).Info("DatastoreDescribe AfterEach: checking for core files.")
 				afterCoreFiles := readCoreFiles()
 				coreFilesAtStart.Iter(func(item string) error {
 					afterCoreFiles.Discard(item)
