@@ -40,6 +40,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -76,6 +77,9 @@ type K8sDatastoreInfra struct {
 	serviceClusterIPRange string
 	apiServerBindIP       string
 	ipMask                string
+
+	cleanups cleanupStack
+	felixes  []*Felix
 }
 
 var (
@@ -196,6 +200,11 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
 		kds.bpfLog = RunBPFLog()
+		kds.AddCleanup(func() {
+			if kds.bpfLog != nil {
+				kds.bpfLog.Stop()
+			}
+		})
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
@@ -548,7 +557,22 @@ func (kds *K8sDatastoreInfra) Stop() {
 	kds.needsCleanup = true
 	kds.runningTest = ""
 
-	kds.bpfLog.Stop()
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		kds.DumpErrorData()
+	}
+	// Run registered teardowns (reverse order). Do not suppress panics.
+	kds.cleanups.Run()
+}
+
+func (kds *K8sDatastoreInfra) AddCleanup(f func()) {
+	kds.cleanups.Add(f)
+}
+
+func (kds *K8sDatastoreInfra) RegisterFelix(f *Felix) {
+	if f == nil {
+		return
+	}
+	kds.felixes = append(kds.felixes, f)
 }
 
 type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Interface)
@@ -708,7 +732,10 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 	}
 	if len(felix.IPv6) > 0 && v6CIDR != nil {
 		nodeIn.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
-		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx))
+		v6CIDR := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx)
+		// Put the CIDR into canonical format, as required by k8s validation.
+		v6CIDR = ip.MustParseCIDROrIP(v6CIDR).String()
+		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, v6CIDR)
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
 			Address: felix.IPv6,
 			Type:    v1.NodeInternalIP,
@@ -883,6 +910,13 @@ func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (kds *K8sDatastoreInfra) DumpErrorData() {
+	// Per-Felix diagnostics first for context.
+	for _, f := range kds.felixes {
+		if f != nil {
+			dumpFelixDiags(f)
+		}
+	}
+
 	nsList, err := kds.K8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err == nil {
 		log.Info("DIAGS: Kubernetes Namespaces:")
@@ -1299,6 +1333,7 @@ func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
 	podIPs := []v1.PodIP{}
 	for _, ipnet := range wep.Spec.IPNetworks {
 		podIP := strings.Split(ipnet, "/")[0]
+		podIP = net.ParseIP(podIP).String() // Normalise the IP.
 		podIPs = append(podIPs, v1.PodIP{IP: podIP})
 	}
 	podStatus := v1.PodStatus{
