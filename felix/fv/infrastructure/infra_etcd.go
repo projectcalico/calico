@@ -69,13 +69,7 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		eds.bpfLog = RunBPFLog()
-		eds.AddCleanup(func() {
-			if eds.bpfLog != nil {
-				eds.bpfLog.StopLogs()
-				eds.bpfLog.Stop()
-			}
-		})
+		eds.bpfLog = RunBPFLog(eds)
 	}
 
 	// Ensure client is closed via cleanup stack (if it was created).
@@ -257,7 +251,9 @@ func (eds *EtcdDatastoreInfra) DumpErrorData() {
 func (eds *EtcdDatastoreInfra) Stop() {
 	// Collect diagnostics first, before tearing anything down.
 	if ginkgo.CurrentGinkgoTestDescription().Failed {
-		eds.DumpErrorData()
+		// Queue up the diags dump so that the cleanupStack will handle any
+		// panic from it.
+		eds.AddCleanup(eds.DumpErrorData)
 	}
 	// Run registered teardowns (reverse order). Do not suppress panics.
 	eds.cleanups.Run()
