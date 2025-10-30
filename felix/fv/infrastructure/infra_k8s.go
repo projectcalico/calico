@@ -1277,17 +1277,17 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 				panic(err)
 			}
 		}
-		endpointsInterface := coreV1.Endpoints(ns.Name)
-		endpoints, err := endpointsInterface.List(context.Background(), metav1.ListOptions{})
+		endpointSliceInterface := clientset.DiscoveryV1().EndpointSlices(ns.Name)
+		endpointSlices, err := endpointSliceInterface.List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			panic(err)
 		}
-		for _, ep := range endpoints.Items {
-			if ep.Name == "kubernetes" {
+		for _, ep := range endpointSlices.Items {
+			if ep.Labels["kubernetes.io/service-name"] == "kubernetes" {
 				// Skip cleaning up the Kubernetes API service.
 				continue
 			}
-			err := endpointsInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
+			err := endpointSliceInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
 			if err != nil && !strings.Contains(err.Error(), "not found") {
 				panic(err)
 			}
