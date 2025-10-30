@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -432,10 +433,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			denyRule := in
 			denyRule.Action = "deny"
 			policyID := &types.PolicyID{
-				Tier: "default",
 				Name: "default.foo",
+				Kind: v3.KindGlobalNetworkPolicy,
 			}
 			policy := &proto.Policy{
+				Tier:          "default",
 				Namespace:     "",
 				InboundRules:  []*proto.Rule{denyRule},
 				OutboundRules: []*proto.Rule{},
@@ -444,8 +446,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
-			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
+			Expect(chains[0].Name).To(Equal("cali-pi-_Z2XXGUGuYtd-F7DcN76"))
+			Expect(chains[1].Name).To(Equal("cali-po-_Z2XXGUGuYtd-F7DcN76"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -472,10 +474,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			denyRule := in
 			denyRule.Action = "deny"
 			policyID := &types.PolicyID{
-				Tier: "default",
 				Name: "default.foo",
+				Kind: v3.KindGlobalNetworkPolicy,
 			}
 			policy := &proto.Policy{
+				Tier:          "default",
 				Namespace:     "",
 				InboundRules:  []*proto.Rule{denyRule},
 				OutboundRules: []*proto.Rule{},
@@ -484,8 +487,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
-			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
+			Expect(chains[0].Name).To(Equal("cali-pi-_Z2XXGUGuYtd-F7DcN76"))
+			Expect(chains[1].Name).To(Equal("cali-po-_Z2XXGUGuYtd-F7DcN76"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -519,10 +522,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			denyRule := in
 			denyRule.Action = "deny"
 			policyID := &types.PolicyID{
-				Tier: "default",
 				Name: "default.foo",
+				Kind: v3.KindGlobalNetworkPolicy,
 			}
 			policy := &proto.Policy{
+				Tier:          "default",
 				Namespace:     "",
 				InboundRules:  []*proto.Rule{},
 				OutboundRules: []*proto.Rule{denyRule},
@@ -531,8 +535,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
-			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
+			Expect(chains[0].Name).To(Equal("cali-pi-_Z2XXGUGuYtd-F7DcN76"))
+			Expect(chains[1].Name).To(Equal("cali-po-_Z2XXGUGuYtd-F7DcN76"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -560,11 +564,12 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			denyRule := in
 			denyRule.Action = "deny"
 			policyID := &types.PolicyID{
-				Tier: "default",
 				Name: "default.foo",
+				Kind: v3.KindGlobalNetworkPolicy,
 			}
 			policy := &proto.Policy{
 				Namespace:     "",
+				Tier:          "default",
 				InboundRules:  []*proto.Rule{},
 				OutboundRules: []*proto.Rule{denyRule},
 				Untracked:     false,
@@ -572,8 +577,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
-			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
+			Expect(chains[0].Name).To(Equal("cali-pi-_Z2XXGUGuYtd-F7DcN76"))
+			Expect(chains[1].Name).To(Equal("cali-po-_Z2XXGUGuYtd-F7DcN76"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -608,10 +613,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			denyRule := in
 			denyRule.Action = "deny"
 			policyID := &types.PolicyID{
-				Tier: "default",
 				Name: "staged:default.foo",
+				Kind: v3.KindStagedGlobalNetworkPolicy,
 			}
 			policy := &proto.Policy{
+				Tier:          "default",
 				Namespace:     "",
 				InboundRules:  []*proto.Rule{denyRule},
 				OutboundRules: []*proto.Rule{},
@@ -641,10 +647,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			denyRule := in
 			denyRule.Action = "deny"
 			policyID := &types.PolicyID{
-				Tier: "default",
 				Name: "staged:default.foo",
+				Kind: v3.KindStagedGlobalNetworkPolicy,
 			}
 			policy := &proto.Policy{
+				Tier:          "default",
 				Namespace:     "",
 				InboundRules:  []*proto.Rule{},
 				OutboundRules: []*proto.Rule{denyRule},
@@ -673,10 +680,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			policyID := &types.PolicyID{
-				Tier: "default",
 				Name: "staged:default.foo",
+				Kind: v3.KindStagedGlobalNetworkPolicy,
 			}
 			policy := &proto.Policy{
+				Tier:          "default",
 				Namespace:     "",
 				InboundRules:  []*proto.Rule{denyRule},
 				OutboundRules: []*proto.Rule{},
@@ -705,10 +713,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			policyID := &types.PolicyID{
-				Tier: "default",
 				Name: "staged:default.foo",
+				Kind: v3.KindStagedGlobalNetworkPolicy,
 			}
 			policy := &proto.Policy{
+				Tier:          "default",
 				Namespace:     "",
 				InboundRules:  []*proto.Rule{},
 				OutboundRules: []*proto.Rule{denyRule},
@@ -2238,15 +2247,17 @@ var _ = Describe("rule metadata tests", func() {
 		chains := renderer.PolicyToIptablesChains(
 			&types.PolicyID{
 				Name: "long-policy-name-that-gets-hashed",
+				Kind: v3.KindGlobalNetworkPolicy,
 			},
 			&proto.Policy{
+				Tier:         "default",
 				InboundRules: []*proto.Rule{{Action: "allow"}},
 			},
 			4,
 		)
 		Expect(chains).To(ConsistOf(
 			&generictables.Chain{
-				Name: "cali-pi-_FJ9yUkNpzshVDh2n7mg",
+				Name: "cali-pi-_cDn-iLFzbkkUDFdASOj",
 				Rules: []generictables.Rule{
 					{
 						Match:  iptables.Match(),
@@ -2258,7 +2269,7 @@ var _ = Describe("rule metadata tests", func() {
 				},
 			},
 			&generictables.Chain{
-				Name: "cali-po-_FJ9yUkNpzshVDh2n7mg",
+				Name: "cali-po-_cDn-iLFzbkkUDFdASOj",
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{
@@ -2276,15 +2287,17 @@ var _ = Describe("rule metadata tests", func() {
 		chains := renderer.PolicyToIptablesChains(
 			&types.PolicyID{
 				Name: "long-policy-name-that-gets-hashed",
+				Kind: v3.KindGlobalNetworkPolicy,
 			},
 			&proto.Policy{
+				Tier:         "default",
 				InboundRules: []*proto.Rule{{Action: "allow"}},
 			},
 			4,
 		)
 		Expect(chains).To(ConsistOf(
 			&generictables.Chain{
-				Name: "cali-pi-_FJ9yUkNpzshVDh2n7mg",
+				Name: "cali-pi-_cDn-iLFzbkkUDFdASOj",
 				Rules: []generictables.Rule{
 					{
 						Match:  iptables.Match(),
@@ -2304,7 +2317,7 @@ var _ = Describe("rule metadata tests", func() {
 				},
 			},
 			&generictables.Chain{
-				Name: "cali-po-_FJ9yUkNpzshVDh2n7mg",
+				Name: "cali-po-_cDn-iLFzbkkUDFdASOj",
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{
