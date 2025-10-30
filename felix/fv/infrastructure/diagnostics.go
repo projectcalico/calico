@@ -19,50 +19,50 @@ package infrastructure
 // can be used universally from DumpErrorData() on failures.
 func dumpFelixDiags(f *Felix) {
 	// Core Linux networking dumps.
-	f.Exec("ip", "link")
-	f.Exec("ip", "addr")
-	f.Exec("ip", "rule", "list")
-	f.Exec("ip", "route", "show", "table", "all")
-	f.Exec("ip", "route", "show", "cached")
-	f.Exec("conntrack", "-L")
+	f.ExecBestEffort("ip", "link")
+	f.ExecBestEffort("ip", "addr")
+	f.ExecBestEffort("ip", "rule", "list")
+	f.ExecBestEffort("ip", "route", "show", "table", "all")
+	f.ExecBestEffort("ip", "route", "show", "cached")
+	f.ExecBestEffort("conntrack", "-L")
 
 	// Table dumps (iptables or nftables) depending on mode.
 	if NFTMode() {
-		f.Exec("nft", "list", "ruleset")
+		f.ExecBestEffort("nft", "list", "ruleset")
 	} else {
-		f.Exec("iptables-save", "-c")
+		f.ExecBestEffort("iptables-save", "-c")
 	}
 
 	// IPv6-specific diagnostics if IPv6 is enabled for this node.
 	if f.TopologyOptions.EnableIPv6 {
-		f.Exec("ip", "-6", "link")
-		f.Exec("ip", "-6", "addr")
-		f.Exec("ip", "-6", "rule")
-		f.Exec("ip", "-6", "route", "show", "table", "all")
-		f.Exec("ip", "-6", "route", "show", "cached")
-		f.Exec("ip", "-6", "neigh")
-		f.Exec("conntrack", "-L", "-f", "ipv6")
+		f.ExecBestEffort("ip", "-6", "link")
+		f.ExecBestEffort("ip", "-6", "addr")
+		f.ExecBestEffort("ip", "-6", "rule")
+		f.ExecBestEffort("ip", "-6", "route", "show", "table", "all")
+		f.ExecBestEffort("ip", "-6", "route", "show", "cached")
+		f.ExecBestEffort("ip", "-6", "neigh")
+		f.ExecBestEffort("conntrack", "-L", "-f", "ipv6")
 		if !NFTMode() {
-			f.Exec("ip6tables-save", "-c")
+			f.ExecBestEffort("ip6tables-save", "-c")
 		}
 	}
 
 	// BPF-specific diagnostics when running in BPF mode.
 	if BPFMode() {
 		// Data-plane maps & state.
-		f.Exec("calico-bpf", "ipsets", "dump")
-		f.Exec("calico-bpf", "routes", "dump")
-		f.Exec("calico-bpf", "nat", "dump")
-		f.Exec("calico-bpf", "conntrack", "dump")
-		f.Exec("calico-bpf", "arp", "dump")
-		f.Exec("calico-bpf", "counters", "dump")
-		f.Exec("calico-bpf", "ifstate", "dump")
+		f.ExecBestEffort("calico-bpf", "ipsets", "dump")
+		f.ExecBestEffort("calico-bpf", "routes", "dump")
+		f.ExecBestEffort("calico-bpf", "nat", "dump")
+		f.ExecBestEffort("calico-bpf", "conntrack", "dump")
+		f.ExecBestEffort("calico-bpf", "arp", "dump")
+		f.ExecBestEffort("calico-bpf", "counters", "dump")
+		f.ExecBestEffort("calico-bpf", "ifstate", "dump")
 		// Policy attached to host (best-effort on eth0).
-		f.Exec("calico-bpf", "policy", "dump", "eth0", "all")
+		f.ExecBestEffort("calico-bpf", "policy", "dump", "eth0", "all")
 		if f.TopologyOptions.EnableIPv6 {
 			// IPv6 route and policy dumps where supported.
-			f.Exec("calico-bpf", "-6", "routes", "dump")
-			f.Exec("calico-bpf", "policy", "-6", "dump", "eth0", "all")
+			f.ExecBestEffort("calico-bpf", "-6", "routes", "dump")
+			f.ExecBestEffort("calico-bpf", "policy", "-6", "dump", "eth0", "all")
 		}
 	}
 }

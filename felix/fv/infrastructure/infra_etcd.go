@@ -250,6 +250,7 @@ func (eds *EtcdDatastoreInfra) DumpErrorData() {
 
 func (eds *EtcdDatastoreInfra) Stop() {
 	// Collect diagnostics first, before tearing anything down.
+	log.Info("Stopping etcd infra.")
 	if ginkgo.CurrentGinkgoTestDescription().Failed {
 		// Queue up the diags dump so that the cleanupStack will handle any
 		// panic from it.
