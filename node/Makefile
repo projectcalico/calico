@@ -5,7 +5,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/node
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
-WINDOWS_IMAGE         ?=node-windows
+WINDOWS_IMAGE         ?=$(NODE_IMAGE)-windows
 
 # We don't include the windows images here because we build them differently
 # using targets within this makefile.
