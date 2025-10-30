@@ -285,6 +285,7 @@ var (
 			Name:      "policy1",
 			Namespace: "",
 		},
+		Tier:      "default",
 		Index:     0,
 		IndexStr:  "0",
 		Action:    rules.RuleActionAllow,
@@ -296,6 +297,7 @@ var (
 			Name:      "policy1",
 			Namespace: "",
 		},
+		Tier:      "default",
 		Index:     0,
 		IndexStr:  "0",
 		Action:    rules.RuleActionAllow,
@@ -307,6 +309,7 @@ var (
 			Name:      "policy2",
 			Namespace: "",
 		},
+		Tier:      "default",
 		Index:     0,
 		IndexStr:  "0",
 		Action:    rules.RuleActionDeny,
@@ -318,6 +321,7 @@ var (
 			Name:      "policy2",
 			Namespace: "",
 		},
+		Tier:      "default",
 		Index:     0,
 		IndexStr:  "0",
 		Action:    rules.RuleActionDeny,
@@ -329,6 +333,7 @@ var (
 			Name:      "policy11",
 			Namespace: "",
 		},
+		Tier:      "tier1",
 		Index:     0,
 		IndexStr:  "0",
 		Action:    rules.RuleActionAllow,
@@ -340,6 +345,7 @@ var (
 			Name:      "policy11",
 			Namespace: "",
 		},
+		Tier:      "tier1",
 		Index:     0,
 		IndexStr:  "0",
 		Action:    rules.RuleActionDeny,
@@ -1353,6 +1359,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(localCtEntryWithDNAT.ReplyCounters.Bytes)))
 		})
 	})
+
 	Describe("Test conntrack TCP Protoinfo State", func() {
 		It("Handle TCP conntrack entries with TCP state TIME_WAIT after NFLOGs gathered", func() {
 			By("handling a conntrack update to start tracking stats for tuple")
@@ -1413,6 +1420,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateTimeWait, 0)}
 			Eventually(c.epStats, "500ms", "100ms").ShouldNot(HaveKey(*t))
 		})
+
 		It("Handle TCP conntrack entries with TCP state TIME_WAIT before NFLOGs gathered", func() {
 			By("handling a conntrack update to start tracking stats for tuple")
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
@@ -2089,6 +2097,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			Kind: v3.KindGlobalNetworkPolicy,
 			Name: "policy1",
 		}] = &proto.Policy{
+			Tier: "default",
 			InboundRules: []*proto.Rule{
 				{
 					Action: "allow",
@@ -2105,6 +2114,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			Kind: v3.KindGlobalNetworkPolicy,
 			Name: "policy11",
 		}] = &proto.Policy{
+			Tier: "default",
 			InboundRules: []*proto.Rule{
 				{
 					Action: "allow",

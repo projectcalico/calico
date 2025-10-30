@@ -36,6 +36,7 @@ var (
 			Name: "P1",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T1",
 		Direction: rules.RuleDirIngress,
 	}
 	denyIngressRid0 = &calc.RuleID{
@@ -46,6 +47,7 @@ var (
 			Name: "P2",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T2",
 		Direction: rules.RuleDirIngress,
 	}
 	allowIngressRid1 = &calc.RuleID{
@@ -56,6 +58,7 @@ var (
 			Name: "P1",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T3",
 		Direction: rules.RuleDirIngress,
 	}
 	denyIngressRid1 = &calc.RuleID{
@@ -66,6 +69,7 @@ var (
 			Name: "P2",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T4",
 		Direction: rules.RuleDirIngress,
 	}
 	allowIngressRid2 = &calc.RuleID{
@@ -76,6 +80,7 @@ var (
 			Name: "P2",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T5",
 		Direction: rules.RuleDirIngress,
 	}
 	nextTierIngressRid0 = &calc.RuleID{
@@ -86,6 +91,7 @@ var (
 			Name: "P1",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T6",
 		Direction: rules.RuleDirIngress,
 	}
 	nextTierIngressRid1 = &calc.RuleID{
@@ -96,6 +102,7 @@ var (
 			Name: "P2",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T7",
 		Direction: rules.RuleDirIngress,
 	}
 	allowIngressRid11 = &calc.RuleID{
@@ -106,6 +113,7 @@ var (
 			Name: "P1",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T8",
 		Direction: rules.RuleDirIngress,
 	}
 	denyIngressRid21 = &calc.RuleID{
@@ -116,6 +124,7 @@ var (
 			Name: "P1",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T9",
 		Direction: rules.RuleDirIngress,
 	}
 
@@ -126,6 +135,7 @@ var (
 		PolicyID: calc.PolicyID{
 			Name: "P4",
 		},
+		Tier:      "T10",
 		Direction: rules.RuleDirEgress,
 	}
 	allowEgressRid2 = &calc.RuleID{
@@ -136,6 +146,7 @@ var (
 			Name: "P3",
 			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T11",
 		Direction: rules.RuleDirEgress,
 	}
 )
