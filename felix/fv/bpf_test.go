@@ -2031,7 +2031,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-							"Service endpoints didn't get created? Is controller-manager happy?")
+							"Service endpoint didn't get created. Is controller-manager happy?")
 
 						Expect(k8sGetEpsForService(k8sClient, testSvc)[0].Endpoints[0].Addresses).Should(HaveLen(1),
 							"Service endpoint didn't have the expected number of addresses.")
