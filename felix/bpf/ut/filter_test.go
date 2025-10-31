@@ -92,7 +92,7 @@ func TestFilter(t *testing.T) {
 		for _, tc := range link.tests {
 			t.Run(link.level+"_"+tc.expression, func(t *testing.T) {
 
-				insns, err := filter.NewStandAlone(link.typ, 64, tc.expression)
+				insns, err := filter.NewStandAlone(link.typ, 64, tc.expression, stateMap.MapFD())
 				Expect(err).NotTo(HaveOccurred())
 				fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 				Expect(err).NotTo(HaveOccurred())
@@ -123,7 +123,7 @@ func TestFilter(t *testing.T) {
 
 		t.Run(link.level+"_"+neg, func(t *testing.T) {
 
-			insns, err := filter.NewStandAlone(layers.LinkTypeEthernet, 64, neg)
+			insns, err := filter.NewStandAlone(layers.LinkTypeEthernet, 64, neg, stateMap.MapFD())
 			Expect(err).NotTo(HaveOccurred())
 			fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 			Expect(err).NotTo(HaveOccurred())
