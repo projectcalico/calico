@@ -636,7 +636,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		PreDnatTiers: []*proto.TierInfo{
 			{
 				Name:            "default",
-				IngressPolicies: []*proto.PolicyID{{Name: "default.mypolicy"}},
+				IngressPolicies: []*proto.PolicyID{{Name: "default.mypolicy", Kind: v3.KindNetworkPolicy}},
 			},
 		},
 	}
@@ -646,8 +646,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "default",
-				IngressPolicies: []*proto.PolicyID{{Name: "default.mypolicy"}},
-				EgressPolicies:  []*proto.PolicyID{{Name: "default.mypolicy"}},
+				IngressPolicies: []*proto.PolicyID{{Name: "default.mypolicy", Kind: v3.KindNetworkPolicy}},
+				EgressPolicies:  []*proto.PolicyID{{Name: "default.mypolicy", Kind: v3.KindNetworkPolicy}},
 			},
 		},
 	}

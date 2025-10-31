@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
@@ -54,8 +55,9 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 		Describe("after a policy update", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 					Policy: &proto.Policy{
+						Tier: "tier1",
 						InboundRules: []*proto.Rule{
 							{Action: "deny"},
 						},
@@ -70,19 +72,19 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should install the in and out chain", func() {
 				filterTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-tier1/pol1"},
-					{Name: "cali-po-tier1/pol1"},
+					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
+					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
 				}})
 				mangleTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-tier1/pol1"},
-					{Name: "cali-po-tier1/pol1"},
+					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
+					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
 				}})
 			})
 
 			Describe("after a policy remove", func() {
 				BeforeEach(func() {
 					policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-						Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+						Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 					})
 				})
 
@@ -96,8 +98,9 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 		Describe("after an untracked policy update", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 					Policy: &proto.Policy{
+						Tier: "tier1",
 						InboundRules: []*proto.Rule{
 							{Action: "deny"},
 						},
@@ -113,27 +116,27 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should install the raw chains", func() {
 				rawTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-tier1/pol1"},
-					{Name: "cali-po-tier1/pol1"},
+					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
+					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
 				}})
 			})
 			It("should install to the filter table", func() {
 				filterTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-tier1/pol1"},
-					{Name: "cali-po-tier1/pol1"},
+					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
+					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
 				}})
 			})
 			It("should install to the mangle table", func() {
 				mangleTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-tier1/pol1"},
-					{Name: "cali-po-tier1/pol1"},
+					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
+					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
 				}})
 			})
 
 			Describe("after a policy remove", func() {
 				BeforeEach(func() {
 					policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-						Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+						Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 					})
 				})
 
@@ -152,8 +155,9 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 		Describe("after a pre-DNAT policy update", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 					Policy: &proto.Policy{
+						Tier: "tier1",
 						InboundRules: []*proto.Rule{
 							{Action: "deny"},
 						},
@@ -169,27 +173,27 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should install the raw chains", func() {
 				rawTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-tier1/pol1"},
-					{Name: "cali-po-tier1/pol1"},
+					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
+					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
 				}})
 			})
 			It("should install to the filter table", func() {
 				filterTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-tier1/pol1"},
-					{Name: "cali-po-tier1/pol1"},
+					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
+					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
 				}})
 			})
 			It("should install to the mangle table", func() {
 				mangleTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-tier1/pol1"},
-					{Name: "cali-po-tier1/pol1"},
+					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
+					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
 				}})
 			})
 
 			Describe("after a policy remove", func() {
 				BeforeEach(func() {
 					policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-						Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+						Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 					})
 				})
 
@@ -308,8 +312,9 @@ var _ = Describe("Raw egress policy manager", func() {
 	It("correctly reports needed IP sets", func() {
 		By("defining one untracked policy with an IP set")
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-			Id: &proto.PolicyID{Tier: "default", Name: "pol1"},
+			Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 			Policy: &proto.Policy{
+				Tier:      "default",
 				Untracked: true,
 				OutboundRules: []*proto.Rule{
 					{
@@ -326,8 +331,9 @@ var _ = Describe("Raw egress policy manager", func() {
 
 		By("defining another untracked policy with a different IP set")
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-			Id: &proto.PolicyID{Tier: "default", Name: "pol2"},
+			Id: &proto.PolicyID{Name: "pol2", Kind: v3.KindGlobalNetworkPolicy},
 			Policy: &proto.Policy{
+				Tier:      "default",
 				Untracked: true,
 				OutboundRules: []*proto.Rule{
 					{
@@ -344,8 +350,9 @@ var _ = Describe("Raw egress policy manager", func() {
 
 		By("defining a non-untracked policy with a third IP set")
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-			Id: &proto.PolicyID{Tier: "default", Name: "pol3"},
+			Id: &proto.PolicyID{Name: "pol3", Kind: v3.KindGlobalNetworkPolicy},
 			Policy: &proto.Policy{
+				Tier: "default",
 				OutboundRules: []*proto.Rule{
 					{
 						Action:      "deny",
@@ -362,7 +369,7 @@ var _ = Describe("Raw egress policy manager", func() {
 
 		By("removing the first untracked policy")
 		policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-			Id: &proto.PolicyID{Tier: "default", Name: "pol1"},
+			Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 		})
 		err = policyMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
@@ -371,7 +378,7 @@ var _ = Describe("Raw egress policy manager", func() {
 
 		By("removing the second untracked policy")
 		policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-			Id: &proto.PolicyID{Tier: "default", Name: "pol2"},
+			Id: &proto.PolicyID{Name: "pol2", Kind: v3.KindGlobalNetworkPolicy},
 		})
 		err = policyMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
