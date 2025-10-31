@@ -117,6 +117,9 @@ func programHeader(b *asm.Block, minLen int) {
 	b.LabelNextInsn("use_skb_len")
 	// R4 now contains min(skb->len, minLen)
 
+	// Check that we have at least 1 byte to load (verifier requirement)
+	b.JumpLTImm64(asm.R4, 1, "exit")
+
 	// Save the actual length to load in R9 (callee-saved) before calling helper
 	b.Mov64(asm.R9, asm.R4)
 
