@@ -213,6 +213,7 @@ func releaseBuildFlags() []cli.Flag {
 		archFlag,
 		registryFlag,
 		buildImagesFlag,
+		archiveImagesFlag,
 		githubTokenFlag,
 		skipValidationFlag)
 	return f
