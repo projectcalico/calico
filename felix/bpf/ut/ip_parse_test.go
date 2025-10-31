@@ -17,7 +17,7 @@ package ut_test
 import (
 	"testing"
 
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 )
 

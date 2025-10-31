@@ -478,8 +478,9 @@ func describeBPFDualStackProxyHealthTests() bool {
 	desc := "_BPF_ _BPF-SAFE_ BPF dual stack kube-proxy health checking tests"
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
-			infra infrastructure.DatastoreInfra
-			tc    infrastructure.TopologyContainers
+			infra     infrastructure.DatastoreInfra
+			tc        infrastructure.TopologyContainers
+			k8sClient *kubernetes.Clientset
 		)
 
 		BeforeEach(func() {
@@ -494,8 +495,10 @@ func describeBPFDualStackProxyHealthTests() bool {
 			opts.IPIPMode = api.IPIPModeNever
 			opts.NATOutgoingEnabled = true
 			opts.BPFProxyHealthzPort = 10256
+			opts.IPIPMode = api.IPIPModeNever
 
-			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+			tc, _ = infrastructure.StartNNodeTopology(2, opts, infra)
+			k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 		})
 
 		AfterEach(func() {
@@ -512,6 +515,58 @@ func describeBPFDualStackProxyHealthTests() bool {
 
 			Eventually(func() int { return felixReady(felix.IP) }, "10s", "330ms").Should(BeGood())
 			Eventually(func() int { return felixReady(felix.IPv6) }, "10s", "330ms").Should(BeGood())
+		})
+
+		It("should have nodeport health probe working over both IPv4 and IPv6", func() {
+			// Create a workload on node 0
+			w0 := workload.Run(
+				tc.Felixes[0],
+				"w0",
+				"default",
+				"10.65.0.2",
+				"8055",
+				"tcp",
+				workload.WithIPv6Address("dead:beef::0:2"),
+			)
+			w0.WorkloadEndpoint.Labels = map[string]string{"name": w0.Name, "app": "test"}
+			w0.ConfigureInInfra(infra)
+
+			// Create a NodePort service with ExternalTrafficPolicy=Local
+			// This will automatically get a HealthCheckNodePort allocated
+			clusterIPs := []string{"10.101.0.20", "dead:beef::abcd:0:0:20"}
+			testSvc := k8sServiceForDualStack("test-np-health", clusterIPs, w0, 80, 8055, 30080, "tcp")
+			testSvc.Spec.Type = v1.ServiceTypeLoadBalancer
+			testSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+			healthCheckNodePort := int32(30081)
+			testSvc.Spec.HealthCheckNodePort = healthCheckNodePort
+			_, err := k8sClient.CoreV1().Services("default").Create(context.Background(), testSvc, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+				"Service endpoints didn't get created? Is controller-manager happy?")
+
+			// Check health probe on node 0 (has local endpoint) - should return 200
+			Eventually(func() int {
+				return healthStatus(tc.Felixes[0].IP, strconv.Itoa(int(healthCheckNodePort)), "")
+			}, "10s", "330ms").Should(Equal(200))
+
+			Eventually(func() int {
+				return healthStatus("["+tc.Felixes[0].IPv6+"]", strconv.Itoa(int(healthCheckNodePort)), "")
+			}, "10s", "330ms").Should(Equal(200))
+
+			// Check health probe on node 1 (no local endpoint) - should return 503
+			Eventually(func() int {
+				return healthStatus(tc.Felixes[1].IP, strconv.Itoa(int(healthCheckNodePort)), "")
+			}, "10s", "330ms").Should(Equal(503))
+
+			Eventually(func() int {
+				return healthStatus("["+tc.Felixes[1].IPv6+"]", strconv.Itoa(int(healthCheckNodePort)), "")
+			}, "10s", "330ms").Should(Equal(503))
+
+			// Clean up
+			w0.Stop()
+			err = k8sClient.CoreV1().Services("default").Delete(context.Background(), "test-np-health", metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 }

@@ -19,7 +19,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 
 	"github.com/projectcalico/calico/felix/ip"
 )
@@ -134,9 +133,11 @@ func WithExcludedCIDRs(cidrs []string) Option {
 	})
 }
 
-func WithHealthzServer(hs *healthcheck.ProxyHealthServer) Option {
+func WithHealthCheck(hc Healthcheck) Option {
 	return makeOption(func(p *proxy) error {
-		p.healthzServer = hs
+		if hc != nil {
+			p.healthzServer = hc
+		}
 		return nil
 	})
 }
