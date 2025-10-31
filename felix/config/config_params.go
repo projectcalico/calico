@@ -222,7 +222,7 @@ type Config struct {
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
-	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);L2Only;non-zero"`
+	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);Enabled;non-zero"`
 	BPFAttachType                      string            `config:"oneof(TCX,TC);TCX;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`

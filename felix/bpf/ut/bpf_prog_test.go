@@ -29,8 +29,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 	"github.com/onsi/gomega/types"
@@ -379,7 +379,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 			log.WithField("hostIP", hostIP).Info("Host IP")
 			log.WithField("intfIP", intfIP).Info("Intf IP")
 		}
-		obj += fmt.Sprintf("fib_%s", loglevel)
+		obj += loglevel
 
 		if strings.Contains(section, "_dsr") {
 			obj += "_dsr"

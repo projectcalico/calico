@@ -140,6 +140,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
 
+	kp.proxy.SetHostIPs(hostIPs)
 	kp.proxy.SetSyncer(syncer)
 
 	log.Infof("kube-proxy v%d node info updated, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)

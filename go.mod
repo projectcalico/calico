@@ -35,10 +35,10 @@ require (
 	github.com/google/btree v1.1.3
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-github/v53 v53.2.0
-	github.com/google/gopacket v1.1.19
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
 	github.com/google/safetext v0.0.0-20240722112252-5a72de7e7962
 	github.com/google/uuid v1.6.0
+	github.com/gopacket/gopacket v1.4.0
 	github.com/gruntwork-io/terratest v0.50.0
 	github.com/hashicorp/yamux v0.1.2
 	github.com/ishidawataru/sctp v0.0.0-20250708014235-1989182a9425
@@ -82,10 +82,10 @@ require (
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 	github.com/tigera/operator/api v0.0.0-20250807130954-d4353da6554e
 	github.com/vishvananda/netlink v1.3.1
-	go.etcd.io/etcd/api/v3 v3.6.4
-	go.etcd.io/etcd/client/pkg/v3 v3.6.4
+	go.etcd.io/etcd/api/v3 v3.6.5
+	go.etcd.io/etcd/client/pkg/v3 v3.6.5
 	go.etcd.io/etcd/client/v2 v2.305.22
-	go.etcd.io/etcd/client/v3 v3.6.4
+	go.etcd.io/etcd/client/v3 v3.6.5
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/crypto v0.41.0
 	golang.org/x/mod v0.27.0
