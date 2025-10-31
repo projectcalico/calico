@@ -9,22 +9,46 @@
 
 #include <linux/if_packet.h>
 
+static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
+{
+	int rc = bpf_skb_change_head(ctx->skb, ETH_HLEN, 0);
+	if (rc < 0) {
+		CALI_DEBUG("bpf_skb_change_head failed %d.", rc);
+		return rc;
+	}
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		CALI_DEBUG("Too short");
+		return -1;
+	}
+#ifdef IPVER6
+	eth_hdr(ctx)->h_proto = bpf_htons(ETH_P_IPV6);
+#else
+	eth_hdr(ctx)->h_proto = bpf_htons(ETH_P_IP);
+#endif
+	return 0;
+}
+
 static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 {
 	struct cali_tc_state *state = ctx->state;
+	int rc = 0;
 	bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
-
 	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
-		int rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
+		if (CALI_F_L3_DEV) {
+			rc = make_room_for_l2_header(ctx);
+			if (rc < 0) {
+				return TC_ACT_UNSPEC;
+			}
+		}
+		rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 		if (rc == TC_ACT_REDIRECT) {
 			counter_inc(ctx, CALI_REDIRECT_PEER);
 			CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
 			return rc;
 		}
 	}
-
 	return TC_ACT_UNSPEC;
 }
 
@@ -275,6 +299,12 @@ try_fib_external:
 				nh_params.nh_family = 2 /* AF_INET */;
 				nh_params.ipv4_nh = state->ip_dst;
 #endif
+				if (CALI_F_L3_DEV) {
+					rc = make_room_for_l2_header(ctx);
+					if (rc < 0) {
+						goto cancel_fib;
+					}
+				}
 				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
 				if (rc == TC_ACT_REDIRECT) {
 					counter_inc(ctx, CALI_REDIRECT_NEIGH);
@@ -374,6 +404,13 @@ try_fib_external:
 #endif
 
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
+
+			if (CALI_F_L3_DEV) {
+				rc = make_room_for_l2_header(ctx);
+				if (rc < 0) {
+					goto cancel_fib;
+				}
+			}
 			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 			break;
 		default:
