@@ -3978,7 +3978,8 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 }
 
 func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
-	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, m.commonMaps.ProgramsMap.MapFD())
+	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter,
+		m.commonMaps.ProgramsMap.MapFD(), m.commonMaps.StateMap.MapFD())
 	if err != nil {
 		return nil, 0, err
 	}
