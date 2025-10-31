@@ -25,12 +25,6 @@ else
   args+=("-DCALI_DROP_WORKLOAD_TO_HOST=false")
 fi
 
-if [[ "${filename}" =~ .*fib.* ]]; then
-  args+=("-DCALI_FIB_LOOKUP_ENABLED=true")
-else
-  args+=("-DCALI_FIB_LOOKUP_ENABLED=false")
-fi
-
 if [[ "${filename}" =~ test_.* ]]; then
   args+=("-DUNITTEST")
   args+=("-DBPF_CORE_SUPPORTED")
