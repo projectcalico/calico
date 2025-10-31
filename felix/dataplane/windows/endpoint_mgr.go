@@ -151,7 +151,7 @@ func (m *endpointManager) OnUpdate(msg interface{}) {
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		m.pendingWlEpUpdates[id] = nil
 	case *proto.ActivePolicyUpdate:
-		if model.PolicyIsStaged(msg.Id.Name) {
+		if model.KindIsStaged(msg.Id.Kind) {
 			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
 			return
 		}
@@ -256,12 +256,12 @@ func (m *endpointManager) refreshPendingWlEpUpdates(updatedPolicies []string) {
 			continue
 		}
 
-		var activePolicyNames []string
+		var activePolicies []string
 		profilesApply := true
 
 		if len(workload.Tiers) > 0 {
-			activePolicyNames = append(activePolicyNames, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].IngressPolicies)...)
-			activePolicyNames = append(activePolicyNames, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].EgressPolicies)...)
+			activePolicies = append(activePolicies, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].IngressPolicies)...)
+			activePolicies = append(activePolicies, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].EgressPolicies)...)
 
 			if len(workload.Tiers[0].IngressPolicies) > 0 && len(workload.Tiers[0].EgressPolicies) > 0 {
 				profilesApply = false
@@ -269,11 +269,11 @@ func (m *endpointManager) refreshPendingWlEpUpdates(updatedPolicies []string) {
 		}
 
 		if profilesApply && len(workload.ProfileIds) > 0 {
-			activePolicyNames = append(activePolicyNames, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)...)
+			activePolicies = append(activePolicies, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)...)
 		}
 
 	Policies:
-		for _, policyName := range activePolicyNames {
+		for _, policyName := range activePolicies {
 			for _, updatedPolicy := range updatedPolicies {
 				if policyName == updatedPolicy {
 					log.WithFields(log.Fields{"policyName": policyName, "endpointId": endpointId}).Info("Endpoint is being marked for policy refresh")
