@@ -51,17 +51,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 	}
 	for _, testConfig := range []testConf{
 		// IPIP does not support IPv6.
-		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
-		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
+		{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
+		{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
 
-		//{api.IPIPModeAlways, "CalicoIPAM", true, false},
-		//{api.IPIPModeAlways, "WorkloadIPs", false, false},
+		{api.IPIPModeAlways, "CalicoIPAM", true, false},
+		{api.IPIPModeAlways, "WorkloadIPs", false, false},
 
 		// No encap routing tests. BrokenXSum is irrelevant in these cases.
-		//{api.IPIPModeNever, "CalicoIPAM", false, false},
-		//{api.IPIPModeNever, "WorkloadIPs", false, false},
+		{api.IPIPModeNever, "CalicoIPAM", false, false},
+		{api.IPIPModeNever, "WorkloadIPs", false, false},
 		{api.IPIPModeNever, "CalicoIPAM", false, true},
-		//{api.IPIPModeNever, "WorkloadIPs", false, true},
+		{api.IPIPModeNever, "WorkloadIPs", false, true},
 	} {
 		ipipMode := testConfig.IPIPMode
 		routeSource := testConfig.RouteSource
