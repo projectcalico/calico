@@ -1117,32 +1117,14 @@ func setupWorkloadsWithOffset(infra infrastructure.DatastoreInfra, tc infrastruc
 	for ii := range w {
 		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii+offset)
 		wName := fmt.Sprintf("w%d", ii)
-		err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP:       net.MustParseIP(wIP),
-			HandleID: &wName,
-			Attrs: map[string]string{
-				ipam.AttributeNode: tc.Felixes[ii].Hostname,
-			},
-			Hostname: tc.Felixes[ii].Hostname,
-		})
-		Expect(err).NotTo(HaveOccurred())
-
+		infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, client)
 		w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 		w[ii].ConfigureInInfra(infra)
 
 		if enableIPv6 {
 			w6IP := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:3", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], IPv6CIDR.IP[10], IPv6CIDR.IP[11], ii+offset)
 			w6Name := fmt.Sprintf("w6-%d", ii)
-			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-				IP:       net.MustParseIP(w6IP),
-				HandleID: &w6Name,
-				Attrs: map[string]string{
-					ipam.AttributeNode: tc.Felixes[ii].Hostname,
-				},
-				Hostname: tc.Felixes[ii].Hostname,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
+			infrastructure.AssignIP(w6Name, w6IP, tc.Felixes[ii].Hostname, client)
 			w6[ii] = workload.Run(tc.Felixes[ii], w6Name, "default", w6IP, "8055", "tcp")
 			w6[ii].ConfigureInInfra(infra)
 		}
@@ -1153,6 +1135,7 @@ func setupWorkloadsWithOffset(infra infrastructure.DatastoreInfra, tc infrastruc
 		}
 	}
 
+	ensureRoutesProgrammed(tc.Felixes)
 	if BPFMode() {
 		ensureAllNodesBPFProgramsAttached(tc.Felixes)
 	}
