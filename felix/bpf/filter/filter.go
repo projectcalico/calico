@@ -33,35 +33,35 @@ var (
 	skbCb1 = asm.FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
 )
 
-func New(epType tcdefs.EndpointType, minLen int, expression string, jumpMapFD, stateMapFD maps.FD) (asm.Insns, error) {
+func New(epType tcdefs.EndpointType, maxData int, expression string, jumpMapFD, stateMapFD maps.FD) (asm.Insns, error) {
 	linkType := layers.LinkTypeEthernet
 
 	if epType == tcdefs.EpTypeL3Device {
 		linkType = layers.LinkTypeIPv4
 	}
 
-	return newFilter(linkType, minLen, expression, jumpMapFD, stateMapFD, false)
+	return newFilter(linkType, maxData, expression, jumpMapFD, stateMapFD, false)
 }
 
-func NewStandAlone(linkType layers.LinkType, minLen int, expression string, stateMapFD maps.FD) (asm.Insns, error) {
-	return newFilter(linkType, minLen, expression, 0, stateMapFD, true)
+func NewStandAlone(linkType layers.LinkType, maxData int, expression string, stateMapFD maps.FD) (asm.Insns, error) {
+	return newFilter(linkType, maxData, expression, 0, stateMapFD, true)
 }
 
 func newFilter(
 	linkType layers.LinkType,
-	minLen int,
+	maxData int,
 	expression string,
 	jumpMapFD, stateMapFD maps.FD,
 	standAlone bool) (asm.Insns, error) {
 
 	b := asm.NewBlock(true)
 
-	insns, err := pcap.CompileBPFFilter(linkType, minLen, expression)
+	insns, err := pcap.CompileBPFFilter(linkType, maxData, expression)
 	if err != nil {
 		return nil, fmt.Errorf("pcap compile filter: %w", err)
 	}
 
-	programHeader(b, minLen, stateMapFD)
+	programHeader(b, maxData, stateMapFD)
 
 	err = cBPF2eBPF(b, insns, linkType)
 	if err != nil {
@@ -100,7 +100,7 @@ func Printk(b *asm.Block, msg string) {
 	b.Call(asm.HelperTracePrintk)
 }
 
-func programHeader(b *asm.Block, minLen int, stateMapFD maps.FD) {
+func programHeader(b *asm.Block, maxData int, stateMapFD maps.FD) {
 	// Preamble to the policy program.
 	b.LabelNextInsn("start")
 	b.Mov64(asm.R6, asm.R1) // Save R1 (context) in R6.
@@ -109,13 +109,13 @@ func programHeader(b *asm.Block, minLen int, stateMapFD maps.FD) {
 	// Load skb->len to determine how many bytes to load
 	b.Load32(asm.R4, asm.R6, asm.SkbuffOffsetLen)
 
-	// Calculate min(skb->len, minLen) and store in R4
-	b.MovImm64(asm.R1, int32(minLen))
+	// Calculate min(skb->len, maxData) and store in R4
+	b.MovImm64(asm.R1, int32(maxData))
 	b.JumpLE64(asm.R4, asm.R1, "use_skb_len")
-	// If skb->len > minLen, use minLen
+	// If skb->len > maxData, use maxData
 	b.Mov64(asm.R4, asm.R1)
 	b.LabelNextInsn("use_skb_len")
-	// R4 now contains min(skb->len, minLen)
+	// R4 now contains min(skb->len, maxData)
 
 	// Check that we have at least 1 byte to load (verifier requirement)
 	b.JumpLTImm64(asm.R4, 1, "exit")
@@ -139,7 +139,6 @@ func programHeader(b *asm.Block, minLen int, stateMapFD maps.FD) {
 	// R1 = skb (context)
 	// R2 = offset (0 - start from beginning)
 	// R3 = destination buffer
-	// R4 = length (already set to min(skb->len, minLen))
 	b.Mov64(asm.R1, asm.R6) // ctx -> R1
 	b.MovImm64(asm.R2, 0)   // offset = 0 (start from beginning)
 	b.Mov64(asm.R3, asm.R7) // dest = scratch buffer
