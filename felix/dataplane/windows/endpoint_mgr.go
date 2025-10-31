@@ -16,6 +16,7 @@ package windataplane
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"reflect"
@@ -260,8 +261,8 @@ func (m *endpointManager) refreshPendingWlEpUpdates(updatedPolicies []string) {
 		profilesApply := true
 
 		if len(workload.Tiers) > 0 {
-			activePolicies = append(activePolicies, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].IngressPolicies)...)
-			activePolicies = append(activePolicies, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].EgressPolicies)...)
+			activePolicies = append(activePolicies, policyIDsToStrings(policysets.PolicyNamePrefix, workload.Tiers[0].IngressPolicies)...)
+			activePolicies = append(activePolicies, policyIDsToStrings(policysets.PolicyNamePrefix, workload.Tiers[0].EgressPolicies)...)
 
 			if len(workload.Tiers[0].IngressPolicies) > 0 && len(workload.Tiers[0].EgressPolicies) > 0 {
 				profilesApply = false
@@ -269,7 +270,7 @@ func (m *endpointManager) refreshPendingWlEpUpdates(updatedPolicies []string) {
 		}
 
 		if profilesApply && len(workload.ProfileIds) > 0 {
-			activePolicies = append(activePolicies, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)...)
+			activePolicies = append(activePolicies, profileIDsToStrings(policysets.ProfileNamePrefix, workload.ProfileIds)...)
 		}
 
 	Policies:
@@ -381,14 +382,14 @@ func (m *endpointManager) CompleteDeferredWork() error {
 					if t.Name == names.DefaultTierName {
 						defaultTierIngressAppliesToEP = true
 					}
-					policyNames := prependAll(policysets.PolicyNamePrefix, t.IngressPolicies)
+					policyNames := policyIDsToStrings(policysets.PolicyNamePrefix, t.IngressPolicies)
 					ingressRules = append(ingressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, true, endOfTierDrop))
 				}
 				if len(t.EgressPolicies) > 0 {
 					if t.Name == names.DefaultTierName {
 						defaultTierEgressAppliesToEP = true
 					}
-					policyNames := prependAll(policysets.PolicyNamePrefix, t.EgressPolicies)
+					policyNames := policyIDsToStrings(policysets.PolicyNamePrefix, t.EgressPolicies)
 					egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, false, endOfTierDrop))
 				}
 			}
@@ -397,12 +398,12 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			// If _no_ policies apply at all, then we fall through to the profiles.  Otherwise, there's no way to get
 			// from policies to profiles.
 			if len(ingressRules) == 0 || !defaultTierIngressAppliesToEP {
-				policyNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
+				policyNames := profileIDsToStrings(policysets.ProfileNamePrefix, workload.ProfileIds)
 				ingressRules = append(ingressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, true, true))
 			}
 
 			if len(egressRules) == 0 || !defaultTierEgressAppliesToEP {
-				policyNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
+				policyNames := profileIDsToStrings(policysets.ProfileNamePrefix, workload.ProfileIds)
 				egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, false, true))
 			}
 
@@ -589,12 +590,25 @@ func (m *endpointManager) getHnsEndpointId(ip string) (string, error) {
 	return "", ErrUnknownEndpoint
 }
 
-// prependAll prepends a string to all of the provided input strings
-func prependAll(prefix string, in []string) (out []string) {
+// profileIDsToStrings converts a list of profile names to their string representation with prefix.
+func profileIDsToStrings(prefix string, in []string) (out []string) {
 	for _, s := range in {
 		out = append(out, prefix+s)
 	}
 	return
+}
+
+// policyIDsToStrings converts a list of PolicyID to their string representation with prefix.
+func policyIDsToStrings(prefix string, in []*proto.PolicyID) []string {
+	var out []string
+	for _, id := range in {
+		if id.Namespace != "" {
+			out = append(out, fmt.Sprintf("%s%s/%s/%s", prefix, id.Kind, id.Namespace, id.Name))
+		} else {
+			out = append(out, fmt.Sprintf("%s%s/%s", prefix, id.Kind, id.Name))
+		}
+	}
+	return out
 }
 
 // loopPollingForInterfaceAddrs periodically checks the IP addresses on the host and sends updates on the channel
