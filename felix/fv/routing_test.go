@@ -98,7 +98,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				cc = &connectivity.Checker{}
 			})
 
-			// Only applicable to IPIP encap
+			// These tests are only applicable to IPIP encap
 			if ipipMode != api.IPIPModeNever {
 				if brokenXSum {
 					It("should disable checksum offload", func() {
