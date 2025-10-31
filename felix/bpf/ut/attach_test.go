@@ -29,7 +29,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
@@ -1143,7 +1142,7 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 			},
 			BPFExtToServiceConnmark: 0,
 			BPFPolicyDebugEnabled:   true,
-			BPFAttachType:           apiv3.BPFAttachOptionTCX,
+			BPFAttachType:           v3.BPFAttachOptionTCX,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -1238,7 +1237,7 @@ func TestAttachTcx(t *testing.T) {
 			},
 			BPFExtToServiceConnmark: 0,
 			BPFPolicyDebugEnabled:   true,
-			BPFAttachType:           apiv3.BPFAttachOptionTCX,
+			BPFAttachType:           v3.BPFAttachOptionTCX,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -1288,7 +1287,7 @@ func TestAttachTcx(t *testing.T) {
 		},
 		HostIPv4:   net.IPv4(1, 2, 3, 4),
 		IntfIPv4:   net.IPv4(1, 6, 6, 6),
-		AttachType: apiv3.BPFAttachOptionTC,
+		AttachType: v3.BPFAttachOptionTC,
 	}
 
 	_, err = tc.EnsureQdisc("workloadep0")

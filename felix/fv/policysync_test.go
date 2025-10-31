@@ -27,7 +27,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -271,7 +270,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 								wlIdx := wlIndexes[i%len(wlIndexes)]
 								By(fmt.Sprintf("Churn %d; targeting workload %d", i, wlIdx))
 
-								policy := api.NewGlobalNetworkPolicy()
+								policy := v3.NewGlobalNetworkPolicy()
 								policy.SetName("policy-0")
 								policy.Spec.Selector = w[wlIdx].NameSelector()
 
@@ -314,30 +313,30 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 
 					Context("after adding a policy that applies to workload 0 only", func() {
 						var (
-							policy   *api.GlobalNetworkPolicy
+							policy   *v3.GlobalNetworkPolicy
 							policyID types.PolicyID
 						)
 
 						BeforeEach(func() {
-							policy = api.NewGlobalNetworkPolicy()
+							policy = v3.NewGlobalNetworkPolicy()
 							policy.SetName("policy-0")
 							policy.Spec.Selector = w[0].NameSelector()
-							policy.Spec.Ingress = []api.Rule{
+							policy.Spec.Ingress = []v3.Rule{
 								{
 									Action: "Allow",
-									Source: api.EntityRule{
+									Source: v3.EntityRule{
 										Selector: "all()",
-										ServiceAccounts: &api.ServiceAccountMatch{
+										ServiceAccounts: &v3.ServiceAccountMatch{
 											Selector: "foo == 'bar'",
 										},
 									},
-									HTTP: &api.HTTPMatch{
+									HTTP: &v3.HTTPMatch{
 										Methods: []string{"GET"},
-										Paths:   []api.HTTPPath{{Exact: "/path"}},
+										Paths:   []v3.HTTPPath{{Exact: "/path"}},
 									},
 								},
 							}
-							policy.Spec.Egress = []api.Rule{
+							policy.Spec.Egress = []v3.Rule{
 								{
 									Action: "Allow",
 								},
@@ -480,7 +479,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 
 						BeforeEach(func() {
 							log.Info("Adding Service Account Profile")
-							profile := api.NewProfile()
+							profile := v3.NewProfile()
 							profile.SetName(conversion.ServiceAccountProfileNamePrefix + "sa-namespace.sa-name")
 							saID.Name = "sa-name"
 							saID.Namespace = "sa-namespace"
@@ -512,7 +511,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 
 						BeforeEach(func() {
 							log.Info("Adding Namespace Profile")
-							profile := api.NewProfile()
+							profile := v3.NewProfile()
 							profile.SetName(conversion.NamespaceProfileNamePrefix + "ns1")
 							nsID.Name = "ns1"
 							profile.Spec.LabelsToApply = map[string]string{
