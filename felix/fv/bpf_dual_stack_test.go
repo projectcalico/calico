@@ -258,7 +258,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				testSvcNamespace = testSvc.Namespace
 				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+				Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(2),
 					"Service endpoints didn't get created? Is controller-manager happy?")
 			})
 			It("Should connect to w[0][0] from all other workloads with IPv4 and IPv6", func() {
@@ -389,7 +389,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				testSvcNamespace = testSvc.Namespace
 				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+				Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(2),
 					"Service endpoints didn't get created? Is controller-manager happy?")
 				Eventually(func() bool {
 					return checkServiceRoute(tc.Felixes[0], testSvc.Spec.ClusterIPs[0])
@@ -542,7 +542,7 @@ func describeBPFDualStackProxyHealthTests() bool {
 			_, err := k8sClient.CoreV1().Services("default").Create(context.Background(), testSvc, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+			Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(2),
 				"Service endpoints didn't get created? Is controller-manager happy?")
 
 			// Check health probe on node 0 (has local endpoint) - should return 200
