@@ -59,6 +59,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, client)
 			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].ConfigureInInfra(infra)
 
