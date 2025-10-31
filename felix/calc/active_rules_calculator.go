@@ -42,7 +42,7 @@ type FelixSender interface {
 }
 
 type PolicyMatchListener interface {
-	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
+	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey, tier string)
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 }
 
@@ -353,6 +353,12 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 	polKey := selID.(model.PolicyKey)
 	policyWasActive := arc.policyIDToEndpointKeys.ContainsKey(polKey)
 	arc.policyIDToEndpointKeys.Put(selID, labelId)
+
+	// Determine the tier to pass to the policy match handler.
+	// CASEY: This is a temporary hack, see comment in OnPolicyMatch.
+	pol, _ := arc.allPolicies.Get(polKey)
+	tier := pol.Tier
+
 	if !policyWasActive {
 		// Policy wasn't active before, tell the listener.  The policy
 		// must be in allPolicies because we can only match on a policy
@@ -366,7 +372,7 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 	}
 	if labelId, ok := labelId.(model.EndpointKey); ok {
 		for _, l := range arc.PolicyMatchListeners {
-			l.OnPolicyMatch(polKey, labelId)
+			l.OnPolicyMatch(polKey, labelId, tier)
 		}
 	}
 }
@@ -388,12 +394,10 @@ func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
 	}
 }
 
-var (
-	DummyDropRules = model.ProfileRules{
-		InboundRules:  []model.Rule{{Action: "deny"}},
-		OutboundRules: []model.Rule{{Action: "deny"}},
-	}
-)
+var DummyDropRules = model.ProfileRules{
+	InboundRules:  []model.Rule{{Action: "deny"}},
+	OutboundRules: []model.Rule{{Action: "deny"}},
+}
 
 func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string, rules *model.ProfileRules) {
 	active := arc.profileIDToEndpointKeys.ContainsKey(profileID)
