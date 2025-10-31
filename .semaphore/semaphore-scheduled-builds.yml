@@ -826,6 +826,30 @@ blocks:
                 - s390x
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+  - name: istio
+    run:
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/istio'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/istio
+      jobs:
+        - name: make ci
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: Build binary
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
       when: "true"
