@@ -14,6 +14,18 @@
 
 package utils
 
+import (
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/release/internal/command"
+)
+
 const (
 	// ProductName is used in the release process to identify the product.
 	ProductName = CalicoProductName
@@ -40,12 +52,72 @@ const (
 	TigeraOrg = "tigera"
 )
 
-// Contains returns true if the a string is in a string slice.
-func Contains(haystack []string, needle string) bool {
-	for _, item := range haystack {
-		if item == needle {
-			return true
-		}
+var once sync.Once
+
+var (
+	ImageReleaseDirs = []string{
+		"apiserver",
+		"app-policy",
+		"calicoctl",
+		"cni-plugin",
+		"goldmane",
+		"guardian",
+		"key-cert-provisioner",
+		"kube-controllers",
+		"node",
+		"pod2daemon",
+		"third_party/envoy-gateway",
+		"third_party/envoy-proxy",
+		"third_party/envoy-ratelimit",
+		"typha",
+		"whisker",
+		"whisker-backend",
 	}
-	return false
+	releaseImages = []string{}
+)
+
+func initReleaseImages() {
+	rootDir, err := command.GitDir()
+	if err != nil {
+		logrus.Panicf("Cannot determine root git dir: %v", err)
+	}
+	images, err := BuildReleaseImageList(rootDir, ImageReleaseDirs...)
+	if err != nil {
+		logrus.Panicf("Cannot build release images list for release dirs[%s]: %v", strings.Join(ImageReleaseDirs, ","), err)
+	}
+	releaseImages = images
+}
+
+func ReleaseImages() []string {
+	once.Do(initReleaseImages)
+	return slices.Clone(releaseImages)
+}
+
+// buildImages returns the list of images built by the given directory.
+// It does this by calling a make target that returns the values of BUILD_IMAGES and WINDOWS_IMAGE (if set).
+func buildImages(dir string) ([]string, error) {
+	out, err := command.MakeInDir(dir, []string{"-s", "build-images"}, nil)
+	if err != nil {
+		logrus.Error(out)
+		return nil, fmt.Errorf("failed to get images for release dir %s: %w", dir, err)
+	}
+	return strings.Fields(out), nil
+}
+
+// BuildReleaseImageList builds a list of images to be released from the given directories.
+func BuildReleaseImageList(rootDir string, dirs ...string) ([]string, error) {
+	if len(dirs) == 0 {
+		logrus.WithField("root_dir", rootDir).Warnf("No image release dirs specified, will get images from root dir instead")
+		return buildImages(rootDir)
+	}
+	combinedImages := []string{}
+	for _, d := range dirs {
+		dir := filepath.Join(rootDir, d)
+		images, err := buildImages(dir)
+		if err != nil {
+			return nil, err
+		}
+		combinedImages = append(combinedImages, images...)
+	}
+	return combinedImages, nil
 }

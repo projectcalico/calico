@@ -1,55 +1,59 @@
-title: vX.Y.Z
+title: v3.31.0
+manifest_url: https://test-release.docs.eng.tigera.net
 release_name: test-release
-note: Test note
-full_hash: vX.Y.Z-vA.B.C
+note: test-release - generated at [Date1] using release-v3.31 release branch with release-v1.40 operator branch
+full_hash: v3.31.0-v1.40.0
 tigera-operator:
-  version: vA.B.C
+  version: v1.40.0-v3.31.0
   image: tigera/operator
   registry: docker.io
 components:
   api:
-    version: vX.Y.Z
+    version: v3.31.0
   apiserver:
-    version: vX.Y.Z
+    version: v3.31.0
   calico:
-    version: vX.Y.Z
+    version: v3.31.0
   calicoctl:
-    version: vX.Y.Z
+    version: v3.31.0
+    image: ctl
   cni:
-    version: vX.Y.Z
+    version: v3.31.0
   cni-windows:
-    version: vX.Y.Z
+    version: v3.31.0
   csi:
-    version: vX.Y.Z
+    version: v3.31.0
   csi-node-driver-registrar:
-    version: vX.Y.Z
+    version: v3.31.0
+    image: node-driver-registrar
   dikastes:
-    version: vX.Y.Z
+    version: v3.31.0
   envoy-gateway:
-    version: vX.Y.Z
+    version: v3.31.0
   envoy-proxy:
-    version: vX.Y.Z
+    version: v3.31.0
   envoy-ratelimit:
-    version: vX.Y.Z
+    version: v3.31.0
   flexvol:
-    version: vX.Y.Z
+    version: v3.31.0
+    image: pod2daemon-flexvol
   goldmane:
-    version: vX.Y.Z
+    version: v3.31.0
   guardian:
-    version: vX.Y.Z
+    version: v3.31.0
   key-cert-provisioner:
-    version: vX.Y.Z
+    version: v3.31.0
   kube-controllers:
-    version: vX.Y.Z
+    version: v3.31.0
   networking-calico:
-    version: release-v1.0
+    version: release-v3.31
   node:
-    version: vX.Y.Z
+    version: v3.31.0
   node-windows:
-    version: vX.Y.Z
+    version: v3.31.0
   typha:
-    version: vX.Y.Z
+    version: v3.31.0
   whisker:
-    version: vX.Y.Z
+    version: v3.31.0
   whisker-backend:
-    version: vX.Y.Z
+    version: v3.31.0

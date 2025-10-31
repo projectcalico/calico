@@ -17,8 +17,9 @@ export OPERATOR_BRANCH
 build: bin/release
 
 clean:
-	@rm -rf ./bin
-	@rm -rf ./output ./_output ./report ./tmp ./*.log
+	@rm -rf ./bin ./output ./_output ./report ./tmp
+	@find ../ -name '*release*.log' -delete
+	@find . -name '*.received.*' -delete
 
 bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \

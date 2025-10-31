@@ -37,7 +37,7 @@ type Versions interface {
 	ReleaseBranch(releaseBranchPrefix string) string
 }
 
-func NewHashreleaseVersions(calico Version, operator string) Versions {
+func NewHashreleaseVersions(calico Version, operator string) *HashreleaseVersions {
 	return &HashreleaseVersions{
 		calico:   calico,
 		operator: operator,

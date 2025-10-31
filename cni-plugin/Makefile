@@ -5,7 +5,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 CNI_PLUGIN_IMAGE ?=cni
-WINDOWS_IMAGE ?=cni-windows
+WINDOWS_IMAGE ?=$(CNI_PLUGIN_IMAGE)-windows
 BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 
 ###############################################################################
