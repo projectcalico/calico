@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -285,7 +286,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 								}
 
 								if wlIdx != 2 {
-									policyID := types.PolicyID{Name: "default.policy-0", Tier: "default"}
+									policyID := types.PolicyID{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}
 									Eventually(mockWlClient[wlIdx].ActivePolicies, waitTime).Should(Equal(set.From(policyID)))
 								}
 
@@ -344,7 +345,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 							policy, err = calicoClient.GlobalNetworkPolicies().Create(ctx, policy, utils.NoOptions)
 							Expect(err).NotTo(HaveOccurred())
 
-							policyID = types.PolicyID{Name: "default.policy-0", Tier: "default"}
+							policyID = types.PolicyID{Name: "default.policy-0"}
 						})
 
 						It("should be sent to workload 0 only", func() {
@@ -354,8 +355,8 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 							Eventually(mockWlClient[0].EndpointToPolicyOrder).Should(Equal(
 								map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {{
 									Name:            "default",
-									EgressPolicies:  []string{"default.policy-0"},
-									IngressPolicies: []string{"default.policy-0"},
+									EgressPolicies:  []types.PolicyID{{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}},
+									IngressPolicies: []types.PolicyID{{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}},
 								}}}))
 
 							Consistently(mockWlClient[1].ActivePolicies).Should(Equal(set.New[types.PolicyID]()))
@@ -438,8 +439,8 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 							Eventually(mockWlClient[1].EndpointToPolicyOrder).Should(Equal(
 								map[string][]mock.TierInfo{"k8s/fv/fv-pod-1/eth0": {{
 									Name:            "default",
-									EgressPolicies:  []string{"default.policy-0"},
-									IngressPolicies: []string{"default.policy-0"},
+									EgressPolicies:  []types.PolicyID{{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}},
+									IngressPolicies: []types.PolicyID{{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}},
 								}}}))
 
 							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New[types.PolicyID]()))
