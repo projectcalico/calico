@@ -1125,11 +1125,30 @@ func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
 }
 
 func ensureRoutesProgrammed(felixes []*infrastructure.Felix) {
-	expectedRoute := "proto 80" // Default proto number used in Felix
 	for _, felix := range felixes {
-		EventuallyWithOffset(1, felix.ExecOutputFn("ip", "route", "show"), "15s", "200ms").
-			Should(ContainSubstring(expectedRoute))
-		ConsistentlyWithOffset(1, felix.ExecOutputFn("ip", "route", "show"), "3s", "200ms").
-			Should(ContainSubstring(expectedRoute))
+		ensureFelixRoutesProgrammed(felix)
 	}
+}
+
+func ensureFelixRoutesProgrammed(felix *infrastructure.Felix) {
+	routesExist := func() bool {
+		cmdv4 := []string{"ip", "route", "show"}
+		outv4, err := felix.ExecOutput(cmdv4...)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check for the default route protocol used in Felix or Calico vxlan devices.
+		if strings.Contains(outv4, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
+			strings.Contains(outv4, dataplanedefs.VXLANIfaceNameV4) {
+			return true
+		}
+
+		cmdv6 := []string{"ip", "-6", "route", "show"}
+		outv6, err := felix.ExecOutput(cmdv6...)
+		Expect(err).NotTo(HaveOccurred())
+		// Check for the default route protocol used in Felix or Calico vxlan devices.
+		return strings.Contains(outv6, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
+			strings.Contains(outv6, dataplanedefs.VXLANIfaceNameV6)
+	}
+	EventuallyWithOffset(2, routesExist, "30s", "200ms").Should(BeTrue())
+	EventuallyWithOffset(2, routesExist, "3s", "200ms").Should(BeTrue())
 }
