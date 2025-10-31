@@ -57,6 +57,7 @@ type Proxy interface {
 type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
+	SetHostIPs([]net.IP)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -151,6 +152,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		stopCh:        make(chan struct{}),
 		healthzServer: new(alwaysHealthy),
+		// N.B. we do not start healthzServer until we have at least some host
+		// IPs. Dataplane implementation of hostports assumes we have a host IP.
 	}
 
 	for _, o := range opts {
@@ -166,7 +169,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
 	p.epsChanges = k8sp.NewEndpointsChangeTracker(ipVersion, p.hostname, nil, nil)
 	p.svcChanges = k8sp.NewServiceChangeTracker(ipVersion, makeServiceInfo, nil)
@@ -227,8 +229,7 @@ func (p *proxy) Stop() {
 	p.stopOnce.Do(func() {
 		log.Info("Proxy stopping")
 		// Pass empty update to close all the health checks.
-		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
-		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
+		p.stopSvcHealthServer()
 		p.dpSyncer.Stop()
 		close(p.stopCh)
 		p.stopWg.Wait()
@@ -263,11 +264,13 @@ func (p *proxy) invokeDPSyncer() {
 	_ = p.svcMap.Update(p.svcChanges)
 	_ = p.epsMap.Update(p.epsChanges)
 
-	if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
-		log.WithError(err).Error("Error syncing healthcheck services")
-	}
-	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
-		log.WithError(err).Error("Error syncing healthcheck endpoints")
+	if p.healthzServer != nil && p.svcHealthServer != nil {
+		if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
+			log.WithError(err).Error("Error syncing healthcheck services")
+		}
+		if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
+			log.WithError(err).Error("Error syncing healthcheck endpoints")
+		}
 	}
 
 	if p.healthzServer != nil {
@@ -351,6 +354,34 @@ func (p *proxy) SetSyncer(s DPSyncer) {
 	p.syncerLck.Unlock()
 
 	p.forceSyncDP()
+}
+
+func (p *proxy) stopSvcHealthServer() {
+	if p.svcHealthServer != nil {
+		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
+		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
+	}
+}
+
+func (p *proxy) SetHostIPs(hostIPs []net.IP) {
+	p.runnerLck.Lock()
+	defer p.runnerLck.Unlock()
+
+	p.stopSvcHealthServer()
+
+	ips := make([]string, 0, len(hostIPs))
+	for _, ip := range hostIPs {
+		if ip.To4() != nil && p.ipFamily == 4 {
+			ips = append(ips, ip.String()+"/32")
+		} else if ip.To4() == nil && p.ipFamily != 4 {
+			ips = append(ips, ip.String()+"/128")
+		}
+	}
+
+	npa := util.NewNodePortAddresses(p.v1IPFamily(), ips)
+	log.Infof("NodePortAddresses V%d for health checks: %s", p.ipFamily, npa.String())
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder,
+		npa, p.healthzServer)
 }
 
 func (p *proxy) IPFamily() discovery.AddressType {
