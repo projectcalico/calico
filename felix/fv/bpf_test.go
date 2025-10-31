@@ -3076,7 +3076,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}
 							_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 							Expect(err).NotTo(HaveOccurred())
-							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+							// We have 3 backends all listening on port 8055.
+							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(3),
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
@@ -3257,7 +3258,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							testSvc.Spec.SessionAffinity = "ClientIP"
 							_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 							Expect(err).NotTo(HaveOccurred())
-							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(3),
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
