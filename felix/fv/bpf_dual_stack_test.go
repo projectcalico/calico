@@ -39,8 +39,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var (
@@ -91,9 +89,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			opts.EnableIPv6 = true
 			opts.NATOutgoingEnabled = true
 			opts.AutoHEPsEnabled = false
-			// Simulate BIRD noEncap routes since IPIP is not supported with IPv6.
 			opts.IPIPMode = api.IPIPModeNever
-			opts.SimulateBIRDRoutes = true
 			opts.DelayFelixStart = true
 
 			if ipv6Dataplane {
@@ -123,10 +119,14 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				}
 
 				wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+				wIPv6 := fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)
 				wName := fmt.Sprintf("w%d%d", ii, wi)
 
+				infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+				infrastructure.AssignIP(wName, wIPv6, tc.Felixes[ii].Hostname, calicoClient)
+
 				w := workload.New(tc.Felixes[ii], wName, "default",
-					wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()))
+					wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(wIPv6))
 
 				labels["name"] = w.Name
 				labels["workload"] = "regular"
@@ -136,28 +136,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					err := w.Start(infra)
 					Expect(err).NotTo(HaveOccurred())
 					w.ConfigureInInfra(infra)
-				}
-
-				if opts.UseIPPools {
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(w.IP),
-						HandleID: &w.Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: tc.Felixes[ii].Hostname,
-						},
-						Hostname: tc.Felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
-					err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(w.IP6),
-						HandleID: &w.Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: tc.Felixes[ii].Hostname,
-						},
-						Hostname: tc.Felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
 				}
 
 				return w
@@ -226,6 +204,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready, ifstate.FlgHEP, nil)
 			})
 			It("should drop ipv6 packets at workload interface and allow ipv6 packets at host interface when in IPv4 only mode", func() {
+				cc.ResetExpectations()
 				// IPv4 connectivity must work.
 				cc.Expect(Some, hostW[0], w[0][0])
 				cc.Expect(Some, hostW[0], hostW[1])
@@ -262,6 +241,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					"Service endpoints didn't get created? Is controller-manager happy?")
 			})
 			It("Should connect to w[0][0] from all other workloads with IPv4 and IPv6", func() {
+				cc.ResetExpectations()
 				cc.ExpectSome(w[0][1], w[0][0])
 				cc.ExpectSome(w[1][0], w[0][0])
 				cc.ExpectSome(w[1][1], w[0][0])
@@ -273,6 +253,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			})
 
 			It("Should connect to w[0][0] via clusterIP (IPv4 and IPv6)", func() {
+				cc.ResetExpectations()
 				port := uint16(testSvc.Spec.Ports[0].Port)
 				cc.ExpectSome(w[1][0], TargetIP(clusterIPs[0]), port)
 				cc.ExpectSome(w[1][0], TargetIP(clusterIPs[1]), port)
@@ -283,6 +264,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			})
 
 			It("Should connect to w[0][0] via nodePort (IPv4 and IPv6)", func() {
+				cc.ResetExpectations()
 				cc.ExpectSome(w[1][0], TargetIP(felixIP(0)), npPort)
 				cc.ExpectSome(w[0][1], TargetIP(felixIP(0)), npPort)
 
@@ -316,6 +298,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, nil)
 				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
+				cc.ResetExpectations()
 				cc.ExpectSome(w[0][1], w[0][0])
 				cc.ExpectSome(w[1][0], w[0][0])
 				cc.ExpectSome(w[1][1], w[0][0])
@@ -326,13 +309,12 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				cc.Expect(Some, hostW[0], hostW[1], ExpectWithIPVersion(6))
 
 				cc.CheckConnectivity()
-				cc.ResetExpectations()
 
 				// Since we allow the IPv6 packets through IPv4 programs, a stale neighbor entry might get created
 				// when trying to reach w[0][0] from workloads in felix-1. This will impact subsequent
 				// tests. This does not seem to be a problem with ubuntu 22+ but is on ubuntu 20.
 				// Hence cleaning up the neighbor entry.
-				tc.Felixes[0].Exec("ip", "-6", "neigh", "del", w[0][0].IP6, "dev", w[0][0].InterfaceName)
+				_ = tc.Felixes[0].ExecMayFail("ip", "-6", "neigh", "del", w[0][0].IP6, "dev", w[0][0].InterfaceName)
 
 				// Add the node IPv6 address
 				node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
@@ -348,6 +330,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				Expect(err).NotTo(HaveOccurred())
 
 				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
+				cc.ResetExpectations()
 				cc.ExpectSome(w[0][1], w[0][0])
 				cc.ExpectSome(w[1][0], w[0][0])
 				cc.ExpectSome(w[1][1], w[0][0])
@@ -422,6 +405,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					Consistently(felixReady, "10s", "1s").Should(BeGood())
 				}
 
+				cc.ResetExpectations()
 				cc.Expect(None, w[0][1], w[0][0])
 				cc.Expect(None, w[1][0], w[0][0])
 				cc.Expect(None, w[1][1], w[0][0])
@@ -457,6 +441,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					Consistently(felixReady, "10s", "1s").Should(BeGood())
 				}
 
+				cc.ResetExpectations()
 				cc.Expect(None, w[0][1], w[0][0], ExpectWithIPVersion(6))
 				cc.Expect(None, w[1][0], w[0][0], ExpectWithIPVersion(6))
 				cc.Expect(None, w[1][1], w[0][0], ExpectWithIPVersion(6))
