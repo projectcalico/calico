@@ -311,7 +311,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 				return fmt.Errorf("Wrong number of ports: %#v", eps[0])
 			}
 			if *ports[0].Port != int32(wepPort) {
-				return fmt.Errorf("Wrong port %d != svcPort", ports[0].Port)
+				return fmt.Errorf("Wrong port %d != svcPort", *ports[0].Port)
 			}
 			return nil
 		}
