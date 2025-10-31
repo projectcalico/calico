@@ -145,11 +145,17 @@ func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKe
 	})
 }
 
-func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey) {
+func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey, tier string) {
 	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
 	// If it's first time the policy become matched, add it to the tier
 	if !pr.policySorter.HasPolicy(policyKey) {
-		policy := pr.allPolicies[policyKey]
+		policy, ok := pr.allPolicies[policyKey]
+		if !ok {
+			// TODO: CASEY This is a temporary hack. It's possible that we receive policy match calls before
+			// the policy resolver itself has seen the policy update (due to ordering of updates). In that case,
+			// we create a placeholder policyMetadata here. We should fix the ordering issue instead.
+			policy = policyMetadata{Tier: tier}
+		}
 		pr.policySorter.UpdatePolicy(policyKey, &policy)
 	}
 	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
@@ -208,8 +214,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 			if pr.endpointIDToPolicyIDs.Contains(endpointID, polKV.Key) {
 				log.Debugf("Policy %v matches %v", polKV.Key, endpointID)
 				tierMatches = true
-				filteredTier.OrderedPolicies = append(filteredTier.OrderedPolicies,
-					polKV)
+				filteredTier.OrderedPolicies = append(filteredTier.OrderedPolicies, polKV)
 			}
 		}
 		if tierMatches {

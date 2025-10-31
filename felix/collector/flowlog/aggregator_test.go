@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
@@ -65,6 +66,7 @@ var (
 	publicIP1Str      = "1.0.0.1"
 	publicIP2Str      = "2.0.0.2"
 	ingressRule1Allow = calc.NewRuleID(
+		v3.KindGlobalNetworkPolicy,
 		"default",
 		"policy1",
 		"",
@@ -73,6 +75,7 @@ var (
 		rules.RuleActionAllow,
 	)
 	egressRule2Deny = calc.NewRuleID(
+		v3.KindGlobalNetworkPolicy,
 		"default",
 		"policy2",
 		"",
@@ -254,7 +257,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 
 		BeforeEach(func() {
 			ca = NewAggregator()
-
 		})
 
 		It("aggregates the fed metric updates", func() {
@@ -336,7 +338,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 			By("by endpoint IP classification as the meta name when meta info is missing")
 			ca = NewAggregator()
 			endpointMeta := calc.RemoteEndpointData{
-
 				CommonEndpointData: calc.CalculateCommonEndpointData(
 					model.WorkloadEndpointKey{
 						Hostname:       "node-01",
@@ -488,7 +489,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy := muNoConn1Rule1AllowUpdateWithEndpointMeta
 			// Updating the Workload IDs for src and dst.
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.RemoteEndpointData{
-
 				CommonEndpointData: calc.CalculateCommonEndpointData(
 					model.WorkloadEndpointKey{
 						Hostname:       "node-01",
@@ -504,7 +504,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 			}
 
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.RemoteEndpointData{
-
 				CommonEndpointData: calc.CalculateCommonEndpointData(
 					model.WorkloadEndpointKey{
 						Hostname:       "node-02",
@@ -726,7 +725,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 
 			// Updating the Workload IDs for src and dst.
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.RemoteEndpointData{
-
 				CommonEndpointData: calc.CalculateCommonEndpointData(
 					model.WorkloadEndpointKey{
 						Hostname:       "node-01",
