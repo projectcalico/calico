@@ -368,7 +368,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
 		mockDP               bpfDataplane
-		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
 		l3IfacePattern       string
@@ -394,7 +393,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	)
 
 	BeforeEach(func() {
-		fibLookupEnabled = true
 		endpointToHostAction = "DROP"
 		dataIfacePattern = "^eth0"
 		workloadIfaceRegex = "cali"
@@ -490,7 +488,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				BPFIpv6Enabled:          ipv6Enabled,
 			},
 			maps,
-			fibLookupEnabled,
 			regexp.MustCompile(workloadIfaceRegex),
 			ipSetIDAllocatorV4,
 			ipSetIDAllocatorV6,
