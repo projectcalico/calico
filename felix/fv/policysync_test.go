@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -54,7 +55,6 @@ func init() {
 }
 
 var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
-
 	var (
 		tc                infrastructure.TopologyContainers
 		calicoClient      client.Interface
@@ -104,10 +104,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 	})
 
 	Context("with the binder", func() {
-
-		var (
-			hostWlSocketPath, containerWlSocketPath [3]string
-		)
+		var hostWlSocketPath, containerWlSocketPath [3]string
 
 		dirNameForWorkload := func(wl *workload.Workload) string {
 			return filepath.Join(binder.MountSubdir, wl.WorkloadEndpoint.Spec.Pod)
@@ -116,7 +113,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 		createWorkloadDirectory := func(wl *workload.Workload) (string, string) {
 			dirName := dirNameForWorkload(wl)
 			hostWlDir := filepath.Join(tempDir, dirName)
-			Expect(os.MkdirAll(hostWlDir, 0777)).To(Succeed())
+			Expect(os.MkdirAll(hostWlDir, 0o777)).To(Succeed())
 			return hostWlDir, filepath.Join("/var/run/calico/policysync", dirName)
 		}
 
@@ -130,13 +127,13 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 			credentialFileName := credentials.Uid + binder.CredentialsExtension
 
 			credsFileTmp := filepath.Join(tempDir, credentialFileName)
-			err = os.WriteFile(credsFileTmp, attrs, 0777)
+			err = os.WriteFile(credsFileTmp, attrs, 0o777)
 			if err != nil {
 				return err
 			}
 
 			// Lazy create the credential's directory
-			err = os.MkdirAll(hostMgmtCredsPath, 0777)
+			err = os.MkdirAll(hostMgmtCredsPath, 0o777)
 			if err != nil {
 				return err
 			}
@@ -186,7 +183,6 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 			})
 
 			Context("with open workload connections", func() {
-
 				// Then connect to it.
 				var (
 					wlConn   [3]*grpc.ClientConn
@@ -226,9 +222,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 				})
 
 				Context("with mock clients syncing", func() {
-					var (
-						mockWlClient [3]*mockWorkloadClient
-					)
+					var mockWlClient [3]*mockWorkloadClient
 
 					BeforeEach(func() {
 						for i := range w {
@@ -292,7 +286,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 								}
 
 								if wlIdx != 2 {
-									policyID := types.PolicyID{Name: "default.policy-0", Tier: "default"}
+									policyID := types.PolicyID{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}
 									Eventually(mockWlClient[wlIdx].ActivePolicies, waitTime).Should(Equal(set.From(policyID)))
 								}
 
@@ -337,8 +331,9 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 											Selector: "foo == 'bar'",
 										},
 									},
-									HTTP: &api.HTTPMatch{Methods: []string{"GET"},
-										Paths: []api.HTTPPath{{Exact: "/path"}},
+									HTTP: &api.HTTPMatch{
+										Methods: []string{"GET"},
+										Paths:   []api.HTTPPath{{Exact: "/path"}},
 									},
 								},
 							}
@@ -350,7 +345,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 							policy, err = calicoClient.GlobalNetworkPolicies().Create(ctx, policy, utils.NoOptions)
 							Expect(err).NotTo(HaveOccurred())
 
-							policyID = types.PolicyID{Name: "default.policy-0", Tier: "default"}
+							policyID = types.PolicyID{Name: "default.policy-0"}
 						})
 
 						It("should be sent to workload 0 only", func() {
@@ -359,9 +354,9 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 							)))
 							Eventually(mockWlClient[0].EndpointToPolicyOrder).Should(Equal(
 								map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {{
-									Name:               "default",
-									EgressPolicyNames:  []string{"default.policy-0"},
-									IngressPolicyNames: []string{"default.policy-0"},
+									Name:            "default",
+									EgressPolicies:  []types.PolicyID{{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}},
+									IngressPolicies: []types.PolicyID{{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}},
 								}}}))
 
 							Consistently(mockWlClient[1].ActivePolicies).Should(Equal(set.New[types.PolicyID]()))
@@ -396,8 +391,9 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 											SrcServiceAccountMatch: &proto.ServiceAccountMatch{
 												Selector: "foo == 'bar'",
 											},
-											HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"},
-												Paths: []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/path"}}},
+											HttpMatch: &proto.HTTPMatch{
+												Methods: []string{"GET"},
+												Paths:   []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/path"}}},
 											},
 										},
 									},
@@ -442,9 +438,9 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 							Eventually(mockWlClient[1].ActivePolicies).Should(Equal(set.From(policyID)))
 							Eventually(mockWlClient[1].EndpointToPolicyOrder).Should(Equal(
 								map[string][]mock.TierInfo{"k8s/fv/fv-pod-1/eth0": {{
-									Name:               "default",
-									EgressPolicyNames:  []string{"default.policy-0"},
-									IngressPolicyNames: []string{"default.policy-0"},
+									Name:            "default",
+									EgressPolicies:  []types.PolicyID{{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}},
+									IngressPolicies: []types.PolicyID{{Name: "default.policy-0", Kind: v3.KindGlobalNetworkPolicy}},
 								}}}))
 
 							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New[types.PolicyID]()))
@@ -458,7 +454,8 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 								defProfID,
 							)))
 							Eventually(mockWlClient[0].EndpointToProfiles).Should(Equal(map[string][]string{
-								"k8s/fv/fv-pod-0/eth0": {"default"}}))
+								"k8s/fv/fv-pod-0/eth0": {"default"},
+							}))
 
 							// Send in an endpoint update that adds one profile and deletes another.
 							var err error
@@ -469,7 +466,8 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 							By("Sending through an endpoint update and policy remove/update")
 							notDefProfID := types.ProfileID{Name: "notdefault"}
 							Eventually(mockWlClient[0].EndpointToProfiles).Should(Equal(map[string][]string{
-								"k8s/fv/fv-pod-0/eth0": {"notdefault"}}))
+								"k8s/fv/fv-pod-0/eth0": {"notdefault"},
+							}))
 							Eventually(mockWlClient[0].ActiveProfiles).Should(Equal(set.From(notDefProfID)))
 
 							Eventually(mockWlClient[2].ActiveProfiles).Should(Equal(set.From(defProfID)))

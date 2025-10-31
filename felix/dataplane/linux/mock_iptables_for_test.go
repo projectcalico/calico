@@ -15,6 +15,9 @@
 package intdataplane
 
 import (
+	"fmt"
+
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -82,22 +85,26 @@ func (t *mockTable) checkChains(expecteds [][]*generictables.Chain) {
 }
 
 func (t *mockTable) checkChainsSameAsBefore() {
-	log.Debug("Expected chains")
+	// Build a failure message in case of unexpected chains.
+	msg := "Unexpected chain:\n\n %+v\n\n Expected chains:\n\n"
 	for _, chain := range t.expectedChains {
 		log.WithField("chain", *chain).Debug("")
+		msg += fmt.Sprintf(" %+v\n", *chain)
 	}
 
-	// Compare chains one-by-one to get a nice diff.
+	// Check each current chain is as expected.
 	for _, chain := range t.currentChains {
 		expected, ok := t.expectedChains[chain.Name]
-		Expect(ok).To(BeTrue(), "Unexpected chain: %v", chain)
-		Expect(*chain).To(Equal(*expected), t.Table+" chain incorrect")
+		ExpectWithOffset(2, ok).To(BeTrue(), fmt.Sprintf(msg, *chain))
+		ExpectWithOffset(2, *chain).To(Equal(*expected), cmp.Diff(expected, chain))
 	}
+
+	// Ensure no expected chains are missing.
 	for _, chain := range t.expectedChains {
 		_, ok := t.currentChains[chain.Name]
-		Expect(ok).To(BeTrue(), "Missing expected chain: %v", chain)
+		ExpectWithOffset(2, ok).To(BeTrue(), "Missing expected chain: %v", chain)
 	}
 
 	// Assert the whole map is as expected.
-	ExpectWithOffset(1, t.currentChains).To(Equal(t.expectedChains), t.Table+" chains incorrect")
+	ExpectWithOffset(2, t.currentChains).To(Equal(t.expectedChains), t.Table+" chains incorrect")
 }
