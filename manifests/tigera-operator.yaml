@@ -413,6 +413,7 @@ rules:
       - projectcalico.org
     resourceNames:
       - allow-tigera.*
+      - allow-calico-istio.*
     resources:
       - tier.networkpolicies
       - tier.globalnetworkpolicies
@@ -428,6 +429,7 @@ rules:
       - projectcalico.org
     resourceNames:
       - allow-tigera
+      - allow-calico-istio
     resources:
       - tiers
     verbs:
@@ -439,6 +441,7 @@ rules:
       - projectcalico.org
     resources:
       - tiers
+      - globalnetworkpolicies
     verbs:
       - create
       - list
@@ -528,6 +531,25 @@ rules:
       - update
     resourceNames:
       - istiod
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resourceNames:
+      - istiod-default-validator
+      - istio-validator-calico-istio
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - update
+      - delete
 ---
 # Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator.yaml
 kind: ClusterRoleBinding

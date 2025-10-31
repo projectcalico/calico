@@ -27843,7 +27843,7 @@ spec:
                           type: object
                       type: object
                   type: object
-                istioDeployment:
+                istiod:
                   description:
                     Istiod defines the resource requirements and node selector
                     for the Istio deployment.
@@ -28958,7 +28958,7 @@ spec:
                           type: object
                       type: object
                   type: object
-                zTunnel:
+                ztunnel:
                   description:
                     ZTunnel defines the resource requirements for the ZTunnel
                     component.
