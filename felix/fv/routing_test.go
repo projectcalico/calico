@@ -1127,7 +1127,7 @@ func ensureFelixRoutesProgrammed(felix *infrastructure.Felix) {
 	routesExist := func() bool {
 		cmdv4 := []string{"ip", "route", "show"}
 		outv4, err := felix.ExecOutput(cmdv4...)
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		// Check for the default route protocol used in Felix or Calico vxlan devices.
 		if strings.Contains(outv4, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
