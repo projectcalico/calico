@@ -241,7 +241,7 @@ func WithServerLabels(labels map[string]string) ServerOption {
 func WithHostNetworking() ServerOption {
 	return func(c *Server) error {
 		if c.podCustomizer != nil {
-			return fmt.Errorf("Customizer already set")
+			return fmt.Errorf("customizer already set")
 		}
 		c.podCustomizer = func(pod *v1.Pod) {
 			pod.Spec.HostNetwork = true

@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "github.com/tigera/operator/api/v1"
@@ -50,7 +52,7 @@ var _ = describe.CalicoDescribe(
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("bgppeer")
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			// Create a connection tester for the test.
 			checker = conncheck.NewConnectionTester(f)
 
@@ -78,7 +80,7 @@ var _ = describe.CalicoDescribe(
 			// Before each test, perform the following steps:
 			// - Create a server pod and corresponding service in the main namespace for the test.
 			// - Create a client pod and assert that it can connect to the service.
-			By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
+			ginkgo.By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
 			server1 = conncheck.NewServer(
 				"server",
 				f.Namespace,
@@ -100,12 +102,12 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 
-		AfterEach(func() {
+		ginkgo.AfterEach(func() {
 			checker.Stop()
 			restoreBGPConfig()
 		})
 
-		It("should support BGP peers", func() {
+		ginkgo.It("should support BGP peers", func() {
 			// Disable full mesh BGP.
 			disableFullMesh(cli)
 
@@ -115,7 +117,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 
 			// Create a BGPPeer to re-enable connectivity.
-			By("Creating a BGPPeer to re-enable connectivity, simulating full mesh")
+			ginkgo.By("Creating a BGPPeer to re-enable connectivity, simulating full mesh")
 			peer := &v3.BGPPeer{
 				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-self"},
 				Spec: v3.BGPPeerSpec{
@@ -125,7 +127,7 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			DeferCleanup(func() {
+			ginkgo.DeferCleanup(func() {
 				err := cli.Delete(context.Background(), peer)
 				if !errors.IsNotFound(err) {
 					Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
@@ -138,7 +140,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 
 			// Delete the BGPPeer to disable connectivity again.
-			By("Deleting the BGPPeer to disable connectivity again")
+			ginkgo.By("Deleting the BGPPeer to disable connectivity again")
 			err = cli.Delete(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource")
 
@@ -148,7 +150,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 
 			// Create per-node BGPPeers to re-enable connectivity.
-			By("Creating per-node BGPPeers to re-enable connectivity")
+			ginkgo.By("Creating per-node BGPPeers to re-enable connectivity")
 			nodes := &corev1.NodeList{}
 			err = cli.List(context.Background(), nodes)
 			Expect(err).NotTo(HaveOccurred(), "Error querying nodes in the cluster")
@@ -166,7 +168,7 @@ var _ = describe.CalicoDescribe(
 					}
 					err = cli.Create(context.Background(), peer)
 					Expect(err).NotTo(HaveOccurred(), "Error creating per-node BGPPeer resource")
-					DeferCleanup(func() {
+					ginkgo.DeferCleanup(func() {
 						err := cli.Delete(context.Background(), peer)
 						if !errors.IsNotFound(err) {
 							Expect(err).NotTo(HaveOccurred(), "Error deleting per-node BGPPeer resource during cleanup")
