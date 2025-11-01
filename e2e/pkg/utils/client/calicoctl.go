@@ -45,13 +45,16 @@ func (c *calicoctlExecClient) Create(ctx context.Context, obj client.Object, opt
 	serializer := json.NewSerializer(json.DefaultMetaFactory, c.scheme, c.scheme, false)
 
 	w := &strings.Builder{}
-	serializer.Encode(obj, w)
+	err := serializer.Encode(obj, w)
+	if err != nil {
+		return err
+	}
 
 	// Create a calicoctl command to create the object.
 	cmd := []string{"exec", "-i", c.name, "--", "calicoctl", "create", "-f", "-"}
 
 	// Execute the command in the specified pod.
-	_, err := kubectl.RunKubectlInput(c.namespace, w.String(), cmd...)
+	_, err = kubectl.RunKubectlInput(c.namespace, w.String(), cmd...)
 	if err != nil {
 		return err
 	}
@@ -230,6 +233,10 @@ func (c *calicoctlExecClient) GroupVersionKindFor(obj runtime.Object) (schema.Gr
 
 func (c *calicoctlExecClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	return c.base.IsObjectNamespaced(obj)
+}
+
+func (c *calicoctlExecClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+	panic("not implemented")
 }
 
 func (c *calicoctlExecClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
