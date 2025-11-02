@@ -16,7 +16,9 @@ import (
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -41,7 +43,7 @@ var _ = describe.CalicoDescribe(
 			ctx context.Context
 		)
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			// Ensure a clean starting environment before each test.
 			var err error
 			cli, err = client.New(f.ClientConfig())
@@ -55,7 +57,7 @@ var _ = describe.CalicoDescribe(
 
 		// This test verifies that the Kubernetes Garbage Collector correctly deletes Calico objects
 		// with OwnerReferences if the referenced owner is deleted.
-		It("should delete a NetworkSet if its owner has been deleted", func() {
+		ginkgo.It("should delete a NetworkSet if its owner has been deleted", func() {
 			// Create a NetworkSet that will act as the owner.
 			ns := v3.NewNetworkSet()
 			ns.Name = "parent"
