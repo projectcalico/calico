@@ -175,3 +175,7 @@ func (f *fakeNFT) maybeFailListElements(name string) error {
 	}
 	return nil
 }
+
+func (f *fakeNFT) ListCounters(ctx context.Context) ([]*knftables.Counter, error) {
+	return f.fake.ListCounters(ctx)
+}
