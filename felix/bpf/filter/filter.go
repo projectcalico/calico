@@ -124,8 +124,8 @@ func programHeader(b *asm.Block, maxData int, stateMapFD maps.FD) {
 	b.Mov64(asm.R9, asm.R4)
 
 	b.AddComment("Get scratch buffer from state map")
-	b.MovImm64(asm.R1, 1)                   // R1 = 1
-	b.StoreStack32(asm.R1, -4)              // store 1 at stack[-4] as a key to the state map
+	b.MovImm32(asm.R1, 0)                   // R1 = 0 -use state as scratch buffer, it is not used until after the filter
+	b.StoreStack32(asm.R1, -4)              // store 0 at stack[-4] as a key to the state map
 	b.Mov64(asm.R2, asm.R10)                // R2 = R10
 	b.AddImm64(asm.R2, -4)                  // R2 = &stack[-4]
 	b.LoadMapFD(asm.R1, uint32(stateMapFD)) // R1 = 0 (64-bit immediate)
