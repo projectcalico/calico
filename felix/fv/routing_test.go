@@ -286,6 +286,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						if BPFMode() {
 							tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
 						}
+
 						By("testing that the ext client can connect via ipip")
 						cc.ResetExpectations()
 						cc.ExpectSome(externalClient, w[0])
