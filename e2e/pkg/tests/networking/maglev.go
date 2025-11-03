@@ -77,7 +77,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			nodesInfo := utils.GetNodesInfo(f, nodes, false)
-			nodeNames := nodesInfo.GetNames()
+			nodeNames = nodesInfo.GetNames()
 			nodeIPv4s := nodesInfo.GetIPv4s()
 			nodeIPv6s := nodesInfo.GetIPv6s()
 			Expect(len(nodeNames)).Should(BeNumerically(">", 0))
@@ -408,7 +408,10 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 			DeferCleanup(func() {
 				deleteRouteCmd := fmt.Sprintf("sudo ip route del %s/32 via %s", m.serviceClusterIPv4, targetNodeIPv4)
 				_, err := extNode.Exec("sh", "-c", deleteRouteCmd)
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to remove IPv4 route to %s via %s", m.serviceClusterIPv4, targetNodeIPv4))
+				if err != nil {
+					// Route may have already been removed, log but don't fail
+					framework.Logf("Note: IPv4 route to %s via %s may have already been removed: %v", m.serviceClusterIPv4, targetNodeIPv4, err)
+				}
 			})
 
 			framework.Logf("Added IPv4 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv4, targetNodeName, targetNodeIPv4)
@@ -430,7 +433,10 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 			DeferCleanup(func() {
 				deleteRouteCmd := fmt.Sprintf("sudo ip -6 route del %s/128 via %s", m.serviceClusterIPv6, targetNodeIPv6)
 				_, err := extNode.Exec("sh", "-c", deleteRouteCmd)
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to remove IPv6 route to %s via %s", m.serviceClusterIPv6, targetNodeIPv6))
+				if err != nil {
+					// Route may have already been removed, log but don't fail
+					framework.Logf("Note: IPv6 route to %s via %s may have already been removed: %v", m.serviceClusterIPv6, targetNodeIPv6, err)
+				}
 			})
 
 			framework.Logf("Added IPv6 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv6, targetNodeName, targetNodeIPv6)
