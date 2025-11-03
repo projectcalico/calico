@@ -92,7 +92,7 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 	noSelWithSAandNSSelector.Spec.NamespaceSelector = "name == 'testing'"
 
 	Context("test processing of a valid GlobalNetworkPolicy from V3 to V1", func() {
-		up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor()
+		up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(apiv3.KindGlobalNetworkPolicy)
 
 		// Basic tests with minimal and full GlobalNetworkPolicies.
 		It("should accept a GlobalNetworkPolicy with a minimal configuration", func() {
@@ -100,10 +100,14 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
 
-			v1Key := model.PolicyKey{Tier: "default", Name: "minimal"}
+			v1Key := model.PolicyKey{
+				Name: "minimal",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps[0]).To(Equal(&model.KVPair{
 				Key: v1Key,
 				Value: &model.Policy{
+					Tier:           "default",
 					PreDNAT:        true,
 					ApplyOnForward: true,
 				},
@@ -117,7 +121,10 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 			policy := fullGNPv1()
 			policy.Selector = `mylabel == 'selectme'`
-			v1Key := model.PolicyKey{Tier: "default", Name: "full"}
+			v1Key := model.PolicyKey{
+				Name: "full",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 
 			By("should be able to delete the full network policy")
@@ -139,7 +146,10 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 			kvps, err := up.Process(&model.KVPair{Key: emptyGNPKey, Value: apiv3.NewHostEndpoint(), Revision: testRev})
 			Expect(err).NotTo(HaveOccurred())
 
-			v1Key := model.PolicyKey{Tier: "default", Name: "empty"}
+			v1Key := model.PolicyKey{
+				Name: "empty",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: nil}}))
 		})
 
@@ -150,7 +160,10 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 			policy := fullGNPv1()
 			policy.Selector = `(mylabel == 'selectme') && pcsa.role == "development"`
-			v1Key := model.PolicyKey{Tier: "default", Name: "valid-sa-selector"}
+			v1Key := model.PolicyKey{
+				Name: "valid-sa-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -160,7 +173,10 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 			policy := fullGNPv1()
 			policy.Selector = `mylabel == 'selectme'`
-			v1Key := model.PolicyKey{Tier: "default", Name: "invalid-sa-selector"}
+			v1Key := model.PolicyKey{
+				Name: "invalid-sa-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -170,7 +186,10 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 			policy := fullGNPv1()
 			policy.Selector = `(mylabel == 'selectme') && has(projectcalico.org/serviceaccount)`
-			v1Key := model.PolicyKey{Tier: "default", Name: "all-sa-selector"}
+			v1Key := model.PolicyKey{
+				Name: "all-sa-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -181,7 +200,10 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 			policy := fullGNPv1()
 			policy.Selector = `(mylabel == 'selectme') && pcns.name == "testing"`
-			v1Key := model.PolicyKey{Tier: "default", Name: "valid-ns-selector"}
+			v1Key := model.PolicyKey{
+				Name: "valid-ns-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -191,7 +213,10 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 			policy := fullGNPv1()
 			policy.Selector = `mylabel == 'selectme'`
-			v1Key := model.PolicyKey{Tier: "default", Name: "invalid-ns-selector"}
+			v1Key := model.PolicyKey{
+				Name: "invalid-ns-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -201,7 +226,10 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 			policy := fullGNPv1()
 			policy.Selector = `(mylabel == 'selectme') && has(projectcalico.org/namespace)`
-			v1Key := model.PolicyKey{Tier: "default", Name: "all-ns-selector"}
+			v1Key := model.PolicyKey{
+				Name: "all-ns-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -212,43 +240,67 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 			policy := fullGNPv1()
 			policy.Selector = `((mylabel == 'selectme') && pcns.name == "testing") && pcsa.role == "development"`
-			v1Key := model.PolicyKey{Tier: "default", Name: "sa-and-ns-selector"}
+			v1Key := model.PolicyKey{
+				Name: "sa-and-ns-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
 		// GlobalNetworkPolicies without a Selector and with combinations of ServiceAccount and Namespace selectors.
 		It("should accept a GlobalNetworkPolicy without a Selector but with a ServiceAccountSelector", func() {
-			kvps, err := up.Process(&model.KVPair{Key: noSelWithSASelectorKey, Value: noSelWithSASelector,
-				Revision: testRev})
+			kvps, err := up.Process(&model.KVPair{
+				Key: noSelWithSASelectorKey, Value: noSelWithSASelector,
+				Revision: testRev,
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			policy := fullGNPv1()
 			policy.Selector = `pcsa.role == "development"`
-			v1Key := model.PolicyKey{Tier: "default", Name: "no-sel-with-sa-selector"}
+			v1Key := model.PolicyKey{
+				Name: "no-sel-with-sa-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
 		It("should accept a GlobalNetworkPolicy without a Selector but with a NamespaceSelector", func() {
-			kvps, err := up.Process(&model.KVPair{Key: noSelWithNSSelectorKey, Value: noSelWithNSSelector,
-				Revision: testRev})
+			kvps, err := up.Process(&model.KVPair{
+				Key: noSelWithNSSelectorKey, Value: noSelWithNSSelector,
+				Revision: testRev,
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			policy := fullGNPv1()
 			policy.Selector = `pcns.name == "testing"`
-			v1Key := model.PolicyKey{Tier: "default", Name: "no-sel-with-ns-selector"}
+			v1Key := model.PolicyKey{
+				Name: "no-sel-with-ns-selector",
+				Kind: apiv3.KindGlobalNetworkPolicy,
+			}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
 		It("should accept a GlobalNetworkPolicy without a Selector but with a NamespaceSelector and ServiceAccountSelector",
 			func() {
-				kvps, err := up.Process(&model.KVPair{Key: noSelWithSAandNSSelectorKey,
-					Value: noSelWithSAandNSSelector, Revision: testRev})
+				kvps, err := up.Process(&model.KVPair{
+					Key:   noSelWithSAandNSSelectorKey,
+					Value: noSelWithSAandNSSelector, Revision: testRev,
+				})
 				Expect(err).NotTo(HaveOccurred())
 
 				policy := fullGNPv1()
 				policy.Selector = `(pcns.name == "testing") && pcsa.role == "development"`
-				v1Key := model.PolicyKey{Tier: "default", Name: "no-sel-with-ns-and-sa-selector"}
-				Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
+				v1Key := model.PolicyKey{
+					Name: "no-sel-with-ns-and-sa-selector",
+					Kind: apiv3.KindGlobalNetworkPolicy,
+				}
+				Expect(kvps).To(Equal(
+					[]*model.KVPair{{
+						Key:      v1Key,
+						Value:    &policy,
+						Revision: testRev,
+					}},
+				))
 			})
 	})
 })
@@ -293,8 +345,12 @@ var (
 var (
 	expectedModel1 = []*model.KVPair{
 		{
-			Key: model.PolicyKey{Tier: "adminnetworkpolicy", Name: "kanp.adminnetworkpolicy.test.policy"},
+			Key: model.PolicyKey{
+				Name: "kanp.adminnetworkpolicy.test.policy",
+				Kind: model.KindKubernetesAdminNetworkPolicy,
+			},
 			Value: &model.Policy{
+				Tier:           "adminnetworkpolicy",
 				Order:          &anpOrder,
 				Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
 				Types:          []string{"egress"},
@@ -344,9 +400,10 @@ var expectedModel2 = []*model.KVPair{
 	{
 		Key: model.PolicyKey{
 			Name: "kanp.adminnetworkpolicy.test.policy",
-			Tier: "adminnetworkpolicy",
+			Kind: model.KindKubernetesAdminNetworkPolicy,
 		},
 		Value: &model.Policy{
+			Tier:           "adminnetworkpolicy",
 			Order:          &anpOrder,
 			Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
 			Types:          []string{"ingress"},
@@ -365,7 +422,7 @@ var expectedModel2 = []*model.KVPair{
 }
 
 var _ = Describe("Test the AdminNetworkPolicy update processor + conversion", func() {
-	up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor()
+	up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(model.KindKubernetesAdminNetworkPolicy)
 
 	DescribeTable("GlobalNetworkPolicy update processor + conversion tests",
 		func(anp adminpolicy.AdminNetworkPolicy, expected []*model.KVPair) {
