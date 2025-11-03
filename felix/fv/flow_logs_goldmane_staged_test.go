@@ -127,6 +127,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		ep2_3 = workload.Run(tc.Felixes[1], "ep2-3", "default", "10.65.1.2", wepPortStr, "tcp")
 		ep2_3.ConfigureInInfra(infra)
 
+		ensureRoutesProgrammed(tc.Felixes)
+
 		// Create tiers tier1 and tier2
 		tier := api.NewTier()
 		tier.Name = "tier1"

@@ -150,7 +150,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 							return (strings.Count(out, "cali-thfw-eth0") > 0)
 						}
 					}
-					Eventually(hostEndpointProgrammed, "15s", "1s").Should(BeTrue(),
+					Eventually(hostEndpointProgrammed, "10s", "1s").Should(BeTrue(),
 						"Expected HostEndpoint rules to appear")
 				}
 			})
@@ -194,7 +194,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 							return (strings.Count(out, expectedName) > 0)
 						}
 					}
-					Eventually(hostEndpointProgrammed, "15s", "1s").Should(BeTrue(),
+					Eventually(hostEndpointProgrammed, "10s", "1s").Should(BeTrue(),
 						"Expected HostEndpoint rules to appear")
 				}
 			})

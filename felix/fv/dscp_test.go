@@ -551,7 +551,7 @@ func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, value
 		rulePattern = "DSCP --set-dscp"
 	}
 
-	EventuallyWithOffset(2, assertRules, 15*time.Second, 100*time.Millisecond).
+	EventuallyWithOffset(2, assertRules, 10*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
 	ConsistentlyWithOffset(2, assertRules, 3*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
