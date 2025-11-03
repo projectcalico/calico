@@ -77,7 +77,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			nodesInfo := utils.GetNodesInfo(f, nodes, false)
-			nodeNames := nodesInfo.GetNames()
+			nodeNames = nodesInfo.GetNames()
 			nodeIPv4s := nodesInfo.GetIPv4s()
 			nodeIPv6s := nodesInfo.GetIPv6s()
 			Expect(len(nodeNames)).Should(BeNumerically(">", 0))
@@ -358,7 +358,7 @@ func (m *MaglevTests) EnableMaglev() {
 	if service.Annotations == nil {
 		service.Annotations = make(map[string]string)
 	}
-	service.Annotations["lb.projectcalico.org/external-traffic-strategy"] = "maglev"
+	service.Annotations["lb.projectcalico.org/external-traffic-policy"] = "maglev"
 
 	// Update the service
 	_, err = m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
@@ -381,7 +381,7 @@ func (m *MaglevTests) EnableMaglev() {
 			return false
 		}
 
-		annotationValue, exists := updatedService.Annotations["lb.projectcalico.org/external-traffic-strategy"]
+		annotationValue, exists := updatedService.Annotations["lb.projectcalico.org/external-traffic-policy"]
 		if !exists || annotationValue != "maglev" {
 			framework.Logf("Maglev annotation not found or incorrect value: %s", annotationValue)
 			return false
@@ -390,6 +390,9 @@ func (m *MaglevTests) EnableMaglev() {
 		framework.Logf("Maglev annotation confirmed on service")
 		return true
 	}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Maglev annotation should be applied and processed")
+
+	framework.Logf("Waiting 10 seconds to ensure Maglev changes propagate")
+	time.Sleep(10 * time.Second)
 }
 
 func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *externalnode.Client, targetNodeName string) {
