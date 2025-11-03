@@ -191,14 +191,17 @@ func (c *connectionTester) stop() error {
 	}
 
 	for _, server := range c.servers {
-		By(fmt.Sprintf("Deleting server pod %s and service %s", server.pod.Name, server.service.Name))
+		By(fmt.Sprintf("Deleting server pod %s", server.pod.Name))
 		err := c.f.ClientSet.CoreV1().Pods(server.namespace.Name).Delete(ctx, server.pod.Name, metav1.DeleteOptions{})
 		if err != nil {
 			return err
 		}
-		err = c.f.ClientSet.CoreV1().Services(server.namespace.Name).Delete(ctx, server.service.Name, metav1.DeleteOptions{})
-		if err != nil {
-			return err
+		if server.service != nil {
+			By(fmt.Sprintf("Deleting server service %s", server.service.Name))
+			err = c.f.ClientSet.CoreV1().Services(server.namespace.Name).Delete(ctx, server.service.Name, metav1.DeleteOptions{})
+			if err != nil {
+				return err
+			}
 		}
 	}
 
