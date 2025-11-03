@@ -1134,7 +1134,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         try:
             LOG.info("Periodic compaction thread started")
             while self._epoch == launch_epoch:
-                # Only do the resync if we are the master node.
+                # Only do the compaction if we are the master node.
                 if self.elector.master():
                     LOG.info("I am master: doing periodic compaction")
 
