@@ -291,23 +291,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		Expect(ep2_1.IP).NotTo(Equal(""))
 		getEpsFunc := k8sGetEpsForServiceFunc(k8sClient, tSvc)
 		epCorrectFn := func() error {
-			eps := getEpsFunc()
+			epslices := getEpsFunc()
+			if len(epslices) != 1 {
+				return fmt.Errorf("Wrong number of endpoints: %#v", epslices)
+			}
+			eps := epslices[0].Endpoints
 			if len(eps) != 1 {
-				return fmt.Errorf("Wrong number of endpoints: %#v", eps)
+				return fmt.Errorf("Wrong number of endpoint addresses: %#v", epslices[0])
 			}
 			addrs := eps[0].Addresses
 			if len(addrs) != 1 {
 				return fmt.Errorf("Wrong number of addresses: %#v", eps[0])
 			}
-			if addrs[0].IP != ep2_1.IP {
-				return fmt.Errorf("Unexpected IP: %s != %s", addrs[0].IP, ep2_1.IP)
+			if addrs[0] != ep2_1.IP {
+				return fmt.Errorf("Unexpected IP: %s != %s", addrs[0], ep2_1.IP)
 			}
-			ports := eps[0].Ports
+			ports := epslices[0].Ports
 			if len(ports) != 1 {
 				return fmt.Errorf("Wrong number of ports: %#v", eps[0])
 			}
-			if ports[0].Port != int32(wepPort) {
-				return fmt.Errorf("Wrong port %d != svcPort", ports[0].Port)
+			if *ports[0].Port != int32(wepPort) {
+				return fmt.Errorf("Wrong port %d != svcPort", *ports[0].Port)
 			}
 			return nil
 		}

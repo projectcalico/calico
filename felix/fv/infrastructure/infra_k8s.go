@@ -596,6 +596,7 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllTiers,
 		cleanupAllHostEndpoints,
 		cleanupAllNetworkSets,
+		cleanupAllGlobalNetworkSets,
 		cleanupAllFelixConfigurations,
 		cleanupAllServices,
 	}
@@ -734,7 +735,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 	}
 	if len(felix.IPv6) > 0 && v6CIDR != nil {
 		nodeIn.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
-		v6CIDR := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx)
+		v6CIDR := fmt.Sprintf("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%04x::/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], idx)
 		// Put the CIDR into canonical format, as required by k8s validation.
 		v6CIDR = ip.MustParseCIDROrIP(v6CIDR).String()
 		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, v6CIDR)
@@ -1212,12 +1213,29 @@ func cleanupAllNetworkSets(clientset *kubernetes.Clientset, client client.Interf
 	}
 	log.WithField("count", len(ns.Items)).Info("networksets present")
 	for _, n := range ns.Items {
-		_, err = client.HostEndpoints().Delete(ctx, n.Name, options.DeleteOptions{})
+		_, err = client.NetworkSets().Delete(ctx, n.Name, n.Namespace, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
 		}
 	}
-	log.Info("Cleaned up host networksets")
+	log.Info("Cleaned up networksets")
+}
+
+func cleanupAllGlobalNetworkSets(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up global network sets")
+	ctx := context.Background()
+	gns, err := client.GlobalNetworkSets().List(ctx, options.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("count", len(gns.Items)).Info("global networksets present")
+	for _, gn := range gns.Items {
+		_, err = client.GlobalNetworkSets().Delete(ctx, gn.Name, options.DeleteOptions{})
+		if err != nil {
+			panic(err)
+		}
+	}
+	log.Info("Cleaned up global network sets")
 }
 
 func cleanupAllHostEndpoints(clientset *kubernetes.Clientset, client client.Interface) {
@@ -1277,17 +1295,17 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 				panic(err)
 			}
 		}
-		endpointsInterface := coreV1.Endpoints(ns.Name)
-		endpoints, err := endpointsInterface.List(context.Background(), metav1.ListOptions{})
+		endpointSliceInterface := clientset.DiscoveryV1().EndpointSlices(ns.Name)
+		endpointSlices, err := endpointSliceInterface.List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			panic(err)
 		}
-		for _, ep := range endpoints.Items {
-			if ep.Name == "kubernetes" {
+		for _, ep := range endpointSlices.Items {
+			if ep.Labels["kubernetes.io/service-name"] == "kubernetes" {
 				// Skip cleaning up the Kubernetes API service.
 				continue
 			}
-			err := endpointsInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
+			err := endpointSliceInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
 			if err != nil && !strings.Contains(err.Error(), "not found") {
 				panic(err)
 			}
