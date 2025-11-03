@@ -310,7 +310,12 @@ func (p *PolKV) String() string {
 			orderStr = fmt.Sprint(p.Value.Order)
 		}
 	}
-	return fmt.Sprintf("%s(%s)", p.Key.Name, orderStr)
+
+	// For uniqueness, include kind and namespace if present.
+	if p.Key.Namespace != "" {
+		return fmt.Sprintf("%s/%s/%s(%s)", p.Key.Kind, p.Key.Namespace, p.Key.Name, orderStr)
+	}
+	return fmt.Sprintf("%s/%s(%s)", p.Key.Kind, p.Key.Name, orderStr)
 }
 
 func (p *PolKV) GovernsIngress() bool {
@@ -331,7 +336,15 @@ func PolKVLess(i, j PolKV) bool {
 	// We map the default order to +Inf, which compares equal to itself so,
 	// this "just works".
 	if i.Value.Order == j.Value.Order {
-		// Order is equal, use name as tie-break.
+		// Order is equal, use name to break ties.
+		if i.Key.Name == j.Key.Name {
+			// Name is also equal, use Kind to break ties.
+			if i.Key.Kind == j.Key.Kind {
+				// Kind is also equal, use Namespace to break ties.
+				return i.Key.Namespace < j.Key.Namespace
+			}
+			return i.Key.Kind < j.Key.Kind
+		}
 		return i.Key.Name < j.Key.Name
 	}
 	return i.Value.Order < j.Value.Order

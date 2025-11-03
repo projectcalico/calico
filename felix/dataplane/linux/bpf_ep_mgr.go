@@ -1312,7 +1312,7 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 	// Note, polID includes the tier name as well as the policy name.
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	if m.bpfPolicyDebugEnabled {
-		m.updatePolicyCache(polID.Name, "Policy", m.policies[polID].InboundRules, m.policies[polID].OutboundRules)
+		m.updatePolicyCache(polID, m.policies[polID].InboundRules, m.policies[polID].OutboundRules)
 	}
 }
 
@@ -1338,7 +1338,7 @@ func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 	m.profiles[profID] = msg.Profile
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	if m.bpfPolicyDebugEnabled {
-		m.updatePolicyCache(profID.Name, "Profile", m.profiles[profID].InboundRules, m.profiles[profID].OutboundRules)
+		m.updatePolicyCacheProfile(profID, m.profiles[profID].InboundRules, m.profiles[profID].OutboundRules)
 	}
 }
 
@@ -4465,8 +4465,19 @@ func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 	}).Debug("delRoute")
 }
 
+func (m *bpfEndpointManager) updatePolicyCacheProfile(id types.ProfileID, inboundRules, outboundRules []*proto.Rule) {
+	m.updateCache(id.Name, "Profile", inboundRules, outboundRules)
+}
+
 // updatePolicyCache modifies entries in the cache, adding new entries and marking old entries dirty.
-func (m *bpfEndpointManager) updatePolicyCache(name string, owner string, inboundRules, outboundRules []*proto.Rule) {
+func (m *bpfEndpointManager) updatePolicyCache(id types.PolicyID, inboundRules, outboundRules []*proto.Rule) {
+	// Build a unique string name for the policy
+	name := id.String()
+	m.updateCache(name, "Policy", inboundRules, outboundRules)
+}
+
+// TODO: Do we need to consider the owner here for identical names between Profile and Policy?
+func (m *bpfEndpointManager) updateCache(name, owner string, inboundRules, outboundRules []*proto.Rule) {
 	ruleIds := set.New[polprog.RuleMatchID]()
 	if val, ok := m.polNameToMatchIDs[name]; ok {
 		// If the policy name exists, it means the policy is updated. There are cases where both inbound,
