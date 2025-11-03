@@ -81,6 +81,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			Expect(kvps[0]).To(Equal(&model.KVPair{
 				Key: v1Key,
 				Value: &model.Policy{
+					Tier:           "default",
 					Namespace:      ns1,
 					Selector:       "projectcalico.org/namespace == 'namespace1'",
 					ApplyOnForward: false,
@@ -215,6 +216,7 @@ var (
 				Kind:      apiv3.KindNetworkPolicy,
 			},
 			Value: &model.Policy{
+				Tier:           "default",
 				Namespace:      "default",
 				Order:          &testDefaultPolicyOrder,
 				Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'default'",
@@ -264,6 +266,7 @@ var expected2 = []*model.KVPair{
 			Kind:      apiv3.KindNetworkPolicy,
 		},
 		Value: &model.Policy{
+			Tier:           "default",
 			Namespace:      "default",
 			Order:          &testDefaultPolicyOrder,
 			Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'default'",

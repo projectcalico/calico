@@ -175,6 +175,7 @@ func mustParseCIDR(cidr string) *cnet.IPNet {
 // fullGNPv1 returns a v1 GNP with all fields filled out.
 func fullGNPv1() (p model.Policy) {
 	return model.Policy{
+		Tier:           "default",
 		Order:          &testPolicyOrder101,
 		DoNotTrack:     true,
 		InboundRules:   []model.Rule{v1TestIngressRule},
@@ -212,6 +213,7 @@ func fullNPv1(namespace string) (p model.Policy) {
 	}
 
 	return model.Policy{
+		Tier:           "default",
 		Namespace:      namespace,
 		Order:          &testPolicyOrder101,
 		InboundRules:   []model.Rule{ir},

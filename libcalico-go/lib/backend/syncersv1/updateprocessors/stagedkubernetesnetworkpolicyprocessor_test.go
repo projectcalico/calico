@@ -59,6 +59,7 @@ var _ = Describe("Test the StagedKubernetesNetworkPolicy update processor", func
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1StagedKubernetesNetworkPolicyKey1,
 			Value: &model.Policy{
+				Tier:           "default",
 				Namespace:      ns1,
 				Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'namespace1'",
 				ApplyOnForward: false,

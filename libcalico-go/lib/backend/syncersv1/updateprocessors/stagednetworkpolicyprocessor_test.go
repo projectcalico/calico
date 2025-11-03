@@ -84,6 +84,7 @@ var _ = Describe("Test the StagedNetworkPolicy update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1StagedNetworkPolicyKey1,
 			Value: &model.Policy{
+				Tier:           "default",
 				Namespace:      ns1,
 				Selector:       "projectcalico.org/namespace == 'namespace1'",
 				ApplyOnForward: false,
@@ -195,6 +196,7 @@ var _ = Describe("Test the StagedNetworkPolicy update processor", func() {
 			{
 				Key: v1StagedNetworkPolicyKey2,
 				Value: &model.Policy{
+					Tier:           "default",
 					Namespace:      ns2,
 					Order:          &order,
 					InboundRules:   []model.Rule{v1irule},
@@ -223,6 +225,7 @@ var _ = Describe("Test the StagedNetworkPolicy update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1StagedNetworkPolicyKey3,
 			Value: &model.Policy{
+				Tier:           mytier,
 				Namespace:      "namespace3",
 				Selector:       "projectcalico.org/namespace == 'namespace3'",
 				ApplyOnForward: false,

@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -108,6 +107,7 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 			Expect(kvps[0]).To(Equal(&model.KVPair{
 				Key: v1Key,
 				Value: &model.Policy{
+					Tier:           "default",
 					PreDNAT:        true,
 					ApplyOnForward: true,
 				},
@@ -347,9 +347,10 @@ var (
 		{
 			Key: model.PolicyKey{
 				Name: "kanp.adminnetworkpolicy.test.policy",
-				Kind: v3.KindGlobalNetworkPolicy, // TODO: Should this be Kind AdminNetworkPolicy?
+				Kind: model.KindKubernetesAdminNetworkPolicy,
 			},
 			Value: &model.Policy{
+				Tier:           "adminnetworkpolicy",
 				Order:          &anpOrder,
 				Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
 				Types:          []string{"egress"},
@@ -399,9 +400,10 @@ var expectedModel2 = []*model.KVPair{
 	{
 		Key: model.PolicyKey{
 			Name: "kanp.adminnetworkpolicy.test.policy",
-			Kind: v3.KindGlobalNetworkPolicy, // TODO: Should this be Kind AdminNetworkPolicy?
+			Kind: model.KindKubernetesAdminNetworkPolicy,
 		},
 		Value: &model.Policy{
+			Tier:           "adminnetworkpolicy",
 			Order:          &anpOrder,
 			Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
 			Types:          []string{"ingress"},
