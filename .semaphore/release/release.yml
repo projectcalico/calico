@@ -71,7 +71,7 @@ blocks:
           - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
           # Install more tools
           - sudo apt update
-          - sudo apt install -y moreutils patchelf jq dch
+          - sudo apt install -y moreutils patchelf jq devscripts
       jobs:
         - name: "Build Openstack Packages"
           execution_time_limit:
