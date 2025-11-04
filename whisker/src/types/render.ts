@@ -1,6 +1,14 @@
+import { FilterHintKey, StreamFilterKey } from '@/utils/omniFilter';
 import { FlowLog as ApiFlowLog } from './api';
 
-export type FlowLogAction = 'Allow' | 'Deny' | 'Pass' | 'Log';
+export enum Action {
+    Allow = 'Allow',
+    Deny = 'Deny',
+    Pass = 'Pass',
+    Log = 'Log',
+}
+
+export type FlowLogAction = keyof typeof Action;
 
 export type FlowLog = Omit<ApiFlowLog, 'start_time' | 'end_time'> & {
     id: string;
@@ -16,6 +24,7 @@ export type AppConfig = {
         notifications: 'Enabled' | 'Disabled';
         calico_cloud_url: string;
     };
+    features: Record<string, boolean>;
 };
 
 export type UniqueFlowLogs = {
@@ -25,3 +34,7 @@ export type UniqueFlowLogs = {
         flowLog: FlowLog;
     }[];
 };
+
+export type StreamFilters = Partial<Record<StreamFilterKey, string>>;
+
+export type FilterHintValues = Record<FilterHintKey, string[]>;

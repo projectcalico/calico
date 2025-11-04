@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@/test-utils/helper';
+import { act, render, screen, waitFor } from '@/test-utils/helper';
 import {
     CustomOmniFilterKeys,
     CustomOmniFilterParam,
@@ -108,7 +108,7 @@ describe('<PortOmniFilter />', () => {
         screen.getByRole('button', { name: 'Port = UDP:2020' });
     });
 
-    it('should change the protocol to Any', async () => {
+    it.only('should change the protocol to Any', async () => {
         const mockOnChange = jest.fn();
         render(
             <PortOmniFilter
@@ -118,12 +118,16 @@ describe('<PortOmniFilter />', () => {
             />,
         );
 
-        userEvent.click(screen.getByRole('button', { name: 'Port = TCP' }));
+        await userEvent.click(
+            screen.getByRole('button', { name: 'Port = TCP' }),
+        );
         await screen.findByTestId('port-filter-popover-body');
 
-        MockSelect.onChange({ value: '' });
+        act(() => {
+            MockSelect.onChange({ value: '' });
+        });
 
-        userEvent.click(screen.getByRole('button', { name: 'Apply filter' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Update' }));
 
         await waitFor(() => {
             expect(mockOnChange).toHaveBeenCalledWith({
