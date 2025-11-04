@@ -235,7 +235,16 @@ skip_redir_ifindex:
 			}
 			if (!cali_rt_is_tunneled(dest_rt)) {
 				CALI_DEBUG("Not a tunnel route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
+#if CALI_F_L3_DEV
+				// In the case of wireguard, we support host->host encryption.
+				// Remote host route will not be tunneled and we should not be
+				// denying such packets. Hence let them pass to IP stack.
+				// CALI_F_L3_DEV is set for ipip as well but we should not
+				// have host->host ipip traffic hitting the tunnel device.
+				goto skip_fib;
+#else
 				goto deny;
+#endif
 			}
 
 			struct bpf_tunnel_key key = {
