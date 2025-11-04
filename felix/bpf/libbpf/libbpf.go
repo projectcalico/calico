@@ -30,6 +30,7 @@ import (
 // #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
 // #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/amd64 -lbpf -lelf -lz
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo s390x LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/s390x -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
