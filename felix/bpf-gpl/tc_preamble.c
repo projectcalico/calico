@@ -21,8 +21,6 @@ const volatile struct cali_tc_preamble_globals __globals;
 #define JUMP(idx) globals->data.jumps[JUMP_IDX(idx)]
 #define JUMP_DEBUG(idx) globals->data.jumps[JUMP_IDX_DEBUG(idx)]
 
-#define EMIT_LOGS 1
-
 SEC("tc")
 int  cali_tc_preamble(struct __sk_buff *skb)
 {

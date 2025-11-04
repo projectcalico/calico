@@ -48,7 +48,7 @@ func TestFilter(t *testing.T) {
 			SrcPort: 1234,
 			DstPort: 666,
 		},
-		make([]byte, 36),
+		nil,
 	)
 
 	type testCase struct {
@@ -70,8 +70,8 @@ func TestFilter(t *testing.T) {
 		{"dst 1.2.3.4 and src 11.22.33.44", false},
 		{"(host 1.2.3.4 or host 5.6.7.8) and (udp port 666)", true},
 		{"(host 1.2.3.4 or host 5.6.7.8) and (udp port 1212)", false},
-		{"len >= 64", true},
-		{"len < 64", false},
+		{"len >= 20", true},
+		{"len < 20", false},
 		{"len >= 500", false},
 		{"portrange 600-700", true},
 		{"tcp portrange 600-700", false},
