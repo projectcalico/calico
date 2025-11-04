@@ -20,7 +20,9 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "github.com/tigera/operator/api/v1"
@@ -52,7 +54,7 @@ var _ = describe.CalicoDescribe(
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("bgp-export")
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			if windows.ClusterIsWindows() {
 				// These tests exec commands in pods to check routes, which has not been implemented
 				// for Windows yet.
@@ -91,7 +93,7 @@ var _ = describe.CalicoDescribe(
 			pool.Spec.IPIPMode = v3.IPIPModeAlways
 			err = cli.Create(context.Background(), pool)
 			Expect(err).NotTo(HaveOccurred(), "Error creating IP pool")
-			DeferCleanup(func() {
+			ginkgo.DeferCleanup(func() {
 				err = cli.Delete(context.Background(), pool)
 				Expect(err).NotTo(HaveOccurred(), "Error deleting IP pool")
 			})
@@ -99,7 +101,7 @@ var _ = describe.CalicoDescribe(
 			// Before each test, perform the following steps:
 			// - Create a server pod and corresponding service in the main namespace for the test.
 			// - Create a client pod and assert that it can connect to the service.
-			By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
+			ginkgo.By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
 
 			// Use customizers to ensure pods use the test IP pool and avoid landing on the same node.
 			customizer := conncheck.CombineCustomizers(
@@ -127,13 +129,13 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 
-		AfterEach(func() {
+		ginkgo.AfterEach(func() {
 			checker.Stop()
 		})
 
-		It("should support toggling IPIP on and off", func() {
+		ginkgo.It("should support toggling IPIP on and off", func() {
 			// Toggle IPIP mode off and on again, verifying connectivity after each step.
-			By("Disabling IPIP mode on the IP pool")
+			ginkgo.By("Disabling IPIP mode on the IP pool")
 			pool := &v3.IPPool{}
 			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool)
 			Expect(err).NotTo(HaveOccurred(), "Error querying IP pool")
@@ -147,7 +149,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 
 			// Eventually, the routes for the test's IP pool should no longer use tunl0.
-			By("Verifying that node routes no longer use tunl0")
+			ginkgo.By("Verifying that node routes no longer use tunl0")
 			Eventually(func() error {
 				routes := getNodeRoutes(cli, "203.0.113")
 				if len(routes) == 0 {
@@ -162,7 +164,7 @@ var _ = describe.CalicoDescribe(
 			}, 10*time.Second, 1*time.Second).Should(Succeed(), "Routes for the test IP pool are still using tunl0")
 
 			// CrossSubnet.
-			By("Setting IPIP mode to CrossSubnet on the IP pool")
+			ginkgo.By("Setting IPIP mode to CrossSubnet on the IP pool")
 			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool)
 			Expect(err).NotTo(HaveOccurred(), "Error querying IP pool")
 			pool.Spec.IPIPMode = v3.IPIPModeCrossSubnet
@@ -175,7 +177,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 
 			// Always.
-			By("Setting IPIP mode to Always on the IP pool")
+			ginkgo.By("Setting IPIP mode to Always on the IP pool")
 			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool)
 			Expect(err).NotTo(HaveOccurred(), "Error querying IP pool")
 			pool.Spec.IPIPMode = v3.IPIPModeAlways
@@ -183,7 +185,7 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "Error updating IP pool to set IPIP to Always")
 
 			// Routes should now be using tunl0 again.
-			By("Verifying that node routes are using tunl0")
+			ginkgo.By("Verifying that node routes are using tunl0")
 			Eventually(func() error {
 				routes := getNodeRoutes(cli, "203.0.113")
 				if len(routes) == 0 {
@@ -204,8 +206,8 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 
-		It("should assign an IPIP address to the tunl0 interface", func() {
-			By("Verifying that each node has a tunl0 interface with an IPIP address")
+		ginkgo.It("should assign an IPIP address to the tunl0 interface", func() {
+			ginkgo.By("Verifying that each node has a tunl0 interface with an IPIP address")
 			pods := corev1.PodList{}
 			err := cli.List(context.Background(), &pods, ctrlclient.MatchingLabels{"k8s-app": "calico-node"})
 			Expect(err).NotTo(HaveOccurred(), "Error querying calico/node pods")

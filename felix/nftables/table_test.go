@@ -52,7 +52,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
 	BeforeEach(func() {
-		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
 		}
@@ -860,7 +860,7 @@ var _ = Describe("Insert early rules", func() {
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
 	BeforeEach(func() {
-		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
 		}
