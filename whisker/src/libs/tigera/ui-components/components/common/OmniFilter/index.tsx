@@ -1,21 +1,24 @@
-import { Box, BoxProps, Button, Flex, Text } from '@chakra-ui/react';
+import {
+    BoxProps,
+    Button,
+    Flex,
+    PopoverContentProps,
+    useDisclosure,
+} from '@chakra-ui/react';
 import React, { useEffect } from 'react';
+import SearchInput from '../SearchInput';
 import OmniCheckboxList, {
     OmniCheckboxListProps,
 } from './components/OmniCheckboxList';
-import { useOmniFilterUrlState } from './hooks';
-import SearchInput from '../SearchInput';
 import OmniFilterOperatorSelect from './components/OmniFilterOperatorSelect';
-import { CheckboxListLoadingSkeleton } from './components/CheckboxLoadingSkeleton';
-import {
-    OmniFilterOption,
-    OmniInternalListComponentProps,
-    OperatorType,
-} from './types';
+import OmniInternalList from './components/OmniInternalList';
 import OmniRadioList from './components/OmniRadioList';
 import OmniRangeList from './components/OmniRangeList';
 import OmniSwitchList from './components/OmniSwitchList';
-import { totalItemsLabelStyles } from './styles';
+import OmniTagListTrigger, {
+    OmniTagListTriggerPartsProps,
+} from './components/OmniTagListTrigger';
+import { useOmniFilterUrlState } from './hooks';
 import {
     OmniFilterBody,
     OmniFilterContainer,
@@ -24,7 +27,12 @@ import {
     OmniFilterHeader,
     OmniFilterTrigger,
 } from './parts';
-import { AddIcon } from '@chakra-ui/icons';
+import {
+    OmniFilterOption,
+    OmniInternalListComponentProps,
+    OperatorType,
+} from './types';
+import PageCounter from './components/PageCounter';
 
 // Handle calling onReady for lazy loaded content
 const LazyOnReady: React.FC<{ onReady?: () => void }> = ({ onReady }) => {
@@ -80,6 +88,9 @@ export type OmniFilterProps = {
     formatSelectedLabel?: (selectedFilters: OmniFilterOption[]) => string;
     formatListCountLabel?: (listCount: number, totalItems: number) => string;
     formatCreatableLabel?: (searchInput: string) => string;
+    triggerType?: 'default' | 'taglist';
+    tagListTriggerProps?: OmniTagListTriggerPartsProps;
+    popoverContentProps?: PopoverContentProps;
 } & Omit<BoxProps, 'onChange'> & { 'data-testid'?: string };
 
 type CheckboxOmniFilterProps = {
@@ -113,6 +124,9 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     inMemorySearch = false,
     totalItems,
     isCreatable = false,
+    triggerType = 'default',
+    popoverContentProps,
+    tagListTriggerProps,
     formatCreatableLabel,
     onChange,
     onReady,
@@ -125,7 +139,7 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
         `${listCount} of ${totalItems}`,
     ...rest
 }) => {
-    const [isOpen, setIsOpen] = React.useState(false);
+    const { isOpen, onClose, onToggle } = useDisclosure();
     const [isLoadingMore, setLoadingMore] = React.useState(false);
 
     const [filteredData, setFilterData] = React.useState(filters);
@@ -154,6 +168,16 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
         }
     }, [isLoading]);
 
+    const handleChange = (filters: OmniFilterOption[]) => {
+        onChange({
+            filterId,
+            filterLabel,
+            operator: showOperatorSelect ? selectedOperator : undefined,
+            filters,
+        });
+        popoverContentRef?.current?.focus();
+    };
+
     const listComponentProps = {
         options: filteredData,
         selectedOptions: selectedFilters,
@@ -167,15 +191,7 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
         labelListHeader,
         labelSelectedListHeader,
         ref: showSearch ? undefined : initialFocusRef, // focus on first in list when no search
-        onChange: (filters: OmniFilterOption[]) => {
-            onChange({
-                filterId,
-                filterLabel,
-                operator: showOperatorSelect ? selectedOperator : undefined,
-                filters,
-            });
-            popoverContentRef?.current?.focus();
-        },
+        onChange: handleChange,
         onRequestMore: () => {
             if (onRequestMore) {
                 setLoadingMore(true);
@@ -187,55 +203,72 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     return (
         <>
             <OmniFilterContainer
+                isOpen={isOpen}
                 onClose={() => {
-                    setIsOpen(false);
+                    onClose();
                     setSearchInput('');
                 }}
                 initialFocusRef={initialFocusRef}
             >
-                <OmniFilterTrigger
-                    isOpen={isOpen}
-                    onClick={() => setIsOpen(true)}
-                    label={filterLabel}
-                    isActive={firstSelectedFilter && showSelectedOnButton}
-                    isDisabled={isDisabled}
-                    testId={testId}
-                    showButtonIcon={showButtonIcon}
-                    selectedValueLabel={
-                        formatSelectedLabel
-                            ? formatSelectedLabel(selectedFilters)
-                            : firstSelectedFilter?.label
-                    }
-                    operator={selectedOperator}
-                    selectedValueTitle={
-                        !formatSelectedLabel
-                            ? selectedFilters
-                                  .map((filter) => filter.label)
-                                  .join(', ')
-                            : undefined
-                    }
-                    showSelectedValueLabel={showSelectedOnButton}
-                    badgeLabel={
-                        remainingSelectedFilters.length > 0 &&
-                        !formatSelectedLabel
-                            ? remainingSelectedFilters.length
-                            : undefined
-                    }
-                    valueSx={
-                        formatSelectedLabel
-                            ? { maxWidth: BUTTON_LABEL_WIDTH }
-                            : {
-                                  maxWidth:
-                                      remainingSelectedFilters.length > 0
-                                          ? BUTTON_LABEL_WITH_COUNT_WIDTH
-                                          : BUTTON_LABEL_WIDTH,
-                              }
-                    }
-                />
+                {triggerType === 'taglist' ? (
+                    <OmniTagListTrigger
+                        options={selectedFilters}
+                        onRemove={(removed) =>
+                            handleChange(
+                                selectedFilters.filter(
+                                    (filter) => filter.value !== removed.value,
+                                ),
+                            )
+                        }
+                        partsProps={tagListTriggerProps}
+                        onOpen={onToggle}
+                    />
+                ) : (
+                    <OmniFilterTrigger
+                        isOpen={isOpen}
+                        onClick={onToggle}
+                        label={filterLabel}
+                        isActive={firstSelectedFilter && showSelectedOnButton}
+                        isDisabled={isDisabled}
+                        testId={testId}
+                        showButtonIcon={showButtonIcon}
+                        selectedValueLabel={
+                            formatSelectedLabel
+                                ? formatSelectedLabel(selectedFilters)
+                                : firstSelectedFilter?.label
+                        }
+                        operator={selectedOperator}
+                        selectedValueTitle={
+                            !formatSelectedLabel
+                                ? selectedFilters
+                                      .map((filter) => filter.label)
+                                      .join(', ')
+                                : undefined
+                        }
+                        showSelectedValueLabel={showSelectedOnButton}
+                        badgeLabel={
+                            remainingSelectedFilters.length > 0 &&
+                            !formatSelectedLabel
+                                ? remainingSelectedFilters.length
+                                : undefined
+                        }
+                        valueSx={
+                            formatSelectedLabel
+                                ? { maxWidth: BUTTON_LABEL_WIDTH }
+                                : {
+                                      maxWidth:
+                                          remainingSelectedFilters.length > 0
+                                              ? BUTTON_LABEL_WITH_COUNT_WIDTH
+                                              : BUTTON_LABEL_WIDTH,
+                                  }
+                        }
+                    />
+                )}
 
                 <OmniFilterContent
                     data-testid={`${testId}-popover-content`}
                     ref={popoverContentRef}
+                    {...popoverContentProps}
                 >
                     <LazyOnReady onReady={onReady} />
 
@@ -303,76 +336,41 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                     )}
 
                     <OmniFilterBody
-                        px={hasFilters && !isLoading ? 0 : 3}
+                        px={3}
                         pt={!showOperatorSelect && !showSearch ? 2 : 0}
+                        pb={hasFilters ? 2 : 0}
+                        data-testid={`popover-body`}
                     >
-                        {isLoading && !isLoadingMore ? (
-                            <CheckboxListLoadingSkeleton
-                                numberOfLines={8}
-                                data-testid={`${testId}-list-skeleton`}
-                            />
-                        ) : hasFilters ? (
-                            InternalListComponent ? (
-                                <InternalListComponent
-                                    {...listComponentProps}
-                                    {...internalListComponentProps}
-                                />
-                            ) : listType === 'checkbox' ? (
-                                <OmniCheckboxList
-                                    {...listComponentProps}
-                                    {...internalListComponentProps}
-                                />
-                            ) : (
-                                <OmniRadioList {...listComponentProps} />
-                            )
-                        ) : isCreatable ? (
-                            <Box py={2}>
-                                {!searchInput && filteredData.length === 0 && (
-                                    <Text>{labelNoData}</Text>
-                                )}
-
-                                {searchInput && filteredData.length === 0 && (
-                                    <Button
-                                        variant='ghost'
-                                        leftIcon={<AddIcon fontSize='xs' />}
-                                        pl={0}
-                                        onClick={() => {
-                                            setSearchInput('');
-                                            listComponentProps.onChange([
-                                                ...selectedFilters,
-                                                {
-                                                    label: searchInput,
-                                                    value: searchInput,
-                                                },
-                                            ]);
-                                            if (onRequestSearch) {
-                                                onRequestSearch(filterId, '');
-                                            }
-                                        }}
-                                        data-testid={`${testId}-create-filter-button`}
-                                    >
-                                        {formatCreatableLabel ? (
-                                            formatCreatableLabel(searchInput)
-                                        ) : (
-                                            <>Add "{searchInput}"</>
-                                        )}
-                                    </Button>
-                                )}
-                            </Box>
-                        ) : (
-                            <Text py={2}>{labelNoData}</Text>
-                        )}
+                        <OmniInternalList
+                            {...listComponentProps}
+                            InternalListComponent={InternalListComponent}
+                            listType={listType}
+                            internalListComponentProps={
+                                internalListComponentProps
+                            }
+                            ref={initialFocusRef}
+                            isCreatable={isCreatable}
+                            searchInput={searchInput}
+                            filteredData={filteredData}
+                            selectedFilters={selectedFilters}
+                            labelNoData={labelNoData}
+                            testId={testId}
+                            onClearSearch={() => setSearchInput('')}
+                            isLoading={isLoading}
+                            hasFilters={hasFilters}
+                            filterId={filterId}
+                            onRequestSearch={onRequestSearch}
+                            formatCreatableLabel={formatCreatableLabel}
+                        />
                     </OmniFilterBody>
 
-                    <OmniFilterFooter
-                        alignItems='center'
-                        justifyContent='space-between'
-                    >
+                    <OmniFilterFooter>
                         <Button
                             isDisabled={selectedFilters.length === 0}
                             variant='ghost'
                             fontWeight='semibold'
                             size='sm'
+                            tabIndex={0}
                             onClick={() => {
                                 onClear();
 
@@ -391,12 +389,12 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                         </Button>
 
                         {totalItems ? (
-                            <Text sx={totalItemsLabelStyles}>
+                            <PageCounter>
                                 {formatListCountLabel(
                                     filteredData.length,
                                     totalItems,
                                 )}
-                            </Text>
+                            </PageCounter>
                         ) : (
                             ''
                         )}
@@ -411,8 +409,11 @@ export default OmniFilter;
 
 export {
     OmniCheckboxList,
+    OmniInternalList,
     OmniRadioList,
     OmniRangeList,
     OmniSwitchList,
+    LazyOnReady,
     useOmniFilterUrlState,
+    PageCounter,
 };
