@@ -30,6 +30,13 @@ func (p PolicyID) String() string {
 	return fmt.Sprintf("{Name: %s, Namespace: %s, Kind: %s}", p.Name, p.Namespace, p.Kind)
 }
 
+func (p PolicyID) ID() string {
+	if p.Namespace != "" {
+		return fmt.Sprintf("%s/%s/%s", p.Kind, p.Namespace, p.Name)
+	}
+	return fmt.Sprintf("%s/%s", p.Kind, p.Name)
+}
+
 func ProtoToPolicyID(p *proto.PolicyID) PolicyID {
 	return PolicyID{
 		Name:      p.GetName(),

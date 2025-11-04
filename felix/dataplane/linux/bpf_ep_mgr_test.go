@@ -297,9 +297,9 @@ func (m *mockDataplane) delRoute(cidr ip.CIDR) {
 	delete(m.routes, cidr)
 }
 
-func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, name string) polprog.RuleMatchID {
+func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, id types.IDMaker) polprog.RuleMatchID {
 	h := fnv.New64a()
-	h.Write([]byte(action + owner.String() + dir.String() + strconv.Itoa(idx+1) + name))
+	h.Write([]byte(action + owner.String() + dir.String() + strconv.Itoa(idx+1) + id.ID()))
 	return h.Sum64()
 }
 
@@ -1529,11 +1529,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Describe("polCounters", func() {
+		allowPolID := types.PolicyID{Name: "allowPol", Kind: v3.KindNetworkPolicy}
+
 		It("should update the maps with ruleIds", func() {
 			ingRule := &proto.Rule{Action: "Allow", RuleId: "INGRESSALLOW1234"}
 			egrRule := &proto.Rule{Action: "Allow", RuleId: "EGRESSALLOW12345"}
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
+			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, allowPolID)
+			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, allowPolID)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.commonMaps.RuleCountersMap
@@ -1544,7 +1546,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingRule}, OutboundRules: []*proto.Rule{egrRule}},
 			})
 			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(1))
-			val := bpfEpMgr.polNameToMatchIDs["allowPol"]
+			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveKey(allowPolID.ID()))
+			val := bpfEpMgr.polNameToMatchIDs[allowPolID.ID()]
+			Expect(val).NotTo(BeNil())
 			Expect(val.Contains(ingRuleMatchId)).To(BeTrue())
 			Expect(val.Contains(egrRuleMatchId)).To(BeTrue())
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
@@ -1557,13 +1561,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			// update the ingress rule of the policy
 			ingDenyRule := &proto.Rule{Action: "Deny", RuleId: "INGRESSDENY12345"}
-			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Deny", rules.RuleOwnerTypePolicy, 0, "allowPol")
+			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Deny", rules.RuleOwnerTypePolicy, 0, allowPolID)
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
 				Id:     &proto.PolicyID{Name: "allowPol", Kind: v3.KindNetworkPolicy},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingDenyRule}, OutboundRules: []*proto.Rule{egrRule}},
 			})
 			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(1))
-			val = bpfEpMgr.polNameToMatchIDs["allowPol"]
+			val = bpfEpMgr.polNameToMatchIDs[allowPolID.ID()]
+			Expect(val).NotTo(BeNil())
 			Expect(val.Contains(ingDenyRuleMatchId)).To(BeTrue())
 			Expect(val.Contains(egrRuleMatchId)).To(BeTrue())
 			Expect(bpfEpMgr.dirtyRules.Contains(ingRuleMatchId)).To(BeTrue())
@@ -1597,8 +1602,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should cleanup the bpf map after restart", func() {
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
+			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, allowPolID)
+			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, allowPolID)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.commonMaps.RuleCountersMap

@@ -19,13 +19,15 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	. "github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 var _ = Describe("NFLOG prefix construction tests", func() {
 	DescribeTable(
 		"CalculateNFLOGPrefixStr should return correct result",
-		func(action RuleAction, owner RuleOwnerType, dir RuleDir, idx int, name string, expected string, expectHash bool) {
+		func(action RuleAction, owner RuleOwnerType, dir RuleDir, idx int, name types.IDMaker, expected string, expectHash bool) {
 			actual := CalculateNFLOGPrefixStr(action, owner, dir, idx, name)
 			Expect(actual).To(Equal(expected), actual)
 			if expectHash {
@@ -37,38 +39,39 @@ var _ = Describe("NFLOG prefix construction tests", func() {
 		Entry(
 			"Short NP name - will not hash",
 			RuleActionAllow, RuleOwnerTypePolicy, RuleDirIngress, 0,
-			"namespace1/default.policy",
-			"API0|namespace1/default.policy", false,
+			types.PolicyID{Name: "default.policy", Namespace: "namespace1", Kind: v3.KindNetworkPolicy},
+			"API0|NetworkPolicy/namespace1/default.policy",
+			false,
 		),
 		Entry(
 			"Short profile name - will not hash",
 			RuleActionPass, RuleOwnerTypeProfile, RuleDirEgress, 999,
-			"short.profile.name",
+			types.ProfileID{Name: "short.profile.name"},
 			"PRE999|short.profile.name", false,
 		),
 		Entry(
 			"Policy name makes raw prefix 62 bytes - will not hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 88,
-			"01234567890123456789012345678901234567890123456789012345",
-			"DPE88|01234567890123456789012345678901234567890123456789012345", false,
+			types.PolicyID{Name: "012345678901234567890123456789012345", Kind: v3.KindGlobalNetworkPolicy},
+			"DPE88|GlobalNetworkPolicy/012345678901234567890123456789012345", false,
 		),
 		Entry(
 			"Policy name makes raw prefix 63 bytes - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirIngress, 88,
-			"012345678901234567890123456789012345678901234567890123456",
-			"DPI88|0123_S7GBfc7R7_4bzrXpbzglqoJrRG_UxIP0CuYjRWshz_7890123456", true,
+			types.PolicyID{Name: "0123456789012345678901234567890123456", Kind: v3.KindGlobalNetworkPolicy},
+			"DPI88|Glob_TgIrDfSZByUMyW1jdRlqRwUFnz9Ia95pepsiza2bL_7890123456", true,
 		),
 		Entry(
 			"Very long GNP name - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 1,
-			"quite-a-long-namespace/quite-a-long-tier-name.quite-a-long-policy-name",
-			"DPE1|quite_nnW4FYptgISH4G3jdI6KJWVcEx19s0BDp2On0wVAY_olicy-name", true,
+			types.PolicyID{Name: "quite-a-long-tier-name-even-though-its-not-required.quite-a-long-policy-name", Kind: v3.KindGlobalNetworkPolicy},
+			"DPE1|Globa_XF5BxrLqWODw91KGGf0D9YjSIxxX_71n98wNC1NxD_olicy-name", true,
 		),
 		Entry(
 			"A similar (but different) very long GNP name - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 2,
-			"quite-a-long-namespace/quite-a-long-tier-name.quite-a-long-policy-name2",
-			"DPE2|quite_1G46uquk9ypeSpt4I-AIn1FSwWxCefDd8GEcuoxHP_licy-name2", true,
+			types.PolicyID{Name: "quite-a-long-tier-name-even-though-its-not-required.quite-a-long-policy-name2", Kind: v3.KindGlobalNetworkPolicy},
+			"DPE2|Globa_wBNKd5xXqEk9Q5vhGZ_B5KMFrMmFdtyOIcgrMvA3x_licy-name2", true,
 		),
 	)
 

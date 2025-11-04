@@ -20,6 +20,10 @@ type ProfileID struct {
 	Name string
 }
 
+func (p ProfileID) ID() string {
+	return p.Name
+}
+
 func ProtoToProfileID(p *proto.ProfileID) ProfileID {
 	return ProfileID{
 		Name: p.GetName(),

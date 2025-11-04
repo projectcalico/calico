@@ -177,7 +177,7 @@ type bpfDataplane interface {
 	setRPFilter(iface string, val int) error
 	setRoute(ip.CIDR)
 	delRoute(ip.CIDR)
-	ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, name string) polprog.RuleMatchID
+	ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, id types.IDMaker) polprog.RuleMatchID
 	loadDefaultPolicies() error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
@@ -1326,8 +1326,8 @@ func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 	delete(m.policies, polID)
 	delete(m.policiesToWorkloads, polID)
 	if m.bpfPolicyDebugEnabled {
-		m.dirtyRules.AddSet(m.polNameToMatchIDs[polID.Name])
-		delete(m.polNameToMatchIDs, polID.Name)
+		m.dirtyRules.AddSet(m.polNameToMatchIDs[polID.ID()])
+		delete(m.polNameToMatchIDs, polID.ID())
 	}
 }
 
@@ -1351,8 +1351,8 @@ func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
 	delete(m.profiles, profID)
 	delete(m.profilesToWorkloads, profID)
 	if m.bpfPolicyDebugEnabled {
-		m.dirtyRules.AddSet(m.polNameToMatchIDs[profID.Name])
-		delete(m.polNameToMatchIDs, profID.Name)
+		m.dirtyRules.AddSet(m.polNameToMatchIDs[profID.ID()])
+		delete(m.polNameToMatchIDs, profID.ID())
 	}
 }
 
@@ -3190,7 +3190,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 				for ri, r := range prules {
 					policy.Rules[ri] = polprog.Rule{
 						Rule:    r,
-						MatchID: m.ruleMatchID(dir, r.Action, rules.RuleOwnerTypePolicy, ri, policyName(polID)),
+						MatchID: m.ruleMatchID(dir, r.Action, rules.RuleOwnerTypePolicy, ri, policyID(polID)),
 					}
 				}
 
@@ -3232,7 +3232,7 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 			for ri, r := range prules {
 				profile.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: m.ruleMatchID(dir, r.Action, rules.RuleOwnerTypeProfile, ri, profName),
+					MatchID: m.ruleMatchID(dir, r.Action, rules.RuleOwnerTypeProfile, ri, &types.ProfileID{Name: profName}),
 				}
 			}
 
@@ -4466,20 +4466,20 @@ func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 }
 
 func (m *bpfEndpointManager) updatePolicyCacheProfile(id types.ProfileID, inboundRules, outboundRules []*proto.Rule) {
-	m.updateCache(id.Name, "Profile", inboundRules, outboundRules)
+	m.updateCache(id, id.Name, "Profile", inboundRules, outboundRules)
 }
 
 // updatePolicyCache modifies entries in the cache, adding new entries and marking old entries dirty.
 func (m *bpfEndpointManager) updatePolicyCache(id types.PolicyID, inboundRules, outboundRules []*proto.Rule) {
 	// Build a unique string name for the policy
 	name := id.String()
-	m.updateCache(name, "Policy", inboundRules, outboundRules)
+	m.updateCache(id, name, "Policy", inboundRules, outboundRules)
 }
 
 // TODO: Do we need to consider the owner here for identical names between Profile and Policy?
-func (m *bpfEndpointManager) updateCache(name, owner string, inboundRules, outboundRules []*proto.Rule) {
+func (m *bpfEndpointManager) updateCache(id types.IDMaker, name, owner string, inboundRules, outboundRules []*proto.Rule) {
 	ruleIds := set.New[polprog.RuleMatchID]()
-	if val, ok := m.polNameToMatchIDs[name]; ok {
+	if val, ok := m.polNameToMatchIDs[id.ID()]; ok {
 		// If the policy name exists, it means the policy is updated. There are cases where both inbound,
 		// outbound rules are updated or any one.
 		// Mark all the entries as dirty.
@@ -4488,27 +4488,28 @@ func (m *bpfEndpointManager) updateCache(name, owner string, inboundRules, outbo
 	// Now iterate through all the rules and if the ruleIds are already in the cache, it means the rule has not
 	// changed as part of the update. Remove the dirty flag and add this entry back as non-dirty.
 	for idx, rule := range inboundRules {
-		ruleIds.Add(m.addRuleInfo(rule, idx, owner, PolDirnIngress, name))
+		ruleIds.Add(m.addRuleInfo(id, rule, idx, owner, PolDirnIngress, name))
 	}
 	for idx, rule := range outboundRules {
-		ruleIds.Add(m.addRuleInfo(rule, idx, owner, PolDirnEgress, name))
+		ruleIds.Add(m.addRuleInfo(id, rule, idx, owner, PolDirnEgress, name))
 	}
-	m.polNameToMatchIDs[name] = ruleIds
+	m.polNameToMatchIDs[id.ID()] = ruleIds
 }
 
-func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int, owner string, direction PolDirection, polName string) polprog.RuleMatchID {
+func (m *bpfEndpointManager) addRuleInfo(id types.IDMaker, rule *proto.Rule, idx int, owner string, direction PolDirection, polName string) polprog.RuleMatchID {
 	ruleOwner := rules.RuleOwnerTypePolicy
 	if owner == "Profile" {
 		ruleOwner = rules.RuleOwnerTypeProfile
 	}
-	matchID := m.dp.ruleMatchID(direction.RuleDir(), rule.Action, ruleOwner, idx, polName)
+	matchID := m.dp.ruleMatchID(direction.RuleDir(), rule.Action, ruleOwner, idx, id)
 	m.dirtyRules.Discard(matchID)
 
 	return matchID
 }
 
-func policyName(id *proto.PolicyID) string {
-	return fmt.Sprintf("%s/%s/%s", id.Kind, id.Namespace, id.Name)
+// TODO: CASEY Revisit this.
+func policyID(id *proto.PolicyID) types.IDMaker {
+	return types.PolicyID{Name: id.Name, Namespace: id.Namespace, Kind: id.Kind}
 }
 
 func (m *bpfEndpointManager) ruleMatchID(
@@ -4516,7 +4517,7 @@ func (m *bpfEndpointManager) ruleMatchID(
 	action string,
 	owner rules.RuleOwnerType,
 	idx int,
-	name string,
+	id types.IDMaker,
 ) polprog.RuleMatchID {
 	var a rules.RuleAction
 	switch action {
@@ -4535,7 +4536,7 @@ func (m *bpfEndpointManager) ruleMatchID(
 	}
 
 	// TODO: CASEY Revisit this.
-	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNFLOGPrefixStr(a, owner, dir, idx, name))
+	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNFLOGPrefixStr(a, owner, dir, idx, id))
 }
 
 func (m *bpfEndpointManager) getIfaceLink(name string) (netlink.Link, error) {

@@ -19,7 +19,6 @@ package collector
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -273,12 +272,18 @@ var (
 	}
 )
 
+func toprefix(s string) [64]byte {
+	p := [64]byte{}
+	copy(p[:], []byte(s))
+	return p
+}
+
 // Nflog prefix test parameters
 var (
-	defTierAllowIngressNFLOGPrefix   = [64]byte{'A', 'P', 'I', '0', '|', 'd', 'e', 'f', 'a', 'u', 'l', 't', '.', 'p', 'o', 'l', 'i', 'c', 'y', '1'}
-	defTierAllowEgressNFLOGPrefix    = [64]byte{'A', 'P', 'E', '0', '|', 'd', 'e', 'f', 'a', 'u', 'l', 't', '.', 'p', 'o', 'l', 'i', 'c', 'y', '1'}
-	defTierDenyIngressNFLOGPrefix    = [64]byte{'D', 'P', 'I', '0', '|', 'd', 'e', 'f', 'a', 'u', 'l', 't', '.', 'p', 'o', 'l', 'i', 'c', 'y', '2'}
-	defTierDenyEgressNFLOGPrefix     = [64]byte{'D', 'P', 'E', '0', '|', 'd', 'e', 'f', 'a', 'u', 'l', 't', '.', 'p', 'o', 'l', 'i', 'c', 'y', '2'}
+	defTierAllowIngressNFLOGPrefix   = toprefix("API0|GlobalNetworkPolicy/policy1")
+	defTierAllowEgressNFLOGPrefix    = toprefix("APE0|GlobalNetworkPolicy/policy1")
+	defTierDenyIngressNFLOGPrefix    = toprefix("DPI0|GlobalNetworkPolicy/policy2")
+	defTierDenyEgressNFLOGPrefix     = toprefix("DPE0|GlobalNetworkPolicy/policy2")
 	defTierPolicy1AllowIngressRuleID = &calc.RuleID{
 		PolicyID: calc.PolicyID{
 			Kind:      v3.KindGlobalNetworkPolicy,
@@ -1595,22 +1600,21 @@ var _ = Describe("Conntrack Datasource", func() {
 })
 
 func policyIDStrToRuleIDParts(r *calc.RuleID) [64]byte {
-	var (
-		name  string
-		byt64 [64]byte
-	)
+	var byt64 [64]byte
 
-	if r.Namespace != "" {
-		if strings.HasPrefix(r.Name, "knp.default.") {
-			name = fmt.Sprintf("%s/%s", r.Namespace, r.Name)
-		} else {
-			name = fmt.Sprintf("%s/%s.%s", r.Namespace, r.Tier, r.Name)
-		}
-	} else {
-		name = fmt.Sprintf("%s.%s", r.Tier, r.Name)
-	}
+	// TODO: CASEY: Review this logic vs. the IDMaker.
+	// if r.Namespace != "" {
+	// 	if strings.HasPrefix(r.Name, "knp.default.") {
+	// 		name = fmt.Sprintf("%s/%s", r.Namespace, r.Name)
+	// 	} else {
+	// 		name = fmt.Sprintf("%s/%s.%s", r.Namespace, r.Tier, r.Name)
+	// 	}
+	// } else {
+	// 	name = fmt.Sprintf("%s.%s", r.Tier, r.Name)
+	// }
 
-	prefix := rules.CalculateNFLOGPrefixStr(r.Action, rules.RuleOwnerTypePolicy, r.Direction, r.Index, name)
+	id := types.PolicyID{Name: r.Name, Namespace: r.Namespace, Kind: r.Kind}
+	prefix := rules.CalculateNFLOGPrefixStr(r.Action, rules.RuleOwnerTypePolicy, r.Direction, r.Index, id)
 	copy(byt64[:], []byte(prefix))
 	return byt64
 }
@@ -2212,13 +2216,13 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			{2, data2.IngressPendingRuleIDs, tier1TierPolicy1AllowIngressRuleID},
 			{3, data2.EgressPendingRuleIDs, tier1TierPolicy1DenyEgressRuleID},
 		} {
-			Expect(ruleID.pendingRuleIDs).To(HaveLen(1), "Iteration: %s.Expected PendingRuleIDs to be updated")
-			Expect(ruleID.pendingRuleIDs[0].Name).To(Equal(ruleID.expectedRuleID.Name), "Iteration: %s.Expected policy name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Name)
-			Expect(ruleID.pendingRuleIDs[0].Tier).To(Equal(ruleID.expectedRuleID.Tier), "Iteration: %s.Expected tier name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Tier)
-			Expect(ruleID.pendingRuleIDs[0].Namespace).To(Equal(ruleID.expectedRuleID.Namespace), "Iteration: %s.Expected namespace to be: %s", ruleID.iteration, ruleID.expectedRuleID.Namespace)
-			Expect(ruleID.pendingRuleIDs[0].Action).To(Equal(ruleID.expectedRuleID.Action), "Iteration: %s.Expected action to be: %s", ruleID.iteration, ruleID.expectedRuleID.Action)
-			Expect(ruleID.pendingRuleIDs[0].Direction).To(Equal(ruleID.expectedRuleID.Direction), "Iteration: %s.Expected direction to be: %s", ruleID.iteration, ruleID.expectedRuleID.Direction)
-			Expect(ruleID.pendingRuleIDs[0].Index).To(Equal(ruleID.expectedRuleID.Index), "Iteration: %s.Expected index to be: %s", ruleID.iteration, ruleID.expectedRuleID.Index)
+			Expect(ruleID.pendingRuleIDs).To(HaveLen(1), "Iteration: %d. Expected PendingRuleIDs to be updated")
+			Expect(ruleID.pendingRuleIDs[0].Name).To(Equal(ruleID.expectedRuleID.Name), "Iteration: %d. Expected policy name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Name)
+			Expect(ruleID.pendingRuleIDs[0].Tier).To(Equal(ruleID.expectedRuleID.Tier), "Iteration: %d. Expected tier name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Tier)
+			Expect(ruleID.pendingRuleIDs[0].Namespace).To(Equal(ruleID.expectedRuleID.Namespace), "Iteration: %d. Expected namespace to be: %s", ruleID.iteration, ruleID.expectedRuleID.Namespace)
+			Expect(ruleID.pendingRuleIDs[0].Action).To(Equal(ruleID.expectedRuleID.Action), "Iteration: %d. Expected action to be: %s", ruleID.iteration, ruleID.expectedRuleID.Action)
+			Expect(ruleID.pendingRuleIDs[0].Direction).To(Equal(ruleID.expectedRuleID.Direction), "Iteration: %d. Expected direction to be: %s", ruleID.iteration, ruleID.expectedRuleID.Direction)
+			Expect(ruleID.pendingRuleIDs[0].Index).To(Equal(ruleID.expectedRuleID.Index), "Iteration: %d. Expected index to be: %s", ruleID.iteration, ruleID.expectedRuleID.Index)
 		}
 
 		// Update the policies

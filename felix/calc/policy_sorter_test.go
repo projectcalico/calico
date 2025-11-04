@@ -46,17 +46,17 @@ func TestPolKV_String(t *testing.T) {
 		{
 			name:     "nil policy",
 			kv:       PolKV{Key: model.PolicyKey{Name: "name", Namespace: "ns", Kind: "kind"}},
-			expected: "name(nil policy)",
+			expected: "kind/ns/name(nil policy)",
 		},
 		{
 			name:     "nil order",
 			kv:       PolKV{Key: model.PolicyKey{Name: "name", Kind: "kind"}, Value: &nilOrder},
-			expected: "name(default)",
+			expected: "kind/name(default)",
 		},
 		{
 			name:     "order set",
 			kv:       PolKV{Key: model.PolicyKey{Name: "name", Kind: "kind"}, Value: &policyMetadata{Order: 10.5, Tier: "default"}},
-			expected: "name(10.5)",
+			expected: "kind/name(10.5)",
 		},
 	}
 

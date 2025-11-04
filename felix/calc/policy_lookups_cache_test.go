@@ -15,6 +15,8 @@
 package calc_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -50,9 +52,9 @@ var (
 			{Action: "deny"},
 		},
 	}
-	prefix_gnp1_t1_i0A = toprefix("API0|policy-1.2.3")
+	prefix_gnp1_t1_i0A = toprefix("API0|GlobalNetworkPolicy/policy-1.2.3")
 	ruleID_gnp1_t1_i0A = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 0, rules.RuleDirIngress, rules.RuleActionAllow)
-	prefix_gnp1_t1_e0D = toprefix("DPE0|policy-1.2.3")
+	prefix_gnp1_t1_e0D = toprefix("DPE0|GlobalNetworkPolicy/policy-1.2.3")
 	ruleID_gnp1_t1_e0D = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
 
 	gnp1_t1_4i2e_key = model.PolicyKey{
@@ -70,15 +72,15 @@ var (
 	}
 	// prefix_gnp1_t1_i0A defined above
 	// ruleID_gnp1_t1_i0A defined above
-	prefix_gnp1_t1_i1D = toprefix("DPI1|policy-1.2.3")
+	prefix_gnp1_t1_i1D = toprefix("DPI1|GlobalNetworkPolicy/policy-1.2.3")
 	ruleID_gnp1_t1_i1D = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 1, rules.RuleDirIngress, rules.RuleActionDeny)
-	prefix_gnp1_t1_i2N = toprefix("PPI2|policy-1.2.3")
+	prefix_gnp1_t1_i2N = toprefix("PPI2|GlobalNetworkPolicy/policy-1.2.3")
 	ruleID_gnp1_t1_i2N = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 2, rules.RuleDirIngress, rules.RuleActionPass)
-	prefix_gnp1_t1_i3P = toprefix("PPI3|policy-1.2.3")
+	prefix_gnp1_t1_i3P = toprefix("PPI3|GlobalNetworkPolicy/policy-1.2.3")
 	ruleID_gnp1_t1_i3P = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 3, rules.RuleDirIngress, rules.RuleActionPass)
-	prefix_gnp1_t1_e0A = toprefix("APE0|policy-1.2.3")
+	prefix_gnp1_t1_e0A = toprefix("APE0|GlobalNetworkPolicy/policy-1.2.3")
 	ruleID_gnp1_t1_e0A = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 0, rules.RuleDirEgress, rules.RuleActionAllow)
-	prefix_gnp1_t1_e1A = toprefix("APE1|policy-1.2.3")
+	prefix_gnp1_t1_e1A = toprefix("APE1|GlobalNetworkPolicy/policy-1.2.3")
 	ruleID_gnp1_t1_e1A = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 1, rules.RuleDirEgress, rules.RuleActionAllow)
 
 	// NetworkPolicy namespace-1/policy-2
@@ -93,7 +95,7 @@ var (
 			{Action: "allow"},
 		},
 	}
-	prefix_np1_t1_e0A = toprefix("APE0|namespace-1/policy-2")
+	prefix_np1_t1_e0A = toprefix("APE0|NetworkPolicy/namespace-1/policy-2")
 	ruleID_np1_t1_e0A = NewRuleID(v3.KindNetworkPolicy, "tier-1", "policy-2", "namespace-1", 0, rules.RuleDirEgress, rules.RuleActionAllow)
 
 	// K8s NetworkPolicy namespace-1/knp.default.policy-1.1
@@ -108,7 +110,7 @@ var (
 			{Action: "deny"},
 		},
 	}
-	prefix_knp1_t1_i0D = toprefix("DPI0|namespace-1/knp.default.policy-1.1.1.1")
+	prefix_knp1_t1_i0D = toprefix("DPI0|Kuber_5HwCRltkQrn3nPrjux75x7ANb4A_vQNoCNkhOgMmo_cy-1.1.1.1")
 	ruleID_knp1_t1_i0D = NewRuleID(model.KindKubernetesNetworkPolicy, "default", "knp.default.policy-1.1.1.1", "namespace-1", 0, rules.RuleDirIngress, rules.RuleActionDeny)
 
 	// K8s AdminNetworkPolicy kanp.adminnetworkpolicy.policy-1.1
@@ -122,7 +124,7 @@ var (
 			{Action: "deny"},
 		},
 	}
-	prefix_kanp1_t1_i0D = toprefix("DPI0|kanp.adminnetworkpolicy.policy-1.1.1.1")
+	prefix_kanp1_t1_i0D = toprefix("DPI0|Kuber_raaadhPTKp108i_R7hSe0X7mpTEWhRZE2lw31vdE2_cy-1.1.1.1")
 	ruleID_kanp1_t1_i0D = NewRuleID(
 		model.KindKubernetesAdminNetworkPolicy,
 		"adminnetworkpolicy",
@@ -144,7 +146,7 @@ var (
 			{Action: "deny"},
 		},
 	}
-	prefix_kbanp1_t1_i0D = toprefix("DPI0|kbanp.baselineadminnetworkpolicy.policy-1.1.1.1")
+	prefix_kbanp1_t1_i0D = toprefix("DPI0|Kuber_82xgyGw4Tyc_IURL0Eife92ILwtEdPEzsM3lgzvtm_cy-1.1.1.1")
 	ruleID_kbanp1_t1_i0D = NewRuleID(
 		model.KindKubernetesBaselineAdminNetworkPolicy,
 		"baselineadminnetworkpolicy",
@@ -218,7 +220,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 			c := "Querying prefix " + string(prefix[:]) + "\n"
 			pc.OnPolicyActive(key, pol)
 			rid := pc.GetRuleIDFromNFLOGPrefix(prefix)
-			Expect(rid).NotTo(BeNil(), c+pc.Dump())
+			Expect(rid).NotTo(BeNil(), c+pc.Dump(), fmt.Sprintf("Couldn't find prefix: %s", prefix))
 			Expect(*rid).To(Equal(*expectedRuleID))
 
 			// Send a policy delete and check that the entry is not in the cache
@@ -399,7 +401,7 @@ var _ = Describe("RuleID tests", func() {
 		Entry("Namespaced network policy", v3.KindNetworkPolicy, "default", "np-1", "ns1", 0, rules.RuleDirIngress, rules.RuleActionAllow, "default|ns1/np-1|allow"),
 		Entry("Namespaced network policy in non default tier", v3.KindNetworkPolicy, "netsec", "np-2", "ns2", 0, rules.RuleDirIngress, rules.RuleActionAllow, "netsec|ns2/np-2|allow"),
 		Entry("Kubernetes network policy", model.KindKubernetesNetworkPolicy, "default", "knp.default.allow.all", "test", 0, rules.RuleDirIngress, rules.RuleActionAllow, "default|test/knp.default.allow.all|allow"),
-		Entry("Profile", "", "", "kns.ns3", "ns3", 0, rules.RuleDirIngress, rules.RuleActionAllow, "__PROFILE__|ns3/kns.ns3|allow"),
+		Entry("Profile", "", "", "kns.ns3", "ns3", 0, rules.RuleDirIngress, rules.RuleActionAllow, "__PROFILE__|__PROFILE__.kns.ns3|allow"),
 
 		Entry("Staged Global network policy", v3.KindStagedGlobalNetworkPolicy, "default", "gnp-1", "", 0, rules.RuleDirIngress, rules.RuleActionAllow, "default|default.staged:gnp-1|allow"),
 		Entry("Staged Global network policy in non default tier", v3.KindStagedGlobalNetworkPolicy, "tier-1", "gnp-2", "", 2, rules.RuleDirEgress, rules.RuleActionPass, "tier-1|tier-1.staged:gnp-2|pass"),

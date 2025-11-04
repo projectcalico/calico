@@ -323,11 +323,17 @@ func (p *PolKV) String() string {
 		}
 	}
 
-	// For uniqueness, include kind and namespace if present.
-	if p.Key.Namespace != "" {
-		return fmt.Sprintf("%s/%s/%s(%s)", p.Key.Kind, p.Key.Namespace, p.Key.Name, orderStr)
+	var parts []string
+	if p.Key.Kind != "" {
+		parts = append(parts, p.Key.Kind)
 	}
-	return fmt.Sprintf("%s/%s(%s)", p.Key.Kind, p.Key.Name, orderStr)
+	if p.Key.Namespace != "" {
+		parts = append(parts, p.Key.Namespace)
+	}
+	if p.Key.Name != "" {
+		parts = append(parts, p.Key.Name)
+	}
+	return fmt.Sprintf("%s(%s)", strings.Join(parts, "/"), orderStr)
 }
 
 func (p *PolKV) GovernsIngress() bool {

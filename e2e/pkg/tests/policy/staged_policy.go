@@ -158,7 +158,6 @@ var _ = describe.CalicoDescribe(
 				})
 
 				framework.ConformanceIt("Validate name, tier, action", func() {
-					time.Sleep(1 * time.Hour)
 					verifyFlowCount(url, 2)
 
 					verifyFlowContainsStagedPolicy(

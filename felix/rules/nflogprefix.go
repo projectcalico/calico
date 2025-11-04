@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/felix/hashutils"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 const (
@@ -30,8 +31,8 @@ const (
 // If the total length of the prefix is greater than NFLOGPrefixMaxLength, then the first 10 chars
 // and the last 10 chars are left unchanged and the remainder is filled in with a hash of the original prefix
 // up to the max length. This allows for a reasonable stab at matching a hashed prefix with the profile or policy.
-func CalculateNFLOGPrefixStr(action RuleAction, owner RuleOwnerType, dir RuleDir, idx int, name string) string {
-	return maybeHash(fmt.Sprintf("%c%c%c%d|%s", action, owner, dir, idx, name))
+func CalculateNFLOGPrefixStr(action RuleAction, owner RuleOwnerType, dir RuleDir, idx int, id types.IDMaker) string {
+	return maybeHash(fmt.Sprintf("%c%c%c%d|%s", action, owner, dir, idx, id.ID()))
 }
 
 // CalculateEndOfTierDropNFLOGPrefixStr calculates NFLOG prefix string to use for the no-policy-match
@@ -87,8 +88,8 @@ func CalculateNoMatchProfileNFLOGPrefixStr(dir RuleDir) string {
 //	O:      the owner type: Always (P)olicy
 //	D:      the rule direction: (I)ngress or (E)gress
 //	Policy: the policy ID, consisting of the policy name, namespace, and kind.
-func CalculateNoMatchPolicyNFLOGPrefixStr(dir RuleDir, name string) string {
-	return maybeHash(fmt.Sprintf("%c%c%c|%s", RuleActionDeny, RuleOwnerTypePolicy, dir, name))
+func CalculateNoMatchPolicyNFLOGPrefixStr(dir RuleDir, id types.IDMaker) string {
+	return maybeHash(fmt.Sprintf("%c%c%c|%s", RuleActionDeny, RuleOwnerTypePolicy, dir, id.ID()))
 }
 
 func maybeHash(prefix string) string {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -174,10 +175,11 @@ func (pc *PolicyLookupsCache) updatePolicyRulesNFLOGPrefixes(key model.PolicyKey
 
 	oldPrefixes := pc.nflogPrefixesPolicy[key]
 	pc.nflogPrefixesPolicy[key] = pc.updateRulesNFLOGPrefixes(
+		&types.PolicyID{Name: key.Name, Namespace: key.Namespace, Kind: key.Kind},
 		key.Kind,
 		key.Namespace,
-		policy.Tier,
 		key.Name,
+		policy.Tier,
 		oldPrefixes,
 		policy.InboundRules,
 		policy.OutboundRules,
@@ -224,10 +226,11 @@ func (pc *PolicyLookupsCache) removePolicyRulesNFLOGPrefixes(key model.PolicyKey
 func (pc *PolicyLookupsCache) updateProfileRulesNFLOGPrefixes(key model.ProfileRulesKey, profile *model.ProfileRules) {
 	oldPrefixes := pc.nflogPrefixesProfile[key]
 	pc.nflogPrefixesProfile[key] = pc.updateRulesNFLOGPrefixes(
-		"",
+		&types.ProfileID{Name: key.Name},
 		"",
 		"",
 		key.Name,
+		"",
 		oldPrefixes,
 		profile.InboundRules,
 		profile.OutboundRules,
@@ -246,22 +249,13 @@ func (pc *PolicyLookupsCache) removeProfileRulesNFLOGPrefixes(key model.ProfileR
 // settings. This method adds any new rules and removes any obsolete rules.
 // TODO (rlb): Maybe we should do a lazy clean up of rules?
 func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
-	kind, namespace, tier, name string,
+	id types.IDMaker,
+	kind, namespace, name, tier string,
 	oldPrefixes set.Set[string],
 	ingress []model.Rule,
 	egress []model.Rule,
 ) set.Set[string] {
 	newPrefixes := set.New[string]()
-
-	// Build an ID string that identifies this policy.
-	//
-	// TODO: We are relying on the name being unique across kinds here.
-	// This is only true because we prefix the real polcicy name with special identifiers when passing
-	// to Felix. If we remove those IDs, we'll need to include the `kind` in the idStr.
-	idStr := fmt.Sprintf("%s/%s", kind, name)
-	if namespace != "" {
-		idStr = fmt.Sprintf("%s/%s/%s", kind, namespace, name)
-	}
 
 	convertAction := func(a string) rules.RuleAction {
 		switch a {
@@ -280,7 +274,7 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	}
 	for ii, rule := range ingress {
 		action := convertAction(rule.Action)
-		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirIngress, ii, idStr)
+		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirIngress, ii, id)
 		pc.addNFLogPrefixEntry(
 			prefix,
 			NewRuleID(kind, tier, name, namespace, ii, rules.RuleDirIngress, action),
@@ -289,7 +283,7 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	}
 	for ii, rule := range egress {
 		action := convertAction(rule.Action)
-		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirEgress, ii, idStr)
+		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirEgress, ii, id)
 		pc.addNFLogPrefixEntry(
 			prefix,
 			NewRuleID(kind, tier, name, namespace, ii, rules.RuleDirEgress, action),
@@ -302,14 +296,14 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	// they will be reported by the collector. The collector will only report these stats if we hit
 	// the end-of-tier pass indicating that the tier contains only staged policies.
 	if model.KindIsStaged(kind) {
-		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, idStr)
+		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, id)
 		pc.addNFLogPrefixEntry(
 			prefix,
 			NewRuleID(kind, tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
 
-		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, idStr)
+		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, id)
 		pc.addNFLogPrefixEntry(
 			prefix,
 			NewRuleID(kind, tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny),
