@@ -77,8 +77,10 @@ metadata:
   labels:
     k8s-app: tigera-operator
 rules:
-  # The tigera/operator installs CustomResourceDefinitions necessary for itself
+  # The tigera/operator needs the following permissions when configured with the --bootstrapCRDs=true
+  # argument. When specified, the tigera/operator installs CustomResourceDefinitions necessary for itself
   # and Calico more broadly to function.
+  # You can remove this permission block if your operator deployment does not use this option.
   - apiGroups:
       - apiextensions.k8s.io
     resources:
