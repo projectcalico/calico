@@ -106,7 +106,7 @@ func makeNamePart(h *PolicyHit) (string, error) {
 	var namePart string
 	switch h.Kind {
 	case PolicyKind_GlobalNetworkPolicy:
-		namePart = fmt.Sprintf("%s", h.Name)
+		namePart = h.Name
 	case PolicyKind_CalicoNetworkPolicy:
 		namePart = fmt.Sprintf("%s/%s", h.Namespace, h.Name)
 	case PolicyKind_NetworkPolicy:
