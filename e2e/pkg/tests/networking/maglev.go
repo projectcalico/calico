@@ -119,9 +119,22 @@ var _ = describe.CalicoDescribe(
 			// Enable Maglev on the same service by adding annotation
 			maglevTests.EnableMaglev()
 
-			// Test Maglev consistent hashing with the annotation for both IPv4 and IPv6
-			backendViaNode2IPv4 := maglevTests.TestMaglevConsistentHashing(extNode, false) // IPv4 test
-			backendViaNode2IPv6 := maglevTests.TestMaglevConsistentHashing(extNode, true)  // IPv6 test
+			// Set a fixed source port for consistent hashing tests
+			maglevTests.SetSourcePort(12345)
+
+			// Test Maglev consistent hashing with the annotation for both IPv4 and IPv6 using first source port
+			backendViaNode2IPv4Port1 := maglevTests.TestMaglevConsistentHashing(extNode, false) // IPv4 test with port 12345
+			backendViaNode2IPv6Port1 := maglevTests.TestMaglevConsistentHashing(extNode, true)  // IPv6 test with port 12345
+
+			// Test Maglev consistent hashing with a different source port to verify different flows can hash to different backends
+			maglevTests.SetSourcePort(23456)                                                    // Change source port
+			backendViaNode2IPv4Port2 := maglevTests.TestMaglevConsistentHashing(extNode, false) // IPv4 test with port 23456
+			backendViaNode2IPv6Port2 := maglevTests.TestMaglevConsistentHashing(extNode, true)  // IPv6 test with port 23456
+			framework.Logf("Maglev hashing with different source ports: IPv4 port 12345->%s, port 23456->%s; IPv6 port 12345->%s, port 23456->%s",
+				backendViaNode2IPv4Port1, backendViaNode2IPv4Port2, backendViaNode2IPv6Port1, backendViaNode2IPv6Port2)
+
+			// Reset source port for next tests
+			maglevTests.SetSourcePort(12345)
 
 			// Then: Remove the routes from external node to service cluster IPs via node 2
 			maglevTests.RemoveExternalNodeClientRoutes(extNode, nodeNames[1])
@@ -129,21 +142,40 @@ var _ = describe.CalicoDescribe(
 			// Add route to external node where packets to service cluster IP go to node 3
 			maglevTests.SetupExternalNodeClientRoutingToSpecificNode(extNode, nodeNames[2]) // node 3 (third node)
 
-			// Test Maglev consistent hashing again for both IPv4 and IPv6
-			backendViaNode3IPv4 := maglevTests.TestMaglevConsistentHashing(extNode, false) // IPv4 test via node 3
-			backendViaNode3IPv6 := maglevTests.TestMaglevConsistentHashing(extNode, true)  // IPv6 test via node 3
+			// Test Maglev consistent hashing again for both IPv4 and IPv6 via node 3 with first source port
+			backendViaNode3IPv4Port1 := maglevTests.TestMaglevConsistentHashing(extNode, false) // IPv4 test via node 3 with port 12345
+			backendViaNode3IPv6Port1 := maglevTests.TestMaglevConsistentHashing(extNode, true)  // IPv6 test via node 3 with port 12345
 
-			// Assert that the backend selected via node 3 is the same as that selected via node 2
-			Expect(backendViaNode3IPv4).Should(Equal(backendViaNode2IPv4),
+			// Test Maglev consistent hashing via node 3 with a different source port
+			maglevTests.SetSourcePort(23456)                                                    // Change source port
+			backendViaNode3IPv4Port2 := maglevTests.TestMaglevConsistentHashing(extNode, false) // IPv4 test via node 3 with port 23456
+			backendViaNode3IPv6Port2 := maglevTests.TestMaglevConsistentHashing(extNode, true)  // IPv6 test via node 3 with port 23456
+			framework.Logf("Maglev hashing via node 3 with different source ports: IPv4 port 12345->%s, port 23456->%s; IPv6 port 12345->%s, port 23456->%s",
+				backendViaNode3IPv4Port1, backendViaNode3IPv4Port2, backendViaNode3IPv6Port1, backendViaNode3IPv6Port2)
+
+			// Reset source port
+			maglevTests.SetSourcePort(12345)
+
+			// Assert that the backend selected via node 3 is the same as that selected via node 2 (for same source port)
+			Expect(backendViaNode3IPv4Port1).Should(Equal(backendViaNode2IPv4Port1),
 				fmt.Sprintf("Expected IPv4 backend selection to be consistent across nodes: node 2 selected %s, node 3 selected %s",
-					backendViaNode2IPv4, backendViaNode3IPv4))
+					backendViaNode2IPv4Port1, backendViaNode3IPv4Port1))
 
-			Expect(backendViaNode3IPv6).Should(Equal(backendViaNode2IPv6),
+			Expect(backendViaNode3IPv6Port1).Should(Equal(backendViaNode2IPv6Port1),
 				fmt.Sprintf("Expected IPv6 backend selection to be consistent across nodes: node 2 selected %s, node 3 selected %s",
-					backendViaNode2IPv6, backendViaNode3IPv6))
+					backendViaNode2IPv6Port1, backendViaNode3IPv6Port1))
 
-			framework.Logf("Maglev cross-node consistency verified: IPv4 backend %s and IPv6 backend %s selected consistently via nodes 2 and 3",
-				backendViaNode2IPv4, backendViaNode2IPv6)
+			// Also verify that the second source port routes to the same backend across nodes
+			Expect(backendViaNode3IPv4Port2).Should(Equal(backendViaNode2IPv4Port2),
+				fmt.Sprintf("Expected IPv4 backend selection (port 23456) to be consistent across nodes: node 2 selected %s, node 3 selected %s",
+					backendViaNode2IPv4Port2, backendViaNode3IPv4Port2))
+
+			Expect(backendViaNode3IPv6Port2).Should(Equal(backendViaNode2IPv6Port2),
+				fmt.Sprintf("Expected IPv6 backend selection (port 23456) to be consistent across nodes: node 2 selected %s, node 3 selected %s",
+					backendViaNode2IPv6Port2, backendViaNode3IPv6Port2))
+
+			framework.Logf("Maglev cross-node consistency verified for both source ports: IPv4 port 12345->%s, port 23456->%s; IPv6 port 12345->%s, port 23456->%s",
+				backendViaNode2IPv4Port1, backendViaNode2IPv4Port2, backendViaNode2IPv6Port1, backendViaNode2IPv6Port2)
 		})
 	})
 
@@ -172,9 +204,8 @@ func NewMaglevTests(f *framework.Framework) *MaglevTests {
 		maglevConfig: &MaglevConfig{
 			ServiceName:      "netexec",
 			ServicePort:      8080,
-			SourcePort:       12345, // Fixed source port for consistent hashing tests
-			NumberOfRequests: 10,    // Default number of requests for testing
-			IntervalSeconds:  1,     // Default interval between requests
+			NumberOfRequests: 10, // Default number of requests for testing
+			IntervalSeconds:  1,  // Default interval between requests
 		},
 		nodeNameToIPv4: make(map[string]string),
 		nodeNameToIPv6: make(map[string]string),
@@ -577,4 +608,10 @@ func (m *MaglevTests) TestMaglevConsistentHashing(extNode *externalnode.Client, 
 
 	framework.Logf("Maglev consistent hashing verified (%s): all %d requests consistently routed to backends: %v", ipVersion, m.maglevConfig.NumberOfRequests, uniqueBackends)
 	return backendName
+}
+
+// SetSourcePort sets the source port for subsequent requests
+func (m *MaglevTests) SetSourcePort(port int) {
+	framework.Logf("Setting source port to %d for subsequent requests", port)
+	m.maglevConfig.SourcePort = port
 }
