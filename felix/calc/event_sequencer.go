@@ -495,7 +495,8 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 	}
 }
 
-func (buf *EventSequencer) OnEndpointTierUpdate(endpointKey model.EndpointKey,
+func (buf *EventSequencer) OnEndpointTierUpdate(
+	endpointKey model.EndpointKey,
 	endpoint model.Endpoint,
 	peerData *EndpointBGPPeer,
 	filteredTiers []TierInfo,

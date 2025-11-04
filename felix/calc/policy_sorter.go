@@ -171,6 +171,10 @@ func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
 var polMetaDefaultOrder = math.Inf(1)
 
 func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
+	if policy.Tier == "" {
+		// This shouldn't happen - all policies should have a tier assigned by now.
+		logrus.WithField("policy", policy).Warn("Policy has no tier assigned")
+	}
 	m := policyMetadata{Tier: policy.Tier}
 	if policy.Order == nil {
 		m.Order = polMetaDefaultOrder
@@ -249,6 +253,14 @@ func (poc *PolicySorter) tierForPolicy(key model.PolicyKey, meta *policyMetadata
 
 func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMetadata) (dirty bool) {
 	tierName, tierInfo := poc.tierForPolicy(key, newPolicy)
+
+	if tierName == "" {
+		// Failed to find a tier name for this policy. What does that mean?
+		logrus.WithFields(logrus.Fields{
+			"policyKey": key,
+			"newPolicy": newPolicy,
+		}).Warn("Failed to find tier for policy during policy sorter update.")
+	}
 	var tiKey tierInfoKey
 	var oldPolicy *policyMetadata
 	if tierInfo != nil {

@@ -246,7 +246,10 @@ func (pc *PolicyLookupsCache) removeProfileRulesNFLOGPrefixes(key model.ProfileR
 // settings. This method adds any new rules and removes any obsolete rules.
 // TODO (rlb): Maybe we should do a lazy clean up of rules?
 func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
-	kind, namespace, tier, name string, oldPrefixes set.Set[string], ingress []model.Rule, egress []model.Rule,
+	kind, namespace, tier, name string,
+	oldPrefixes set.Set[string],
+	ingress []model.Rule,
+	egress []model.Rule,
 ) set.Set[string] {
 	newPrefixes := set.New[string]()
 
@@ -255,9 +258,9 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	// TODO: We are relying on the name being unique across kinds here.
 	// This is only true because we prefix the real polcicy name with special identifiers when passing
 	// to Felix. If we remove those IDs, we'll need to include the `kind` in the idStr.
-	idStr := name
+	idStr := fmt.Sprintf("%s/%s", kind, name)
 	if namespace != "" {
-		idStr = fmt.Sprintf("%s/%s", namespace, name)
+		idStr = fmt.Sprintf("%s/%s/%s", kind, namespace, name)
 	}
 
 	convertAction := func(a string) rules.RuleAction {
@@ -299,14 +302,14 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	// they will be reported by the collector. The collector will only report these stats if we hit
 	// the end-of-tier pass indicating that the tier contains only staged policies.
 	if model.KindIsStaged(kind) {
-		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, name)
+		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, idStr)
 		pc.addNFLogPrefixEntry(
 			prefix,
 			NewRuleID(kind, tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
 
-		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, name)
+		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, idStr)
 		pc.addNFLogPrefixEntry(
 			prefix,
 			NewRuleID(kind, tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny),
@@ -555,25 +558,34 @@ func (r *RuleID) GetDeniedPacketRuleName() string {
 }
 
 func (r *RuleID) setFlowLogPolicyName() {
-	if !r.IsNamespaced() {
-		if model.KindIsStaged(r.Kind) {
-			// Staged GlobalNetworkPolicy.
-			r.fpName = fmt.Sprintf(
-				"%s|%s.staged:%s|%s",
-				r.TierString(),
-				r.TierString(),
-				r.NameString(),
-				r.ActionString(),
-			)
-		} else {
-			// GlobalNetworkPolicy, AdminNetworkPolicy, BaselineAdminNetworkPolicy.
-			r.fpName = fmt.Sprintf(
-				"%s|%s|%s",
-				r.TierString(),
-				r.NameString(),
-				r.ActionString(),
-			)
-		}
+	if r.IsProfile() {
+		// Profile.
+		r.fpName = fmt.Sprintf(
+			"%s|%s.%s|%s",
+			ProfileTierStr,
+			ProfileTierStr,
+			r.NameString(),
+			r.ActionString(),
+		)
+	} else if r.Kind == v3.KindGlobalNetworkPolicy ||
+		r.Kind == model.KindKubernetesAdminNetworkPolicy ||
+		r.Kind == model.KindKubernetesBaselineAdminNetworkPolicy {
+		// GlobalNetworkPolicy, AdminNetworkPolicy, BaselineAdminNetworkPolicy.
+		r.fpName = fmt.Sprintf(
+			"%s|%s|%s",
+			r.TierString(),
+			r.NameString(),
+			r.ActionString(),
+		)
+	} else if r.Kind == v3.KindStagedGlobalNetworkPolicy {
+		// Staged GlobalNetworkPolicy.
+		r.fpName = fmt.Sprintf(
+			"%s|%s.staged:%s|%s",
+			r.TierString(),
+			r.TierString(),
+			r.NameString(),
+			r.ActionString(),
+		)
 	} else if r.Kind == model.KindKubernetesNetworkPolicy {
 		// Kubernetes NetworkPolicy.
 		r.fpName = fmt.Sprintf(

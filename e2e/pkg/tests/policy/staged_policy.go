@@ -158,6 +158,7 @@ var _ = describe.CalicoDescribe(
 				})
 
 				framework.ConformanceIt("Validate name, tier, action", func() {
+					time.Sleep(1 * time.Hour)
 					verifyFlowCount(url, 2)
 
 					verifyFlowContainsStagedPolicy(
@@ -352,7 +353,7 @@ func verifyPortForward(url string) {
 func verifyFlowCount(url string, count int) {
 	var response apiutil.List[whiskerv1.FlowResponse]
 
-	Eventually(func() error {
+	EventuallyWithOffset(1, func() error {
 		resp, err := http.Get(url)
 		if err != nil {
 			return err

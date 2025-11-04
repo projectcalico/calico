@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -953,6 +954,12 @@ const (
 func (m *endpointManager) groupTieredPolicy(tieredPolicies []*proto.TierInfo, filter tierGroupFilter) []rules.TierPolicyGroups {
 	var tierPolGroups []rules.TierPolicyGroups
 	for _, tierInfo := range tieredPolicies {
+		logrus.WithFields(logrus.Fields{
+			"tier":            tierInfo.Name,
+			"defaultAction":   tierInfo.DefaultAction,
+			"ingressPolicies": tierInfo.IngressPolicies,
+			"egressPolicies":  tierInfo.EgressPolicies,
+		}).Debug("CASEY: grouping tiered policies")
 		var inPols, outPols []*rules.PolicyGroup
 		if filter&includeInbound != 0 {
 			inPols = m.groupPolicies(tierInfo.Name, tierInfo.IngressPolicies, rules.PolicyDirectionInbound)
