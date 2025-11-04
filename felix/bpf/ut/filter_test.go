@@ -48,7 +48,7 @@ func TestFilter(t *testing.T) {
 			SrcPort: 1234,
 			DstPort: 666,
 		},
-		make([]byte, 36),
+		nil,
 	)
 
 	type testCase struct {
@@ -70,8 +70,8 @@ func TestFilter(t *testing.T) {
 		{"dst 1.2.3.4 and src 11.22.33.44", false},
 		{"(host 1.2.3.4 or host 5.6.7.8) and (udp port 666)", true},
 		{"(host 1.2.3.4 or host 5.6.7.8) and (udp port 1212)", false},
-		{"len >= 64", true},
-		{"len < 64", false},
+		{"len >= 20", true},
+		{"len < 20", false},
 		{"len >= 500", false},
 		{"portrange 600-700", true},
 		{"tcp portrange 600-700", false},
@@ -92,7 +92,7 @@ func TestFilter(t *testing.T) {
 		for _, tc := range link.tests {
 			t.Run(link.level+"_"+tc.expression, func(t *testing.T) {
 
-				insns, err := filter.NewStandAlone(link.typ, 64, tc.expression)
+				insns, err := filter.NewStandAlone(link.typ, 64, tc.expression, stateMap.MapFD())
 				Expect(err).NotTo(HaveOccurred())
 				fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 				Expect(err).NotTo(HaveOccurred())
@@ -123,7 +123,7 @@ func TestFilter(t *testing.T) {
 
 		t.Run(link.level+"_"+neg, func(t *testing.T) {
 
-			insns, err := filter.NewStandAlone(layers.LinkTypeEthernet, 64, neg)
+			insns, err := filter.NewStandAlone(layers.LinkTypeEthernet, 64, neg, stateMap.MapFD())
 			Expect(err).NotTo(HaveOccurred())
 			fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 			Expect(err).NotTo(HaveOccurred())
