@@ -325,8 +325,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 
 		if !bpfEnabled {
 			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			Eventually(getRuleFunc(tc.Felixes[0], "APE0|default.ep1-1-allow-all"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "APE0|default.ep1-1-allow-all"), "15s", "1s").Should(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "APE0|default.ep1-1-allow-all"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "APE0|default.ep1-1-allow-all"), "10s", "1s").Should(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
@@ -784,10 +784,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		Expect(err).NotTo(HaveOccurred())
 
 		if !bpfEnabled {
-			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
@@ -821,10 +821,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 
 		if !bpfEnabled {
 			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
@@ -855,10 +855,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 
 		if !bpfEnabled {
 			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
@@ -891,10 +891,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 
 		if !bpfEnabled {
 			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
@@ -1410,10 +1410,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		Expect(err).NotTo(HaveOccurred())
 
 		if !bpfEnabled {
-			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
@@ -1519,10 +1519,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 
 		if !bpfEnabled {
 			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
@@ -1581,10 +1581,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 
 		if !bpfEnabled {
 			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "15s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
