@@ -66,9 +66,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		infra.AddDefaultAllow()
 
 		// Create workload on host 1 (Felix0).
+		infrastructure.AssignIP("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
 		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
 		ep1_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-1", "10.65.0.1", tc.Felixes[0].Hostname, client)
 		ep2_1 = workload.Run(tc.Felixes[0], "ep2-1", "default", "10.65.0.1", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
 
@@ -76,15 +78,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		hostw.ConfigureInInfra(infra)
 
 		// Create workload on host 2 (Felix1)
+		infrastructure.AssignIP("ep1-2", "10.65.1.0", tc.Felixes[1].Hostname, client)
+		infrastructure.AssignIP("ep1-2", "dead:beef::1:0", tc.Felixes[1].Hostname, client)
 		ep1_2Opts := workload.WithIPv6Address("dead:beef::1:0")
 		ep1_2 = workload.Run(tc.Felixes[1], "ep1-2", "default", "10.65.1.0", wepPortStr, "tcp", ep1_2Opts)
 		ep1_2.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-2", "10.65.1.1", tc.Felixes[1].Hostname, client)
+		infrastructure.AssignIP("ep2-2", "dead:beef::1:1", tc.Felixes[1].Hostname, client)
 		ep2_2Opts := workload.WithIPv6Address("dead:beef::1:1")
 		ep2_2 = workload.Run(tc.Felixes[1], "ep2-2", "default", "10.65.1.1", wepPortStr, "tcp", ep2_2Opts)
 		ep2_2.ConfigureInInfra(infra)
 
-		cc = &connectivity.Checker{}
+		ensureRoutesProgrammed(tc.Felixes)
 
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
@@ -106,6 +112,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 		err := extWorkload.Start(infra)
 		Expect(err).NotTo(HaveOccurred())
+
+		cc = &connectivity.Checker{}
 	})
 
 	AfterEach(func() {
