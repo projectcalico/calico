@@ -3327,13 +3327,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
-					"bpfKubeProxyEndpointSlicesEnabled": {
-						SchemaProps: spec.SchemaProps{
-							Description: "BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF kube-proxy always accepts endpoint slices. This option will be removed in the next release.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
 					"bpfPSNATPorts": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and preferably outside the  ephemeral ranges used by common operating systems. Linux uses 32768–60999, while others mostly use the IANA defined range 49152–65535. It is not necessarily a problem if this range overlaps with the operating systems. Both ends of the range are inclusive. [Default: 20000:29999]",
