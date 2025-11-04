@@ -16,7 +16,6 @@ package calc
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -156,7 +155,7 @@ func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey m
 			// the policy resolver itself has seen the policy update (due to ordering of updates). In that case,
 			// we create a placeholder policyMetadata here. We should fix the ordering issue instead.
 			policy = policyMetadata{Tier: tier}
-			logrus.Warnf("PolicyResolver missing policy metadata for %v, creating placeholder in tier %s", policyKey, tier)
+			log.Warnf("PolicyResolver missing policy metadata for %v, creating placeholder in tier %s", policyKey, tier)
 		}
 		pr.policySorter.UpdatePolicy(policyKey, &policy)
 	}
