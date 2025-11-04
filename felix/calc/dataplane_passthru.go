@@ -116,7 +116,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			if update.Value == nil {
 				log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
 				delete(h.hostIPv6s, hostname)
-				h.callbacks.OnHostIPv6Remove(hostname)
+				h.callbacks.OnHostMetadataRemove(hostname)
 				log.WithField("update", update).Debug("Passing-through Node remove")
 				h.callbacks.OnHostMetadataRemove(hostname)
 			} else {
@@ -136,28 +136,19 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 						ip6net.IP = ip6.IP
 						bgpIp6net = ip6net
 					}
+					oldIP := h.hostIPv6s[hostname]
+					// TODO: also consider IPv4
+					if oldIP != nil && ip6.Equal(oldIP.IP) {
+						log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 address update")
+						return
+					}
+					log.WithField("update", update).Debug("Passing-through Node IPv6 address update")
+					h.hostIPv6s[hostname] = ip
 					if node.Spec.BGP.ASNumber != nil {
 						asnumber = node.Spec.BGP.ASNumber.String()
 					}
 				}
 				h.callbacks.OnHostMetadataUpdate(hostname, bgpIp4net, bgpIp6net, asnumber, node.Labels)
-				if node.Spec.BGP != nil {
-					if node.Spec.BGP.IPv6Address != "" {
-						ip, _, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
-						oldIP := h.hostIPv6s[hostname]
-						if oldIP != nil && ip.Equal(oldIP.IP) {
-							log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 address update")
-							return
-						}
-						log.WithField("update", update).Debug("Passing-through Node IPv6 address update")
-						h.hostIPv6s[hostname] = ip
-						h.callbacks.OnHostIPv6Update(hostname, ip)
-					} else if h.hostIPv6s[hostname] != nil {
-						log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
-						delete(h.hostIPv6s, hostname)
-						h.callbacks.OnHostIPv6Remove(hostname)
-					}
-				}
 
 				if h.ipv6Support && node.Spec.BGP == nil {
 					// BGP is turned off, try to get one from the node resource. This is a
@@ -180,7 +171,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 					} else if h.hostIPv6s[hostname] != nil {
 						log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
 						delete(h.hostIPv6s, hostname)
-						h.callbacks.OnHostIPv6Remove(hostname)
+						h.callbacks.OnHostMetadataRemove(hostname)
 					}
 				}
 			}
