@@ -30,7 +30,7 @@ global_job_config:
     - name: USE_PRIVATE_REGISTRY
       value: "true"
     - name: PRIVATE_REGISTRY
-      value: "quay.io/calico/"
+      value: "quay.io/"
 
 # Dimensions
 # Provisioners: aws-kubeadm, gcp-kubeadm, rancher
