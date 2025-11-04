@@ -106,9 +106,9 @@ func makeNamePart(h *PolicyHit) (string, error) {
 	var namePart string
 	switch h.Kind {
 	case PolicyKind_GlobalNetworkPolicy:
-		namePart = fmt.Sprintf("%s.%s", h.Tier, h.Name)
+		namePart = h.Name
 	case PolicyKind_CalicoNetworkPolicy:
-		namePart = fmt.Sprintf("%s/%s.%s", h.Namespace, h.Tier, h.Name)
+		namePart = fmt.Sprintf("%s/%s", h.Namespace, h.Name)
 	case PolicyKind_NetworkPolicy:
 		namePart = fmt.Sprintf("%s/knp.default.%s", h.Namespace, h.Name)
 	case PolicyKind_StagedKubernetesNetworkPolicy:
@@ -175,12 +175,14 @@ func HitFromString(s string) (*PolicyHit, error) {
 	nameParts := strings.Split(namePart, "/")
 	if len(nameParts) == 1 {
 		// No namespace, must be a global policy.
-		// Name format is "(staged:)tier.name".
+		// Name format is "(staged:)name".
 		n := nameParts[0]
 
 		if strings.Contains(n, "staged:") {
+			// StagedGlobalNetworkPolicy.
+			// Take form of "tier.staged:name", so we can trim the entire prefix off.
 			kind = PolicyKind_StagedGlobalNetworkPolicy
-			n = strings.Replace(n, "staged:", "", 1)
+			n = strings.Split(n, "staged:")[1]
 		} else if strings.HasPrefix(n, "kanp.") {
 			kind = PolicyKind_AdminNetworkPolicy
 			n = strings.TrimPrefix(n, "kanp.")
@@ -189,28 +191,23 @@ func HitFromString(s string) (*PolicyHit, error) {
 			n = strings.TrimPrefix(n, "kbanp.")
 		} else if strings.HasPrefix(n, "__PROFILE__.") {
 			kind = PolicyKind_Profile
+			n = strings.TrimPrefix(n, "__PROFILE__.")
 		} else {
 			kind = PolicyKind_GlobalNetworkPolicy
 		}
 
-		// At this point, n is "tier.name". The name may of dots in it, so
-		// we need to recombine the parts except for the tier.
-		name = strings.Join(strings.Split(n, ".")[1:], ".")
-
-		// Verify the "tier" part of "tier.name" matches the tier.
-		if strings.Split(n, ".")[0] != tier {
-			return nil, fmt.Errorf("tier does not match: %s != %s", strings.Split(n, ".")[0], tier)
-		}
+		// Assign the name after processing prefixes.
+		name = n
 	} else if len(nameParts) == 2 {
 		// Namespaced.
-		// Name format for Calico policies is "tier.(staged:)name".
+		// Name format for Calico policies is "(staged:)name".
 		// Name format for K8s policies is "(staged:)knp.default.name".
 		n := nameParts[1]
 		ns = nameParts[0]
-		if strings.HasPrefix(n, "staged:knp.") {
+		if strings.HasPrefix(n, "staged:knp.default.") {
 			// StagedKubernetesNetworkPolicy.
 			kind = PolicyKind_StagedKubernetesNetworkPolicy
-			n = strings.TrimPrefix(n, "staged:knp.")
+			n = strings.TrimPrefix(n, "staged:knp.default.")
 		} else if strings.HasPrefix(n, "knp.") {
 			// KubernetesNetworkPolicy.
 			kind = PolicyKind_NetworkPolicy
@@ -218,23 +215,18 @@ func HitFromString(s string) (*PolicyHit, error) {
 		} else {
 			// This is either a Calico NetworkPolicy or Calico StagedNetworkPolicy.
 			if strings.Contains(n, "staged:") {
+				// Calico StagedNetworkPolicy.
+				// Take form of "tier.staged:name", so we can trim the entire prefix off.
 				kind = PolicyKind_StagedNetworkPolicy
-				n = strings.Replace(n, "staged:", "", 1)
+				n = strings.Split(n, "staged:")[1]
 			} else {
 				// Calico NetworkPolicy.
-				// Name format is already "tier.name".
 				kind = PolicyKind_CalicoNetworkPolicy
 			}
 		}
 
-		// At this point, n is "tier.name". The name may of dots in it, so
-		// we need to recombine the parts except for the tier.
-		name = strings.Join(strings.Split(n, ".")[1:], ".")
-
-		// Verify the "tier" part of "tier.name" matches the tier.
-		if strings.Split(n, ".")[0] != tier {
-			return nil, fmt.Errorf("tier does not match: %s != %s", strings.Split(n, ".")[0], tier)
-		}
+		// Assign the name after processing prefixes.
+		name = n
 	}
 
 	// Verify the name is valid.
