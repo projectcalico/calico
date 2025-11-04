@@ -62,6 +62,7 @@ const OmniRadioList: React.FC<OmniInternalListComponentProps> = forwardRef(
                                         isTruncated
                                         maxWidth='240px'
                                         title={option.label}
+                                        fontSize='sm'
                                     >
                                         {option.label}
                                     </Text>

@@ -38,3 +38,8 @@ export type UniqueFlowLogs = {
 export type StreamFilters = Partial<Record<StreamFilterKey, string>>;
 
 export type FilterHintValues = Record<FilterHintKey, string[]>;
+
+export const ReporterLabels = {
+    src: 'Source',
+    dst: 'Destination',
+} as const;

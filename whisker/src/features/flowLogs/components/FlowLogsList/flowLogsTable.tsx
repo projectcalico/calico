@@ -1,6 +1,6 @@
 import { CellProps, Row } from 'react-table';
 import { DataTable } from '@/libs/tigera/ui-components/components/common';
-import { FlowLog } from '@/types/render';
+import { FlowLog, ReporterLabels } from '@/types/render';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
 import { AddIcon } from '@chakra-ui/icons';
 import { Button, Icon, Tooltip } from '@chakra-ui/react';
@@ -114,6 +114,11 @@ export const getStandardColumns = (): Column[] => [
         minWidth: 20,
         accessor: 'reporter',
         checked: true,
+        Cell: ({ row }: CellProps<FlowLog>) => {
+            const { reporter } = row.original;
+
+            return ReporterLabels[reporter as keyof typeof ReporterLabels];
+        },
     },
 ];
 

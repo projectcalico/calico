@@ -168,7 +168,7 @@ const FlowLogsPage: React.FC = () => {
                             fetchFilter(filterParam, null)
                         }
                         onMultiChange={handleMultiChange}
-                        selectedValues={urlFilterParams}
+                        selectedValues={filterHintValues}
                         startTime={startTime}
                     />
                 </Flex>

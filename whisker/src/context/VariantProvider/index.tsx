@@ -7,7 +7,7 @@ export const useVariant = <T extends string = string>(): T =>
 
 type VariantProviderProps = {
     children: React.ReactNode;
-    variant: string;
+    variant?: string;
 };
 
 const VariantProvider: React.FC<VariantProviderProps> = ({

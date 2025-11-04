@@ -8,7 +8,7 @@ import {
 import { iconButtonStyles, labelStyles } from './styles';
 
 type ClearableFormLabelProps = {
-    showClearButton: boolean;
+    showClearButton?: boolean;
     onClear: () => void;
     clearButtonAriaLabel: string;
 } & FormLabelProps;

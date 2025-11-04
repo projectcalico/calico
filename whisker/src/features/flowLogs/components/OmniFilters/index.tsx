@@ -91,7 +91,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                 onResetVisible={onReset}
             >
                 <PolicyOmniFilter
-                    key='policy-omni-filter-v2'
+                    key='policy-omni-filter'
                     onChange={onMultiChange}
                     filterId={CustomOmniFilterKeys.policy}
                     filterLabel={
