@@ -16,6 +16,8 @@ rules:
       - get
       - list
       - watch
+      # The create permission can be omitted if you are not using the --bootstrapCRDs=true
+      # feature flag to create CRDs in the cluster.
       - create
   # We only allow update access to our own CRDs.
   - apiGroups:
