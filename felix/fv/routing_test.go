@@ -1078,10 +1078,8 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions.IPIPMode = ipipMode
 	topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.VXLANMode = api.VXLANModeNever
-	topologyOptions.SimulateBIRDRoutes = false
 	topologyOptions.EnableIPv6 = enableIPv6
 	topologyOptions.FelixLogSeverity = "Debug"
-	topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
@@ -1118,4 +1116,33 @@ func allHostsIPSetSize(felixes []*infrastructure.Felix, ipipMode api.IPIPMode) i
 
 func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
 	return ipipMode != api.IPIPModeAlways || routeSource != "WorkloadIPs"
+}
+
+func ensureRoutesProgrammed(felixes []*infrastructure.Felix) {
+	for _, felix := range felixes {
+		ensureFelixRoutesProgrammed(felix)
+	}
+}
+
+func ensureFelixRoutesProgrammed(felix *infrastructure.Felix) {
+	routesExist := func() bool {
+		cmdv4 := []string{"ip", "route", "show"}
+		outv4, err := felix.ExecOutput(cmdv4...)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check for the default route protocol used in Felix or Calico vxlan devices.
+		if strings.Contains(outv4, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
+			strings.Contains(outv4, dataplanedefs.VXLANIfaceNameV4) {
+			return true
+		}
+
+		cmdv6 := []string{"ip", "-6", "route", "show"}
+		outv6, err := felix.ExecOutput(cmdv6...)
+		Expect(err).NotTo(HaveOccurred())
+		// Check for the default route protocol used in Felix or Calico vxlan devices.
+		return strings.Contains(outv6, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
+			strings.Contains(outv6, dataplanedefs.VXLANIfaceNameV6)
+	}
+	EventuallyWithOffset(2, routesExist, "1m", "1s").Should(BeTrue())
+	ConsistentlyWithOffset(2, routesExist, "3s", "1s").Should(BeTrue())
 }
