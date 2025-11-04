@@ -1024,12 +1024,6 @@ spec:
                     if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
                     Felix will not modify the JIT hardening setting. [Default: Auto]
                   type: string
-                bpfKubeProxyEndpointSlicesEnabled:
-                  description: |-
-                    BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
-                    kube-proxy always accepts endpoint slices. This option will be removed in
-                    the next release.
-                  type: boolean
                 bpfKubeProxyHealthzPort:
                   description: |-
                     BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
