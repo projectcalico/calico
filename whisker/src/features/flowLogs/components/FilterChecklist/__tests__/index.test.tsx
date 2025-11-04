@@ -134,10 +134,10 @@ jest.mock('@/hooks', () => ({
 describe('<FilterChecklist />', () => {
     const defaultProps = {
         testId: 'test-filter',
-        filterId: 'policyV2Tier' as const,
+        filterId: 'policyTier' as const,
         label: 'Policy Filter',
         selectedValues: ['filter-value-1'],
-        filterQuery: { policyV2Tier: ['filter-value-1'] } as any,
+        filterQuery: { policyTier: ['filter-value-1'] } as any,
         onChange: jest.fn(),
         onClear: jest.fn(),
     };
@@ -228,7 +228,7 @@ describe('<FilterChecklist />', () => {
 
         // The first call should be the selection
         expect(onChangeMock).toHaveBeenNthCalledWith(1, {
-            filterId: 'policyV2Tier',
+            filterId: 'policyTier',
             filterLabel: 'Policy Filter',
             operator: undefined,
             filters: [
@@ -244,7 +244,7 @@ describe('<FilterChecklist />', () => {
         // Let's check what actually happens
         expect(onChangeMock).toHaveBeenCalledTimes(2);
         expect(onChangeMock).toHaveBeenNthCalledWith(2, {
-            filterId: 'policyV2Tier',
+            filterId: 'policyTier',
             filterLabel: 'Policy Filter',
             operator: undefined,
             filters: [
@@ -271,7 +271,7 @@ describe('<FilterChecklist />', () => {
 
         await user.click(screen.getByRole('button', { name: 'Clear' }));
 
-        expect(onClearMock).toHaveBeenCalledWith('policyV2Tier');
+        expect(onClearMock).toHaveBeenCalledWith('policyTier');
     });
 
     it('disables clear button when no filters are selected', () => {
@@ -381,7 +381,7 @@ describe('<FilterChecklist />', () => {
         await user.click(createButton);
 
         expect(onChangeMock).toHaveBeenCalledWith({
-            filterId: 'policyV2Tier',
+            filterId: 'policyTier',
             filterLabel: 'Policy Filter',
             operator: undefined,
             filters: [{ label: 'new-filter', value: 'new-filter' }],

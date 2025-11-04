@@ -103,17 +103,16 @@ export type FlowsFilterValue =
     | undefined;
 
 export type FlowsFilter = Partial<{
-    policies: { name: FlowsFilterQuery }[];
     source_names: FlowsFilterQuery[];
     dest_names: FlowsFilterQuery[];
     source_namespaces: FlowsFilterQuery[];
     dest_namespaces: FlowsFilterQuery[];
     protocols: FlowsFilterQuery[];
     dest_ports: FlowsFilterQuery[];
-    policiesV2: FlowsFilterQuery[];
-    policiesV2Namespaces: FlowsFilterQuery[];
-    policyV2Tiers: FlowsFilterQuery[];
-    policyV2Kinds: FlowsFilterQuery[];
+    policies: FlowsFilterQuery[];
+    policy_namespaces: FlowsFilterQuery[];
+    policy_tiers: FlowsFilterQuery[];
+    policy_kinds: FlowsFilterQuery[];
     reporters: FlowsFilterQuery[];
     actions: FlowsFilterQuery[];
     staged_actions: FlowsFilterQuery[];

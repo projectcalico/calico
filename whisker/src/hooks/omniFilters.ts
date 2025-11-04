@@ -92,7 +92,6 @@ export const useOmniFilterData = (): [
     (filterParam: DataListOmniFilterParam, query: string | null) => void,
 ] => {
     const dataQueries = {
-        policy: useOmniFilterQuery(ListOmniFilterKeys.policy),
         source_namespace: useOmniFilterQuery(
             ListOmniFilterKeys.source_namespace,
         ),
@@ -110,7 +109,6 @@ export const useOmniFilterData = (): [
 
     return [
         {
-            policy: dataQueries.policy.data,
             source_namespace: dataQueries.source_namespace.data,
             dest_namespace: dataQueries.dest_namespace.data,
             source_name: dataQueries.source_name.data,

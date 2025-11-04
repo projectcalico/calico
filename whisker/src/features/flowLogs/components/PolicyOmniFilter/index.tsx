@@ -60,10 +60,10 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
 
     const onClearFilter = (onClose: () => void) => {
         onChange({
-            policyV2: [],
-            policyV2Namespace: [],
-            policyV2Tier: [],
-            policyV2Kind: [],
+            policy: [],
+            policyNamespace: [],
+            policyTier: [],
+            policyKind: [],
         });
         onClose();
     };
@@ -78,7 +78,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
             {({ onClose }) => (
                 <>
                     <OmniFilterTrigger
-                        label={OmniFilterProperties[FilterKey.policyV2].label}
+                        label={OmniFilterProperties[FilterKey.policy].label}
                         isDisabled={false}
                         testId={testId}
                         onClick={() => setValues(selectedValues)}
@@ -87,7 +87,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                             <Flex>
                                 <Text>
                                     {
-                                        OmniFilterProperties[FilterKey.policyV2]
+                                        OmniFilterProperties[FilterKey.policy]
                                             .label
                                     }
                                 </Text>
@@ -100,7 +100,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                     <OmniFilterContent width='600px'>
                         <OmniFilterBody p={0}>
                             <FilterTabs
-                                filterId={FilterKey.policyV2}
+                                filterId={FilterKey.policy}
                                 values={values}
                                 filterQuery={filterQuery}
                                 onChange={handleChange}

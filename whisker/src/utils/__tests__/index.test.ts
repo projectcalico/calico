@@ -12,12 +12,11 @@ describe('transformToFilterHintsQuery', () => {
                     dest_namespace: [],
                     source_name: [],
                     source_namespace: [],
-                    policy: [],
-                    policyV2: [],
-                    policyV2Namespace: [],
-                    policyV2Tier: [],
-                    policyV2Kind: [],
                     reporter: [],
+                    policy: [],
+                    policyNamespace: [],
+                    policyTier: [],
+                    policyKind: [],
                 },
                 ListOmniFilterKeys.dest_namespace,
                 searchText,
@@ -30,7 +29,7 @@ describe('transformToFilterHintsQuery', () => {
         );
     });
 
-    it('should policy filters', () => {
+    it('should transform policy filters', () => {
         const policy = 'policy-1';
         expect(
             transformToFlowsFilterQuery({
@@ -39,42 +38,40 @@ describe('transformToFilterHintsQuery', () => {
                 source_name: [],
                 source_namespace: [],
                 policy: [policy],
-                policyV2: [],
-                policyV2Namespace: [],
-                policyV2Tier: [],
-                policyV2Kind: [],
+                policyNamespace: [],
+                policyTier: [],
+                policyKind: [],
                 reporter: [],
             }),
         ).toEqual(
             JSON.stringify({
-                policies: [{ name: { type: 'Exact', value: policy } }],
+                policies: [{ type: 'Exact', value: policy }],
             }),
         );
     });
 
-    it('should policy search filter', () => {
-        const policy = 'policy-1';
+    it('should transform dest name search filter', () => {
+        const destName = 'dest-1';
         const searchText = 'search';
         expect(
             transformToFlowsFilterQuery(
                 {
-                    dest_name: [],
+                    dest_name: [destName],
                     dest_namespace: [],
                     source_name: [],
                     source_namespace: [],
-                    policy: [policy],
-                    policyV2: [],
-                    policyV2Namespace: [],
-                    policyV2Tier: [],
-                    policyV2Kind: [],
+                    policy: [],
+                    policyNamespace: [],
+                    policyTier: [],
+                    policyKind: [],
                     reporter: [],
                 },
-                ListOmniFilterKeys.policy,
+                ListOmniFilterKeys.dest_name,
                 searchText,
             ),
         ).toEqual(
             JSON.stringify({
-                policies: [{ name: { type: 'Fuzzy', value: searchText } }],
+                dest_names: [{ type: 'Fuzzy', value: searchText }],
             }),
         );
     });

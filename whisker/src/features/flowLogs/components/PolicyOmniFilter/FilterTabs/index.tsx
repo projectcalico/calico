@@ -18,10 +18,10 @@ import React from 'react';
 import FilterChecklist from '../../FilterChecklist';
 
 const filters = [
-    FilterKey.policyV2,
-    FilterKey.policyV2Namespace,
-    FilterKey.policyV2Tier,
-    FilterKey.policyV2Kind,
+    FilterKey.policy,
+    FilterKey.policyNamespace,
+    FilterKey.policyTier,
+    FilterKey.policyKind,
 ] as const;
 export type PolicyFilters = (typeof filters)[number];
 

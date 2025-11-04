@@ -119,11 +119,11 @@ describe('<OmniFilters />', () => {
         const mockOnChange = jest.fn();
         render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
 
-        const omniFilter = within(screen.getByTestId('Policy'));
+        const omniFilter = within(screen.getByTestId('Source'));
         fireEvent.click(omniFilter.getByText('on clear'));
 
         expect(mockOnChange).toHaveBeenCalledWith({
-            filterId: 'policy',
+            filterId: 'source_name',
             filterLabel: '',
             filters: [],
             operator: undefined,
@@ -138,16 +138,16 @@ describe('<OmniFilters />', () => {
                 onRequestFilterData={mockOnRequestFilterData}
                 omniFilterData={{
                     ...defaultProps.omniFilterData,
-                    policy: { filters: null, isLoading: false },
+                    source_name: { filters: null, isLoading: false },
                 }}
             />,
         );
 
-        const omniFilter = within(screen.getByTestId('Policy'));
+        const omniFilter = within(screen.getByTestId('Source'));
         fireEvent.click(omniFilter.getByText('on ready'));
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'policy',
+            filterParam: 'source_name',
             searchOption: '',
         });
     });
@@ -161,16 +161,19 @@ describe('<OmniFilters />', () => {
             />,
         );
 
-        const omniFilter = within(screen.getByTestId('Policy'));
-        fireEvent.click(omniFilter.getByText('on search'));
+        const omniFilter = within(screen.getByTestId('Destination'));
+        act(() => {
+            fireEvent.click(omniFilter.getByText('on search'));
+            jest.advanceTimersByTime(1000);
+        });
 
-        jest.advanceTimersByTime(1000);
-        fireEvent.click(omniFilter.getByText('on search'));
-
-        jest.advanceTimersByTime(1000);
+        act(() => {
+            fireEvent.click(omniFilter.getByText('on search'));
+            jest.advanceTimersByTime(1000);
+        });
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'policy',
+            filterParam: 'dest_name',
             searchOption: 'search-criteria',
         });
     });
@@ -184,11 +187,11 @@ describe('<OmniFilters />', () => {
             />,
         );
 
-        const omniFilter = within(screen.getByTestId('Policy'));
+        const omniFilter = within(screen.getByTestId('Destination'));
         fireEvent.click(omniFilter.getByText('on clear search'));
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'policy',
+            filterParam: 'dest_name',
             searchOption: '',
         });
     });
@@ -202,10 +205,10 @@ describe('<OmniFilters />', () => {
             />,
         );
 
-        const omniFilter = within(screen.getByTestId('Policy'));
+        const omniFilter = within(screen.getByTestId('Source'));
         fireEvent.click(omniFilter.getByText('request more'));
 
-        expect(mockOnRequestNextPage).toHaveBeenCalledWith('policy');
+        expect(mockOnRequestNextPage).toHaveBeenCalledWith('source_name');
     });
 
     it('should call onMultiChange when port/ protocol changes', () => {

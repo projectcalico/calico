@@ -63,21 +63,21 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
     const debounce = useDebouncedCallback();
     const [isLoading, setIsLoading] = React.useState(false);
 
-    const policyV2Filters = React.useMemo(
+    const policyFilters = React.useMemo(
         () =>
             [
-                selectedValues.policyV2,
-                selectedValues.policyV2Namespace,
-                selectedValues.policyV2Tier,
-                selectedValues.policyV2Kind,
+                selectedValues.policy,
+                selectedValues.policyNamespace,
+                selectedValues.policyTier,
+                selectedValues.policyKind,
             ]
                 .filter(Boolean)
                 .flat() as string[],
         [
-            selectedValues.policyV2?.length,
-            selectedValues.policyV2Namespace?.length,
-            selectedValues.policyV2Tier?.length,
-            selectedValues.policyV2Kind?.length,
+            selectedValues.policy?.length,
+            selectedValues.policyNamespace?.length,
+            selectedValues.policyTier?.length,
+            selectedValues.policyKind?.length,
         ],
     );
 
@@ -93,17 +93,17 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                 <PolicyOmniFilter
                     key='policy-omni-filter-v2'
                     onChange={onMultiChange}
-                    filterId={CustomOmniFilterKeys.policyV2}
+                    filterId={CustomOmniFilterKeys.policy}
                     filterLabel={
-                        OmniFilterProperties[OmniFilterKeys.policyV2].label
+                        OmniFilterProperties[OmniFilterKeys.policy].label
                     }
                     selectedValues={{
-                        policyV2: selectedValues.policyV2,
-                        policyV2Namespace: selectedValues.policyV2Namespace,
-                        policyV2Tier: selectedValues.policyV2Tier,
-                        policyV2Kind: selectedValues.policyV2Kind,
+                        policy: selectedValues.policy,
+                        policyNamespace: selectedValues.policyNamespace,
+                        policyTier: selectedValues.policyTier,
+                        policyKind: selectedValues.policyKind,
                     }}
-                    selectedFilters={policyV2Filters}
+                    selectedFilters={policyFilters}
                     filterQuery={selectedValues}
                 />
 

@@ -45,29 +45,16 @@ jest.mock('../../../FilterChecklist', () => {
 
 describe('<FilterTabs />', () => {
     const defaultProps = {
-        filterId: FilterKey.policyV2,
+        filterId: FilterKey.policy,
         values: {
-            [FilterKey.policyV2]: ['policy1', 'policy2'],
-            [FilterKey.policyV2Namespace]: ['ns1'],
-            [FilterKey.policyV2Tier]: [],
-            [FilterKey.policyV2Kind]: ['kind1', 'kind2', 'kind3'],
-            // Add other required FilterKey properties with empty arrays
-            [FilterKey.policy]: [],
-            [FilterKey.source_name]: [],
-            [FilterKey.source_namespace]: [],
-            [FilterKey.dest_name]: [],
-            [FilterKey.dest_namespace]: [],
-            [FilterKey.start_time]: [],
-            [FilterKey.action]: [],
-            [FilterKey.dest_port]: [],
-            [FilterKey.protocol]: [],
-            [FilterKey.reporter]: [],
-            [FilterKey.staged_action]: [],
-            [FilterKey.pending_action]: [],
-        } as Record<FilterKey, string[]>,
+            [FilterKey.policy]: ['policy1', 'policy2'],
+            [FilterKey.policyNamespace]: ['ns1'],
+            [FilterKey.policyTier]: [],
+            [FilterKey.policyKind]: ['kind1', 'kind2', 'kind3'],
+        },
         filterQuery: {
-            policyV2: ['policy1'],
-            policyV2Namespace: ['ns1'],
+            policy: ['policy1'],
+            policyNamespace: ['ns1'],
         } as any,
         onChange: jest.fn(),
         onClear: jest.fn(),
@@ -83,7 +70,7 @@ describe('<FilterTabs />', () => {
         // Check that all filter tabs are rendered with correct labels using role queries
         // The tab names include the badge numbers
         expect(
-            screen.getByRole('tab', { name: 'Policy V2 2' }),
+            screen.getByRole('tab', { name: 'Policy 2' }),
         ).toBeInTheDocument();
         expect(
             screen.getByRole('tab', { name: 'Namespace 1' }),
@@ -113,18 +100,16 @@ describe('<FilterTabs />', () => {
         const user = userEvent.setup();
         render(<FilterTabs {...defaultProps} />);
 
-        // Only the active tab (policyV2) should be visible initially
+        // Only the active tab (policy) should be visible initially
         expect(
-            screen.getByTestId('policyV2-filter-checklist'),
+            screen.getByTestId('policy-filter-checklist'),
         ).toBeInTheDocument();
 
         // Check that the correct label is passed for the active tab
-        expect(screen.getByTestId('policyV2-label')).toHaveTextContent(
-            'Policy V2',
-        );
+        expect(screen.getByTestId('policy-label')).toHaveTextContent('Policy');
 
         // Check selected values are passed correctly for the active tab
-        expect(screen.getByTestId('policyV2-selected-count')).toHaveTextContent(
+        expect(screen.getByTestId('policy-selected-count')).toHaveTextContent(
             '2',
         );
 
@@ -132,37 +117,37 @@ describe('<FilterTabs />', () => {
         const namespaceTab = screen.getByRole('tab', { name: 'Namespace 1' });
         await user.click(namespaceTab);
         expect(
-            screen.getByTestId('policyV2Namespace-filter-checklist'),
+            screen.getByTestId('policyNamespace-filter-checklist'),
         ).toBeInTheDocument();
-        expect(screen.getByTestId('policyV2Namespace-label')).toHaveTextContent(
+        expect(screen.getByTestId('policyNamespace-label')).toHaveTextContent(
             'Namespace',
         );
         expect(
-            screen.getByTestId('policyV2Namespace-selected-count'),
+            screen.getByTestId('policyNamespace-selected-count'),
         ).toHaveTextContent('1');
 
         const tierTab = screen.getByRole('tab', { name: 'Tier' });
         await user.click(tierTab);
         expect(
-            screen.getByTestId('policyV2Tier-filter-checklist'),
+            screen.getByTestId('policyTier-filter-checklist'),
         ).toBeInTheDocument();
-        expect(screen.getByTestId('policyV2Tier-label')).toHaveTextContent(
+        expect(screen.getByTestId('policyTier-label')).toHaveTextContent(
             'Tier',
         );
         expect(
-            screen.getByTestId('policyV2Tier-selected-count'),
+            screen.getByTestId('policyTier-selected-count'),
         ).toHaveTextContent('0');
 
         const kindTab = screen.getByRole('tab', { name: 'Kind 3' });
         await user.click(kindTab);
         expect(
-            screen.getByTestId('policyV2Kind-filter-checklist'),
+            screen.getByTestId('policyKind-filter-checklist'),
         ).toBeInTheDocument();
-        expect(screen.getByTestId('policyV2Kind-label')).toHaveTextContent(
+        expect(screen.getByTestId('policyKind-label')).toHaveTextContent(
             'Kind',
         );
         expect(
-            screen.getByTestId('policyV2Kind-selected-count'),
+            screen.getByTestId('policyKind-selected-count'),
         ).toHaveTextContent('3');
     });
 
@@ -184,57 +169,40 @@ describe('<FilterTabs />', () => {
         await user.click(kindTab);
 
         // Click the change button in the Kind FilterChecklist
-        const kindChangeButton = screen.getByTestId(
-            'policyV2Kind-change-button',
-        );
+        const kindChangeButton = screen.getByTestId('policyKind-change-button');
         await user.click(kindChangeButton);
 
         // Verify onChange was called with correct event
         expect(onChangeMock).toHaveBeenCalledWith({
-            filterId: 'policyV2Kind',
+            filterId: 'policyKind',
             filterLabel: 'Kind',
             operator: undefined,
             filters: [{ label: 'test', value: 'test' }],
         });
 
         // Click the clear button in the Kind FilterChecklist
-        const kindClearButton = screen.getByTestId('policyV2Kind-clear-button');
+        const kindClearButton = screen.getByTestId('policyKind-clear-button');
         await user.click(kindClearButton);
 
         // Verify onClear was called with correct filterId
-        expect(onClearMock).toHaveBeenCalledWith('policyV2Kind');
+        expect(onClearMock).toHaveBeenCalledWith('policyKind');
     });
 
     it('handles empty values correctly and shows no badges', () => {
         const emptyValuesProps = {
             ...defaultProps,
             values: {
-                [FilterKey.policyV2]: [],
-                [FilterKey.policyV2Namespace]: [],
-                [FilterKey.policyV2Tier]: [],
-                [FilterKey.policyV2Kind]: [],
-                // Add other required FilterKey properties with empty arrays
                 [FilterKey.policy]: [],
-                [FilterKey.source_name]: [],
-                [FilterKey.source_namespace]: [],
-                [FilterKey.dest_name]: [],
-                [FilterKey.dest_namespace]: [],
-                [FilterKey.start_time]: [],
-                [FilterKey.action]: [],
-                [FilterKey.dest_port]: [],
-                [FilterKey.protocol]: [],
-                [FilterKey.reporter]: [],
-                [FilterKey.staged_action]: [],
-                [FilterKey.pending_action]: [],
-            } as Record<FilterKey, string[]>,
+                [FilterKey.policyNamespace]: [],
+                [FilterKey.policyTier]: [],
+                [FilterKey.policyKind]: [],
+            },
         };
 
         render(<FilterTabs {...emptyValuesProps} />);
 
         // All tabs should be rendered using role queries
-        expect(
-            screen.getByRole('tab', { name: 'Policy V2' }),
-        ).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Policy' })).toBeInTheDocument();
         expect(
             screen.getByRole('tab', { name: 'Namespace' }),
         ).toBeInTheDocument();
@@ -248,7 +216,7 @@ describe('<FilterTabs />', () => {
         expect(screen.queryByText('3')).not.toBeInTheDocument();
 
         // FilterChecklist component for active tab should still be rendered with empty selected values
-        expect(screen.getByTestId('policyV2-selected-count')).toHaveTextContent(
+        expect(screen.getByTestId('policy-selected-count')).toHaveTextContent(
             '0',
         );
     });
