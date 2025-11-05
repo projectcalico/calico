@@ -151,6 +151,19 @@ func (o *Obj) Load() error {
 	return nil
 }
 
+// SetProgramAutoload sets whether a program should be automatically loaded.
+// When set to false, the program will not be loaded when Load() is called.
+func (o *Obj) SetProgramAutoload(progName string, autoload bool) error {
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cProgName))
+	C.bpf_set_program_autoload(o.obj, cProgName, C.bool(autoload))
+	// Check if errno was set (ENOENT means program not found)
+	if err := syscall.Errno(C.int(C.errno)); err != 0 {
+		return fmt.Errorf("error setting autoload for program %s: %w", progName, err)
+	}
+	return nil
+}
+
 // FirstMap returns first bpf map of the object.
 // Returns error if the map is nil.
 func (o *Obj) FirstMap() (*Map, error) {
