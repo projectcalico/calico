@@ -7,5 +7,7 @@
         os_image: ubuntu2204
     jobs:
       - name: Pre-flight checks
+        run:
+          when: "${FORCE_RUN} or change_in(['/'], {pipeline_file: 'track'})"
         commands:
           - make ci-preflight-checks
