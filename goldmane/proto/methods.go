@@ -183,12 +183,12 @@ func HitFromString(s string) (*PolicyHit, error) {
 			// Take form of "tier.staged:name", so we can trim the entire prefix off.
 			kind = PolicyKind_StagedGlobalNetworkPolicy
 			n = strings.Split(n, "staged:")[1]
-		} else if strings.HasPrefix(n, "kanp.") {
+		} else if strings.HasPrefix(n, "kanp.adminnetworkpolicy.") {
 			kind = PolicyKind_AdminNetworkPolicy
-			n = strings.TrimPrefix(n, "kanp.")
-		} else if strings.HasPrefix(n, "kbanp.") {
+			n = strings.TrimPrefix(n, "kanp.adminnetworkpolicy.")
+		} else if strings.HasPrefix(n, "kbanp.baselineadminnetworkpolicy.") {
 			kind = PolicyKind_BaselineAdminNetworkPolicy
-			n = strings.TrimPrefix(n, "kbanp.")
+			n = strings.TrimPrefix(n, "kbanp.baselineadminnetworkpolicy.")
 		} else if strings.HasPrefix(n, "__PROFILE__.") {
 			kind = PolicyKind_Profile
 			n = strings.TrimPrefix(n, "__PROFILE__.")
@@ -208,10 +208,10 @@ func HitFromString(s string) (*PolicyHit, error) {
 			// StagedKubernetesNetworkPolicy.
 			kind = PolicyKind_StagedKubernetesNetworkPolicy
 			n = strings.TrimPrefix(n, "staged:knp.default.")
-		} else if strings.HasPrefix(n, "knp.") {
+		} else if strings.HasPrefix(n, "knp.default.") {
 			// KubernetesNetworkPolicy.
 			kind = PolicyKind_NetworkPolicy
-			n = strings.TrimPrefix(n, "knp.")
+			n = strings.TrimPrefix(n, "knp.default.")
 		} else {
 			// This is either a Calico NetworkPolicy or Calico StagedNetworkPolicy.
 			if strings.Contains(n, "staged:") {

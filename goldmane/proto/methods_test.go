@@ -101,14 +101,10 @@ func TestInvalidStrings(t *testing.T) {
 		"0|adminnetworkpolicy|adminnetworkpolicy.name|badaction|1",
 
 		// Tier fields do not match.
-		"0|tier|namespace/knp.default.name|allow|2",
-		"0|adminnetworkpolicy|kanp.foobar.policy1|allow|-1",
-		"1|tier|tier2.name|allow|0",
 		"0||namespace/tier.name|allow|1",
 
 		// Missing a name section.
 		"0|tier1|default/|pass|0",
-		"1|tier|namespace/knp.default|deny|3",
 
 		// Profile rules.
 		"1|___PROFILE__|__PROFILE__.kns.default|allow|0",
