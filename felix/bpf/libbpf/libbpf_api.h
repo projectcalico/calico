@@ -529,5 +529,4 @@ void bpf_set_program_autoload(struct bpf_object *obj, char *progName, bool autol
 	if (ret) {
 		set_errno(ret);
 	}
-	return;
 }
