@@ -1843,21 +1843,6 @@ Felix will not modify the JIT hardening setting.
 | Default value (YAML) | `Auto` |
 | Notes | Required. | 
 
-### `BPFKubeProxyEndpointSlicesEnabled` (config file) / `bpfKubeProxyEndpointSlicesEnabled` (YAML)
-
-Deprecated and has no effect. BPF
-kube-proxy always accepts endpoint slices. This option will be removed in
-the next release.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_BPFKubeProxyEndpointSlicesEnabled` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `true` |
-| `FelixConfiguration` field | `bpfKubeProxyEndpointSlicesEnabled` (YAML) `BPFKubeProxyEndpointSlicesEnabled` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `true` |
-
 ### `BPFKubeProxyHealthzPort` (config file) / `bpfKubeProxyHealthzPort` (YAML)
 
 In BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.

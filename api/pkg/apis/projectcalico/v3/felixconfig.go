@@ -784,11 +784,6 @@ type FelixConfigurationSpec struct {
 	// The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
 	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=1,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
 
-	// BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
-	// kube-proxy always accepts endpoint slices. This option will be removed in
-	// the next release.
-	BPFKubeProxyEndpointSlicesEnabled *bool `json:"bpfKubeProxyEndpointSlicesEnabled,omitempty" validate:"omitempty"`
-
 	// BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
 	// collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and
 	// preferably outside the  ephemeral ranges used by common operating systems. Linux uses
