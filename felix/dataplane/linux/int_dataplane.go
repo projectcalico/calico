@@ -101,39 +101,53 @@ const (
 )
 
 var (
-	countDataplaneSyncErrors = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "felix_int_dataplane_failures",
-		Help: "Number of times dataplane updates failed and will be retried.",
-	})
-	countMessages = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "felix_int_dataplane_messages",
-		Help: "Number dataplane messages by type.",
-	}, []string{"type"})
-	gaugeInitialResyncApplyTime = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_int_dataplane_initial_resync_time_seconds",
-		Help: "Time in seconds that it took to do the initial resync with " +
-			"the dataplane and bring the dataplane into sync for the first time.",
-	})
-	summaryApplyTime = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "felix_int_dataplane_apply_time_seconds",
-		Help: "Time in seconds for each incremental update to the dataplane " +
-			"(after the initial resync).",
-	})
-	summaryBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "felix_int_dataplane_msg_batch_size",
-		Help: "Number of messages processed in each batch. Higher values indicate we're " +
-			"doing more batching to try to keep up.",
-	})
-	summaryIfaceBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "felix_int_dataplane_iface_msg_batch_size",
-		Help: "Number of interface state messages processed in each batch. Higher " +
-			"values indicate we're doing more batching to try to keep up.",
-	})
-	summaryAddrBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "felix_int_dataplane_addr_msg_batch_size",
-		Help: "Number of interface address messages processed in each batch. Higher " +
-			"values indicate we're doing more batching to try to keep up.",
-	})
+	countDataplaneSyncErrors = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "felix_int_dataplane_failures",
+			Help: "Number of times dataplane updates failed and will be retried.",
+		},
+	)
+	countMessages = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "felix_int_dataplane_messages",
+			Help: "Number dataplane messages by type.",
+		}, []string{"type"},
+	)
+	gaugeInitialResyncApplyTime = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "felix_int_dataplane_initial_resync_time_seconds",
+			Help: "Time in seconds that it took to do the initial resync with " +
+				"the dataplane and bring the dataplane into sync for the first time.",
+		},
+	)
+	summaryApplyTime = cprometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "felix_int_dataplane_apply_time_seconds",
+			Help: "Time in seconds for each incremental update to the dataplane " +
+				"(after the initial resync).",
+		},
+	)
+	summaryBatchSize = cprometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "felix_int_dataplane_msg_batch_size",
+			Help: "Number of messages processed in each batch. Higher values indicate we're " +
+				"doing more batching to try to keep up.",
+		},
+	)
+	summaryIfaceBatchSize = cprometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "felix_int_dataplane_iface_msg_batch_size",
+			Help: "Number of interface state messages processed in each batch. Higher " +
+				"values indicate we're doing more batching to try to keep up.",
+		},
+	)
+	summaryAddrBatchSize = cprometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "felix_int_dataplane_addr_msg_batch_size",
+			Help: "Number of interface address messages processed in each batch. Higher " +
+				"values indicate we're doing more batching to try to keep up.",
+		},
+	)
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
@@ -178,7 +192,6 @@ type Config struct {
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
 	IptablesLockFilePath           string
-	IptablesLockTimeout            time.Duration
 	IptablesLockProbeInterval      time.Duration
 	XDPRefreshInterval             time.Duration
 
@@ -438,7 +451,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 	epMarkMapper := rules.NewEndpointMarkMapper(
 		config.RulesConfig.MarkEndpoint,
-		config.RulesConfig.MarkNonCaliEndpoint)
+		config.RulesConfig.MarkNonCaliEndpoint,
+	)
 
 	// Auto-detect host MTU.
 	hostMTU, err := findHostMTU(config.MTUIfacePattern)
@@ -495,7 +509,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		InsertMode:            config.IptablesInsertMode,
 		RefreshInterval:       config.TableRefreshInterval,
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
-		LockTimeout:           config.IptablesLockTimeout,
 		LockProbeInterval:     config.IptablesLockProbeInterval,
 		BackendMode:           backendMode,
 		LookPathOverride:      config.LookPathOverride,
@@ -515,7 +528,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
 		log.Info("BPF enabled, configuring iptables/nftables layer to clean up kube-proxy's rules.")
 		iptablesOptions.ExtraCleanupRegexPattern = rules.KubeProxyInsertRuleRegex
-		iptablesOptions.HistoricChainPrefixes = append(iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...)
+		iptablesOptions.HistoricChainPrefixes = append(
+			iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...,
+		)
 	}
 
 	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
@@ -534,37 +549,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	dataplaneFeatures := featureDetector.GetFeatures()
-	var iptablesLock sync.Locker
-	if config.RulesConfig.NFTables {
-		iptablesLock = dummyLock{}
-	} else {
-		if dataplaneFeatures.RestoreSupportsLock {
-			log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
-				"iptables-restore will use its own implementation).")
-			iptablesLock = dummyLock{}
-		} else if config.IptablesLockTimeout <= 0 {
-			log.Debug("Calico implementation of iptables lock disabled (by configuration).")
-			iptablesLock = dummyLock{}
-		} else {
-			// Create the shared iptables lock.  This allows us to block other processes from
-			// manipulating iptables while we make our updates.  We use a shared lock because we
-			// actually do multiple updates in parallel (but to different tables), which is safe.
-			log.WithField("timeout", config.IptablesLockTimeout).Debug(
-				"Calico implementation of iptables lock enabled")
-			iptablesLock = iptables.NewSharedLock(
-				config.IptablesLockFilePath,
-				config.IptablesLockTimeout,
-				config.IptablesLockProbeInterval,
-			)
-		}
-	}
 
 	// iptables and nftables implementations.
 	var mangleTableV4NFT, natTableV4NFT, rawTableV4NFT, filterTableV4NFT generictables.Table
 	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
 
 	// This is required when nftables mode is configured; but also useful for cleanup in other modes.
-	nftablesV4RootTable := nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions, config.RulesConfig.NFTables)
+	nftablesV4RootTable := nftables.NewTable(
+		"calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions, config.RulesConfig.NFTables,
+	)
 
 	if config.RulesConfig.NFTables {
 		// Create nftables Table implementations.
@@ -575,10 +568,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	// Create iptables table implementations.
-	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
-	natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesNATOptions)
-	rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
-	filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+	natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
+	rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+	filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 	// Based on configuration, some of the above tables should be active and others not.
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
@@ -594,7 +587,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ipSetsV4 = nftablesV4RootTable
 
 		// Cleanup iptables.
-		cleanupTables = append(cleanupTables,
+		cleanupTables = append(
+			cleanupTables,
 			mangleTableV4IPT,
 			natTableV4IPT,
 			rawTableV4IPT,
@@ -728,7 +722,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFEnabled && bpfutils.BTFEnabled {
 			fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
 		}
-		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
+		vxlanFDB := vxlanfdb.New(
+			netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...,
+		)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
 		dp.vxlanManager = newVXLANManager(
@@ -831,11 +827,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var filterTableV6NFT, filterTableV6IPT generictables.Table
 
 	// Create nftables Table implementations for IPv6.
-	nftablesV6RootTable := nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions, config.RulesConfig.NFTables)
+	nftablesV6RootTable := nftables.NewTable(
+		"calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions, config.RulesConfig.NFTables,
+	)
 	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
 
 	// Create iptables Table implementations for IPv6.
-	filterTableV6IPT = iptables.NewTable("filter", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+	filterTableV6IPT = iptables.NewTable("filter", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 	// Select the correct table implementation based on whether we're using nftables or iptables.
 	var filterTableV6 generictables.Table
@@ -851,12 +849,19 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// BPF mode disabled, create the iptables/nftables-only managers.
 		dp.ipsetsSourceV4 = ipsetsManager
 		// TODO Connect host IP manager to BPF
-		dp.RegisterManager(newHostIPManager(
-			config.RulesConfig.WorkloadIfacePrefixes,
-			rules.IPSetIDThisHostIPs,
-			ipSetsV4,
-			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, config.RulesConfig.NFTables))
+		dp.RegisterManager(
+			newHostIPManager(
+				config.RulesConfig.WorkloadIfacePrefixes,
+				rules.IPSetIDThisHostIPs,
+				ipSetsV4,
+				config.MaxIPSetSize,
+			),
+		)
+		dp.RegisterManager(
+			newPolicyManager(
+				rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, config.RulesConfig.NFTables,
+			),
+		)
 
 		// Clean up any leftover BPF state.
 		err := bpfnat.RemoveConnectTimeLoadBalancer(true, "")
@@ -867,7 +872,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, config.RulesConfig.NFTables))
+		dp.RegisterManager(
+			newRawEgressPolicyManager(
+				rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, config.RulesConfig.NFTables,
+			),
+		)
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -888,13 +897,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	bpfMapSizeConntrackResizeSize, _ := conntrackMapSizeFromFile()
 	if bpfMapSizeConntrackResizeSize > bpfMapSizeConntrack {
-		log.Infof("Overriding bpfMapSizeConntrack (%d) with map size growth (%d)",
-			bpfMapSizeConntrack, bpfMapSizeConntrackResizeSize)
+		log.Infof(
+			"Overriding bpfMapSizeConntrack (%d) with map size growth (%d)",
+			bpfMapSizeConntrack, bpfMapSizeConntrackResizeSize,
+		)
 		bpfMapSizeConntrack = bpfMapSizeConntrackResizeSize
 	}
 
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
-	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeMaglev)
+	bpfnat.SetMapSizes(
+		config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity,
+		config.BPFMapSizeMaglev,
+	)
 	bpfroutes.SetMapSize(config.BPFMapSizeRoute)
 	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
@@ -938,19 +952,25 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ipSetIDAllocatorV4 = idalloc.New()
 
 		// Start IPv4 BPF dataplane components
-		conntrackScannerV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp)
+		conntrackScannerV4 = startBPFDataplaneComponents(
+			proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp,
+		)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
 			ipSetIDAllocatorV6 = idalloc.New()
-			conntrackScannerV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp)
+			conntrackScannerV6 = startBPFDataplaneComponents(
+				proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp,
+			)
 		}
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 
 		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) &&
 			config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
-			log.Warn("Host-networked access to services from host networked process won't work properly " +
-				"- BPFHostNetworkedNAT is disabled.")
+			log.Warn(
+				"Host-networked access to services from host networked process won't work properly " +
+					"- BPFHostNetworkedNAT is disabled.",
+			)
 		}
 
 		if config.LookupsCache != nil {
@@ -989,17 +1009,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// The above cases are invalid configuration. Revert to CTLB enabled.
 		if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
 			if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBEnabled) {
-				log.Warn("Both BPFConnectTimeLoadBalancing and BPFHostNetworkedNATWithoutCTLB are enabled. " +
-					"Disabling BPFHostNetworkedNATWithoutCTLB. " +
-					"Set BPFConnectTimeLoadBalancing=TCP if you want disable it for other protocols.")
+				log.Warn(
+					"Both BPFConnectTimeLoadBalancing and BPFHostNetworkedNATWithoutCTLB are enabled. " +
+						"Disabling BPFHostNetworkedNATWithoutCTLB. " +
+						"Set BPFConnectTimeLoadBalancing=TCP if you want disable it for other protocols.",
+				)
 				config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATDisabled)
 			}
 		} else {
 			if config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBEnabled) {
 				if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
-					log.Warnf("Access to (some) services from host may not work properly because "+
-						"BPFConnectTimeLoadBalancing is %s and BPFHostNetworkedNATWithoutCTLB is disabled",
-						config.BPFConnTimeLB)
+					log.Warnf(
+						"Access to (some) services from host may not work properly because "+
+							"BPFConnectTimeLoadBalancing is %s and BPFHostNetworkedNATWithoutCTLB is disabled",
+						config.BPFConnTimeLB,
+					)
 				}
 			}
 		}
@@ -1017,8 +1041,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 
 			// Activate the connect-time load balancer.
-			err = bpfnat.InstallConnectTimeLoadBalancer(true, config.BPFIpv6Enabled,
-				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP, bpfMaps.CommonMaps.CTLBProgramsMap)
+			err = bpfnat.InstallConnectTimeLoadBalancer(
+				true, config.BPFIpv6Enabled,
+				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP,
+				bpfMaps.CommonMaps.CTLBProgramsMap,
+			)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
@@ -1083,7 +1110,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 	}
 
-	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	linkAddrsManagerV4 := linkaddrs.New(
+		4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout,
+	)
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
@@ -1151,7 +1180,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// Add a manager for IPv4 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
 	// because it may need to tidy up some of the routing rules when disabled.
-	cryptoRouteTableWireguard := wireguard.New(config.Hostname, &config.Wireguard, 4, config.NetlinkTimeout,
+	cryptoRouteTableWireguard := wireguard.New(
+		config.Hostname, &config.Wireguard, 4, config.NetlinkTimeout,
 		config.DeviceRouteProtocol, func(publicKey wgtypes.Key) error {
 			if publicKey == zeroKey {
 				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: "", IpVersion: 4}
@@ -1181,9 +1211,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		// Define iptables table implementations for IPv6.
-		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
-		natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesNATOptions)
-		rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+		natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
+		rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 		// Select the correct table implementation based on whether we're using nftables or iptables.
 		var mangleTableV6, natTableV6, rawTableV6 generictables.Table
@@ -1196,7 +1226,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsV6 = nftablesV6RootTable
 
 			// Cleanup iptables.
-			cleanupTables = append(cleanupTables,
+			cleanupTables = append(
+				cleanupTables,
 				mangleTableV6IPT,
 				natTableV6IPT,
 				rawTableV6IPT,
@@ -1274,14 +1305,25 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ipsetsManagerV6.AddDataplane(ipSetsV6)
 		dp.RegisterManager(ipsetsManagerV6)
 		if !config.BPFEnabled {
-			dp.RegisterManager(newHostIPManager(
-				config.RulesConfig.WorkloadIfacePrefixes,
-				rules.IPSetIDThisHostIPs,
-				ipSetsV6,
-				config.MaxIPSetSize))
-			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, config.RulesConfig.NFTables))
+			dp.RegisterManager(
+				newHostIPManager(
+					config.RulesConfig.WorkloadIfacePrefixes,
+					rules.IPSetIDThisHostIPs,
+					ipSetsV6,
+					config.MaxIPSetSize,
+				),
+			)
+			dp.RegisterManager(
+				newPolicyManager(
+					rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, config.RulesConfig.NFTables,
+				),
+			)
 		} else {
-			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
+			dp.RegisterManager(
+				newRawEgressPolicyManager(
+					rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables,
+				),
+			)
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
@@ -1289,30 +1331,34 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 		}
 
-		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		linkAddrsManagerV6 := linkaddrs.New(
+			6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout,
+		)
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
-		dp.RegisterManager(newEndpointManager(
-			rawTableV6,
-			mangleTableV6,
-			filterTableV6,
-			ruleRenderer,
-			routeTableV6,
-			6,
-			epMarkMapper,
-			config.RulesConfig.KubeIPVSSupportEnabled,
-			config.RulesConfig.WorkloadIfacePrefixes,
-			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
-			"",
-			filterMapsV6,
-			config.BPFEnabled,
-			config.BPFAttachType,
-			nil,
-			callbacks,
-			config.FloatingIPsEnabled,
-			config.RulesConfig.NFTables,
-			linkAddrsManagerV6,
-		))
+		dp.RegisterManager(
+			newEndpointManager(
+				rawTableV6,
+				mangleTableV6,
+				filterTableV6,
+				ruleRenderer,
+				routeTableV6,
+				6,
+				epMarkMapper,
+				config.RulesConfig.KubeIPVSSupportEnabled,
+				config.RulesConfig.WorkloadIfacePrefixes,
+				dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+				"",
+				filterMapsV6,
+				config.BPFEnabled,
+				config.BPFAttachType,
+				nil,
+				callbacks,
+				config.FloatingIPsEnabled,
+				config.RulesConfig.NFTables,
+				linkAddrsManagerV6,
+			),
+		)
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
@@ -1327,7 +1373,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
 		// because it may need to tidy up some of the routing rules when disabled.
-		cryptoRouteTableWireguardV6 := wireguard.New(config.Hostname, &config.Wireguard, 6, config.NetlinkTimeout,
+		cryptoRouteTableWireguardV6 := wireguard.New(
+			config.Hostname, &config.Wireguard, 6, config.NetlinkTimeout,
 			config.DeviceRouteProtocol, func(publicKey wgtypes.Key) error {
 				if publicKey == zeroKey {
 					dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: "", IpVersion: 6}
@@ -1337,7 +1384,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				return nil
 			},
 			dp.loopSummarizer,
-			featureDetector)
+			featureDetector,
+		)
 		dp.wireguardManagerV6 = newWireguardManager(cryptoRouteTableWireguardV6, config, 6)
 		dp.RegisterManager(dp.wireguardManagerV6)
 	}
@@ -1377,7 +1425,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.DebugSimulateDataplaneHangAfter != 0 {
 		log.WithField("delay", config.DebugSimulateDataplaneHangAfter).Warn(
-			"Simulating a dataplane hang.")
+			"Simulating a dataplane hang.",
+		)
 		dp.debugHangC = time.After(config.DebugSimulateDataplaneHangAfter)
 	}
 
@@ -1385,8 +1434,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.Collector != nil {
 		if !config.BPFEnabled {
 			log.Debug("Stats collection is required, create nflog reader")
-			nflogrd := collector.NewNFLogReader(config.LookupsCache, 1, 2,
-				config.NfNetlinkBufSize, true)
+			nflogrd := collector.NewNFLogReader(
+				config.LookupsCache, 1, 2,
+				config.NfNetlinkBufSize, true,
+			)
 			collectorPacketInfoReader = nflogrd
 			log.Debug("Stats collection is required, create conntrack reader")
 			ctrd := collector.NewNetLinkConntrackReader(felixconfig.DefaultConntrackPollingInterval)
@@ -1726,11 +1777,13 @@ type ifaceInSync struct{}
 
 // onIfaceStateChange is our interface monitor callback.  It gets called from the monitor's thread.
 func (d *InternalDataplane) onIfaceStateChange(ifaceName string, state ifacemonitor.State, ifIndex int) {
-	log.WithFields(log.Fields{
-		"ifaceName": ifaceName,
-		"ifIndex":   ifIndex,
-		"state":     state,
-	}).Info("Linux interface state changed.")
+	log.WithFields(
+		log.Fields{
+			"ifaceName": ifaceName,
+			"ifIndex":   ifIndex,
+			"state":     state,
+		},
+	).Info("Linux interface state changed.")
 	d.ifaceUpdates <- &ifaceStateUpdate{
 		Name:  ifaceName,
 		State: state,
@@ -1760,10 +1813,12 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 	ipvsIfacePresent := state != ifacemonitor.StateNotPresent
 	ipvsSupportEnabled := d.config.RulesConfig.KubeIPVSSupportEnabled
 	if ipvsSupportEnabled != ipvsIfacePresent {
-		log.WithFields(log.Fields{
-			"ipvsIfaceState": state,
-			"ipvsSupport":    ipvsSupportEnabled,
-		}).Info("kube-proxy mode changed. Restart felix.")
+		log.WithFields(
+			log.Fields{
+				"ipvsIfaceState": state,
+				"ipvsSupport":    ipvsSupportEnabled,
+			},
+		).Info("kube-proxy mode changed. Restart felix.")
 		d.config.ConfigChangedRestartCallback()
 	}
 }
@@ -1771,10 +1826,12 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 // onIfaceAddrsChange is our interface address monitor callback.  It gets called
 // from the monitor's thread.
 func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[string]) {
-	log.WithFields(log.Fields{
-		"ifaceName": ifaceName,
-		"addrs":     addrs,
-	}).Info("Linux interface addrs changed.")
+	log.WithFields(
+		log.Fields{
+			"ifaceName": ifaceName,
+			"addrs":     addrs,
+		},
+	).Info("Linux interface addrs changed.")
 	d.ifaceUpdates <- &ifaceAddrsUpdate{
 		Name:  ifaceName,
 		Addrs: addrs,
@@ -1866,7 +1923,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 		// Handle packets for flows that pre-date the BPF programs.  The BPF program doesn't have any conntrack
 		// state for these so it allows them to fall through to iptables with a mark set.
-		inputRules = append(inputRules,
+		inputRules = append(
+			inputRules,
 			generictables.Rule{
 				Match: d.newMatch().
 					MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
@@ -1882,9 +1940,11 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				Action:  d.actions.Reject("tcp-reset"),
 			},
 			generictables.Rule{
-				Match:   d.newMatch().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-				Comment: []string{fmt.Sprintf("%s packets from unknown non-TCP flows.", d.ruleRenderer.IptablesFilterDenyAction())},
-				Action:  d.ruleRenderer.IptablesFilterDenyAction(),
+				Match: d.newMatch().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
+				Comment: []string{fmt.Sprintf(
+					"%s packets from unknown non-TCP flows.", d.ruleRenderer.IptablesFilterDenyAction(),
+				)},
+				Action: d.ruleRenderer.IptablesFilterDenyAction(),
 			},
 		)
 
@@ -1892,10 +1952,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		outputRules = append(outputRules, d.bpfMarkPreestablishedFlowsRules()...)
 
 		for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
-			fwdRules = append(fwdRules,
+			fwdRules = append(
+				fwdRules,
 				// Drop/reject packets that have come from a workload but have not been through our BPF program.
 				generictables.Rule{
-					Match:   d.newMatch().InInterface(prefix+wildcard).NotMarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
+					Match: d.newMatch().InInterface(prefix+wildcard).NotMarkMatchesWithMask(
+						tcdefs.MarkSeen, tcdefs.MarkSeenMask,
+					),
 					Action:  d.ruleRenderer.IptablesFilterDenyAction(),
 					Comment: []string{"From workload without BPF seen mark"},
 				},
@@ -1904,17 +1967,25 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			if rulesConfig.EndpointToHostAction == "ACCEPT" {
 				// Only need to worry about ACCEPT here.  Drop gets compiled into the BPF program and
 				// RETURN would be a no-op since there's nothing to RETURN from.
-				inputRules = append(inputRules, generictables.Rule{
-					Match:  d.newMatch().InInterface(prefix+wildcard).MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-					Action: d.actions.Allow(),
-				})
+				inputRules = append(
+					inputRules, generictables.Rule{
+						Match: d.newMatch().InInterface(prefix+wildcard).MarkMatchesWithMask(
+							tcdefs.MarkSeen, tcdefs.MarkSeenMask,
+						),
+						Action: d.actions.Allow(),
+					},
+				)
 			}
 
 			// Catch any workload to host packets that haven't been through the BPF program.
-			inputRules = append(inputRules, generictables.Rule{
-				Match:  d.newMatch().InInterface(prefix+wildcard).NotMarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-				Action: d.ruleRenderer.IptablesFilterDenyAction(),
-			})
+			inputRules = append(
+				inputRules, generictables.Rule{
+					Match: d.newMatch().InInterface(prefix+wildcard).NotMarkMatchesWithMask(
+						tcdefs.MarkSeen, tcdefs.MarkSeenMask,
+					),
+					Action: d.ruleRenderer.IptablesFilterDenyAction(),
+				},
+			)
 		}
 
 		if rulesConfig.EndpointToHostAction != "ACCEPT" {
@@ -1922,18 +1993,22 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			// SEEN traffic, so it was policed and accepted at a HEP. If the default INPUT
 			// chain policy was DROP, it would get dropped now, therefore an explicit accept
 			// is needed.
-			inputRules = append(inputRules, d.ruleRenderer.FilterInputChainAllowWG(t.IPVersion(), rulesConfig, d.actions.Allow())...)
+			inputRules = append(
+				inputRules, d.ruleRenderer.FilterInputChainAllowWG(t.IPVersion(), rulesConfig, d.actions.Allow())...,
+			)
 		}
 
 		if t.IPVersion() == 6 {
 			if !d.config.BPFIpv6Enabled {
 				for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
 					// In BPF ipv4 mode, drop ipv6 packets to pods.
-					fwdRules = append(fwdRules, generictables.Rule{
-						Match:   d.newMatch().OutInterface(prefix + wildcard),
-						Action:  d.ruleRenderer.IptablesFilterDenyAction(),
-						Comment: []string{"To workload, drop IPv6."},
-					})
+					fwdRules = append(
+						fwdRules, generictables.Rule{
+							Match:   d.newMatch().OutInterface(prefix + wildcard),
+							Action:  d.ruleRenderer.IptablesFilterDenyAction(),
+							Comment: []string{"To workload, drop IPv6."},
+						},
+					)
 				}
 			} else {
 				// ICMPv6 for router/neighbor soliciting are allowed towards the
@@ -1951,7 +2026,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			// add interfaces to the dispatch chain if the BPF program is in place.
 			for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
 				// Make sure iptables rules don't drop packets that we're about to process through BPF.
-				fwdRules = append(fwdRules,
+				fwdRules = append(
+					fwdRules,
 					generictables.Rule{
 						Match:   d.newMatch().OutInterface(prefix + wildcard),
 						Action:  d.actions.Jump(rules.ChainToWorkloadDispatch),
@@ -1965,7 +2041,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			// early before the destination is checked.
 			for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
 				// Make sure iptables rules don't drop packets that we're about to process through BPF.
-				fwdRules = append(fwdRules,
+				fwdRules = append(
+					fwdRules,
 					generictables.Rule{
 						Match:   d.newMatch().InInterface(prefix + wildcard),
 						Action:  d.actions.Allow(),
@@ -1973,7 +2050,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					},
 				)
 			}
-			fwdRules = append(fwdRules,
+			fwdRules = append(
+				fwdRules,
 				generictables.Rule{
 					Match:   d.newMatch().InInterface(dataplanedefs.BPFOutDev),
 					Action:  d.actions.Allow(),
@@ -1989,37 +2067,48 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 	for _, t := range d.natTables {
 		t.UpdateChains(d.ruleRenderer.StaticNATPostroutingChains(t.IPVersion()))
-		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainNATPostrouting),
-		}})
+		t.InsertOrAppendRules(
+			"POSTROUTING", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainNATPostrouting),
+			}},
+		)
 	}
 
 	for _, t := range d.rawTables {
-		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion(),
-			d.config.Wireguard.EncryptHostTraffic, d.config.BPFHostConntrackBypass,
-		))
-		t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainRawPrerouting),
-		}})
-		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainRawOutput),
-		}})
+		t.UpdateChains(
+			d.ruleRenderer.StaticBPFModeRawChains(
+				t.IPVersion(),
+				d.config.Wireguard.EncryptHostTraffic, d.config.BPFHostConntrackBypass,
+			),
+		)
+		t.InsertOrAppendRules(
+			"PREROUTING", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainRawPrerouting),
+			}},
+		)
+		t.InsertOrAppendRules(
+			"OUTPUT", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainRawOutput),
+			}},
+		)
 	}
 
 	if d.config.BPFExtToServiceConnmark != 0 {
 		mark := uint32(d.config.BPFExtToServiceConnmark)
 		for _, t := range d.mangleTables {
-			t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
-				Match: d.newMatch().MarkMatchesWithMask(
-					tcdefs.MarkSeen|mark,
-					tcdefs.MarkSeenMask|mark,
-				),
-				Comment: []string{"Mark connections with ExtToServiceConnmark"},
-				Action:  d.actions.SetConnmark(mark, mark),
-			}})
+			t.InsertOrAppendRules(
+				"PREROUTING", []generictables.Rule{{
+					Match: d.newMatch().MarkMatchesWithMask(
+						tcdefs.MarkSeen|mark,
+						tcdefs.MarkSeenMask|mark,
+					),
+					Comment: []string{"Mark connections with ExtToServiceConnmark"},
+					Action:  d.actions.SetConnmark(mark, mark),
+				}},
+			)
 		}
 	}
 }
@@ -2064,40 +2153,52 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 	for _, t := range d.rawTables {
 		rawChains := d.ruleRenderer.StaticRawTableChains(t.IPVersion())
 		t.UpdateChains(rawChains)
-		t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainRawPrerouting),
-		}})
-		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainRawOutput),
-		}})
+		t.InsertOrAppendRules(
+			"PREROUTING", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainRawPrerouting),
+			}},
+		)
+		t.InsertOrAppendRules(
+			"OUTPUT", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainRawOutput),
+			}},
+		)
 	}
 	for _, t := range d.filterTables {
 		filterChains := d.ruleRenderer.StaticFilterTableChains(t.IPVersion())
 		t.UpdateChains(filterChains)
-		t.InsertOrAppendRules("FORWARD", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainFilterForward),
-		}})
-		t.InsertOrAppendRules("INPUT", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainFilterInput),
-		}})
-		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainFilterOutput),
-		}})
+		t.InsertOrAppendRules(
+			"FORWARD", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainFilterForward),
+			}},
+		)
+		t.InsertOrAppendRules(
+			"INPUT", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainFilterInput),
+			}},
+		)
+		t.InsertOrAppendRules(
+			"OUTPUT", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainFilterOutput),
+			}},
+		)
 
 		// Include rules which should be appended to the filter table forward chain.
 		t.AppendRules("FORWARD", d.ruleRenderer.StaticFilterForwardAppendRules())
 	}
 	for _, t := range d.natTables {
 		t.UpdateChains(d.ruleRenderer.StaticNATTableChains(t.IPVersion()))
-		t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainNATPrerouting),
-		}})
+		t.InsertOrAppendRules(
+			"PREROUTING", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainNATPrerouting),
+			}},
+		)
 		// We must go last to avoid a conflict if both kube-proxy and Calico
 		// decide to MASQ the traffic.
 		//
@@ -2114,25 +2215,33 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		//
 		// N.B. ChainFIPSnat does not do MASQ, but does not collide with k8s
 		// service, namely nodeports.
-		t.AppendRules("POSTROUTING", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainNATPostrouting),
-		}})
-		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainNATOutput),
-		}})
+		t.AppendRules(
+			"POSTROUTING", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainNATPostrouting),
+			}},
+		)
+		t.InsertOrAppendRules(
+			"OUTPUT", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainNATOutput),
+			}},
+		)
 	}
 	for _, t := range d.mangleTables {
 		t.UpdateChains(d.ruleRenderer.StaticMangleTableChains(t.IPVersion()))
-		t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainManglePrerouting),
-		}})
-		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
-			Match:  d.newMatch(),
-			Action: d.actions.Jump(rules.ChainManglePostrouting),
-		}})
+		t.InsertOrAppendRules(
+			"PREROUTING", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainManglePrerouting),
+			}},
+		)
+		t.InsertOrAppendRules(
+			"POSTROUTING", []generictables.Rule{{
+				Match:  d.newMatch(),
+				Action: d.actions.Jump(rules.ChainManglePostrouting),
+			}},
+		)
 	}
 	if d.xdpState != nil {
 		if err := d.setXDPFailsafePorts(); err != nil {
@@ -2199,7 +2308,9 @@ func (d *InternalDataplane) shutdownXDPCompletely() error {
 		log.WithError(err).WithField("try", i).Warn("failed to wipe the XDP state")
 		time.Sleep(waitInterval)
 	}
-	return fmt.Errorf("failed to wipe the XDP state after %v tries over %v seconds: Error %v", maxTries, waitInterval, err)
+	return fmt.Errorf(
+		"failed to wipe the XDP state after %v tries over %v seconds: Error %v", maxTries, waitInterval, err,
+	)
 }
 
 func (d *InternalDataplane) loopUpdatingDataplane() {
@@ -2279,7 +2390,9 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				applyStart := time.Now()
 
 				if d.config.DebugSimulateDataplaneApplyDelay > 0 {
-					log.WithField("delay", d.config.DebugSimulateDataplaneApplyDelay).Debug("Simulating a dataplane-apply delay")
+					log.WithField(
+						"delay", d.config.DebugSimulateDataplaneApplyDelay,
+					).Debug("Simulating a dataplane-apply delay")
 					time.Sleep(d.config.DebugSimulateDataplaneApplyDelay)
 				}
 				// Actually apply the changes to the dataplane.
@@ -2290,9 +2403,11 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					// Dataplane is still dirty, record an error.
 					countDataplaneSyncErrors.Inc()
 				} else {
-					d.sendDataplaneInSyncOnce.Do(func() {
-						d.fromDataplane <- &proto.DataplaneInSync{}
-					})
+					d.sendDataplaneInSyncOnce.Do(
+						func() {
+							d.fromDataplane <- &proto.DataplaneInSync{}
+						},
+					)
 				}
 
 				d.loopSummarizer.EndOfIteration(applyTime)
@@ -2361,7 +2476,8 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
 	switch msg.(type) {
 	case *proto.InSync:
 		log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
-			"Datastore in sync, flushing the dataplane for the first time...")
+			"Datastore in sync, flushing the dataplane for the first time...",
+		)
 		d.datastoreInSync = true
 	}
 }
@@ -2527,7 +2643,8 @@ func (d *InternalDataplane) apply() {
 			err := handler.ResolveUpdateBatch()
 			if err != nil {
 				log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
-					"couldn't resolve update batch for manager, will try again later")
+					"couldn't resolve update batch for manager, will try again later",
+				)
 				d.dataplaneNeedsSync = true
 			}
 			d.reportHealth()
@@ -2539,7 +2656,8 @@ func (d *InternalDataplane) apply() {
 		err := mgr.CompleteDeferredWork()
 		if err != nil {
 			log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
-				"couldn't complete deferred work for manager, will try again later")
+				"couldn't complete deferred work for manager, will try again later",
+			)
 			d.dataplaneNeedsSync = true
 		}
 		d.reportHealth()
@@ -2877,7 +2995,9 @@ func startBPFDataplaneComponents(
 		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
 	}
 
-	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, maps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer)
+	ipSets := bpfipsets.NewBPFIPSets(
+		ipSetConfig, ipSetIDAllocator, maps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer,
+	)
 	dp.ipSets = append(dp.ipSets, ipSets)
 	ipSetsMgr.AddDataplane(ipSets)
 
@@ -2906,12 +3026,14 @@ func startBPFDataplaneComponents(
 		log.Errorf("error creating the bpf cleaner %v", err)
 	}
 
-	conntrackScanner := bpfconntrack.NewScanner(maps.CtMap, ctKey, ctVal,
+	conntrackScanner := bpfconntrack.NewScanner(
+		maps.CtMap, ctKey, ctVal,
 		config.ConfigChangedRestartCallback,
 		config.BPFMapSizeConntrackScaling, maps.CtCleanupMap.(bpfmaps.MapWithExistsCheck),
 		int(ipFamily),
 		bpfCleaner,
-		livenessScanner)
+		livenessScanner,
+	)
 
 	// Before we start, scan for all finished / timed out connections to
 	// free up the conntrack table asap as it may take time to sync up the

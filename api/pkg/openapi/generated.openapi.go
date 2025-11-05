@@ -2527,12 +2527,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"iptablesLockTimeout": {
-						SchemaProps: spec.SchemaProps{
-							Description: "IptablesLockTimeout is the time that Felix itself will wait for the iptables lock (rather than delegating the lock handling to the `iptables` command).\n\nDeprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock. [Default: 0s disabled]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
-						},
-					},
 					"iptablesLockProbeInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IptablesLockProbeInterval when IptablesLockTimeout is enabled: the time that Felix will wait between attempts to acquire the iptables lock if it is not available. Lower values make Felix more responsive when the lock is contended, but use more CPU. [Default: 50ms]",

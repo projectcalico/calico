@@ -306,7 +306,6 @@ type Config struct {
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`
-	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	FeatureDetectOverride              map[string]string `config:"keyvaluelist;;"`
 	FeatureGates                       map[string]string `config:"keyvaluelist;;"`
@@ -658,11 +657,15 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 	rawDataCopy := make(map[string]string)
 	for k, v := range rawData {
 		if v == "" {
-			log.WithFields(log.Fields{
-				"name":   k,
-				"source": source,
-			}).Info("Ignoring empty configuration parameter. Use value 'none' if " +
-				"your intention is to explicitly disable the default value.")
+			log.WithFields(
+				log.Fields{
+					"name":   k,
+					"source": source,
+				},
+			).Info(
+				"Ignoring empty configuration parameter. Use value 'none' if " +
+					"your intention is to explicitly disable the default value.",
+			)
 			continue
 		}
 		rawDataCopy[k] = v
@@ -720,13 +723,15 @@ func (config *Config) KubernetesProvider() Provider {
 		p, err := newProvider(s)
 		if err == nil {
 			log.WithFields(log.Fields{"clusterType": config.ClusterType, "provider": p}).Debug(
-				"detected a known kubernetes provider")
+				"detected a known kubernetes provider",
+			)
 			return p
 		}
 	}
 
 	log.WithField("clusterType", config.ClusterType).Debug(
-		"failed to detect a known kubernetes provider, defaulting to none")
+		"failed to detect a known kubernetes provider, defaulting to none",
+	)
 	return ProviderNone
 }
 
@@ -744,8 +749,10 @@ func (config *Config) applyDefaults() {
 	}
 	hostname, err := names.Hostname()
 	if err != nil {
-		log.Warningf("Failed to get hostname from kernel, "+
-			"trying HOSTNAME variable: %v", err)
+		log.Warningf(
+			"Failed to get hostname from kernel, "+
+				"trying HOSTNAME variable: %v", err,
+		)
 		hostname = strings.ToLower(os.Getenv("HOSTNAME"))
 	}
 	config.FelixHostname = hostname
@@ -780,19 +787,24 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 					nameToSource[lowerCaseName] = source
 				}
 				log.WithField("raw name", rawName).Info(
-					"Ignoring unknown config param.")
+					"Ignoring unknown config param.",
+				)
 				continue valueLoop
 			}
 			metadata := param.GetMetadata()
 			name := metadata.Name
 			if metadata.Local && !source.Local() {
-				log.Warningf("Ignoring local-only configuration %v=%q from %v",
-					name, rawValue, source)
+				log.Warningf(
+					"Ignoring local-only configuration %v=%q from %v",
+					name, rawValue, source,
+				)
 				continue valueLoop
 			}
 
-			log.Infof("Parsing value for %v: %v (from %v)",
-				name, rawValue, source)
+			log.Infof(
+				"Parsing value for %v: %v (from %v)",
+				name, rawValue, source,
+			)
 			var value interface{}
 			if strings.ToLower(rawValue) == "none" {
 				// Special case: we allow a value of "none" to force the value to
@@ -803,13 +815,16 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 					err = errors.New("non-zero field cannot be set to none")
 					log.Errorf(
 						"Failed to parse value for %v: %v from source %v. %v",
-						name, rawValue, source, err)
+						name, rawValue, source, err,
+					)
 					config.Err = err
 					return
 				}
 				value = metadata.ZeroValue
-				log.Infof("Value set to 'none', replacing with zero-value: %#v.",
-					value)
+				log.Infof(
+					"Value set to 'none', replacing with zero-value: %#v.",
+					value,
+				)
 			} else {
 				value, err = param.Parse(rawValue)
 				if err != nil {
@@ -820,19 +835,24 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 						return
 					} else {
 						logCxt.WithField("default", metadata.Default).Warn(
-							"Replacing invalid value with default")
+							"Replacing invalid value with default",
+						)
 						value = metadata.Default
 						err = nil
 					}
 				}
 			}
 
-			log.Infof("Parsed value for %v: %v (from %v)",
-				name, value, source)
+			log.Infof(
+				"Parsed value for %v: %v (from %v)",
+				name, value, source,
+			)
 			if source < currentSource {
-				log.Infof("Skipping config value for %v from %v; "+
-					"already have a value from %v", name,
-					source, currentSource)
+				log.Infof(
+					"Skipping config value for %v from %v; "+
+						"already have a value from %v", name,
+					source, currentSource,
+				)
 				continue
 			}
 			field := reflect.ValueOf(config).Elem().FieldByName(name)
@@ -1005,9 +1025,11 @@ func (config *Config) Validate() (err error) {
 			config.TyphaCertFile == "" ||
 			config.TyphaCAFile == "" ||
 			(config.TyphaCN == "" && config.TyphaURISAN == "") {
-			err = errors.New("if any Felix-Typha TLS config parameters are specified," +
-				" they _all_ must be" +
-				" - except that either TyphaCN or TyphaURISAN may be left unset")
+			err = errors.New(
+				"if any Felix-Typha TLS config parameters are specified," +
+					" they _all_ must be" +
+					" - except that either TyphaCN or TyphaURISAN may be left unset",
+			)
 		}
 	}
 
@@ -1030,9 +1052,11 @@ func loadParams() {
 	knownParams = make(map[string]Param)
 	config := Config{}
 	kind := reflect.TypeOf(config)
-	metaRegexp := regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
-		`([^;]*)(?:;` +
-		`([^;]*))?$`)
+	metaRegexp := regexp.MustCompile(
+		`^([^;(]+)(?:\(([^)]*)\))?;` +
+			`([^;]*)(?:;` +
+			`([^;]*))?$`,
+	)
 	for ii := 0; ii < kind.NumField(); ii++ {
 		field := kind.Field(ii)
 		tag := field.Tag.Get("config")
