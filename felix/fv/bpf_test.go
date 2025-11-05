@@ -408,15 +408,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			options.ExtraEnvVars["FELIX_HEALTHENABLED"] = "true"
 			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16,beaf::dead/64"
-			if testOpts.tunnel == "wireguard" {
-				options.ExtraEnvVars["FELIX_BPFREDIRECTTOPEERFROML3DEVICE"] = "true"
-			}
-			if testOpts.tunnel == "ipip" && testOpts.protocol != "udp" {
-				// Some tests run with tcpdump in udp case. We make sure that
-				// the redirection does not affect connectivity, but we exclude
-				// those tests. It is too coarse, but the simplest.
-				options.ExtraEnvVars["FELIX_BPFREDIRECTTOPEERFROML3DEVICE"] = "true"
-			}
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "0.0.0.0"
 			} else {
