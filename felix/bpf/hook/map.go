@@ -203,11 +203,51 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
 	}
 
+	skipIPDefrag := false
 	if err := obj.Load(); err != nil {
-		return nil, fmt.Errorf("error loading program: %w", err)
+		// If load fails and this attach type has IP defrag, try loading without the IP defrag program
+		if at.hasIPDefrag() {
+			log.WithError(err).Warn("Failed to load object with IP defrag program, retrying without it")
+			// Close the failed object and reopen
+			obj.Close()
+			obj, err = libbpf.OpenObject(file)
+			if err != nil {
+				return nil, fmt.Errorf("file %s: %w", file, err)
+			}
+
+			// Re-configure maps
+			for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+				mapName := m.Name()
+				if strings.Contains(mapName, ".rodata") {
+					continue
+				}
+
+				if err := pm.setMapSize(m); err != nil {
+					return nil, fmt.Errorf("error setting map size %s : %w", mapName, err)
+				}
+				if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
+					return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
+				}
+			}
+
+			// Disable autoload for the IP defrag program
+			if err := obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false); err != nil {
+				log.WithError(err).Debug("Could not disable autoload for IP defrag program, program may not exist")
+			} else {
+				skipIPDefrag = true
+			}
+
+			// Try loading again
+			if err := obj.Load(); err != nil {
+				return nil, fmt.Errorf("error loading program: %w", err)
+			}
+			log.Info("Successfully loaded object without IP defrag program")
+		} else {
+			return nil, fmt.Errorf("error loading program: %w", err)
+		}
 	}
 
-	layout, err := pm.allocateLayout(at, obj)
+	layout, err := pm.allocateLayout(at, obj, skipIPDefrag)
 	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s", file)
 
 	return layout, err
@@ -220,7 +260,7 @@ func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
 	return nil
 }
 
-func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, error) {
+func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefrag bool) (Layout, error) {
 	mapName := pm.GetName()
 
 	l := make(Layout)
@@ -242,7 +282,7 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, e
 			continue
 		}
 
-		if SubProg(idx) == SubProgIPFrag && !at.hasIPDefrag() {
+		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
 			continue
 		}
 
