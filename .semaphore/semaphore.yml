@@ -158,6 +158,8 @@ blocks:
           os_image: ubuntu2204
       jobs:
         - name: Pre-flight checks
+          run:
+            when: "false or change_in(['/'], {pipeline_file: 'track'})"
           commands:
             - make ci-preflight-checks
   - name: API
