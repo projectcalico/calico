@@ -211,20 +211,8 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		return nil, fmt.Errorf("file %s: %w", file, err)
 	}
 
-	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		mapName := m.Name()
-		if strings.Contains(mapName, ".rodata") {
-			continue
-		}
-
-		if err := pm.setMapSize(m); err != nil {
-			return nil, fmt.Errorf("error setting map size %s : %w", mapName, err)
-		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
-			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
-		}
-		log.Debugf("map %s k %d v %d pinned to %s for generic object file %s",
-			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
+	if err := pm.configureMaps(obj, file); err != nil {
+		return nil, err
 	}
 
 	if progAttachType == "TCX" {
@@ -252,18 +240,8 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 			}
 
 			// Re-configure maps
-			for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-				mapName := m.Name()
-				if strings.Contains(mapName, ".rodata") {
-					continue
-				}
-
-				if err := pm.setMapSize(m); err != nil {
-					return nil, fmt.Errorf("error setting map size %s : %w", mapName, err)
-				}
-				if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
-					return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
-				}
+			if err := pm.configureMaps(obj, file); err != nil {
+				return nil, err
 			}
 
 			// Disable autoload for the IP defrag program
@@ -287,6 +265,25 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s into %s", file, pm.GetName())
 
 	return layout, err
+}
+
+func (pm *ProgramsMap) configureMaps(obj *libbpf.Obj, file string) error {
+	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		mapName := m.Name()
+		if strings.Contains(mapName, ".rodata") {
+			continue
+		}
+
+		if err := pm.setMapSize(m); err != nil {
+			return fmt.Errorf("error setting map size %s : %w", mapName, err)
+		}
+		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
+			return fmt.Errorf("error pinning map %s: %w", mapName, err)
+		}
+		log.Debugf("map %s k %d v %d pinned to %s for generic object file %s",
+			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
+	}
+	return nil
 }
 
 func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
