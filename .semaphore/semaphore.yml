@@ -150,6 +150,8 @@ blocks:
           commands:
             - make check-images-availability
   - name: Prerequisites
+    run:
+      when: "false or change_in(['/'], {pipeline_file: 'track'})"
     dependencies: []
     task:
       agent:

@@ -33,35 +33,35 @@ var (
 	skbCb1 = asm.FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
 )
 
-func New(epType tcdefs.EndpointType, minLen int, expression string, jumpMapFD maps.FD) (asm.Insns, error) {
+func New(epType tcdefs.EndpointType, maxData int, expression string, jumpMapFD, stateMapFD maps.FD) (asm.Insns, error) {
 	linkType := layers.LinkTypeEthernet
 
 	if epType == tcdefs.EpTypeL3Device {
 		linkType = layers.LinkTypeIPv4
 	}
 
-	return newFilter(linkType, minLen, expression, jumpMapFD, false)
+	return newFilter(linkType, maxData, expression, jumpMapFD, stateMapFD, false)
 }
 
-func NewStandAlone(linkType layers.LinkType, minLen int, expression string) (asm.Insns, error) {
-	return newFilter(linkType, minLen, expression, 0, true)
+func NewStandAlone(linkType layers.LinkType, maxData int, expression string, stateMapFD maps.FD) (asm.Insns, error) {
+	return newFilter(linkType, maxData, expression, 0, stateMapFD, true)
 }
 
 func newFilter(
 	linkType layers.LinkType,
-	minLen int,
+	maxData int,
 	expression string,
-	jumpMapFD maps.FD,
+	jumpMapFD, stateMapFD maps.FD,
 	standAlone bool) (asm.Insns, error) {
 
 	b := asm.NewBlock(true)
 
-	insns, err := pcap.CompileBPFFilter(linkType, minLen, expression)
+	insns, err := pcap.CompileBPFFilter(linkType, maxData, expression)
 	if err != nil {
 		return nil, fmt.Errorf("pcap compile filter: %w", err)
 	}
 
-	programHeader(b, minLen)
+	programHeader(b, maxData, stateMapFD)
 
 	err = cBPF2eBPF(b, insns, linkType)
 	if err != nil {
@@ -100,32 +100,57 @@ func Printk(b *asm.Block, msg string) {
 	b.Call(asm.HelperTracePrintk)
 }
 
-func programHeader(b *asm.Block, minLen int) {
+func programHeader(b *asm.Block, maxData int, stateMapFD maps.FD) {
 	// Preamble to the policy program.
 	b.LabelNextInsn("start")
 	b.Mov64(asm.R6, asm.R1) // Save R1 (context) in R6.
 
-	b.AddComment("Make sure enough data is accessible")
-	b.Load32(asm.R1, asm.R6, asm.SkbuffOffsetLen)
-	b.JumpLTImm64(asm.R1, int32(minLen), "exit")
+	b.AddComment("Load packet bytes to stack buffer")
+	// Load skb->len to determine how many bytes to load
+	b.Load32(asm.R4, asm.R6, asm.SkbuffOffsetLen)
 
-	// Load data pointer to R7
-	b.Load32(asm.R7, asm.R6, asm.SkbuffOffsetData)
-	b.Load32(asm.R8, asm.R6, asm.SkbuffOffsetDataEnd)
-	b.Mov64(asm.R3, asm.R7)
-	b.AddImm64(asm.R3, int32(minLen))
-	b.JumpLE64(asm.R3, asm.R8, "filter")
+	// Calculate min(skb->len, maxData) and store in R4
+	b.MovImm64(asm.R1, int32(maxData))
+	b.JumpLE64(asm.R4, asm.R1, "use_skb_len")
+	// If skb->len > maxData, use maxData
+	b.Mov64(asm.R4, asm.R1)
+	b.LabelNextInsn("use_skb_len")
+	// R4 now contains min(skb->len, maxData)
 
-	// Pull data if do not have enough
+	// Check that we have at least 1 byte to load (verifier requirement)
+	b.JumpLTImm64(asm.R4, 1, "exit")
+
+	// Save the actual length to load in R9 (callee-saved) before calling helper
+	b.Mov64(asm.R9, asm.R4)
+
+	b.AddComment("Get scratch buffer from state map")
+	b.MovImm32(asm.R1, 0)                   // R1 = 0 -use state as scratch buffer, it is not used until after the filter
+	b.StoreStack32(asm.R1, -4)              // store 0 at stack[-4] as a key to the state map
+	b.Mov64(asm.R2, asm.R10)                // R2 = R10
+	b.AddImm64(asm.R2, -4)                  // R2 = &stack[-4]
+	b.LoadMapFD(asm.R1, uint32(stateMapFD)) // R1 = 0 (64-bit immediate)
+	b.Call(asm.HelperMapLookupElem)         // Call helper
+	// Check return value for NULL.
+	b.JumpEqImm64(asm.R0, 0, "exit")
+	// Set up R7 to point to the sracth buffer
+	b.Mov64(asm.R7, asm.R0)
+
+	// Prepare arguments for bpf_skb_load_bytes
+	// R1 = skb (context)
+	// R2 = offset (0 - start from beginning)
+	// R3 = destination buffer
 	b.Mov64(asm.R1, asm.R6) // ctx -> R1
-	b.LoadImm64(asm.R2, int64(minLen))
-	b.Call(asm.HelperSkbPullData)
+	b.MovImm64(asm.R2, 0)   // offset = 0 (start from beginning)
+	b.Mov64(asm.R3, asm.R7) // dest = scratch buffer
+	b.Mov64(asm.R4, asm.R9) // restore length to load
+	b.Call(asm.HelperSkbLoadBytes)
+
+	// Check if bpf_skb_load_bytes succeeded (returns 0 on success)
 	b.JumpNEImm64(asm.R0, 0, "exit")
-	b.Load32(asm.R7, asm.R6, asm.SkbuffOffsetData)
-	b.Load32(asm.R8, asm.R6, asm.SkbuffOffsetDataEnd)
-	b.Mov64(asm.R3, asm.R7)
-	b.AddImm64(asm.R3, int32(minLen))
-	b.JumpGT64(asm.R3, asm.R8, "exit")
+
+	// Set up R8 to point to the end of actually loaded data (R7 + actual length)
+	b.Mov64(asm.R8, asm.R7)
+	b.Add64(asm.R8, asm.R9)
 
 	b.LabelNextInsn("filter")
 	// Zero R1 (A) and R2 (X)

@@ -235,7 +235,9 @@ skip_redir_ifindex:
 			}
 			if (!cali_rt_is_tunneled(dest_rt)) {
 				CALI_DEBUG("Not a tunnel route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
-				goto deny;
+				// We dont have a tunnel route, so nothing to do here.
+				// Better to leave it to the tunnel device to handle it.
+				goto skip_fib;
 			}
 
 			struct bpf_tunnel_key key = {
