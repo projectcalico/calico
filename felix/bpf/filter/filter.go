@@ -221,7 +221,15 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkTyp
 
 		switch class {
 		case bpfClassMisc:
-			return fmt.Errorf("misc class: %+v", cbpf)
+			switch op {
+			case bpfTAX:
+				b.Mov64(asm.R2, asm.R1) // X = A
+				continue
+			case bpfTXA:
+				b.Mov64(asm.R1, asm.R2) // A = X
+				continue
+			}
+			return fmt.Errorf("misc class: %+v op %d", cbpf, op)
 		case bpfClassRet:
 			// K is the return value and hit should be snap length, 0 otherwise.
 			// https://github.com/the-tcpdump-group/libpcap/blob/aa4fd0d411239f5cc98f0ae14018d3ad91a5ee15/gencode.c#L822
@@ -258,6 +266,7 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkTyp
 			case bpfModeIMM:
 				// eBPF has only 64bit imm instructions
 				b.LoadImm64(asm.R1, int64(K))
+
 				continue
 			}
 		case bpfClassLdx:
@@ -279,7 +288,15 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkTyp
 					b.Mov64(asm.R1 /* A */, asm.R3 /* tmp */)                                               // Restore A from tmp
 				}
 				continue
+			} else {
+				switch bpfMode(code) {
+				case bpfModeIMM:
+					// eBPF has only 64bit imm instructions
+					b.LoadImm64(asm.R2, int64(K)) // X = K
+					continue
+				}
 			}
+		case bpfClassAlu:
 		case bpfClassJmp:
 
 			var srcR asm.Reg
@@ -347,6 +364,7 @@ const (
 	bpfClassLd   uint8 = 0x0
 	bpfClassLdx  uint8 = 0x1
 	bpfClassJmp  uint8 = 0x5
+	bpfClassAlu  uint8 = 0x4
 	bpfClassRet  uint8 = 0x6
 	bpfClassMisc uint8 = 0x7
 )
@@ -379,6 +397,20 @@ const (
 	bpfModeMSH uint8 = 0xa0
 )
 
+const (
+	bpfAluAdd uint8 = 0x00
+	bpfAluSub uint8 = 0x10
+	bpfAluMul uint8 = 0x20
+	bpfAluDiv uint8 = 0x30
+	bpfAluOr  uint8 = 0x40
+	bpfAluAnd uint8 = 0x50
+	bpfAluLsh uint8 = 0x60
+	bpfAluRsh uint8 = 0x70
+	bpfAluNeg uint8 = 0x80
+	bpfAluMod uint8 = 0x90
+	bpfAluXor uint8 = 0xa0
+)
+
 var (
 	_ = bpfModeIMM
 	_ = bpfModeMEM
@@ -391,6 +423,11 @@ func bpfMode(code uint8) uint8 {
 func bpfOp(code uint8) uint8 {
 	return code & 0xf0
 }
+
+const (
+	bpfTAX uint8 = 0x00
+	bpfTXA uint8 = 0x80
+)
 
 const (
 	bpfK uint8 = 0

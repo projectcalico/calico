@@ -191,6 +191,8 @@ func TestFilterIPv6(t *testing.T) {
 		{"portrange 600-700", true},
 		{"tcp portrange 600-700", false},
 		{"portrange 700-800", false},
+		{"ip6 protochain 17", true},
+		{"ip6 protochain 6", false},
 	}
 
 	links := []struct {
@@ -207,7 +209,7 @@ func TestFilterIPv6(t *testing.T) {
 		for _, tc := range link.tests {
 			t.Run(link.level+"_"+tc.expression, func(t *testing.T) {
 
-				insns, err := filter.NewStandAlone(link.typ, 64, tc.expression)
+				insns, err := filter.NewStandAlone(link.typ, 64, tc.expression, stateMap.MapFD())
 				Expect(err).NotTo(HaveOccurred())
 				fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 				Expect(err).NotTo(HaveOccurred())
@@ -238,7 +240,7 @@ func TestFilterIPv6(t *testing.T) {
 
 		t.Run(link.level+"_"+neg, func(t *testing.T) {
 
-			insns, err := filter.NewStandAlone(layers.LinkTypeEthernet, 64, neg)
+			insns, err := filter.NewStandAlone(layers.LinkTypeEthernet, 64, neg, stateMap.MapFD())
 			Expect(err).NotTo(HaveOccurred())
 			fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 			Expect(err).NotTo(HaveOccurred())
