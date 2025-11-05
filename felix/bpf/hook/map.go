@@ -239,6 +239,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		}
 	}
 
+	skipIPDefrag := false
 	if err := obj.Load(); err != nil {
 		// If load fails and this attach type has IP defrag, try loading without the IP defrag program
 		if at.hasIPDefrag() {
@@ -268,6 +269,8 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 			// Disable autoload for the IP defrag program
 			if err := obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false); err != nil {
 				log.WithError(err).Debug("Could not disable autoload for IP defrag program, program may not exist")
+			} else {
+				skipIPDefrag = true
 			}
 
 			// Try loading again
@@ -280,7 +283,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		}
 	}
 
-	layout, err := pm.allocateLayout(at, obj)
+	layout, err := pm.allocateLayout(at, obj, skipIPDefrag)
 	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s into %s", file, pm.GetName())
 
 	return layout, err
@@ -293,7 +296,7 @@ func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
 	return nil
 }
 
-func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, error) {
+func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefrag bool) (Layout, error) {
 	mapName := pm.GetName()
 
 	l := make(Layout)
@@ -315,7 +318,7 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, e
 			continue
 		}
 
-		if SubProg(idx) == SubProgIPFrag && !at.hasIPDefrag() {
+		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
 			continue
 		}
 
