@@ -161,9 +161,8 @@ func (o *Obj) Load() error {
 func (o *Obj) SetProgramAutoload(progName string, autoload bool) error {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cProgName))
-	C.bpf_set_program_autoload(o.obj, cProgName, C.bool(autoload))
-	// Check if errno was set (ENOENT means program not found)
-	if err := syscall.Errno(C.int(C.errno)); err != 0 {
+	_, err := C.bpf_set_program_autoload(o.obj, cProgName, C.bool(autoload))
+	if err != nil {
 		return fmt.Errorf("error setting autoload for program %s: %w", progName, err)
 	}
 	return nil
