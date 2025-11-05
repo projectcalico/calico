@@ -219,7 +219,8 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 			if err := obj.Load(); err != nil {
 				return nil, fmt.Errorf("error loading program: %w", err)
 			}
-			log.Info("Successfully loaded object without IP defrag program")
+			log.WithField("attach type", at).
+				Warn("Object loaded without IP defrag - processing of fragmented packets will not be supported")
 		} else {
 			return nil, fmt.Errorf("error loading program: %w", err)
 		}
