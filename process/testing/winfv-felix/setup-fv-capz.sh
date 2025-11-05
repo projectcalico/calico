@@ -134,8 +134,8 @@ function prepare_windows_images(){
     CALICO_NODE_IMAGE="node-windows-$GIT_VERSION-ltsc2022.tar"
     CALICO_CNI_IMAGE="cni-windows-$GIT_VERSION-ltsc2022.tar"
   else
-    CALICO_NODE_IMAGE="node-windows-$GIT_VERSION-1809.tar"
-    CALICO_CNI_IMAGE="cni-windows-$GIT_VERSION-1809.tar"
+    CALICO_NODE_IMAGE="node-windows-$GIT_VERSION-ltsc2019.tar"
+    CALICO_CNI_IMAGE="cni-windows-$GIT_VERSION-ltsc2019.tar"
   fi
 }
 
