@@ -83,6 +83,7 @@ var (
 
 	// Used for testing Syncer conversion
 	calicoAllowPolicyModelV1 = model.Policy{
+		Tier:  "default",
 		Order: &zeroOrder,
 		InboundRules: []model.Rule{
 			{
@@ -96,6 +97,7 @@ var (
 		},
 	}
 	calicoDisallowPolicyModelV1 = model.Policy{
+		Tier:  "default",
 		Order: &zeroOrder,
 		InboundRules: []model.Rule{
 			{
