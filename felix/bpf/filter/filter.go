@@ -268,6 +268,13 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkTyp
 				b.LoadImm64(asm.R1, int64(K))
 
 				continue
+			case bpfModeMEM:
+				// Load from scratch memory M[K] to A
+				if K >= 16 {
+					return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+				}
+				b.Load32(asm.R1, asm.R10, asm.FieldOffset{Offset: -int16((K+1)*4), Field: fmt.Sprintf("M[%d]", K)})
+				continue
 			}
 		case bpfClassLdx:
 			if cbpf.Code == uint16(bpfClassLdx|bpfModeMSH|bpfSizeB) {
@@ -294,9 +301,111 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkTyp
 					// eBPF has only 64bit imm instructions
 					b.LoadImm64(asm.R2, int64(K)) // X = K
 					continue
+				case bpfModeMEM:
+					// Load from scratch memory M[K] to X
+					if K >= 16 {
+						return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+					}
+					b.Load32(asm.R2, asm.R10, asm.FieldOffset{Offset: -int16((K+1)*4), Field: fmt.Sprintf("M[%d]", K)})
+					continue
 				}
 			}
+		case bpfClassSt:
+			// Store A to scratch memory M[K]
+			// We use stack slots (R10 + offset) to emulate scratch memory
+			// Classic BPF has 16 scratch memory slots (M[0] through M[15])
+			// Each slot is 32 bits, so we store at offset -(K+1)*4
+			if K >= 16 {
+				return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+			}
+			b.StoreStack32(asm.R1, -int16((K+1)*4))
+			continue
+		case bpfClassStx:
+			// Store X to scratch memory M[K]
+			if K >= 16 {
+				return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+			}
+			b.StoreStack32(asm.R2, -int16((K+1)*4))
+			continue
 		case bpfClassAlu:
+			// Classic BPF ALU operations on A register
+			// src can be either K (immediate) or X (register R2)
+			switch op {
+			case bpfAluAdd:
+				if src == bpfX {
+					b.Add64(asm.R1, asm.R2) // A += X
+				} else {
+					b.AddImm64(asm.R1, K) // A += K
+				}
+				continue
+			case bpfAluSub:
+				if src == bpfX {
+					b.Instr(asm.Sub64, asm.R1, asm.R2, 0, 0, "") // A -= X
+				} else {
+					b.Instr(asm.SubImm64, asm.R1, 0, 0, K, "") // A -= K
+				}
+				continue
+			case bpfAluMul:
+				if src == bpfX {
+					b.Instr(asm.Mul64, asm.R1, asm.R2, 0, 0, "") // A *= X
+				} else {
+					b.Instr(asm.MulImm64, asm.R1, 0, 0, K, "") // A *= K
+				}
+				continue
+			case bpfAluDiv:
+				if src == bpfX {
+					b.Instr(asm.Div64, asm.R1, asm.R2, 0, 0, "") // A /= X
+				} else {
+					b.Instr(asm.DivImm64, asm.R1, 0, 0, K, "") // A /= K
+				}
+				continue
+			case bpfAluOr:
+				if src == bpfX {
+					b.Instr(asm.Or64, asm.R1, asm.R2, 0, 0, "") // A |= X
+				} else {
+					b.OrImm64(asm.R1, K) // A |= K
+				}
+				continue
+			case bpfAluAnd:
+				if src == bpfX {
+					b.Instr(asm.And64, asm.R1, asm.R2, 0, 0, "") // A &= X
+				} else {
+					b.AndImm64(asm.R1, K) // A &= K
+				}
+				continue
+			case bpfAluLsh:
+				if src == bpfX {
+					b.Instr(asm.ShiftL64, asm.R1, asm.R2, 0, 0, "") // A <<= X
+				} else {
+					b.ShiftLImm64(asm.R1, K) // A <<= K
+				}
+				continue
+			case bpfAluRsh:
+				if src == bpfX {
+					b.Instr(asm.ShiftR64, asm.R1, asm.R2, 0, 0, "") // A >>= X
+				} else {
+					b.ShiftRImm64(asm.R1, K) // A >>= K
+				}
+				continue
+			case bpfAluNeg:
+				b.Instr(asm.Negate64, asm.R1, 0, 0, 0, "") // A = -A
+				continue
+			case bpfAluMod:
+				if src == bpfX {
+					b.Instr(asm.Mod64, asm.R1, asm.R2, 0, 0, "") // A %= X
+				} else {
+					b.Instr(asm.ModImm64, asm.R1, 0, 0, K, "") // A %= K
+				}
+				continue
+			case bpfAluXor:
+				if src == bpfX {
+					b.Instr(asm.XOR64, asm.R1, asm.R2, 0, 0, "") // A ^= X
+				} else {
+					b.Instr(asm.XORImm64, asm.R1, 0, 0, K, "") // A ^= K
+				}
+				continue
+			}
+			return fmt.Errorf("unsupported ALU operation: %+v op 0x%x", cbpf, op)
 		case bpfClassJmp:
 
 			var srcR asm.Reg
@@ -363,8 +472,10 @@ var jumpOpNegate = map[asm.OpCode]asm.OpCode{
 const (
 	bpfClassLd   uint8 = 0x0
 	bpfClassLdx  uint8 = 0x1
-	bpfClassJmp  uint8 = 0x5
+	bpfClassSt   uint8 = 0x2
+	bpfClassStx  uint8 = 0x3
 	bpfClassAlu  uint8 = 0x4
+	bpfClassJmp  uint8 = 0x5
 	bpfClassRet  uint8 = 0x6
 	bpfClassMisc uint8 = 0x7
 )
