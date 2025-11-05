@@ -19,7 +19,6 @@ import (
 	"errors"
 	"io"
 	"strings"
-	"sync"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -42,211 +41,310 @@ var (
 	}
 )
 
-var _ = Describe("Rule hashing tests", func() {
-	It("should generate different hashes for different rules", func() {
-		hashes1 := calculateHashes("chain", rules1)
-		hashes2 := calculateHashes("chain", rules2)
-		Expect(hashes1).NotTo(Equal(hashes2))
-	})
-	It("should generate same hash for prefix to same chain", func() {
-		hashes1 := calculateHashes("chain", rules1)
-		hashes2 := calculateHashes("chain", rules3)
-		Expect(hashes1[0]).To(Equal(hashes2[0]))
-	})
-	It("should generate different hashes for different chains with same rules", func() {
-		hashes1 := calculateHashes("chain", rules1)
-		hashes2 := calculateHashes("chain2", rules1)
-		Expect(hashes1).NotTo(Equal(hashes2))
-	})
-	It("should generate different hashes for same rule at different position", func() {
-		hashes2 := calculateHashes("chain", rules2)
-		hashes3 := calculateHashes("chain", rules3)
-		Expect(hashes2[0]).NotTo(Equal(hashes3[1]))
-	})
-	It("should generate a slice of same length as input", func() {
-		Expect(len(calculateHashes("foo", rules1))).To(Equal(len(rules1)))
-		Expect(len(calculateHashes("foo", rules2))).To(Equal(len(rules2)))
-		Expect(len(calculateHashes("foo", rules3))).To(Equal(len(rules3)))
-	})
-})
-
-var _ = Describe("Hash extraction tests", func() {
-	var table *Table
-
-	BeforeEach(func() {
-		fd := environment.NewFeatureDetector(nil)
-		fd.GetKernelVersionReader = func() (io.Reader, error) {
-			return nil, errors.New("not implemented")
-		}
-		fd.NewCmd = func(name string, arg ...string) cmdshim.CmdIface {
-			return cmdshim.NewRealCmd("echo", "iptables v1.4.7")
-		}
-		table = NewTable(
-			"filter",
-			4,
-			"cali:",
-			&sync.Mutex{},
-			fd,
-			TableOptions{
-				HistoricChainPrefixes:    []string{"felix-", "cali"},
-				ExtraCleanupRegexPattern: "an-old-rule",
-				BackendMode:              "legacy",
-				LookPathOverride: func(file string) (s string, e error) {
-					return s, nil
-				},
+var _ = Describe(
+	"Rule hashing tests", func() {
+		It(
+			"should generate different hashes for different rules", func() {
+				hashes1 := calculateHashes("chain", rules1)
+				hashes2 := calculateHashes("chain", rules2)
+				Expect(hashes1).NotTo(Equal(hashes2))
 			},
 		)
-	})
+		It(
+			"should generate same hash for prefix to same chain", func() {
+				hashes1 := calculateHashes("chain", rules1)
+				hashes2 := calculateHashes("chain", rules3)
+				Expect(hashes1[0]).To(Equal(hashes2[0]))
+			},
+		)
+		It(
+			"should generate different hashes for different chains with same rules", func() {
+				hashes1 := calculateHashes("chain", rules1)
+				hashes2 := calculateHashes("chain2", rules1)
+				Expect(hashes1).NotTo(Equal(hashes2))
+			},
+		)
+		It(
+			"should generate different hashes for same rule at different position", func() {
+				hashes2 := calculateHashes("chain", rules2)
+				hashes3 := calculateHashes("chain", rules3)
+				Expect(hashes2[0]).NotTo(Equal(hashes3[1]))
+			},
+		)
+		It(
+			"should generate a slice of same length as input", func() {
+				Expect(len(calculateHashes("foo", rules1))).To(Equal(len(rules1)))
+				Expect(len(calculateHashes("foo", rules2))).To(Equal(len(rules2)))
+				Expect(len(calculateHashes("foo", rules3))).To(Equal(len(rules3)))
+			},
+		)
+	},
+)
 
-	It("should extract an old felix rule by prefix", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf("-A FORWARD -j felix-FORWARD\n"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": {"OLD INSERT RULE"},
-		}))
-		Expect(rules).To(Equal(map[string][]string{
-			"FORWARD": {"-A FORWARD -j felix-FORWARD"},
-		}))
-	})
-	It("should extract an old felix rule by special case", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
-			"-A FORWARD -j an-old-rule\n" +
-				"-A FORWARD -j ignore-me\n",
-		))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": {
-				"OLD INSERT RULE",
-				"",
-			},
-		}))
-		Expect(rules).To(Equal(map[string][]string{
-			"FORWARD": {
-				"-A FORWARD -j an-old-rule",
-				"-",
-			},
-		}))
-	})
-	It("should extract a rule with a hash", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
-			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": {"wUHhoiAYhphO9Mso"},
-		}))
-		Expect(rules).To(Equal(map[string][]string{
-			"FORWARD": {
-				"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD",
-			},
-		}))
-	})
-	It("should extract a hash or a gap from each rule", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
-			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
-				"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
-				"-A FORWARD --src '1.2.3.4'\n" +
-				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": {
-				"wUHhoiAYhphO9Mso",
-				"abcdefghij1234-_",
-				"",
-				"1234567890093213",
-			},
-		}))
-		Expect(rules).To(Equal(map[string][]string{
-			"FORWARD": {
-				"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD",
-				"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD",
-				"-",
-				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD",
-			},
-		}))
-	})
+var _ = Describe(
+	"Hash extraction tests", func() {
+		var table *Table
 
-	It("should handle multiple chains", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
-			"-A cali-abcd -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
-				"-A cali-abcd -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
-				"-A FORWARD --src '1.2.3.4'\n" +
-				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(hashes).To(Equal(map[string][]string{
-			"cali-abcd": {
-				"wUHhoiAYhphO9Mso",
-				"abcdefghij1234-_",
+		BeforeEach(
+			func() {
+				fd := environment.NewFeatureDetector(nil)
+				fd.GetKernelVersionReader = func() (io.Reader, error) {
+					return nil, errors.New("not implemented")
+				}
+				fd.NewCmd = func(name string, arg ...string) cmdshim.CmdIface {
+					return cmdshim.NewRealCmd("echo", "iptables v1.4.7")
+				}
+				table = NewTable(
+					"filter", 4, "cali:", fd, TableOptions{
+						HistoricChainPrefixes:    []string{"felix-", "cali"},
+						ExtraCleanupRegexPattern: "an-old-rule",
+						BackendMode:              "legacy",
+						LookPathOverride: func(file string) (s string, e error) {
+							return s, nil
+						},
+					},
+				)
 			},
-			"FORWARD": {
-				"",
-				"1234567890093213",
+		)
+
+		It(
+			"should extract an old felix rule by prefix", func() {
+				hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf("-A FORWARD -j felix-FORWARD\n"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hashes).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {"OLD INSERT RULE"},
+						},
+					),
+				)
+				Expect(rules).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {"-A FORWARD -j felix-FORWARD"},
+						},
+					),
+				)
 			},
-		}))
-		Expect(rules).To(Equal(map[string][]string{
-			"FORWARD": {
-				"-",
-				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD",
+		)
+		It(
+			"should extract an old felix rule by special case", func() {
+				hashes, rules, err := table.readHashesAndRulesFrom(
+					newClosableBuf(
+						"-A FORWARD -j an-old-rule\n" +
+							"-A FORWARD -j ignore-me\n",
+					),
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hashes).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {
+								"OLD INSERT RULE",
+								"",
+							},
+						},
+					),
+				)
+				Expect(rules).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {
+								"-A FORWARD -j an-old-rule",
+								"-",
+							},
+						},
+					),
+				)
 			},
-		}))
-	})
-
-	It("should extract a rule with a hash and a label comment", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
-			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -m comment --comment \"key=value\" -j cali-FORWARD\n"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": {"wUHhoiAYhphO9Mso"},
-		}))
-		Expect(rules).To(Equal(map[string][]string{
-			"FORWARD": {
-				"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -m comment --comment \"key=value\" -j cali-FORWARD",
+		)
+		It(
+			"should extract a rule with a hash", func() {
+				hashes, rules, err := table.readHashesAndRulesFrom(
+					newClosableBuf(
+						"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n",
+					),
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hashes).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {"wUHhoiAYhphO9Mso"},
+						},
+					),
+				)
+				Expect(rules).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {
+								"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD",
+							},
+						},
+					),
+				)
 			},
-		}))
-	})
-})
+		)
+		It(
+			"should extract a hash or a gap from each rule", func() {
+				hashes, rules, err := table.readHashesAndRulesFrom(
+					newClosableBuf(
+						"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
+							"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
+							"-A FORWARD --src '1.2.3.4'\n" +
+							"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n",
+					),
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hashes).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {
+								"wUHhoiAYhphO9Mso",
+								"abcdefghij1234-_",
+								"",
+								"1234567890093213",
+							},
+						},
+					),
+				)
+				Expect(rules).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {
+								"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD",
+								"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD",
+								"-",
+								"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD",
+							},
+						},
+					),
+				)
+			},
+		)
 
-var _ = Describe("rule comments", func() {
-	Context("Rule with multiple comments", func() {
-		rule := generictables.Rule{
-			Match:   matchCriteria{"-m foobar --foobar baz"},
-			Action:  JumpAction{Target: "biff"},
-			Comment: []string{"boz", "fizz"},
-		}
+		It(
+			"should handle multiple chains", func() {
+				hashes, rules, err := table.readHashesAndRulesFrom(
+					newClosableBuf(
+						"-A cali-abcd -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
+							"-A cali-abcd -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
+							"-A FORWARD --src '1.2.3.4'\n" +
+							"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n",
+					),
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hashes).To(
+					Equal(
+						map[string][]string{
+							"cali-abcd": {
+								"wUHhoiAYhphO9Mso",
+								"abcdefghij1234-_",
+							},
+							"FORWARD": {
+								"",
+								"1234567890093213",
+							},
+						},
+					),
+				)
+				Expect(rules).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {
+								"-",
+								"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD",
+							},
+						},
+					),
+				)
+			},
+		)
 
-		It("should render rule including multiple comments", func() {
-			render := renderAppend(rule)
-			Expect(render).To(ContainSubstring("-m comment --comment \"boz\""))
-			Expect(render).To(ContainSubstring("-m comment --comment \"fizz\""))
-		})
-	})
+		It(
+			"should extract a rule with a hash and a label comment", func() {
+				hashes, rules, err := table.readHashesAndRulesFrom(
+					newClosableBuf(
+						"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -m comment --comment \"key=value\" -j cali-FORWARD\n",
+					),
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hashes).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {"wUHhoiAYhphO9Mso"},
+						},
+					),
+				)
+				Expect(rules).To(
+					Equal(
+						map[string][]string{
+							"FORWARD": {
+								"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -m comment --comment \"key=value\" -j cali-FORWARD",
+							},
+						},
+					),
+				)
+			},
+		)
+	},
+)
 
-	Context("Rule with comment with newlines", func() {
-		rule := generictables.Rule{
-			Match:  matchCriteria{"-m foobar --foobar baz"},
-			Action: JumpAction{Target: "biff"},
-			Comment: []string{`boz
+var _ = Describe(
+	"rule comments", func() {
+		Context(
+			"Rule with multiple comments", func() {
+				rule := generictables.Rule{
+					Match:   matchCriteria{"-m foobar --foobar baz"},
+					Action:  JumpAction{Target: "biff"},
+					Comment: []string{"boz", "fizz"},
+				}
+
+				It(
+					"should render rule including multiple comments", func() {
+						render := renderAppend(rule)
+						Expect(render).To(ContainSubstring("-m comment --comment \"boz\""))
+						Expect(render).To(ContainSubstring("-m comment --comment \"fizz\""))
+					},
+				)
+			},
+		)
+
+		Context(
+			"Rule with comment with newlines", func() {
+				rule := generictables.Rule{
+					Match:  matchCriteria{"-m foobar --foobar baz"},
+					Action: JumpAction{Target: "biff"},
+					Comment: []string{`boz
 fizz`},
-		}
+				}
 
-		It("should render rule with newline escaped", func() {
-			render := renderAppend(rule)
-			Expect(render).To(ContainSubstring("-m comment --comment \"boz_fizz\""))
-		})
-	})
+				It(
+					"should render rule with newline escaped", func() {
+						render := renderAppend(rule)
+						Expect(render).To(ContainSubstring("-m comment --comment \"boz_fizz\""))
+					},
+				)
+			},
+		)
 
-	Context("Rule with comment longer than 256 characters", func() {
-		rule := generictables.Rule{
-			Match:   matchCriteria{"-m foobar --foobar baz"},
-			Action:  JumpAction{Target: "biff"},
-			Comment: []string{strings.Repeat("a", 257)},
-		}
+		Context(
+			"Rule with comment longer than 256 characters", func() {
+				rule := generictables.Rule{
+					Match:   matchCriteria{"-m foobar --foobar baz"},
+					Action:  JumpAction{Target: "biff"},
+					Comment: []string{strings.Repeat("a", 257)},
+				}
 
-		It("should render rule with comment truncated", func() {
-			render := renderAppend(rule)
-			Expect(render).To(ContainSubstring("-m comment --comment \"" + strings.Repeat("a", 256) + "\""))
-		})
-	})
-})
+				It(
+					"should render rule with comment truncated", func() {
+						render := renderAppend(rule)
+						Expect(render).To(ContainSubstring("-m comment --comment \"" + strings.Repeat("a", 256) + "\""))
+					},
+				)
+			},
+		)
+	},
+)
 
 func newClosableBuf(s string) *withDummyClose {
 	return (*withDummyClose)(bytes.NewBufferString(s))
