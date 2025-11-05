@@ -38,6 +38,17 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 		logrus.Debugf("Skip programming staged policy %v", policyID.Name)
 		return nil
 	}
+
+	// Build an appropriate commentIngress for the policy.
+	var commentIngress, commentEgress string
+	if policyID.Namespace == "" {
+		commentIngress = fmt.Sprintf("%s %s ingress", policyID.Kind, policyID.Name)
+		commentEgress = fmt.Sprintf("%s %s egress", policyID.Kind, policyID.Name)
+	} else {
+		commentIngress = fmt.Sprintf("%s %s/%s ingress", policyID.Kind, policyID.Namespace, policyID.Name)
+		commentEgress = fmt.Sprintf("%s %s/%s egress", policyID.Kind, policyID.Namespace, policyID.Name)
+	}
+
 	inbound := generictables.Chain{
 		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
 		Rules: r.ProtoRulesToIptablesRules(
@@ -46,7 +57,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			RuleDirIngress,
 			policyID,
 			policy.Untracked,
-			fmt.Sprintf("Policy %s ingress", policyID.Name),
+			commentIngress,
 		),
 	}
 	outbound := generictables.Chain{
@@ -58,7 +69,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			RuleDirEgress,
 			policyID,
 			policy.Untracked,
-			fmt.Sprintf("Policy %s egress", policyID.Name),
+			commentEgress,
 		),
 	}
 	return []*generictables.Chain{&inbound, &outbound}
