@@ -1270,26 +1270,10 @@ with an iptables "DROP" action. If you want to use "REJECT" action instead you c
 | Default value (YAML) | `Drop` |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
-### `IptablesLockFilePath` (config file) / `iptablesLockFilePath` (YAML)
-
-The location of the iptables lock file. You may need to change this
-if the lock file is not in its standard location (for example if you have mapped it into Felix's
-container at a different path).
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_IptablesLockFilePath` |
-| Encoding (env var/config file) | Path to file |
-| Default value (above encoding) | `/run/xtables.lock` |
-| `FelixConfiguration` field | `iptablesLockFilePath` (YAML) `IptablesLockFilePath` (Go API) |
-| `FelixConfiguration` schema | String. |
-| Default value (YAML) | `/run/xtables.lock` |
-
 ### `IptablesLockProbeIntervalMillis` (config file) / `iptablesLockProbeInterval` (YAML)
 
-When IptablesLockTimeout is enabled: the time that Felix will wait between
-attempts to acquire the iptables lock if it is not available. Lower values make Felix more
-responsive when the lock is contended, but use more CPU.
+Configures the interval between attempts to claim
+the xtables lock. Shorter intervals are more responsive but use more CPU.
 
 | Detail |   |
 | --- | --- |
@@ -1299,22 +1283,6 @@ responsive when the lock is contended, but use more CPU.
 | `FelixConfiguration` field | `iptablesLockProbeInterval` (YAML) `IptablesLockProbeInterval` (Go API) |
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `50ms` |
-
-### `IptablesLockTimeoutSecs` (config file) / `iptablesLockTimeout` (YAML)
-
-The time that Felix itself will wait for the iptables lock (rather than delegating the
-lock handling to the `iptables` command).
-
-Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_IptablesLockTimeoutSecs` |
-| Encoding (env var/config file) | Seconds (floating point) |
-| Default value (above encoding) | `0` (0s) |
-| `FelixConfiguration` field | `iptablesLockTimeout` (YAML) `IptablesLockTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
-| Default value (YAML) | `0s` |
 
 ### `IptablesMangleAllowAction` (config file) / `iptablesMangleAllowAction` (YAML)
 

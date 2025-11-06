@@ -314,7 +314,6 @@ build-typha:
 fv-prereqs: $(REMOTE_DEPS) \
             $(FELIX_CONTAINER_CREATED) \
             $(FV_BINARY) \
-            bin/iptables-locker \
             bin/test-workload \
             bin/test-connection \
             bin/calico-bpf \
@@ -480,10 +479,6 @@ bin/calico-bpf: $(SRC_FILES)
 bin/pktgen: $(SRC_FILES) $(FV_SRC_FILES)
 	@echo Building pktgen...
 	$(call build_binary, "$(PACKAGE_NAME)/fv/pktgen", $@)
-
-bin/iptables-locker: ../go.mod $(shell find iptables -type f -name '*.go' -print)
-	@echo Building iptables-locker...
-	$(call build_binary, "$(PACKAGE_NAME)/fv/iptables-locker", $@)
 
 bin/test-workload: ../go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connectivity/*.go fv/test-workload/*.go
 	@echo Building test-workload...
