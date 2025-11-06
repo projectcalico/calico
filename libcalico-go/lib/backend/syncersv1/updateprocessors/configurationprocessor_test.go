@@ -16,6 +16,7 @@ package updateprocessors_test
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -42,8 +43,8 @@ const (
 	wireguardMarker = "*WIREGUARDMARKER*"
 )
 
-const (
-	numBaseFelixConfigs = 174
+var (
+	numBaseFelixConfigs = reflect.TypeOf(apiv3.FelixConfigurationSpec{}).NumField()
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
