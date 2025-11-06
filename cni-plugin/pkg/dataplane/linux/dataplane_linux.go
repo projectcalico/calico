@@ -179,7 +179,6 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			case <-macUpdateTimeout:
 				return fmt.Errorf("timed out waiting for host veth %q to accept MAC %s", hostVethName, hostSideMAC.String())
 			case <-time.After(100 * time.Millisecond):
-				continue
 			}
 		}
 
