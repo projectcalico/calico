@@ -22,6 +22,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -416,12 +417,13 @@ type RuleID struct {
 	Tier string
 
 	// Optimization so that the hot path doesn't need to create strings.
-	dpName string
 	fpName string
 }
 
 func NewRuleID(kind, tier, name, namespace string, ruleIndex int, ruleDirection rules.RuleDir, ruleAction rules.RuleAction) *RuleID {
 	rid := &RuleID{
+		// Note: we use a PolicyID here even for profiles to avoid creating a separate struct. Profile type RuleIDs
+		// will have empty Kind and Namespace, and empty Tier in the RuleID itself.
 		PolicyID: PolicyID{
 			Name:      name,
 			Namespace: namespace,
@@ -433,7 +435,6 @@ func NewRuleID(kind, tier, name, namespace string, ruleIndex int, ruleDirection 
 		IndexStr:  strconv.Itoa(ruleIndex),
 		Action:    ruleAction,
 	}
-	rid.setDeniedPacketRuleName()
 	rid.setFlowLogPolicyName()
 	return rid
 }
@@ -520,37 +521,6 @@ func (r *RuleID) DirectionString() string {
 	return ""
 }
 
-func (r *RuleID) setDeniedPacketRuleName() {
-	if r.Action != rules.RuleActionDeny {
-		return
-	}
-	if !r.IsNamespaced() {
-		r.dpName = fmt.Sprintf(
-			"%s|%s|%s|%s",
-			r.TierString(),
-			r.NameString(),
-			r.IndexStr,
-			r.ActionString(),
-		)
-		return
-	}
-	r.dpName = fmt.Sprintf(
-		"%s|%s/%s|%s|%s",
-		r.TierString(),
-		r.Namespace,
-		r.NameString(),
-		r.IndexStr,
-		r.ActionString(),
-	)
-}
-
-func (r *RuleID) GetDeniedPacketRuleName() string {
-	if r == nil {
-		return ""
-	}
-	return r.dpName
-}
-
 func (r *RuleID) setFlowLogPolicyName() {
 	if r.IsProfile() {
 		// Profile.
@@ -608,8 +578,7 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.NameString(),
 			r.ActionString(),
 		)
-	} else {
-		// Calico namespaced NetworkPolicy.
+	} else if r.Kind == v3.KindNetworkPolicy {
 		r.fpName = fmt.Sprintf(
 			"%s|%s/%s|%s",
 			r.TierString(),
@@ -617,6 +586,8 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.NameString(),
 			r.ActionString(),
 		)
+	} else {
+		logrus.WithField("ruleID", r.String()).Fatal("Unknown RuleID kind")
 	}
 }
 

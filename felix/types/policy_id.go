@@ -31,6 +31,7 @@ func (p PolicyID) String() string {
 }
 
 func (p PolicyID) ID() string {
+	// Include namespace only if it's set.
 	if p.Namespace != "" {
 		return fmt.Sprintf("%s/%s/%s", p.Kind, p.Namespace, p.Name)
 	}

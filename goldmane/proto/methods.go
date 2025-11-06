@@ -286,6 +286,6 @@ func HitFromString(s string) (*PolicyHit, error) {
 		RuleIndex:   ruleIdx,
 		Kind:        kind,
 	}
-	logrus.WithFields(hit.fields()).Debug("Parsed policy hit")
+	logrus.WithField("orig", s).WithFields(hit.fields()).Debug("Parsed policy hit")
 	return hit, nil
 }
