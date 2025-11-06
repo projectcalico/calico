@@ -457,7 +457,7 @@ func (r *RuleID) IsNamespaced() bool {
 }
 
 func (r *RuleID) IsProfile() bool {
-	return len(r.Tier) == 0
+	return len(r.Tier) == 0 || r.Tier == ProfileTierStr
 }
 
 func (r *RuleID) IsEndOfTier() bool {
