@@ -158,11 +158,10 @@ func (o *Obj) Load() error {
 
 // SetProgramAutoload sets whether a program should be automatically loaded.
 // When set to false, the program will not be loaded when Load() is called.
-func (o *Obj) SetProgramAutoload(progName string, autoload bool) error {
+func (o *Obj) SetProgramAutoload(progName string, autoload bool) {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cProgName))
 	C.bpf_set_program_autoload(o.obj, cProgName, C.bool(autoload))
-	return nil
 }
 
 // FirstMap returns first bpf map of the object.

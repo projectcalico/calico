@@ -245,10 +245,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 			}
 
 			// Disable autoload for the IP defrag program
-			if err := obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false); err != nil {
-				log.WithError(err).Warn("Could not disable autoload for IP defrag program, program may not exist; not retrying load")
-				return nil, fmt.Errorf("failed to disable autoload for IP defrag program: %w", err)
-			}
+			obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
 			skipIPDefrag = true
 
 			// Try loading again
