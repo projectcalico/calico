@@ -182,6 +182,9 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 	})
 
 	Context("with XDP blocklist on felix[srvr] blocking felixes[clnt]", func() {
+		// The expected iptables chain name for the xdpf policy.
+		xdpfChainName := "cali-pi-_SXWVuDzW3QvEGyzbItT"
+
 		BeforeEach(func() {
 			order := float64(20)
 
@@ -297,7 +300,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				Expect(doHping()).To(HaveOccurred())
 
 				if !BPFMode() && !NFTMode() {
-					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default/default.xdpf")
+					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", xdpfChainName)
 					// the only rule that refers to a cali40-prefixed ipset should
 					// have 0 packets/bytes because the raw small packets should've been
 					// blocked by XDP
@@ -330,7 +333,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				Expect(doPing()).To(HaveOccurred())
 
 				if !BPFMode() && !NFTMode() {
-					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default/default.xdpf")
+					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", xdpfChainName)
 					// the only rule that refers to a cali40-prefixed ipset should
 					// have 0 packets/bytes because the icmp packets should've been
 					// blocked by XDP
@@ -368,13 +371,12 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				if !BPFMode() {
 					if !NFTMode() {
 						Eventually(func() string {
-							out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
-								"cali-pi-default/default.xdpf")
+							out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", xdpfChainName)
 							return out
 						}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 					} else {
 						Eventually(func() string {
-							out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default/default.xdpf")
+							out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-GlobalNetworkPolicy/xdpf")
 							return out
 						}).Should(MatchRegexp(`packets 0 bytes 0`))
 					}
@@ -486,8 +488,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				if !BPFMode() && !NFTMode() {
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 					Eventually(func() string {
-						out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
-							"cali-pi-default/default.xdpf")
+						out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", xdpfChainName)
 						return out
 					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
