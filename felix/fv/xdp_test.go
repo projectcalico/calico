@@ -376,7 +376,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 						}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 					} else {
 						Eventually(func() string {
-							out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default/xdpf")
+							out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-GlobalNetworkPolicy/xdpf")
 							return out
 						}).Should(MatchRegexp(`packets 0 bytes 0`))
 					}
