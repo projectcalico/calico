@@ -156,10 +156,7 @@ func (o *Obj) Load() error {
 func (o *Obj) SetProgramAutoload(progName string, autoload bool) error {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cProgName))
-	_, err := C.bpf_set_program_autoload(o.obj, cProgName, C.bool(autoload))
-	if err != nil {
-		return fmt.Errorf("error setting autoload for program %s: %w", progName, err)
-	}
+	C.bpf_set_program_autoload(o.obj, cProgName, C.bool(autoload))
 	return nil
 }
 

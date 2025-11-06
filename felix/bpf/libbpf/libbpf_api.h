@@ -518,7 +518,7 @@ int create_bpf_map(enum bpf_map_type type, unsigned int key_size, unsigned int v
 	return fd;
 }
 
-void bpf_set_program_autoload(struct bpf_object *obj, char *progName, bool autoload)
+void bpf_set_program_autoload(struct bpf_object *obj, const char *progName, bool autoload)
 {
 	struct bpf_program *prog = bpf_object__find_program_by_name(obj, progName);
 	if (prog == NULL) {
