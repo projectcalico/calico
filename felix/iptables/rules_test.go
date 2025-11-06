@@ -19,7 +19,6 @@ import (
 	"errors"
 	"io"
 	"strings"
-	"sync"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -85,7 +84,6 @@ var _ = Describe("Hash extraction tests", func() {
 			"filter",
 			4,
 			"cali:",
-			&sync.Mutex{},
 			fd,
 			TableOptions{
 				HistoricChainPrefixes:    []string{"felix-", "cali"},

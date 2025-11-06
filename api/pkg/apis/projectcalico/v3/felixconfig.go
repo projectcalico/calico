@@ -204,23 +204,8 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	IptablesPostWriteCheckInterval *metav1.Duration `json:"iptablesPostWriteCheckInterval,omitempty" configv1timescale:"seconds" confignamev1:"IptablesPostWriteCheckIntervalSecs"`
 
-	// IptablesLockFilePath is the location of the iptables lock file. You may need to change this
-	// if the lock file is not in its standard location (for example if you have mapped it into Felix's
-	// container at a different path). [Default: /run/xtables.lock]
-	IptablesLockFilePath string `json:"iptablesLockFilePath,omitempty"`
-
-	// IptablesLockTimeout is the time that Felix itself will wait for the iptables lock (rather than delegating the
-	// lock handling to the `iptables` command).
-	//
-	// Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock.
-	// [Default: 0s disabled]
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
-	IptablesLockTimeout *metav1.Duration `json:"iptablesLockTimeout,omitempty" configv1timescale:"seconds" confignamev1:"IptablesLockTimeoutSecs"`
-
-	// IptablesLockProbeInterval when IptablesLockTimeout is enabled: the time that Felix will wait between
-	// attempts to acquire the iptables lock if it is not available. Lower values make Felix more
-	// responsive when the lock is contended, but use more CPU. [Default: 50ms]
+	// IptablesLockProbeInterval configures the interval between attempts to claim
+	// the xtables lock.  Shorter intervals are more responsive but use more CPU.  [Default: 50ms]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	IptablesLockProbeInterval *metav1.Duration `json:"iptablesLockProbeInterval,omitempty" configv1timescale:"milliseconds" confignamev1:"IptablesLockProbeIntervalMillis"`
