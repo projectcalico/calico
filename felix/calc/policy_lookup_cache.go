@@ -448,7 +448,7 @@ func (r *RuleID) Equals(r2 *RuleID) bool {
 func (r *RuleID) String() string {
 	return fmt.Sprintf(
 		"Rule(Tier=%s,Kind=%s,Name=%s,Namespace=%s,Direction=%s,Index=%s,Action=%s)",
-		r.TierString(), r.Kind, r.NameString(), r.NamespaceString(), r.DirectionString(), r.IndexStr, r.ActionString(),
+		r.Tier, r.Kind, r.Name, r.Namespace, r.Direction, r.IndexStr, r.Action,
 	)
 }
 
