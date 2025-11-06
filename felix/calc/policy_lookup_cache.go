@@ -22,7 +22,6 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -587,7 +586,7 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.ActionString(),
 		)
 	} else {
-		logrus.WithField("ruleID", r.String()).Warn("Unknown RuleID kind")
+		log.WithField("ruleID", r.String()).Warn("Unknown RuleID kind")
 	}
 }
 

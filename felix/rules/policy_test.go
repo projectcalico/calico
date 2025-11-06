@@ -456,7 +456,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(inbound).To(HaveLen(2))
 			Expect(outbound).To(ConsistOf(
 				generictables.Rule{
-					Comment: []string{"Policy default.foo egress"},
+					Comment: []string{"GlobalNetworkPolicy default.foo egress"},
 				}))
 			Expect(inbound[0].Match.Render()).To(Equal(expMatch))
 			Expect(inbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
@@ -497,7 +497,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(inbound).To(HaveLen(3))
 			Expect(outbound).To(ConsistOf(
 				generictables.Rule{
-					Comment: []string{"Policy default.foo egress"},
+					Comment: []string{"GlobalNetworkPolicy default.foo egress"},
 				}))
 			Expect(inbound[0].Match.Render()).To(Equal(expMatch))
 			Expect(inbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
@@ -545,7 +545,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 			Expect(inbound).To(ConsistOf(
 				generictables.Rule{
-					Comment: []string{"Policy default.foo ingress"},
+					Comment: []string{"GlobalNetworkPolicy default.foo ingress"},
 				}))
 			Expect(outbound).To(HaveLen(2))
 			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
@@ -587,7 +587,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 			Expect(inbound).To(ConsistOf(
 				generictables.Rule{
-					Comment: []string{"Policy default.foo ingress"},
+					Comment: []string{"GlobalNetworkPolicy default.foo ingress"},
 				}))
 			Expect(outbound).To(HaveLen(3))
 			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
@@ -2265,7 +2265,7 @@ var _ = Describe("rule metadata tests", func() {
 						Match:  iptables.Match(),
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
-							"Policy long-policy-name-that-gets-hashed ingress",
+							"GlobalNetworkPolicy long-policy-name-that-gets-hashed ingress",
 						},
 					},
 				},
@@ -2275,7 +2275,7 @@ var _ = Describe("rule metadata tests", func() {
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{
-							"Policy long-policy-name-that-gets-hashed egress",
+							"GlobalNetworkPolicy long-policy-name-that-gets-hashed egress",
 						},
 					},
 				},
@@ -2305,7 +2305,7 @@ var _ = Describe("rule metadata tests", func() {
 						Match:  iptables.Match(),
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
-							"Policy long-policy-name-that-gets-hashed ingress",
+							"GlobalNetworkPolicy long-policy-name-that-gets-hashed ingress",
 						},
 					},
 					{
@@ -2323,7 +2323,7 @@ var _ = Describe("rule metadata tests", func() {
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{
-							"Policy long-policy-name-that-gets-hashed egress",
+							"GlobalNetworkPolicy long-policy-name-that-gets-hashed egress",
 						},
 					},
 				},
