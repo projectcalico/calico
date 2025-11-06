@@ -587,7 +587,7 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.ActionString(),
 		)
 	} else {
-		logrus.WithField("ruleID", r.String()).Fatal("Unknown RuleID kind")
+		logrus.WithField("ruleID", r.String()).Warn("Unknown RuleID kind")
 	}
 }
 
