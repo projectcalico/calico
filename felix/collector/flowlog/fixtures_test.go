@@ -15,6 +15,7 @@
 package flowlog
 
 import (
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/proxy"
 
@@ -50,13 +51,20 @@ var (
 
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
-				calc.PolicyID{Name: "policy1", Tier: "default"}: 0,
-				calc.PolicyID{Name: "policy2", Tier: "default"}: 0,
+				{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}: 0,
+				{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}: 0,
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
-						rules.RuleDirIngress, rules.RuleActionDeny),
+					TierDefaultActionRuleID: calc.NewRuleID(
+						v3.KindGlobalNetworkPolicy,
+						"default",
+						"policy2",
+						"",
+						calc.RuleIndexTierDefaultAction,
+						rules.RuleDirIngress,
+						rules.RuleActionDeny,
+					),
 					EndOfTierMatchIndex: 0,
 				},
 			},
@@ -64,13 +72,20 @@ var (
 		},
 		Egress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
-				calc.PolicyID{Name: "policy1", Tier: "default"}: 0,
-				calc.PolicyID{Name: "policy2", Tier: "default"}: 0,
+				{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}: 0,
+				{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}: 0,
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
-						rules.RuleDirIngress, rules.RuleActionDeny),
+					TierDefaultActionRuleID: calc.NewRuleID(
+						v3.KindGlobalNetworkPolicy,
+						"default",
+						"policy2",
+						"",
+						calc.RuleIndexTierDefaultAction,
+						rules.RuleDirIngress,
+						rules.RuleActionDeny,
+					),
 					EndOfTierMatchIndex: 0,
 				},
 			},
@@ -669,7 +684,6 @@ var (
 		DstEp:      nil,
 		UnknownRuleID: &calc.RuleID{
 			PolicyID: calc.PolicyID{
-				Tier:      "__UNKNOWN__",
 				Name:      "__UNKNOWN__",
 				Namespace: "__UNKNOWN__",
 			},

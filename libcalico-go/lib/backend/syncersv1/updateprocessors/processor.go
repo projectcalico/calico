@@ -15,7 +15,6 @@
 package updateprocessors
 
 import (
-	"errors"
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
@@ -34,27 +33,28 @@ import (
 // resource key. The simple update processor is for converting objects that can create
 // the v1 key using only the information available in the resource key.
 
-// Function signature to convert a v3 model.ResourceKey to a v1 model.Key type
-type ConvertV2ToV1Key func(v3Key model.ResourceKey) (model.Key, error)
+// Function signature to convert a v3 model.KVPair to a v1 model.Key type
+type ConvertV3KeyToV1Key func(key model.ResourceKey) (model.Key, error)
 
 // Function to convert a v3 resource to the v1 value.  The converter may filter out
 // results by returning nil.  The generic watchersyncer will handle filtered out events
 // by either sending no event or sending delete events depending on whether the entry
 // is currently in the cache.
-type ConvertV2ToV1Value func(interface{}) (interface{}, error)
+type ConvertV3ToV1Value func(interface{}) (interface{}, error)
 
-func NewSimpleUpdateProcessor(v3Kind string, kConverter ConvertV2ToV1Key, vConverter ConvertV2ToV1Value) watchersyncer.SyncerUpdateProcessor {
-	return &simpleUpdateProcessor{
+func NewSimpleUpdateProcessor(v3Kind string, kConverter ConvertV3KeyToV1Key, vConverter ConvertV3ToV1Value) watchersyncer.SyncerUpdateProcessor {
+	up := &simpleUpdateProcessor{
 		v3Kind:         v3Kind,
 		keyConverter:   kConverter,
 		valueConverter: vConverter,
 	}
+	return up
 }
 
 type simpleUpdateProcessor struct {
 	v3Kind         string
-	keyConverter   ConvertV2ToV1Key
-	valueConverter ConvertV2ToV1Value
+	keyConverter   ConvertV3KeyToV1Key
+	valueConverter ConvertV3ToV1Value
 }
 
 func (sup *simpleUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
@@ -64,14 +64,10 @@ func (sup *simpleUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, e
 		return nil, fmt.Errorf("Incorrect key type - expecting resource of kind %s", sup.v3Kind)
 	}
 
-	// Convert the v3 resource to the equivalent v1 resource type.
-	v3key, ok := kvp.Key.(model.ResourceKey)
-	if !ok {
-		return nil, errors.New("Key is not a valid V2 resource key")
-	}
-	v1key, err := sup.keyConverter(v3key)
+	// Convert the v3 resource to the equivalent v1 resource type, started with the Key.
+	v1key, err := sup.keyConverter(rk)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Unable to convert v3 key to v1 key: %v", err)
 	}
 
 	var v1value interface{}
