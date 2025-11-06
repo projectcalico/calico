@@ -164,7 +164,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			}
 
 			// Read back the MAC to check that the set actually worked.
-			hostVeth, err := hostNlHandle.LinkByName(hostVethName)
+			hostVeth, err = hostNlHandle.LinkByName(hostVethName)
 			if err != nil {
 				err = fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
 				return err
