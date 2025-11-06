@@ -685,7 +685,6 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 		for _, expander := range testExpanders() {
 			expanderDesc, expandedTests := expander(baseTest)
 			for _, test := range expandedTests {
-				test := test
 				It("should handle: "+baseTest.String()+" "+expanderDesc, func() {
 					// Create the calculation graph.
 					conf := config.New()
