@@ -2436,13 +2436,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 		Describe("policy grouping tests", func() {
 			var (
 				// Define expected policy IDs for easier reference.
-				polA1      = "_eHFm3TQw14h98yjlEUE"
-				polA2      = "_P6FN0XHKfw4OeYo5W-W"
-				polB1      = "_3yLkKC2Dn85JFw7aHHk"
-				polB2      = "_1NljDEjWDQyDUmlbqDu"
-				tier2PolA1 = "_fYNAezCI7ZPstdDgoZ0"
-				tier2PolA2 = "_fvk5wVN5UpxrgwivjiR"
-				tier2PolB1 = "_CmyjNuqUiaFmPIFEdcI"
+				polA1      = "_FKj8ETtf3-BcMnS_qo8"
+				polA2      = "_omeUFCH2bVsRWONBpLZ"
+				polB1      = "_QZd81nWIIq0kC7gSngJ"
+				polB2      = "_NFYMXSjYN5YxMZGkDZS"
+				polC1      = "_v9EN8tMXxU3DVtYqK-R"
+				tier2PolA1 = "_phijx67K6PReQIW2j1X"
+				tier2PolA2 = "_hhHLUXdx7-vnBWg14Yt"
+				tier2PolB1 = "_EW0ENnzubkA1Izk0IBF"
 			)
 
 			JustBeforeEach(func() {
@@ -2648,19 +2649,16 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 						namesEP2, groupsEP2 := extractGroups(table.currentChains, ep2IngressChain)
 						Expect(groupsEP2).To(Equal([][]string{
-							// "polB1", "polB2"
 							{
-								"_3yLkKC2Dn85JFw7aHHk",
-								"_1NljDEjWDQyDUmlbqDu",
+								polB1,
+								polB2,
 							},
-							// "polC1"
 							{
-								"_43aX6-KpNIKVUkU4dQX",
+								polC1,
 							},
-							// "tier2.polA1", "tier2.polA2"
 							{
-								"_fYNAezCI7ZPstdDgoZ0",
-								"_fvk5wVN5UpxrgwivjiR",
+								tier2PolA1,
+								tier2PolA2,
 							},
 						}))
 
@@ -2673,37 +2671,31 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						// Start as with the above test...
 						ingressNamesEP1, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
 						Expect(groupsEP1).To(Equal([][]string{
-							// {"polA1", "polA2"},
 							{
-								"_eHFm3TQw14h98yjlEUE",
-								"_P6FN0XHKfw4OeYo5W-W",
+								polA1,
+								polA2,
 							},
-							// {"polB1", "polB2"},
 							{
-								"_3yLkKC2Dn85JFw7aHHk",
-								"_1NljDEjWDQyDUmlbqDu",
+								polB1,
+								polB2,
 							},
-							// {"tier2.polA1", "tier2.polA2"},
 							{
-								"_fYNAezCI7ZPstdDgoZ0",
-								"_fvk5wVN5UpxrgwivjiR",
+								tier2PolA1,
+								tier2PolA2,
 							},
 						}))
 						_, groupsEP2 := extractGroups(table.currentChains, ep2IngressChain)
 						Expect(groupsEP2).To(Equal([][]string{
-							// {"polB1", "polB2"},
 							{
-								"_3yLkKC2Dn85JFw7aHHk",
-								"_1NljDEjWDQyDUmlbqDu",
+								polB1,
+								polB2,
 							},
-							// {"polC1"},
 							{
-								"_43aX6-KpNIKVUkU4dQX",
+								polC1,
 							},
-							// {"tier2.polA1", "tier2.polA2"},
 							{
-								"_fYNAezCI7ZPstdDgoZ0",
-								"_fvk5wVN5UpxrgwivjiR",
+								tier2PolA1,
+								tier2PolA2,
 							},
 						}))
 
@@ -2716,38 +2708,33 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 						_, groupsEP1Post := extractGroups(table.currentChains, ep1IngressChain)
 						Expect(groupsEP1Post).To(Equal([][]string{
-							// {"polA1"},
 							{
-								"_eHFm3TQw14h98yjlEUE",
+								polA1,
 							},
-							// {"polA2", "polB1", "polB2"},
 							{
-								"_P6FN0XHKfw4OeYo5W-W",
-								"_3yLkKC2Dn85JFw7aHHk",
-								"_1NljDEjWDQyDUmlbqDu",
+								polA2,
+								polB1,
+								polB2,
 							},
-							// {"tier2.polA1", "tier2.polA2"},
 							{
-								"_fYNAezCI7ZPstdDgoZ0",
-								"_fvk5wVN5UpxrgwivjiR",
+								tier2PolA1,
+								tier2PolA2,
 							},
 						}))
 
 						_, groupsEP2Post := extractGroups(table.currentChains, ep2IngressChain)
 						Expect(groupsEP2Post).To(Equal([][]string{
-							// {"polB1", "polB2"},
 							{
-								"_3yLkKC2Dn85JFw7aHHk",
-								"_1NljDEjWDQyDUmlbqDu",
+								polB1,
+								polB2,
 							},
-							// {"polC1"},
 							{
-								"_43aX6-KpNIKVUkU4dQX",
+								polC1,
 							},
 							// {"tier2.polA1", "tier2.polA2"},
 							{
-								"_fYNAezCI7ZPstdDgoZ0",
-								"_fvk5wVN5UpxrgwivjiR",
+								tier2PolA1,
+								tier2PolA2,
 							},
 						}))
 
@@ -2787,8 +2774,8 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						Expect(groupsEP1).To(Equal([][]string{
 							// {"polB1", "polB2"},
 							{
-								"_3yLkKC2Dn85JFw7aHHk",
-								"_1NljDEjWDQyDUmlbqDu",
+								polB1,
+								polB2,
 							},
 						}))
 						Expect(table.currentChains).NotTo(HaveKey(polAGroup), "Policy A group should be cleaned up")

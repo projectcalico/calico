@@ -37,6 +37,10 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 			mangleTable  *mockTable
 			filterTable  *mockTable
 			ruleRenderer *mockPolRenderer
+
+			// Expected chain names for GNP "pol1".
+			caliPIPol1ChainName = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy}, false)
+			caliPOPol1ChainName = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy}, false)
 		)
 
 		BeforeEach(func() {
@@ -72,12 +76,12 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should install the in and out chain", func() {
 				filterTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
-					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
+					{Name: caliPIPol1ChainName},
+					{Name: caliPOPol1ChainName},
 				}})
 				mangleTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
-					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
+					{Name: caliPIPol1ChainName},
+					{Name: caliPOPol1ChainName},
 				}})
 			})
 
@@ -116,20 +120,20 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should install the raw chains", func() {
 				rawTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
-					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
+					{Name: caliPIPol1ChainName},
+					{Name: caliPOPol1ChainName},
 				}})
 			})
 			It("should install to the filter table", func() {
 				filterTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
-					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
+					{Name: caliPIPol1ChainName},
+					{Name: caliPOPol1ChainName},
 				}})
 			})
 			It("should install to the mangle table", func() {
 				mangleTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
-					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
+					{Name: caliPIPol1ChainName},
+					{Name: caliPOPol1ChainName},
 				}})
 			})
 
@@ -173,20 +177,20 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should install the raw chains", func() {
 				rawTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
-					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
+					{Name: caliPIPol1ChainName},
+					{Name: caliPOPol1ChainName},
 				}})
 			})
 			It("should install to the filter table", func() {
 				filterTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
-					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
+					{Name: caliPIPol1ChainName},
+					{Name: caliPOPol1ChainName},
 				}})
 			})
 			It("should install to the mangle table", func() {
 				mangleTable.checkChains([][]*generictables.Chain{{
-					{Name: "cali-pi-_YspepO_0A2yEDN3C8xg"},
-					{Name: "cali-po-_YspepO_0A2yEDN3C8xg"},
+					{Name: caliPIPol1ChainName},
+					{Name: caliPOPol1ChainName},
 				}})
 			})
 

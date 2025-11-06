@@ -959,14 +959,12 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bool) string {
 	maxLen := iptables.MaxChainNameLength
-	id := polID.String() // TODO: This is a hack for tests. Should use ID as well.
 	if nft {
 		maxLen = nftables.MaxChainNameLength
-		id = polID.ID()
 	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
-		id,
+		polID.ID(),
 		maxLen,
 	)
 }

@@ -448,8 +448,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-_Z2XXGUGuYtd-F7DcN76"))
-			Expect(chains[1].Name).To(Equal("cali-po-_Z2XXGUGuYtd-F7DcN76"))
+			Expect(chains[0].Name).To(Equal("cali-pi-_V_L_-qbyj9pMkjjggbj"))
+			Expect(chains[1].Name).To(Equal("cali-po-_V_L_-qbyj9pMkjjggbj"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -489,8 +489,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-_Z2XXGUGuYtd-F7DcN76"))
-			Expect(chains[1].Name).To(Equal("cali-po-_Z2XXGUGuYtd-F7DcN76"))
+			Expect(chains[0].Name).To(Equal("cali-pi-_V_L_-qbyj9pMkjjggbj"))
+			Expect(chains[1].Name).To(Equal("cali-po-_V_L_-qbyj9pMkjjggbj"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -537,8 +537,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-_Z2XXGUGuYtd-F7DcN76"))
-			Expect(chains[1].Name).To(Equal("cali-po-_Z2XXGUGuYtd-F7DcN76"))
+			Expect(chains[0].Name).To(Equal("cali-pi-_V_L_-qbyj9pMkjjggbj"))
+			Expect(chains[1].Name).To(Equal("cali-po-_V_L_-qbyj9pMkjjggbj"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -579,8 +579,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-_Z2XXGUGuYtd-F7DcN76"))
-			Expect(chains[1].Name).To(Equal("cali-po-_Z2XXGUGuYtd-F7DcN76"))
+			Expect(chains[0].Name).To(Equal("cali-pi-_V_L_-qbyj9pMkjjggbj"))
+			Expect(chains[1].Name).To(Equal("cali-po-_V_L_-qbyj9pMkjjggbj"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -2259,7 +2259,7 @@ var _ = Describe("rule metadata tests", func() {
 		)
 		Expect(chains).To(ConsistOf(
 			&generictables.Chain{
-				Name: "cali-pi-_cDn-iLFzbkkUDFdASOj",
+				Name: "cali-pi-_bcnvGyipuD4NqeKuy1j",
 				Rules: []generictables.Rule{
 					{
 						Match:  iptables.Match(),
@@ -2271,7 +2271,7 @@ var _ = Describe("rule metadata tests", func() {
 				},
 			},
 			&generictables.Chain{
-				Name: "cali-po-_cDn-iLFzbkkUDFdASOj",
+				Name: "cali-po-_bcnvGyipuD4NqeKuy1j",
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{
@@ -2299,7 +2299,7 @@ var _ = Describe("rule metadata tests", func() {
 		)
 		Expect(chains).To(ConsistOf(
 			&generictables.Chain{
-				Name: "cali-pi-_cDn-iLFzbkkUDFdASOj",
+				Name: "cali-pi-_bcnvGyipuD4NqeKuy1j",
 				Rules: []generictables.Rule{
 					{
 						Match:  iptables.Match(),
@@ -2319,7 +2319,7 @@ var _ = Describe("rule metadata tests", func() {
 				},
 			},
 			&generictables.Chain{
-				Name: "cali-po-_cDn-iLFzbkkUDFdASOj",
+				Name: "cali-po-_bcnvGyipuD4NqeKuy1j",
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{

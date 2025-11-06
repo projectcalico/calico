@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/rules"
 	. "github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
 )
@@ -41,6 +42,26 @@ func init() {
 var (
 	_ = Describe("Endpoints", endpointRulesTests(false, "DROP"))
 	_ = Describe("Endpoints with flowlogs", endpointRulesTests(true, "DROP"))
+)
+
+var (
+	// Expected ID suffixes for policies used in tests.
+	gnpAI = "_ZMdvlDxVmjIQZiLZp4U"
+	gnpBI = "_8W91OfQf0rhQJtk1nWi"
+	gnpAE = "_BOgFuOi8tbV0awqZFjg"
+	gnpBE = "_TPOgx2WKFeXH7YpWFda"
+
+	// These don't exceed the length limit for iptables chain names, so
+	// they do not get hashed.
+	npAI  = "NetworkPolicy/ai"
+	npBI  = "NetworkPolicy/bi"
+	npAE  = "NetworkPolicy/ae"
+	npBE  = "NetworkPolicy/be"
+	npC   = "NetworkPolicy/c"
+	npAFI = "NetworkPolicy/afi"
+	npBFI = "NetworkPolicy/bfi"
+	npAFE = "NetworkPolicy/afe"
+	npBFE = "NetworkPolicy/bfe"
 )
 
 func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() {
@@ -188,19 +209,15 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a fully-loaded workload endpoint", func() {
-					aiName := "_O0pVgrbUS-w9LV-ymOU"
-					biName := "_CIk7lCjAz0nqT58dsOl"
 					toWlRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(aiName, biName),
+						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 					).build()
 
-					aeName := "_jfZJzRk5BL6etkeURWF"
-					beName := "_pg0PVW77c72uzvPC77t"
 					fromWlRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
@@ -209,7 +226,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
 						withEgress(),
-						withPolicies(aeName, beName),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
 					).build()
 
@@ -342,24 +359,22 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
-					biName := "_CIk7lCjAz0nqT58dsOl"
 					toWlRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("staged:ai", biName),
+						withPolicies("staged:ai", gnpBI),
 						withProfiles("prof1", "prof2"),
 					).build()
 
-					aeName := "_jfZJzRk5BL6etkeURWF"
 					fromWlRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withEgress(),
-						withPolicies(aeName, "staged:be"),
+						withPolicies(gnpAE, "staged:be"),
 						withProfiles("prof1", "prof2"),
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
@@ -527,27 +542,23 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 
 				It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
 					// Suffixes for policy IDs "ai" and "bi".
-					aiName := "_3xKN3evNxwBWcAh244h"
-					biName := "_QSW5_PDK_s1eHapChNF"
 					toWlRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(aiName, biName),
+						withPolicies(npAI, npBI),
 						withProfiles("prof1", "prof2"),
 						withTierPassAction(),
 					).build()
 
-					aeName := "_8047GZMW_qdpTav2vE_"
-					beName := "_Qs3dCzh7d3PMMSbH4cY"
 					fromWlRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withEgress(),
-						withPolicies(aeName, beName),
+						withPolicies(npAE, npBE),
 						withProfiles("prof1", "prof2"),
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
@@ -595,75 +606,67 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name: "default",
 							IngressPolicies: []*proto.PolicyID{
-								{Name: "ai", Namespace: "default", Kind: v3.KindNetworkPolicy},
-								{Name: "bi", Namespace: "default", Kind: v3.KindNetworkPolicy},
+								{Name: "ai", Kind: v3.KindNetworkPolicy},
+								{Name: "bi", Kind: v3.KindNetworkPolicy},
 							},
 							EgressPolicies: []*proto.PolicyID{
-								{Name: "ae", Namespace: "default", Kind: v3.KindNetworkPolicy},
-								{Name: "be", Namespace: "default", Kind: v3.KindNetworkPolicy},
+								{Name: "ae", Kind: v3.KindNetworkPolicy},
+								{Name: "be", Kind: v3.KindNetworkPolicy},
 							},
 						}}),
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name: "default",
 							IngressPolicies: []*proto.PolicyID{
-								{Name: "afi", Namespace: "default", Kind: v3.KindNetworkPolicy},
-								{Name: "bfi", Namespace: "default", Kind: v3.KindNetworkPolicy},
+								{Name: "afi", Kind: v3.KindNetworkPolicy},
+								{Name: "bfi", Kind: v3.KindNetworkPolicy},
 							},
 							EgressPolicies: []*proto.PolicyID{
-								{Name: "afe", Namespace: "default", Kind: v3.KindNetworkPolicy},
-								{Name: "bfe", Namespace: "default", Kind: v3.KindNetworkPolicy},
+								{Name: "afe", Kind: v3.KindNetworkPolicy},
+								{Name: "bfe", Kind: v3.KindNetworkPolicy},
 							},
 						}}),
 						epMarkMapper,
 						[]string{"prof1", "prof2"},
 					)
 
-					aeName := "_JU5oNNAwhHV___R-lkh"
-					beName := "_meI83QSxZWNsHZWBTpG"
 					toHostRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(aeName, beName),
+						withPolicies(npAE, npBE),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
 						withEgress(),
 					).build()
 
-					aiName := "_zfgAup6KA9szFfRRLO_"
-					biName := "_KaxbBcfOEz1XamwGVp9"
 					fromHostRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(aiName, biName),
+						withPolicies(npAI, npBI),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
 					).build()
 
-					afeName := "_asYL3CrFYcESD7GeJkV"
-					bfeName := "_PrFGa9kfQlssZ7HxbWW"
 					toHostFWRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(afeName, bfeName),
+						withPolicies(npAFE, npBFE),
 						withForwardPolicies(),
 						withEgress(),
 						forHostEndpoint(),
 					).build()
 
-					afiName := "_o3FRDN3_rZ1aQfqc648"
-					bfiName := "_LkOhm96eqBXACWwMddz"
 					fromHostFWRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(afiName, bfiName),
+						withPolicies(npAFI, npBFI),
 						withForwardPolicies(),
 						forHostEndpoint(),
 					).build()
@@ -699,7 +702,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("_ejW1WrlORJHV5IRl3pC"),
+						withPolicies(npC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
 						withEgress(),
@@ -710,7 +713,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("_ejW1WrlORJHV5IRl3pC"),
+						withPolicies(npC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
 					).build()
@@ -740,7 +743,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("_ejW1WrlORJHV5IRl3pC"),
+						withPolicies(npC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
 					).build()
@@ -912,7 +915,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("_ejW1WrlORJHV5IRl3pC"),
+						withPolicies(npC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
 						withInvalidCTStateDisabled(),
@@ -1222,34 +1225,34 @@ var _ = Describe("PolicyGroups", func() {
 	})
 })
 
-const (
+var (
 	// Chain names for policy ID "a".
-	cali_pi_a = "cali-pi-_zZmPWPWcSYDlSYt2mVx"
-	cali_po_a = "cali-po-_zZmPWPWcSYDlSYt2mVx"
+	cali_pi_a = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_a = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "b".
-	cali_pi_b = "cali-pi-_mvrMXyei4Bwo-k-Pg_n"
-	cali_po_b = "cali-po-_mvrMXyei4Bwo-k-Pg_n"
+	cali_pi_b = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_b = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "c".
-	cali_pi_c = "cali-pi-_IWgmLeWfcy_zbDokHRI"
-	cali_po_c = "cali-po-_IWgmLeWfcy_zbDokHRI"
+	cali_pi_c = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_c = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "d".
-	cali_pi_d = "cali-pi-_sxlkXxhHXbxPId0_tSf"
-	cali_po_d = "cali-po-_sxlkXxhHXbxPId0_tSf"
+	cali_pi_d = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_d = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "e".
-	cali_pi_e = "cali-pi-_KbR5DOfeUwsXOzPC_dc"
-	cali_po_e = "cali-po-_KbR5DOfeUwsXOzPC_dc"
+	cali_pi_e = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_e = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "f".
-	cali_pi_f = "cali-pi-_tSzg7xN86XZNLThoL0V"
-	cali_po_f = "cali-po-_tSzg7xN86XZNLThoL0V"
+	cali_pi_f = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_f = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
 
-	cali_po_g = "cali-po-_qk99B8pcXK9ABs7ze5J"
-	cali_po_h = "cali-po-_bYCRyZOZIjCr3sLjG1-"
-	cali_po_i = "cali-po-_0-YXdDkgCnTdkj8SJc9"
+	cali_po_g = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "g", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_h = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "h", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_i = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "i", Kind: v3.KindGlobalNetworkPolicy}, false)
 )
 
 var _ = table.DescribeTable("PolicyGroup chains",
