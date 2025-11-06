@@ -1300,22 +1300,6 @@ responsive when the lock is contended, but use more CPU.
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `50ms` |
 
-### `IptablesLockTimeoutSecs` (config file) / `iptablesLockTimeout` (YAML)
-
-The time that Felix itself will wait for the iptables lock (rather than delegating the
-lock handling to the `iptables` command).
-
-Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_IptablesLockTimeoutSecs` |
-| Encoding (env var/config file) | Seconds (floating point) |
-| Default value (above encoding) | `0` (0s) |
-| `FelixConfiguration` field | `iptablesLockTimeout` (YAML) `IptablesLockTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
-| Default value (YAML) | `0s` |
-
 ### `IptablesMangleAllowAction` (config file) / `iptablesMangleAllowAction` (YAML)
 
 Controls what happens to traffic that is accepted by a Felix policy chain in the

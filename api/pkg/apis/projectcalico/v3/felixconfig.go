@@ -209,15 +209,6 @@ type FelixConfigurationSpec struct {
 	// container at a different path). [Default: /run/xtables.lock]
 	IptablesLockFilePath string `json:"iptablesLockFilePath,omitempty"`
 
-	// IptablesLockTimeout is the time that Felix itself will wait for the iptables lock (rather than delegating the
-	// lock handling to the `iptables` command).
-	//
-	// Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock.
-	// [Default: 0s disabled]
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
-	IptablesLockTimeout *metav1.Duration `json:"iptablesLockTimeout,omitempty" configv1timescale:"seconds" confignamev1:"IptablesLockTimeoutSecs"`
-
 	// IptablesLockProbeInterval when IptablesLockTimeout is enabled: the time that Felix will wait between
 	// attempts to acquire the iptables lock if it is not available. Lower values make Felix more
 	// responsive when the lock is contended, but use more CPU. [Default: 50ms]
