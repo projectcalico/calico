@@ -44,6 +44,8 @@ const (
 	v4TempIPSetName2 = "cali4t2"
 	v4MainIPSetName2 = "cali40t:qMt7iLlGDhvLnCjM0l9nzxb"
 	v4MainIPSetName3 = "cali40u:qMt7iLlGDhvLnCjM0l9nzxb"
+
+	supportedRevision = 5
 )
 
 var v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
@@ -464,6 +466,35 @@ var _ = Describe("IP sets dataplane", func() {
 		})
 	})
 
+	It("Calico IP sets with unsupported revision and in desired sets should be re-created", func() {
+		dataplane.IPSetMetadata = map[string]setMetadata{
+			v4MainIPSetName: {
+				Name:     v4MainIPSetName,
+				Family:   "inet",
+				Type:     IPSetTypeHashIP,
+				MaxSize:  1234,
+				Revision: supportedRevision + 1,
+			},
+			v4MainIPSetName2: {
+				Name:     v4MainIPSetName2,
+				Family:   "inet",
+				Type:     IPSetTypeHashIP,
+				MaxSize:  1234,
+				Revision: supportedRevision + 1,
+			},
+		}
+		dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3")
+		dataplane.IPSetMembers[v4MainIPSetName2] = set.From("10.0.0.1", "10.0.0.2")
+
+		ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+		apply()
+
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName: v4Members1And2, // Should be re-created from the desired state.
+			// v4MainIPSetName2 should be destroyed.
+		})
+	})
+
 	Describe("with many left-over IP sets in place", func() {
 		BeforeEach(func() {
 			for i := 0; i < MaxIPSetDeletionsPerIteration*3; i++ {
@@ -795,7 +826,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 				It("should be detected after many transient errors", func() {
 					// Simulate lots of transient failures in a row, followed by success.
-					dataplane.RestoreOpFailures = slices.Repeat([]string{"write-ip"}, 6)
+					dataplane.RestoreOpFailures = slices.Repeat([]string{"write-ip"}, 11)
 					// Trigger an update to only one IP set.
 					ipsets.AddMembers(ipSetID2, []string{"10.0.0.4"})
 					apply()
