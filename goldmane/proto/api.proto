@@ -200,6 +200,12 @@ message Filter {
 
   // Policies matches on policy fields. Combined using logical OR.
   repeated PolicyMatch policies = 8;
+
+  // StagedActions filters on the staged action field. Combined using logical OR.
+  repeated Action staged_actions = 9;
+
+  // Reporter filters on the reporter field (source or destination). Combined using logical OR.
+  repeated Reporter reporters = 10;
 }
 
 enum MatchType {
@@ -418,6 +424,10 @@ message Flow {
   // NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
   // connection that matches the FlowKey that was active at this Flow's EndTime.
   int64 num_connections_live = 12;
+  
+  // StagedAction is the action that would be taken if all staged policies were enforced.
+  // This field reflects dynamic calculations based on current staged policies.
+  Action staged_action = 13;
 }
 
 message PolicyTrace {
