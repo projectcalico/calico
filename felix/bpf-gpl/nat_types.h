@@ -45,11 +45,6 @@ struct __attribute__((__packed__)) calico_nat_key {
 // This is used as a special ID along with count=0 to drop a packet at nat level1 lookup
 #define NAT_FE_DROP_COUNT  0xffffffff
 
-union calico_nat_lpm_key {
-        struct bpf_lpm_trie_key lpm;
-        struct calico_nat_key key;
-};
-
 struct calico_nat_value {
 	__u32 id;
 	__u32 count;
@@ -69,7 +64,7 @@ CALI_MAP_NAMED(cali_v6_nat_fe, cali_nat_fe, 3,
 CALI_MAP_NAMED(cali_v4_nat_fe, cali_nat_fe, 3,
 #endif
 		BPF_MAP_TYPE_LPM_TRIE,
-		union calico_nat_lpm_key, struct calico_nat_value,
+		struct calico_nat_key, struct calico_nat_value,
 		64*1024, BPF_F_NO_PREALLOC)
 
 

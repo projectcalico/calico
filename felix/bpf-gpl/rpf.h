@@ -31,9 +31,9 @@ static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt
                 CALI_INFO("Workload RPF fail: not a local workload.");
                 return RPF_RES_FAIL;
         }
-        if (r->if_index != ctx->skb->ifindex) {
+        if (CALI_RT_IFINDEX(r) != ctx->skb->ifindex) {
                 CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)",
-                                ctx->skb->ifindex, r->if_index);
+                                ctx->skb->ifindex, CALI_RT_IFINDEX(r));
                 return RPF_RES_FAIL;
         }
 
