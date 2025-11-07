@@ -44,6 +44,7 @@ type dataplaneMetadata struct {
 	RangeMin     int
 	RangeMax     int
 	DeleteFailed bool
+	ListFailed   bool
 }
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -363,17 +364,15 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 			s.logCxt.Debug("Resyncing ipsets with dataplane.")
 			s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
 
-			failedIPSets, err := s.tryResync()
-			if err != nil {
+			if err := s.tryResync(); err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
 
 				// Most likely, we are dealing with a persistent failure in re-syncing with dataplane.
 				// Try to destroy IPSets with failures. Desired IPSets will be created later.
-				if attempt >= 3 {
-					s.deleteIPSets(failedIPSets)
+				if attempt < 3 {
+					backOff()
+					continue
 				}
-				backOff()
-				continue
 			}
 			s.fullResyncRequired = false
 		}
@@ -412,7 +411,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
 // IP sets in the dataplane and queues up updates to any IP sets that are out-of-sync.
-func (s *IPSets) tryResync() ([]string, error) {
+func (s *IPSets) tryResync() (err error) {
 	// Log the time spent as we exit the function.
 	resyncStart := time.Now()
 	defer func() {
@@ -448,7 +447,7 @@ func (s *IPSets) tryResync() ([]string, error) {
 	ipSets, err := s.CalicoIPSets()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
-		return nil, err
+		return err
 	}
 	if debug {
 		s.logCxt.Debugf("List of ipsets: %v", ipSets)
@@ -478,7 +477,7 @@ func (s *IPSets) tryResync() ([]string, error) {
 	}
 
 	if len(failedIPSets) > 0 {
-		return failedIPSets, fmt.Errorf("failed to parse IPSets %v", strings.Join(failedIPSets, ","))
+		return fmt.Errorf("failed to parse IPSets %v", strings.Join(failedIPSets, ","))
 	}
 
 	// Mark any IP sets that we didn't see as empty.
@@ -508,7 +507,7 @@ func (s *IPSets) tryResync() ([]string, error) {
 	// don't exist in the dataplane, and we just handled those above.
 	s.ipSetsRequiringResync.Clear()
 
-	return nil, nil
+	return nil
 }
 
 func (s *IPSets) CalicoIPSets() ([]string, error) {
@@ -690,6 +689,10 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		return scanner.Err()
 	})
 	if err != nil {
+		meta, _ := s.setNameToProgrammedMetadata.Dataplane().Get(ipSetName)
+		meta.ListFailed = true
+		s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
+
 		return err
 	}
 	return nil
@@ -1099,12 +1102,6 @@ func (s *IPSets) tryTempIPSetDeletions() {
 		numDeletions++
 		return deltatracker.IterActionUpdateDataplane
 	})
-}
-
-func (s *IPSets) deleteIPSets(ipSetNames []string) {
-	for _, setName := range ipSetNames {
-		_ = s.deleteIPSet(setName)
-	}
 }
 
 func (s *IPSets) deleteIPSet(setName string) error {

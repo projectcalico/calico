@@ -484,14 +484,21 @@ var _ = Describe("IP sets dataplane", func() {
 			},
 		}
 		dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3")
-		dataplane.IPSetMembers[v4MainIPSetName2] = set.From("10.0.0.1", "10.0.0.2")
+		dataplane.IPSetMembers[v4MainIPSetName2] = set.From("10.0.0.1", "10.0.0.4")
 
 		ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
 		apply()
 
 		dataplane.ExpectMembers(map[string][]string{
-			v4MainIPSetName: v4Members1And2, // Should be re-created from the desired state.
+			v4MainIPSetName:  []string{"10.0.0.1", "10.0.0.2"}, // New IPSet from the desired state.
+			v4TempIPSetName0: []string{"10.0.0.1", "10.0.0.3"}, // Temp IPSet from dataplane state.
 			// v4MainIPSetName2 should be destroyed.
+		})
+
+		apply()
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName: []string{"10.0.0.1", "10.0.0.2"},
+			// Temp IPSet should be destroyed.
 		})
 	})
 
