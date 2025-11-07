@@ -59,7 +59,7 @@ enum xdp_action prefilter(struct xdp_md* xdp)
 	struct ethhdr * ehdr;
 	struct iphdr  * ihdr;
 	struct protoport dport = {0,0};
-	union ip4_bpf_lpm_trie_key sip;
+	struct ip4key sip;
 
 	// You must be at least 'UDP header' tall to take this ride.
 	if (xdp->data + sizeof(*ehdr) + sizeof(*ihdr) + sizeof(struct udphdr)
@@ -87,8 +87,8 @@ enum xdp_action prefilter(struct xdp_md* xdp)
 		}
 	}
 
-	ip4val_to_lpm(&sip, 32, ihdr->saddr);
-
+	sip.addr = ihdr->saddr;
+	sip.mask = 32;
 	// Drop the packet if source IP matches a blocklist entry.
 	if (NULL != bpf_map_lookup_elem(&calico_prefilter_v4, &sip)) {
 		// In blocklist - "thou shall not XDP_PASS!"
