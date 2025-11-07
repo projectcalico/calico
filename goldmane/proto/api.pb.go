@@ -1618,10 +1618,7 @@ type FlowKey struct {
 	Action Action `protobuf:"varint,14,opt,name=action,proto3,enum=goldmane.Action" json:"action,omitempty"`
 	// Policies includes an entry for each policy rule that took an action on the connections
 	// aggregated into this flow.
-	Policies *PolicyTrace `protobuf:"bytes,15,opt,name=policies,proto3" json:"policies,omitempty"`
-	// StagedAction is the action that would be taken if all staged policies were enforced.
-	// This field reflects dynamic calculations based on current staged policies.
-	StagedAction  Action `protobuf:"varint,16,opt,name=staged_action,json=stagedAction,proto3,enum=goldmane.Action" json:"staged_action,omitempty"`
+	Policies      *PolicyTrace `protobuf:"bytes,15,opt,name=policies,proto3" json:"policies,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1761,13 +1758,6 @@ func (x *FlowKey) GetPolicies() *PolicyTrace {
 	return nil
 }
 
-func (x *FlowKey) GetStagedAction() Action {
-	if x != nil {
-		return x.StagedAction
-	}
-	return Action_ActionUnspecified
-}
-
 // Flow is a message representing statistics gathered about connections that share common fields,
 // aggregated across either time, nodes, or both.
 type Flow struct {
@@ -1800,8 +1790,11 @@ type Flow struct {
 	// NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
 	// connection that matches the FlowKey that was active at this Flow's EndTime.
 	NumConnectionsLive int64 `protobuf:"varint,12,opt,name=num_connections_live,json=numConnectionsLive,proto3" json:"num_connections_live,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// StagedAction is the action that would be taken if all staged policies were enforced.
+	// This field reflects dynamic calculations based on current staged policies.
+	StagedAction  Action `protobuf:"varint,13,opt,name=staged_action,json=stagedAction,proto3,enum=goldmane.Action" json:"staged_action,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Flow) Reset() {
@@ -1916,6 +1909,13 @@ func (x *Flow) GetNumConnectionsLive() int64 {
 		return x.NumConnectionsLive
 	}
 	return 0
+}
+
+func (x *Flow) GetStagedAction() Action {
+	if x != nil {
+		return x.StagedAction
+	}
+	return Action_ActionUnspecified
 }
 
 type PolicyTrace struct {
@@ -2405,7 +2405,7 @@ const file_api_proto_rawDesc = "" +
 	"\vFlowReceipt\"0\n" +
 	"\n" +
 	"FlowUpdate\x12\"\n" +
-	"\x04flow\x18\x01 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xc1\x05\n" +
+	"\x04flow\x18\x01 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\x8a\x05\n" +
 	"\aFlowKey\x12\x1f\n" +
 	"\vsource_name\x18\x01 \x01(\tR\n" +
 	"sourceName\x12)\n" +
@@ -2424,8 +2424,7 @@ const file_api_proto_rawDesc = "" +
 	"\x05proto\x18\f \x01(\tR\x05proto\x12.\n" +
 	"\breporter\x18\r \x01(\x0e2\x12.goldmane.ReporterR\breporter\x12(\n" +
 	"\x06action\x18\x0e \x01(\x0e2\x10.goldmane.ActionR\x06action\x121\n" +
-	"\bpolicies\x18\x0f \x01(\v2\x15.goldmane.PolicyTraceR\bpolicies\x125\n" +
-	"\rstaged_action\x18\x10 \x01(\x0e2\x10.goldmane.ActionR\fstagedAction\"\xc9\x03\n" +
+	"\bpolicies\x18\x0f \x01(\v2\x15.goldmane.PolicyTraceR\bpolicies\"\x80\x04\n" +
 	"\x04Flow\x12#\n" +
 	"\x03Key\x18\x01 \x01(\v2\x11.goldmane.FlowKeyR\x03Key\x12\x1d\n" +
 	"\n" +
@@ -2443,7 +2442,8 @@ const file_api_proto_rawDesc = "" +
 	"\x17num_connections_started\x18\n" +
 	" \x01(\x03R\x15numConnectionsStarted\x12:\n" +
 	"\x19num_connections_completed\x18\v \x01(\x03R\x17numConnectionsCompleted\x120\n" +
-	"\x14num_connections_live\x18\f \x01(\x03R\x12numConnectionsLive\"\x8f\x01\n" +
+	"\x14num_connections_live\x18\f \x01(\x03R\x12numConnectionsLive\x125\n" +
+	"\rstaged_action\x18\r \x01(\x0e2\x10.goldmane.ActionR\fstagedAction\"\x8f\x01\n" +
 	"\vPolicyTrace\x12@\n" +
 	"\x11enforced_policies\x18\x01 \x03(\v2\x13.goldmane.PolicyHitR\x10enforcedPolicies\x12>\n" +
 	"\x10pending_policies\x18\x02 \x03(\v2\x13.goldmane.PolicyHitR\x0fpendingPolicies\"\x96\x02\n" +
@@ -2636,8 +2636,8 @@ var file_api_proto_depIdxs = []int32{
 	6,  // 27: goldmane.FlowKey.reporter:type_name -> goldmane.Reporter
 	1,  // 28: goldmane.FlowKey.action:type_name -> goldmane.Action
 	27, // 29: goldmane.FlowKey.policies:type_name -> goldmane.PolicyTrace
-	1,  // 30: goldmane.FlowKey.staged_action:type_name -> goldmane.Action
-	25, // 31: goldmane.Flow.Key:type_name -> goldmane.FlowKey
+	25, // 30: goldmane.Flow.Key:type_name -> goldmane.FlowKey
+	1,  // 31: goldmane.Flow.staged_action:type_name -> goldmane.Action
 	28, // 32: goldmane.PolicyTrace.enforced_policies:type_name -> goldmane.PolicyHit
 	28, // 33: goldmane.PolicyTrace.pending_policies:type_name -> goldmane.PolicyHit
 	3,  // 34: goldmane.PolicyHit.kind:type_name -> goldmane.PolicyKind

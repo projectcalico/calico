@@ -383,10 +383,6 @@ message FlowKey {
   // Policies includes an entry for each policy rule that took an action on the connections
   // aggregated into this flow.
   PolicyTrace policies = 15;
-
-  // StagedAction is the action that would be taken if all staged policies were enforced.
-  // This field reflects dynamic calculations based on current staged policies.
-  Action staged_action = 16;
 }
 
 // Flow is a message representing statistics gathered about connections that share common fields,
@@ -428,6 +424,10 @@ message Flow {
   // NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
   // connection that matches the FlowKey that was active at this Flow's EndTime.
   int64 num_connections_live = 12;
+  
+  // StagedAction is the action that would be taken if all staged policies were enforced.
+  // This field reflects dynamic calculations based on current staged policies.
+  Action staged_action = 13;
 }
 
 message PolicyTrace {
