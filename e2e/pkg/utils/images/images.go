@@ -35,13 +35,14 @@ func WindowsClientImage() string {
 		framework.Failf("WINDOWS_OS env not specified. Please set env properly")
 		return ""
 	}
-	if opsys == "1809" || opsys == "1909" || opsys == "1903" || opsys == "2004" || opsys == "20H2" {
+	switch opsys {
+	case "1809", "1909", "1903", "2004", "20H2":
 		return "mcr.microsoft.com/windows/servercore:" + opsys
-	} else if opsys == "2022" {
+	case "2022":
 		// For 2022, servercore uses "ltsc2022" and does not have the image tag
 		// "2022" (unlike previous Windows versions).
 		return "mcr.microsoft.com/windows/servercore:ltsc2022"
-	} else {
+	default:
 		framework.Failf("Windows OS version currently not supported: %s", opsys)
 	}
 	return ""
