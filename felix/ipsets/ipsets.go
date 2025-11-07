@@ -44,6 +44,7 @@ type dataplaneMetadata struct {
 	RangeMin     int
 	RangeMax     int
 	DeleteFailed bool
+	ListFailed   bool
 }
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -365,8 +366,13 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 			if err := s.tryResync(); err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
-				backOff()
-				continue
+
+				// Most likely, we are dealing with a persistent failure in re-syncing with dataplane.
+				// Try to destroy IPSets with failures. Desired IPSets will be created later.
+				if attempt < 3 {
+					backOff()
+					continue
+				}
 			}
 			s.fullResyncRequired = false
 		}
@@ -448,12 +454,10 @@ func (s *IPSets) tryResync() (err error) {
 	}
 
 	ipSetPartOfSync := func(name string) bool {
-		if s.fullResyncRequired {
-			return true
-		}
-		return s.ipSetsRequiringResync.Contains(name)
+		return s.fullResyncRequired || s.ipSetsRequiringResync.Contains(name)
 	}
 
+	var failedIPSets []string
 	for _, name := range ipSets {
 		if !ipSetPartOfSync(name) {
 			// Skipping this IP set on this pass.
@@ -465,11 +469,15 @@ func (s *IPSets) tryResync() (err error) {
 		err = s.resyncIPSet(name)
 		if err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
-			return
+			failedIPSets = append(failedIPSets, name)
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
 			s.ipSetsRequiringResync.Discard(name)
 		}
+	}
+
+	if len(failedIPSets) > 0 {
+		return fmt.Errorf("failed to parse IPSets %v", strings.Join(failedIPSets, ","))
 	}
 
 	// Mark any IP sets that we didn't see as empty.
@@ -551,6 +559,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 	//
 	// As we stream through the data, we extract the name of the IP set and its members. We
 	// use the IP set's metadata to convert each member to its canonical form for comparison.
+	meta := dataplaneMetadata{}
 	err := s.runIPSetList(ipSetName, func(scanner *bufio.Scanner) error {
 		debug := log.GetLevel() >= log.DebugLevel
 		ipSetName := ""
@@ -576,9 +585,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 				// When we hit the Header line we should know the name, and type of the IP set, which lets
 				// us update the tracker.
 				parts := strings.Split(line, " ")
-				meta := dataplaneMetadata{
-					Type: ipSetType,
-				}
+				meta.Type = ipSetType
 				for idx, p := range parts {
 					if p == "maxelem" {
 						if idx+1 >= len(parts) {
@@ -681,6 +688,8 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		return scanner.Err()
 	})
 	if err != nil {
+		meta.ListFailed = true
+		s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
 		return err
 	}
 	return nil
