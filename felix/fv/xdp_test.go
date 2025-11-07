@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -98,7 +97,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				"8055,8056,1234",
 				proto)
 
-			hostEp := api.NewHostEndpoint()
+			hostEp := v3.NewHostEndpoint()
 			hostEp.Name = fmt.Sprintf("host-endpoint-%d", ii)
 			hostEp.Labels = map[string]string{
 				"host-endpoint": "true",
@@ -192,15 +191,15 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			order := float64(20)
 
 			// allow everything
-			allowAllPolicy := api.NewGlobalNetworkPolicy()
+			allowAllPolicy := v3.NewGlobalNetworkPolicy()
 			allowAllPolicy.Name = "allow-all"
 			allowAllPolicy.Spec.Order = &order
 			allowAllPolicy.Spec.Selector = "all()"
-			allowAllPolicy.Spec.Ingress = []api.Rule{{
-				Action: api.Allow,
+			allowAllPolicy.Spec.Ingress = []v3.Rule{{
+				Action: v3.Allow,
 			}}
-			allowAllPolicy.Spec.Egress = []api.Rule{{
-				Action: api.Allow,
+			allowAllPolicy.Spec.Egress = []v3.Rule{{
+				Action: v3.Allow,
 			}}
 			_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, allowAllPolicy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
@@ -211,15 +210,15 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 			// apply XDP policy to felix[srvr] blocking felixes[clnt] by IP
 			serverSelector := "role=='server'"
-			xdpPolicy := api.NewGlobalNetworkPolicy()
+			xdpPolicy := v3.NewGlobalNetworkPolicy()
 			xdpPolicy.Name = "xdpf" // keep name short, so it matches with the iptables chain name
 			xdpPolicy.Spec.Order = &order
 			xdpPolicy.Spec.DoNotTrack = true
 			xdpPolicy.Spec.ApplyOnForward = true
 			xdpPolicy.Spec.Selector = serverSelector
-			xdpPolicy.Spec.Ingress = []api.Rule{{
-				Action: api.Deny,
-				Source: api.EntityRule{
+			xdpPolicy.Spec.Ingress = []v3.Rule{{
+				Action: v3.Deny,
+				Source: v3.EntityRule{
 					Selector: "xdpblocklist-set=='true'",
 				},
 			}}
@@ -253,7 +252,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 		applyGlobalNetworkSets := func(name string, ip string, cidrToHexSuffix string, update bool) (hexCIDR []string) {
 			// create GlobalNetworkSet with IP of felixes[clnt]
-			var srcNS *api.GlobalNetworkSet
+			var srcNS *v3.GlobalNetworkSet
 			var err error
 			if update {
 				srcNS, err = client.GlobalNetworkSets().Get(utils.Ctx, name, options.GetOptions{})
@@ -263,7 +262,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 				_, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
 			} else {
-				srcNS = api.NewGlobalNetworkSet()
+				srcNS = v3.NewGlobalNetworkSet()
 				srcNS.Name = name
 				srcNS.Spec.Nets = []string{ip}
 				srcNS.Labels = map[string]string{
