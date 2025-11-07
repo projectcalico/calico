@@ -131,6 +131,9 @@ type FlowSpec struct {
 	// Reset aggregated data on the next metric update to ensure we clear out obsolete labels, policies and Domains for
 	// connections that are not actively part of the flow during the export interval.
 	resetAggrData bool
+	
+	// Store the last pending rule IDs to calculate staged action
+	lastPendingRuleIDs []*calc.RuleID
 }
 
 func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool) *FlowSpec {
@@ -141,6 +144,7 @@ func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool) *FlowSpec {
 		FlowEnforcedPolicySets: NewFlowEnforcedPolicySets(*mu),
 		FlowPendingPolicySet:   NewFlowPendingPolicySet(*mu),
 		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs),
+		lastPendingRuleIDs:     mu.PendingRuleIDs,
 	}
 }
 
@@ -167,6 +171,7 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 		if !includePolicies {
 			fl.FlowEnforcedPolicySet = nil
 			fl.FlowPendingPolicySet = nil
+			fl.StagedAction = ActionAllow // Default to allow when policies not included
 			flogs = append(flogs, fl)
 		} else {
 			if len(f.FlowEnforcedPolicySets) > 1 {
@@ -182,6 +187,11 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 				// policy will replace the previous one. The same pending policy will be depicted
 				// across all flow logs.
 				cpfl.FlowPendingPolicySet = FlowPolicySet(f.FlowPendingPolicySet)
+				
+				// Set the staged action based on the pending policy set
+				// This represents what action would be taken if staged policies were enforced
+				cpfl.StagedAction = f.GetStagedAction()
+				
 				flogs = append(flogs, &cpfl)
 			}
 		}
@@ -204,6 +214,13 @@ func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 	f.aggregateFlowStatsByProcess(mu)
 
 	f.replaceFlowPendingPolicySet(*mu)
+	// Update the pending rule IDs for staged action calculation
+	f.lastPendingRuleIDs = mu.PendingRuleIDs
+}
+
+// GetStagedAction returns the action that would be taken if staged policies were enforced
+func (f *FlowSpec) GetStagedAction() Action {
+	return getStagedActionFromRuleIDs(f.lastPendingRuleIDs)
 }
 
 // MergeWith merges two flow specs. This means copying the flowRefsActive that contains a reference
@@ -574,4 +591,5 @@ type FlowLog struct {
 	FlowProcessReportedStats
 
 	FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
+	StagedAction                                 Action
 }

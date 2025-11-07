@@ -200,6 +200,12 @@ message Filter {
 
   // Policies matches on policy fields. Combined using logical OR.
   repeated PolicyMatch policies = 8;
+
+  // StagedActions filters on the staged action field. Combined using logical OR.
+  repeated Action staged_actions = 9;
+
+  // Reporter filters on the reporter field (source or destination). Combined using logical OR.
+  repeated Reporter reporters = 10;
 }
 
 enum MatchType {
@@ -377,6 +383,10 @@ message FlowKey {
   // Policies includes an entry for each policy rule that took an action on the connections
   // aggregated into this flow.
   PolicyTrace policies = 15;
+
+  // StagedAction is the action that would be taken if all staged policies were enforced.
+  // This field reflects dynamic calculations based on current staged policies.
+  Action staged_action = 16;
 }
 
 // Flow is a message representing statistics gathered about connections that share common fields,

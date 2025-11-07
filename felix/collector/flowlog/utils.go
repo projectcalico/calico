@@ -53,6 +53,32 @@ func getActionAndReporterFromRuleID(r *calc.RuleID) (a Action, flr ReporterType)
 	return
 }
 
+// getStagedActionFromRuleIDs calculates the action that would be taken if pending (staged) policies were enforced.
+// It examines the pending rule IDs and returns the action from the last decisive rule.
+func getStagedActionFromRuleIDs(pendingRuleIDs []*calc.RuleID) Action {
+	// Default to allow if no pending policies
+	if len(pendingRuleIDs) == 0 {
+		return ActionAllow
+	}
+	
+	// Find the last rule with an action (not Pass)
+	for i := len(pendingRuleIDs) - 1; i >= 0; i-- {
+		ruleID := pendingRuleIDs[i]
+		if ruleID == nil {
+			continue
+		}
+		switch ruleID.Action {
+		case rules.RuleActionDeny:
+			return ActionDeny
+		case rules.RuleActionAllow:
+			return ActionAllow
+		}
+	}
+	
+	// If we didn't find a decisive action, default to allow
+	return ActionAllow
+}
+
 func labelsToString(labels map[string]string) string {
 	if labels == nil {
 		return "-"
