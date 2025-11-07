@@ -1,4 +1,4 @@
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+# Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
-# ARG WINDOWS_HPC_VERSION
 ARG WINDOWS_VERSION
 
-#FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:${WINDOWS_HPC_VERSION}
 FROM mcr.microsoft.com/windows/nanoserver:${WINDOWS_VERSION}
 
 ARG GIT_VERSION=unknown
