@@ -229,16 +229,14 @@ const (
 	NumSyncerTypes = iota
 )
 
-var (
-	// AllSyncerTypes contains each of the SyncerType constants. We use an array rather than a slice for a
-	// compile-time length check.
-	AllSyncerTypes = [NumSyncerTypes]SyncerType{
-		SyncerTypeFelix,
-		SyncerTypeBGP,
-		SyncerTypeTunnelIPAllocation,
-		SyncerTypeNodeStatus,
-	}
-)
+// AllSyncerTypes contains each of the SyncerType constants. We use an array rather than a slice for a
+// compile-time length check.
+var AllSyncerTypes = [NumSyncerTypes]SyncerType{
+	SyncerTypeFelix,
+	SyncerTypeBGP,
+	SyncerTypeTunnelIPAllocation,
+	SyncerTypeNodeStatus,
+}
 
 type CompressionAlgorithm string
 
@@ -286,11 +284,12 @@ type MsgDecoderRestart struct {
 
 // MsgACK is a general-purpose ACK message, currently used during the initial handshake to acknowledge the
 // switch to compressed mode.
-type MsgACK struct {
-}
-type MsgSyncStatus struct {
-	SyncStatus api.SyncStatus
-}
+type (
+	MsgACK        struct{}
+	MsgSyncStatus struct {
+		SyncStatus api.SyncStatus
+	}
+)
 type MsgPing struct {
 	Timestamp time.Time
 }

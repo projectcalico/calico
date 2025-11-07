@@ -27,8 +27,8 @@ var _ = Describe("Policy functions", func() {
 		order := 10.5
 		p := model.Policy{
 			Order:            &order,
-			InboundRules:     []model.Rule{model.Rule{Action: "Deny"}},
-			OutboundRules:    []model.Rule{model.Rule{Action: "Allow"}},
+			InboundRules:     []model.Rule{{Action: "Deny"}},
+			OutboundRules:    []model.Rule{{Action: "Allow"}},
 			Selector:         "apples=='oranges'",
 			DoNotTrack:       false,
 			PreDNAT:          true,
@@ -39,23 +39,8 @@ var _ = Describe("Policy functions", func() {
 		Expect(p.String()).To(Equal(`order:10.5,selector:"apples=='oranges'",inbound:Deny,outbound:Allow,untracked:false,pre_dnat:true,apply_on_forward:true,types:Ingress;Egress,performance_hints:[AssumeNeededOnEveryNode]`))
 	})
 
-	It("Policy should identify as staged by name", func() {
-		Expect(model.PolicyIsStaged("staged:policy1")).To(BeTrue())
-		Expect(model.PolicyIsStaged("policy1")).To(BeFalse())
-	})
-
-	It("Staged policy name should be less than non-staged equivalent", func() {
-		Expect(model.PolicyNameLessThan("tier1.policy0", "tier1.policy1")).To(BeTrue())
-		Expect(model.PolicyNameLessThan("tier1.policy1", "tier1.policy0")).To(BeFalse())
-		Expect(model.PolicyNameLessThan("staged:tier1.policy1", "tier1.policy1")).To(BeTrue())
-		Expect(model.PolicyNameLessThan("ns1/staged:knp.default.policy1", "ns1/knp.default.policy1")).To(BeTrue())
-		Expect(model.PolicyNameLessThan("knp.default.policy1", "staged:knp.default.policy1")).To(BeFalse())
-		Expect(model.PolicyNameLessThan("ns1/staged:tier2.policy0", "ns1/tier2.policy1")).To(BeTrue())
-		Expect(model.PolicyNameLessThan("ns1/staged:tier2.policy0", "ns1/tier2.policy0")).To(BeTrue())
-		Expect(model.PolicyNameLessThan("ns1/tier2.policy1", "ns1/staged:tier2.policy0")).To(BeFalse())
-		Expect(model.PolicyNameLessThan("ns1/staged:tier2.policy0", "ns1/staged:tier2.policy1")).To(BeTrue())
-		Expect(model.PolicyNameLessThan("ns1/staged:tier2.policy1", "ns1/staged:tier2.policy0")).To(BeFalse())
-		Expect(model.PolicyNameLessThan("ns1/staged:tier2.policy1", "ns1/staged:tier2.policy1")).To(BeFalse())
-		Expect(model.PolicyNameLessThan("ns1/staged:tier2.policy1", "ns2/staged:tier1.policy1")).To(BeTrue())
+	It("Policy should identify as staged by kind", func() {
+		Expect(model.KindIsStaged(v3.KindStagedNetworkPolicy)).To(BeTrue())
+		Expect(model.KindIsStaged(v3.KindNetworkPolicy)).To(BeFalse())
 	})
 })

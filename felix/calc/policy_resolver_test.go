@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -31,7 +32,7 @@ func TestPolicyResolver_OnUpdate(t *testing.T) {
 		Name: "test-policy",
 	}
 
-	policy := model.Policy{}
+	policy := model.Policy{Tier: "default"}
 
 	kvp := model.KVPair{
 		Key:   polKey,
@@ -96,11 +97,11 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	pr, recorder := createPolicyResolver()
 
 	polKey := model.PolicyKey{
-		Tier: "default",
 		Name: "test-policy",
+		Kind: v3.KindNetworkPolicy,
 	}
 
-	pol := ExtractPolicyMetadata(&model.Policy{})
+	pol := ExtractPolicyMetadata(&model.Policy{Tier: "default"})
 
 	endpointKey := model.WorkloadEndpointKey{
 		Hostname: "test-workload-ep",
@@ -118,7 +119,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		t.Error("Unexpected updates from policy resolver:", recorder.updates)
 	}
 
-	pr.OnPolicyMatch(polKey, endpointKey)
+	pr.OnPolicyMatch(polKey, endpointKey, "")
 	if len(recorder.updates) > 0 {
 		// Shouldn't get any updates until we Flush()
 		t.Error("Unexpected updates from policy resolver before calling Flush():", recorder.updates)
@@ -134,7 +135,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		t.Error("Adding new policy - expected DirtyEndpoints to contain endpoint for policy but it does not")
 	}
 
-	pr.OnPolicyMatch(polKey, endpointKey)
+	pr.OnPolicyMatch(polKey, endpointKey, "")
 	pr.OnDatamodelStatus(api.InSync)
 	pr.Flush()
 	if len(recorder.updates) != 1 {
@@ -166,8 +167,8 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 	pr.OnDatamodelStatus(api.InSync)
 
 	polKey := model.PolicyKey{
-		Tier: "default",
 		Name: "test-policy",
+		Kind: v3.KindNetworkPolicy,
 	}
 
 	pol := policyMetadata{}
@@ -178,7 +179,7 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 
 	pr.policySorter.UpdatePolicy(polKey, &pol)
 
-	pr.OnPolicyMatch(polKey, endpointKey)
+	pr.OnPolicyMatch(polKey, endpointKey, "")
 	pr.OnPolicyMatchStopped(polKey, endpointKey)
 
 	if pr.policyIDToEndpointIDs.ContainsKey(polKey) {
