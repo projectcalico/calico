@@ -18,8 +18,11 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.podAnnotations }}
       annotations:
+      {{- if .Values.kubernetesServiceEndpoint.host }}
+        checksum/endpoints-config: {{ include (print $.Template.BasePath "/tigera-operator/01-kubernetes-services-endpoint.yaml") . | sha256sum }}
+      {{- end }}
+      {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
