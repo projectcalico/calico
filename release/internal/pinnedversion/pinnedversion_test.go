@@ -21,60 +21,66 @@ import (
 
 	approvals "github.com/approvals/go-approval-tests"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
+var dateApprovalScrubber = approvals.NewDateScrubber(`[a-zA-Z]{3}, \d{1,2} [a-zA-Z]{3} \d{4} \d{2}:\d{2}:\d{2} [A-Z]{3}`)
+
 func TestImageComponents(t *testing.T) {
-	data := &calicoTemplateData{
-		ReleaseName:    "test-release",
-		BaseDomain:     "example.com",
-		ProductVersion: "vX.Y.Z",
-		Operator: registry.Component{
-			Version:  "vA.B.C",
+	dir := t.TempDir()
+	rootDir, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("failed to get git root dir: %v", err)
+	}
+	c := &CalicoPinnedVersions{
+		Dir:                 dir,
+		RootDir:             rootDir,
+		ReleaseBranchPrefix: "release",
+		OperatorCfg: OperatorConfig{
 			Image:    "tigera/operator",
 			Registry: "docker.io",
+			Branch:   "release-v1.40",
 		},
-		Hash:          "vX.Y.Z-vA.B.C",
-		Note:          "Test note",
-		ReleaseBranch: "release-v1.0",
+		releaseName:   "test-release",
+		productBranch: "release-v3.31",
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
 	}
-	outputDir := t.TempDir()
-
-	err := generatePinnedVersionFile(data, outputDir)
-	if err != nil {
+	if err := generatePinnedVersionFile(c); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)
 	}
 
-	p, err := retrievePinnedVersion(outputDir)
+	p, err := retrievePinnedVersion(dir)
 	if err != nil {
 		t.Fatalf("failed to retrieve pinned version: %v", err)
 	}
 	t.Run("without operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{
-			"typha":                     {Version: "vX.Y.Z", Image: "typha"},
-			"calicoctl":                 {Version: "vX.Y.Z", Image: "ctl"},
-			"node":                      {Version: "vX.Y.Z", Image: "node"},
-			"cni":                       {Version: "vX.Y.Z", Image: "cni"},
-			"apiserver":                 {Version: "vX.Y.Z", Image: "apiserver"},
-			"kube-controllers":          {Version: "vX.Y.Z", Image: "kube-controllers"},
-			"goldmane":                  {Version: "vX.Y.Z", Image: "goldmane"},
-			"flannel":                   {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
-			"dikastes":                  {Version: "vX.Y.Z", Image: "dikastes"},
-			"envoy-gateway":             {Version: "vX.Y.Z", Image: "envoy-gateway"},
-			"envoy-proxy":               {Version: "vX.Y.Z", Image: "envoy-proxy"},
-			"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
-			"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
-			"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
-			"test-signer":               {Version: "vX.Y.Z", Image: "test-signer"},
-			"csi":                       {Version: "vX.Y.Z", Image: "csi"},
-			"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
-			"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
-			"node-windows":              {Version: "vX.Y.Z", Image: "node-windows"},
-			"guardian":                  {Version: "vX.Y.Z", Image: "guardian"},
-			"whisker":                   {Version: "vX.Y.Z", Image: "whisker"},
-			"whisker-backend":           {Version: "vX.Y.Z", Image: "whisker-backend"},
+			"typha":                        {Version: "v3.31.0", Image: "typha"},
+			"calicoctl":                    {Version: "v3.31.0", Image: "ctl"},
+			"node":                         {Version: "v3.31.0", Image: "node"},
+			"cni":                          {Version: "v3.31.0", Image: "cni"},
+			"apiserver":                    {Version: "v3.31.0", Image: "apiserver"},
+			"kube-controllers":             {Version: "v3.31.0", Image: "kube-controllers"},
+			"goldmane":                     {Version: "v3.31.0", Image: "goldmane"},
+			"flannel":                      {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
+			"flannel-migration-controller": {Version: "v3.31.0", Image: "flannel-migration-controller"},
+			"dikastes":                     {Version: "v3.31.0", Image: "dikastes"},
+			"envoy-gateway":                {Version: "v3.31.0", Image: "envoy-gateway"},
+			"envoy-proxy":                  {Version: "v3.31.0", Image: "envoy-proxy"},
+			"envoy-ratelimit":              {Version: "v3.31.0", Image: "envoy-ratelimit"},
+			"flexvol":                      {Version: "v3.31.0", Image: "pod2daemon-flexvol"},
+			"key-cert-provisioner":         {Version: "v3.31.0", Image: "key-cert-provisioner"},
+			"test-signer":                  {Version: "v3.31.0", Image: "test-signer"},
+			"csi":                          {Version: "v3.31.0", Image: "csi"},
+			"csi-node-driver-registrar":    {Version: "v3.31.0", Image: "node-driver-registrar"},
+			"cni-windows":                  {Version: "v3.31.0", Image: "cni-windows"},
+			"node-windows":                 {Version: "v3.31.0", Image: "node-windows"},
+			"guardian":                     {Version: "v3.31.0", Image: "guardian"},
+			"whisker":                      {Version: "v3.31.0", Image: "whisker"},
+			"whisker-backend":              {Version: "v3.31.0", Image: "whisker-backend"},
 		}
 		actualComponents := p.ImageComponents(false)
 		if diff := cmp.Diff(expectedComponents, actualComponents); diff != "" {
@@ -83,30 +89,31 @@ func TestImageComponents(t *testing.T) {
 	})
 	t.Run("with operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{
-			"typha":                     {Version: "vX.Y.Z", Image: "typha"},
-			"calicoctl":                 {Version: "vX.Y.Z", Image: "ctl"},
-			"node":                      {Version: "vX.Y.Z", Image: "node"},
-			"cni":                       {Version: "vX.Y.Z", Image: "cni"},
-			"apiserver":                 {Version: "vX.Y.Z", Image: "apiserver"},
-			"kube-controllers":          {Version: "vX.Y.Z", Image: "kube-controllers"},
-			"goldmane":                  {Version: "vX.Y.Z", Image: "goldmane"},
-			"flannel":                   {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
-			"dikastes":                  {Version: "vX.Y.Z", Image: "dikastes"},
-			"envoy-gateway":             {Version: "vX.Y.Z", Image: "envoy-gateway"},
-			"envoy-proxy":               {Version: "vX.Y.Z", Image: "envoy-proxy"},
-			"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
-			"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
-			"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
-			"test-signer":               {Version: "vX.Y.Z", Image: "test-signer"},
-			"csi":                       {Version: "vX.Y.Z", Image: "csi"},
-			"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
-			"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
-			"node-windows":              {Version: "vX.Y.Z", Image: "node-windows"},
-			"guardian":                  {Version: "vX.Y.Z", Image: "guardian"},
-			"whisker":                   {Version: "vX.Y.Z", Image: "whisker"},
-			"whisker-backend":           {Version: "vX.Y.Z", Image: "whisker-backend"},
-			"tigera/operator":           {Version: "vA.B.C", Image: "tigera/operator", Registry: "docker.io"},
-			"tigera/operator-init":      {Version: "vA.B.C", Image: "tigera/operator-init", Registry: "docker.io"},
+			"typha":                        {Version: "v3.31.0", Image: "typha"},
+			"calicoctl":                    {Version: "v3.31.0", Image: "ctl"},
+			"node":                         {Version: "v3.31.0", Image: "node"},
+			"cni":                          {Version: "v3.31.0", Image: "cni"},
+			"apiserver":                    {Version: "v3.31.0", Image: "apiserver"},
+			"kube-controllers":             {Version: "v3.31.0", Image: "kube-controllers"},
+			"goldmane":                     {Version: "v3.31.0", Image: "goldmane"},
+			"flannel":                      {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
+			"flannel-migration-controller": {Version: "v3.31.0", Image: "flannel-migration-controller"},
+			"dikastes":                     {Version: "v3.31.0", Image: "dikastes"},
+			"envoy-gateway":                {Version: "v3.31.0", Image: "envoy-gateway"},
+			"envoy-proxy":                  {Version: "v3.31.0", Image: "envoy-proxy"},
+			"envoy-ratelimit":              {Version: "v3.31.0", Image: "envoy-ratelimit"},
+			"flexvol":                      {Version: "v3.31.0", Image: "pod2daemon-flexvol"},
+			"key-cert-provisioner":         {Version: "v3.31.0", Image: "key-cert-provisioner"},
+			"test-signer":                  {Version: "v3.31.0", Image: "test-signer"},
+			"csi":                          {Version: "v3.31.0", Image: "csi"},
+			"csi-node-driver-registrar":    {Version: "v3.31.0", Image: "node-driver-registrar"},
+			"cni-windows":                  {Version: "v3.31.0", Image: "cni-windows"},
+			"node-windows":                 {Version: "v3.31.0", Image: "node-windows"},
+			"guardian":                     {Version: "v3.31.0", Image: "guardian"},
+			"whisker":                      {Version: "v3.31.0", Image: "whisker"},
+			"whisker-backend":              {Version: "v3.31.0", Image: "whisker-backend"},
+			"tigera/operator":              {Version: "v1.40.0-v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
+			"tigera/operator-init":         {Version: "v1.40.0-v3.31.0", Image: "tigera/operator-init", Registry: "docker.io"},
 		}
 		actualComponents := p.ImageComponents(true)
 		if diff := cmp.Diff(expectedComponents, actualComponents); diff != "" {
@@ -116,27 +123,28 @@ func TestImageComponents(t *testing.T) {
 }
 
 func TestGeneratePinnedVersionFile(t *testing.T) {
-	data := &calicoTemplateData{
-		ReleaseName:    "test-release",
-		BaseDomain:     "example.com",
-		ProductVersion: "vX.Y.Z",
-		Operator: registry.Component{
-			Version:  "vA.B.C",
+	dir := t.TempDir()
+	rootDir, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("failed to get git root dir: %v", err)
+	}
+	p := &CalicoPinnedVersions{
+		Dir:                 dir,
+		RootDir:             rootDir,
+		ReleaseBranchPrefix: "release",
+		OperatorCfg: OperatorConfig{
 			Image:    "tigera/operator",
 			Registry: "docker.io",
+			Branch:   "release-v1.40",
 		},
-		Hash:          "vX.Y.Z-vA.B.C",
-		Note:          "Test note",
-		ReleaseBranch: "release-v1.0",
+		releaseName:   "test-release",
+		productBranch: "release-v3.31",
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
 	}
-	outputDir := t.TempDir()
-
-	err := generatePinnedVersionFile(data, outputDir)
-	if err != nil {
+	if err := generatePinnedVersionFile(p); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)
 	}
-
-	pinnedVersionPath := PinnedVersionFilePath(outputDir)
+	pinnedVersionPath := PinnedVersionFilePath(dir)
 	if _, err := os.Stat(pinnedVersionPath); err != nil {
 		t.Fatalf("pinned version file not created: %v", err)
 	}
@@ -144,26 +152,29 @@ func TestGeneratePinnedVersionFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read pinned version file: %v", err)
 	}
-	approvals.VerifyString(t, string(content))
+	approvals.VerifyString(t, string(content), approvals.Options().WithScrubber(dateApprovalScrubber))
 }
 
 func TestGenerateOperatorComponents(t *testing.T) {
 	dir := t.TempDir()
-	data := &calicoTemplateData{
-		ReleaseName:    "test-release",
-		BaseDomain:     "example.com",
-		ProductVersion: "vX.Y.Z",
-		Operator: registry.Component{
-			Version:  "vA.B.C",
+	rootDir, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("failed to get git root dir: %v", err)
+	}
+	p := &CalicoPinnedVersions{
+		Dir:                 dir,
+		RootDir:             rootDir,
+		ReleaseBranchPrefix: "release",
+		OperatorCfg: OperatorConfig{
 			Image:    "tigera/operator",
 			Registry: "docker.io",
+			Branch:   "release-v1.40",
 		},
-		Hash:          "vX.Y.Z-vA.B.C",
-		Note:          "Test note",
-		ReleaseBranch: "release-v1.0",
+		releaseName:   "test-release",
+		productBranch: "release-v3.31",
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
 	}
-	err := generatePinnedVersionFile(data, dir)
-	if err != nil {
+	if err := generatePinnedVersionFile(p); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)
 	}
 	op, path, err := GenerateOperatorComponents(dir, dir)
@@ -172,7 +183,7 @@ func TestGenerateOperatorComponents(t *testing.T) {
 	}
 	expectedOperator := registry.OperatorComponent{
 		Component: registry.Component{
-			Version:  "vA.B.C",
+			Version:  "v1.40.0-v3.31.0",
 			Image:    "tigera/operator",
 			Registry: "docker.io",
 		},
@@ -188,59 +199,5 @@ func TestGenerateOperatorComponents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read operator components file: %v", err)
 	}
-	approvals.VerifyString(t, string(content))
-}
-
-func TestRetrieveImageComponents(t *testing.T) {
-	dir := t.TempDir()
-	data := &calicoTemplateData{
-		ReleaseName:    "test-release",
-		BaseDomain:     "example.com",
-		ProductVersion: "vX.Y.Z",
-		Operator: registry.Component{
-			Version:  "vA.B.C",
-			Image:    "tigera/operator",
-			Registry: "docker.io",
-		},
-		Hash:          "vX.Y.Z-vA.B.C",
-		Note:          "Test note",
-		ReleaseBranch: "release-v1.0",
-	}
-	err := generatePinnedVersionFile(data, dir)
-	if err != nil {
-		t.Fatalf("failed to generate pinned version file: %v", err)
-	}
-	retrievedComponents, err := RetrieveImageComponents(dir)
-	if err != nil {
-		t.Fatalf("failed to retrieve image components: %v", err)
-	}
-	expectedComponents := map[string]registry.Component{
-		"typha":                     {Version: "vX.Y.Z", Image: "typha"},
-		"calicoctl":                 {Version: "vX.Y.Z", Image: "ctl"},
-		"node":                      {Version: "vX.Y.Z", Image: "node"},
-		"cni":                       {Version: "vX.Y.Z", Image: "cni"},
-		"apiserver":                 {Version: "vX.Y.Z", Image: "apiserver"},
-		"kube-controllers":          {Version: "vX.Y.Z", Image: "kube-controllers"},
-		"goldmane":                  {Version: "vX.Y.Z", Image: "goldmane"},
-		"flannel":                   {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
-		"dikastes":                  {Version: "vX.Y.Z", Image: "dikastes"},
-		"envoy-gateway":             {Version: "vX.Y.Z", Image: "envoy-gateway"},
-		"envoy-proxy":               {Version: "vX.Y.Z", Image: "envoy-proxy"},
-		"envoy-ratelimit":           {Version: "vX.Y.Z", Image: "envoy-ratelimit"},
-		"flexvol":                   {Version: "vX.Y.Z", Image: "pod2daemon-flexvol"},
-		"key-cert-provisioner":      {Version: "vX.Y.Z", Image: "key-cert-provisioner"},
-		"test-signer":               {Version: "vX.Y.Z", Image: "test-signer"},
-		"csi":                       {Version: "vX.Y.Z", Image: "csi"},
-		"csi-node-driver-registrar": {Version: "vX.Y.Z", Image: "node-driver-registrar"},
-		"cni-windows":               {Version: "vX.Y.Z", Image: "cni-windows"},
-		"node-windows":              {Version: "vX.Y.Z", Image: "node-windows"},
-		"guardian":                  {Version: "vX.Y.Z", Image: "guardian"},
-		"whisker":                   {Version: "vX.Y.Z", Image: "whisker"},
-		"whisker-backend":           {Version: "vX.Y.Z", Image: "whisker-backend"},
-		"tigera/operator":           {Version: "vA.B.C", Image: "tigera/operator", Registry: "docker.io"},
-		"tigera/operator-init":      {Version: "vA.B.C", Image: "tigera/operator-init", Registry: "docker.io"},
-	}
-	if diff := cmp.Diff(expectedComponents, retrievedComponents, cmpopts.SortMaps(func(a, b string) bool { return a < b })); diff != "" {
-		t.Errorf("components do not match (-expected +actual):\n%s", diff)
-	}
+	approvals.VerifyString(t, string(content), approvals.Options().WithScrubber(dateApprovalScrubber))
 }
