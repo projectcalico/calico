@@ -29,7 +29,6 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/felix/rules"
 	. "github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
 )
@@ -1227,32 +1226,32 @@ var _ = Describe("PolicyGroups", func() {
 
 var (
 	// Chain names for policy ID "a".
-	cali_pi_a = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
-	cali_po_a = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_pi_a = PolicyChainName("cali-pi-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_a = PolicyChainName("cali-po-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "b".
-	cali_pi_b = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
-	cali_po_b = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_pi_b = PolicyChainName("cali-pi-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_b = PolicyChainName("cali-po-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "c".
-	cali_pi_c = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
-	cali_po_c = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_pi_c = PolicyChainName("cali-pi-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_c = PolicyChainName("cali-po-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "d".
-	cali_pi_d = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
-	cali_po_d = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_pi_d = PolicyChainName("cali-pi-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_d = PolicyChainName("cali-po-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "e".
-	cali_pi_e = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
-	cali_po_e = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_pi_e = PolicyChainName("cali-pi-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_e = PolicyChainName("cali-po-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 	// Chain names for policy ID "f".
-	cali_pi_f = rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
-	cali_po_f = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_pi_f = PolicyChainName("cali-pi-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_f = PolicyChainName("cali-po-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
 
-	cali_po_g = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "g", Kind: v3.KindGlobalNetworkPolicy}, false)
-	cali_po_h = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "h", Kind: v3.KindGlobalNetworkPolicy}, false)
-	cali_po_i = rules.PolicyChainName("cali-po-", &types.PolicyID{Name: "i", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_g = PolicyChainName("cali-po-", &types.PolicyID{Name: "g", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_h = PolicyChainName("cali-po-", &types.PolicyID{Name: "h", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_i = PolicyChainName("cali-po-", &types.PolicyID{Name: "i", Kind: v3.KindGlobalNetworkPolicy}, false)
 )
 
 var _ = table.DescribeTable("PolicyGroup chains",
