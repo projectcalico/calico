@@ -1265,7 +1265,7 @@ allow:
 		struct cali_rt *r = cali_rt_lookup(&state->post_nat_ip_dst);
 
 		if (r && cali_rt_flags_local_workload(r->flags)) {
-			state->ct_result.ifindex_fwd = r->if_index;
+			state->ct_result.ifindex_fwd = CALI_RT_IFINDEX(r);
 			CALI_DEBUG("NP local WL " IP_FMT ":%d on HEP",
 					debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
 			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
