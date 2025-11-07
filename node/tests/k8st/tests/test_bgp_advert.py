@@ -112,11 +112,6 @@ class _TestBGPAdvert(TestBase):
             bird_peer_config=self.get_bird_conf(),
         )
 
-        # Enable debug logging
-        self.update_ds_env("calico-node",
-                           "calico-system",
-                           {"BGP_LOGSEVERITYSCREEN": "debug"})
-
         # Establish BGPPeer from cluster nodes to node-extra
         calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
