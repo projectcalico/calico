@@ -363,8 +363,15 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 			s.logCxt.Debug("Resyncing ipsets with dataplane.")
 			s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
 
-			if err := s.tryResync(); err != nil {
+			failedIPSets, err := s.tryResync()
+			if err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
+
+				// Most likely, we are dealing with a persistent failure in re-syncing with dataplane.
+				// Try to destroy IPSets with failures. Desired IPSets will be created later.
+				if attempt >= 3 {
+					s.deleteIPSets(failedIPSets)
+				}
 				backOff()
 				continue
 			}
@@ -405,7 +412,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
 // IP sets in the dataplane and queues up updates to any IP sets that are out-of-sync.
-func (s *IPSets) tryResync() (err error) {
+func (s *IPSets) tryResync() ([]string, error) {
 	// Log the time spent as we exit the function.
 	resyncStart := time.Now()
 	defer func() {
@@ -441,19 +448,17 @@ func (s *IPSets) tryResync() (err error) {
 	ipSets, err := s.CalicoIPSets()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
-		return
+		return nil, err
 	}
 	if debug {
 		s.logCxt.Debugf("List of ipsets: %v", ipSets)
 	}
 
 	ipSetPartOfSync := func(name string) bool {
-		if s.fullResyncRequired {
-			return true
-		}
-		return s.ipSetsRequiringResync.Contains(name)
+		return s.fullResyncRequired || s.ipSetsRequiringResync.Contains(name)
 	}
 
+	var failedIPSets []string
 	for _, name := range ipSets {
 		if !ipSetPartOfSync(name) {
 			// Skipping this IP set on this pass.
@@ -465,11 +470,15 @@ func (s *IPSets) tryResync() (err error) {
 		err = s.resyncIPSet(name)
 		if err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
-			return
+			failedIPSets = append(failedIPSets, name)
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
 			s.ipSetsRequiringResync.Discard(name)
 		}
+	}
+
+	if len(failedIPSets) > 0 {
+		return failedIPSets, fmt.Errorf("failed to parse IPSets %v", strings.Join(failedIPSets, ","))
 	}
 
 	// Mark any IP sets that we didn't see as empty.
@@ -499,7 +508,7 @@ func (s *IPSets) tryResync() (err error) {
 	// don't exist in the dataplane, and we just handled those above.
 	s.ipSetsRequiringResync.Clear()
 
-	return
+	return nil, nil
 }
 
 func (s *IPSets) CalicoIPSets() ([]string, error) {
@@ -1090,6 +1099,14 @@ func (s *IPSets) tryTempIPSetDeletions() {
 		numDeletions++
 		return deltatracker.IterActionUpdateDataplane
 	})
+}
+
+func (s *IPSets) deleteIPSets(ipSetNames []string) {
+	for _, setName := range ipSetNames {
+		if err := s.deleteIPSet(setName); err != nil {
+			s.logCxt.WithError(err).Errorf("Failed to delete IPSet %v", setName)
+		}
+	}
 }
 
 func (s *IPSets) deleteIPSet(setName string) error {
