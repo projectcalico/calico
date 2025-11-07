@@ -58,6 +58,10 @@ func (key IPPoolKey) valueType() (reflect.Type, error) {
 	return typeIPPool, nil
 }
 
+func (key IPPoolKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[IPPool](key, rawData)
+}
+
 func (key IPPoolKey) String() string {
 	return fmt.Sprintf("IPPool(cidr=%s)", key.CIDR)
 }
