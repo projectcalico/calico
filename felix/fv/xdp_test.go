@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/environment"
@@ -30,6 +31,8 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -183,7 +186,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 	Context("with XDP blocklist on felix[srvr] blocking felixes[clnt]", func() {
 		// The expected iptables chain name for the xdpf policy.
-		xdpfChainName := "cali-pi-_SXWVuDzW3QvEGyzbItT"
+		xdpfChainName := rules.PolicyChainName("cali-pi-", &types.PolicyID{Name: "xdpf", Kind: v3.KindGlobalNetworkPolicy}, false)
 
 		BeforeEach(func() {
 			order := float64(20)
