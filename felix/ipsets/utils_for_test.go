@@ -454,6 +454,7 @@ type setMetadata struct {
 	Name     string
 	Family   IPFamily
 	Type     IPSetType
+	Revision int
 	MaxSize  int
 	RangeMin int
 	RangeMax int
@@ -726,18 +727,26 @@ func (c *listCmd) main() {
 		result = fmt.Errorf("ipset %v does not exists", c.SetName)
 		return
 	}
-	writef("Name: %s\n", c.SetName)
 	meta, ok := c.Dataplane.IPSetMetadata[c.SetName]
 	if !ok {
 		// Default metadata for IP sets created by tests.
 		meta = setMetadata{
-			Name:    v4MainIPSetName,
-			Family:  IPFamilyV4,
-			Type:    IPSetTypeHashIP,
-			MaxSize: 1234,
+			Name:     v4MainIPSetName,
+			Family:   IPFamilyV4,
+			Type:     IPSetTypeHashIP,
+			Revision: supportedRevision,
+			MaxSize:  1234,
 		}
 	}
+
+	if meta.Revision > supportedRevision {
+		result = fmt.Errorf("revision %v not supported", meta.Revision)
+		return
+	}
+
+	writef("Name: %s\n", c.SetName)
 	writef("Type: %s\n", meta.Type)
+	writef("Revision: %d\n", meta.Revision)
 	switch meta.Type {
 	case IPSetTypeBitmapPort:
 		writef("Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
