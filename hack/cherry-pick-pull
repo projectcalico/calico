@@ -255,11 +255,20 @@ EOF
     echo
     cat "${pr_body_file}"
   else
-    if gh repo set-default --view 2>&1 | grep -q "No default remote"; then
-      echo "+++ Default repo must be set. Running: gh repo set-default"
-      gh repo set-default
+    # Temporarily set the gh default repo to the one derived from DST_UPSTREAM_REMOTE.
+    gh_default_remote=$(gh repo set-default --view 2>&1)
+    if [[ "$gh_default_remote" != "${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}" ]]; then
+      echo "+++ Using ${DST_UPSTREAM_REMOTE} remote to set gh default repo to: ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}"
+      gh repo set-default "${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}"
+
+      trap 'echo "+++ Restoring gh default repo";
+      if echo "$gh_default_remote" | grep -q "No default remote"; then
+          gh repo set-default -u
+      else
+          gh repo set-default "$gh_default_remote"
+      fi' EXIT
     fi
-    echo "+++ Creating PR. Running: gh pr create -t \"[${relshort}] ${new_title}\" -F \"${pr_body_file}\" -H \"${GITHUB_USER}:${NEWBRANCH}\" -B \"${DST_MAIN_REPO_ORG}:${rel}\" -l \"${new_labels}\""
+    echo "+++ Creating PR into ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}. Running: gh pr create -t \"[${relshort}] ${new_title}\" -F \"${pr_body_file}\" -H \"${GITHUB_USER}:${NEWBRANCH}\" -B \"${rel}\" -l \"${new_labels}\""
     gh pr create \
       -t "[${relshort}] ${new_title}" \
       -F "${pr_body_file}" \
