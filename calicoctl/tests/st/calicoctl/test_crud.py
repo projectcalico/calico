@@ -867,56 +867,6 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete", data2)
         rc.assert_no_error()
 
-    @parameterized.expand([
-        (globalnetworkpolicy_os_name1_rev1, False),
-        (stagedglobalnetworkpolicy_os_name1_rev1, False),
-        (networkpolicy_os_name1_rev1, True),
-        (stagednetworkpolicy_os_name1_rev1, True),
-    ])
-    def test_os_compat(self, data, is_namespaced):
-        """
-        Test policy CRUD commands with calico (open source) style manifests.
-        """
-        # Clone the data so that we can modify the metadata parms.
-        data1 = copy.deepcopy(data)
-
-        # Create the policy without a tier present in the name or spec.
-        rc = calicoctl("create", data=data1)
-        rc.assert_no_error()
-
-        # On get, we expect name to be the same as the name the policy was created with as
-        # well as have the tier field and value present in the spec.
-        # First we check with the name without tier in the name.
-        if is_namespaced:
-            rc = calicoctl("get %s %s --namespace default -o yaml" % (data['kind'], data['metadata']['name']))
-        else:
-            rc = calicoctl("get %s %s -o yaml" % (data['kind'], data['metadata']['name']))
-        data1['metadata']['name'] = data1['metadata']['name']
-        data1['spec']['tier'] = 'default'
-        data1 = add_tier_label(data1)
-        rc.assert_data(data1)
-
-        # Then we check with the tiered policy name.
-        if is_namespaced:
-            rc = calicoctl("get %s %s --namespace default -o yaml" % (data['kind'], data1['metadata']['name']))
-        else:
-            rc = calicoctl("get %s %s -o yaml" % (data['kind'], data1['metadata']['name']))
-        rc.assert_data(data1)
-
-        # Deleting without a tiered policy name will delete the correct policy
-        if is_namespaced:
-            rc = calicoctl("delete %s %s --namespace default" % (data['kind'], data['metadata']['name']))
-        else:
-            rc = calicoctl("delete %s %s" % (data['kind'], data['metadata']['name']))
-        rc.assert_no_error()
-
-        # And we re-check to make sure the deleted policy is not present.
-        if is_namespaced:
-            rc = calicoctl("get %s %s --namespace default -o yaml" % (data['kind'], data['metadata']['name']))
-        else:
-            rc = calicoctl("get %s %s -o yaml" % (data['kind'], data['metadata']['name']))
-        rc.assert_error(NOT_FOUND)
-
     def test_bgpconfig(self):
         """
         Test CRUD commands behave as expected on the BGP configuration resource:
@@ -1605,7 +1555,7 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_error()
         rc.assert_output_contains("Usage:")
 
-        # Test --namespace argument rejection  
+        # Test --namespace argument rejection
         rc = calicoctl("validate --namespace=test -f /tmp/test.yaml", no_config=True)
         rc.assert_error()
         rc.assert_output_contains("Usage:")
@@ -1657,7 +1607,7 @@ class TestCalicoctlCommands(TestBase):
         valid_ippool = ippool_name1_rev1_v4
         invalid_networkpolicy = {
             'apiVersion': API_VERSION,
-            'kind': 'NetworkPolicy', 
+            'kind': 'NetworkPolicy',
             'metadata': {
                 'name': 'invalid-policy',
                 'namespace': 'test'

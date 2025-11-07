@@ -185,8 +185,8 @@
     epilogue:
       always:
         commands:
-          - .semaphore/vms/collect-artifacts
-          - .semaphore/vms/publish-artifacts
+          - ../.semaphore/vms/collect-artifacts
+          - ../.semaphore/vms/publish-artifacts
           - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
           - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
 - name: "Felix: BPF tests on Ubuntu 24.04"
