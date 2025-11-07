@@ -447,7 +447,7 @@ func (s *IPSets) tryResync() (err error) {
 	ipSets, err := s.CalicoIPSets()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
-		return err
+		return
 	}
 	if debug {
 		s.logCxt.Debugf("List of ipsets: %v", ipSets)
@@ -507,7 +507,7 @@ func (s *IPSets) tryResync() (err error) {
 	// don't exist in the dataplane, and we just handled those above.
 	s.ipSetsRequiringResync.Clear()
 
-	return nil
+	return
 }
 
 func (s *IPSets) CalicoIPSets() ([]string, error) {

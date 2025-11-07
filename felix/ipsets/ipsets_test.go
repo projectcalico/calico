@@ -492,7 +492,7 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.ExpectMembers(map[string][]string{
 			v4MainIPSetName:  []string{"10.0.0.1", "10.0.0.2"}, // New IPSet from the desired state.
 			v4TempIPSetName0: []string{"10.0.0.1", "10.0.0.3"}, // Temp IPSet from dataplane state.
-			// v4MainIPSetName2 should be destroyed.
+			// v4MainIPSetName2 should be destroyed since it's not in the desired state.
 		})
 
 		apply()
