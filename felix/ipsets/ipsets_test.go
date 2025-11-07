@@ -826,7 +826,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 				It("should be detected after many transient errors", func() {
 					// Simulate lots of transient failures in a row, followed by success.
-					dataplane.RestoreOpFailures = slices.Repeat([]string{"write-ip"}, 11)
+					dataplane.RestoreOpFailures = slices.Repeat([]string{"write-ip"}, 6)
 					// Trigger an update to only one IP set.
 					ipsets.AddMembers(ipSetID2, []string{"10.0.0.4"})
 					apply()

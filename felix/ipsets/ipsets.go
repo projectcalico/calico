@@ -353,7 +353,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		retryDelay *= 2
 	}
 
-	for attempt := 0; attempt < 15; attempt++ {
+	for attempt := 0; attempt < 10; attempt++ {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
 		}
@@ -367,14 +367,14 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 			if err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
 
-				if attempt >= 5 {
-					s.tryRecreateIPSetsWithErrorState(failedIPSets, listener)
+				// Most likely, we are dealing with a persistent failure in re-syncing with dataplane.
+				// Try to destroy IPSets with failures. Desired IPSets will be created later.
+				if attempt >= 3 {
+					s.deleteIPSets(failedIPSets)
 				}
-
 				backOff()
 				continue
 			}
-
 			s.fullResyncRequired = false
 		}
 
@@ -385,7 +385,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
 		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
-			if attempt >= 10 {
+			if attempt >= 5 {
 				// Persistent failures, try a full resync.
 				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
 					"Persistently failed to update IP sets. Will do full resync.")
@@ -408,26 +408,6 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		s.logCxt.Panic("Failed to update IP sets after multiple retries.")
 	}
 	gaugeNumTotalIpsets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
-}
-
-func (s *IPSets) tryRecreateIPSetsWithErrorState(ipSetNames []string, listener UpdateListener) {
-	s.logCxt.Infof("Trying to re-create IPSets with error state.")
-	var ipSetsToUpdate []string
-	for _, setName := range ipSetNames {
-		if err := s.deleteIPSet(setName); err != nil {
-			s.logCxt.WithError(err).Errorf("Failed to delete IPSet %v", setName)
-		}
-		meta, exists := s.setNameToAllMetadata[setName]
-		if !exists {
-			s.logCxt.WithField("setName", setName).Warnf("IPSet %v not in desired sets - Skipping.", setName)
-			continue
-		}
-		s.setNameToProgrammedMetadata.Desired().Set(setName, meta)
-		ipSetsToUpdate = append(ipSetsToUpdate, setName)
-	}
-	if err := s.tryUpdates(ipSetsToUpdate, listener); err != nil {
-		s.logCxt.WithError(err).Errorf("Failed to update")
-	}
 }
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
@@ -478,7 +458,7 @@ func (s *IPSets) tryResync() ([]string, error) {
 		return s.fullResyncRequired || s.ipSetsRequiringResync.Contains(name)
 	}
 
-	var ipsetsWithError []string
+	var failedIPSets []string
 	for _, name := range ipSets {
 		if !ipSetPartOfSync(name) {
 			// Skipping this IP set on this pass.
@@ -490,15 +470,15 @@ func (s *IPSets) tryResync() ([]string, error) {
 		err = s.resyncIPSet(name)
 		if err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
-			ipsetsWithError = append(ipsetsWithError, name)
+			failedIPSets = append(failedIPSets, name)
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
 			s.ipSetsRequiringResync.Discard(name)
 		}
 	}
 
-	if len(ipsetsWithError) > 0 {
-		return ipsetsWithError, fmt.Errorf("failed to parse ipsets %v", strings.Join(ipsetsWithError, ","))
+	if len(failedIPSets) > 0 {
+		return failedIPSets, fmt.Errorf("failed to parse IPSets %v", strings.Join(failedIPSets, ","))
 	}
 
 	// Mark any IP sets that we didn't see as empty.
@@ -1119,6 +1099,14 @@ func (s *IPSets) tryTempIPSetDeletions() {
 		numDeletions++
 		return deltatracker.IterActionUpdateDataplane
 	})
+}
+
+func (s *IPSets) deleteIPSets(ipSetNames []string) {
+	for _, setName := range ipSetNames {
+		if err := s.deleteIPSet(setName); err != nil {
+			s.logCxt.WithError(err).Errorf("Failed to delete IPSet %v", setName)
+		}
+	}
 }
 
 func (s *IPSets) deleteIPSet(setName string) error {
