@@ -55,13 +55,14 @@ func getActionAndReporterFromRuleID(r *calc.RuleID) (a Action, flr ReporterType)
 
 // getStagedActionFromRuleIDs calculates the action that would be taken if pending (staged) policies were enforced.
 // It examines the pending rule IDs and returns the action from the last decisive rule.
+// Pass actions are skipped as they delegate to the next tier/policy. Only Allow and Deny are decisive.
 func getStagedActionFromRuleIDs(pendingRuleIDs []*calc.RuleID) Action {
 	// Default to allow if no pending policies
 	if len(pendingRuleIDs) == 0 {
 		return ActionAllow
 	}
 	
-	// Find the last rule with an action (not Pass)
+	// Find the last rule with a decisive action (Allow or Deny, not Pass)
 	for i := len(pendingRuleIDs) - 1; i >= 0; i-- {
 		ruleID := pendingRuleIDs[i]
 		if ruleID == nil {
@@ -72,6 +73,7 @@ func getStagedActionFromRuleIDs(pendingRuleIDs []*calc.RuleID) Action {
 			return ActionDeny
 		case rules.RuleActionAllow:
 			return ActionAllow
+		// Pass actions are intentionally not handled - they delegate to next tier
 		}
 	}
 	

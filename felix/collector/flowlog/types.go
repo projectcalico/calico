@@ -171,7 +171,11 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 		if !includePolicies {
 			fl.FlowEnforcedPolicySet = nil
 			fl.FlowPendingPolicySet = nil
-			fl.StagedAction = ActionAllow // Default to allow when policies not included
+			// Default to allow when policies are not included. This is safe because:
+			// 1. Without policy information, we cannot determine the staged action
+			// 2. The enforced action (fm.Action) contains the actual verdict
+			// 3. Allow is the default-deny complement and least restrictive choice
+			fl.StagedAction = ActionAllow
 			flogs = append(flogs, fl)
 		} else {
 			if len(f.FlowEnforcedPolicySets) > 1 {

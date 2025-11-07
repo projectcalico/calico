@@ -149,7 +149,9 @@ func (d *DiachronicFlow) addToWindow(flow *types.Flow, index int) {
 	d.Windows[index].NumConnectionsLive += flow.NumConnectionsLive
 	d.Windows[index].SourceLabels = intersection(d.Windows[index].SourceLabels, flow.SourceLabels)
 	d.Windows[index].DestLabels = intersection(d.Windows[index].DestLabels, flow.DestLabels)
-	// Use the latest staged action from the flow
+	// Override with the latest staged action. This represents the most recent staged policy
+	// calculation for this flow. Staged actions are computed per-flow and represent a point-in-time
+	// snapshot of what would happen if staged policies were enforced.
 	d.Windows[index].StagedAction = flow.StagedAction
 }
 
@@ -272,7 +274,9 @@ func (d *DiachronicFlow) AggregateWindows(windows []*Window) *types.Flow {
 			f.DestLabels = w.DestLabels
 		}
 		
-		// Use the latest staged action from the most recent window
+		// Use the staged action from this window. Since windows are processed in chronological order
+		// (oldest to newest), this will end up using the staged action from the chronologically last
+		// window in the aggregation range, representing the most recent staged policy state.
 		f.StagedAction = w.StagedAction
 
 		// Update the flow's start and end times.
