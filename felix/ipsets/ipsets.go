@@ -1103,9 +1103,7 @@ func (s *IPSets) tryTempIPSetDeletions() {
 
 func (s *IPSets) deleteIPSets(ipSetNames []string) {
 	for _, setName := range ipSetNames {
-		if err := s.deleteIPSet(setName); err != nil {
-			s.logCxt.WithError(err).Errorf("Failed to delete IPSet %v", setName)
-		}
+		_ = s.deleteIPSet(setName)
 	}
 }
 
