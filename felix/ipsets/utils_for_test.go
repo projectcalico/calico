@@ -746,7 +746,7 @@ func (c *listCmd) main() {
 
 	writef("Name: %s\n", c.SetName)
 	writef("Type: %s\n", meta.Type)
-	writef("Revision: %s\n")
+	writef("Revision: %d\n", meta.Revision)
 	switch meta.Type {
 	case IPSetTypeBitmapPort:
 		writef("Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
