@@ -55,6 +55,10 @@ func (key TierKey) valueType() (reflect.Type, error) {
 	return typeTier, nil
 }
 
+func (key TierKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[Tier](key, rawData)
+}
+
 func (key TierKey) String() string {
 	return fmt.Sprintf("Tier(name=%s)", key.Name)
 }
