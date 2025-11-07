@@ -4,7 +4,7 @@ import logging
 import re
 
 from tests.k8st.test_base import Container, Pod, TestBase
-from tests.k8st.utils.utils import DiagsCollector, calicoctl, kubectl, run, retry_until_success, node_info, start_external_node_with_bgp, update_ds_env
+from tests.k8st.utils.utils import DiagsCollector, calicoctl, kubectl, run, retry_until_success, node_info, start_external_node_with_bgp
 
 _log = logging.getLogger(__name__)
 
@@ -37,11 +37,6 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 class TestBGPFilter(TestBase):
     def setUp(self):
         super(TestBGPFilter, self).setUp()
-
-        # Enable debug logging
-        update_ds_env("calico-node",
-                      "calico-system",
-                      {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Create test namespace
         self.ns = "bgpfilter-test"
@@ -611,19 +606,19 @@ EOF
             if output is not None:
                 output = output.strip()
 
-            expectedOutput = """The BGPFilter "test-invalid-filter" is invalid: 
-* MatchOperator: Invalid value: "notin": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Accetp": Reason: failed to validate Field: Action because of Tag: filterAction 
-* MatchOperator: Invalid value: "in": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* CIDR: Invalid value: "IPv4Address": Reason: failed to validate Field: CIDR because of Tag: netv4 
-* Action: Invalid value: "accept": Reason: failed to validate Field: Action because of Tag: filterAction 
-* MatchOperator: Invalid value: "equal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Retecj": Reason: failed to validate Field: Action because of Tag: filterAction 
-* CIDR: Invalid value: "fd00:1111:1111:1111::/64": Reason: failed to validate Field: CIDR because of Tag: netv4 
-* MatchOperator: Invalid value: "notequal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "reject": Reason: failed to validate Field: Action because of Tag: filterAction 
-* CIDR: Invalid value: "ipv6Address": Reason: failed to validate Field: CIDR because of Tag: netv6 
-* MatchOperator: Invalid value: "Eqaul": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
+            expectedOutput = """The BGPFilter "test-invalid-filter" is invalid:
+* MatchOperator: Invalid value: "notin": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
+* Action: Invalid value: "Accetp": Reason: failed to validate Field: Action because of Tag: filterAction
+* MatchOperator: Invalid value: "in": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
+* CIDR: Invalid value: "IPv4Address": Reason: failed to validate Field: CIDR because of Tag: netv4
+* Action: Invalid value: "accept": Reason: failed to validate Field: Action because of Tag: filterAction
+* MatchOperator: Invalid value: "equal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
+* Action: Invalid value: "Retecj": Reason: failed to validate Field: Action because of Tag: filterAction
+* CIDR: Invalid value: "fd00:1111:1111:1111::/64": Reason: failed to validate Field: CIDR because of Tag: netv4
+* MatchOperator: Invalid value: "notequal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
+* Action: Invalid value: "reject": Reason: failed to validate Field: Action because of Tag: filterAction
+* CIDR: Invalid value: "ipv6Address": Reason: failed to validate Field: CIDR because of Tag: netv6
+* MatchOperator: Invalid value: "Eqaul": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
 * CIDR: Invalid value: "10.111.111.0/24": Reason: failed to validate Field: CIDR because of Tag: netv6"""
             assert output == expectedOutput
 
