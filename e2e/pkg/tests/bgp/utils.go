@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -26,7 +28,7 @@ func ensureInitialBGPConfig(cli ctrlclient.Client) func() {
 	if errors.IsNotFound(err) {
 		// Not found - simply create a new one, enabling full mesh (the default behavior). Ideally, our product code
 		// would do this automatically, but we do it here until it does.
-		By("Creating default BGPConfiguration suitable for tests")
+		ginkgo.By("Creating default BGPConfiguration suitable for tests")
 		err = cli.Create(context.Background(), &v3.BGPConfiguration{
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 			Spec: v3.BGPConfigurationSpec{
@@ -36,19 +38,19 @@ func ensureInitialBGPConfig(cli ctrlclient.Client) func() {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error creating BGPConfiguration resource")
 
 		return func() {
-			By("Deleting BGPConfiguration created for tests")
+			ginkgo.By("Deleting BGPConfiguration created for tests")
 			err := cli.Delete(context.Background(), &v3.BGPConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error deleting BGPConfiguration resource")
 		}
 	}
 
-	By("Ensuring full mesh BGP is enabled in existing BGPConfiguration")
+	ginkgo.By("Ensuring full mesh BGP is enabled in existing BGPConfiguration")
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying BGPConfiguration resource")
 	ExpectWithOffset(1, initialConfig.Spec.NodeToNodeMeshEnabled).NotTo(BeNil(), "nodeToNodeMeshEnabled is not configured in BGPConfiguration")
 	ExpectWithOffset(1, *initialConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
 
 	return func() {
-		By("Restoring initial BGPConfiguration")
+		ginkgo.By("Restoring initial BGPConfiguration")
 		// Query the resource again to get the latest resource version.
 		currentConfig := &v3.BGPConfiguration{}
 		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, currentConfig)
@@ -60,7 +62,7 @@ func ensureInitialBGPConfig(cli ctrlclient.Client) func() {
 }
 
 func disableFullMesh(cli ctrlclient.Client) {
-	By("Disabling full mesh BGP")
+	ginkgo.By("Disabling full mesh BGP")
 	config := &v3.BGPConfiguration{}
 	err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, config)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying BGPConfiguration resource")
@@ -70,7 +72,7 @@ func disableFullMesh(cli ctrlclient.Client) {
 }
 
 func setASNumber(cli ctrlclient.Client, asn numorstring.ASNumber) {
-	By("Setting AS number in BGPConfiguration")
+	ginkgo.By("Setting AS number in BGPConfiguration")
 	config := &v3.BGPConfiguration{}
 	err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, config)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying BGPConfiguration resource")
@@ -80,7 +82,7 @@ func setASNumber(cli ctrlclient.Client, asn numorstring.ASNumber) {
 }
 
 func setNodeAsRouteReflector(cli ctrlclient.Client, rrNode *corev1.Node, rrClusterID string) {
-	By(fmt.Sprintf("Using node %s as a route reflector", rrNode.Name))
+	ginkgo.By(fmt.Sprintf("Using node %s as a route reflector", rrNode.Name))
 	prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
 
 	// Adding the cluster ID as an annotation tells Calico to configure the node as a route reflector.
@@ -98,13 +100,13 @@ func setNodeAsRouteReflector(cli ctrlclient.Client, rrNode *corev1.Node, rrClust
 	err := cli.Patch(context.Background(), rrNode, prePatch)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error marking node as route reflector")
 
-	DeferCleanup(func() {
+	ginkgo.DeferCleanup(func() {
 		setNodeAsNotRouteReflector(cli, rrNode)
 	})
 }
 
 func setNodeAsNotRouteReflector(cli ctrlclient.Client, rrNode *corev1.Node) {
-	By(fmt.Sprintf("Removing route reflector role from node %s", rrNode.Name))
+	ginkgo.By(fmt.Sprintf("Removing route reflector role from node %s", rrNode.Name))
 	prePatch := ctrlclient.MergeFrom(rrNode.DeepCopy())
 	delete(rrNode.Labels, resources.RouteReflectorClusterIDAnnotation)
 	delete(rrNode.Annotations, resources.RouteReflectorClusterIDAnnotation)
@@ -113,7 +115,7 @@ func setNodeAsNotRouteReflector(cli ctrlclient.Client, rrNode *corev1.Node) {
 }
 
 func deleteCalicoNode(cli ctrlclient.Client, node *corev1.Node) {
-	By(fmt.Sprintf("Simulating failure of node %s by deleting calico-node Pod", node.Name))
+	ginkgo.By(fmt.Sprintf("Simulating failure of node %s by deleting calico-node Pod", node.Name))
 
 	// Get the calico/node Pod on the node.
 	podList := &corev1.PodList{}

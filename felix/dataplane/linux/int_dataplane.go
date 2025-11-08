@@ -282,7 +282,7 @@ type Config struct {
 	KubernetesProvider felixconfig.Provider
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
-	NewNftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
+	NewNftablesDataplane func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error)
 }
 
 type UpdateBatchResolver interface {

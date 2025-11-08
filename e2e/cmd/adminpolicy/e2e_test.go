@@ -49,7 +49,10 @@ func TestConformance(t *testing.T) {
 		t.Fatalf("error when creating Kubernetes ClientSet: %v", err)
 	}
 
-	v1alpha1.Install(c.Scheme())
+	err = v1alpha1.Install(c.Scheme())
+	if err != nil {
+		t.Fatalf("error when installing Network Policy API scheme: %v", err)
+	}
 
 	supportedFeatures := suite.ParseSupportedFeatures(*flags.SupportedFeatures)
 	exemptFeatures := suite.ParseSupportedFeatures(*flags.ExemptFeatures)

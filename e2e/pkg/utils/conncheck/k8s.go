@@ -20,10 +20,9 @@ import (
 	"maps"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,7 +92,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	newLabels["pod-name"] = podName
 	newLabels[roleLabel] = roleServer
 
-	By(fmt.Sprintf("Creating a server pod %s in namespace %s", podName, namespace.Name))
+	ginkgo.By(fmt.Sprintf("Creating a server pod %s in namespace %s", podName, namespace.Name))
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   podName,
@@ -104,11 +103,11 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 			RestartPolicy: v1.RestartPolicyNever,
 			NodeSelector:  nodeselector,
 			Tolerations: []v1.Toleration{
-				corev1.Toleration{
+				v1.Toleration{
 					Key:      "kubernetes.io/arch",
-					Operator: corev1.TolerationOpEqual,
+					Operator: v1.TolerationOpEqual,
 					Value:    "arm64",
-					Effect:   corev1.TaintEffectNoSchedule,
+					Effect:   v1.TaintEffectNoSchedule,
 				},
 			},
 		},
@@ -120,8 +119,8 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	pod, err := f.ClientSet.CoreV1().Pods(namespace.Name).Create(ctx, pod, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
-	logrus.Infof("Created pod %v", pod.ObjectMeta.Name)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	logrus.Infof("Created pod %v", pod.Name)
 
 	// Only create service if autoCreateSvc is true
 	if !autoCreateSvc {
@@ -130,7 +129,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	}
 
 	svcName := fmt.Sprintf("svc-%s", podName)
-	By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
+	ginkgo.By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
 	v4Svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: svcName},
 		Spec: v1.ServiceSpec{
@@ -145,7 +144,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	v4Svc, err = f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, v4Svc, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	if !pod.Spec.HostNetwork {
 		// Create an ipv6 service for the pod instead, if the cluster supports v6.
@@ -169,14 +168,14 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
+		ginkgo.By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
 		v6Svc, err := f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, svc, metav1.CreateOptions{})
 		if err == nil {
 			// IPv6 is supported - return the dual stack service.
 			return pod, v6Svc
 		} else if !kerrors.IsInvalid(err) {
 			// An error other than 422 Invalid is an actual error.
-			Expect(err).NotTo(HaveOccurred(), "Error creating IPv6 service")
+			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Error creating IPv6 service")
 		} else {
 			// If v6 is not enabled on the cluster, we will receive an "Invalid" error type. In this case,
 			// fall through and return the v4 service.

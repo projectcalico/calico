@@ -111,7 +111,7 @@ func (t *target) String() string {
 		}
 		if t.http != nil {
 			sha := sha1.New()
-			sha.Write([]byte(fmt.Sprintf("%s:%s %v", t.http.Method, t.http.Path, t.http.Headers)))
+			_, _ = fmt.Fprintf(sha, "%s:%s %v", t.http.Method, t.http.Path, t.http.Headers)
 			chunks = append(chunks, base64.URLEncoding.EncodeToString(sha.Sum(nil))[:7])
 		}
 		return strings.Join(chunks, ":")

@@ -24,7 +24,9 @@ import (
 	"strings"
 	"time"
 
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -347,7 +349,7 @@ func (m *MaglevTests) DeployService() {
 	}
 
 	DeferCleanup(func() {
-		m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Delete(context.TODO(), createdService.Name, metav1.DeleteOptions{})
+		_ = m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Delete(context.TODO(), createdService.Name, metav1.DeleteOptions{})
 	})
 
 	framework.Logf("Service cluster IPv4: %s", m.serviceClusterIPv4)
