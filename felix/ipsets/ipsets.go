@@ -36,6 +36,7 @@ import (
 
 const (
 	MaxIPSetDeletionsPerIteration = 1
+	maxRetryAttempt               = 10
 )
 
 type dataplaneMetadata struct {
@@ -354,7 +355,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		retryDelay *= 2
 	}
 
-	for attempt := 0; attempt < 10; attempt++ {
+	for attempt := 0; attempt < maxRetryAttempt; attempt++ {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
 		}
@@ -367,9 +368,11 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 			if err := s.tryResync(); err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
 
-				// Most likely, we are dealing with a persistent failure in re-syncing with dataplane.
-				// Try to destroy IPSets with failures. Desired IPSets will be created later.
-				if attempt < 3 {
+				// After a few attempts, most likely, we are dealing with a persistent failure.
+				// This could be due to different failuers, like userspace and kernel incompatibility.
+				// The incompatibility failure can be fixed by swapping the one Felix understand (created from
+				// desired state) and the one (with higher revision) in dataplane. As such, we should try next steps.
+				if attempt < maxRetryAttempt/2 {
 					backOff()
 					continue
 				}
@@ -384,7 +387,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
 		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
-			if attempt >= 5 {
+			if attempt >= maxRetryAttempt/2 {
 				// Persistent failures, try a full resync.
 				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
 					"Persistently failed to update IP sets. Will do full resync.")
@@ -447,7 +450,7 @@ func (s *IPSets) tryResync() (err error) {
 	ipSets, err := s.CalicoIPSets()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
-		return
+		return err
 	}
 	if debug {
 		s.logCxt.Debugf("List of ipsets: %v", ipSets)
@@ -466,8 +469,7 @@ func (s *IPSets) tryResync() (err error) {
 		if debug {
 			s.logCxt.Debugf("Parsing IP set %v.", name)
 		}
-		err = s.resyncIPSet(name)
-		if err != nil {
+		if err = s.resyncIPSet(name); err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
 			failedIPSets = append(failedIPSets, name)
 		} else {
@@ -507,7 +509,7 @@ func (s *IPSets) tryResync() (err error) {
 	// don't exist in the dataplane, and we just handled those above.
 	s.ipSetsRequiringResync.Clear()
 
-	return
+	return nil
 }
 
 func (s *IPSets) CalicoIPSets() ([]string, error) {
