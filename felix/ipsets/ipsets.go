@@ -561,8 +561,9 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 	//
 	// As we stream through the data, we extract the name of the IP set and its members. We
 	// use the IP set's metadata to convert each member to its canonical form for comparison.
+	meta := dataplaneMetadata{}
+	debug := log.GetLevel() >= log.DebugLevel
 	err := s.runIPSetList(ipSetName, func(scanner *bufio.Scanner) error {
-		debug := log.GetLevel() >= log.DebugLevel
 		ipSetName := ""
 		var ipSetType IPSetType
 		for scanner.Scan() {
@@ -586,9 +587,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 				// When we hit the Header line we should know the name, and type of the IP set, which lets
 				// us update the tracker.
 				parts := strings.Split(line, " ")
-				meta := dataplaneMetadata{
-					Type: ipSetType,
-				}
+				meta.Type = ipSetType
 				for idx, p := range parts {
 					if p == "maxelem" {
 						if idx+1 >= len(parts) {
@@ -619,7 +618,6 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 						break
 					}
 				}
-				s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
 			}
 			if strings.HasPrefix(line, "Members:") {
 				// Start of a Members entry, following this, there'll be one member per
@@ -690,11 +688,15 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		}
 		return scanner.Err()
 	})
-	if err != nil {
-		s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, dataplaneMetadata{})
+	if debug {
+		s.logCxt.WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
+	}
+	s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
+	return err
+	/*if err != nil {
 		return err
 	}
-	return nil
+	return nil*/
 }
 
 func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) error) error {
