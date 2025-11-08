@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@ const (
 	v4TempIPSetName2 = "cali4t2"
 	v4MainIPSetName2 = "cali40t:qMt7iLlGDhvLnCjM0l9nzxb"
 	v4MainIPSetName3 = "cali40u:qMt7iLlGDhvLnCjM0l9nzxb"
+
+	supportedRevision = 5
 )
 
 var v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
@@ -461,6 +463,42 @@ var _ = Describe("IP sets dataplane", func() {
 		It("IP set should get cleaned up", func() {
 			apply()
 			dataplane.ExpectMembers(map[string][]string{})
+		})
+	})
+
+	It("Calico IP sets with unsupported revision and in desired sets should be re-created", func() {
+		dataplane.IPSetMetadata = map[string]setMetadata{
+			v4MainIPSetName: {
+				Name:     v4MainIPSetName,
+				Family:   "inet",
+				Type:     IPSetTypeHashIP,
+				MaxSize:  1234,
+				Revision: supportedRevision + 1,
+			},
+			v4MainIPSetName2: {
+				Name:     v4MainIPSetName2,
+				Family:   "inet",
+				Type:     IPSetTypeHashIP,
+				MaxSize:  1234,
+				Revision: supportedRevision + 1,
+			},
+		}
+		dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3")
+		dataplane.IPSetMembers[v4MainIPSetName2] = set.From("10.0.0.1", "10.0.0.4")
+
+		ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+		apply()
+
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName:  []string{"10.0.0.1", "10.0.0.2"}, // New IPSet from the desired state.
+			v4TempIPSetName0: []string{"10.0.0.1", "10.0.0.3"}, // Temp IPSet from dataplane state.
+			// v4MainIPSetName2 should be destroyed since it's not in the desired state.
+		})
+
+		apply()
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName: []string{"10.0.0.1", "10.0.0.2"},
+			// Temp IPSet should be destroyed.
 		})
 	})
 
