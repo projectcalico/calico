@@ -228,6 +228,28 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 				return p.Name
 			},
 		)
+	case proto.FilterType_FilterTypePolicyKind:
+		valueFunc = extractPolicyFieldsFromFlowKey(
+			func(p *proto.PolicyHit) string {
+				return p.Kind.String()
+			},
+		)
+	case proto.FilterType_FilterTypePolicyNamespace:
+		valueFunc = extractPolicyFieldsFromFlowKey(
+			func(p *proto.PolicyHit) string {
+				return p.Namespace
+			},
+		)
+	case proto.FilterType_FilterTypePolicyV2:
+		// PolicyV2 is a composite filter that returns all policy information
+		// This is used for cascading filters in the UI
+		valueFunc = extractPolicyFieldsFromFlowKey(
+			func(p *proto.PolicyHit) string {
+				// Return a composite string with all policy fields
+				// Format: Kind|Tier|Namespace|Name
+				return fmt.Sprintf("%s|%s|%s|%s", p.Kind.String(), p.Tier, p.Namespace, p.Name)
+			},
+		)
 	default:
 		return nil, nil, fmt.Errorf("unsupported filter type '%s'", req.Type.String())
 	}
