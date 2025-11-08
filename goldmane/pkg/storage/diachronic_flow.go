@@ -52,6 +52,7 @@ type Window struct {
 	NumConnectionsStarted   int64
 	NumConnectionsCompleted int64
 	NumConnectionsLive      int64
+	StagedAction            proto.Action
 }
 
 func (w *Window) Within(startGte, startLt int64) bool {
@@ -148,6 +149,10 @@ func (d *DiachronicFlow) addToWindow(flow *types.Flow, index int) {
 	d.Windows[index].NumConnectionsLive += flow.NumConnectionsLive
 	d.Windows[index].SourceLabels = intersection(d.Windows[index].SourceLabels, flow.SourceLabels)
 	d.Windows[index].DestLabels = intersection(d.Windows[index].DestLabels, flow.DestLabels)
+	// Override with the latest staged action. This represents the most recent staged policy
+	// calculation for this flow. Staged actions are computed per-flow and represent a point-in-time
+	// snapshot of what would happen if staged policies were enforced.
+	d.Windows[index].StagedAction = flow.StagedAction
 }
 
 func (d *DiachronicFlow) insertWindow(flow *types.Flow, index int, start, end int64) {
@@ -163,6 +168,7 @@ func (d *DiachronicFlow) insertWindow(flow *types.Flow, index int, start, end in
 		NumConnectionsLive:      flow.NumConnectionsLive,
 		SourceLabels:            flow.SourceLabels,
 		DestLabels:              flow.DestLabels,
+		StagedAction:            flow.StagedAction,
 	}
 	d.Windows = append(d.Windows[:index], append([]Window{w}, d.Windows[index:]...)...)
 
@@ -188,6 +194,7 @@ func (d *DiachronicFlow) appendWindow(flow *types.Flow, start, end int64) {
 		NumConnectionsLive:      flow.NumConnectionsLive,
 		SourceLabels:            flow.SourceLabels,
 		DestLabels:              flow.DestLabels,
+		StagedAction:            flow.StagedAction,
 	}
 	d.Windows = append(d.Windows, w)
 
@@ -266,6 +273,11 @@ func (d *DiachronicFlow) AggregateWindows(windows []*Window) *types.Flow {
 		} else {
 			f.DestLabels = w.DestLabels
 		}
+		
+		// Use the staged action from this window. Since windows are processed in chronological order
+		// (oldest to newest), this will end up using the staged action from the chronologically last
+		// window in the aggregation range, representing the most recent staged policy state.
+		f.StagedAction = w.StagedAction
 
 		// Update the flow's start and end times.
 		if f.StartTime == 0 || w.start < f.StartTime {
@@ -285,7 +297,33 @@ func (d *DiachronicFlow) Matches(filter *proto.Filter, startGte, startLt int64) 
 	if filter == nil {
 		return true
 	}
-	return types.Matches(filter, &d.Key)
+	
+	// Check key-based filters
+	if !types.Matches(filter, &d.Key) {
+		return false
+	}
+	
+	// Check staged action filter if specified
+	if len(filter.StagedActions) > 0 {
+		// Get the windows within the time range to check staged action
+		windows := d.GetWindows(startGte, startLt)
+		if len(windows) == 0 {
+			return false
+		}
+		// Check if any window's staged action matches the filter
+		matchesStagedAction := false
+		for _, w := range windows {
+			if slices.Contains(filter.StagedActions, w.StagedAction) {
+				matchesStagedAction = true
+				break
+			}
+		}
+		if !matchesStagedAction {
+			return false
+		}
+	}
+	
+	return true
 }
 
 func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
