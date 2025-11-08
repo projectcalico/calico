@@ -225,6 +225,8 @@ type Filters struct {
 	DestPorts        FilterMatches[int64]  `json:"dest_ports,omitempty"`
 	Actions          Actions               `json:"actions,omitempty"`
 	Policies         []PolicyMatch         `json:"policies,omitempty"`
+	StagedActions    FilterMatches[Action] `json:"staged_actions,omitempty"`
+	Reporters        FilterMatches[Reporter] `json:"reporters,omitempty"`
 }
 
 type PolicyMatch struct {
@@ -239,6 +241,7 @@ type FlowResponse struct {
 	StartTime       time.Time   `json:"start_time"`
 	EndTime         time.Time   `json:"end_time"`
 	Action          Action      `json:"action"`
+	StagedAction    Action      `json:"staged_action"`
 	SourceName      string      `json:"source_name"`
 	SourceNamespace string      `json:"source_namespace"`
 	SourceLabels    string      `json:"source_labels"`
