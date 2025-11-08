@@ -36,6 +36,7 @@ import (
 
 const (
 	MaxIPSetDeletionsPerIteration = 1
+	maxRetryAttempt               = 10
 )
 
 type dataplaneMetadata struct {
@@ -44,6 +45,7 @@ type dataplaneMetadata struct {
 	RangeMin     int
 	RangeMax     int
 	DeleteFailed bool
+	ListFailed   bool
 }
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -353,7 +355,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		retryDelay *= 2
 	}
 
-	for attempt := 0; attempt < 10; attempt++ {
+	for attempt := 0; attempt < maxRetryAttempt; attempt++ {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
 		}
@@ -365,8 +367,16 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 			if err := s.tryResync(); err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
-				backOff()
-				continue
+
+				// After a few attempts, most likely, we are dealing with a persistent failure.
+				// This could be due to different failures, like userspace and kernel incompatibility.
+				// The incompatibility failure can be fixed by swapping the one Felix understand (created from
+				// desired state) and the one (with higher revision) in dataplane. As such, we should stop re-trying
+				// to re-sync, and instead continue with next steps.
+				if attempt < maxRetryAttempt/2 {
+					backOff()
+					continue
+				}
 			}
 			s.fullResyncRequired = false
 		}
@@ -378,7 +388,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
 		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
-			if attempt >= 5 {
+			if attempt >= maxRetryAttempt/2 {
 				// Persistent failures, try a full resync.
 				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
 					"Persistently failed to update IP sets. Will do full resync.")
@@ -448,12 +458,10 @@ func (s *IPSets) tryResync() (err error) {
 	}
 
 	ipSetPartOfSync := func(name string) bool {
-		if s.fullResyncRequired {
-			return true
-		}
-		return s.ipSetsRequiringResync.Contains(name)
+		return s.fullResyncRequired || s.ipSetsRequiringResync.Contains(name)
 	}
 
+	var failedIPSets []string
 	for _, name := range ipSets {
 		if !ipSetPartOfSync(name) {
 			// Skipping this IP set on this pass.
@@ -462,14 +470,17 @@ func (s *IPSets) tryResync() (err error) {
 		if debug {
 			s.logCxt.Debugf("Parsing IP set %v.", name)
 		}
-		err = s.resyncIPSet(name)
-		if err != nil {
+		if err = s.resyncIPSet(name); err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
-			return
+			failedIPSets = append(failedIPSets, name)
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
 			s.ipSetsRequiringResync.Discard(name)
 		}
+	}
+
+	if len(failedIPSets) > 0 {
+		return fmt.Errorf("failed to parse IPSets %v", strings.Join(failedIPSets, ","))
 	}
 
 	// Mark any IP sets that we didn't see as empty.
@@ -681,6 +692,9 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		return scanner.Err()
 	})
 	if err != nil {
+		s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, dataplaneMetadata{
+			ListFailed: true,
+		})
 		return err
 	}
 	return nil
