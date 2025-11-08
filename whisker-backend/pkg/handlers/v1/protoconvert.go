@@ -83,7 +83,7 @@ func toProtoFilter(filters whiskerv1.Filters) *proto.Filter {
 		DestNamespaces:   toProtoStringMatches(filters.DestNamespaces, toProtoNamespace),
 		Protocols:        toProtoStringMatches(filters.Protocols, nil),
 		DestPorts:        toProtoPorts(filters.DestPorts),
-		Actions:          filters.Actions.AsProtos(),
+		Actions:          toProtoActions(filters.Actions),
 		Policies:         toProtoPolicyMatch(filters.Policies),
 		StagedActions:    toProtoActions(filters.StagedActions),
 		Reporters:        toProtoReporters(filters.Reporters),

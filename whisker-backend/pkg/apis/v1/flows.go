@@ -217,15 +217,15 @@ func (f FilterMatch[E]) Value() E {
 }
 
 type Filters struct {
-	SourceNames      FilterMatches[string] `json:"source_names,omitempty"`
-	SourceNamespaces FilterMatches[string] `json:"source_namespaces,omitempty"`
-	DestNames        FilterMatches[string] `json:"dest_names,omitempty"`
-	DestNamespaces   FilterMatches[string] `json:"dest_namespaces,omitempty"`
-	Protocols        FilterMatches[string] `json:"protocols,omitempty"`
-	DestPorts        FilterMatches[int64]  `json:"dest_ports,omitempty"`
-	Actions          Actions               `json:"actions,omitempty"`
-	Policies         []PolicyMatch         `json:"policies,omitempty"`
-	StagedActions    FilterMatches[Action] `json:"staged_actions,omitempty"`
+	SourceNames      FilterMatches[string]   `json:"source_names,omitempty"`
+	SourceNamespaces FilterMatches[string]   `json:"source_namespaces,omitempty"`
+	DestNames        FilterMatches[string]   `json:"dest_names,omitempty"`
+	DestNamespaces   FilterMatches[string]   `json:"dest_namespaces,omitempty"`
+	Protocols        FilterMatches[string]   `json:"protocols,omitempty"`
+	DestPorts        FilterMatches[int64]    `json:"dest_ports,omitempty"`
+	Actions          FilterMatches[Action]   `json:"actions,omitempty"`
+	Policies         []PolicyMatch           `json:"policies,omitempty"`
+	StagedActions    FilterMatches[Action]   `json:"staged_actions,omitempty"`
 	Reporters        FilterMatches[Reporter] `json:"reporters,omitempty"`
 }
 
