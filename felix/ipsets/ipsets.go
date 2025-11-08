@@ -372,7 +372,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 				// This could be due to different failures, like userspace and kernel incompatibility.
 				// The incompatibility failure can be fixed by swapping the one Felix understand (created from
 				// desired state) and the one (with higher revision) in dataplane. As such, we should stop re-trying
-				// to re-sync, and instead continue with next steps.
+				// to re-sync, and instead continue with the next steps.
 				if attempt < maxRetryAttempt/2 {
 					backOff()
 					continue
