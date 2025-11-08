@@ -693,10 +693,6 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 	}
 	s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
 	return err
-	/*if err != nil {
-		return err
-	}
-	return nil*/
 }
 
 func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) error) error {
