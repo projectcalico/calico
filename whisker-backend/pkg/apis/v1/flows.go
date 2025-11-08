@@ -225,8 +225,8 @@ type Filters struct {
 	DestPorts        FilterMatches[int64]  `json:"dest_ports,omitempty"`
 	Actions          Actions               `json:"actions,omitempty"`
 	Policies         []PolicyMatch         `json:"policies,omitempty"`
-	StagedActions    Actions               `json:"staged_actions,omitempty"`
-	Reporters        []Reporter            `json:"reporters,omitempty"`
+	StagedActions    FilterMatches[Action] `json:"staged_actions,omitempty"`
+	Reporters        FilterMatches[Reporter] `json:"reporters,omitempty"`
 }
 
 type PolicyMatch struct {

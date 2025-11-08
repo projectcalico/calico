@@ -85,15 +85,23 @@ func toProtoFilter(filters whiskerv1.Filters) *proto.Filter {
 		DestPorts:        toProtoPorts(filters.DestPorts),
 		Actions:          filters.Actions.AsProtos(),
 		Policies:         toProtoPolicyMatch(filters.Policies),
-		StagedActions:    filters.StagedActions.AsProtos(),
+		StagedActions:    toProtoActions(filters.StagedActions),
 		Reporters:        toProtoReporters(filters.Reporters),
 	}
 }
 
-func toProtoReporters(reporters []whiskerv1.Reporter) []proto.Reporter {
+func toProtoActions(actions whiskerv1.FilterMatches[whiskerv1.Action]) []proto.Action {
+	var protos []proto.Action
+	for _, a := range actions {
+		protos = append(protos, a.V.AsProto())
+	}
+	return protos
+}
+
+func toProtoReporters(reporters whiskerv1.FilterMatches[whiskerv1.Reporter]) []proto.Reporter {
 	var protos []proto.Reporter
 	for _, r := range reporters {
-		protos = append(protos, r.AsProto())
+		protos = append(protos, r.V.AsProto())
 	}
 	return protos
 }
