@@ -36,8 +36,14 @@
     }
   ],
   "actions": [
-    "Deny",
-    "Pass"
+    {
+      "value": "Deny",
+      "type": "Fuzzy"
+    },
+    {
+      "value": "Pass",
+      "type": "Fuzzy"
+    }
   ],
   "policies": [
     {
