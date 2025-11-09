@@ -206,7 +206,7 @@ func TestWatchFlowsParameterConversion(t *testing.T) {
 					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
 					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
 					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
-					Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
+					Actions:          whiskerv1.FilterMatches[whiskerv1.Action]{whiskerv1.NewFilterMatch(whiskerv1.Action(proto.Action_Pass), whiskerv1.MatchTypeExact), whiskerv1.NewFilterMatch(whiskerv1.Action(proto.Action_Allow), whiskerv1.MatchTypeExact)},
 					Policies: []whiskerv1.PolicyMatch{{
 						Kind:      whiskerv1.PolicyKindCalicoNetworkPolicy,
 						Tier:      whiskerv1.NewFilterMatch("default-tier", whiskerv1.MatchTypeExact),
@@ -287,7 +287,7 @@ func TestListFlowsParameterConversion(t *testing.T) {
 					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
 					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
 					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
-					Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
+					Actions:          whiskerv1.FilterMatches[whiskerv1.Action]{whiskerv1.NewFilterMatch(whiskerv1.Action(proto.Action_Pass), whiskerv1.MatchTypeExact), whiskerv1.NewFilterMatch(whiskerv1.Action(proto.Action_Allow), whiskerv1.MatchTypeExact)},
 				},
 			},
 			expected: &proto.FlowListRequest{

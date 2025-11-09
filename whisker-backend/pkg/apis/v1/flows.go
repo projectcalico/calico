@@ -153,7 +153,33 @@ type Reporter proto.Reporter
 func (p Reporter) String() string               { return proto.Reporter(p).String() }
 func (p Reporter) MarshalJSON() ([]byte, error) { return marshalToBytes(p) }
 func (p *Reporter) UnmarshalJSON(b []byte) error {
-	return unmarshalProtoEnum(&p, b, proto.Reporter_value)
+	var str string
+	err := json.Unmarshal(b, &str)
+	if err != nil {
+		return err
+	}
+	
+	// Make Reporter case-insensitive for UI compatibility
+	// UI sends "src" and "dst", proto expects "Src" and "Dst"
+	normalized := strings.ToLower(str)
+	switch normalized {
+	case "src":
+		*p = Reporter(proto.Reporter_Src)
+		return nil
+	case "dst":
+		*p = Reporter(proto.Reporter_Dst)
+		return nil
+	case "reporterunspecified", "unspecified", "":
+		*p = Reporter(proto.Reporter_ReporterUnspecified)
+		return nil
+	default:
+		// Fall back to exact match for backward compatibility
+		if val, exists := proto.Reporter_value[str]; exists {
+			*p = Reporter(val)
+			return nil
+		}
+		return fmt.Errorf("unknown value: %s", str)
+	}
 }
 func (p Reporter) AsProto() proto.Reporter { return proto.Reporter(p) }
 
@@ -217,14 +243,16 @@ func (f FilterMatch[E]) Value() E {
 }
 
 type Filters struct {
-	SourceNames      FilterMatches[string] `json:"source_names,omitempty"`
-	SourceNamespaces FilterMatches[string] `json:"source_namespaces,omitempty"`
-	DestNames        FilterMatches[string] `json:"dest_names,omitempty"`
-	DestNamespaces   FilterMatches[string] `json:"dest_namespaces,omitempty"`
-	Protocols        FilterMatches[string] `json:"protocols,omitempty"`
-	DestPorts        FilterMatches[int64]  `json:"dest_ports,omitempty"`
-	Actions          Actions               `json:"actions,omitempty"`
-	Policies         []PolicyMatch         `json:"policies,omitempty"`
+	SourceNames      FilterMatches[string]   `json:"source_names,omitempty"`
+	SourceNamespaces FilterMatches[string]   `json:"source_namespaces,omitempty"`
+	DestNames        FilterMatches[string]   `json:"dest_names,omitempty"`
+	DestNamespaces   FilterMatches[string]   `json:"dest_namespaces,omitempty"`
+	Protocols        FilterMatches[string]   `json:"protocols,omitempty"`
+	DestPorts        FilterMatches[int64]    `json:"dest_ports,omitempty"`
+	Actions          FilterMatches[Action]   `json:"actions,omitempty"`
+	Policies         []PolicyMatch           `json:"policies,omitempty"`
+	StagedActions    FilterMatches[Action]   `json:"staged_actions,omitempty"`
+	Reporters        FilterMatches[Reporter] `json:"reporters,omitempty"`
 }
 
 type PolicyMatch struct {
@@ -239,6 +267,7 @@ type FlowResponse struct {
 	StartTime       time.Time   `json:"start_time"`
 	EndTime         time.Time   `json:"end_time"`
 	Action          Action      `json:"action"`
+	StagedAction    Action      `json:"staged_action"`
 	SourceName      string      `json:"source_name"`
 	SourceNamespace string      `json:"source_namespace"`
 	SourceLabels    string      `json:"source_labels"`
