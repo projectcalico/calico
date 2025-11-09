@@ -158,6 +158,7 @@ enum FilterType {
   FilterTypePolicyKind = 7;
   FilterTypePolicyNamespace = 8;
   FilterTypePolicyV2 = 9;  // Composite filter for policy information
+  FilterTypePolicy = 10;  // Alias for PolicyV2 for UI compatibility
 }
 
 // FlowResult wraps a Flow object with additional metadata.

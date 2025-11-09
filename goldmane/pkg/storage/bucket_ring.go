@@ -240,8 +240,8 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 				return p.Namespace
 			},
 		)
-	case proto.FilterType_FilterTypePolicyV2:
-		// PolicyV2 is a composite filter that returns all policy information
+	case proto.FilterType_FilterTypePolicyV2, proto.FilterType_FilterTypePolicy:
+		// PolicyV2 and Policy are composite filters that return all policy information
 		// This is used for cascading filters in the UI
 		valueFunc = extractPolicyFieldsFromFlowKey(
 			func(p *proto.PolicyHit) string {

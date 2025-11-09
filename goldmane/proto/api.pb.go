@@ -34,22 +34,24 @@ const (
 	FilterType_FilterTypePolicyName      FilterType = 6
 	FilterType_FilterTypePolicyKind      FilterType = 7
 	FilterType_FilterTypePolicyNamespace FilterType = 8
-	FilterType_FilterTypePolicyV2        FilterType = 9 // Composite filter for policy information
+	FilterType_FilterTypePolicyV2        FilterType = 9  // Composite filter for policy information
+	FilterType_FilterTypePolicy          FilterType = 10 // Alias for PolicyV2 for UI compatibility
 )
 
 // Enum value maps for FilterType.
 var (
 	FilterType_name = map[int32]string{
-		0: "FilterTypeUnspecified",
-		1: "FilterTypeDestName",
-		2: "FilterTypeSourceName",
-		3: "FilterTypeDestNamespace",
-		4: "FilterTypeSourceNamespace",
-		5: "FilterTypePolicyTier",
-		6: "FilterTypePolicyName",
-		7: "FilterTypePolicyKind",
-		8: "FilterTypePolicyNamespace",
-		9: "FilterTypePolicyV2",
+		0:  "FilterTypeUnspecified",
+		1:  "FilterTypeDestName",
+		2:  "FilterTypeSourceName",
+		3:  "FilterTypeDestNamespace",
+		4:  "FilterTypeSourceNamespace",
+		5:  "FilterTypePolicyTier",
+		6:  "FilterTypePolicyName",
+		7:  "FilterTypePolicyKind",
+		8:  "FilterTypePolicyNamespace",
+		9:  "FilterTypePolicyV2",
+		10: "FilterTypePolicy",
 	}
 	FilterType_value = map[string]int32{
 		"FilterTypeUnspecified":     0,
@@ -62,6 +64,7 @@ var (
 		"FilterTypePolicyKind":      7,
 		"FilterTypePolicyNamespace": 8,
 		"FilterTypePolicyV2":        9,
+		"FilterTypePolicy":          10,
 	}
 )
 
@@ -2490,7 +2493,7 @@ const file_api_proto_rawDesc = "" +
 	"\n" +
 	"passed_out\x18\n" +
 	" \x03(\x03R\tpassedOut\x12\f\n" +
-	"\x01x\x18\v \x03(\x03R\x01x*\x9a\x02\n" +
+	"\x01x\x18\v \x03(\x03R\x01x*\xb0\x02\n" +
 	"\n" +
 	"FilterType\x12\x19\n" +
 	"\x15FilterTypeUnspecified\x10\x00\x12\x16\n" +
@@ -2502,7 +2505,9 @@ const file_api_proto_rawDesc = "" +
 	"\x14FilterTypePolicyName\x10\x06\x12\x18\n" +
 	"\x14FilterTypePolicyKind\x10\a\x12\x1d\n" +
 	"\x19FilterTypePolicyNamespace\x10\b\x12\x16\n" +
-	"\x12FilterTypePolicyV2\x10\t*>\n" +
+	"\x12FilterTypePolicyV2\x10\t\x12\x14\n" +
+	"\x10FilterTypePolicy\x10\n" +
+	"*>\n" +
 	"\x06Action\x12\x15\n" +
 	"\x11ActionUnspecified\x10\x00\x12\t\n" +
 	"\x05Allow\x10\x01\x12\b\n" +
