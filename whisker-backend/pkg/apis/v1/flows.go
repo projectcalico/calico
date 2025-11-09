@@ -153,7 +153,33 @@ type Reporter proto.Reporter
 func (p Reporter) String() string               { return proto.Reporter(p).String() }
 func (p Reporter) MarshalJSON() ([]byte, error) { return marshalToBytes(p) }
 func (p *Reporter) UnmarshalJSON(b []byte) error {
-	return unmarshalProtoEnum(&p, b, proto.Reporter_value)
+	var str string
+	err := json.Unmarshal(b, &str)
+	if err != nil {
+		return err
+	}
+	
+	// Make Reporter case-insensitive for UI compatibility
+	// UI sends "src" and "dst", proto expects "Src" and "Dst"
+	normalized := strings.ToLower(str)
+	switch normalized {
+	case "src":
+		*p = Reporter(proto.Reporter_Src)
+		return nil
+	case "dst":
+		*p = Reporter(proto.Reporter_Dst)
+		return nil
+	case "reporterunspecified", "unspecified", "":
+		*p = Reporter(proto.Reporter_ReporterUnspecified)
+		return nil
+	default:
+		// Fall back to exact match for backward compatibility
+		if val, exists := proto.Reporter_value[str]; exists {
+			*p = Reporter(val)
+			return nil
+		}
+		return fmt.Errorf("unknown value: %s", str)
+	}
 }
 func (p Reporter) AsProto() proto.Reporter { return proto.Reporter(p) }
 
