@@ -67,7 +67,7 @@ func TestListFlows(t *testing.T) {
 				DestNamespaces:   v1.FilterMatches[string]{v1.NewFilterMatch("dest-namespace", v1.MatchTypeExact)},
 				DestPorts:        v1.FilterMatches[int64]{v1.NewFilterMatch(int64(8080), v1.MatchTypeExact)},
 				Protocols:        v1.FilterMatches[string]{v1.NewFilterMatch("tcp", v1.MatchTypeExact)},
-				Actions:          v1.Actions{v1.ActionDeny, v1.ActionPass},
+				Actions:          v1.FilterMatches[v1.Action]{v1.NewFilterMatch(v1.ActionDeny, v1.MatchTypeFuzzy), v1.NewFilterMatch(v1.ActionPass, v1.MatchTypeFuzzy)},
 				Policies: []v1.PolicyMatch{{
 					Kind:      v1.PolicyKindCalicoNetworkPolicy,
 					Tier:      v1.NewFilterMatch("default-tier", v1.MatchTypeExact),
@@ -203,7 +203,7 @@ func TestFilters_DecodedFromRawString(t *testing.T) {
 				DestNamespaces:   []v1.FilterMatch[string]{v1.NewFilterMatch("dest-namespace", v1.MatchTypeExact)},
 				DestPorts:        []v1.FilterMatch[int64]{v1.NewFilterMatch(int64(8080), v1.MatchTypeExact)},
 				Protocols:        []v1.FilterMatch[string]{v1.NewFilterMatch("tcp", v1.MatchTypeExact)},
-				Actions:          v1.Actions{v1.Action(proto.Action_Deny), v1.Action(proto.Action_Pass)},
+				Actions:          []v1.FilterMatch[v1.Action]{v1.NewFilterMatch(v1.Action(proto.Action_Deny), v1.MatchTypeExact), v1.NewFilterMatch(v1.Action(proto.Action_Pass), v1.MatchTypeExact)},
 				Policies: []v1.PolicyMatch{{
 					Kind:      v1.PolicyKindCalicoNetworkPolicy,
 					Tier:      v1.NewFilterMatch("default-tier", v1.MatchTypeExact),
@@ -229,7 +229,7 @@ func TestFilters_DecodedFromRawString(t *testing.T) {
 				DestNamespaces:   []v1.FilterMatch[string]{v1.NewFilterMatch("dest-namespace", v1.MatchTypeFuzzy)},
 				DestPorts:        []v1.FilterMatch[int64]{v1.NewFilterMatch(int64(8080), v1.MatchTypeFuzzy)},
 				Protocols:        []v1.FilterMatch[string]{v1.NewFilterMatch("tcp", v1.MatchTypeFuzzy)},
-				Actions:          v1.Actions{v1.ActionDeny, v1.ActionPass},
+				Actions:          v1.FilterMatches[v1.Action]{v1.NewFilterMatch(v1.ActionDeny, v1.MatchTypeFuzzy), v1.NewFilterMatch(v1.ActionPass, v1.MatchTypeFuzzy)},
 				Policies: []v1.PolicyMatch{{
 					Tier:      v1.NewFilterMatch("default-tier", v1.MatchTypeFuzzy),
 					Name:      v1.NewFilterMatch("name", v1.MatchTypeFuzzy),
