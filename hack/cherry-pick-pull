@@ -255,14 +255,11 @@ EOF
     echo
     cat "${pr_body_file}"
   else
-    if gh repo set-default --view 2>&1 | grep -q "No default remote"; then
-      echo "+++ Default repo must be set. Running: gh repo set-default"
-      gh repo set-default
-    fi
-    echo "+++ Creating PR. Running: gh pr create -t \"[${relshort}] ${new_title}\" -F \"${pr_body_file}\" -H \"${GITHUB_USER}:${NEWBRANCH}\" -B \"${DST_MAIN_REPO_ORG}:${rel}\" -l \"${new_labels}\""
+    echo "+++ Creating PR into ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}. Running: gh pr create -t \"[${relshort}] ${new_title}\" -F \"${pr_body_file}\" --repo \"${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}\" -H \"${GITHUB_USER}:${NEWBRANCH}\" -B \"${rel}\" -l \"${new_labels}\""
     gh pr create \
       -t "[${relshort}] ${new_title}" \
       -F "${pr_body_file}" \
+      --repo "${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}" \
       -H "${GITHUB_USER}:${NEWBRANCH}" \
       -B "${rel}" \
       -l "${new_labels}"
