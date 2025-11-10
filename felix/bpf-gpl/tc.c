@@ -384,9 +384,12 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
-	// We avoid this block when TO_HOST, since we must perform a NAT lookup
-	// to determine if such packets belong to a Maglev failover connection.
-	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS && !CALI_F_TO_HOST) {
+	// Handle all non-Maglev midflow misses here.
+	// That's all misses:
+	// - from WEPs to/from host
+	// - from HEPs *from* from host
+	// That leaves misses from HEPs *to* host to be checked as Maglev failover.
+	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS && (!CALI_F_TO_HOST || CALI_F_FROM_WEP)) {
 		if (CALI_F_HEP) {
 			// HEP egress for a mid-flow packet with no BPF or Linux CT state.
 			// This happens, for example, with asymmetric untracked policy,
