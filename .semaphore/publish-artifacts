@@ -22,9 +22,11 @@ shopt -s nullglob
 
 my_dir=$(dirname "$0")
 repo_dir=$my_dir/..
+artifacts_dir="$repo_dir/artifacts"
 
-cd "$repo_dir/artifacts" || exit 1
+cd "$artifacts_dir" || exit 1
 
-for file in *; do
-  artifact push job "$file"
-done
+find . -type f \
+  -printf "Uploading artifact: " \
+  -print \
+  -exec bash -c 'artifact push job "$1" || echo "Failed to publish artifact $1"' shell {} ';'
