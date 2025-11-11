@@ -384,44 +384,60 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
-	// We avoid this block when TO_HOST, since we must perform a NAT lookup
-	// to determine if such packets belong to a Maglev failover connection.
-	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS && !CALI_F_TO_HOST) {
-		if (CALI_F_HEP) {
-			// HEP egress for a mid-flow packet with no BPF or Linux CT state.
-			// This happens, for example, with asymmetric untracked policy,
-			// where we want the return path packet to be dropped if there is a
-			// HEP present (regardless of the policy configured on it, for
-			// consistency with the iptables dataplane's invalid CT state
-			// check), but allowed if there is no HEP, i.e. the egress interface
-			// is a plain data interface. Unfortunately we have no simple check
-			// for "is there a HEP here?" All we can do - below - is try to
-			// tail call the policy program; if that attempt returns, it means
-			// there is no HEP. So what we can do is set a state flag to record
-			// the situation that we are in, then let the packet continue. If
-			// we find that there is no policy program - i.e. no HEP - the
-			// packet is correctly allowed.  If there is a policy program and it
-			// denies, fine. If there is a policy program and it allows, but
-			// the state flag is set, we drop the packet at the start of
-			// calico_tc_skb_accepted_entrypoint.
-			//
-			// Also we are mid-flow and so it's important to suppress any CT
-			// state creation - which normally follows when a packet is allowed
-			// through - because that CT state would not be correct. Basically,
-			// unless we see the SYN packet that starts a flow, we should never
-			// have CT state for that flow.
-			//
-			// Net, we can use the same flag, CALI_ST_SUPPRESS_CT_STATE, both to
-			// suppress CT state creation and to drop the packet if we find that
-			// there is a HEP present.
-			CALI_DEBUG("CT mid-flow miss to HEP with no Linux conntrack entry: "
-					"continue but suppressing CT state creation.");
-			ctx->state->flags |= CALI_ST_SUPPRESS_CT_STATE;
-			ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_NEW);
+	// Handle all non-Maglev midflow misses here.
+	// That's all misses that do not ingress on a HEP.
+	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
+		if (CALI_F_TO_HOST) {
+			if (CALI_F_FROM_HEP) {
+				CALI_DEBUG("CT mid-flow miss; possible Maglev failover packet, will perform a NAT lookup");
+			} else {
+				/* Mid-flow miss: let iptables handle it in case it's an existing flow
+				* in the Linux conntrack table. We can't apply policy or DNAT because
+				* it's too late in the flow.  iptables will drop if the flow is not
+				* known.
+				*/
+				CALI_DEBUG("CT mid-flow miss; fall through to iptables");
+				ctx->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
+				fwd_fib_set(&ctx->fwd, false);
+				goto finalize;
+			}
 		} else {
-			CALI_DEBUG("CT mid-flow miss away from host with no Linux "
-					"conntrack entry, drop.");
-			goto deny;
+			if (CALI_F_HEP) {
+				// HEP egress for a mid-flow packet with no BPF or Linux CT state.
+				// This happens, for example, with asymmetric untracked policy,
+				// where we want the return path packet to be dropped if there is a
+				// HEP present (regardless of the policy configured on it, for
+				// consistency with the iptables dataplane's invalid CT state
+				// check), but allowed if there is no HEP, i.e. the egress interface
+				// is a plain data interface. Unfortunately we have no simple check
+				// for "is there a HEP here?" All we can do - below - is try to
+				// tail call the policy program; if that attempt returns, it means
+				// there is no HEP. So what we can do is set a state flag to record
+				// the situation that we are in, then let the packet continue. If
+				// we find that there is no policy program - i.e. no HEP - the
+				// packet is correctly allowed.  If there is a policy program and it
+				// denies, fine. If there is a policy program and it allows, but
+				// the state flag is set, we drop the packet at the start of
+				// calico_tc_skb_accepted_entrypoint.
+				//
+				// Also we are mid-flow and so it's important to suppress any CT
+				// state creation - which normally follows when a packet is allowed
+				// through - because that CT state would not be correct. Basically,
+				// unless we see the SYN packet that starts a flow, we should never
+				// have CT state for that flow.
+				//
+				// Net, we can use the same flag, CALI_ST_SUPPRESS_CT_STATE, both to
+				// suppress CT state creation and to drop the packet if we find that
+				// there is a HEP present.
+				CALI_DEBUG("CT mid-flow miss to HEP with no Linux conntrack entry: "
+						"continue but suppressing CT state creation");
+				ctx->state->flags |= CALI_ST_SUPPRESS_CT_STATE;
+				ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_NEW);
+			} else {
+				CALI_DEBUG("CT mid-flow miss away from host with no Linux "
+						"conntrack entry, will drop");
+				goto deny;
+			}
 		}
 	}
 
@@ -459,7 +475,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 
 	if (HAS_MAGLEV && nat_res == NAT_MAGLEV) {
 		/* Packet to be handled by maglev*/
-		CALI_DEBUG("NAT Lookup determined packet handled by maglev");
+		CALI_DEBUG("NAT Lookup determined packet to be Maglev-related");
 		CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
 		CALI_DEBUG("Failed to jump to maglev program");
 		goto deny;
@@ -473,7 +489,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		 * it's too late in the flow.  iptables will drop if the flow is not
 		 * known.
 		 */
-		CALI_DEBUG("CT mid-flow miss; fall through to iptables.");
+		CALI_DEBUG("CT mid-flow miss and not a Maglev failover. Fall through to iptables");
 		ctx->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
 		fwd_fib_set(&ctx->fwd, false);
 		goto finalize;
