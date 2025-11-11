@@ -27,5 +27,5 @@ artifacts_dir="$repo_dir/artifacts"
 cd "$artifacts_dir" || exit 1
 
 for file in *; do
-  artifact push job "$file"
+  artifact push job "$file" || echo "Failed to publish artifact $file"
 done
