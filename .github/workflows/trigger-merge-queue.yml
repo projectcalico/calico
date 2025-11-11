@@ -1,0 +1,29 @@
+name: Trigger Merge Queue Bot
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  trigger-merge-queue-bot:
+#    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'master'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Merge Queue Bot in Tigera org
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.TIGERA_BOT_PAT }}" \
+            https://api.github.com/repos/tigera/merge-queue-bot/actions/workflows/merge-queue-bot-triggered.yml/dispatches \
+            -d @- <<'EOF'
+          {
+            "ref": "oleks-test-gh-action-web-hook",
+            "inputs": {
+              "repo": "${{ github.repository }}",
+              "pr_number": "${{ github.event.pull_request.number }}",
+              "merge_sha": "${{ github.event.pull_request.merge_commit_sha }}",
+              "base_branch": "${{ github.event.pull_request.base.ref }}"
+            }
+          }
+          EOF
