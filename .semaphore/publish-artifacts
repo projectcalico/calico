@@ -26,6 +26,7 @@ artifacts_dir="$repo_dir/artifacts"
 
 cd "$artifacts_dir" || exit 1
 
-for file in *; do
-  artifact push job "$file" || echo "Failed to publish artifact $file"
-done
+find . -type f \
+  -printf "Uploading artifact: " \
+  -print \
+  -exec bash -c 'artifact push job "$1" || echo "Failed to publish artifact $1"' shell {} ';'

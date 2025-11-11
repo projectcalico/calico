@@ -12,7 +12,7 @@ run_batch() {
 
   case $batch in
     k8s-test)
-      cmd=("make" "--directory=calico/node" "k8s-test")
+      cmd=("make" "--directory=${CALICO_DIR_NAME}/node" "k8s-test")
       ;;
     *)
       echo "invalid batch name" && exit 1

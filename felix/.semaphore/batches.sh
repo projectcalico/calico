@@ -17,11 +17,11 @@ run_batch() {
   local log_file="$4"
 
   if [ "$batch" = "ut" ]; then
-    VM_NAME="$vm_name" ${remote_exec} make --directory=calico/felix \
+    VM_NAME="$vm_name" ${remote_exec} make --directory=${CALICO_DIR_NAME}/felix \
       FOCUS="${UT_FOCUS}" \
       ut-bpf check-wireguard >& "$log_file"
   else
-    VM_NAME="$vm_name" ${remote_exec} make --directory=calico/felix fv-bpf \
+    VM_NAME="$vm_name" ${remote_exec} make --directory=${CALICO_DIR_NAME}/felix fv-bpf \
       FELIX_FV_NFTABLES="$FELIX_FV_NFTABLES" \
       FELIX_FV_BPFATTACHTYPE="$FELIX_FV_BPFATTACHTYPE" \
       GINKGO_FOCUS="${FV_FOCUS}" \

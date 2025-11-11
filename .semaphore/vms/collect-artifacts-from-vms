@@ -20,7 +20,7 @@ my_dir="$(dirname $0)"
 repo_dir="$my_dir/../.."
 
 # COMPONENT might be node or felix; give shellcheck something to work with.
-# shellcheck source=../felix/.semaphore/batches.sh
+# shellcheck source=../../felix/.semaphore/batches.sh
 source "${repo_dir}/${COMPONENT}/.semaphore/batches.sh"
 
 vm_name_prefix=$1
@@ -40,11 +40,11 @@ for batch in "${batches[@]}"; do
   (
     args=()
     # Only collect binaries once since they're large to copy and should be identical.
-    if [ $batch != 1 ]; then
+    if [ "$batch" != 1 ]; then
       args+=("--skip-binaries")
     fi
-    VM_NAME=$vm_name $my_dir/on-test-vm .semaphore/collect-artifacts "${args[@]}" || echo "Failed to collect artifacts from ${vm_name}."
-    timeout 10m gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${REPO_NAME}/artifacts" ./ --recurse || echo "Failed to SCP from ${vm_name}"
+    VM_NAME=$vm_name "$my_dir/on-test-vm" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" "${args[@]}" || echo "Failed to collect artifacts from ${vm_name}."
+    timeout 10m gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" --recurse || echo "Failed to SCP from ${vm_name}"
   ) >& "$log_file" &
   pid=$!
   pids+=( "$pid" )

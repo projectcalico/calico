@@ -34,6 +34,7 @@ cd "$repo_dir" || exit 1
 mkdir -p "$artifacts_dir"
 
 if [ "$COMPONENT" = "felix" ]; then
+
   echo "Collecting artifacts for felix..."
   felix_dir="$repo_dir/felix"
   for file in /tmp/core_felix* ; do
@@ -55,6 +56,14 @@ if [ "$COMPONENT" = "felix" ]; then
       "$felix_dir/bin/calico-bpf" \
       "$felix_dir/bin/"test-*
   fi
+  cp -r "$felix_dir/report" "$artifacts_dir/" || echo "Failed to copy felix reports."
+
+elif [ "$COMPONENT" = "node" ]; then
+
+  echo "Collecting artifacts for node..."
+  node_dir="$repo_dir/node"
+  cp -r "$node_dir/report" "$artifacts_dir/" || echo "Failed to copy node reports."
+
 fi
 
 exit 0

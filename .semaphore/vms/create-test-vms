@@ -22,7 +22,7 @@ vm_name_prefix=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
-repo_dir="."
+repo_dir="$my_dir/../.."
 artifacts_dir="$repo_dir/artifacts"
 
 pids=()

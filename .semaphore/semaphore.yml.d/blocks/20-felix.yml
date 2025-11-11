@@ -201,7 +201,8 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
+        - export JOB_TAG=felix-ipt
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
         - export COMPONENT=felix
         - export NUM_FV_BATCHES=8
@@ -223,6 +224,7 @@
         commands:
           - export COMPONENT=felix
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
+          - ../.semaphore/vms/publish-reports ${JOB_TAG}
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -238,7 +240,8 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
+        - export JOB_TAG=felix-nft
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
         - export COMPONENT=felix
         - export NUM_FV_BATCHES=4
@@ -262,6 +265,7 @@
         commands:
           - export COMPONENT=felix
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
+          - ../.semaphore/vms/publish-reports ${JOB_TAG}
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -277,7 +281,8 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-2504-
+        - export JOB_TAG=felix-2504
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
         - export COMPONENT=felix
         - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
@@ -304,6 +309,7 @@
         commands:
           - export COMPONENT=felix
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
+          - ../.semaphore/vms/publish-reports ${JOB_TAG}
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -315,11 +321,13 @@
   task:
     prologue:
       commands:
+        - mkdir -p artifacts
         - cd felix
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-jithard-
+        - export JOB_TAG=felix-jithard
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
         - export COMPONENT=felix
         - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
@@ -328,7 +336,6 @@
         - export NUM_FV_BATCHES=2
         - export RUN_UT=true
         - export FV_FOCUS='_BPF_.*tcp.*ct=true'
-        - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
         - ../.semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
     jobs:
@@ -347,6 +354,7 @@
         commands:
           - export COMPONENT=felix
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
+          - ../.semaphore/vms/publish-reports ${JOB_TAG}
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
