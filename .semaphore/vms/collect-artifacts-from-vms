@@ -17,7 +17,7 @@
 set -e
 
 my_dir="$(dirname $0)"
-repo_dir="$my_dir/.."
+repo_dir="$my_dir/../.."
 
 # COMPONENT might be node or felix; give shellcheck something to work with.
 # shellcheck source=../felix/.semaphore/batches.sh
