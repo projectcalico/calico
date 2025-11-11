@@ -15,6 +15,7 @@
 
 set -e
 
+my_dir="$(dirname $0)"
 repo_dir="$my_dir/../.."
 
 # COMPONENT might be node or felix; give shellcheck something to work with.
