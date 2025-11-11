@@ -19,6 +19,7 @@ set -x
 
 my_dir="$(dirname "$0")"
 repo_dir="$my_dir/.."
+artifacts_dir="$repo_dir/artifacts"
 skip_binaries=false
 
 for arg in "$@"; do
@@ -30,21 +31,37 @@ done
 
 cd "$repo_dir" || exit 1
 
-rm -rf artifacts
-mkdir -p artifacts
-for file in /tmp/core_felix* ; do
-  if [ -f "$file" ]; then
-    echo "Adding core file: $file"
-    sudo chmod a+r "$file"
-    out_file="artifacts/$(basename "$file").xz"
-    xz < "$file" > "$out_file"
+mkdir -p "artifacts"
+
+if [ "$COMPONENT" = "felix" ]; then
+
+  echo "Collecting artifacts for felix..."
+  for file in /tmp/core_felix* ; do
+    if [ -f "$file" ]; then
+      echo "Adding core file: $file"
+      sudo chmod a+r "$file"
+      out_file="artifacts/$(basename "$file").xz"
+      xz < "$file" > "$out_file"
+    fi
+  done
+  races="felix/fv/data-races.log"
+  if [ -s "$races" ]; then
+    # Only save the log if it's non-empty.
+    xz < "$races" > artifacts/data-races.log.xz
   fi
-done
-if [ -s fv/data-races.log ]; then
-  # Only save the log if it's non-empty.
-  xz < fv/data-races.log > artifacts/data-races.log.xz
+  if ! $skip_binaries; then
+    tar -cJf artifacts/binaries.tar.xz \
+      "felix/bin/calico-felix-amd64" \
+      "felix/bin/calico-bpf" \
+      "felix/bin/"test-*
+  fi
+  cp -r "felix/report" "artifacts/" || echo "Failed to copy felix reports."
+
+elif [ "$COMPONENT" = "node" ]; then
+
+  echo "Collecting artifacts for node..."
+  cp -r "node/report" "artifacts/" || echo "Failed to copy node reports."
+
 fi
-if ! $skip_binaries; then
-  tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*
-fi
+
 exit 0
