@@ -1,4 +1,4 @@
-after_pipeline:
+  after_pipeline:
   task:
     jobs:
       - name: Reports
