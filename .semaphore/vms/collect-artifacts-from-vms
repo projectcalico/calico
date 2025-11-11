@@ -43,7 +43,7 @@ for batch in "${batches[@]}"; do
     if [ "$batch" != 1 ]; then
       args+=("--skip-binaries")
     fi
-    VM_NAME=$vm_name "$my_dir/on-test-vm" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" "${args[@]}" || echo "Failed to collect artifacts from ${vm_name}."
+    VM_NAME=$vm_name "$my_dir/on-test-vm" COMPONENT=${COMPONENT} "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" "${args[@]}" || echo "Failed to collect artifacts from ${vm_name}."
     timeout 10m gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" --recurse || echo "Failed to SCP from ${vm_name}"
   ) >& "$log_file" &
   pid=$!

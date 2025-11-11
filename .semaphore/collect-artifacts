@@ -31,38 +31,36 @@ done
 
 cd "$repo_dir" || exit 1
 
-mkdir -p "$artifacts_dir"
+mkdir -p "artifacts"
 
 if [ "$COMPONENT" = "felix" ]; then
 
   echo "Collecting artifacts for felix..."
-  felix_dir="$repo_dir/felix"
   for file in /tmp/core_felix* ; do
     if [ -f "$file" ]; then
       echo "Adding core file: $file"
       sudo chmod a+r "$file"
-      out_file="$artifacts_dir/$(basename "$file").xz"
+      out_file="artifacts/$(basename "$file").xz"
       xz < "$file" > "$out_file"
     fi
   done
-  races="$felix_dir/fv/data-races.log"
+  races="felix/fv/data-races.log"
   if [ -s "$races" ]; then
     # Only save the log if it's non-empty.
     xz < "$races" > artifacts/data-races.log.xz
   fi
   if ! $skip_binaries; then
     tar -cJf artifacts/binaries.tar.xz \
-      "$felix_dir/bin/calico-felix-amd64" \
-      "$felix_dir/bin/calico-bpf" \
-      "$felix_dir/bin/"test-*
+      "felix/bin/calico-felix-amd64" \
+      "felix/bin/calico-bpf" \
+      "felix/bin/"test-*
   fi
-  cp -r "$felix_dir/report" "$artifacts_dir/" || echo "Failed to copy felix reports."
+  cp -r "felix/report" "artifacts/" || echo "Failed to copy felix reports."
 
 elif [ "$COMPONENT" = "node" ]; then
 
   echo "Collecting artifacts for node..."
-  node_dir="$repo_dir/node"
-  cp -r "$node_dir/report" "$artifacts_dir/" || echo "Failed to copy node reports."
+  cp -r "node/report" "artifacts/" || echo "Failed to copy node reports."
 
 fi
 
