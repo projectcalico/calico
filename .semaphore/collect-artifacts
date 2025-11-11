@@ -55,12 +55,14 @@ if [ "$COMPONENT" = "felix" ]; then
       "felix/bin/calico-bpf" \
       "felix/bin/"test-*
   fi
-  cp -r "felix/report" "artifacts/" || echo "Failed to copy felix reports."
+  mkdir -p "artifacts/report"
+  cp -r "felix/report/*.xml" "artifacts/report" || echo "Failed to copy reports."
 
 elif [ "$COMPONENT" = "node" ]; then
 
   echo "Collecting artifacts for node..."
-  cp -r "node/report" "artifacts/" || echo "Failed to copy node reports."
+  mkdir -p "artifacts/report"
+  cp -r "node/report/*.xml" "node/report" || echo "Failed to copy reports."
 
 fi
 
