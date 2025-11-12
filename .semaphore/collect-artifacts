@@ -19,7 +19,6 @@ set -x
 
 my_dir="$(dirname "$0")"
 repo_dir="$my_dir/.."
-artifacts_dir="$repo_dir/artifacts"
 skip_binaries=false
 
 for arg in "$@"; do
@@ -50,19 +49,19 @@ if [ "$COMPONENT" = "felix" ]; then
     xz < "$races" > artifacts/data-races.log.xz
   fi
   if ! $skip_binaries; then
-    tar -cJf artifacts/binaries.tar.xz \
-      "felix/bin/calico-felix-amd64" \
+    tar -cJf artifacts/binaries.tar.xz --ignore-failed-read \
+      "felix/bin/"calico-felix*amd64 \
       "felix/bin/calico-bpf" \
       "felix/bin/"test-*
   fi
   mkdir -p "artifacts/report"
-  cp -r "felix/report/*.xml" "artifacts/report" || echo "Failed to copy reports."
+  cp felix/report/*.xml "artifacts/report" || echo "Failed to copy reports."
 
 elif [ "$COMPONENT" = "node" ]; then
 
   echo "Collecting artifacts for node..."
   mkdir -p "artifacts/report"
-  cp -r "node/report/*.xml" "node/report" || echo "Failed to copy reports."
+  cp node/report/*.xml "artifacts/report" || echo "Failed to copy reports."
 
 fi
 
