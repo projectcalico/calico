@@ -20,7 +20,6 @@ jobs:
           {
             "ref": "oleks-test-gh-action-web-hook",
             "inputs": {
-              "repo": "${{ github.repository }}",
               "pr_number": "${{ github.event.pull_request.number }}",
               "merge_sha": "${{ github.event.pull_request.merge_commit_sha }}",
               "base_branch": "${{ github.event.pull_request.base.ref }}"
