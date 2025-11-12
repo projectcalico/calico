@@ -24,6 +24,6 @@ import (
 
 func TestProxy(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/felix_bpf_proxy_suite.xml")
+	junitReporter := reporters.NewJUnitReporter("../../report/felix_bpf_proxy_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/bpf/proxy", []Reporter{junitReporter})
 }
