@@ -44,10 +44,12 @@ func init() {
 func TestK8sFV(t *testing.T) {
 	RegisterFailHandler(Fail)
 	// The run-test script runs this file from k8sfv/output.
-	junitReporter := reporters.NewJUnitReporter("../../report/felix_k8sfv_suite.xml")
-	withTypha := ""
+	nameTypha := ""
+	fileTypha := ""
 	if os.Getenv("USE_TYPHA") == "true" {
-		withTypha = " (typha)"
+		nameTypha = " (typha)"
+		fileTypha = "typha_"
 	}
-	RunSpecsWithDefaultAndCustomReporters(t, "k8sfv tests"+withTypha, []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/felix_k8sfv_" + fileTypha + "suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "k8sfv tests"+nameTypha, []Reporter{junitReporter})
 }
