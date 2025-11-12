@@ -30,6 +30,6 @@ func init() {
 
 func TestIPSets(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/ipsets_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "IP sets Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_ipsets_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/ipsets", []Reporter{junitReporter})
 }
