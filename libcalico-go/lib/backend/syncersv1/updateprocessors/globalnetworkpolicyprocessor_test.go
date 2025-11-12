@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 package updateprocessors_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -22,11 +24,12 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -253,31 +256,32 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 	})
 })
 
-// Define AdminNetworkPolicies and the corresponding expected v1 KVPairs.
+// Define ClusterNetworkPolicies and the corresponding expected v1 KVPairs.
 //
-// anp1 is an AdminNetworkPolicy with a single Egress rule, which contains ports only,
+// kcnp1 is a k8s ClusterNetworkPolicy with a single Egress rule, which contains ports only,
 // and no selectors.
 var (
-	anpOrder = float64(1000.0)
-	ports    = []adminpolicy.AdminNetworkPolicyPort{{
-		PortNumber: &adminpolicy.Port{
+	kcnpOrder = float64(1000.0)
+	ports     = []clusternetpol.ClusterNetworkPolicyPort{{
+		PortNumber: &clusternetpol.Port{
 			Port: 80,
 		},
 	}}
-	anp1 = adminpolicy.AdminNetworkPolicy{
+	kcnp1 = clusternetpol.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test.policy",
 			UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 		},
-		Spec: adminpolicy.AdminNetworkPolicySpec{
-			Subject: adminpolicy.AdminNetworkPolicySubject{
+		Spec: clusternetpol.ClusterNetworkPolicySpec{
+			Subject: clusternetpol.ClusterNetworkPolicySubject{
 				Namespaces: &metav1.LabelSelector{},
 			},
+			Tier:     clusternetpol.AdminTier,
 			Priority: 1000,
-			Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+			Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 				{
-					Action: "Allow",
-					To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+					Action: "Accept",
+					To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 						{
 							Namespaces: &metav1.LabelSelector{},
 						},
@@ -289,13 +293,16 @@ var (
 	}
 )
 
-// expected1 is the expected v1 KVPair representation of np1 from above.
+// expected1 is the expected v1 KVPair representation of kcnp1 from above.
 var (
 	expectedModel1 = []*model.KVPair{
 		{
-			Key: model.PolicyKey{Tier: "adminnetworkpolicy", Name: "kanp.adminnetworkpolicy.test.policy"},
+			Key: model.PolicyKey{
+				Tier: names.KubeAdminTierName,
+				Name: fmt.Sprintf("%vtest.policy", names.K8sCNPAdminTierNamePrefix),
+			},
 			Value: &model.Policy{
-				Order:          &anpOrder,
+				Order:          &kcnpOrder,
 				Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
 				Types:          []string{"egress"},
 				ApplyOnForward: false,
@@ -314,23 +321,24 @@ var (
 	}
 )
 
-// np2 is a NetworkPolicy with a single Ingress rule which allows from all namespaces.
-var anp2 = adminpolicy.AdminNetworkPolicy{
+// kcnp2 is a k8s ClusterNetworkPolicy with a single Ingress rule which allows from all namespaces.
+var kcnp2 = clusternetpol.ClusterNetworkPolicy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name: "test.policy",
 		UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 	},
-	Spec: adminpolicy.AdminNetworkPolicySpec{
-		Subject: adminpolicy.AdminNetworkPolicySubject{
-			Pods: &adminpolicy.NamespacedPod{
+	Spec: clusternetpol.ClusterNetworkPolicySpec{
+		Subject: clusternetpol.ClusterNetworkPolicySubject{
+			Pods: &clusternetpol.NamespacedPod{
 				PodSelector: metav1.LabelSelector{},
 			},
 		},
 		Priority: 1000,
-		Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+		Tier:     clusternetpol.BaselineTier,
+		Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 			{
-				Action: "Allow",
-				From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+				Action: "Accept",
+				From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 					{
 						Namespaces: &metav1.LabelSelector{},
 					},
@@ -343,11 +351,11 @@ var anp2 = adminpolicy.AdminNetworkPolicy{
 var expectedModel2 = []*model.KVPair{
 	{
 		Key: model.PolicyKey{
-			Name: "kanp.adminnetworkpolicy.test.policy",
-			Tier: "adminnetworkpolicy",
+			Tier: names.KubeBaselineTierName,
+			Name: fmt.Sprintf("%vtest.policy", names.K8sCNPBaselineTierNamePrefix),
 		},
 		Value: &model.Policy{
-			Order:          &anpOrder,
+			Order:          &kcnpOrder,
 			Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
 			Types:          []string{"ingress"},
 			ApplyOnForward: false,
@@ -364,14 +372,14 @@ var expectedModel2 = []*model.KVPair{
 	},
 }
 
-var _ = Describe("Test the AdminNetworkPolicy update processor + conversion", func() {
+var _ = Describe("Test the ClusterNetworkPolicy update processor + conversion", func() {
 	up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor()
 
 	DescribeTable("GlobalNetworkPolicy update processor + conversion tests",
-		func(anp adminpolicy.AdminNetworkPolicy, expected []*model.KVPair) {
-			// First, convert the NetworkPolicy using the k8s conversion logic.
+		func(cnp clusternetpol.ClusterNetworkPolicy, expected []*model.KVPair) {
+			// First, convert the ClusterNetworkPolicy using the k8s conversion logic.
 			c := conversion.NewConverter()
-			kvp, err := c.K8sAdminNetworkPolicyToCalico(&anp)
+			kvp, err := c.K8sClusterNetworkPolicyToCalico(&cnp)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Next, run the policy through the update processor.
@@ -382,7 +390,7 @@ var _ = Describe("Test the AdminNetworkPolicy update processor + conversion", fu
 			Expect(out).To(Equal(expected))
 		},
 
-		Entry("should handle an AdminNetworkPolicy with no rule selectors", anp1, expectedModel1),
-		Entry("should handle an AdminNetworkPolicy with an empty ns selector", anp2, expectedModel2),
+		Entry("should handle an ClusterNetworkPolicy with no rule selectors", kcnp1, expectedModel1),
+		Entry("should handle an ClusterNetworkPolicy with an empty ns selector", kcnp2, expectedModel2),
 	)
 })
