@@ -47,7 +47,8 @@ type TcGlobalData struct {
 	HostTunnelIPv6 [16]byte
 	JumpsV6        [40]uint32
 
-	DSCP int8
+	DSCP          int8
+	MaglevLUTSize uint32
 }
 
 type XDPGlobalData struct {

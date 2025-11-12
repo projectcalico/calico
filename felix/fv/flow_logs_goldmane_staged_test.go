@@ -111,17 +111,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		infra.AddDefaultAllow()
 
 		// Create workload on host 1.
+		infrastructure.AssignIP("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
 		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
 		ep1_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-1", "10.65.1.0", tc.Felixes[1].Hostname, client)
 		ep2_1 = workload.Run(tc.Felixes[1], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-2", "10.65.1.1", tc.Felixes[1].Hostname, client)
 		ep2_2 = workload.Run(tc.Felixes[1], "ep2-2", "default", "10.65.1.1", wepPortStr, "tcp")
 		ep2_2.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-3", "10.65.1.2", tc.Felixes[1].Hostname, client)
 		ep2_3 = workload.Run(tc.Felixes[1], "ep2-3", "default", "10.65.1.2", wepPortStr, "tcp")
 		ep2_3.ConfigureInInfra(infra)
+
+		ensureRoutesProgrammed(tc.Felixes)
 
 		// Create tiers tier1 and tier2
 		tier := api.NewTier()
@@ -291,23 +297,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		Expect(ep2_1.IP).NotTo(Equal(""))
 		getEpsFunc := k8sGetEpsForServiceFunc(k8sClient, tSvc)
 		epCorrectFn := func() error {
-			eps := getEpsFunc()
+			epslices := getEpsFunc()
+			if len(epslices) != 1 {
+				return fmt.Errorf("Wrong number of endpoints: %#v", epslices)
+			}
+			eps := epslices[0].Endpoints
 			if len(eps) != 1 {
-				return fmt.Errorf("Wrong number of endpoints: %#v", eps)
+				return fmt.Errorf("Wrong number of endpoint addresses: %#v", epslices[0])
 			}
 			addrs := eps[0].Addresses
 			if len(addrs) != 1 {
 				return fmt.Errorf("Wrong number of addresses: %#v", eps[0])
 			}
-			if addrs[0].IP != ep2_1.IP {
-				return fmt.Errorf("Unexpected IP: %s != %s", addrs[0].IP, ep2_1.IP)
+			if addrs[0] != ep2_1.IP {
+				return fmt.Errorf("Unexpected IP: %s != %s", addrs[0], ep2_1.IP)
 			}
-			ports := eps[0].Ports
+			ports := epslices[0].Ports
 			if len(ports) != 1 {
 				return fmt.Errorf("Wrong number of ports: %#v", eps[0])
 			}
-			if ports[0].Port != int32(wepPort) {
-				return fmt.Errorf("Wrong port %d != svcPort", ports[0].Port)
+			if *ports[0].Port != int32(wepPort) {
+				return fmt.Errorf("Wrong port %d != svcPort", *ports[0].Port)
 			}
 			return nil
 		}
@@ -660,38 +670,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			return nil
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_2.InterfaceName, "all", "--asm")
-			}
-		}
-
-		ep1_1.Stop()
-		ep2_1.Stop()
-		ep2_2.Stop()
-		ep2_3.Stop()
-		for _, felix := range tc.Felixes {
-			if bpfEnabled {
-				felix.Exec("calico-bpf", "connect-time", "clean")
-			}
-			felix.Stop()
-		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })
 
 // Felix1             Felix2
@@ -756,9 +734,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		infra.AddDefaultAllow()
 
 		// Create workload on host 1.
+		infrastructure.AssignIP("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
 		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
 		ep1_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-1", "10.65.1.0", tc.Felixes[1].Hostname, client)
 		ep2_1 = workload.Run(tc.Felixes[1], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
 
@@ -1320,36 +1300,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			return nil
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_1.InterfaceName, "all", "--asm")
-			}
-		}
-
-		ep1_1.Stop()
-		ep2_1.Stop()
-		for _, felix := range tc.Felixes {
-			if bpfEnabled {
-				felix.Exec("calico-bpf", "connect-time", "clean")
-			}
-			felix.Stop()
-		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })
 
 // Felix1             Felix2
@@ -1410,9 +1360,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		infra.AddDefaultAllow()
 
 		// Create workload on host 1.
+		infrastructure.AssignIP("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
 		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
 		ep1_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-1", "10.65.1.0", tc.Felixes[1].Hostname, client)
 		ep2_1 = workload.Run(tc.Felixes[1], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
 
@@ -1974,33 +1926,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_1.InterfaceName, "all", "--asm")
-			}
-		}
-
-		ep1_1.Stop()
-		ep2_1.Stop()
 		for _, felix := range tc.Felixes {
 			if bpfEnabled {
+				// FIXME
 				felix.Exec("calico-bpf", "connect-time", "clean")
 			}
-			felix.Stop()
 		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })
 

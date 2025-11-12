@@ -204,23 +204,8 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	IptablesPostWriteCheckInterval *metav1.Duration `json:"iptablesPostWriteCheckInterval,omitempty" configv1timescale:"seconds" confignamev1:"IptablesPostWriteCheckIntervalSecs"`
 
-	// IptablesLockFilePath is the location of the iptables lock file. You may need to change this
-	// if the lock file is not in its standard location (for example if you have mapped it into Felix's
-	// container at a different path). [Default: /run/xtables.lock]
-	IptablesLockFilePath string `json:"iptablesLockFilePath,omitempty"`
-
-	// IptablesLockTimeout is the time that Felix itself will wait for the iptables lock (rather than delegating the
-	// lock handling to the `iptables` command).
-	//
-	// Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock.
-	// [Default: 0s disabled]
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
-	IptablesLockTimeout *metav1.Duration `json:"iptablesLockTimeout,omitempty" configv1timescale:"seconds" confignamev1:"IptablesLockTimeoutSecs"`
-
-	// IptablesLockProbeInterval when IptablesLockTimeout is enabled: the time that Felix will wait between
-	// attempts to acquire the iptables lock if it is not available. Lower values make Felix more
-	// responsive when the lock is contended, but use more CPU. [Default: 50ms]
+	// IptablesLockProbeInterval configures the interval between attempts to claim
+	// the xtables lock.  Shorter intervals are more responsive but use more CPU.  [Default: 50ms]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	IptablesLockProbeInterval *metav1.Duration `json:"iptablesLockProbeInterval,omitempty" configv1timescale:"milliseconds" confignamev1:"IptablesLockProbeIntervalMillis"`
@@ -784,11 +769,6 @@ type FelixConfigurationSpec struct {
 	// The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
 	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=1,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
 
-	// BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
-	// kube-proxy always accepts endpoint slices. This option will be removed in
-	// the next release.
-	BPFKubeProxyEndpointSlicesEnabled *bool `json:"bpfKubeProxyEndpointSlicesEnabled,omitempty" validate:"omitempty"`
-
 	// BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
 	// collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and
 	// preferably outside the  ephemeral ranges used by common operating systems. Linux uses
@@ -891,14 +871,12 @@ type FelixConfigurationSpec struct {
 	// [Default: Continuous]
 	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
 
-	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
-	// peer side of the workload devices. It is allowed for any host L2 devices by default
-	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
-	// it on ingress. Value of Enabled also allows redirection from L3 host devices like
-	// IPIP tunnel or Wireguard directly to the peer side of the workload's device. This
-	// makes redirection faster, however, it breaks tools like tcpdump on the peer side.
-	// Use Enabled with caution. [Default: L2Only]
-	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
+	// BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device.
+	// Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+	// Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
+	// which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
+	// As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]
+	//+kubebuilder:validation:Enum=Enabled;Disabled
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
 	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
@@ -1059,6 +1037,23 @@ type FelixConfigurationSpec struct {
 	// RequireMTUFile specifies whether mtu file is required to start the felix.
 	// Optional as to keep the same as previous behavior. [Default: false]
 	RequireMTUFile *bool `json:"requireMTUFile,omitempty"`
+
+	// BPFMaglevMaxEndpointsPerService is the maximum number of endpoints
+	// expected to be part of a single Maglev-enabled service.
+	//
+	// Influences the size of the per-service Maglev lookup-tables generated by Felix
+	// and thus the amount of memory reserved.
+	//
+	// [Default: 100]
+	// +optional
+	BPFMaglevMaxEndpointsPerService *int `json:"bpfMaglevMaxEndpointsPerService,omitempty" validate:"omitempty,gt=0,lte=3000"`
+
+	// BPFMaglevMaxServices is the maximum number of expected Maglev-enabled
+	// services that Felix will allocate lookup-tables for.
+	//
+	// [Default: 100]
+	// +optional
+	BPFMaglevMaxServices *int `json:"bpfMaglevMaxServices,omitempty" validate:"omitempty,gt=0,lte=3000"`
 }
 
 type HealthTimeoutOverride struct {

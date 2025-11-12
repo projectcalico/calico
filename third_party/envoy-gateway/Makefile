@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_GATEWAY_VERSION=v1.3.2
+ENVOY_GATEWAY_VERSION=v1.5.4
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -26,7 +26,17 @@ init-source: $(ENVOY_GATEWAY_DOWNLOADED)
 $(ENVOY_GATEWAY_DOWNLOADED):
 	mkdir -p envoy-gateway
 	curl -sfL https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz | tar xz --strip-components 1 -C envoy-gateway
-	patch -d envoy-gateway -p1 < patches/0001-Bumping-x-net-and-containerd.patch
+
+# 	Apply patches for the specified Envoy Gateway version if patches directory exists.
+# 	This code checks for the presence of a patches directory corresponding to ENVOY_GATEWAY_VERSION.
+# 	If the directory exists, it iterates over all .patch files within it.
+# 	For each valid patch file, it applies the patch to the envoy-gateway directory using patch -p1.
+	for patch in patches/*.patch; do \
+		if [ -f "$$patch" ]; then \
+			patch -d envoy-gateway -p1 < "$$patch"; \
+		fi; \
+	done; \
+
 	touch $@
 
 .PHONY: build

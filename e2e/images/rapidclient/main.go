@@ -57,7 +57,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read and print the response
 	body, err := io.ReadAll(resp.Body)

@@ -57,6 +57,7 @@ type Proxy interface {
 type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
+	SetHostIPs([]net.IP)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -115,17 +116,11 @@ type proxy struct {
 	// event recorder to update node events
 	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
-	healthzServer   healthcheckIntf
+	healthzServer   Healthcheck
 
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
-}
-
-type healthcheckIntf interface {
-	Health() healthcheck.ProxyHealth
-	QueuedUpdate(v1.IPFamily)
-	Updated(v1.IPFamily)
 }
 
 type stoppableRunner interface {
@@ -160,6 +155,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		stopCh:        make(chan struct{}),
 		healthzServer: new(alwaysHealthy),
+		// N.B. we do not start healthzServer until we have at least some host
+		// IPs. Dataplane implementation of hostports assumes we have a host IP.
 	}
 
 	for _, o := range opts {
@@ -175,7 +172,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
 	p.epsChanges = k8sp.NewEndpointsChangeTracker(ipVersion, p.hostname, nil, nil)
 	p.svcChanges = k8sp.NewServiceChangeTracker(ipVersion, makeServiceInfo, nil)
@@ -236,8 +232,7 @@ func (p *proxy) Stop() {
 	p.stopOnce.Do(func() {
 		log.Info("Proxy stopping")
 		// Pass empty update to close all the health checks.
-		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
-		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
+		p.stopSvcHealthServer()
 		p.dpSyncer.Stop()
 		close(p.stopCh)
 		p.stopWg.Wait()
@@ -275,11 +270,13 @@ func (p *proxy) invokeDPSyncer() error {
 	_ = p.svcMap.Update(p.svcChanges)
 	_ = p.epsMap.Update(p.epsChanges)
 
-	if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
-		return fmt.Errorf("error syncing healthcheck Services - err: %w", err)
-	}
-	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
-		return fmt.Errorf("error syncing healthcheck endpoints - err: %w", err)
+	if p.healthzServer != nil && p.svcHealthServer != nil {
+		if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
+			return fmt.Errorf("error syncing healthcheck Services - err: %w", err)
+		}
+		if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
+			return fmt.Errorf("error syncing healthcheck endpoints - err: %w", err)
+		}
 	}
 
 	if p.healthzServer != nil {
@@ -366,6 +363,34 @@ func (p *proxy) SetSyncer(s DPSyncer) {
 	p.forceSyncDP()
 }
 
+func (p *proxy) stopSvcHealthServer() {
+	if p.svcHealthServer != nil {
+		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
+		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
+	}
+}
+
+func (p *proxy) SetHostIPs(hostIPs []net.IP) {
+	p.runnerLck.Lock()
+	defer p.runnerLck.Unlock()
+
+	p.stopSvcHealthServer()
+
+	ips := make([]string, 0, len(hostIPs))
+	for _, ip := range hostIPs {
+		if ip.To4() != nil && p.ipFamily == 4 {
+			ips = append(ips, ip.String()+"/32")
+		} else if ip.To4() == nil && p.ipFamily != 4 {
+			ips = append(ips, ip.String()+"/128")
+		}
+	}
+
+	npa := util.NewNodePortAddresses(p.v1IPFamily(), ips)
+	log.Infof("NodePortAddresses V%d for health checks: %s", p.ipFamily, npa.String())
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder,
+		npa, p.healthzServer)
+}
+
 func (p *proxy) IPFamily() discovery.AddressType {
 	if p.ipFamily == 4 {
 		return discovery.AddressTypeIPv4
@@ -406,17 +431,24 @@ const (
 	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
-	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
+	ExcludeServiceAnnotation          = "projectcalico.org/natExcludeService"
+	ExternalTrafficStrategyAnnotation = "lb.projectcalico.org/external-traffic-strategy"
+)
+
+var (
+	ExternalTrafficStrategyMaglev = "maglev"
 )
 
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
+	UseMaglev() bool
 }
 
 type servicePortAnnotations struct {
 	reapTerminatingUDP bool
 	excludeService     bool
+	useMaglev          bool
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -425,6 +457,10 @@ func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
 
 func (s *servicePortAnnotations) ExcludeService() bool {
 	return s.excludeService
+}
+
+func (s *servicePortAnnotations) UseMaglev() bool {
+	return s.useMaglev
 }
 
 type servicePort struct {
@@ -448,15 +484,10 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		}
 	}
 
+	if a, ok := s.Annotations[ExternalTrafficStrategyAnnotation]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
+		svc.useMaglev = true
+	}
+
 out:
 	return svc
 }
-
-type alwaysHealthy struct{}
-
-func (a *alwaysHealthy) Health() healthcheck.ProxyHealth {
-	return healthcheck.ProxyHealth{Healthy: true}
-}
-
-func (a *alwaysHealthy) QueuedUpdate(v1.IPFamily) {}
-func (a *alwaysHealthy) Updated(v1.IPFamily)      {}

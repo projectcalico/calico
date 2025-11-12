@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"time"
 
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -256,7 +258,7 @@ var _ = describe.CalicoDescribe(
 					})
 
 					// enforce the policy
-					_, enforced := v3.ConvertStagedKubernetesPolicyToK8SEnforced(policy)
+					_, enforced := ConvertStagedKubernetesPolicyToK8SEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 					DeferCleanup(func() {
 						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
@@ -283,7 +285,7 @@ var _ = describe.CalicoDescribe(
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
 
 					// enforce the policy
-					_, enforced := v3.ConvertStagedPolicyToEnforced(policy)
+					_, enforced := ConvertStagedPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 
 					// test connection from client to server - it should fail
@@ -311,7 +313,7 @@ var _ = describe.CalicoDescribe(
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
 
 					// enforce the policy
-					_, enforced := v3.ConvertStagedGlobalPolicyToEnforced(policy)
+					_, enforced := ConvertStagedGlobalPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 
 					// test connection from client to server - it should fail
@@ -339,7 +341,7 @@ func verifyPortForward(url string) {
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("http response is not successful %d", resp.StatusCode)
@@ -357,7 +359,7 @@ func verifyFlowCount(url string, count int) {
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -382,7 +384,7 @@ func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.Polic
 
 	resp, err := http.Get(url)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())

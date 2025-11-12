@@ -17,7 +17,7 @@ package utils
 import (
 	"context"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	v1 "github.com/tigera/operator/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
@@ -27,12 +27,12 @@ import (
 func IsOpenShift(f *framework.Framework) bool {
 	// Create a client to the API server.
 	cli, err := client.New(f.ClientConfig())
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Query Installation object to check if we are running on OpenShift.
 	installs := &v1.InstallationList{}
 	err = cli.List(context.TODO(), installs)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	for _, inst := range installs.Items {
 		if inst.Spec.KubernetesProvider == v1.ProviderOpenShift {

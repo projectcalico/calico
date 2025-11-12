@@ -96,45 +96,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				assignTunnelAddresses(infra, tc, client)
 			})
 
-			JustAfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ipset", "list")
-						felix.Exec("ip", "r")
-						felix.Exec("ip", "a")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-						}
-						felix.Exec("ip", "-d", "link")
-					}
-
-					infra.DumpErrorData()
-				}
-			})
-
-			AfterEach(func() {
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-				infra.Stop()
-			})
-
 			if brokenXSum {
 				It("should disable checksum offload", func() {
 					Eventually(func() string {
@@ -906,8 +867,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -928,7 +887,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
@@ -954,25 +913,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						}
 					}
 				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
+				// Topology/workload cleanup is handled by infra.Stop() via DatastoreDescribe.
 			})
 
 			It("should have host to workload connectivity", func() {
@@ -1005,8 +946,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -1054,50 +993,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
 				assignTunnelAddresses(infra, tc, client)
-			})
-
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ipset", "list")
-						felix.Exec("ip", "r")
-						felix.Exec("ip", "a")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-						}
-						felix.Exec("calico-bpf", "routes", "dump")
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
 			})
 
 			It("should have correct connectivity", func() {
@@ -1217,32 +1117,14 @@ func setupWorkloadsWithOffset(infra infrastructure.DatastoreInfra, tc infrastruc
 	for ii := range w {
 		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii+offset)
 		wName := fmt.Sprintf("w%d", ii)
-		err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP:       net.MustParseIP(wIP),
-			HandleID: &wName,
-			Attrs: map[string]string{
-				ipam.AttributeNode: tc.Felixes[ii].Hostname,
-			},
-			Hostname: tc.Felixes[ii].Hostname,
-		})
-		Expect(err).NotTo(HaveOccurred())
-
+		infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, client)
 		w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 		w[ii].ConfigureInInfra(infra)
 
 		if enableIPv6 {
 			w6IP := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:3", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], IPv6CIDR.IP[10], IPv6CIDR.IP[11], ii+offset)
 			w6Name := fmt.Sprintf("w6-%d", ii)
-			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-				IP:       net.MustParseIP(w6IP),
-				HandleID: &w6Name,
-				Attrs: map[string]string{
-					ipam.AttributeNode: tc.Felixes[ii].Hostname,
-				},
-				Hostname: tc.Felixes[ii].Hostname,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
+			infrastructure.AssignIP(w6Name, w6IP, tc.Felixes[ii].Hostname, client)
 			w6[ii] = workload.Run(tc.Felixes[ii], w6Name, "default", w6IP, "8055", "tcp")
 			w6[ii].ConfigureInInfra(infra)
 		}
@@ -1253,6 +1135,7 @@ func setupWorkloadsWithOffset(infra infrastructure.DatastoreInfra, tc infrastruc
 		}
 	}
 
+	ensureRoutesProgrammed(tc.Felixes)
 	if BPFMode() {
 		ensureAllNodesBPFProgramsAttached(tc.Felixes)
 	}

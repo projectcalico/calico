@@ -969,6 +969,11 @@ func poolContains(ipAddr string, cidrs []cnet.IPNet) bool {
 		return false
 	}
 	ip := net.ParseIP(ipAddr)
+	if ip == nil {
+		// Invalid IP address, cannot be in any pool
+		log.Warnf("Invalid IP address encountered in IPAM allocation tracker: %q (treating as not in any pool)", ipAddr)
+		return false
+	}
 	for _, cidr := range cidrs {
 		if cidr.Contains(ip) {
 			return true

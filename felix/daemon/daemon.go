@@ -380,6 +380,13 @@ configRetry:
 			if err != nil {
 				log.WithError(err).Panic("Bug: failed to override config parameter BPFConntrackCleanupMode")
 			}
+			if configParams.BPFRedirectToPeer == "L2Only" {
+				log.Warn("BPFRedirectToPeer 'L2Only' is deprecated and equals 'Enabled' now.")
+				_, err := configParams.OverrideParam("BPFRedirectToPeer", "Enabled")
+				if err != nil {
+					log.WithError(err).Panic("Bug: failed to override config parameter BPFRedirectToPeer")
+				}
+			}
 		}
 	}
 

@@ -68,7 +68,7 @@ check-go-mod:
 go-vet:
 	# Go vet will check that libbpf headers can be found; make sure they're available.
 	$(MAKE) -C felix clone-libbpf
-	$(DOCKER_GO_BUILD) go vet ./...
+	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
@@ -164,7 +164,7 @@ image:
 # Run local e2e smoke test against the checked-out code
 # using a local kind cluster.
 ###############################################################################
-E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance"
+E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
 E2E_SKIP ?= ""
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"

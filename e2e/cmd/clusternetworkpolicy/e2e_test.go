@@ -51,7 +51,7 @@ func TestConformance(t *testing.T) {
 
 	err = api.Install(c.Scheme())
 	if err != nil {
-		t.Fatalf("Error installing api scheme: %v", err)
+		t.Fatalf("error when installing Network Policy API scheme: %v", err)
 	}
 
 	supportedFeatures := suite.ParseSupportedFeatures(*flags.SupportedFeatures)
