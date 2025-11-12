@@ -30,6 +30,6 @@ func init() {
 
 func TestNetworkingWindows(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/fv_suite.xml")
+	junitReporter := reporters.NewJUnitReporter("../../report/fv_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Felix windows Suite", []Reporter{junitReporter})
 }

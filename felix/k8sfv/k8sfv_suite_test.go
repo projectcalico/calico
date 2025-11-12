@@ -41,9 +41,9 @@ func init() {
 	flag.StringVar(&codeLevel, "code-level", "", "")
 }
 
-func TestMain(t *testing.T) {
+func TestK8sFV(t *testing.T) {
 	RegisterFailHandler(Fail)
 	// The run-test script runs this file from k8sfv/output.
-	junitReporter := reporters.NewJUnitReporter("../../report/k8sfv_suite.xml")
+	junitReporter := reporters.NewJUnitReporter("../report/k8sfv_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Felix/KDD FV tests", []Reporter{junitReporter})
 }
