@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 job_tag="$1"
 
@@ -12,18 +13,4 @@ echo "Publishing any reports from the artifacts directory."
 
 cd "$artifacts_dir"
 
-# Combine the reports
-n=0
-tmp_dir=$(mktemp -d -t ci-XXXXXXXXXX)
-while IFS= read -r -d '' xml_file
-do
-  echo "Compiling $xml_file"
-  test-results compile "$xml_file" "$tmp_dir/$n.json"
-  (( n++ ))
-done < <(find . -name '*.xml' -print0)
-
-echo "Combining..."
-test-results combine "$tmp_dir/"*.json "$tmp_dir/combined.json"
-echo "Publishing..."
-test-results publish "$tmp_dir/combined.json" --name "UT/FV felix $job_tag"
-echo "Done"
+find . -name '*.xml' -print0 | xargs -0 test-results publish
