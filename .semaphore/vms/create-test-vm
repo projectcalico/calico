@@ -66,7 +66,8 @@ EOF' && \
   echo "$DOCKERHUB_PASSWORD" | gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
   set -x && \
   gcloud --quiet compute scp --zone=${zone} --recurse --compress "$(dirname $(pwd))" "ubuntu@${vm_name}:/home/ubuntu/calico" && \
-  gcloud --quiet compute scp --zone=${zone} --recurse --compress "$HOME/secrets" "ubuntu@${vm_name}:/home/ubuntu/secrets"
+  gcloud --quiet compute scp --zone=${zone} --recurse --compress "$HOME/secrets" "ubuntu@${vm_name}:/home/ubuntu/secrets" && \
+  ${ssh_cmd} -- rm -rf '/home/ubuntu/calico/artifacts'
 }
 
 function delete-vm() {
