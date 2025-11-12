@@ -11,22 +11,23 @@ RELEASE=$1
 REPO=$2
 
 # Translate modern OpenStack release names to their YEAR.NUMBER form.
+FORMAL_RELEASE=${RELEASE}
 case "${RELEASE}" in
     caracal )
-        RELEASE=2024.1
+        FORMAL_RELEASE=2024.1
         ;;
     gazpacho )
-        RELEASE=2026.1
+        FORMAL_RELEASE=2026.1
         ;;
 esac
 
-if [ `git ls-remote -h https://github.com/openstack/${REPO} refs/heads/stable/${RELEASE} | wc -l` = 1 ]; then
-    echo stable/${RELEASE}
+if [ `git ls-remote -h https://github.com/openstack/${REPO} refs/heads/stable/${FORMAL_RELEASE} | wc -l` = 1 ]; then
+    echo stable/${FORMAL_RELEASE}
     exit 0
 fi
 
-if [ `git ls-remote -h https://github.com/openstack/${REPO} refs/heads/unmaintained/${RELEASE} | wc -l` = 1 ]; then
-    echo unmaintained/${RELEASE}
+if [ `git ls-remote -h https://github.com/openstack/${REPO} refs/heads/unmaintained/${FORMAL_RELEASE} | wc -l` = 1 ]; then
+    echo unmaintained/${FORMAL_RELEASE}
     exit 0
 fi
 
