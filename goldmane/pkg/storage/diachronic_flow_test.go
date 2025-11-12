@@ -16,7 +16,6 @@ package storage_test
 
 import (
 	"testing"
-	"unique"
 
 	"github.com/stretchr/testify/require"
 
@@ -24,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	ul "github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -58,8 +58,8 @@ func TestDiachronicFlow(t *testing.T) {
 		NumConnectionsLive:      5,
 		NumConnectionsStarted:   6,
 		NumConnectionsCompleted: 7,
-		SourceLabels:            unique.Make("source"),
-		DestLabels:              unique.Make("dest"),
+		SourceLabels:            ul.Make(map[string]string{"source": "s1"}),
+		DestLabels:              ul.Make(map[string]string{"dest": "d1"}),
 	}
 	for i := range 400 {
 		df.AddFlow(&f, int64(i), int64(i+1))
