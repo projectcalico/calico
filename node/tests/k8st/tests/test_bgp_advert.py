@@ -112,11 +112,6 @@ class _TestBGPAdvert(TestBase):
             bird_peer_config=self.get_bird_conf(),
         )
 
-        # Enable debug logging
-        self.update_ds_env("calico-node",
-                           "calico-system",
-                           {"BGP_LOGSEVERITYSCREEN": "debug"})
-
         # Establish BGPPeer from cluster nodes to node-extra
         calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
@@ -500,7 +495,7 @@ EOF
             self.wait_for_deployment(local_svc, self.ns)
 
             # Verify that we have ECMP routes for the external IP of the local service.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(local_svc_external_ip, [self.ips[1], self.ips[2], self.ips[3]])
 
             # Delete both services, assert only cluster CIDR route is advertised.
             self.delete_and_confirm(local_svc, "svc", self.ns)
@@ -537,7 +532,7 @@ EOF
             self.wait_for_deployment(svc_name, self.ns)
 
             # Verify the ext IP address is advertised from all nodes.
-            retry_until_success(lambda: self.assert_ecmp_routes(ext_ip, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(ext_ip, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]])
 
     def test_loadbalancer_ip_advertisement(self):
         """
@@ -590,14 +585,14 @@ EOF
 
             # The full range should be advertised from each node.
             lb_cidr = "80.15.0.0/24"
-            retry_until_success(lambda: self.assert_ecmp_routes(lb_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(lb_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]])
 
             # Scale the local_svc to 4 replicas.
             self.scale_deployment(local_svc, self.ns, 4)
             self.wait_for_deployment(local_svc, self.ns)
 
             # Verify that we have ECMP routes for the LB IP of the local service from nodes running it.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]])
 
             # Apply a modified BGP config that no longer enables advertisement
             # for LoadBalancer IPs.
@@ -640,7 +635,7 @@ spec:
 EOF
 """)
             # Verify that we have ECMP routes for the LB IP of the local service from nodes running it.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]])
             retry_until_success(lambda: self.assertIn(lb_cidr, self.get_routes()))
             retry_until_success(lambda: self.assertNotIn(cluster_svc_lb_route, self.get_routes()))
 
