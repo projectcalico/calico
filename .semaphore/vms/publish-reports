@@ -22,13 +22,6 @@ do
   (( n++ ))
 done < <(find . -name '*.xml' -print0)
 
-while IFS= read -r -d '' json_file
-do
-  echo "Compiling $json_file"
-  test-results compile "$json_file" "$tmp_dir/$n.json"
-  (( n++ ))
-done < <(find . -name '*.go_test.json' -print0)
-
 echo "Combining..."
 test-results combine "$tmp_dir/"*.json "$tmp_dir/combined.json"
 echo "Publishing..."
