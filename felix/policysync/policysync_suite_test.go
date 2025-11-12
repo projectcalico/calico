@@ -30,6 +30,6 @@ func init() {
 
 func TestPolicysync(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/policysync_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Policysync Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_policysync_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/policysync", []Reporter{junitReporter})
 }

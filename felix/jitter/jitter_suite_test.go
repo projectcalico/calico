@@ -30,6 +30,6 @@ func init() {
 
 func TestJitter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/jitter_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Jitter Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_jitter_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/jitter", []Reporter{junitReporter})
 }
