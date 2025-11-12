@@ -32,6 +32,6 @@ func init() {
 
 func TestTuple(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/tuple_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Tuple Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../../report/felix_collector_tuple_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/collector/tuple", []Reporter{junitReporter})
 }

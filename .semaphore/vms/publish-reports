@@ -1,0 +1,18 @@
+#!/bin/bash
+
+set -e
+
+job_tag="$1"
+
+my_dir="$(dirname $0)"
+repo_dir="$my_dir/../.."
+artifacts_dir="${repo_dir}/artifacts"
+
+echo "Publishing any reports from the artifacts directory."
+
+cd "$artifacts_dir"
+
+find . -name '*.xml' \
+  -printf "Publishing: " \
+  -print \
+  -execdir bash -c 'echo test-results publish "$1" --name "${job_tag}-$(basename "$1" .xml)"' shell {} ';'
