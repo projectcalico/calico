@@ -13,16 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set +e
+set -e
 
-source $(pwd)/.semaphore/batches.sh
+my_dir="$(dirname $0)"
+repo_dir="$my_dir/../.."
+
+# COMPONENT might be node or felix; give shellcheck something to work with.
+# shellcheck source=../../felix/.semaphore/batches.sh
+source "${repo_dir}/${COMPONENT}/.semaphore/batches.sh"
 
 zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
 vm_name_prefix=$1
 shift 1
-repo_dir="."
-artifacts_dir="./artifacts"
 
 echo
 echo "===== Starting tests ====="
@@ -30,7 +33,7 @@ echo
 
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
-  VM_NAME="$vm_name" ../.semaphore/vms/on-test-vm "$@"
+  VM_NAME="$vm_name" "$my_dir/on-test-vm" "$@"
 done
 
-echo "===== Done, exiting with RC=$final_result ====="
+echo "===== Done ====="
