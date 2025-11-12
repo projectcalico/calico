@@ -732,16 +732,16 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	if err != nil {
 		return err
 	}
+	err = s.bpfMaglevEps.ApplyAllChanges()
+	if err != nil {
+		return err
+	}
 	err = s.bpfSvcs.ApplyUpdatesOnly()
 	if err != nil {
 		return err
 	}
 	// Remove any unused backends.
 	err = s.bpfEps.ApplyDeletionsOnly()
-	if err != nil {
-		return err
-	}
-	err = s.bpfMaglevEps.ApplyAllChanges()
 	if err != nil {
 		return err
 	}
