@@ -108,6 +108,11 @@ func init() {
 		reflect.TypeOf(apiv3.GlobalNetworkSet{}),
 	)
 	registerResourceInfo(
+		KindKubernetesClusterNetworkPolicy,
+		"kubernetesclusternetworkpolicies",
+		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
+	)
+	registerResourceInfo(
 		KindKubernetesAdminNetworkPolicy,
 		"kubernetesadminnetworkpolicies",
 		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),

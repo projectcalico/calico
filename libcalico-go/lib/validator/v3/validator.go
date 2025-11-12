@@ -1737,6 +1737,30 @@ func validateTier(structLevel validator.StructLevel) {
 		}
 	}
 
+	if tier.Name == names.KubeAdminTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.AdminTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("kube-admin tier order must be %v", api.AdminTierOrder)),
+				"",
+			)
+		}
+	}
+
+	if tier.Name == names.KubeBaselineTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.BaselineTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("kube-baseline tier order must be %v", api.BaselineTierOrder)),
+				"",
+			)
+		}
+	}
+
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
 	validateObjectMetaLabels(structLevel, tier.Labels)
 }
