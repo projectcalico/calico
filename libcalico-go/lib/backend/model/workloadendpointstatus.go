@@ -92,6 +92,10 @@ func (key WorkloadEndpointStatusKey) valueType() (reflect.Type, error) {
 	return reflect.TypeOf(WorkloadEndpointStatus{}), nil
 }
 
+func (key WorkloadEndpointStatusKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[WorkloadEndpointStatus](key, rawData)
+}
+
 func (key WorkloadEndpointStatusKey) String() string {
 	return fmt.Sprintf("WorkloadEndpointStatus(hostname=%s, orchestrator=%s, workload=%s, name=%s)",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)

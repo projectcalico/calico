@@ -66,6 +66,10 @@ func (key HostEndpointKey) valueType() (reflect.Type, error) {
 	return typeHostEndpoint, nil
 }
 
+func (key HostEndpointKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[HostEndpoint](key, rawData)
+}
+
 func (key HostEndpointKey) String() string {
 	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Hostname, key.EndpointID)
 }

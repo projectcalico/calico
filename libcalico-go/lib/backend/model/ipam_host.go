@@ -50,6 +50,10 @@ func (key IPAMHostKey) valueType() (reflect.Type, error) {
 	return typeIPAMHost, nil
 }
 
+func (key IPAMHostKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[IPAMHost](key, rawData)
+}
+
 func (key IPAMHostKey) String() string {
 	return fmt.Sprintf("IPAMHostKey(host=%s)", key.Host)
 }

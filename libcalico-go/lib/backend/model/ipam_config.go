@@ -42,6 +42,10 @@ func (key IPAMConfigKey) valueType() (reflect.Type, error) {
 	return typeIPAMConfig, nil
 }
 
+func (key IPAMConfigKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[IPAMConfig](key, rawData)
+}
+
 func (key IPAMConfigKey) String() string {
 	return "IPAMConfigKey()"
 }
