@@ -993,6 +993,14 @@ func (m *endpointManager) hasSourceSpoofingConfiguration(interfaceName string) b
 	return ok
 }
 
+func getAddrIpVersion(addr string) uint8 {
+	ip, _, _ := net.ParseCIDR(addr)
+	if ip.To4() == nil {
+		return 6
+	}
+	return 4
+}
+
 func (m *endpointManager) updateRPFSkipChain() {
 	log.Debug("Updating RPF skip chain")
 	chain := &generictables.Chain{
@@ -1001,10 +1009,12 @@ func (m *endpointManager) updateRPFSkipChain() {
 	}
 	for interfaceName, addresses := range m.sourceSpoofingConfig {
 		for _, addr := range addresses {
-			chain.Rules = append(chain.Rules, generictables.Rule{
-				Match:  m.newMatch().InInterface(interfaceName).SourceNet(addr),
-				Action: m.actions.Allow(),
-			})
+			if m.ipVersion == getAddrIpVersion(addr) {
+				chain.Rules = append(chain.Rules, generictables.Rule{
+					Match:  m.newMatch().InInterface(interfaceName).SourceNet(addr),
+					Action: m.actions.Allow(),
+				})
+			}
 		}
 	}
 	m.rawTable.UpdateChain(chain)
