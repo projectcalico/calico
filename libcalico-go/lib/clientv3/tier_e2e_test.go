@@ -63,12 +63,12 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 		Order:         &defaultOrder,
 		DefaultAction: &actionDeny,
 	}
-	kcnpAdminTierOrder := apiv3.AdminTierOrder
+	kcnpAdminTierOrder := apiv3.KubeAdminTierOrder
 	kcnpAdminSpec := apiv3.TierSpec{
 		Order:         &kcnpAdminTierOrder,
 		DefaultAction: &actionPass,
 	}
-	kcnpBaselineTierOrder := apiv3.BaselineTierOrder
+	kcnpBaselineTierOrder := apiv3.KubeBaselineTierOrder
 	kcnpBaselineSpec := apiv3.TierSpec{
 		Order:         &kcnpBaselineTierOrder,
 		DefaultAction: &actionPass,

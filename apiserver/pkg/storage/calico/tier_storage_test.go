@@ -527,7 +527,7 @@ func TestTierList(t *testing.T) {
 		return fmt.Sprintf("projectcalico.org/tiers/%s", name)
 	}
 
-	kubeAdminTier := makeTier(names.KubeAdminTierName, "", v3.AdminTierOrder)
+	kubeAdminTier := makeTier(names.KubeAdminTierName, "", v3.KubeAdminTierOrder)
 	err := store.Get(ctx, tierPath(names.KubeAdminTierName), opts, kubeAdminTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
@@ -539,7 +539,7 @@ func TestTierList(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	kubeBaselineTier := makeTier(names.KubeBaselineTierName, "", v3.BaselineTierOrder)
+	kubeBaselineTier := makeTier(names.KubeBaselineTierName, "", v3.KubeBaselineTierOrder)
 	err = store.Get(ctx, tierPath(names.KubeBaselineTierName), opts, kubeBaselineTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)

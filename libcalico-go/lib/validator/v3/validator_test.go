@@ -45,8 +45,8 @@ func init() {
 	var V100000000 = 0x100000000
 	var tierOrder = float64(100.0)
 	var defaultTierOrder = api.DefaultTierOrder
-	var adminTierOrder = api.AdminTierOrder
-	var baselineTierOrder = api.BaselineTierOrder
+	var adminTierOrder = api.KubeAdminTierOrder
+	var baselineTierOrder = api.KubeBaselineTierOrder
 	var defaultTierBadOrder = float64(10.0)
 
 	// We need pointers to bools, so define the values here.
