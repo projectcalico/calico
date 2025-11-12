@@ -55,7 +55,7 @@ if [ "$COMPONENT" = "felix" ]; then
       "felix/bin/"test-*
   fi
   mkdir -p "artifacts/report"
-  cp felix/report/*.xml "artifacts/report" || echo "Failed to copy reports."
+  cp felix/report/*.xml felix/report/*.json "artifacts/report" || echo "Failed to copy reports."
 
 elif [ "$COMPONENT" = "node" ]; then
 

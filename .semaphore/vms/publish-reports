@@ -12,7 +12,25 @@ echo "Publishing any reports from the artifacts directory."
 
 cd "$artifacts_dir"
 
-find . -name '*.xml' \
-  -printf "Publishing: " \
-  -print \
-  -execdir bash -c 'echo test-results publish "$1" --name "${job_tag}-$(basename "$1" .xml)"' shell {} ';'
+# Combine the reports
+n=0
+tmp_dir=$(mktemp -d -t ci-XXXXXXXXXX)
+while IFS= read -r -d '' xml_file
+do
+  echo "Compiling $xml_file"
+  test-results compile "$xml_file" "$tmp_dir/$n.json"
+  (( n++ ))
+done < <(find . -name '*.xml' -print0)
+
+while IFS= read -r -d '' json_file
+do
+  echo "Compiling $json_file"
+  test-results compile "$json_file" "$tmp_dir/$n.json"
+  (( n++ ))
+done < <(find . -name '*.go_test.json' -print0)
+
+echo "Combining..."
+test-results combine "$tmp_dir/"*.json "$tmp_dir/combined.json"
+echo "Publishing..."
+test-results publish "$tmp_dir/combined.json" --name "UT/FV felix $job_tag"
+echo "Done"
