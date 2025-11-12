@@ -128,12 +128,6 @@ class _TestLocalBGPPeer(TestBase):
         )
         self.add_cleanup(self.delete_extra_node)
 
-        # Enable debug logging on BGP and set endpointStatusPathPrefix
-        self.update_ds_env("calico-node",
-                           "kube-system",
-                           {"BGP_LOGSEVERITYSCREEN": "debug",
-                            "FELIX_EndpointStatusPathPrefix": "/var/run/calico"})
-
         # Create the BGP filter to export to the ToR.
         kubectl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
