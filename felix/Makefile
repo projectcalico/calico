@@ -121,8 +121,8 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
-# Currently CGO can be enabled in ARM64 and AMD64 builds.
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 s390x))
+# Currently CGO can be enabled in ARM64, AMD64, and s390x builds.
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
