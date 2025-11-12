@@ -30,6 +30,6 @@ func init() {
 
 func TestIntdataplane(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/intdataplane_ut_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Intdataplane Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/felix_dataplane_linux_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/dataplane/linux", []Reporter{junitReporter})
 }
