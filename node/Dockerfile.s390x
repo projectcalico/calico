@@ -35,6 +35,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Calico node handles networking and policy for Calico"
+LABEL maintainerauthors="maintainers@tigera.io"
+LABEL name="Calico node"
+LABEL release=1
+LABEL summary="The primary networking and policy engine for Calico"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
 
