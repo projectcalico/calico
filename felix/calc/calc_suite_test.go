@@ -30,6 +30,6 @@ func init() {
 
 func TestCalculationGraph(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/calc_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Calculation graph Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_calc_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/calc", []Reporter{junitReporter})
 }

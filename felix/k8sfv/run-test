@@ -256,7 +256,7 @@ felix_hostname=$(get_container_hostname ${prefix}-felix)
 # Run the test suite.
 run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v -k8s-api-endpoint ${k8s_api_endpoint} -felix-ip ${felix_ip} -felix-hostname ${felix_hostname} -prometheus-push-url \"${PROMPG_URL}\" -code-level \"${CODE_LEVEL}\""
 if test -n "${GINKGO_FOCUS}"; then
-    docker exec ${prefix}-felix /bin/sh -c \
+    docker exec -e USE_TYPHA=${USE_TYPHA} ${prefix}-felix /bin/sh -c \
         "${run} -ginkgo.focus \"${GINKGO_FOCUS}\""
 elif ${JUST_A_MINUTE}; then
     tmp=$(mktemp)
@@ -265,7 +265,7 @@ elif ${JUST_A_MINUTE}; then
     # test should be marked as "[slow]" if it normally takes longer
     # than 1 minute - so this allows a buffer of 1 extra minute to
     # allow for executor slowness.
-    docker exec ${prefix}-felix /bin/sh -c \
+    docker exec -e USE_TYPHA=${USE_TYPHA} ${prefix}-felix /bin/sh -c \
        "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120" | tee $tmp
     # Fail if the docker command returned failure
     cmdStatus=${PIPESTATUS[0]}
@@ -297,7 +297,7 @@ elif ${JUST_A_MINUTE}; then
         exit 1
     fi
 else
-    docker exec ${prefix}-felix /bin/sh -c \
+    docker exec -e USE_TYPHA=${USE_TYPHA} ${prefix}-felix /bin/sh -c \
         "${run}"
 fi
 
