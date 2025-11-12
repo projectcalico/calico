@@ -564,8 +564,8 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 		$(CALICO_BUILD) bash -o pipefail -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
-		BPF_FORCE_REAL_LIB=true go tool test2json ../bin/bpf.test -test.v -test.run "$(FOCUS)"  |\
-		tee ../report/felix_bpf.go_test.json'
+		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v=test2json -test.run "$(FOCUS)" |\
+		tee >(go tool test2json > ../report/felix_bpf.go_test.json)'
 	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
 		-e $(ACK_GINKGO) \
@@ -575,8 +575,8 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 		$(CALICO_BUILD) bash -o pipefail -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
-		go tool test2json ../../bin/bpf_ut.test -test.v -test.run "$(FOCUS)" |\
-		tee ../report/felix_bpf_ut.go_test.json'
+		../../bin/bpf_ut.test -test.v=test2json -test.run "$(FOCUS)" |\
+		tee >(go tool test2json > ../../report/felix_bpf_ut.go_test.json)'
 
 .PHONY: bench-bpf
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
