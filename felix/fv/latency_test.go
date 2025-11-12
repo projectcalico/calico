@@ -245,15 +245,13 @@ func getTotalBPFIPSetMembers(felix *infrastructure.Felix) int {
 		log.WithError(err).WithField("output", out).Warn("Failed to run bpftool")
 		return -1
 	}
-	r := regexp.MustCompile(`Found (\d+) elements`)
-	m := r.FindStringSubmatch(out)
-	if m != nil {
-		count, err := strconv.ParseInt(m[1], 10, 64)
-		if err != nil {
-			log.WithError(err).Panic("Failed to parse bpftool output")
-		}
-		return int(count)
+
+	// Count occurrences of "key:" at the start of lines in bpftool output.
+	re := regexp.MustCompile(`(?m)^\s*"key":`)
+	matches := re.FindAllStringIndex(out, -1)
+	if matches == nil {
+		log.WithField("out", out).Warn("bpftool didn't return any 'key:' lines")
+		return 0
 	}
-	log.WithField("out", out).Warn("bpftool didn't return a Found n elements line")
-	return -1
+	return len(matches)
 }
