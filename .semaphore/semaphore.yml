@@ -649,9 +649,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export COMPONENT=felix
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports ${JOB_TAG}
+            - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (iptables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -690,9 +689,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export COMPONENT=felix
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports ${JOB_TAG}
+            - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -734,9 +732,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export COMPONENT=felix
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports ${JOB_TAG}
+            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -779,9 +776,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export COMPONENT=felix
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports ${JOB_TAG}
+            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 jitharden (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -963,8 +959,9 @@ blocks:
       epilogue:
         always:
           commands:
+            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
             - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
-            - test-results publish ./report/*.xml --name "node-kind-tests" || true
+            - ../.semaphore/vms/publish-reports "Node KinD"
       secrets:
         - name: google-service-account-for-gce
   - name: pod2daemon
