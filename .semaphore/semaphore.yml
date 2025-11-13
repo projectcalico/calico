@@ -601,6 +601,7 @@ blocks:
           execution_time_limit:
             minutes: 120
           commands:
+            - 'export TEST_REPORT_NAME="Felix (iptables): FV"'
             - make check-wireguard
             - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
           parallelism: 3
@@ -611,6 +612,7 @@ blocks:
             - name: FELIX_FV_NFTABLES
               value: "Enabled"
           commands:
+            - 'export TEST_REPORT_NAME="Felix (nftables): FV"'
             - make check-wireguard
             - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
           parallelism: 3
@@ -618,7 +620,7 @@ blocks:
         always:
           commands:
             # We're still in the felix directory here.
-            - 'test-results publish report/*.xml || true'
+            - 'test-results publish report/*.xml --name "$TEST_REPORT_NAME" || true'
             - ../.semaphore/collect-artifacts
   - name: "Felix: BPF tests on Ubuntu 24.04"
     run:
