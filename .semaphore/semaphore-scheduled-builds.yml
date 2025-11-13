@@ -457,7 +457,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - test-results publish ./report/*.xml || true
+            - "find ./report -name \"*.xml\" -print0 | grep -z \"k8sfv\" | xargs -r -0 test-results publish --name \"Felix: k8sfv\""
+            - "find ./report -name \"*.xml\" -print0 | grep -z -v \"k8sfv\" | xargs -r -0 test-results publish --name \"Felix: UT\""
   - name: "Felix: multi-arch build"
     run:
       when: "true"
@@ -977,7 +978,7 @@ blocks:
         - name: pod2daemon tests
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-            - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
+            - test-results publish ./report/*.xml --name "pod2daemon: UT" || true
   - name: "Tools (hack directory)"
     run:
       when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -1013,8 +1014,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - test-results publish ./report/*.xml --name "typha-ut" || true
-            - test-results publish ../felix/report/*.xml --name "typha-k8sfv" || true
+            - test-results publish ./report/*.xml --name "Typha: UT" || true
+            - test-results publish ../felix/report/*.xml --name "Typha: k8sfv" || true
   - name: whisker-backend
     run:
       when: "true"
@@ -1189,7 +1190,7 @@ blocks:
         - name: ci
           commands:
             - ../.semaphore/run-and-monitor release-ci.log make ci
-            - test-results publish --name "release-tool-ut-tests" ./report/*.xml || true
+            - test-results publish --name "Release tool: UT" ./report/*.xml || true
         - name: build binary
           commands:
             - ../.semaphore/run-and-monitor release-build.log make build

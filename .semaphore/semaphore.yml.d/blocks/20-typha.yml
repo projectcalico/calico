@@ -20,5 +20,5 @@
     epilogue:
       always:
         commands:
-          - test-results publish ./report/*.xml --name "typha-ut" || true
-          - test-results publish ../felix/report/*.xml --name "typha-k8sfv" || true
+          - test-results publish ./report/*.xml --name "Typha: UT" || true
+          - test-results publish ../felix/report/*.xml --name "Typha: k8sfv" || true
