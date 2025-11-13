@@ -30,6 +30,6 @@ func init() {
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/config_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Config Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_config_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/config", []Reporter{junitReporter})
 }
