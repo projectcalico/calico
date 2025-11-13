@@ -1007,9 +1007,11 @@ blocks:
       jobs:
         - name: "Typha: UT and FV tests"
           commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
-        - name: "Typha: UT and FV tests on UBI-minimal"
+            - export TEST_REPORT_NAME="Typha"
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "Typha: FV tests on UBI-minimal"
           commands:
+            - 'export TEST_REPORT_NAME="Typha (UBI-minimal)"'
             - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
           env_vars:
             - name: USE_UBI_AS_CALICO_BASE
@@ -1017,7 +1019,7 @@ blocks:
       epilogue:
         always:
           commands:
-            - 'test-results publish ./report/*.xml ../felix/report/*.xml --name "Typha" || true'
+            - 'test-results publish --ignore-missing ./report/*.xml ../felix/report/*.xml --name "$TEST_REPORT_NAME" || true'
   - name: Whisker backend
     run:
       when: "change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml','/.semaphore/semaphore.yml.d/02-global_job_config.yml','/.semaphore/semaphore.yml.d/03-promotions.yml','/.semaphore/semaphore.yml.d/09-blocks.yml','/.semaphore/semaphore.yml.d/99-after_pipeline.yml','/.semaphore/semaphore.yml.d/blocks/20-whisker-backend.yml','/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/crypto/pkg/tls/*.go','/goldmane/pkg/client/*.go','/goldmane/pkg/internal/flowcache/*.go','/goldmane/pkg/types/*.go','/goldmane/proto/*.go','/hack/test/certs/','/lib.Makefile','/lib/httpmachinery/pkg/apiutil/*.go','/lib/httpmachinery/pkg/codec/*.go','/lib/httpmachinery/pkg/context/*.go','/lib/httpmachinery/pkg/header/*.go','/lib/httpmachinery/pkg/server/*.go','/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go','/lib/std/cryptoutils/*.go','/lib/std/testutils/json/*.go','/lib/std/time/*.go','/libcalico-go/lib/logutils/*.go','/metadata.mk','/whisker-backend/**'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/goldmane/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go']})"
