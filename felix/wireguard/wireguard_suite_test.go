@@ -30,6 +30,6 @@ func init() {
 
 func TestRules(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/wireguard_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Wireguard Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_wireguard_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/wireguard", []Reporter{junitReporter})
 }

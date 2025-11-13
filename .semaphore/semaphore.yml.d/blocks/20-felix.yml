@@ -31,6 +31,11 @@
           minutes: 60
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
+    epilogue:
+      always:
+        commands:
+        - 'find ./report -name "*.xml" -print0 | grep -z "k8sfv" | xargs -r -0 test-results publish --name "Felix: k8sfv"'
+        - 'find ./report -name "*.xml" -print0 | grep -z -v "k8sfv" | xargs -r -0 test-results publish --name "Felix: UT"'
 - name: "Felix: multi-arch build"
   run:
     when: "${CHANGE_IN(felix)}"
@@ -185,10 +190,10 @@
     epilogue:
       always:
         commands:
-          - .semaphore/vms/collect-artifacts
-          - .semaphore/vms/publish-artifacts
-          - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
-          - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
+          # We're still in the felix directory here.
+          - test-results publish report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
+          - test-results publish report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
+          - ../.semaphore/collect-artifacts
 - name: "Felix: BPF tests on Ubuntu 24.04"
   run:
     when: "${CHANGE_IN(felix,typha)}"
@@ -201,9 +206,10 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
+        - export JOB_TAG=felix-ipt
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=felix
         - export NUM_FV_BATCHES=8
         - export RUN_UT=true
         - export FV_FOCUS=BPF-SAFE
@@ -221,9 +227,8 @@
     epilogue:
       always:
         commands:
-          - export REPO_NAME=$(basename $(pwd))
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-artifacts
+          - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (iptables)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -239,9 +244,10 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
+        - export JOB_TAG=felix-nft
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=felix
         - export NUM_FV_BATCHES=4
         - export RUN_UT=true
         - export FV_FOCUS='_BPF_.*ct=true'
@@ -261,9 +267,8 @@
     epilogue:
       always:
         commands:
-          - export REPO_NAME=$(basename $(pwd))
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-artifacts
+          - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nftables)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -279,9 +284,10 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-2504-
+        - export JOB_TAG=felix-2504
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=felix
         - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
         - export UBUNTU_VERSION=plucky
         - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
@@ -304,9 +310,8 @@
     epilogue:
       always:
         commands:
-          - export REPO_NAME=$(basename $(pwd))
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-artifacts
+          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nftables)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -318,20 +323,21 @@
   task:
     prologue:
       commands:
+        - mkdir -p artifacts
         - cd felix
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-jithard-
+        - export JOB_TAG=felix-jithard
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=felix
         - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
         - export UBUNTU_VERSION=plucky
         - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
         - export NUM_FV_BATCHES=2
         - export RUN_UT=true
         - export FV_FOCUS='_BPF_.*tcp.*ct=true'
-        - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
         - ../.semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
     jobs:
@@ -348,9 +354,8 @@
     epilogue:
       always:
         commands:
-          - export REPO_NAME=$(basename $(pwd))
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-artifacts
+          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 jitharden (nftables)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
