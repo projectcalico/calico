@@ -34,7 +34,8 @@
     epilogue:
       always:
         commands:
-          - test-results publish ./report/*.xml || true
+        - 'find ./report -name "*.xml" -print0 | grep -z "k8sfv" | xargs -r -0 test-results publish --name "Felix: k8sfv"'
+        - 'find ./report -name "*.xml" -print0 | grep -z -v "k8sfv" | xargs -r -0 test-results publish --name "Felix: UT"'
 - name: "Felix: multi-arch build"
   run:
     when: "${CHANGE_IN(felix)}"
