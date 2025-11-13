@@ -22,7 +22,7 @@ spec:
   serviceAccountName: calicoctl
   containers:
     - name: calicoctl
-      image: quay.io/calico/ctl:v3.31.0
+      image: quay.io/calico/ctl:v3.31.1
       command:
         - calicoctl
       args:
