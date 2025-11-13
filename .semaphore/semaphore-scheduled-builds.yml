@@ -449,7 +449,7 @@ blocks:
             - ../.semaphore/run-and-monitor ut.log make ut
             - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
             - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-        - name: Static checks
+        - name: "Felix: Static checks"
           execution_time_limit:
             minutes: 60
           commands:
@@ -457,8 +457,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - 'find ./report -name "*.xml" -print0 | grep -z "k8sfv" | xargs -r -0 test-results publish --name "Felix: k8sfv"'
-            - 'find ./report -name "*.xml" -print0 | grep -z -v "k8sfv" | xargs -r -0 test-results publish --name "Felix: UT"'
+            - 'find ./report -name "*.xml" -print0 | grep -z "k8sfv" | xargs -r -0 test-results compile --name "Felix: k8sfv"'
+            - 'find ./report -name "*.xml" -print0 | grep -z -v "k8sfv" | xargs -r -0 test-results compile --name "Felix: UT"'
   - name: "Felix: multi-arch build"
     run:
       when: "true"
@@ -614,8 +614,7 @@ blocks:
         always:
           commands:
             # We're still in the felix directory here.
-            - test-results publish report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
-            - test-results publish report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
+            - 'test-results publish report/*.xml || true'
             - ../.semaphore/collect-artifacts
   - name: "Felix: BPF tests on Ubuntu 24.04"
     run:
@@ -1014,8 +1013,7 @@ blocks:
       epilogue:
         always:
           commands:
-            - 'test-results publish ./report/*.xml --name "Typha: UT" || true'
-            - 'test-results publish ../felix/report/*.xml --name "Typha: k8sfv" || true'
+            - 'test-results publish ./report/*.xml ../felix/report/*.xml --name "Typha" || true'
   - name: Whisker backend
     run:
       when: "true"
