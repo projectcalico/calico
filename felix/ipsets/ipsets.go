@@ -45,7 +45,7 @@ type dataplaneMetadata struct {
 	RangeMin     int
 	RangeMax     int
 	DeleteFailed bool
-	ListError    error
+	ListFailed   bool
 }
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -359,7 +359,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
 		}
-		failureMaybeTransient := attempt < MaxRetryAttempt/2
+		treatFailureAsTransient := attempt < MaxRetryAttempt/2
 		if s.fullResyncRequired || s.ipSetsRequiringResync.Len() > 0 {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
@@ -374,7 +374,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 				// The incompatibility failure can be fixed by swapping the one Felix understand (created from
 				// desired state) and the one (with higher revision) in dataplane. As such, we should stop re-trying
 				// to re-sync, and instead continue with the next steps.
-				if failureMaybeTransient {
+				if treatFailureAsTransient {
 					backOff()
 					continue
 				}
@@ -389,7 +389,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
 		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
-			if failureMaybeTransient {
+			if treatFailureAsTransient {
 				// More than one failure, resync the IP sets that we failed to update.
 				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
 					"Failed to update IP sets. Will do partial resync.")
@@ -690,7 +690,9 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		}
 		return scanner.Err()
 	})
-	meta.ListError = err
+	if err != nil {
+		meta.ListFailed = true
+	}
 	if debug {
 		s.logCxt.WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
 	}
