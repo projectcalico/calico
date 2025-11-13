@@ -30,6 +30,6 @@ func init() {
 
 func TestIptablesUT(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/iptables_ut_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Iptables Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_iptables_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/iptables", []Reporter{junitReporter})
 }
