@@ -288,6 +288,18 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 		errs = append(errs, err)
 	}
 
+	err = c.ensureTierExists(ctx, names.KubeAdminTierName, v3.Pass, v3.KubeAdminTierOrder)
+	if err != nil {
+		log.WithError(err).Info("Unable to initialize kube-admin Tier")
+		errs = append(errs, err)
+	}
+
+	err = c.ensureTierExists(ctx, names.KubeBaselineTierName, v3.Pass, v3.KubeBaselineTierOrder)
+	if err != nil {
+		log.WithError(err).Info("Unable to initialize kube-baseline Tier")
+		errs = append(errs, err)
+	}
+
 	// If there are any errors return the first error. We could combine the error text here and return
 	// a generic error, but an application may be expecting a certain error code, so best just return
 	// the original error.

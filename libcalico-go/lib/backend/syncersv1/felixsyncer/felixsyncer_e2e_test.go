@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -408,11 +408,21 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					model.GlobalConfigKey{Name: "ClusterGUID"},
 					MatchRegexp("[a-f0-9]{32}"),
 				)
-				// Creating the node also creates default and adminnetworkpolicy tiers.
+				// Creating the node also creates default, kube-admin, and kube-baseline tiers.
 				order := apiv3.DefaultTierOrder
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.TierKey{Name: "default"},
 					Value: &model.Tier{Order: &order, DefaultAction: apiv3.Deny},
+				})
+				adminTierOrder := apiv3.KubeAdminTierOrder
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.TierKey{Name: names.KubeAdminTierName},
+					Value: &model.Tier{Order: &adminTierOrder, DefaultAction: apiv3.Pass},
+				})
+				baselineTierOrder := apiv3.KubeBaselineTierOrder
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.TierKey{Name: names.KubeBaselineTierName},
+					Value: &model.Tier{Order: &baselineTierOrder, DefaultAction: apiv3.Pass},
 				})
 				anpOrder := apiv3.AdminNetworkPolicyTierOrder
 				syncTester.ExpectData(model.KVPair{
@@ -437,7 +447,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Value: &model.Wireguard{InterfaceIPv4Addr: &wip, PublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="},
 				})
 				// add one for the node resource
-				expectedCacheSize += 8
+				expectedCacheSize += 10
 			}
 
 			// The HostIP will be added for the IPv4 address
