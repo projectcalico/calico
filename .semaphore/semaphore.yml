@@ -448,7 +448,9 @@ blocks:
             - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
             - ../.semaphore/run-and-monitor ut.log make ut
             - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+            - mv report/k8sfv_suite.xml report/k8sfv_typha_jam_suite.xml
             - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+            - mv report/k8sfv_suite.xml report/k8sfv_no_typha_jam_suite.xml
         - name: Static checks
           execution_time_limit:
             minutes: 60
@@ -649,9 +651,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export COMPONENT=felix
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports ${JOB_TAG}
+            - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (iptables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -690,9 +691,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export COMPONENT=felix
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports ${JOB_TAG}
+            - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -734,9 +734,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export COMPONENT=felix
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports ${JOB_TAG}
+            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -779,9 +778,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export COMPONENT=felix
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports ${JOB_TAG}
+            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 jitharden (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -963,8 +961,9 @@ blocks:
       epilogue:
         always:
           commands:
+            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
             - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
-            - test-results publish ./report/*.xml --name "node-kind-tests" || true
+            - ../.semaphore/vms/publish-reports "Node KinD"
       secrets:
         - name: google-service-account-for-gce
   - name: pod2daemon
