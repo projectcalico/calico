@@ -25,7 +25,7 @@
       commands:
         - cd node
     jobs:
-      - name: Build image
+      - name: "Node: build multi-arch images"
         matrix:
           - env_var: ARCH
             values:
@@ -33,10 +33,10 @@
               - s390x
         commands:
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
-      - name: Build Windows archive
+      - name: "Node: build Windows archive"
         commands:
           - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
-      - name: Build Windows image
+      - name: "Node: build Windows image"
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 - name: "Node: Build - native arm64 runner"
@@ -52,7 +52,7 @@
       commands:
         - cd node
     jobs:
-      - name: Build image
+      - name: "Node: build arm64 image"
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
 - name: "Node: kind-cluster tests"
