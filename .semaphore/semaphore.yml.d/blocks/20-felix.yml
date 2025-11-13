@@ -34,7 +34,7 @@
     epilogue:
       always:
         commands:
-          - 'test-results compile --name "Felix: k8sfv" ./report/*k8sfv*.xml ./report/k8sfv_sem.json || true'
+          - 'test-results compile --name "Felix: FV" ./report/*k8sfv*.xml ./report/k8sfv_sem.json || true'
           - rm -f ./report/*k8sfv*.xml
           - 'test-results compile --name "Felix: UT" ./report/*.xml ./report/ut_sem.json || true'
           - test-results combine report/*_sem.json report/report.json
@@ -178,7 +178,6 @@
         execution_time_limit:
           minutes: 120
         commands:
-          - 'export TEST_REPORT_NAME="Felix (iptables): FV"'
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
         parallelism: 3
@@ -189,7 +188,6 @@
           - name: FELIX_FV_NFTABLES
             value: "Enabled"
         commands:
-          - 'export TEST_REPORT_NAME="Felix (nftables): FV"'
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
         parallelism: 3
@@ -197,7 +195,7 @@
       always:
         commands:
           # We're still in the felix directory here.
-          - 'test-results publish report/*.xml --name "$TEST_REPORT_NAME" || true'
+          - 'test-results publish report/*.xml --name "Felix: FV" || true'
           - ../.semaphore/collect-artifacts
 - name: "Felix: BPF tests on Ubuntu 24.04"
   run:
@@ -233,7 +231,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (ipt)"
+          - '../.semaphore/vms/publish-reports "Felix"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -273,7 +271,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nft)"
+          - '../.semaphore/vms/publish-reports "Felix"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -316,7 +314,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nft)"
+          - '../.semaphore/vms/publish-reports "Felix"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -352,6 +350,8 @@
             value: "Enabled"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
+          - name: FV_EXTRA_REPORT_SUFFIX
+            value: "bpf_jit_harden=2"
         execution_time_limit:
           minutes: 180
         commands:
@@ -360,7 +360,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nft-jit)"
+          - '../.semaphore/vms/publish-reports "Felix"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce

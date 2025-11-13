@@ -23,6 +23,7 @@ run_batch() {
   else
     VM_NAME="$vm_name" ${remote_exec} make --directory=${CALICO_DIR_NAME}/felix fv-bpf \
       FELIX_FV_NFTABLES="$FELIX_FV_NFTABLES" \
+      FV_EXTRA_REPORT_SUFFIX="$FV_EXTRA_REPORT_SUFFIX" \
       FELIX_FV_BPFATTACHTYPE="$FELIX_FV_BPFATTACHTYPE" \
       GINKGO_FOCUS="${FV_FOCUS}" \
       FV_NUM_BATCHES="$num_fv_batches" \
