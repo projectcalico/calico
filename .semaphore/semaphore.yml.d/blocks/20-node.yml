@@ -70,7 +70,7 @@
         - export ZONE=europe-west3-c
         - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=node
         - export VM_DISK_SIZE=80GB
         - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
@@ -83,8 +83,8 @@
     epilogue:
       always:
         commands:
-          - ../.semaphore/vms/publish-artifacts
+          - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
           - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
-          - test-results publish ./report/*.xml --name "node-kind-tests" || true
+          - ../.semaphore/vms/publish-reports "Node KinD"
     secrets:
       - name: google-service-account-for-gce

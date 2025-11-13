@@ -20,7 +20,8 @@ global_job_config:
   prologue:
     commands:
       - checkout
-      - export REPO_DIR="$(pwd)"
+      - export CALICO_DIR="$(pwd)"
+      - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
       - mkdir artifacts
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
@@ -28,7 +29,7 @@ global_job_config:
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
-      - cd "$REPO_DIR"
+      - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
 promotions:
   # Manual promotion for publishing a hashrelease.
@@ -453,6 +454,11 @@ blocks:
             minutes: 60
           commands:
             - ../.semaphore/run-and-monitor static-checks.log make static-checks
+      epilogue:
+        always:
+          commands:
+            - 'find ./report -name "*.xml" -print0 | grep -z "k8sfv" | xargs -r -0 test-results publish --name "Felix: k8sfv"'
+            - 'find ./report -name "*.xml" -print0 | grep -z -v "k8sfv" | xargs -r -0 test-results publish --name "Felix: UT"'
   - name: "Felix: multi-arch build"
     run:
       when: "true"
@@ -607,10 +613,10 @@ blocks:
       epilogue:
         always:
           commands:
-            - .semaphore/vms/collect-artifacts
-            - .semaphore/vms/publish-artifacts
-            - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
-            - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
+            # We're still in the felix directory here.
+            - test-results publish report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
+            - test-results publish report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
+            - ../.semaphore/collect-artifacts
   - name: "Felix: BPF tests on Ubuntu 24.04"
     run:
       when: "true"
@@ -623,9 +629,10 @@ blocks:
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
           - export ZONE=europe-west3-c
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
+          - export JOB_TAG=felix-ipt
+          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
           - echo VM_PREFIX=${VM_PREFIX}
-          - export REPO_NAME=$(basename $(pwd))
+          - export COMPONENT=felix
           - export NUM_FV_BATCHES=8
           - export RUN_UT=true
           - export FV_FOCUS=BPF-SAFE
@@ -643,9 +650,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export REPO_NAME=$(basename $(pwd))
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-artifacts
+            - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (iptables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -661,9 +667,10 @@ blocks:
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
           - export ZONE=europe-west3-c
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
+          - export JOB_TAG=felix-nft
+          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
           - echo VM_PREFIX=${VM_PREFIX}
-          - export REPO_NAME=$(basename $(pwd))
+          - export COMPONENT=felix
           - export NUM_FV_BATCHES=4
           - export RUN_UT=true
           - export FV_FOCUS='_BPF_.*ct=true'
@@ -683,9 +690,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export REPO_NAME=$(basename $(pwd))
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-artifacts
+            - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -701,9 +707,10 @@ blocks:
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
           - export ZONE=europe-west3-c
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-2504-
+          - export JOB_TAG=felix-2504
+          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
           - echo VM_PREFIX=${VM_PREFIX}
-          - export REPO_NAME=$(basename $(pwd))
+          - export COMPONENT=felix
           - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
           - export UBUNTU_VERSION=plucky
           - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
@@ -726,9 +733,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export REPO_NAME=$(basename $(pwd))
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-artifacts
+            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -740,20 +746,21 @@ blocks:
     task:
       prologue:
         commands:
+          - mkdir -p artifacts
           - cd felix
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
           - export ZONE=europe-west3-c
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-jithard-
+          - export JOB_TAG=felix-jithard
+          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
           - echo VM_PREFIX=${VM_PREFIX}
-          - export REPO_NAME=$(basename $(pwd))
+          - export COMPONENT=felix
           - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
           - export UBUNTU_VERSION=plucky
           - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
           - export NUM_FV_BATCHES=2
           - export RUN_UT=true
           - export FV_FOCUS='_BPF_.*tcp.*ct=true'
-          - mkdir artifacts
           - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
           - ../.semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
       jobs:
@@ -770,9 +777,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - export REPO_NAME=$(basename $(pwd))
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-artifacts
+            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 jitharden (nftables)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -941,7 +947,7 @@ blocks:
           - export ZONE=europe-west3-c
           - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
           - echo VM_PREFIX=${VM_PREFIX}
-          - export REPO_NAME=$(basename $(pwd))
+          - export COMPONENT=node
           - export VM_DISK_SIZE=80GB
           - mkdir artifacts
           - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
@@ -954,9 +960,9 @@ blocks:
       epilogue:
         always:
           commands:
-            - ../.semaphore/vms/publish-artifacts
+            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
             - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
-            - test-results publish ./report/*.xml --name "node-kind-tests" || true
+            - ../.semaphore/vms/publish-reports "Node KinD"
       secrets:
         - name: google-service-account-for-gce
   - name: pod2daemon
@@ -972,7 +978,7 @@ blocks:
         - name: pod2daemon tests
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-            - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
+            - 'test-results publish ./report/*.xml --name "pod2daemon: UT" || true'
   - name: "Tools (hack directory)"
     run:
       when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -1008,19 +1014,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - |
-              for f in /home/semaphore/calico/typha/report/*; do
-                NAME=$(basename $f)
-                test-results compile --name typha-$NAME $f $NAME.json || true
-              done
-              for f in /home/semaphore/calico/typha/pkg/report/*; do
-                NAME=$(basename $f)
-                test-results compile --name typha-$NAME $f $NAME.json || true
-              done
-              test-results combine *.xml.json report.json || true
-              artifact push job report.json -d test-results/junit.json || true
-              artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
-            - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true
+            - 'test-results publish ./report/*.xml --name "Typha: UT" || true'
+            - 'test-results publish ../felix/report/*.xml --name "Typha: k8sfv" || true'
   - name: whisker-backend
     run:
       when: "true"
@@ -1195,7 +1190,7 @@ blocks:
         - name: ci
           commands:
             - ../.semaphore/run-and-monitor release-ci.log make ci
-            - test-results publish --name "release-tool-ut-tests" ./report/*.xml || true
+            - test-results publish --name "Release tool: UT" ./report/*.xml || true
         - name: build binary
           commands:
             - ../.semaphore/run-and-monitor release-build.log make build
