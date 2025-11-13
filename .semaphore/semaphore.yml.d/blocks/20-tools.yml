@@ -8,6 +8,6 @@
       commands:
         - cd hack
     jobs:
-      - name: "Tools (hack directory)"
+      - name: "Tools (hack directory): CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
