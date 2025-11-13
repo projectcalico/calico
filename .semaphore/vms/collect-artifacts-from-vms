@@ -16,14 +16,17 @@
 
 set -e
 
-source $(pwd)/.semaphore/batches.sh
+my_dir="$(dirname $0)"
+repo_dir="$my_dir/../.."
+
+# COMPONENT might be node or felix; give shellcheck something to work with.
+# shellcheck source=../../felix/.semaphore/batches.sh
+source "${repo_dir}/${COMPONENT}/.semaphore/batches.sh"
 
 vm_name_prefix=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
-my_dir="$(dirname $0)"
-repo_dir="."
-artifacts_dir="${REPO_NAME}/artifacts"
+artifacts_dir="${repo_dir}/artifacts"
 
 echo "Collecting artifacts..."
 
@@ -32,23 +35,23 @@ log_files=()
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   log_file="$artifacts_dir/collect-artifacts-$batch.log"
-  log_files+=( $log_file )
+  log_files+=( "$log_file" )
   echo "Collecting artifacts from $vm_name. Logging to $log_file."
   (
-    args=""
+    args=()
     # Only collect binaries once since they're large to copy and should be identical.
-    if [ $batch != 1 ]; then
-      args="--skip-binaries"
+    if [ "$batch" != 1 ]; then
+      args+=("--skip-binaries")
     fi
-    VM_NAME=$vm_name $my_dir/on-test-vm ${REPO_NAME}/../.semaphore/vms/collect-artifacts $args || echo "Failed to collect artifacts from ${vm_name}."
-    timeout 10m gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${REPO_NAME}/artifacts" ./ --recurse || echo "Failed to SCP from ${vm_name}"
+    VM_NAME=$vm_name "$my_dir/on-test-vm" COMPONENT=${COMPONENT} "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" "${args[@]}" || echo "Failed to collect artifacts from ${vm_name}."
+    timeout 10m gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" --recurse || echo "Failed to SCP from ${vm_name}"
   ) >& "$log_file" &
   pid=$!
-  pids+=( $pid )
+  pids+=( "$pid" )
 done
 
 echo "===== Waiting for diags collection to complete ====="
-for (( i=0; i<num_fv_batches; i++ )); do
+for (( i=0; i<${#pids[@]}; i++ )); do
   pid=${pids[$i]}
   batch=${batches[$i]}
   if wait "$pid"; then
