@@ -359,6 +359,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
 		}
+		failureMaybeTransient := attempt < MaxRetryAttempt/2
 		if s.fullResyncRequired || s.ipSetsRequiringResync.Len() > 0 {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
@@ -373,7 +374,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 				// The incompatibility failure can be fixed by swapping the one Felix understand (created from
 				// desired state) and the one (with higher revision) in dataplane. As such, we should stop re-trying
 				// to re-sync, and instead continue with the next steps.
-				if attempt < MaxRetryAttempt/2 {
+				if failureMaybeTransient {
 					backOff()
 					continue
 				}
@@ -388,15 +389,15 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
 		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
-			if attempt >= MaxRetryAttempt/2 {
+			if failureMaybeTransient {
+				// More than one failure, resync the IP sets that we failed to update.
+				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
+					"Failed to update IP sets. Will do partial resync.")
+			} else {
 				// Persistent failures, try a full resync.
 				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
 					"Persistently failed to update IP sets. Will do full resync.")
 				s.QueueResync()
-			} else {
-				// More than one failure, resync the IP sets that we failed to update.
-				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
-					"Failed to update IP sets. Will do partial resync.")
 			}
 			countNumIPSetErrors.Inc()
 			backOff()
