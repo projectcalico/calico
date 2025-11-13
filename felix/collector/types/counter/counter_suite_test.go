@@ -32,6 +32,6 @@ func init() {
 
 func TestCounter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/counter_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Counter Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../../report/felix_collector_counter_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/collector/counter", []Reporter{junitReporter})
 }

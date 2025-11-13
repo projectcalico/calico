@@ -1,0 +1,21 @@
+#!/bin/bash
+
+set -e
+set -x
+
+job_tag="$1"
+
+my_dir="$(dirname $0)"
+repo_dir="$my_dir/../.."
+artifacts_dir="${repo_dir}/artifacts"
+
+echo "Publishing any reports from the artifacts directory."
+
+cd "$artifacts_dir"
+
+if [ "$COMPONENT" = "felix" ]; then
+  find . -name '*.xml' -print0 | grep -z '_fv_' | xargs -r -0 test-results publish --name "FV: $job_tag"
+  find . -name '*.xml' -print0 | grep -z -v '_fv_' | xargs -r -0 test-results publish --name "UT: $job_tag"
+else
+  find . -name '*.xml' -print0 | xargs -r -0 test-results publish --name "$job_tag"
+fi
