@@ -67,7 +67,7 @@ LIBBPF_VERSION=v1.4.6
 BPFTOOL_IMAGE=calico/bpftool:v7.5.0
 
 # The operator branch corresponding to this branch.
-OPERATOR_BRANCH       ?= master
+OPERATOR_BRANCH ?= master
 OPERATOR_ORGANIZATION ?= tigera
 OPERATOR_GIT_REPO     ?= operator
 
