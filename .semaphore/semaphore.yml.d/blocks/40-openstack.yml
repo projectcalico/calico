@@ -77,7 +77,7 @@
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-          - TEMPEST=true DEVSTACK_BRANCH=stable/2024.1 ./devstack/bootstrap.sh
+          - TEMPEST=true DEVSTACK_BRANCH=unmaintained/2024.1 ./devstack/bootstrap.sh
     epilogue:
       always:
         commands:
