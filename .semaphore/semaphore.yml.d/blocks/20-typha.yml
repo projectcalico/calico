@@ -20,5 +20,4 @@
     epilogue:
       always:
         commands:
-          - 'test-results publish ./report/*.xml --name "Typha: UT" || true'
-          - 'test-results publish ../felix/report/*.xml --name "Typha: k8sfv" || true'
+          - 'test-results publish ./report/*.xml ../felix/report/*.xml --name "Typha" || true'
