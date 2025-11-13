@@ -30,6 +30,6 @@ func init() {
 
 func TestIfacemonitor(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/ifacemonitor_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Ifacemonitor Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_ifacemonitor_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/ifacemonitor", []Reporter{junitReporter})
 }

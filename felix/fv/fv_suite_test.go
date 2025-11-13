@@ -47,12 +47,18 @@ func init() {
 
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
-	reportName := "fv_suite"
+	reportName := "ipt"
+	mode := "(iptables)"
 	if NFTMode() {
-		reportName = "fv_nft_suite"
+		reportName = "nft"
+		mode = "(nftables)"
 	}
-	junitReporter := reporters.NewJUnitReporter(fmt.Sprintf("../report/%s.xml", reportName))
-	RunSpecsWithDefaultAndCustomReporters(t, "FV Suite", []Reporter{junitReporter})
+	if BPFMode() {
+		reportName = "bpf_" + reportName
+		mode = "BPF " + mode
+	}
+	junitReporter := reporters.NewJUnitReporter(fmt.Sprintf("../report/felix_fv_%s.xml", reportName))
+	RunSpecsWithDefaultAndCustomReporters(t, "FV: felix/fv "+mode, []Reporter{junitReporter})
 }
 
 var _ = BeforeEach(func() {
