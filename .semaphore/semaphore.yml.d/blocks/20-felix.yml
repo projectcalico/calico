@@ -34,8 +34,8 @@
     epilogue:
       always:
         commands:
-          - 'test-results compile --name "Felix: k8sfv" ./report/k8sfv*.xml ./report/k8sfv_sem.json || true'
-          - rm -f ./report/k8sfv-*.xml
+          - 'test-results compile --name "Felix: k8sfv" ./report/*k8sfv*.xml ./report/k8sfv_sem.json || true'
+          - rm -f ./report/*k8sfv*.xml
           - 'test-results compile --name "Felix: UT" ./report/*.xml ./report/ut_sem.json || true'
           - test-results combine report/*_sem.json report/report.json
           - artifact push job report/report.json -d test-results/junit.json || true
