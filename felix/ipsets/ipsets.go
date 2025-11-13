@@ -45,7 +45,7 @@ type dataplaneMetadata struct {
 	RangeMin     int
 	RangeMax     int
 	DeleteFailed bool
-	ListFailed   bool
+	ListError    error
 }
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -690,9 +690,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		}
 		return scanner.Err()
 	})
-	if err != nil {
-		meta.ListFailed = true
-	}
+	meta.ListError = err
 	if debug {
 		s.logCxt.WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
 	}
