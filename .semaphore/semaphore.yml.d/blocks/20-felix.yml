@@ -10,7 +10,7 @@
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
     jobs:
-      - name: Build and run UT, k8sfv
+      - name: "Felix: Build and run UT, k8sfv"
         execution_time_limit:
           minutes: 60
         commands:
@@ -48,7 +48,7 @@
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
     jobs:
-      - name: Build binary
+      - name: "Felix: build multi-arch binaries"
         matrix:
           - env_var: ARCH
             values:
@@ -73,7 +73,7 @@
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
     jobs:
-      - name: Build binary
+      - name: "Felix: build arm64 binaries"
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
 - name: "Felix: Build Windows binaries"
@@ -83,7 +83,7 @@
     - Prerequisites
   task:
     jobs:
-      - name: Build Windows binaries
+      - name: "Felix: Build Windows binaries"
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
@@ -122,7 +122,7 @@
       - name: CONTAINERD_VERSION
         value: 1.7.22
     jobs:
-      - name: CAPZ - Windows FV
+      - name: "Felix: Windows FV - CAPZ"
         commands:
           - ./.semaphore/run-win-fv
 - name: "Felix: FV Tests"
@@ -170,14 +170,14 @@
         # routing in that first felix container chooses different source IPs than the tests are expecting.
         - sudo modprobe ipip
     jobs:
-      - name: FV Test matrix
+      - name: "Felix: FV Tests (iptables)"
         execution_time_limit:
           minutes: 120
         commands:
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
         parallelism: 3
-      - name: nftables FV Test matrix
+      - name: "Felix: FV Tests (nftables)"
         execution_time_limit:
           minutes: 120
         env_vars:
@@ -219,7 +219,7 @@
         - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
-      - name: UT/FV tests
+      - name: "Felix: BPF tests on Ubuntu 24.04"
         execution_time_limit:
           minutes: 180
         commands:
@@ -254,7 +254,7 @@
         - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
-      - name: UT/FV tests
+      - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
         env_vars:
           - name: FELIX_FV_NFTABLES
             value: "Enabled"
@@ -297,7 +297,7 @@
         - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
-      - name: Load / verify precompiled BPF programs
+      - name: "Felix: BPF tests on Ubuntu 25.04, load/verify programs"
         env_vars:
           - name: FELIX_FV_NFTABLES
             value: "Enabled"
@@ -341,7 +341,7 @@
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
         - ../.semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
     jobs:
-      - name: UT/FV tests
+      - name: "Felix: BPF tests with bpf_jit_harden=2"
         env_vars:
           - name: FELIX_FV_NFTABLES
             value: "Enabled"

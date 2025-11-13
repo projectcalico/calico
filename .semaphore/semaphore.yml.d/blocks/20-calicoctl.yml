@@ -8,6 +8,6 @@
       commands:
         - cd calicoctl
     jobs:
-      - name: calicoctl tests
+      - name: "calicoctl: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
