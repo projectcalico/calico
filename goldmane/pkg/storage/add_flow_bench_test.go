@@ -6,9 +6,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"unique"
 
 	"github.com/sirupsen/logrus"
+
+	ul "github.com/projectcalico/calico/lib/std/uniquelabels"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
@@ -25,7 +26,7 @@ var (
 // These constants define the upper limits for each key metric.
 const (
 	maxNsPerOp     = 450.0 // Max allowed nanoseconds per operation
-	maxHeapAllocMB = 5.5   // Max allowed total heap allocation in MB
+	maxHeapAllocMB = 8.5   // Max allowed total heap allocation in MB
 	maxBytesPerOp  = 400.0 // Max allowed bytes allocated per op
 )
 
@@ -81,20 +82,11 @@ func init() {
 			NumConnectionsStarted:   1,
 			NumConnectionsCompleted: 1,
 			NumConnectionsLive:      1,
-			SourceLabels:            encodeLabels(srcMap),
-			DestLabels:              encodeLabels(dstMap),
+			SourceLabels:            ul.Make(srcMap),
+			DestLabels:              ul.Make(dstMap),
 		}
 		flows = append(flows, flow)
 	}
-}
-
-// encodeLabels serializes a map of labels into a single string in the format "key1=val1,key2=val2,..."
-func encodeLabels(m map[string]string) unique.Handle[string] {
-	var parts []string
-	for k, v := range m {
-		parts = append(parts, (k + "=" + v))
-	}
-	return unique.Make(strings.Join(parts, ","))
 }
 
 func getDiachronicFlow() *storage.DiachronicFlow {

@@ -23,6 +23,7 @@ import (
 	goproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/proto"
+	ul "github.com/projectcalico/calico/lib/std/uniquelabels"
 )
 
 type FlowKeySource struct {
@@ -143,8 +144,8 @@ type Flow struct {
 	Key                     *FlowKey
 	StartTime               int64
 	EndTime                 int64
-	SourceLabels            unique.Handle[string]
-	DestLabels              unique.Handle[string]
+	SourceLabels            ul.Map
+	DestLabels              ul.Map
 	PacketsIn               int64
 	PacketsOut              int64
 	BytesIn                 int64
@@ -198,8 +199,8 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 		Key:                     ProtoToFlowKey(p.Key),
 		StartTime:               p.StartTime,
 		EndTime:                 p.EndTime,
-		SourceLabels:            toHandles(p.SourceLabels),
-		DestLabels:              toHandles(p.DestLabels),
+		SourceLabels:            toLabelsMapFromSet(p.SourceLabels),
+		DestLabels:              toLabelsMapFromSet(p.DestLabels),
 		PacketsIn:               p.PacketsIn,
 		PacketsOut:              p.PacketsOut,
 		BytesIn:                 p.BytesIn,
@@ -273,8 +274,8 @@ func FlowIntoProto(f *Flow, pf *proto.Flow) {
 	// Copy flow fields.
 	pf.StartTime = f.StartTime
 	pf.EndTime = f.EndTime
-	pf.SourceLabels = fromHandles(f.SourceLabels)
-	pf.DestLabels = fromHandles(f.DestLabels)
+	pf.SourceLabels = fromLabelsMap(f.SourceLabels)
+	pf.DestLabels = fromLabelsMap(f.DestLabels)
 	pf.PacketsIn = f.PacketsIn
 	pf.PacketsOut = f.PacketsOut
 	pf.BytesIn = f.BytesIn
@@ -318,8 +319,8 @@ func FlowToProto(f *Flow) *proto.Flow {
 		Key:                     flowKeyToProto(f.Key),
 		StartTime:               f.StartTime,
 		EndTime:                 f.EndTime,
-		SourceLabels:            fromHandles(f.SourceLabels),
-		DestLabels:              fromHandles(f.DestLabels),
+		SourceLabels:            fromLabelsMap(f.SourceLabels),
+		DestLabels:              fromLabelsMap(f.DestLabels),
 		PacketsIn:               f.PacketsIn,
 		PacketsOut:              f.PacketsOut,
 		BytesIn:                 f.BytesIn,
@@ -367,14 +368,51 @@ func FlowLogPolicyToProto(h unique.Handle[string]) *proto.PolicyTrace {
 	return &p
 }
 
-func toHandles(labels []string) unique.Handle[string] {
-	slices.Sort(labels)
-	return unique.Make(strings.Join(labels, ","))
+func toLabelsMapFromSet(labels []string) ul.Map {
+	if len(labels) == 0 {
+		return ul.Empty
+	}
+	m := make(map[string]string, len(labels))
+	for _, t := range labels {
+		if t == "" {
+			continue
+		}
+		if i := strings.IndexByte(t, '='); i >= 0 {
+			k, v := t[:i], t[i+1:]
+			if k == "" {
+				continue
+			}
+			m[k] = v
+		} else {
+			m[t] = ""
+		}
+	}
+	if len(m) == 0 {
+		return ul.Empty
+	}
+	return ul.Make(m)
 }
 
-func fromHandles(handles unique.Handle[string]) []string {
-	if handles.Value() == "" {
+func fromLabelsMap(m ul.Map) []string {
+	if m.IsNil() || m.Len() == 0 {
 		return nil
 	}
-	return strings.Split(handles.Value(), ",")
+	raw := m.RecomputeOriginalMap()
+
+	keys := make([]string, 0, len(raw))
+	for k := range raw {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v := raw[k]
+		if v == "" {
+			out = append(out, k)
+		} else {
+			out = append(out, k+"="+v)
+		}
+	}
+	return out
 }
