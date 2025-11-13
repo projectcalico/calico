@@ -233,7 +233,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (iptables)"
+          - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (ipt)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -273,7 +273,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nftables)"
+          - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nft)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -316,7 +316,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nftables)"
+          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nft)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -360,7 +360,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 jitharden (nftables)"
+          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nft-jit)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce

@@ -162,7 +162,7 @@ blocks:
       jobs:
         - name: Pre-flight checks
           commands:
-            - true || make ci-preflight-checks
+            - make ci-preflight-checks
   - name: API
     run:
       when: "false or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -656,7 +656,7 @@ blocks:
         always:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (iptables)"
+            - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (ipt)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -696,7 +696,7 @@ blocks:
         always:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nftables)"
+            - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nft)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -739,7 +739,7 @@ blocks:
         always:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nftables)"
+            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nft)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -783,7 +783,7 @@ blocks:
         always:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 jitharden (nftables)"
+            - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nft-jit)"
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
