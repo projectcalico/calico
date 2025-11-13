@@ -228,9 +228,8 @@
     epilogue:
       always:
         commands:
-          - export COMPONENT=felix
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports ${JOB_TAG}
+          - ../.semaphore/vms/publish-reports "Felix BPF 24.04 (iptables)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -269,9 +268,8 @@
     epilogue:
       always:
         commands:
-          - export COMPONENT=felix
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports ${JOB_TAG}
+          - ../.semaphore/vms/publish-reports "Felix BPF 22.04 (nftables)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -313,9 +311,8 @@
     epilogue:
       always:
         commands:
-          - export COMPONENT=felix
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports ${JOB_TAG}
+          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 (nftables)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -358,9 +355,8 @@
     epilogue:
       always:
         commands:
-          - export COMPONENT=felix
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-reports ${JOB_TAG}
+          - ../.semaphore/vms/publish-reports "Felix BPF 25.04 jitharden (nftables)"
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
