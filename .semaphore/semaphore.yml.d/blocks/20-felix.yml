@@ -34,8 +34,12 @@
     epilogue:
       always:
         commands:
-          - 'find ./report -name "*.xml" -print0 | grep -z "k8sfv" | xargs -r -0 test-results compile --name "Felix: k8sfv"'
-          - 'find ./report -name "*.xml" -print0 | grep -z -v "k8sfv" | xargs -r -0 test-results compile --name "Felix: UT"'
+          - 'test-results compile --name "Felix: k8sfv" ./report/k8sfv-*.xml ./report/k8sfv.json'
+          - rm -f ./report/k8sfv-*.xml
+          - 'test-results compile --name "Felix: UT" ./report/*.xml ./report/ut.json'
+          - test-results combine report/k8sfv.json report/ut.json report/report.json
+          - artifact push job report/report.json -d test-results/junit.json || true
+          - artifact push workflow report/report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
 - name: "Felix: multi-arch build"
   run:
     when: "${CHANGE_IN(felix)}"

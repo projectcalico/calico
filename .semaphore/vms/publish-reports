@@ -15,14 +15,14 @@ cd "$artifacts_dir"
 
 if [ "$COMPONENT" = "felix" ]; then
   # The UTs get lost amongst the FVs, so split them into separate reports.
-  mapfile -t report_names < <(find . -name '*.xml' -print0 | grep '_fv_')
+  mapfile -t report_names < <(find . -name '*.xml' | grep '_fv_')
   echo "FV reports:" "${report_names[@]}"
   json_files=()
   if [ ${#report_names[@]} -ne 0 ]; then
     test-results compile --name "$job_tag: FV" "${report_names[@]}" fv_report.json
     json_files+=(fv_report.json)
   fi
-  mapfile -t report_names < <(find . -name '*.xml' -print0 | grep -v '_fv_')
+  mapfile -t report_names < <(find . -name '*.xml' | grep -v '_fv_')
   echo "UT reports:" "${report_names[@]}"
   if [ ${#report_names[@]} -ne 0 ]; then
     test-results compile --name "$job_tag: UT" "${report_names[@]}" ut_report.json
