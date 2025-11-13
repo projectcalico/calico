@@ -30,6 +30,6 @@ func init() {
 
 func TestBPFConntrack(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/bpf_conntrack_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "BPF Conntrack Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/felix_bpf_conntrack_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/bpf/conntrack", []Reporter{junitReporter})
 }

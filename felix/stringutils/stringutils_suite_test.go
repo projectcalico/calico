@@ -30,6 +30,6 @@ func init() {
 
 func TestStringutils(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/stringutils_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Stringutils Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_stringutils_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/stringutils", []Reporter{junitReporter})
 }
