@@ -44,8 +44,6 @@ const (
 	v4TempIPSetName2 = "cali4t2"
 	v4MainIPSetName2 = "cali40t:qMt7iLlGDhvLnCjM0l9nzxb"
 	v4MainIPSetName3 = "cali40u:qMt7iLlGDhvLnCjM0l9nzxb"
-
-	supportedRevision = 5
 )
 
 var v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
@@ -473,21 +471,21 @@ var _ = Describe("IP sets dataplane", func() {
 				Family:   "inet",
 				Type:     IPSetTypeHashIP,
 				MaxSize:  1234,
-				Revision: supportedRevision + 1,
+				Revision: supportedMockRevision + 1,
 			},
 			v4MainIPSetName2: {
 				Name:     v4MainIPSetName2,
 				Family:   "inet",
 				Type:     IPSetTypeHashIP,
 				MaxSize:  1234,
-				Revision: supportedRevision + 1,
+				Revision: supportedMockRevision + 1,
 			},
 			v4MainIPSetName3: {
 				Name:     v4MainIPSetName3,
 				Family:   "inet",
 				Type:     IPSetTypeHashIP,
 				MaxSize:  1234,
-				Revision: supportedRevision,
+				Revision: supportedMockRevision,
 			},
 		}
 		dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3")

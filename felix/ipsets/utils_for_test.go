@@ -36,6 +36,10 @@ import (
 
 // This file contains shared test infrastructure for testing the ipsets package.
 
+const (
+	supportedMockRevision = 5
+)
+
 var (
 	errTransientFailure = errors.New("simulated transient failure")
 	errPermanentFailure = errors.New("simulated permanent failure")
@@ -734,12 +738,12 @@ func (c *listCmd) main() {
 			Name:     v4MainIPSetName,
 			Family:   IPFamilyV4,
 			Type:     IPSetTypeHashIP,
-			Revision: supportedRevision,
+			Revision: supportedMockRevision,
 			MaxSize:  1234,
 		}
 	}
 
-	if meta.Revision > supportedRevision {
+	if meta.Revision > supportedMockRevision {
 		result = fmt.Errorf("revision %v not supported", meta.Revision)
 		return
 	}
