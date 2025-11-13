@@ -30,6 +30,6 @@ func init() {
 
 func TestCalculationGraph(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/idalloc_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "ID allocation graph Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_idalloc_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/idalloc", []Reporter{junitReporter})
 }
