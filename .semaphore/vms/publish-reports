@@ -13,5 +13,9 @@ echo "Publishing any reports from the artifacts directory."
 
 cd "$artifacts_dir"
 
-find . -name '*.xml' -print0 | grep -z '_fv_' | xargs -r -0 test-results publish --name "$job_tag: FV"
-find . -name '*.xml' -print0 | grep -z -v '_fv_' | xargs -r -0 test-results publish --name "$job_tag: UT"
+if [ "$COMPONENT" = "felix" ]; then
+  find . -name '*.xml' -print0 | grep -z '_fv_' | xargs -r -0 test-results publish --name "FV: $job_tag"
+  find . -name '*.xml' -print0 | grep -z -v '_fv_' | xargs -r -0 test-results publish --name "UT: $job_tag"
+else
+  find . -name '*.xml' -print0 | xargs -r -0 test-results publish --name "$job_tag"
+fi
