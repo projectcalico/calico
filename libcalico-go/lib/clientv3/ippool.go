@@ -15,6 +15,7 @@
 package clientv3
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -296,6 +297,25 @@ func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Int
 	return r.client.resources.Watch(ctx, opts, apiv3.KindIPPool, nil)
 }
 
+// equalCIDRStrings compares two CIDR strings semantically by parsing them into net.IPNet
+// and comparing the IP addresses and masks. If either string fails to parse, it falls back
+// to string comparison. This handles cases where IPv6 addresses use different textual
+// representations (e.g., "2001:cafe:42::00/56" vs "2001:cafe:42::/56").
+func equalCIDRStrings(cidr1, cidr2 string) bool {
+	// Try to parse both CIDRs
+	ip1, net1, err1 := net.ParseCIDR(cidr1)
+	ip2, net2, err2 := net.ParseCIDR(cidr2)
+
+	// If both parse successfully, compare semantically
+	if err1 == nil && err2 == nil {
+		// Compare the masked IP addresses and the masks
+		return ip1.Equal(ip2) && bytes.Equal(net1.Mask, net2.Mask)
+	}
+
+	// Fall back to string comparison if parsing fails
+	return cidr1 == cidr2
+}
+
 // validateAndSetDefaults validates IPPool fields and sets default values that are
 // not assigned.
 // The old pool will be unassigned for a Create.
@@ -333,9 +353,9 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 	}
 
 	// If there was a previous pool then this must be an Update, validate that the
-	// CIDR has not changed.  Since we are using normalized CIDRs we can just do a
-	// simple string comparison.
-	if old != nil && old.Spec.CIDR != new.Spec.CIDR {
+	// CIDR has not changed. Use semantic comparison to handle different textual
+	// representations of the same CIDR (e.g., IPv6 with different zero compression).
+	if old != nil && !equalCIDRStrings(old.Spec.CIDR, new.Spec.CIDR) {
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.CIDR",
 			Reason: "IPPool CIDR cannot be modified",
