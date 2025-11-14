@@ -376,6 +376,7 @@ fv-no-prereqs:
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
+	  EXTRA_REPORT_SUFFIX=$(FV_EXTRA_REPORT_SUFFIX) \
 	  FELIX_FV_WIREGUARD_AVAILABLE=`./wireguard-available >/dev/null && echo true || echo false` \
 	  ./run-batches
 	@if [ -e fv/latency.log ]; then \
@@ -551,24 +552,27 @@ bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 
 .PHONY: ut-bpf
 ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+	mkdir -p report
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
 		-e $(ACK_GINKGO) \
-		$(CALICO_BUILD) sh -c ' \
+		$(CALICO_BUILD) bash -o pipefail -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
-		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v -test.run "$(FOCUS)"'
+		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v=test2json -test.run "$(FOCUS)" |& \
+		gotestsum --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
 	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
 		-e $(ACK_GINKGO) \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
-		$(CALICO_BUILD) sh -c ' \
+		$(CALICO_BUILD) bash -o pipefail -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
-		../../bin/bpf_ut.test -test.v -test.run "$(FOCUS)"'
+		../../bin/bpf_ut.test -test.v=test2json -test.run "$(FOCUS)" |& \
+		gotestsum --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
 
 .PHONY: bench-bpf
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf

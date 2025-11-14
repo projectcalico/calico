@@ -8,6 +8,6 @@
       commands:
         - cd test-tools/mocknode
     jobs:
-      - name: Mock node
+      - name: "Mock node: CI"
         commands:
           - ../../.semaphore/run-and-monitor make-ci.log make ci
