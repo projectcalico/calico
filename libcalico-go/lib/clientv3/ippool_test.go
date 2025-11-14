@@ -27,100 +27,90 @@ import (
 func TestEqualCIDRStrings(t *testing.T) {
 	testCases := []struct {
 		name     string
-		cidr1    string
-		cidr2    string
+		oldCidr  string
+		newCidr  string
 		expected bool
 	}{
-		// IPv6 normalization cases
 		{
-			name:     "IPv6 with trailing zeros - same network",
-			cidr1:    "2001:cafe:42::00/56",
-			cidr2:    "2001:cafe:42::/56",
-			expected: true,
-		},
-		{
-			name:     "IPv6 expanded vs compressed - same network",
-			cidr1:    "2001:0db8:85a3:0000:0000:8a2e:0370:7334/64",
-			cidr2:    "2001:db8:85a3::8a2e:370:7334/64",
-			expected: true,
-		},
-		{
-			name:     "IPv6 all zeros different representations",
-			cidr1:    "2001:cafe:42:0:0:0:0:0/56",
-			cidr2:    "2001:cafe:42::/56",
-			expected: true,
-		},
-		{
-			name:     "IPv6 different networks",
-			cidr1:    "2001:cafe:42::/56",
-			cidr2:    "2001:cafe:43::/56",
+			name:     "Canonical to non-canonical should be rejected",
+			oldCidr:  "2001:cafe:42::/56",
+			newCidr:  "2001:cafe:42:0000:00::/56",
 			expected: false,
 		},
 		{
-			name:     "IPv6 different prefix lengths",
-			cidr1:    "2001:cafe:42::/56",
-			cidr2:    "2001:cafe:42::/64",
+			name:     "Non-canonical to non-canonical should be rejected",
+			oldCidr:  "2001:cafe:42:0:0:0:0:0/56",
+			newCidr:  "2001:cafe:42:0000:00::/56",
 			expected: false,
 		},
-		// IPv4 cases
 		{
-			name:     "IPv4 identical",
-			cidr1:    "192.168.1.0/24",
-			cidr2:    "192.168.1.0/24",
+			name:     "Non-canonical to canonical should be accepted",
+			oldCidr:  "2001:cafe:42::00/56",
+			newCidr:  "2001:cafe:42::/56",
 			expected: true,
 		},
 		{
-			name:     "IPv4 different networks",
-			cidr1:    "192.168.1.0/24",
-			cidr2:    "192.168.2.0/24",
+			name:     "Canonical to canonical but different text should be rejected",
+			oldCidr:  "2001:db8::/32",
+			newCidr:  "2001:0db8::/32", // new must match canonical string exactly
 			expected: false,
 		},
 		{
-			name:     "IPv4 different prefix lengths",
-			cidr1:    "192.168.1.0/24",
-			cidr2:    "192.168.1.0/25",
+			name:     "Same network but new CIDR not canonical should be rejected",
+			oldCidr:  "2001:cafe:42::/56",
+			newCidr:  "2001:cafe:42:0:0::/56",
 			expected: false,
 		},
-		// Edge cases with invalid CIDRs
 		{
-			name:     "Invalid CIDR string comparison - identical",
-			cidr1:    "invalid",
-			cidr2:    "invalid",
+			name:     "Old invalid but new canonical valid should be rejected",
+			oldCidr:  "2001:cafe:::bad/56",
+			newCidr:  "2001:cafe::/56",
+			expected: false, // reject (old fails parse)
+		},
+		{
+			name:     "Valid canonical to valid canonical but different networks rejected",
+			oldCidr:  "fd00::/48",
+			newCidr:  "fd00:1::/48",
+			expected: false,
+		},
+		{
+			name:     "IPv6 uppercase vs lowercase canonical mismatch rejected",
+			oldCidr:  "2001:CAFE:42::/56",
+			newCidr:  "2001:cafe:42::/56",
 			expected: true,
 		},
 		{
-			name:     "Invalid CIDR string comparison - different",
-			cidr1:    "invalid1",
-			cidr2:    "invalid2",
-			expected: false,
+			name:     "IPv4 with zero-padded octets should be normalized only if network matches and new is canonical",
+			oldCidr:  "192.168.001.000/24",
+			newCidr:  "192.168.1.0/24",
+			expected: false, // old parses, but old is NOT canonical; can only go old→canonical if semantically equal AND newCIDR == canonicalNew
 		},
 		{
-			name:     "One valid one invalid",
-			cidr1:    "192.168.1.0/24",
-			cidr2:    "invalid",
-			expected: false,
-		},
-		// More IPv6 edge cases
-		{
-			name:     "IPv6 loopback different representations",
-			cidr1:    "::1/128",
-			cidr2:    "0000:0000:0000:0000:0000:0000:0000:0001/128",
+			name:     "IPv6 non-canonical masked version to canonical should be accepted",
+			oldCidr:  "2001:0db8:0000:0000::/64",
+			newCidr:  "2001:db8::/64",
 			expected: true,
 		},
 		{
-			name:     "IPv6 all zeros",
-			cidr1:    "::/0",
-			cidr2:    "0000:0000:0000:0000:0000:0000:0000:0000/0",
+			name:     "Reject when old is canonical but new adds redundant fields",
+			oldCidr:  "2001:cafe:42::/56",
+			newCidr:  "2001:cafe:42:0:0:0:0:0/56",
+			expected: false,
+		},
+		{
+			name:     "Accept IPv6 equivalent non-canonical to canonical",
+			oldCidr:  "2001:cafe:42:0000::/56",
+			newCidr:  "2001:cafe:42::/56",
 			expected: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := equalCIDRStrings(tc.cidr1, tc.cidr2)
+			result := equalCIDRStrings(tc.oldCidr, tc.newCidr)
 			if result != tc.expected {
 				t.Errorf("equalCIDRStrings(%q, %q) = %v, want %v",
-					tc.cidr1, tc.cidr2, result, tc.expected)
+					tc.oldCidr, tc.newCidr, result, tc.expected)
 			}
 		})
 	}

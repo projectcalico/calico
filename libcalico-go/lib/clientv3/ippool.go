@@ -297,23 +297,35 @@ func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Int
 	return r.client.resources.Watch(ctx, opts, apiv3.KindIPPool, nil)
 }
 
-// equalCIDRStrings compares two CIDR strings semantically by parsing them into net.IPNet
-// and comparing the IP addresses and masks. If either string fails to parse, it falls back
-// to string comparison. This handles cases where IPv6 addresses use different textual
-// representations (e.g., "2001:cafe:42::00/56" vs "2001:cafe:42::/56").
-func equalCIDRStrings(cidr1, cidr2 string) bool {
-	// Try to parse both CIDRs
-	ip1, net1, err1 := net.ParseCIDR(cidr1)
-	ip2, net2, err2 := net.ParseCIDR(cidr2)
-
-	// If both parse successfully, compare semantically
-	if err1 == nil && err2 == nil {
-		// Compare the masked IP addresses and the masks
-		return ip1.Equal(ip2) && bytes.Equal(net1.Mask, net2.Mask)
+func equalCIDRStrings(oldCIDR, newCIDR string) bool {
+	// 1. If strings match exactly, allow.
+	if oldCIDR == newCIDR {
+		return true
 	}
 
-	// Fall back to string comparison if parsing fails
-	return cidr1 == cidr2
+	// Parse both
+	_, oldNet, errOld := net.ParseCIDR(oldCIDR)
+	_, newNet, errNew := net.ParseCIDR(newCIDR)
+
+	// If either fails to parse → reject
+	if errOld != nil || errNew != nil {
+		return false
+	}
+
+	// 2. Check semantic equality (same network IP + mask)
+	sameNetwork := oldNet.IP.Equal(newNet.IP) &&
+		bytes.Equal(oldNet.Mask, newNet.Mask)
+	if !sameNetwork {
+		return false
+	}
+
+	// 3. New CIDR must already be canonical (IPNet.String()); don't allow introducing
+	// a non-canonical CIDR.
+	if newCIDR != newNet.String() {
+		return false
+	}
+
+	return true
 }
 
 // validateAndSetDefaults validates IPPool fields and sets default values that are
