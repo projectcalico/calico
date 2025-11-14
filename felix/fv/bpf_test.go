@@ -1191,10 +1191,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("Changing env and restarting felix")
 
 					tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFENABLED": "false"})
+
+					// We assume here that .Restart() blocks until the restart actually occurs.
 					tc.Felixes[0].Restart()
+					tc.Felixes[0].WaitForReady()
 
 					By("Checking that all programs got cleaned up")
-
 					Eventually(func() string {
 						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
 						return out
