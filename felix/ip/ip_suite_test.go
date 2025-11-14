@@ -26,8 +26,8 @@ import (
 
 func TestIp(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/ip_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "IP Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_ip_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/ip", []Reporter{junitReporter})
 }
 
 func init() {

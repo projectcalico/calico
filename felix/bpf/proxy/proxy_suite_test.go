@@ -18,10 +18,12 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 )
 
 func TestProxy(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "BPF Proxy Suite")
+	junitReporter := reporters.NewJUnitReporter("../../report/felix_bpf_proxy_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/bpf/proxy", []Reporter{junitReporter})
 }

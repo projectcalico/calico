@@ -12,10 +12,10 @@
       commands:
         - cd networking-calico
     jobs:
-      - name: "Unit and FV tests (tox) on Yoga"
+      - name: "OpenStack: Unit and FV tests (tox) on Yoga"
         commands:
           - ../.semaphore/run-and-monitor tox.log make tox-yoga
-      - name: "Mainline ST (DevStack + Tempest) on Yoga"
+      - name: "OpenStack: Mainline ST (DevStack + Tempest) on Yoga"
         commands:
           # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
           # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
@@ -60,10 +60,10 @@
       commands:
         - cd networking-calico
     jobs:
-      - name: "Unit and FV tests (tox) on Caracal"
+      - name: "OpenStack: Unit and FV tests (tox) on Caracal"
         commands:
           - ../.semaphore/run-and-monitor tox.log make tox-caracal
-      - name: "Mainline ST (DevStack + Tempest) on Caracal"
+      - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
         commands:
           # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
           # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and

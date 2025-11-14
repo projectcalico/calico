@@ -25,7 +25,7 @@
       commands:
         - cd node
     jobs:
-      - name: Build image
+      - name: "Node: build multi-arch images"
         matrix:
           - env_var: ARCH
             values:
@@ -33,10 +33,10 @@
               - s390x
         commands:
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
-      - name: Build Windows archive
+      - name: "Node: build Windows archive"
         commands:
           - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
-      - name: Build Windows image
+      - name: "Node: build Windows image"
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 - name: "Node: Build - native arm64 runner"
@@ -52,7 +52,7 @@
       commands:
         - cd node
     jobs:
-      - name: Build image
+      - name: "Node: build arm64 image"
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
 - name: "Node: kind-cluster tests"
@@ -70,7 +70,7 @@
         - export ZONE=europe-west3-c
         - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=node
         - export VM_DISK_SIZE=80GB
         - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
@@ -83,8 +83,8 @@
     epilogue:
       always:
         commands:
-          - ../.semaphore/vms/publish-artifacts
+          - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
+          - '../.semaphore/vms/publish-reports "Node: KinD STs"'
           - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
-          - test-results publish ./report/*.xml --name "node-kind-tests" || true
     secrets:
       - name: google-service-account-for-gce
