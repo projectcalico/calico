@@ -1,4 +1,4 @@
-- name: whisker-backend
+- name: Whisker backend
   run:
     when: "${CHANGE_IN(whisker-backend)}"
   execution_time_limit:
@@ -10,10 +10,10 @@
       commands:
         - cd whisker-backend
     jobs:
-      - name: make ci
+      - name: "Whisker backend: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
-      - name: Build binary
+      - name: "Whisker backend: build multi-arch"
         matrix:
           - env_var: ARCH
             values:

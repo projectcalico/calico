@@ -46,8 +46,8 @@ monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
 vm_name_prefix=$1
-repo_dir="."
-artifacts_dir="./artifacts"
+repo_dir="$my_dir/../.."
+artifacts_dir="$repo_dir/artifacts"
 
 echo
 echo "===== Starting tests ====="
@@ -60,7 +60,7 @@ for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   log_file="$artifacts_dir/test-$batch.log"
 
-  $(run_batch "../.semaphore/vms/on-test-vm" $batch $vm_name $log_file) &
+  (run_batch "$my_dir/on-test-vm" $batch $vm_name $log_file) &
   pid=$!
 
   log_files+=( $log_file )
@@ -86,7 +86,7 @@ echo "===== Waiting for background test runners to finish ===="
 echo
 
 summary=()
-for i in ${!batches[@]}; do
+for i in "${!batches[@]}"; do
   batch=${batches[$i]}
   pid=${pids[$i]}
   echo "Waiting for test batch $batch to finish (PID=$pid)..."
@@ -109,13 +109,6 @@ done
 echo "===== Results summary ====="
 for s in "${summary[@]}"; do
   echo "  $s"
-done
-echo
-
-echo "===== Retrieving report files ====="
-for batch in "${batches[@]}"; do
-  vm_name="$vm_name_prefix$batch"
-  $my_dir/scp-from-test-vm ${vm_name} /home/ubuntu/calico/node/report/* $repo_dir/report/
 done
 echo
 

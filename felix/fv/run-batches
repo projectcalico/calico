@@ -24,6 +24,7 @@
 
 mkdir -p cwlogs
 export FV_CWLOGDIR=`pwd`/cwlogs
+export OS_RELEASE=$(lsb_release -rs 2> /dev/null || echo "unknown")
 
 for batch in ${FV_BATCHES_TO_RUN}; do
   (
