@@ -10,9 +10,11 @@
     jobs:
       - name: "Typha: UT and FV tests"
         commands:
-          - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
-      - name: "Typha: UT and FV tests on UBI-minimal"
+          - export TEST_SUITE_PREFIX="calico/base"
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+      - name: "Typha: FV tests on UBI-minimal"
         commands:
+          - 'export TEST_SUITE_PREFIX="UBI-minimal"'
           - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
         env_vars:
           - name: USE_UBI_AS_CALICO_BASE
@@ -20,16 +22,4 @@
     epilogue:
       always:
         commands:
-          - |
-            for f in /home/semaphore/calico/typha/report/*; do
-              NAME=$(basename $f)
-              test-results compile --name typha-$NAME $f $NAME.json || true
-            done
-            for f in /home/semaphore/calico/typha/pkg/report/*; do
-              NAME=$(basename $f)
-              test-results compile --name typha-$NAME $f $NAME.json || true
-            done
-            test-results combine *.xml.json report.json || true
-            artifact push job report.json -d test-results/junit.json || true
-            artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
-          - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true
+          - 'test-results publish --ignore-missing ./report/*.xml ../felix/report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Typha" || true'

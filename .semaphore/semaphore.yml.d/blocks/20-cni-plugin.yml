@@ -1,4 +1,4 @@
-- name: cni-plugin
+- name: CNI Plugin
   run:
     when: "${CHANGE_IN(cni-plugin)}"
   dependencies:
@@ -8,13 +8,13 @@
       commands:
         - cd cni-plugin
     jobs:
-      - name: cni-plugin tests
+      - name: "CNI Plugin: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
+      - name: "CNI Plugin: build windows images"
         commands:
           - ../.semaphore/run-and-monitor ci.log make image-windows
-- name: "cni-plugin: Windows"
+- name: "CNI Plugin: Windows"
   run:
     when: "false or ${CHANGE_IN(cni-plugin,process)}"
   dependencies:
@@ -49,7 +49,7 @@
       - name: KUBE_VERSION
         value: v1.29.7
     jobs:
-      - name: Containerd - Windows FV - overlay
+      - name: "CNI Plugin: Windows Containerd FV - overlay"
         execution_time_limit:
           minutes: 60
         commands:
@@ -57,7 +57,7 @@
           - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
           - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
           - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
-      - name: Containerd - Windows FV - l2bridge
+      - name: "CNI Plugin: Windows Containerd FV - l2bridge"
         execution_time_limit:
           minutes: 60
         commands:

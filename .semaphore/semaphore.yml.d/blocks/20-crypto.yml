@@ -1,4 +1,4 @@
-- name: crypto
+- name: Crypto
   run:
     when: "${CHANGE_IN(crypto)}"
   dependencies:
@@ -8,6 +8,6 @@
       commands:
         - cd crypto
     jobs:
-      - name: "crypto tests"
+      - name: "Crypto: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
