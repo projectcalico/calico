@@ -654,7 +654,7 @@ blocks:
         always:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "Felix"'
+            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-24.04/nftables"'
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -694,7 +694,7 @@ blocks:
         always:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "Felix"'
+            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-22.04/nftables"'
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -737,7 +737,7 @@ blocks:
         always:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "Felix"'
+            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-25.04/nftables"'
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -783,7 +783,7 @@ blocks:
         always:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "Felix"'
+            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-25.04/nftables/bpf_jit_harden=2"'
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
@@ -1009,11 +1009,11 @@ blocks:
       jobs:
         - name: "Typha: UT and FV tests"
           commands:
-            - export TEST_REPORT_NAME="Typha"
+            - export TEST_SUITE_PREFIX="calico/base"
             - ../.semaphore/run-and-monitor make-ci.log make ci
         - name: "Typha: FV tests on UBI-minimal"
           commands:
-            - 'export TEST_REPORT_NAME="Typha (UBI-minimal)"'
+            - 'export TEST_SUITE_PREFIX="UBI-minimal"'
             - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
           env_vars:
             - name: USE_UBI_AS_CALICO_BASE
@@ -1021,7 +1021,7 @@ blocks:
       epilogue:
         always:
           commands:
-            - 'test-results publish --ignore-missing ./report/*.xml ../felix/report/*.xml --name "$TEST_REPORT_NAME" || true'
+            - 'test-results publish --ignore-missing ./report/*.xml ../felix/report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Typha" || true'
   - name: Whisker backend
     run:
       when: "true"

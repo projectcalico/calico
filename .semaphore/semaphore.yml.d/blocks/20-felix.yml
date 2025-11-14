@@ -231,7 +231,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - '../.semaphore/vms/publish-reports "Felix"'
+          - '../.semaphore/vms/publish-reports "BPF/Ubuntu-24.04/nftables"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -271,7 +271,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - '../.semaphore/vms/publish-reports "Felix"'
+          - '../.semaphore/vms/publish-reports "BPF/Ubuntu-22.04/nftables"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -314,7 +314,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - '../.semaphore/vms/publish-reports "Felix"'
+          - '../.semaphore/vms/publish-reports "BPF/Ubuntu-25.04/nftables"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -360,7 +360,7 @@
       always:
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - '../.semaphore/vms/publish-reports "Felix"'
+          - '../.semaphore/vms/publish-reports "BPF/Ubuntu-25.04/nftables/bpf_jit_harden=2"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
