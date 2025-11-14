@@ -2111,7 +2111,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							Tiers:                      []*proto.TierInfo{},
 							Ipv4Nets:                   []string{"10.0.240.2/24"},
 							Ipv6Nets:                   []string{"2001:db8:2::2/128"},
-							AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32"},
+							AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32", "2001:feed::1/64"},
 						},
 					}
 					interfaceUp = &ifaceStateUpdate{
@@ -2130,15 +2130,24 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						mockProcSys.checkStateContains(map[string]string{
 							"/proc/sys/net/ipv4/conf/cali23456-cd/rp_filter": "0",
 						})
+						rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+							&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
+								{
+									Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
+									Action: iptables.AcceptAction{},
+								},
+							}},
+						}})
+					} else {
+						rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+							&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
+								{
+									Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("2001:feed::1/64"),
+									Action: iptables.AcceptAction{},
+								},
+							}},
+						}})
 					}
-					rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
-						&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
-							{
-								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
-								Action: iptables.AcceptAction{},
-							},
-						}},
-					}})
 
 					By("Re-enabling rpf check on an existing workload")
 					workloadUpdate.Endpoint.AllowSpoofedSourcePrefixes = []string{}
@@ -2154,7 +2163,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					}})
 
 					By("Enabling IP spoofing on an existing workload")
-					workloadUpdate.Endpoint.AllowSpoofedSourcePrefixes = []string{"8.8.8.8/32"}
+					workloadUpdate.Endpoint.AllowSpoofedSourcePrefixes = []string{"8.8.8.8/32", "2001:feed::1/64"}
 					epMgr.OnUpdate(workloadUpdate)
 					applyUpdates(epMgr)
 					if ipVersion == 4 {
@@ -2162,14 +2171,25 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							"/proc/sys/net/ipv4/conf/cali23456-cd/rp_filter": "0",
 						})
 					}
-					rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
-						&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
-							{
-								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
-								Action: iptables.AcceptAction{},
-							},
-						}},
-					}})
+					if ipVersion == 4 {
+						rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+							&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
+								{
+									Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
+									Action: iptables.AcceptAction{},
+								},
+							}},
+						}})
+					} else {
+						rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+							&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
+								{
+									Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("2001:feed::1/64"),
+									Action: iptables.AcceptAction{},
+								},
+							}},
+						}})
+					}
 
 					By("Removing a workload with IP spoofing configured")
 					epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
