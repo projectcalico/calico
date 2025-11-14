@@ -45,7 +45,7 @@ type dataplaneMetadata struct {
 	RangeMin     int
 	RangeMax     int
 	DeleteFailed bool
-	listFailed   bool
+	ListFailed   bool
 }
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -390,7 +390,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
 		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
 			if treatFailureAsTransient {
-				// More than one failure, resync the IP sets that we failed to update.
+				// Transient failure, resync the IP sets that we failed to update.
 				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
 					"Failed to update IP sets. Will do partial resync.")
 			} else {
@@ -691,7 +691,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		return scanner.Err()
 	})
 	if err != nil {
-		meta.listFailed = true
+		meta.ListFailed = true
 	}
 	if debug {
 		s.logCxt.WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
