@@ -10,7 +10,7 @@
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
     jobs:
-      - name: Build and run UT, k8sfv
+      - name: "Felix: Build and run UT, k8sfv"
         execution_time_limit:
           minutes: 60
         commands:
@@ -26,11 +26,20 @@
           - ../.semaphore/run-and-monitor ut.log make ut
           - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
           - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-      - name: Static checks
+      - name: "Felix: Static checks"
         execution_time_limit:
           minutes: 60
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
+    epilogue:
+      always:
+        commands:
+          - 'test-results compile --name "Felix: FV" ./report/*k8sfv*.xml ./report/k8sfv_sem.json || true'
+          - rm -f ./report/*k8sfv*.xml
+          - 'test-results compile --name "Felix: UT" ./report/*.xml ./report/ut_sem.json || true'
+          - test-results combine report/*_sem.json report/report.json
+          - artifact push job report/report.json -d test-results/junit.json || true
+          - artifact push workflow report/report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
 - name: "Felix: multi-arch build"
   run:
     when: "${CHANGE_IN(felix)}"
@@ -43,7 +52,7 @@
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
     jobs:
-      - name: Build binary
+      - name: "Felix: build multi-arch binaries"
         matrix:
           - env_var: ARCH
             values:
@@ -68,7 +77,7 @@
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
     jobs:
-      - name: Build binary
+      - name: "Felix: build arm64 binaries"
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
 - name: "Felix: Build Windows binaries"
@@ -78,7 +87,7 @@
     - Prerequisites
   task:
     jobs:
-      - name: Build Windows binaries
+      - name: "Felix: Build Windows binaries"
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
@@ -117,7 +126,7 @@
       - name: CONTAINERD_VERSION
         value: 1.7.22
     jobs:
-      - name: CAPZ - Windows FV
+      - name: "Felix: Windows FV - CAPZ"
         commands:
           - ./.semaphore/run-win-fv
 - name: "Felix: FV Tests"
@@ -165,14 +174,14 @@
         # routing in that first felix container chooses different source IPs than the tests are expecting.
         - sudo modprobe ipip
     jobs:
-      - name: FV Test matrix
+      - name: "Felix: FV Tests (iptables)"
         execution_time_limit:
           minutes: 120
         commands:
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
         parallelism: 3
-      - name: nftables FV Test matrix
+      - name: "Felix: FV Tests (nftables)"
         execution_time_limit:
           minutes: 120
         env_vars:
@@ -185,10 +194,9 @@
     epilogue:
       always:
         commands:
-          - .semaphore/vms/collect-artifacts
-          - .semaphore/vms/publish-artifacts
-          - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
-          - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
+          # We're still in the felix directory here.
+          - 'test-results publish report/*.xml --name "Felix: FV" || true'
+          - ../.semaphore/collect-artifacts
 - name: "Felix: BPF tests on Ubuntu 24.04"
   run:
     when: "${CHANGE_IN(felix,typha)}"
@@ -201,9 +209,10 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
+        - export JOB_TAG=felix-ipt
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=felix
         - export NUM_FV_BATCHES=8
         - export RUN_UT=true
         - export FV_FOCUS=BPF-SAFE
@@ -213,7 +222,7 @@
         - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
-      - name: UT/FV tests
+      - name: "Felix: BPF tests on Ubuntu 24.04"
         execution_time_limit:
           minutes: 180
         commands:
@@ -221,9 +230,8 @@
     epilogue:
       always:
         commands:
-          - export REPO_NAME=$(basename $(pwd))
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-artifacts
+          - '../.semaphore/vms/publish-reports "BPF/Ubuntu-24.04/nftables"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -239,16 +247,17 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
+        - export JOB_TAG=felix-nft
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=felix
         - export NUM_FV_BATCHES=4
         - export RUN_UT=true
         - export FV_FOCUS='_BPF_.*ct=true'
         - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
-      - name: UT/FV tests
+      - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
         env_vars:
           - name: FELIX_FV_NFTABLES
             value: "Enabled"
@@ -261,9 +270,8 @@
     epilogue:
       always:
         commands:
-          - export REPO_NAME=$(basename $(pwd))
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-artifacts
+          - '../.semaphore/vms/publish-reports "BPF/Ubuntu-22.04/nftables"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -279,9 +287,10 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-2504-
+        - export JOB_TAG=felix-2504
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=felix
         - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
         - export UBUNTU_VERSION=plucky
         - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
@@ -291,7 +300,7 @@
         - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
-      - name: Load / verify precompiled BPF programs
+      - name: "Felix: BPF tests on Ubuntu 25.04, load/verify programs"
         env_vars:
           - name: FELIX_FV_NFTABLES
             value: "Enabled"
@@ -304,9 +313,8 @@
     epilogue:
       always:
         commands:
-          - export REPO_NAME=$(basename $(pwd))
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-artifacts
+          - '../.semaphore/vms/publish-reports "BPF/Ubuntu-25.04/nftables"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
@@ -318,29 +326,32 @@
   task:
     prologue:
       commands:
+        - mkdir -p artifacts
         - cd felix
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-jithard-
+        - export JOB_TAG=felix-jithard
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
         - echo VM_PREFIX=${VM_PREFIX}
-        - export REPO_NAME=$(basename $(pwd))
+        - export COMPONENT=felix
         - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
         - export UBUNTU_VERSION=plucky
         - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
         - export NUM_FV_BATCHES=2
         - export RUN_UT=true
         - export FV_FOCUS='_BPF_.*tcp.*ct=true'
-        - mkdir artifacts
         - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
         - ../.semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
     jobs:
-      - name: UT/FV tests
+      - name: "Felix: BPF tests with bpf_jit_harden=2"
         env_vars:
           - name: FELIX_FV_NFTABLES
             value: "Enabled"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
+          - name: FV_EXTRA_REPORT_SUFFIX
+            value: "bpf_jit_harden=2"
         execution_time_limit:
           minutes: 180
         commands:
@@ -348,9 +359,8 @@
     epilogue:
       always:
         commands:
-          - export REPO_NAME=$(basename $(pwd))
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-          - ../.semaphore/vms/publish-artifacts
+          - '../.semaphore/vms/publish-reports "BPF/Ubuntu-25.04/nftables/bpf_jit_harden=2"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce

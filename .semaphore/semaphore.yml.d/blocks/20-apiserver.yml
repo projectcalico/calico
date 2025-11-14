@@ -1,4 +1,4 @@
-- name: apiserver
+- name: API Server
   run:
     when: "${CHANGE_IN(apiserver)}"
   execution_time_limit:
@@ -10,10 +10,10 @@
       commands:
         - cd apiserver
     jobs:
-      - name: make ci
+      - name: "API Server: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
-      - name: Build binary
+      - name: "API Server: Build"
         matrix:
           - env_var: ARCH
             values:

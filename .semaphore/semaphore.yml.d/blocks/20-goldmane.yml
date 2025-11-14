@@ -1,4 +1,4 @@
-- name: goldmane
+- name: Goldmane
   run:
     when: "${CHANGE_IN(goldmane)}"
   execution_time_limit:
@@ -14,10 +14,10 @@
         - touch goldmane/proto/api.pb.go
         - cd goldmane
     jobs:
-      - name: make ci
+      - name: "Goldmane: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
-      - name: Build binary
+      - name: "Goldmane: build multi-arch"
         matrix:
           - env_var: ARCH
             values:
