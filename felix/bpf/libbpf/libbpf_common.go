@@ -27,6 +27,7 @@ type TcGlobalData struct {
 	Flags          uint32
 	WgPort         uint16
 	Wg6Port        uint16
+	Profiling      uint16
 	NatIn          uint32
 	NatOut         uint32
 	LogFilterJmp   uint32
