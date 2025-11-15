@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -202,14 +202,6 @@ func WrapPayloadWithEnvelope(msg interface{}, seqNo uint64) (*proto.ToDataplane,
 		envelope.Payload = &proto.ToDataplane_WorkloadEndpointUpdate{WorkloadEndpointUpdate: msg}
 	case *proto.WorkloadEndpointRemove:
 		envelope.Payload = &proto.ToDataplane_WorkloadEndpointRemove{WorkloadEndpointRemove: msg}
-	case *proto.HostMetadataUpdate:
-		envelope.Payload = &proto.ToDataplane_HostMetadataUpdate{HostMetadataUpdate: msg}
-	case *proto.HostMetadataRemove:
-		envelope.Payload = &proto.ToDataplane_HostMetadataRemove{HostMetadataRemove: msg}
-	case *proto.HostMetadataV6Update:
-		envelope.Payload = &proto.ToDataplane_HostMetadataV6Update{HostMetadataV6Update: msg}
-	case *proto.HostMetadataV6Remove:
-		envelope.Payload = &proto.ToDataplane_HostMetadataV6Remove{HostMetadataV6Remove: msg}
 	case *proto.HostMetadataV4V6Update:
 		envelope.Payload = &proto.ToDataplane_HostMetadataV4V6Update{HostMetadataV4V6Update: msg}
 	case *proto.HostMetadataV4V6Remove:
