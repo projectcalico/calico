@@ -39,7 +39,7 @@ LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 LABEL description="Calico node handles networking and policy for Calico"
-LABEL maintainerauthors="maintainers@tigera.io"
+LABEL maintainer="maintainers@tigera.io"
 LABEL name="Calico node"
 LABEL release=1
 LABEL summary="The primary networking and policy engine for Calico"
