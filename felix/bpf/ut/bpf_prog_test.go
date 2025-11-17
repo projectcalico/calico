@@ -576,6 +576,7 @@ var (
 	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap     maps.Map
 	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6   maps.Map
 	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP maps.Map
+	ctlbProgsMap                                                                            []maps.Map
 	allMaps                                                                                 []maps.Map
 )
 
@@ -603,11 +604,12 @@ func initMapsOnce() {
 		ifstateMap = ifstate.Map()
 		policyJumpMap = jump.Map()
 		policyJumpMapXDP = jump.XDPMap()
+		ctlbProgsMap = nat.ProgramsMap()
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ifstateMap,
-			policyJumpMap, policyJumpMapXDP}
+			policyJumpMap, policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2]}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
