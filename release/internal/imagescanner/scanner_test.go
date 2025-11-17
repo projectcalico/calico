@@ -92,7 +92,7 @@ func TestScannerScan(t *testing.T) {
 					return
 				}
 			}
-			defer r.Body.Close()
+			defer func() { _ = r.Body.Close() }()
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"results_link": "http://example.com/hashrelease-results"}`))
 		}))
@@ -144,7 +144,7 @@ func TestScannerScan(t *testing.T) {
 					return
 				}
 			}
-			defer r.Body.Close()
+			defer func() { _ = r.Body.Close() }()
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"results_link": "http://example.com/release-results"}`))
 		}))

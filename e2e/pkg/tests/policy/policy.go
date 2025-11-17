@@ -20,7 +20,10 @@ import (
 	"time"
 
 	"github.com/aws/smithy-go/ptr"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -223,7 +226,8 @@ var _ = describe.CalicoDescribe(
 
 			By(fmt.Sprintf("Applying a default-deny policy to namespace %s", ns.Name))
 			defaultDeny := newDefaultDenyPolicy(ns.Name)
-			cli.Create(ctx, defaultDeny)
+			err = cli.Create(ctx, defaultDeny)
+			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				err := cli.Delete(ctx, defaultDeny)
 				Expect(err).NotTo(HaveOccurred())
@@ -236,7 +240,7 @@ var _ = describe.CalicoDescribe(
 			By("Allowing traffic through a service account selector")
 			sa, err := f.ClientSet.CoreV1().ServiceAccounts(ns.Name).Get(ctx, "default", metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			sa.ObjectMeta.Labels = map[string]string{"ns-name": ns.Name}
+			sa.Labels = map[string]string{"ns-name": ns.Name}
 			_, err = f.ClientSet.CoreV1().ServiceAccounts(ns.Name).Update(ctx, sa, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -286,7 +290,8 @@ var _ = describe.CalicoDescribe(
 
 			By(fmt.Sprintf("Applying a default-deny policy to namespace %s", ns.Name))
 			defaultDeny := newDefaultDenyPolicy(ns.Name)
-			cli.Create(ctx, defaultDeny)
+			err := cli.Create(ctx, defaultDeny)
+			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				err := cli.Delete(ctx, defaultDeny)
 				Expect(err).NotTo(HaveOccurred())
@@ -317,7 +322,7 @@ var _ = describe.CalicoDescribe(
 				},
 			}
 
-			err := cli.Create(ctx, np)
+			err = cli.Create(ctx, np)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				err := cli.Delete(ctx, np)

@@ -193,7 +193,7 @@ func TestIPAM(t *testing.T) {
 			err = client.IPAM().ReleaseAffinity(ctx, cidr, nodename, false)
 			Expect(err).NotTo(HaveOccurred())
 			ip := cnet.ParseIP(cidr.IP.String())
-			ips = append(ips, ipam.ReleaseOptions{Address: ip.IP.String()})
+			ips = append(ips, ipam.ReleaseOptions{Address: ip.String()})
 		}
 		// Release the IPs
 		_, _, err = client.IPAM().ReleaseIPs(ctx, ips...)

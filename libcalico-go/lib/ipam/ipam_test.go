@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,19 +64,29 @@ type pool struct {
 	assignmentMode    v3.AssignmentMode
 }
 
+func (i *ipPoolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
+	poolNames := make([]string, 0)
+	// Get a sorted list of pool CIDR strings.
+	for p := range i.pools {
+		poolNames = append(poolNames, p)
+	}
+	return i.getPools(poolNames, 0, "GetAllPools"), nil
+}
+
 func (i *ipPoolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
-	sorted := make([]string, 0)
+	poolNames := make([]string, 0)
 	// Get a sorted list of enabled pool CIDR strings.
 	for p, e := range i.pools {
 		if e.enabled {
-			sorted = append(sorted, p)
+			poolNames = append(poolNames, p)
 		}
 	}
-	return i.getPools(sorted, ipVersion, "GetEnabledPools"), nil
+	return i.getPools(poolNames, ipVersion, "GetEnabledPools"), nil
 }
 
-func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string) []v3.IPPool {
-	sort.Strings(sorted)
+func (i *ipPoolAccessor) getPools(poolNames []string, ipVersion int, caller string) []v3.IPPool {
+	// Return in sorted order for deterministic tests.
+	sort.Strings(poolNames)
 
 	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
 	// mimics more closely the behavior of etcd and allows the tests to be
@@ -82,7 +94,7 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 	pools := make([]v3.IPPool, 0)
 	automatic := v3.Automatic
 	var poolsToPrint []string
-	for _, p := range sorted {
+	for _, p := range poolNames {
 		c := cnet.MustParseCIDR(p)
 		if (ipVersion == 0) || (c.Version() == ipVersion) {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{
@@ -96,7 +108,7 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 				pool.Spec.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}
 			}
 			if i.pools[p].blockSize == 0 {
-				if ipVersion == 4 {
+				if c.Version() == 4 {
 					pool.Spec.BlockSize = 26
 				} else {
 					pool.Spec.BlockSize = 122
@@ -112,18 +124,9 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 		}
 	}
 
-	log.Debugf("%v returns: %v", caller, poolsToPrint)
+	log.Debugf("Mock %v returns: %v", caller, poolsToPrint)
 
 	return pools
-}
-
-func (i *ipPoolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
-	sorted := make([]string, 0)
-	// Get a sorted list of pool CIDR strings.
-	for p := range i.pools {
-		sorted = append(sorted, p)
-	}
-	return i.getPools(sorted, 0, "GetAllPools"), nil
 }
 
 var ipPools = &ipPoolAccessor{pools: map[string]pool{}}
@@ -302,6 +305,85 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
 		}, 20)
 
+		Context("with 1000 nodes", func() {
+			BeforeEach(func() {
+				var eg errgroup.Group
+				eg.SetLimit(runtime.NumCPU())
+				for i := 0; i < 1000; i++ {
+					eg.Go(func() error {
+						defer GinkgoRecover()
+						applyNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i), map[string]string{"foo": "bar"})
+						return nil
+					})
+				}
+				Expect(eg.Wait()).To(Succeed())
+			})
+
+			AfterEach(func() {
+				// Clean up the nodes.
+				var eg errgroup.Group
+				eg.SetLimit(runtime.NumCPU())
+				for i := 0; i < 1000; i++ {
+					eg.Go(func() error {
+						defer GinkgoRecover()
+						deleteNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i))
+						return nil
+					})
+				}
+				Expect(eg.Wait()).To(Succeed())
+				Expect(bc.Clean()).To(Succeed())
+			})
+
+			allocOneIPPerNode := func() {
+				var eg errgroup.Group
+				eg.SetLimit(runtime.NumCPU())
+				for i := 0; i < 1000; i++ {
+					eg.Go(func() error {
+						defer GinkgoRecover()
+						for j := 0; j < 1; j++ {
+							// Build a new backend client. We use a different client for each iteration of the test
+							// so that the k8s QPS /burst limits don't carry across "hosts". This is more realistic.
+							bc, err = backend.NewClient(config)
+							if err != nil {
+								return err
+							}
+							ic = NewIPAMClient(bc, pa, &fakeReservations{})
+
+							v4ia, _, err := ic.AutoAssign(
+								context.Background(),
+								AutoAssignArgs{
+									Num4:        1,
+									IPv4Pools:   pool26,
+									Hostname:    fmt.Sprintf("%s-%d", hostname, i),
+									IntendedUse: v3.IPPoolAllowedUseWorkload,
+								})
+							if err != nil {
+								return err
+							}
+							if len(v4ia.IPs) != 1 {
+								return errors.New("expected to allocate one IP")
+							}
+						}
+						return nil
+					})
+				}
+				Expect(eg.Wait()).To(Succeed())
+			}
+
+			Measure("time to allocate first IP per node across 1000 nodes", func(b Benchmarker) {
+				b.Time("runtime", func() {
+					allocOneIPPerNode()
+				})
+			}, 1)
+
+			Measure("time to allocate second IP per node across 1000 nodes", func(b Benchmarker) {
+				allocOneIPPerNode() // Pre-create one IPAM block per node.
+				b.Time("runtime", func() {
+					allocOneIPPerNode()
+				})
+			}, 1)
+		})
+
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
@@ -409,6 +491,71 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 		})
 
+		It("should wrap IP allocations correctly", func() {
+			// Create a small pool and assign / release IPs until we wrap around to the beginning.
+			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+			applyNode(bc, kc, "wrap-node", map[string]string{"foo": "bar"})
+			allocatedIPs := map[string]bool{}
+			ipsInOrder := []string{}
+
+			// A /30 block has 4 addresses, so after allocating and releasing 4 addresses, the 5th allocation
+			// should wrap back to the first address.
+			totalIPs := 4
+			for range totalIPs {
+				args := AutoAssignArgs{Num4: 1, Hostname: "wrap-node", IntendedUse: v3.IPPoolAllowedUseWorkload}
+				v4, _, err := ic.AutoAssign(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(v4.IPs)).To(Equal(1))
+
+				ipStr := v4.IPs[0].IP.String()
+				_, allocated := allocatedIPs[ipStr]
+				Expect(allocated).To(BeFalse(), "IP %s was already allocated!", ipStr)
+				allocatedIPs[ipStr] = true
+				ipsInOrder = append(ipsInOrder, ipStr)
+
+				// Release the IP again.
+				u, rel, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ipStr})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(u)).To(Equal(0))
+				Expect(len(rel)).To(Equal(1))
+			}
+
+			// Now, allocate one more IP - should wrap to the first one.
+			args := AutoAssignArgs{Num4: 1, Hostname: "wrap-node", IntendedUse: v3.IPPoolAllowedUseWorkload}
+			v4, _, err := ic.AutoAssign(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4.IPs)).To(Equal(1))
+			ipStr := v4.IPs[0].IP.String()
+			Expect(ipStr).To(Equal(ipsInOrder[0]), "Expected wrapped allocation to return first IP again")
+		})
+
+		It("should not assign from deleted IP pools", func() {
+			// Create an IP pool, allocate an IP, delete the pool and create a new IP pool.
+			// Assert new allocations do not come from the deleted pool.
+			applyPool("10.0.0.0/24", true, "all()")
+			applyNode(bc, kc, "deletion-node", map[string]string{"foo": "bar"})
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: "deletion-node", IntendedUse: v3.IPPoolAllowedUseWorkload})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4.IPs)).To(Equal(1))
+			allocatedIP := v4.IPs[0].IP.String()
+
+			// Assert the allocated IP is from the first pool.
+			Expect(strings.HasPrefix(allocatedIP, "10.0.0.")).To(BeTrue(), "Expected allocation to come from first pool")
+
+			// Delete the pool.
+			deleteAllPools()
+
+			// Create a new pool.
+			applyPool("11.0.0.0/24", true, "all()")
+
+			// Allocate a new IP - should not come from the deleted pool.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: "deletion-node", IntendedUse: v3.IPPoolAllowedUseWorkload})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4.IPs)).To(Equal(1))
+			newAllocatedIP := v4.IPs[0].IP.String()
+			Expect(strings.HasPrefix(newAllocatedIP, "11.0.0.")).To(BeTrue(), "Expected new allocation to come from new pool")
+		})
+
 		It("should handle when an IP is released causing block deletion, then reallocated with the same handle", func() {
 			// This test simulates a scenario where client A queries the allocation and determines that the
 			// IP should be released. In the meantime, client B releases and re-allocates the address with the same IP and handle, thus
@@ -491,14 +638,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		It("should release a multitude of IPs in different blocks", func() {
 			// Create an IP pool with a blocksize such that we'll get multiple blocks per-node.
-			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+			applyPoolWithBlockSize("10.0.0.0/24", true, "name in {'node1', 'node2'}", 30)
+			applyPoolWithBlockSize("11.0.0.0/24", true, "name in {'node3', 'node4'}", 30)
 			applyPool("fe80:ba:ad:beef::00/120", true, "all()")
 
 			// Assign a number of IPs in different blocks on different nodes.
 			ips := []cnet.IP{}
 			for _, node := range []string{"node1", "node2", "node3", "node4"} {
 				// 4 nodes
-				applyNode(bc, kc, node, map[string]string{"foo": "bar"})
+				applyNode(bc, kc, node, map[string]string{"foo": "bar", "name": node})
 				for i := 0; i < 6; i++ {
 					// 6 addresses of each family per-node.
 					v4ia, v6ia, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 1, Hostname: node, IntendedUse: v3.IPPoolAllowedUseWorkload})
@@ -535,6 +683,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// - 13 IPv4 addresses with the same handle.
 			// for a total of 25 per-node, 100 in all.
 			Expect(len(ips)).To(Equal(100))
+
+			// Disable a pool to ensure we test releasing from a disabled pool.
+			applyPoolWithBlockSize("11.0.0.0/24", false, "name in {'node3', 'node4'}", 30)
 
 			// Release them all. This should complete within a minute easily.
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -812,6 +963,41 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(blocks.KVPairs)).To(Equal(0))
+		})
+
+		It("should release older blocks created without an explicit affinity type", func() {
+			// Use the backend client to create a block with no affinity type. This simulates a block created by an older version of Calico,
+			// which predate the introduction of affinity types.
+			cidr := "10.0.0.0/24"
+			b := newBlock(cnet.MustParseCIDR(cidr), nil)
+			blockKVP := model.KVPair{
+				Key:   model.BlockKey{CIDR: cnet.MustParseCIDR(cidr)},
+				Value: b.AllocationBlock,
+			}
+			affKVP := model.KVPair{
+				Key: model.BlockAffinityKey{
+					CIDR:         cnet.MustParseCIDR(cidr),
+					Host:         hostname,
+					AffinityType: "",
+				},
+				Value: &model.BlockAffinity{State: "confirmed"},
+			}
+			_, err := bc.Create(context.Background(), &blockKVP)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = bc.Create(context.Background(), &affKVP)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Release the block affinity. It should succeed even though the affinity type is blank.
+			err = ic.ReleasePoolAffinities(context.Background(), cnet.MustParseCIDR("10.0.0.0/16"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block and affinity should both be gone.
+			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(0))
+			affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(affs.KVPairs)).To(Equal(0))
 		})
 
 		It("should release all non-empty blocks if there are multiple", func() {

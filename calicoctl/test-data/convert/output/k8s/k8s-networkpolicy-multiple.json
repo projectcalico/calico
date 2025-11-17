@@ -8,8 +8,7 @@
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
         "name": "test-network-policy1",
-        "namespace": "test-ns",
-        "creationTimestamp": null
+        "namespace": "test-ns"
       },
       "spec": {
         "order": 1000,
@@ -61,7 +60,6 @@
           {
             "action": "Allow",
             "protocol": "TCP",
-            "source": {},
             "destination": {
               "nets": [
                 "10.0.0.0/24"
@@ -83,8 +81,7 @@
       "kind": "NetworkPolicy",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
-        "name": "default-deny-ingress",
-        "creationTimestamp": null
+        "name": "default-deny-ingress"
       },
       "spec": {
         "order": 1000,
@@ -98,16 +95,13 @@
       "kind": "NetworkPolicy",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
-        "name": "allow-all-egress",
-        "creationTimestamp": null
+        "name": "allow-all-egress"
       },
       "spec": {
         "order": 1000,
         "egress": [
           {
-            "action": "Allow",
-            "source": {},
-            "destination": {}
+            "action": "Allow"
           }
         ],
         "selector": "projectcalico.org/orchestrator == 'k8s'",

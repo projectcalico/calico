@@ -251,6 +251,8 @@ message Policy {
   bool pre_dnat = 4;
 
   string original_selector = 6;
+
+  repeated string perf_hints = 7;
 }
 
 enum IPVersion {

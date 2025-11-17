@@ -9,22 +9,46 @@
 
 #include <linux/if_packet.h>
 
+static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
+{
+	int rc = bpf_skb_change_head(ctx->skb, ETH_HLEN, 0);
+	if (rc < 0) {
+		CALI_DEBUG("bpf_skb_change_head failed %d.", rc);
+		return rc;
+	}
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		CALI_DEBUG("Too short");
+		return -1;
+	}
+#ifdef IPVER6
+	eth_hdr(ctx)->h_proto = bpf_htons(ETH_P_IPV6);
+#else
+	eth_hdr(ctx)->h_proto = bpf_htons(ETH_P_IP);
+#endif
+	return 0;
+}
+
 static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 {
 	struct cali_tc_state *state = ctx->state;
+	int rc = 0;
 	bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
-
 	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
-		int rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
+		if (CALI_F_L3_DEV) {
+			rc = make_room_for_l2_header(ctx);
+			if (rc < 0) {
+				return TC_ACT_UNSPEC;
+			}
+		}
+		rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 		if (rc == TC_ACT_REDIRECT) {
 			counter_inc(ctx, CALI_REDIRECT_PEER);
 			CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
 			return rc;
 		}
 	}
-
 	return TC_ACT_UNSPEC;
 }
 
@@ -169,7 +193,7 @@ skip_redir_ifindex:
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if (cali_rt_is_vxlan(dest_rt) && !(cali_rt_is_same_subnet(dest_rt))) {
+		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
@@ -197,7 +221,7 @@ skip_redir_ifindex:
 				goto skip_fib;
 			}
 		}
-	} else if (CALI_F_VXLAN && CALI_F_TO_HEP) {
+	} else if (CALI_F_TUNNEL && CALI_F_TO_HEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) ||
 			!skb_mark_equals(ctx->skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET)) {
 			/* packet to vxlan from the host, needs to set tunnel key. Either
@@ -206,18 +230,20 @@ skip_redir_ifindex:
 			 */
 			struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
 			if (dest_rt == NULL) {
-				CALI_DEBUG("No route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
+				CALI_DEBUG("No route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
 				goto deny;
 			}
-			if (!cali_rt_is_vxlan(dest_rt)) {
-				CALI_DEBUG("Not a vxlan route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
-				goto deny;
+			if (!cali_rt_is_tunneled(dest_rt)) {
+				CALI_DEBUG("Not a tunnel route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
+				// We dont have a tunnel route, so nothing to do here.
+				// Better to leave it to the tunnel device to handle it.
+				goto skip_fib;
 			}
 
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
-
+	
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
@@ -275,6 +301,12 @@ try_fib_external:
 				nh_params.nh_family = 2 /* AF_INET */;
 				nh_params.ipv4_nh = state->ip_dst;
 #endif
+				if (CALI_F_L3_DEV) {
+					rc = make_room_for_l2_header(ctx);
+					if (rc < 0) {
+						goto cancel_fib;
+					}
+				}
 				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
 				if (rc == TC_ACT_REDIRECT) {
 					counter_inc(ctx, CALI_REDIRECT_NEIGH);
@@ -282,15 +314,7 @@ try_fib_external:
 							state->ct_result.ifindex_fwd);
 					goto no_fib_redirect;
 				}
-				CALI_DEBUG("Fall through to redirect without fib lookup rc %d", rc);
 			}
-			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
-			if (rc == TC_ACT_REDIRECT) {
-				counter_inc(ctx, CALI_REDIRECT_NEIGH);
-				CALI_DEBUG("Redirect to host dev %d without fib lookup", state->ct_result.ifindex_fwd);
-				goto no_fib_redirect;
-			}
-			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);
 		}
 
 		*fib_params(ctx) = (struct bpf_fib_lookup) {
@@ -327,9 +351,11 @@ try_fib_external:
 		CALI_DEBUG("FIB sport=%d", bpf_ntohs(fib_params(ctx)->sport));
 		CALI_DEBUG("FIB dport=%d", bpf_ntohs(fib_params(ctx)->dport));
 #ifdef IPVER6
+		CALI_DEBUG("FIB ipv6_src=" IP_FMT, &fib_params(ctx)->ipv6_src);
+		CALI_DEBUG("FIB ipv6_dst="IP_FMT, &fib_params(ctx)->ipv6_dst);
 #else
-		CALI_DEBUG("FIB ipv4_src=%x", bpf_ntohl(fib_params(ctx)->ipv4_src));
-		CALI_DEBUG("FIB ipv4_dst=%x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+		CALI_DEBUG("FIB ipv4_src=" IP_FMT, &fib_params(ctx)->ipv4_src);
+		CALI_DEBUG("FIB ipv4_dst="IP_FMT, &fib_params(ctx)->ipv4_dst);
 #endif
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");
@@ -380,6 +406,13 @@ try_fib_external:
 #endif
 
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
+
+			if (CALI_F_L3_DEV) {
+				rc = make_room_for_l2_header(ctx);
+				if (rc < 0) {
+					goto cancel_fib;
+				}
+			}
 			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 			break;
 		default:

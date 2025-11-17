@@ -829,6 +829,12 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
         if ip_version == 6:
             subnet["ipv6_address_mode"] = constants.DHCPV6_STATEFUL
             subnet["ipv6_ra_mode"] = constants.DHCPV6_STATEFUL
+            if (
+                data.get("ipv6_address_mode") == constants.IPV6_SLAAC
+                and data.get("ipv6_ra_mode") == constants.IPV6_SLAAC
+            ):
+                subnet["ipv6_address_mode"] = constants.IPV6_SLAAC
+                subnet["ipv6_ra_mode"] = constants.IPV6_SLAAC
 
         return dhcp.DictModel(subnet)
 

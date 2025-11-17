@@ -26,6 +26,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -50,7 +51,6 @@ type AttachPoint struct {
 	HostTunnelIPv6              net.IP
 	IntfIPv4                    net.IP
 	IntfIPv6                    net.IP
-	FIB                         bool
 	ToHostDrop                  bool
 	DSR                         bool
 	DSROptoutCIDRs              bool
@@ -74,6 +74,7 @@ type AttachPoint struct {
 	IngressPacketRateConfigured bool
 	EgressPacketRateConfigured  bool
 	DSCP                        int8
+	MaglevLUTSize               uint32
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -109,7 +110,7 @@ func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
 		return fmt.Errorf("object %w", err)
 	}
 	defer obj.Close()
-	progPinPath := ap.progPinPath()
+	progPinPath := ap.ProgPinPath()
 	if _, err := os.Stat(progPinPath); err == nil {
 		link, err := libbpf.OpenLink(progPinPath)
 		if err != nil {
@@ -117,10 +118,17 @@ func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
 		}
 		defer link.Close()
 		if err := link.Update(obj, "cali_tc_preamble"); err != nil {
+			if errors.Is(err, unix.ENOLINK) {
+				// The link was deleted out from under us, so try attaching a new one.
+				logCxt.Debug("Link severed from interface, re-attaching")
+				os.Remove(progPinPath)
+				goto attachNew
+			}
 			return fmt.Errorf("error updating program %s : %w", progPinPath, err)
 		}
 		return nil
 	}
+attachNew:
 	link, err := obj.AttachTCX("cali_tc_preamble", ap.Iface)
 	if err != nil {
 		return err
@@ -177,22 +185,23 @@ func (ap *AttachPoint) AttachProgram() error {
 	}
 	logCxt.Info("Program attached to tc.")
 	// Remove any tcx program.
-	err = ap.detachTcxProgram()
-	if err != nil {
-		logCxt.Warnf("error removing tcx program from %s", err)
+	if _, err := os.Stat(ap.ProgPinPath()); err == nil {
+		logCxt.Info("Removing any existing tcx program")
+		err = ap.detachTcxProgram()
+		if err != nil {
+			logCxt.Warnf("error removing tcx program from %s", err)
+		}
 	}
 	return nil
 }
 
-func (ap *AttachPoint) progPinPath() string {
-	return path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_%s", strings.Replace(ap.Iface, ".", "", -1), ap.Hook))
+func (ap *AttachPoint) ProgPinPath() string {
+	return path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_%s", strings.ReplaceAll(ap.Iface, ".", ""), ap.Hook))
 }
 
 func (ap *AttachPoint) detachTcxProgram() error {
-	progPinPath := ap.progPinPath()
-	if _, err := os.Stat(progPinPath); os.IsNotExist(err) {
-		return nil
-	}
+	progPinPath := ap.ProgPinPath()
+	defer os.Remove(progPinPath)
 	link, err := libbpf.OpenLink(progPinPath)
 	if err != nil {
 		return fmt.Errorf("error opening link %s:%w", progPinPath, err)
@@ -202,7 +211,6 @@ func (ap *AttachPoint) detachTcxProgram() error {
 	if err != nil {
 		return fmt.Errorf("error detaching link %s:%w", progPinPath, err)
 	}
-	os.Remove(progPinPath)
 	return nil
 }
 
@@ -362,12 +370,12 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 func HasQdisc(ifaceName string) (bool, error) {
 	link, err := netlink.LinkByName(ifaceName)
 	if err != nil {
-		return false, fmt.Errorf("Failed to get link for interface '%s': %w", ifaceName, err)
+		return false, fmt.Errorf("failed to get link for interface '%s': %w", ifaceName, err)
 	}
 
 	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
-		return false, fmt.Errorf("Failed to list qdiscs for interface '%s': %w", ifaceName, err)
+		return false, fmt.Errorf("failed to list qdiscs for interface '%s': %w", ifaceName, err)
 	}
 
 	for _, qdisc := range qdiscs {
@@ -410,17 +418,18 @@ func (ap *AttachPoint) Config() string {
 
 func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData := &libbpf.TcGlobalData{
-		ExtToSvcMark: ap.ExtToServiceConnmark,
-		VxlanPort:    ap.VXLANPort,
-		Tmtu:         ap.TunnelMTU,
-		PSNatStart:   ap.PSNATStart,
-		PSNatLen:     ap.PSNATEnd,
-		WgPort:       ap.WgPort,
-		Wg6Port:      ap.Wg6Port,
-		NatIn:        ap.NATin,
-		NatOut:       ap.NATout,
-		LogFilterJmp: uint32(ap.LogFilterIdx),
-		DSCP:         ap.DSCP,
+		ExtToSvcMark:  ap.ExtToServiceConnmark,
+		VxlanPort:     ap.VXLANPort,
+		Tmtu:          ap.TunnelMTU,
+		PSNatStart:    ap.PSNATStart,
+		PSNatLen:      ap.PSNATEnd,
+		WgPort:        ap.WgPort,
+		Wg6Port:       ap.Wg6Port,
+		NatIn:         ap.NATin,
+		NatOut:        ap.NATout,
+		LogFilterJmp:  uint32(ap.LogFilterIdx),
+		DSCP:          ap.DSCP,
+		MaglevLUTSize: ap.MaglevLUTSize,
 	}
 
 	if ap.Profiling == "Enabled" {

@@ -108,7 +108,7 @@ func (c *nodeLabelController) onStatusUpdate(s bapi.SyncStatus) {
 }
 
 func (c *nodeLabelController) onUpdate(update bapi.Update) {
-	switch update.KVPair.Key.(type) {
+	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
 		case apiv3.KindNode:

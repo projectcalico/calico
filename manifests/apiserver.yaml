@@ -74,7 +74,7 @@ spec:
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
-          image: calico/apiserver:master
+          image: quay.io/calico/apiserver:master
           name: calico-apiserver
           readinessProbe:
             httpGet:
@@ -169,6 +169,9 @@ rules:
       - caliconodestatuses
       - ipamconfigs
       - tiers
+      - stagednetworkpolicies
+      - stagedglobalnetworkpolicies
+      - stagedkubernetesnetworkpolicies
     verbs:
       - get
       - list

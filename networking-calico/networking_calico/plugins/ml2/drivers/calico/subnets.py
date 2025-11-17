@@ -99,4 +99,8 @@ def subnet_etcd_data(subnet):
     }
     if subnet["dns_nameservers"]:
         data["dns_servers"] = subnet["dns_nameservers"]
+    if subnet.get("ipv6_ra_mode") and subnet.get("ipv6_address_mode"):
+        data["ipv6_ra_mode"] = subnet["ipv6_ra_mode"]
+        data["ipv6_address_mode"] = subnet["ipv6_address_mode"]
+
     return data

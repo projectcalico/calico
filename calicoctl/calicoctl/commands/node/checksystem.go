@@ -87,7 +87,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -117,7 +117,7 @@ Description:
 
 	// If any of the checks fail, print a message and exit
 	if !systemOk {
-		return fmt.Errorf("System doesn't meet one or more minimum systems requirements to run Calico")
+		return fmt.Errorf("system doesn't meet one or more minimum systems requirements to run Calico")
 	}
 
 	fmt.Printf("System meets minimum system requirements to run Calico!\n")
@@ -144,7 +144,7 @@ func checkKernelVersion() error {
 		// Prints "FAIL" if current version is not >= minimum required version
 		printResult(kernelVersionStr, "FAIL")
 		fmt.Printf("Minimum kernel version to run Calico is %s. Detected kernel version: %s", minKernelVersion, string(kernelVersion))
-		return errors.New("Kernel version mismatch")
+		return errors.New("kernel version mismatch")
 	}
 
 	// Prints "OK" if current version is >= minimum required version
@@ -234,7 +234,7 @@ func checkKernelModules() error {
 			fmt.Printf("WARNING: IPv6 will be unavailable as ip6_tables kernel module is not found\n")
 			return nil
 		}
-		return errors.New("One of more kernel modules missing")
+		return errors.New("one of more kernel modules missing")
 	}
 
 	return nil
@@ -258,14 +258,14 @@ func checkModule(filename, module, kernelVersion string, pattern string) error {
 	}
 
 	f := bufio.NewReader(fh)
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 
 	for {
 		// Ignoring second output (isPrefix) since it's not necessary
 		buf, _, err := f.ReadLine()
 		if err != nil {
 			// EOF without a match
-			return errors.New("Module not found")
+			return errors.New("module not found")
 		}
 
 		if regex.MatchString(string(buf)) {

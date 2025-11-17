@@ -20,10 +20,9 @@ import (
 	"maps"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,19 +33,17 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
 )
 
-func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace, podName string, ports []int, labels map[string]string, podCustomizer func(pod *v1.Pod), serviceCustomizer func(svc *v1.Service)) (*v1.Pod, *v1.Service) {
+func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace, podName string, ports []int, labels map[string]string, podCustomizer func(pod *v1.Pod), serviceCustomizer func(svc *v1.Service), autoCreateSvc bool) (*v1.Pod, *v1.Service) {
 	// Because we have a variable amount of ports, we'll first loop through and generate our Containers for our pod,
 	// and ServicePorts.for our Service.
 	var image string
 	containers := []v1.Container{}
 	servicePorts := []v1.ServicePort{}
 	nodeselector := map[string]string{}
-	imagePull := v1.PullAlways
 
 	if windows.ClusterIsWindows() {
 		image = images.Porter
 		nodeselector["kubernetes.io/os"] = "windows"
-		imagePull = v1.PullIfNotPresent
 	} else {
 		image = images.TestWebserver
 		nodeselector["kubernetes.io/os"] = "linux"
@@ -61,7 +58,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 		containers = append(containers, v1.Container{
 			Name:            fmt.Sprintf("%s-container-%d", podName, port),
 			Image:           image,
-			ImagePullPolicy: imagePull,
+			ImagePullPolicy: v1.PullIfNotPresent,
 			Args:            args,
 			Ports: []v1.ContainerPort{
 				{
@@ -93,8 +90,9 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	newLabels := make(map[string]string)
 	maps.Copy(newLabels, labels)
 	newLabels["pod-name"] = podName
+	newLabels[roleLabel] = roleServer
 
-	By(fmt.Sprintf("Creating a server pod %s in namespace %s", podName, namespace.Name))
+	ginkgo.By(fmt.Sprintf("Creating a server pod %s in namespace %s", podName, namespace.Name))
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   podName,
@@ -105,11 +103,11 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 			RestartPolicy: v1.RestartPolicyNever,
 			NodeSelector:  nodeselector,
 			Tolerations: []v1.Toleration{
-				corev1.Toleration{
+				v1.Toleration{
 					Key:      "kubernetes.io/arch",
-					Operator: corev1.TolerationOpEqual,
+					Operator: v1.TolerationOpEqual,
 					Value:    "arm64",
-					Effect:   corev1.TaintEffectNoSchedule,
+					Effect:   v1.TaintEffectNoSchedule,
 				},
 			},
 		},
@@ -121,11 +119,17 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	pod, err := f.ClientSet.CoreV1().Pods(namespace.Name).Create(ctx, pod, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
-	logrus.Infof("Created pod %v", pod.ObjectMeta.Name)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	logrus.Infof("Created pod %v", pod.Name)
+
+	// Only create service if autoCreateSvc is true
+	if !autoCreateSvc {
+		// Return the pod with nil service when service creation is disabled
+		return pod, nil
+	}
 
 	svcName := fmt.Sprintf("svc-%s", podName)
-	By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
+	ginkgo.By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
 	v4Svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: svcName},
 		Spec: v1.ServiceSpec{
@@ -140,7 +144,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	v4Svc, err = f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, v4Svc, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	if !pod.Spec.HostNetwork {
 		// Create an ipv6 service for the pod instead, if the cluster supports v6.
@@ -164,14 +168,14 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
+		ginkgo.By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
 		v6Svc, err := f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, svc, metav1.CreateOptions{})
 		if err == nil {
 			// IPv6 is supported - return the dual stack service.
 			return pod, v6Svc
 		} else if !kerrors.IsInvalid(err) {
 			// An error other than 422 Invalid is an actual error.
-			Expect(err).NotTo(HaveOccurred(), "Error creating IPv6 service")
+			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Error creating IPv6 service")
 		} else {
 			// If v6 is not enabled on the cluster, we will receive an "Invalid" error type. In this case,
 			// fall through and return the v4 service.

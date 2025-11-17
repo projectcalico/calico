@@ -24,7 +24,6 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -261,9 +260,6 @@ type Table struct {
 	peakIptablesSaveTime    time.Duration
 	peakIptablesRestoreTime time.Duration
 
-	// calicoXtablesLock, if enabled, our implementation of the xtables lock.
-	calicoXtablesLock sync.Locker
-
 	// lockTimeout is the timeout used for iptables-restore's native xtables lock implementation.
 	lockTimeout time.Duration
 	// lockTimeout is the lock probe interval used for iptables-restore's native xtables lock
@@ -302,8 +298,6 @@ type TableOptions struct {
 	RefreshInterval          time.Duration
 	PostWriteInterval        time.Duration
 
-	// LockTimeout is the timeout to use for iptables-restore's native xtables lock.
-	LockTimeout time.Duration
 	// LockProbeInterval is the probe interval to use for iptables-restore's native xtables lock.
 	LockProbeInterval time.Duration
 
@@ -325,7 +319,6 @@ func NewTable(
 	name string,
 	ipVersion uint8,
 	hashPrefix string,
-	iptablesWriteLock sync.Locker,
 	featureDetector environment.FeatureDetectorIface,
 	options TableOptions,
 ) *Table {
@@ -436,9 +429,6 @@ func NewTable(
 
 		refreshInterval: options.RefreshInterval,
 
-		calicoXtablesLock: iptablesWriteLock,
-
-		lockTimeout:       options.LockTimeout,
 		lockProbeInterval: options.LockProbeInterval,
 
 		newCmd:    newCmd,
@@ -542,12 +532,22 @@ func (t *Table) UpdateChain(chain *generictables.Chain) {
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
 	// avoid marking a still-referenced chain as dirty.
+	if chain.ForceProgramming {
+		// A force-programmed chain refers to itself.
+		t.logCxt.WithField("chainName", chain.Name).Debug("Chain has force programming flag, incref.")
+		t.increfChain(chain.Name)
+	}
 	t.maybeIncrefReferredChains(chain.Name, chain.Rules)
 	if oldChain := t.chainNameToChain[chain.Name]; oldChain != nil {
 		oldNumRules = len(oldChain.Rules)
+		if oldChain.ForceProgramming {
+			t.logCxt.WithField("chainName", chain.Name).Debug("Old chain has force programming flag, decref.")
+			t.decrefChain(chain.Name)
+		}
 		t.maybeDecrefReferredChains(chain.Name, oldChain.Rules)
 	}
 	t.chainNameToChain[chain.Name] = chain
+
 	if t.chainIsReferenced(chain.Name) {
 		numRulesDelta := len(chain.Rules) - oldNumRules
 		t.gaugeNumRules.Add(float64(numRulesDelta))
@@ -571,6 +571,9 @@ func (t *Table) RemoveChains(chains []*generictables.Chain) {
 func (t *Table) RemoveChainByName(name string) {
 	t.logCxt.WithField("chainName", name).Debug("Removing chain from available set.")
 	if oldChain, known := t.chainNameToChain[name]; known {
+		if oldChain.ForceProgramming {
+			t.decrefChain(name)
+		}
 		t.maybeDecrefReferredChains(name, oldChain.Rules)
 		delete(t.chainNameToChain, name)
 		if t.chainIsReferenced(name) {
@@ -1449,11 +1452,7 @@ func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
 	cmd.SetStdout(&outputBuf)
 	cmd.SetStderr(&errBuf)
 	countNumRestoreCalls.Inc()
-	// Note: calicoXtablesLock will be a dummy lock if our xtables lock is disabled (i.e. if iptables-restore
-	// supports the xtables lock itself, or if our implementation is disabled by config.
-	t.calicoXtablesLock.Lock()
 	err := cmd.Run()
-	t.calicoXtablesLock.Unlock()
 	if err != nil {
 		// To log out the input, we must convert to string here since, after we return, the buffer can be re-used
 		// (and the logger may convert to string on a background thread).
@@ -1538,7 +1537,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	// For non-cali chains, get the rule by number but delete using the full rule instead of rule number.
 	rules, ok := t.chainToFullRules[chainName]
 	if !ok || ruleNum >= len(rules) {
-		return "", fmt.Errorf("Rendering delete for nonexistent rule: Rule %d in %q", ruleNum, chainName)
+		return "", fmt.Errorf("rendering delete for nonexistent rule: Rule %d in %q", ruleNum, chainName)
 	}
 
 	rule := rules[ruleNum]

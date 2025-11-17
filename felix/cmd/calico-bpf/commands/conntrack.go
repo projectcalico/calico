@@ -75,7 +75,6 @@ func newConntrackDumpCmd() *cobra.Command {
 
 	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "version to dump from")
 	cmd.Command.Flags().BoolVar((&cmd.raw), "raw", false, "dump the raw conntrack table as is. For version < 3 it is always raw")
-	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
 	return cmd.Command
@@ -399,7 +398,6 @@ func newConntrackCleanCmd() *cobra.Command {
 	}
 
 	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "conntrack version to clean")
-	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
 	return cmd.Command
@@ -447,7 +445,6 @@ func newConntrackCreateCmd() *cobra.Command {
 	}
 
 	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "conntrack version to create")
-	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
 	return cmd.Command
@@ -582,7 +579,6 @@ func newConntrackStatsCmd() *cobra.Command {
 
 	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "conntrack map version")
 
-	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
 	return cmd.Command

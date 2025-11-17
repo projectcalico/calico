@@ -48,7 +48,7 @@ func (m *Metadata) GetMetadata() *Metadata {
 }
 
 func (m *Metadata) parseFailed(raw, msg string) error {
-	return fmt.Errorf("Failed to parse config parameter %v; value %#v: %v",
+	return fmt.Errorf("failed to parse config parameter %v; value %#v: %v",
 		m.Name, raw, msg)
 }
 

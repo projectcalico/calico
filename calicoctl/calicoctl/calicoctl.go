@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -94,7 +95,7 @@ Description:
 	}
 
 	if context := arguments["--context"]; context != nil {
-		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
+		_ = os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	if arguments["<command>"] != nil {
@@ -138,12 +139,30 @@ Description:
 		case "datastore":
 			err = commands.Datastore(args)
 		default:
-			err = fmt.Errorf("Unknown command: %q\n%s", command, doc)
+			err = fmt.Errorf("unknown command: %q\n%s", command, doc)
 		}
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
+			fmt.Fprintf(os.Stderr, "%s\n", massageError(err))
 			os.Exit(1)
 		}
 	}
+}
+
+// massageError takes the given error and tries to clean up its message for
+// display.  In particular, it removes confusing prefixes about JSON and
+// tweaks the unknown field error to be more verbose.
+func massageError(err error) string {
+	msg := err.Error()
+
+	// Our YAML processing functions have intermediate steps that use JSON
+	// so the errors end up confusingly highlighting problems with JSON.
+	msg = strings.TrimPrefix(msg, "error unmarshaling JSON: while decoding JSON: json: ")
+
+	unknownFiledRegexp := regexp.MustCompile(`unknown field "([^"]+)"`)
+	if m := unknownFiledRegexp.FindStringSubmatch(msg); m != nil {
+		msg = "field in document is not recognized or is in the wrong location: " + m[1]
+	}
+
+	return msg
 }

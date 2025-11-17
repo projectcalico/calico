@@ -24,11 +24,11 @@ func TestForwardConnections(t *testing.T) {
 		t.Log("Creating two localhost listeners")
 		lst1, err := net.Listen("tcp", "localhost:0")
 		Expect(err).ShouldNot(HaveOccurred())
-		defer lst1.Close()
+		defer func() { _ = lst1.Close() }()
 
 		lst2, err := net.Listen("tcp", "localhost:0")
 		Expect(err).ShouldNot(HaveOccurred())
-		defer lst2.Close()
+		defer func() { _ = lst2.Close() }()
 
 		var wg sync.WaitGroup
 		wg.Add(1)

@@ -48,6 +48,7 @@ type IPMaps struct {
 	SrMsgMap     maps.Map
 	CtNatsMap    maps.Map
 	CtCleanupMap maps.Map
+	MaglevMap    maps.Map
 }
 
 type CommonMaps struct {
@@ -60,6 +61,7 @@ type CommonMaps struct {
 	XDPProgramsMap  maps.Map
 	XDPJumpMap      maps.MapWithDeleteIfExists
 	ProfilingMap    maps.Map
+	CTLBProgramsMap maps.Map
 	QoSMap          maps.MapWithUpdateWithFlags
 }
 
@@ -93,6 +95,7 @@ func getCommonMaps() *CommonMaps {
 		XDPProgramsMap:  hook.NewXDPProgramsMap(),
 		XDPJumpMap:      jump.XDPMap().(maps.MapWithDeleteIfExists),
 		ProfilingMap:    profiling.Map(),
+		CTLBProgramsMap: nat.ProgramsMap(),
 		QoSMap:          qos.Map().(maps.MapWithUpdateWithFlags),
 	}
 }
@@ -124,7 +127,7 @@ func getIPMaps(ipFamily int) *IPMaps {
 		CtCleanupMap: getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
 		SrMsgMap:     getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
 		CtNatsMap:    getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
-	}
+		MaglevMap:    getmapWithExistsCheck(nat.MaglevMap, nat.MaglevMapV6)}
 }
 
 func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
@@ -176,6 +179,7 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.XDPProgramsMap,
 		c.XDPJumpMap,
 		c.ProfilingMap,
+		c.CTLBProgramsMap,
 		c.QoSMap,
 	}
 }
@@ -193,6 +197,7 @@ func (i *IPMaps) slice() []maps.Map {
 		i.CtCleanupMap,
 		i.SrMsgMap,
 		i.CtNatsMap,
+		i.MaglevMap,
 	}
 }
 

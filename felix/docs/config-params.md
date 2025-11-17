@@ -484,6 +484,48 @@ set to false. This reduces the number of metrics reported, reducing Prometheus l
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
 
+### `PrometheusMetricsCAFile` (config file) / `prometheusMetricsCAFile` (YAML)
+
+Defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
+This certificate must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PrometheusMetricsCAFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `prometheusMetricsCAFile` (YAML) `PrometheusMetricsCAFile` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `PrometheusMetricsCertFile` (config file) / `prometheusMetricsCertFile` (YAML)
+
+Defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
+This certificate must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PrometheusMetricsCertFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `prometheusMetricsCertFile` (YAML) `PrometheusMetricsCertFile` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `PrometheusMetricsClientAuth` (config file) / `prometheusMetricsClientAuth` (YAML)
+
+Specifies the client authentication type for the /metrics endpoint.
+This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PrometheusMetricsClientAuth` |
+| Encoding (env var/config file) | One of: <code>NoClientCert</code>, <code>RequireAndVerifyClientCert</code>, <code>RequireAnyClientCert</code>, <code>VerifyClientCertIfGiven</code> (case insensitive) |
+| Default value (above encoding) | `RequireAndVerifyClientCert` |
+| `FelixConfiguration` field | `prometheusMetricsClientAuth` (YAML) `PrometheusMetricsClientAuth` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `RequireAndVerifyClientCert` |
+
 ### `PrometheusMetricsEnabled` (config file) / `prometheusMetricsEnabled` (YAML)
 
 Enables the Prometheus metrics server in Felix if set to true.
@@ -507,6 +549,20 @@ The host that the Prometheus metrics server should bind to.
 | Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9:._+-]{1,64}$</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `prometheusMetricsHost` (YAML) `PrometheusMetricsHost` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `PrometheusMetricsKeyFile` (config file) / `prometheusMetricsKeyFile` (YAML)
+
+Defines the absolute path to the private key file corresponding to the TLS certificate
+used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PrometheusMetricsKeyFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `prometheusMetricsKeyFile` (YAML) `PrometheusMetricsKeyFile` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
@@ -1214,26 +1270,10 @@ with an iptables "DROP" action. If you want to use "REJECT" action instead you c
 | Default value (YAML) | `Drop` |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
-### `IptablesLockFilePath` (config file) / `iptablesLockFilePath` (YAML)
-
-The location of the iptables lock file. You may need to change this
-if the lock file is not in its standard location (for example if you have mapped it into Felix's
-container at a different path).
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_IptablesLockFilePath` |
-| Encoding (env var/config file) | Path to file |
-| Default value (above encoding) | `/run/xtables.lock` |
-| `FelixConfiguration` field | `iptablesLockFilePath` (YAML) `IptablesLockFilePath` (Go API) |
-| `FelixConfiguration` schema | String. |
-| Default value (YAML) | `/run/xtables.lock` |
-
 ### `IptablesLockProbeIntervalMillis` (config file) / `iptablesLockProbeInterval` (YAML)
 
-When IptablesLockTimeout is enabled: the time that Felix will wait between
-attempts to acquire the iptables lock if it is not available. Lower values make Felix more
-responsive when the lock is contended, but use more CPU.
+Configures the interval between attempts to claim
+the xtables lock. Shorter intervals are more responsive but use more CPU.
 
 | Detail |   |
 | --- | --- |
@@ -1243,22 +1283,6 @@ responsive when the lock is contended, but use more CPU.
 | `FelixConfiguration` field | `iptablesLockProbeInterval` (YAML) `IptablesLockProbeInterval` (Go API) |
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `50ms` |
-
-### `IptablesLockTimeoutSecs` (config file) / `iptablesLockTimeout` (YAML)
-
-The time that Felix itself will wait for the iptables lock (rather than delegating the
-lock handling to the `iptables` command).
-
-Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_IptablesLockTimeoutSecs` |
-| Encoding (env var/config file) | Seconds (floating point) |
-| Default value (above encoding) | `0` (0s) |
-| `FelixConfiguration` field | `iptablesLockTimeout` (YAML) `IptablesLockTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
-| Default value (YAML) | `0s` |
 
 ### `IptablesMangleAllowAction` (config file) / `iptablesMangleAllowAction` (YAML)
 
@@ -1771,20 +1795,36 @@ determines the CTLB behavior.
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
-### `BPFKubeProxyEndpointSlicesEnabled` (config file) / `bpfKubeProxyEndpointSlicesEnabled` (YAML)
+### `BPFJITHardening` (config file) / `bpfJITHardening` (YAML)
 
-Deprecated and has no effect. BPF
-kube-proxy always accepts endpoint slices. This option will be removed in
-the next release.
+Controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+Felix will not modify the JIT hardening setting.
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_BPFKubeProxyEndpointSlicesEnabled` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `true` |
-| `FelixConfiguration` field | `bpfKubeProxyEndpointSlicesEnabled` (YAML) `BPFKubeProxyEndpointSlicesEnabled` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `true` |
+| Environment variable | `FELIX_BPFJITHardening` |
+| Encoding (env var/config file) | One of: <code>Auto</code>, <code>Strict</code> (case insensitive) |
+| Default value (above encoding) | `Auto` |
+| `FelixConfiguration` field | `bpfJITHardening` (YAML) `BPFJITHardening` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `Auto` |
+| Notes | Required. | 
+
+### `BPFKubeProxyHealthzPort` (config file) / `bpfKubeProxyHealthzPort` (YAML)
+
+In BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+The health check server is used by external load balancers to determine if this node should receive traffic.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFKubeProxyHealthzPort` |
+| Encoding (env var/config file) | Integer |
+| Default value (above encoding) | `10256` |
+| `FelixConfiguration` field | `bpfKubeProxyHealthzPort` (YAML) `BPFKubeProxyHealthzPort` (Go API) |
+| `FelixConfiguration` schema | Integer |
+| Default value (YAML) | `10256` |
+| Notes | Required. | 
 
 ### `BPFKubeProxyIptablesCleanupEnabled` (config file) / `bpfKubeProxyIptablesCleanupEnabled` (YAML)
 
@@ -1864,6 +1904,37 @@ Controls the log level of the BPF programs when in BPF dataplane mode. One of "O
 | `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Info</code>, <code>Off</code>. |
 | Default value (YAML) | `Off` |
 | Notes | Required. | 
+
+### `BPFMaglevMaxEndpointsPerService` (config file) / `bpfMaglevMaxEndpointsPerService` (YAML)
+
+The maximum number of endpoints
+expected to be part of a single Maglev-enabled service.
+
+Influences the size of the per-service Maglev lookup-tables generated by Felix
+and thus the amount of memory reserved.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFMaglevMaxEndpointsPerService` |
+| Encoding (env var/config file) | Integer: [1,3000] |
+| Default value (above encoding) | `100` |
+| `FelixConfiguration` field | `bpfMaglevMaxEndpointsPerService` (YAML) `BPFMaglevMaxEndpointsPerService` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,3000] |
+| Default value (YAML) | `100` |
+
+### `BPFMaglevMaxServices` (config file) / `bpfMaglevMaxServices` (YAML)
+
+The maximum number of expected Maglev-enabled
+services that Felix will allocate lookup-tables for.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFMaglevMaxServices` |
+| Encoding (env var/config file) | Integer: [1,3000] |
+| Default value (above encoding) | `100` |
+| `FelixConfiguration` field | `bpfMaglevMaxServices` (YAML) `BPFMaglevMaxServices` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,3000] |
+| Default value (YAML) | `100` |
 
 ### `BPFMapSizeConntrack` (config file) / `bpfMapSizeConntrack` (YAML)
 
@@ -2071,22 +2142,20 @@ Disabled or Enabled.
 
 ### `BPFRedirectToPeer` (config file) / `bpfRedirectToPeer` (YAML)
 
-Controls which whether it is allowed to forward straight to the
-peer side of the workload devices. It is allowed for any host L2 devices by default
-(L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
-it on ingress. Value of Enabled also allows redirection from L3 host devices like
-IPIP tunnel or Wireguard directly to the peer side of the workload's device. This
-makes redirection faster, however, it breaks tools like tcpdump on the peer side.
-Use Enabled with caution.
+Controls whether traffic may be forwarded directly to the peer side of a workload’s device.
+Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
+which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
+As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFRedirectToPeer` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code> (case insensitive) |
-| Default value (above encoding) | `L2Only` |
+| Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfRedirectToPeer` (YAML) `BPFRedirectToPeer` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"L2Only"</code>. |
-| Default value (YAML) | `L2Only` |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
 ## <a id="dataplane-windows">Dataplane: Windows

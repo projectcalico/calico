@@ -301,9 +301,10 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 
 	if m.blockedCIDRs.Contains(cidr) {
 		log.WithField("cidr", cidr).Debug("CIDR is blocked.")
-		if m.svcLoopPrevention == "Drop" {
+		switch m.svcLoopPrevention {
+		case "Drop":
 			flags |= routes.FlagBlackHoleDrop
-		} else if m.svcLoopPrevention == "Reject" {
+		case "Reject":
 			flags |= routes.FlagBlackHoleReject
 		}
 	}
@@ -349,7 +350,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 						"Will choose one route.")
 			}
 			wepIDs.Iter(func(wepID types.WorkloadEndpointID) error {
-				// Route is a local workload look up its name and interface details.
+				// Route is a local workload, look up its name and interface details.
 				wepScore := 0
 				wep := m.wepIDToWorkload[wepID]
 				ifaceName := wep.Name

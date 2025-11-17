@@ -72,6 +72,11 @@ type resourceStore struct {
 	converter         resourceConverter
 }
 
+func (rs *resourceStore) GetCurrentResourceVersion(ctx context.Context) (uint64, error) {
+	logrus.Error("STUB: GetCurrentResourceVersion() not supported by Calico client.")
+	return 0, fmt.Errorf("GetCurrentResourceVersion() not supported by Calico client")
+}
+
 func (rs *resourceStore) RequestWatchProgress(ctx context.Context) error {
 	// This method is supposed to trigger the client to emit a progress
 	// notification on each active watch but our client doesn't support that
@@ -83,6 +88,20 @@ func (rs *resourceStore) RequestWatchProgress(ctx context.Context) error {
 func (rs *resourceStore) ReadinessCheck() error {
 	logrus.Error("STUB: RedinessCheck() not supported by Calico client.")
 	return nil
+}
+
+func (rs *resourceStore) Stats(_ context.Context) (storage.Stats, error) {
+	logrus.Error("STUB: Stats() not supported by Calico client.")
+	return storage.Stats{}, nil
+}
+
+func (rs *resourceStore) SetKeysFunc(_ storage.KeysFunc) {
+	logrus.Error("STUB: SetKeysFunc() not supported by Calico client.")
+}
+
+func (rs *resourceStore) CompactRevision() int64 {
+	logrus.Error("STUB: CompactRevision() not supported by Calico client.")
+	return 0
 }
 
 var _ storage.Interface = (*resourceStore)(nil)

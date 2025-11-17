@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -67,9 +66,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		infra.AddDefaultAllow()
 
 		// Create workload on host 1 (Felix0).
+		infrastructure.AssignIP("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
 		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
 		ep1_1.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-1", "10.65.0.1", tc.Felixes[0].Hostname, client)
 		ep2_1 = workload.Run(tc.Felixes[0], "ep2-1", "default", "10.65.0.1", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
 
@@ -77,15 +78,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		hostw.ConfigureInInfra(infra)
 
 		// Create workload on host 2 (Felix1)
+		infrastructure.AssignIP("ep1-2", "10.65.1.0", tc.Felixes[1].Hostname, client)
+		infrastructure.AssignIP("ep1-2", "dead:beef::1:0", tc.Felixes[1].Hostname, client)
 		ep1_2Opts := workload.WithIPv6Address("dead:beef::1:0")
 		ep1_2 = workload.Run(tc.Felixes[1], "ep1-2", "default", "10.65.1.0", wepPortStr, "tcp", ep1_2Opts)
 		ep1_2.ConfigureInInfra(infra)
 
+		infrastructure.AssignIP("ep2-2", "10.65.1.1", tc.Felixes[1].Hostname, client)
+		infrastructure.AssignIP("ep2-2", "dead:beef::1:1", tc.Felixes[1].Hostname, client)
 		ep2_2Opts := workload.WithIPv6Address("dead:beef::1:1")
 		ep2_2 = workload.Run(tc.Felixes[1], "ep2-2", "default", "10.65.1.1", wepPortStr, "tcp", ep2_2Opts)
 		ep2_2.ConfigureInInfra(infra)
 
-		cc = &connectivity.Checker{}
+		ensureRoutesProgrammed(tc.Felixes)
 
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
@@ -96,7 +101,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		extClientOpts := infrastructure.ExtClientOpts{
 			Image: utils.Config.FelixImage,
 		}
-		extClient = infrastructure.RunExtClientWithOpts("ext-client1", extClientOpts)
+		extClient = infrastructure.RunExtClientWithOpts(infra, "ext-client1", extClientOpts)
 		extWorkload = &workload.Workload{
 			C:        extClient,
 			Name:     "ext-workload",
@@ -105,8 +110,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			IP:       extClient.IP,
 			IP6:      extClient.IPv6,
 		}
-		err := extWorkload.Start()
+		err := extWorkload.Start(infra)
 		Expect(err).NotTo(HaveOccurred())
+
+		cc = &connectivity.Checker{}
 	})
 
 	AfterEach(func() {
@@ -151,10 +158,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 				binary = "ip6tables-save"
 			}
 			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
-			allHostsIPSet := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
+			thisHostIPSet := fmt.Sprintf("cali%v0this-host", ipVersion)
 			dscpIPSet := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
 			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
-			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet, allHostsIPSet)
+			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet, thisHostIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
@@ -169,10 +176,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 				ipFamily = "ip6"
 			}
 			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
-			allHostsIPSet := fmt.Sprintf("@cali%v0all-hosts-net", ipVersion)
+			thisHostIPSet := fmt.Sprintf("@cali%v0this-host", ipVersion)
 			dscpIPSet := fmt.Sprintf("@cali%v0dscp-src-net", ipVersion)
 			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
-			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
+			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet, ipFamily, thisHostIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
@@ -190,7 +197,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 	})
 
-	It("applying DSCP annotation should result is adding correct rules", func() {
+	It("applying DSCP annotation should result in correct dataplane state", func() {
 		dscp0 := numorstring.DSCPFromInt(0)   // 0x0
 		dscp20 := numorstring.DSCPFromInt(20) // 0x14
 		dscp32 := numorstring.DSCPFromInt(32) // 0x20
@@ -199,9 +206,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		By("configurging external client to only accept packets with specific DSCP value")
 		extClient.Exec("ip", "route", "add", ep1_1.IP, "via", tc.Felixes[0].IP)
 		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
-		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
 
 		// Configure external client to only accept ipv4 packets with 0x14 DSCP value.
+		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
+
 		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
 		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
 
@@ -348,6 +356,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
+		By("checking DSCP values are applied to return traffic of connections initiated outside cluster")
+		cc.ResetExpectations()
+		cc.ExpectSome(extClient, hostw)
+		cc.ExpectSome(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+
+		cc.Expect(connectivity.Some, extClient, ep1_2, ccOpts)
+		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
+		cc.CheckConnectivity()
+
 		By("removing host endpoint")
 		_, err = client.HostEndpoints().Delete(utils.Ctx, hep.Name, options.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -425,6 +443,68 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			hexStr := fmt.Sprintf("0x%02x", dscpVal)
 			verifyQoSPolicies(tc.Felixes[1], []string{hexStr}, []string{hexStr})
 		}
+	})
+
+	It("should keep DSCP value when NAT outgoing is enabled", func() {
+		ctx := context.Background()
+		ippool, err := client.IPPools().Get(ctx, infrastructure.DefaultIPPoolName, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ippool.Spec.NATOutgoing = true
+		_, err = client.IPPools().Update(ctx, ippool, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		ippoolv6, err := client.IPPools().Get(ctx, infrastructure.DefaultIPv6PoolName, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ippoolv6.Spec.NATOutgoing = true
+		_, err = client.IPPools().Update(ctx, ippoolv6, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		dscpAF11 := numorstring.DSCPFromString("AF11") // 0A
+		dscpEF := numorstring.DSCPFromString("EF")     // 2E
+
+		extClient.Exec("ip", "route", "add", ep1_1.IP, "via", tc.Felixes[0].IP)
+		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
+
+		// Configure external client to only accept ipv4 packets with AF11(0x0A) DSCP value.
+		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x0a", "-j", "DROP")
+
+		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
+		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
+
+		// Configure external client to only accept ipv6 packets with EF(0x2E) DSCP value. ICMPv6 needs to be allowed
+		// regardless for neighbor discovery.
+		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
+		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x2e", "-j", "DROP")
+
+		if !BPFMode() {
+			verifyQoSPolicies(tc.Felixes[0], nil, nil)
+			verifyQoSPolicies(tc.Felixes[1], nil, nil)
+		}
+
+		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscpAF11,
+		}
+		ep1_1.UpdateInInfra(infra)
+
+		ep2_2.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscpEF,
+		}
+		ep2_2.UpdateInInfra(infra)
+
+		if !BPFMode() {
+			verifyQoSPolicies(tc.Felixes[0], []string{"0x0a"}, nil)
+			verifyQoSPolicies(tc.Felixes[1], []string{"0x2e"}, []string{"0x2e"})
+		}
+
+		cc.ResetExpectations()
+		cc.ExpectSNAT(ep1_1, tc.Felixes[0].IP, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
+
+		ccOptsIPv6 := connectivity.ExpectWithIPVersion(6)
+		ccOptsSrc := connectivity.ExpectWithSrcIPs(tc.Felixes[1].IPv6)
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOptsIPv6, ccOptsSrc)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOptsIPv6, ccOptsSrc)
+		cc.CheckConnectivity()
 	})
 })
 

@@ -42,7 +42,6 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 			"INPUT":   {},
 			"OUTPUT":  {},
 		}, "legacy")
-		iptLock := &mockMutex{}
 		featureDetector := environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
@@ -50,7 +49,6 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 			"filter",
 			4,
 			rules.RuleHashPrefix,
-			iptLock,
 			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
@@ -74,7 +72,6 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 func describeEmptyDataplaneTests(dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
 	var table *Table
-	var iptLock *mockMutex
 	var featureDetector *environment.FeatureDetector
 	BeforeEach(func() {
 		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
@@ -82,7 +79,6 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			"INPUT":   {},
 			"OUTPUT":  {},
 		}, dataplaneMode)
-		iptLock = &mockMutex{}
 		featureDetector = environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
@@ -90,7 +86,6 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			"filter",
 			4,
 			rules.RuleHashPrefix,
-			iptLock,
 			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
@@ -131,8 +126,6 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				"iptables-save",
 			}))
 		}
-		Expect(iptLock.Held).To(BeFalse())
-		Expect(iptLock.WasTaken).To(BeFalse())
 	})
 
 	It("should have a refresh scheduled at start-of-day", func() {
@@ -177,7 +170,6 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				"filter",
 				4,
 				rules.RuleHashPrefix,
-				&mockMutex{},
 				featureDetector,
 				TableOptions{
 					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
@@ -198,12 +190,6 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				{Match: Match(), Action: DropAction{}},
 			})
 			table.Apply()
-		})
-		It("should acquire the iptables lock", func() {
-			Expect(iptLock.WasTaken).To(BeTrue())
-		})
-		It("should release the iptables lock", func() {
-			Expect(iptLock.Held).To(BeFalse())
 		})
 		It("should be in the dataplane", func() {
 			Expect(dataplane.Chains).To(Equal(map[string][]string{
@@ -742,6 +728,118 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		})
 	})
 
+	Describe("after adding a force-programmed chain", func() {
+		BeforeEach(func() {
+			table.UpdateChains([]*generictables.Chain{
+				{
+					Name: "cali-foobar",
+					Rules: []generictables.Rule{
+						{Match: Match(), Action: AcceptAction{}},
+						{Match: Match(), Action: DropAction{}},
+					},
+					ForceProgramming: true,
+				},
+			})
+			table.Apply()
+		})
+
+		It("it should be programmed", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {},
+				"INPUT":   {},
+				"OUTPUT":  {},
+				"cali-foobar": {
+					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+					"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+				},
+			}))
+		})
+
+		Describe("after adding a reference", func() {
+			BeforeEach(func() {
+				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
+					{Match: Match(), Action: JumpAction{Target: "cali-foobar"}},
+				})
+				table.Apply()
+			})
+			It("it should still be programmed", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+					"cali-foobar": {
+						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+					},
+				}))
+			})
+		})
+
+		Describe("after disabling force programming", func() {
+			BeforeEach(func() {
+				table.UpdateChains([]*generictables.Chain{
+					{
+						Name: "cali-foobar",
+						Rules: []generictables.Rule{
+							{Match: Match(), Action: AcceptAction{}},
+							{Match: Match(), Action: DropAction{}},
+						},
+					},
+				})
+				table.Apply()
+			})
+
+			It("should be removed", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
+				}))
+			})
+		})
+
+		Describe("after removing the chain", func() {
+			BeforeEach(func() {
+				table.RemoveChainByName("cali-foobar")
+				table.Apply()
+			})
+
+			It("should be removed", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
+				}))
+			})
+
+			Describe("after adding it back non-forced", func() {
+				BeforeEach(func() {
+					table.UpdateChains([]*generictables.Chain{
+						{
+							Name: "cali-foobar",
+							Rules: []generictables.Rule{
+								{Match: Match(), Action: AcceptAction{}},
+								{Match: Match(), Action: DropAction{}},
+							},
+						},
+					})
+					table.Apply()
+				})
+
+				It("should not be present", func() {
+					// This verifies that RemoveChainByName decreffed the chain.
+					Expect(dataplane.Chains).To(Equal(map[string][]string{
+						"FORWARD": {},
+						"INPUT":   {},
+						"OUTPUT":  {},
+					}))
+				})
+			})
+		})
+	})
+
 	Describe("applying updates when underlying iptables have changed in a approved chain", func() {
 		BeforeEach(func() {
 			table.InsertOrAppendRules("FORWARD", []generictables.Rule{
@@ -1124,7 +1222,6 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 			"filter",
 			4,
 			rules.RuleHashPrefix,
-			&mockMutex{},
 			featureDetector,
 			options,
 		)
@@ -1381,7 +1478,6 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 			"filter",
 			4,
 			rules.RuleHashPrefix,
-			&mockMutex{},
 			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
@@ -1791,13 +1887,11 @@ var _ = Describe("Table with inserts and a non-Calico chain (nft)", func() {
 func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
 	var table *Table
-	var iptLock *mockMutex
 	BeforeEach(func() {
 		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
 			"FORWARD":    {},
 			"non-calico": {"-m comment \"foo\""},
 		}, dataplaneMode)
-		iptLock = &mockMutex{}
 		featureDetector := environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
@@ -1805,7 +1899,6 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 			"filter",
 			6,
 			rules.RuleHashPrefix,
-			iptLock,
 			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
@@ -1836,8 +1929,6 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 				"FORWARD": {"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP"},
 			}
 			dataplane.ResetCmds()
-			iptLock.WasTaken = false
-			iptLock.Held = false
 			table.Apply()
 		})
 
@@ -1848,9 +1939,6 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 		})
 		It("should make no changes to the dataplane", func() {
 			Expect(dataplane.CmdNames).To(BeEmpty())
-		})
-		It("should not take the lock", func() {
-			Expect(iptLock.WasTaken).To(BeFalse())
 		})
 	})
 }
@@ -1866,13 +1954,11 @@ var _ = Describe("Insert early rules (nft)", func() {
 func describeInsertEarlyRules(dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
 	var table *Table
-	var iptLock *mockMutex
 	var featureDetector *environment.FeatureDetector
 	BeforeEach(func() {
 		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
 			"FORWARD": {"-m comment --comment \"some rule\""},
 		}, dataplaneMode)
-		iptLock = &mockMutex{}
 		featureDetector = environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
@@ -1880,7 +1966,6 @@ func describeInsertEarlyRules(dataplaneMode string) {
 			"filter",
 			4,
 			rules.RuleHashPrefix,
-			iptLock,
 			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
@@ -1939,24 +2024,4 @@ func describeInsertEarlyRules(dataplaneMode string) {
 
 		Expect(res).To(HaveLen(2))
 	})
-}
-
-type mockMutex struct {
-	Held     bool
-	WasTaken bool
-}
-
-func (m *mockMutex) Lock() {
-	if m.Held {
-		Fail("Mutex already held")
-	}
-	m.Held = true
-	m.WasTaken = true
-}
-
-func (m *mockMutex) Unlock() {
-	if !m.Held {
-		Fail("Mutex not held")
-	}
-	m.Held = false
 }

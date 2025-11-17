@@ -133,7 +133,7 @@ var (
 		Long:  "Flex volume init command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) != 0 {
-				return fmt.Errorf("init takes no arguments.")
+				return fmt.Errorf("init takes no arguments")
 			}
 			return initCommand()
 		},
@@ -145,7 +145,7 @@ var (
 		Long:  "Flex volume mount command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 2 {
-				return fmt.Errorf("mount takes 2 args.")
+				return fmt.Errorf("mount takes 2 args")
 			}
 			return mount(args[0], args[1])
 		},
@@ -157,7 +157,7 @@ var (
 		Long:  "Flex volume unmount command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 1 {
-				return fmt.Errorf("unmount takes 1 args.")
+				return fmt.Errorf("unmount takes 1 args")
 			}
 			return unmount(args[0])
 		},
@@ -222,7 +222,7 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 	cmdMount := exec.Command("/bin/mount", "-t", "tmpfs", "-o", "size=8K", "tmpfs", destinationDir)
 	err = cmdMount.Run()
 	if err != nil {
-		os.RemoveAll(newDir)
+		_ = os.RemoveAll(newDir)
 		return err
 	}
 
@@ -468,7 +468,7 @@ func initConfiguration() {
 	}
 
 	// Convert to absolute paths.
-	var prefix string = ""
+	prefix := ""
 	if !strings.HasPrefix(config.NodeAgentWorkloadHomeDir, "/") {
 		prefix = "/"
 	}
@@ -495,7 +495,7 @@ func main() {
 	var err error
 	logWriter, err = syslog.New(syslog.LOG_WARNING|syslog.LOG_DAEMON, SYSLOGTAG)
 	if err == nil {
-		defer logWriter.Close()
+		defer func() { _ = logWriter.Close() }()
 	}
 
 	initConfiguration()

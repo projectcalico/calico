@@ -34,7 +34,7 @@ func (bc *birdConn) Close() {
 	if bc.conn == nil {
 		log.Fatal("Cannot close a nil bird connection")
 	}
-	bc.conn.Close()
+	_ = bc.conn.Close()
 }
 
 // getBirdConn return a connection to bird socket.

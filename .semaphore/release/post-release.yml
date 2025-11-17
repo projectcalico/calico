@@ -1,0 +1,25 @@
+version: v1.0
+name: Post release
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+execution_time_limit:
+  minutes: 15
+blocks:
+  - name: "Release cut validation"
+    task:
+      secrets:
+        - name: marvin-github-token
+        - name: marvin-github-ssh-private-key
+      prologue:
+        commands:
+          - chmod 0600 ~/.keys/*
+          - ssh-add ~/.keys/*
+          - checkout
+          - retry git fetch --quiet --unshallow
+          - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
+      jobs:
+        - name: "Post release checks"
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make postrelease-checks; fi

@@ -292,9 +292,15 @@ ut combined.coverprofile: $(SRC_FILES)  $(LIBBPF_A) build-bpf
 # FV Tests
 ###############################################################################
 fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
-	# We pre-build the FV test binaries so that we can run them
-	# outside a container and allow them to interact with docker.
-	$(DOCKER_GO_BUILD_CGO) go test ./fv -c --tags fvtests -o $@
+	@# We pre-build the FV test binaries so that we can run them
+	@# outside a container and allow them to interact with docker.
+	@# We no longer separate FV tests with a build tag; make sure it's gone
+	@# so that we don't miss any tests.
+	@if grep '//go:build.*fvtests' -r fv; then \
+	  echo "Found fvtests build tag, please remove."; \
+	  exit 1; \
+	fi
+	$(DOCKER_GO_BUILD_CGO) go test ./fv -c -o $@
 
 REMOTE_DEPS=build-typha
 
@@ -308,7 +314,6 @@ build-typha:
 fv-prereqs: $(REMOTE_DEPS) \
             $(FELIX_CONTAINER_CREATED) \
             $(FV_BINARY) \
-            bin/iptables-locker \
             bin/test-workload \
             bin/test-connection \
             bin/calico-bpf \
@@ -371,6 +376,7 @@ fv-no-prereqs:
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
+	  EXTRA_REPORT_SUFFIX=$(FV_EXTRA_REPORT_SUFFIX) \
 	  FELIX_FV_WIREGUARD_AVAILABLE=`./wireguard-available >/dev/null && echo true || echo false` \
 	  ./run-batches
 	@if [ -e fv/latency.log ]; then \
@@ -475,10 +481,6 @@ bin/pktgen: $(SRC_FILES) $(FV_SRC_FILES)
 	@echo Building pktgen...
 	$(call build_binary, "$(PACKAGE_NAME)/fv/pktgen", $@)
 
-bin/iptables-locker: ../go.mod $(shell find iptables -type f -name '*.go' -print)
-	@echo Building iptables-locker...
-	$(call build_binary, "$(PACKAGE_NAME)/fv/iptables-locker", $@)
-
 bin/test-workload: ../go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connectivity/*.go fv/test-workload/*.go
 	@echo Building test-workload...
 	$(call build_binary, "$(PACKAGE_NAME)/fv/test-workload", $@)
@@ -550,24 +552,27 @@ bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 
 .PHONY: ut-bpf
 ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+	mkdir -p report
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
 		-e $(ACK_GINKGO) \
-		$(CALICO_BUILD) sh -c ' \
+		$(CALICO_BUILD) bash -o pipefail -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
-		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v -test.run "$(FOCUS)"'
-	$(DOCKER_RUN) \
+		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v=test2json -test.run "$(FOCUS)" |& \
+		gotestsum --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
+	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
 		-e $(ACK_GINKGO) \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
-		$(CALICO_BUILD) sh -c ' \
+		$(CALICO_BUILD) bash -o pipefail -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
-		../../bin/bpf_ut.test -test.v -test.run "$(FOCUS)"'
+		../../bin/bpf_ut.test -test.v=test2json -test.run "$(FOCUS)" |& \
+		gotestsum --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
 
 .PHONY: bench-bpf
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf

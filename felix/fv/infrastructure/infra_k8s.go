@@ -28,7 +28,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -40,6 +40,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -76,6 +77,9 @@ type K8sDatastoreInfra struct {
 	serviceClusterIPRange string
 	apiServerBindIP       string
 	ipMask                string
+
+	cleanups cleanupStack
+	felixes  []*Felix
 }
 
 var (
@@ -154,7 +158,7 @@ func createK8sDatastoreInfra(opts ...CreateOption) DatastoreInfra {
 
 func createK8sDatastoreInfraWithIndex(index K8sInfraIndex, opts ...CreateOption) DatastoreInfra {
 	infra, err := GetK8sDatastoreInfra(index, opts...)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return infra
 }
 
@@ -195,18 +199,25 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
-		kds.bpfLog = RunBPFLog()
+		kds.bpfLog = RunBPFLog(kds)
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
 
-func RunBPFLog() *containers.Container {
-	return containers.Run("bpf-log",
+type CleanupProvider interface {
+	AddCleanup(func())
+}
+
+func RunBPFLog(cp CleanupProvider) *containers.Container {
+	c := containers.Run("bpf-log",
 		containers.RunOpts{
 			AutoRemove:       true,
 			IgnoreEmptyLines: true,
 		}, "--privileged",
 		utils.Config.FelixImage, "/usr/bin/bpftool", "prog", "tracelog")
+	cp.AddCleanup(c.Stop)
+	cp.AddCleanup(c.StopLogs)
+	return c
 }
 
 func (kds *K8sDatastoreInfra) runK8sApiserver() {
@@ -291,14 +302,20 @@ func (kds *K8sDatastoreInfra) runK8sControllerManager() {
 	kds.k8sControllerManager = c
 }
 
-func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
+func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err error) {
 	log.Info("Starting Kubernetes infrastructure")
 
 	log.Info("Starting etcd")
-	kds := &K8sDatastoreInfra{
+	kds = &K8sDatastoreInfra{
 		serviceClusterIPRange: "10.101.0.0/16",
 		ipMask:                "/32",
 	}
+	defer func() {
+		if err != nil {
+			log.Warn("setupK8sDatastoreInfra about to fail, tearing down the infra.")
+			TearDownK8sInfra(kds)
+		}
+	}()
 
 	for _, o := range opts {
 		o(kds)
@@ -325,7 +342,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 	kds.runK8sApiserver()
 
 	if kds.k8sApiContainer == nil {
-		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s API server container")
 	}
 
@@ -345,7 +361,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 120*time.Second {
 			log.WithError(err).Error("Failed to create k8s client.")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -376,7 +391,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 90*time.Second {
 			log.WithError(err).Error("Failed to install role binding")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -391,7 +405,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 15*time.Second {
 			log.WithError(err).Error("Failed to list namespaces.")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -401,16 +414,14 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 	log.Info("Starting controller manager.")
 	kds.runK8sControllerManager()
 	if kds.k8sControllerManager == nil {
-		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s controller manager container")
 	}
 
 	log.Info("Started controller manager.")
 
 	// Apply CRDs (mounted as docker volume)
-	err := kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
+	err = kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
 	if err != nil {
-		TearDownK8sInfra(kds)
 		return nil, err
 	}
 
@@ -423,7 +434,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		var resp *http.Response
 		resp, err = insecureHTTPClient.Get(kds.Endpoint + "/apis/crd.projectcalico.org/v1/felixconfigurations")
 		if resp.StatusCode != 200 {
-			err = fmt.Errorf("Bad status (%v) for CRD GET request", resp.StatusCode)
+			err = fmt.Errorf("bad status (%v) for CRD GET request", resp.StatusCode)
 		}
 		if err != nil || resp.StatusCode != 200 {
 			log.WithError(err).WithField("status", resp.StatusCode).Warn("Waiting for API server to respond to requests")
@@ -434,7 +445,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 120*time.Second {
 			log.WithError(err).Error("API server is not responding to requests")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -455,7 +465,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 120*time.Second {
 			log.WithError(err).Error("Failed to get API server cert")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -487,7 +496,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 120*time.Second && err != nil {
 			log.WithError(err).Error("Failed to initialise calico client")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -502,7 +510,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 20*time.Second {
 			log.WithError(err).Error("Failed to get default service account.")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -548,7 +555,26 @@ func (kds *K8sDatastoreInfra) Stop() {
 	kds.needsCleanup = true
 	kds.runningTest = ""
 
-	kds.bpfLog.Stop()
+	// We do run the per-test cleanup stack, this tears down the resources that
+	// the test created.
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		// Queue up the diags dump so that the cleanupStack will handle any
+		// panic from it.
+		kds.AddCleanup(kds.DumpErrorData)
+	}
+	// Run registered teardowns (reverse order). Do not suppress panics.
+	defer kds.cleanups.Run()
+}
+
+func (kds *K8sDatastoreInfra) AddCleanup(f func()) {
+	kds.cleanups.Add(f)
+}
+
+func (kds *K8sDatastoreInfra) RegisterFelix(f *Felix) {
+	if f == nil {
+		return
+	}
+	kds.felixes = append(kds.felixes, f)
 }
 
 type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Interface)
@@ -570,6 +596,7 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllTiers,
 		cleanupAllHostEndpoints,
 		cleanupAllNetworkSets,
+		cleanupAllGlobalNetworkSets,
 		cleanupAllFelixConfigurations,
 		cleanupAllServices,
 	}
@@ -636,7 +663,7 @@ func (kds *K8sDatastoreInfra) GetClusterGUID() string {
 		"default",
 		options.GetOptions{},
 	)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return ci.Spec.ClusterGUID
 }
 
@@ -707,8 +734,11 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 		},
 	}
 	if len(felix.IPv6) > 0 && v6CIDR != nil {
-		nodeIn.ObjectMeta.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
-		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx))
+		nodeIn.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
+		v6CIDR := fmt.Sprintf("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%04x::/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], idx)
+		// Put the CIDR into canonical format, as required by k8s validation.
+		v6CIDR = ip.MustParseCIDROrIP(v6CIDR).String()
+		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, v6CIDR)
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
 			Address: felix.IPv6,
 			Type:    v1.NodeInternalIP,
@@ -883,6 +913,13 @@ func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (kds *K8sDatastoreInfra) DumpErrorData() {
+	// Per-Felix diagnostics first for context.
+	for _, f := range kds.felixes {
+		if f != nil {
+			dumpFelixDiags(f)
+		}
+	}
+
 	nsList, err := kds.K8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err == nil {
 		log.Info("DIAGS: Kubernetes Namespaces:")
@@ -981,8 +1018,8 @@ func cleanupAllNamespaces(clientset *kubernetes.Clientset, calicoClient client.I
 	}
 	log.WithField("count", len(nsList.Items)).Info("Namespaces present")
 	for _, ns := range nsList.Items {
-		if ns.Status.Phase != v1.NamespaceTerminating && !isSystemNamespace(ns.ObjectMeta.Name) {
-			err = clientset.CoreV1().Namespaces().Delete(context.Background(), ns.ObjectMeta.Name, DeleteImmediately)
+		if ns.Status.Phase != v1.NamespaceTerminating && !isSystemNamespace(ns.Name) {
+			err = clientset.CoreV1().Namespaces().Delete(context.Background(), ns.Name, DeleteImmediately)
 			if err != nil {
 				panic(err)
 			}
@@ -999,7 +1036,7 @@ func cleanupAllNodes(clientset *kubernetes.Clientset, calicoClient client.Interf
 	}
 	log.WithField("count", len(nodeList.Items)).Info("Nodes present")
 	for _, node := range nodeList.Items {
-		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.ObjectMeta.Name, DeleteImmediately)
+		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.Name, DeleteImmediately)
 		if err != nil {
 			panic(err)
 		}
@@ -1019,7 +1056,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, calicoClient client.Interfa
 	waiter := sync.WaitGroup{}
 	waiter.Add(len(nsList.Items))
 	for _, ns := range nsList.Items {
-		nsName := ns.ObjectMeta.Name
+		nsName := ns.Name
 		go func() {
 			admission <- 1
 			podList, err := clientset.CoreV1().Pods(nsName).List(context.Background(), metav1.ListOptions{})
@@ -1029,7 +1066,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, calicoClient client.Interfa
 			log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug(
 				"Pods present")
 			for _, pod := range podList.Items {
-				err = clientset.CoreV1().Pods(nsName).Delete(context.Background(), pod.ObjectMeta.Name, DeleteImmediately)
+				err = clientset.CoreV1().Pods(nsName).Delete(context.Background(), pod.Name, DeleteImmediately)
 				if err != nil {
 					panic(err)
 				}
@@ -1155,7 +1192,7 @@ func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {
 	}
 	log.WithField("count", len(tiers.Items)).Info("Tiers present")
 	for _, tier := range tiers.Items {
-		if tier.Name == names.DefaultTierName || tier.Name == names.AdminNetworkPolicyTierName {
+		if names.TierIsStatic(tier.Name) {
 			continue
 		}
 
@@ -1176,12 +1213,29 @@ func cleanupAllNetworkSets(clientset *kubernetes.Clientset, client client.Interf
 	}
 	log.WithField("count", len(ns.Items)).Info("networksets present")
 	for _, n := range ns.Items {
-		_, err = client.HostEndpoints().Delete(ctx, n.Name, options.DeleteOptions{})
+		_, err = client.NetworkSets().Delete(ctx, n.Name, n.Namespace, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
 		}
 	}
-	log.Info("Cleaned up host networksets")
+	log.Info("Cleaned up networksets")
+}
+
+func cleanupAllGlobalNetworkSets(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up global network sets")
+	ctx := context.Background()
+	gns, err := client.GlobalNetworkSets().List(ctx, options.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("count", len(gns.Items)).Info("global networksets present")
+	for _, gn := range gns.Items {
+		_, err = client.GlobalNetworkSets().Delete(ctx, gn.Name, options.DeleteOptions{})
+		if err != nil {
+			panic(err)
+		}
+	}
+	log.Info("Cleaned up global network sets")
 }
 
 func cleanupAllHostEndpoints(clientset *kubernetes.Clientset, client client.Interface) {
@@ -1241,17 +1295,17 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 				panic(err)
 			}
 		}
-		endpointsInterface := coreV1.Endpoints(ns.Name)
-		endpoints, err := endpointsInterface.List(context.Background(), metav1.ListOptions{})
+		endpointSliceInterface := clientset.DiscoveryV1().EndpointSlices(ns.Name)
+		endpointSlices, err := endpointSliceInterface.List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			panic(err)
 		}
-		for _, ep := range endpoints.Items {
-			if ep.Name == "kubernetes" {
+		for _, ep := range endpointSlices.Items {
+			if ep.Labels["kubernetes.io/service-name"] == "kubernetes" {
 				// Skip cleaning up the Kubernetes API service.
 				continue
 			}
-			err := endpointsInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
+			err := endpointSliceInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
 			if err != nil && !strings.Contains(err.Error(), "not found") {
 				panic(err)
 			}
@@ -1299,6 +1353,7 @@ func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
 	podIPs := []v1.PodIP{}
 	for _, ipnet := range wep.Spec.IPNetworks {
 		podIP := strings.Split(ipnet, "/")[0]
+		podIP = net.ParseIP(podIP).String() // Normalise the IP.
 		podIPs = append(podIPs, v1.PodIP{IP: podIP})
 	}
 	podStatus := v1.PodStatus{
@@ -1321,7 +1376,7 @@ func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
 
 func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v1.Pod {
 	if wep.Labels != nil {
-		pod.ObjectMeta.Labels = wep.Labels
+		pod.Labels = wep.Labels
 	}
 	if wep.Spec.QoSControls != nil {
 		if pod.Annotations == nil {

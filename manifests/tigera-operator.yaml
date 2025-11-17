@@ -44,8 +44,10 @@ metadata:
   labels:
     k8s-app: tigera-operator
 rules:
-  # The tigera/operator installs CustomResourceDefinitions necessary for itself
+  # The tigera/operator needs the following permissions when configured with the --bootstrapCRDs=true
+  # argument. When specified, the tigera/operator installs CustomResourceDefinitions necessary for itself
   # and Calico more broadly to function.
+  # You can remove this permission block if your operator deployment does not use this option.
   - apiGroups:
       - apiextensions.k8s.io
     resources:
@@ -102,6 +104,7 @@ rules:
       - update
       - delete
     resourceNames:
+      - clusternetworkpolicies.policy.networking.k8s.io
       - adminnetworkpolicies.policy.networking.k8s.io
       - baselineadminnetworkpolicies.policy.networking.k8s.io
   - apiGroups:
@@ -349,10 +352,19 @@ rules:
     resources:
       - mutatingwebhookconfigurations
     verbs:
+      - create
       - delete
       - get
       - list
       - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+    resourceNames:
+      - envoy-gateway-topology-injector.tigera-gateway
+    verbs:
+      - update
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
@@ -458,6 +470,8 @@ rules:
       - tcproutes.gateway.networking.k8s.io
       - tlsroutes.gateway.networking.k8s.io
       - udproutes.gateway.networking.k8s.io
+      - xbackendtrafficpolicies.gateway.networking.x-k8s.io
+      - xlistenersets.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
       - clienttrafficpolicies.gateway.envoyproxy.io

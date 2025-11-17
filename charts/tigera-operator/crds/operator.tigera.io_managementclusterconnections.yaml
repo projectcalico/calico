@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.17.3
+    controller-gen.kubebuilder.io/version: v0.18.0
   name: managementclusterconnections.operator.tigera.io
 spec:
   group: operator.tigera.io
@@ -224,6 +224,38 @@ spec:
                               type: object
                           type: object
                       type: object
+                  type: object
+                impersonation:
+                  description: |-
+                    Impersonation configures the RBAC impersonation permissions for the guardian deployment. This field is not
+                    applicable to installation variant Calico as no impersonation is ever used. Otherwise, if this field is left nil,
+                    a default set of permissions will be applied.
+                    WARNING: If this field is specified, it completely replaces the default permissions.
+                    For example, providing an empty `impersonation: {}` block will result in guardian
+                    having NO impersonation permissions. Similarly, if you specify `users` but omit `groups`,
+                    guardian will lose its default permissions to impersonate groups.
+                  properties:
+                    groups:
+                      description: |-
+                        Groups is a list of group names that can be impersonated. An empty list infers all groups can be impersonated,
+                        a null values means none.
+                      items:
+                        type: string
+                      type: array
+                    serviceAccounts:
+                      description: |-
+                        ServiceAccounts is a list of service account names that can be impersonated. An empty list infers all service accounts can
+                        be impersonated, a null values means none.
+                      items:
+                        type: string
+                      type: array
+                    users:
+                      description: |-
+                        Users is a list of users that can be impersonated. An empty list infers all users can be impersonated, a null
+                        value means none.
+                      items:
+                        type: string
+                      type: array
                   type: object
                 managementClusterAddr:
                   description: |-

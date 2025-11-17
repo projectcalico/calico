@@ -140,8 +140,13 @@ func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf
 		if flags != "" {
 			flags = " flags " + flags
 		}
-		printf("%s port %d proto %d id %d count %d local %d%s\n",
+		printf("%s port %d proto %d id %d count %d local %d%s",
 			nk.Addr(), nk.Port(), nk.Proto(), id, count, local, flags)
+		srcCIDR := nk.SrcCIDR()
+		if srcCIDR.Prefix() != 0 {
+			printf(" src %s", srcCIDR)
+		}
+		printf("\n")
 		for i := 0; i < count; i++ {
 			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv, ok := back[bk]
@@ -184,8 +189,8 @@ func newNatSetFrontend() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Args = cmd.ArgsSet
-	cmd.Command.Run = cmd.RunSet
+	cmd.Args = cmd.ArgsSet
+	cmd.Run = cmd.RunSet
 
 	return cmd.Command
 }
@@ -270,8 +275,8 @@ func newNatDelFrontend() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Args = cmd.ArgsDel
-	cmd.Command.Run = cmd.RunDel
+	cmd.Args = cmd.ArgsDel
+	cmd.Run = cmd.RunDel
 
 	return cmd.Command
 }
@@ -328,8 +333,8 @@ func newNatSetBackend() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Args = cmd.ArgsSet
-	cmd.Command.Run = cmd.RunSet
+	cmd.Args = cmd.ArgsSet
+	cmd.Run = cmd.RunSet
 
 	return cmd.Command
 }
@@ -401,8 +406,8 @@ func newNatDelBackend() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Args = cmd.ArgsDel
-	cmd.Command.Run = cmd.RunDel
+	cmd.Args = cmd.ArgsDel
+	cmd.Run = cmd.RunDel
 
 	return cmd.Command
 }

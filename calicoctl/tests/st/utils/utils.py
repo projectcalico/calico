@@ -48,12 +48,12 @@ NOT_NAMESPACED = "is not namespaced"
 SET_DEFAULT = "Cannot set"
 NOT_SUPPORTED = "is not supported on"
 KUBERNETES_NP = "kubernetes network policies must be managed through the kubernetes API"
-NOT_LOCKED = "Datastore is not locked. Run the `calicoctl datastore migrate lock` command in order to begin migration."
-NOT_KUBERNETES = "Invalid datastore type: etcdv3 to import to for datastore migration. Datastore type must be kubernetes"
-NO_IPAM = "No IPAM resources specified in file"
-NOT_LOCKED_SPLIT = "Datastore is not locked. Run the `calicoctl datastore migrate lock` command in order split the IP pools."
-POOL_NOT_EXIST_CIDR = "Unable to find IP pool"
-INVALID_SPLIT_NUM = "Number to split CIDR into is not a valid power of 2"
+NOT_LOCKED = "datastore is not locked. Run the `calicoctl datastore migrate lock` command in order to begin migration"
+NOT_KUBERNETES = "invalid datastore type: etcdv3 to import to for datastore migration. Datastore type must be kubernetes"
+NO_IPAM = "no IPAM resources specified in file"
+NOT_LOCKED_SPLIT = "datastore is not locked. Run the `calicoctl datastore migrate lock` command in order split the IP pools"
+POOL_NOT_EXIST_CIDR = "unable to find IP pool"
+INVALID_SPLIT_NUM = "number to split CIDR into is not a valid power of 2"
 POOL_TOO_SMALL = "is not large enough to be split into"
 
 
@@ -522,13 +522,11 @@ def wipe_etcd(ip):
     if ETCD_SCHEME == "https":
         # Etcd is running with SSL/TLS, require key/certificates
         etcd_container_name = "calico-etcd-ssl"
-        tls_vars = ("ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
-                    "ETCDCTL_CERT=/etc/calico/certs/client.pem " +
-                    "ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
+        tls_vars = ("-e ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
+                    "-e ETCDCTL_CERT=/etc/calico/certs/client.pem " +
+                    "-e ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
 
-    check_output("docker exec " + etcd_container_name + " sh -c '" + tls_vars +
-                 "ETCDCTL_API=3 etcdctl del --prefix /calico" +
-                 "'", shell=True)
+    check_output("docker exec " + tls_vars + etcd_container_name + " etcdctl del --prefix /calico", shell=True)
 
 
 def make_list(kind, items):

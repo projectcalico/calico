@@ -31,9 +31,9 @@ var _ = Describe("Windows CNI config template tests", func() {
 		// Swap out placeholders in the CNI config template for a valid JSON
 		// value. These placeholders are replaced when the CNI config is copied
 		// from the template.
-		f = bytes.Replace(f, []byte("__VNI__"), []byte("0"), -1)
-		f = bytes.Replace(f, []byte("__DNS_NAME_SERVERS__"), []byte("0"), -1)
-		f = bytes.Replace(f, []byte("__DSR_SUPPORT__"), []byte("0"), -1)
+		f = bytes.ReplaceAll(f, []byte("__VNI__"), []byte("0"))
+		f = bytes.ReplaceAll(f, []byte("__DNS_NAME_SERVERS__"), []byte("0"))
+		f = bytes.ReplaceAll(f, []byte("__DSR_SUPPORT__"), []byte("0"))
 
 		var data map[string]interface{}
 		err = json.Unmarshal(f, &data)

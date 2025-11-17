@@ -94,7 +94,7 @@ func runServer(arguments map[string]interface{}) {
 			"err":    err,
 		}).Fatal("Unable to listen.")
 	}
-	defer lis.Close()
+	defer func() { _ = lis.Close() }()
 	err = os.Chmod(filePath, 0o777) // Anyone on system can connect.
 	if err != nil {
 		log.Fatal("Unable to set write permission on socket.")
@@ -172,7 +172,7 @@ func runClient(arguments map[string]interface{}) {
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	client := authz.NewAuthorizationClient(conn)
 	req := authz.CheckRequest{
 		Attributes: &authz.AttributeContext{

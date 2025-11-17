@@ -177,8 +177,8 @@ func extractPodInfo(req *csi.NodePublishVolumeRequest) (*creds.Credentials, erro
 	podUID, podUIDExists := req.VolumeContext["csi.storage.k8s.io/pod.uid"]
 	svcAcct, svcAcctExists := req.VolumeContext["csi.storage.k8s.io/serviceAccount.name"]
 
-	if !(podNameExists && podNamespaceExists && podUIDExists && svcAcctExists) {
-		return nil, fmt.Errorf("Missing the required pod info: pod.name: %s, pod.namespace: %s, pod.uid: %s, serviceAccount.name: %s", podName, podNamespace, podUID, svcAcct)
+	if !podNameExists || !podNamespaceExists || !podUIDExists || !svcAcctExists {
+		return nil, fmt.Errorf("missing the required pod info: pod.name: %s, pod.namespace: %s, pod.uid: %s, serviceAccount.name: %s", podName, podNamespace, podUID, svcAcct)
 	}
 
 	return &creds.Credentials{
@@ -210,7 +210,7 @@ func (ns *nodeService) mount(destinationDir, volumeID string) error {
 	// TODO: Test if this is really needed now with CSI as opposed to flexvolume which was run on the host.
 	// Run "mount -t tmpfs -o size=8K tmpfs destinationDir"
 	if err := syscall.Mount("tmpfs", destinationDir, "tmpfs", syscall.O_RDWR|syscall.MS_RELATIME, "size=8K"); err != nil {
-		os.RemoveAll(newDir)
+		_ = os.RemoveAll(newDir)
 		log.Errorf("Could not mount tmpfs to %s: %v", destinationDir, err)
 		return err
 	}
@@ -286,7 +286,7 @@ func (ns *nodeService) retrievePodInfoFromFile(volumeID string) (*creds.Credenti
 		return nil, err
 	}
 
-	defer credsFile.Close()
+	defer func() { _ = credsFile.Close() }()
 
 	credsFileBytes, err := io.ReadAll(credsFile)
 	if err != nil {

@@ -81,15 +81,15 @@ func TestProxy(t *testing.T) {
 
 		mockServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			_, err := w.Write([]byte(fmt.Sprintf("Hello from HTTPS, with expected URL %s", r.URL.Path)))
+			_, err := fmt.Fprintf(w, "Hello from HTTPS, with expected URL %s", r.URL.Path)
 			Expect(err).NotTo(HaveOccurred())
 		}))
 
 		tmpDir := os.TempDir()
 
 		serverCrt, serverKey := utils.CreateKeyCertPair(tmpDir)
-		defer serverCrt.Close()
-		defer serverKey.Close()
+		defer func() { _ = serverCrt.Close() }()
+		defer func() { _ = serverKey.Close() }()
 
 		cert, err := tls.LoadX509KeyPair(serverCrt.Name(), serverKey.Name())
 		if err != nil {

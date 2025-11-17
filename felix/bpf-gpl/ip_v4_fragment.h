@@ -51,6 +51,54 @@ static CALI_BPF_INLINE struct frags4_value *frags4_get_scratch()
 	return cali_v4_frgtmp_lookup_elem(&key);
 }
 
+struct f2skb_ctx {
+	struct cali_tc_ctx *ctx;
+	struct frags4_key *k;
+	int iphdr_off;
+};
+
+static long frag_to_skb(__u64 i, void *_ctx)
+{
+	struct f2skb_ctx *ictx = (struct f2skb_ctx *)_ctx;
+	struct cali_tc_ctx *ctx = ictx->ctx;
+
+	struct frags4_value *v = cali_v4_frags_lookup_elem(ictx->k);
+
+	if (!v) {
+		CALI_DEBUG("IP FRAG: Missing IP fragment at offset %d", ictx->k->offset);
+		return 1;
+	}
+
+	__u16 len = v->len;
+
+	if (len == 0) {
+		len = 1; /* prevent verifier from complaining about zero-length copy */
+	}
+
+	barrier(); /* verifier needs some help with recognizing that len is non-zero */
+
+	if (len > MAX_FRAG) {
+		return 1;
+	}
+
+	CALI_DEBUG("IP FRAG: copy %d bytes to %d", len, ictx->iphdr_off + ictx->k->offset);
+	if (bpf_skb_store_bytes(ctx->skb, ictx->iphdr_off + ictx->k->offset, v->data, len, 0)) {
+		CALI_DEBUG("IP FRAG: Failed to copy bytes");
+		return 1;
+	}
+
+	bool last = !v->more_frags;
+	cali_v4_frags_delete_elem(ictx->k);
+
+	if(last) {
+		return 1;
+	}
+
+	ictx->k->offset += v->len;
+
+	return 0;
+}
+
 static CALI_BPF_INLINE bool frags4_try_assemble(struct cali_tc_ctx *ctx)
 {
 	struct frags4_key k = {
@@ -92,34 +140,13 @@ assemble:
 
 	k.offset = 0;
 
-	for (i = 0; i < 10; i++) {
-		struct frags4_value *v = cali_v4_frags_lookup_elem(&k);
+	struct f2skb_ctx f2sctx = {
+		.ctx = ctx,
+		.k = &k,
+		.iphdr_off = off,
+	};
 
-		if (!v) {
-			CALI_DEBUG("IP FRAG: Missing IP fragment at offset %d", k.offset);
-			goto out;
-		}
-
-		__u16 len = v->len;
-		if (len == 0 || len > MAX_FRAG) {
-			goto out;
-		}
-		CALI_DEBUG("IP FRAG: copy %d bytes to %d", len, off);
-		if (bpf_skb_store_bytes(ctx->skb, off, v->data, len, 0)) {
-			CALI_DEBUG("IP FRAG: Failed to copy bytes");
-			goto out;
-		}
-
-		bool last = !v->more_frags;
-		cali_v4_frags_delete_elem(&k);
-
-		if(last) {
-			break;
-		}
-
-		k.offset += v->len;
-		off += v->len;
-	}
+	bpf_loop(10, frag_to_skb, &f2sctx, 0);
 
 	if (parse_packet_ip(ctx) != PARSING_OK) {
 		goto out;

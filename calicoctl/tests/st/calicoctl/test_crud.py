@@ -190,7 +190,7 @@ class TestCalicoctlCommands(TestBase):
 
         rc = calicoctl("get somekind somename")
         rc.assert_error()
-        rc.assert_output_contains("Failed to get resources: resource type 'somekind' is not supported")
+        rc.assert_output_contains("failed to get resources: resource type 'somekind' is not supported")
 
     def test_empty_name_is_illegal(self):
         """
@@ -365,7 +365,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=bgppeer_invalid, format="json")
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to create 'BGPPeer' resource")
+        rc.assert_output_contains("failed to create 'BGPPeer' resource")
 
     def test_create_all_invalid_resources(self):
         """
@@ -374,7 +374,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=bgppeer_multiple_invalid, format="json")
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to create any 'BGPPeer' resources")
+        rc.assert_output_contains("failed to create any 'BGPPeer' resources")
 
     def test_apply_single_invalid_resource(self):
         """
@@ -383,7 +383,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply", data=bgppeer_invalid)
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to apply 'BGPPeer' resource")
+        rc.assert_output_contains("failed to apply 'BGPPeer' resource")
 
     def test_apply_all_invalid_resources(self):
         """
@@ -392,7 +392,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply", data=bgppeer_multiple_invalid)
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to apply any 'BGPPeer' resources")
+        rc.assert_output_contains("failed to apply any 'BGPPeer' resources")
 
     def test_apply_with_resource_version(self):
         """
@@ -1164,7 +1164,6 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rev1 = rc.decoded
         self.assertNotIn('uid', rev1['metadata'])
-        self.assertIsNone(rev1['metadata']['creationTimestamp'])
         self.assertNotIn('namespace', rev1['metadata'])
         self.assertNotIn('resourceVersion', rev1['metadata'])
         self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
@@ -1221,7 +1220,6 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rev1 = rc.decoded
         self.assertNotIn('uid', rev1['metadata'])
-        self.assertIsNone(rev1['metadata']['creationTimestamp'])
         self.assertNotIn('namespace', rev1['metadata'])
         self.assertNotIn('resourceVersion', rev1['metadata'])
         self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
@@ -1294,12 +1292,14 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         tierList = rc.decoded
 
-        # Validate the tiers are ordered correctly. Default should have a value of 1M and should be placed last.
-        # adminnetworkpolicy has a value of 1K, and should be second one.
+        # Validate the tiers are ordered correctly.
         self.assertEqual(tierList['items'][0]['metadata']['name'], name(tier_name2_rev1))
         self.assertEqual(tierList['items'][1]['metadata']['name'], 'adminnetworkpolicy')
-        self.assertEqual(tierList['items'][2]['metadata']['name'], name(tier_name1_rev1))
-        self.assertEqual(tierList['items'][3]['metadata']['name'], 'default')
+        self.assertEqual(tierList['items'][2]['metadata']['name'], 'kube-admin')
+        self.assertEqual(tierList['items'][3]['metadata']['name'], name(tier_name1_rev1))
+        self.assertEqual(tierList['items'][4]['metadata']['name'], 'default')
+        self.assertEqual(tierList['items'][5]['metadata']['name'], 'baselineadminnetworkpolicy')
+        self.assertEqual(tierList['items'][6]['metadata']['name'], 'kube-baseline')
 
         # Delete the resources
         rc = calicoctl("delete", data=resources)
@@ -1538,7 +1538,7 @@ class TestCalicoctlCommands(TestBase):
         }
         rc = calicoctl("validate", data=invalid_bgp, no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Failed to execute command")
+        rc.assert_output_contains("failed to execute command")
 
     def test_validate_malformed_yaml(self):
         """
@@ -1548,7 +1548,7 @@ class TestCalicoctlCommands(TestBase):
         writeyaml('/tmp/malformed.yaml', "invalid yaml content\n  this: is [broken")
         rc = calicoctl("validate -f /tmp/malformed.yaml", no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Failed to execute command")
+        rc.assert_output_contains("failed to execute command")
 
     def test_validate_multiple_valid_resources(self):
         """
@@ -1585,7 +1585,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("validate -f /tmp/empty.yaml", no_config=True)
         # Empty files should result in error with specific message
         rc.assert_error()
-        rc.assert_output_contains("No resources specified in file")
+        rc.assert_output_contains("no resources specified in file")
 
     def test_validate_skip_empty_flag(self):
         """
@@ -1649,7 +1649,7 @@ class TestCalicoctlCommands(TestBase):
         }
         rc = calicoctl("validate", data=invalid_networkpolicy, no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Failed to validate")
+        rc.assert_output_contains("failed to validate")
 
     def test_validate_multiple_resources_with_calico_validation_failure(self):
         """
@@ -1671,7 +1671,7 @@ class TestCalicoctlCommands(TestBase):
         resources = [valid_ippool, invalid_networkpolicy]
         rc = calicoctl("validate", data=resources, no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Hit error(s):")
+        rc.assert_output_contains("hit error(s):")
 
 #
 # class TestCreateFromFile(TestBase):
@@ -2433,7 +2433,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.250',
                                 'scope': 'node'}
-                   }, 'cannot unmarshal number into Go value of type string'),
+                   }, 'cannot unmarshal number into Go struct field BGPPeerSpec.spec.asNumber of type string'),
                    ("bgpPeer-invalidIP", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',
@@ -2451,7 +2451,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.250',
                                 }
-                   }, 'Unknown resource type (BGPPeer) and/or version (v7)'),
+                   }, 'unknown resource type (BGPPeer) and/or version (v7)'),
                    ("bgpPeer-invalidIpv6", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',
@@ -2531,7 +2531,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}
-                   }, 'cannot unmarshal number 65536 into Go value of type uint16'),
+                   }, 'cannot unmarshal number 65536'),
                    # https://github.com/projectcalico/libcalico-go/issues/248
                    ("policy-invalidHighPortinRange", {
                        'apiVersion': API_VERSION,
@@ -2715,7 +2715,7 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'invalid-ipip-1'},
                        'spec': {'disabled': 'True',  # disabled value must be a bool
                                 'cidr': "10.0.1.0/24"}
-                   }, "cannot parse string 'True' into field IPPoolSpec.disabled of type bool"),
+                   }, "cannot unmarshal string into Go struct field IPPoolSpec.spec.disabled of type bool"),
                    ("pool-invalidIpIp2", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -2723,7 +2723,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'disabled': 'Maybe',
                            'cidr': "10.0.1.0/24"}
-                   }, "cannot parse string 'Maybe' into field IPPoolSpec.disabled of type bool"),
+                   }, "cannot unmarshal string into Go struct field IPPoolSpec.spec.disabled of type bool"),
                    ("profile-ICMPtype", {
                        'apiVersion': API_VERSION,
                        'kind': 'Profile',
@@ -2814,18 +2814,13 @@ class InvalidData(TestBase):
         '- apiVersion: %s\n'
         '  kind: %s\n'
         '  metadata:\n'
-        '    creationTimestamp: null\n'
         '    name: projectcalico-default-allow\n'
         '    resourceVersion: "1"\n'
         '  spec:\n'
         '    egress:\n'
         '    - action: Allow\n'
-        '      destination: {}\n'
-        '      source: {}\n'
         '    ingress:\n'
         '    - action: Allow\n'
-        '      destination: {}\n'
-        '      source: {}\n'
         'kind: %sList\n'
         'metadata:\n'
         '  resourceVersion: ' % (API_VERSION, API_VERSION, testdata['kind'], testdata['kind'])

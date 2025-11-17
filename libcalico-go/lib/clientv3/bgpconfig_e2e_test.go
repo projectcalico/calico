@@ -161,7 +161,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				Spec:       specDebug,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: BGPConfiguration(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: BGPConfiguration(" + name1 + ") with error:"))
 
 			By("Getting BGPConfiguration (name1) and comparing the output against specInfo")
 			res, outError := c.BGPConfigurations().Get(ctx, name1, options.GetOptions{})

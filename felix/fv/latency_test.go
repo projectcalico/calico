@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -29,10 +27,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -50,9 +48,8 @@ func (c latencyConfig) workloadIP(workloadIdx int) string {
 	return fmt.Sprintf("fdc6:3dbc:e983:cbc%x::1", workloadIdx)
 }
 
-var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", func() {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
@@ -64,8 +61,8 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.ExtraEnvVars["FELIX_BPFLOGLEVEL"] = "off" // For best perf.
-
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		_ = tc.Felixes[0].GetFelixPID()
 
 		var err error
@@ -78,21 +75,6 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		if err != nil {
 			log.WithError(err).Error("Close returned error")
 		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	describeLatencyTests := func(c latencyConfig) {
@@ -119,9 +101,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		BeforeEach(func() {
 			for ii := range w {
 				iiStr := strconv.Itoa(ii)
-				var ports string
-
-				ports = "3000"
+				ports := "3000"
 				w[ii] = workload.Run(
 					tc.Felixes[0],
 					"w"+iiStr,
@@ -217,12 +197,6 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 				})
 			})
 		})
-
-		AfterEach(func() {
-			for ii := range w {
-				w[ii].Stop()
-			}
-		})
 	}
 
 	Context("IPv4: Network sets tests with initialized Felix and etcd datastore", func() {
@@ -271,15 +245,13 @@ func getTotalBPFIPSetMembers(felix *infrastructure.Felix) int {
 		log.WithError(err).WithField("output", out).Warn("Failed to run bpftool")
 		return -1
 	}
-	r := regexp.MustCompile(`Found (\d+) elements`)
-	m := r.FindStringSubmatch(out)
-	if m != nil {
-		count, err := strconv.ParseInt(m[1], 10, 64)
-		if err != nil {
-			log.WithError(err).Panic("Failed to parse bpftool output")
-		}
-		return int(count)
+
+	// Count occurrences of "key:" at the start of lines in bpftool output.
+	re := regexp.MustCompile(`(?m)^\s*"key":`)
+	matches := re.FindAllStringIndex(out, -1)
+	if matches == nil {
+		log.WithField("out", out).Warn("bpftool didn't return any 'key:' lines")
+		return 0
 	}
-	log.WithField("out", out).Warn("bpftool didn't return a Found n elements line")
-	return -1
+	return len(matches)
 }

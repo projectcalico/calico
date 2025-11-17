@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 24
+	MaxCounterNumber    int = 26
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -83,6 +83,8 @@ const (
 	DroppedFragReorder
 	DroppedFragUnsupported
 	DroppedQoS
+	Reserved1
+	DroppedMaglevNoBackend
 )
 
 type Description struct {
@@ -204,6 +206,10 @@ var descriptions DescList = DescList{
 	{
 		Counter:  DroppedQoS,
 		Category: "Dropped", Caption: "QoS control limit",
+	},
+	{
+		Counter:  DroppedMaglevNoBackend,
+		Category: "Dropped", Caption: "Maglev lookup found no backends for service IP",
 	},
 }
 

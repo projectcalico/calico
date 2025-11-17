@@ -43,6 +43,7 @@ const (
 	SubProgIcmpInnerNat
 	SubProgNewFlow
 	SubProgIPFrag
+	SubProgMaglev
 	SubProgTCMainDebug
 
 	SubProgXDPMain    = SubProgTCMain
@@ -61,6 +62,7 @@ var tcSubProgNames = []string{
 	"calico_tc_skb_icmp_inner_nat",
 	"calico_tc_skb_new_flow_entrypoint",
 	"calico_tc_skb_ipv4_frag",
+	"calico_tc_maglev",
 }
 
 var xdpSubProgNames = []string{
@@ -187,7 +189,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		mapName := m.Name()
-		if strings.HasPrefix(mapName, ".rodata") {
+		if strings.Contains(mapName, ".rodata") {
 			continue
 		}
 
@@ -241,6 +243,10 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, e
 		}
 
 		if SubProg(idx) == SubProgIPFrag && !at.hasIPDefrag() {
+			continue
+		}
+
+		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
 			continue
 		}
 

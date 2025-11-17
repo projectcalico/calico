@@ -180,7 +180,7 @@ func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath st
 		logrus.WithError(err).Error("Failed to create release notes file")
 		return err
 	}
-	defer releaseNotedFile.Close()
+	defer func() { _ = releaseNotedFile.Close() }()
 	if err := tmpl.Execute(releaseNotedFile, data); err != nil {
 		logrus.WithError(err).Error("Failed to execute release note template")
 		return err

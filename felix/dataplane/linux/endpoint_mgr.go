@@ -993,6 +993,14 @@ func (m *endpointManager) hasSourceSpoofingConfiguration(interfaceName string) b
 	return ok
 }
 
+func getAddrIpVersion(addr string) uint8 {
+	ip, _, _ := net.ParseCIDR(addr)
+	if ip.To4() == nil {
+		return 6
+	}
+	return 4
+}
+
 func (m *endpointManager) updateRPFSkipChain() {
 	log.Debug("Updating RPF skip chain")
 	chain := &generictables.Chain{
@@ -1001,10 +1009,12 @@ func (m *endpointManager) updateRPFSkipChain() {
 	}
 	for interfaceName, addresses := range m.sourceSpoofingConfig {
 		for _, addr := range addresses {
-			chain.Rules = append(chain.Rules, generictables.Rule{
-				Match:  m.newMatch().InInterface(interfaceName).SourceNet(addr),
-				Action: m.actions.Allow(),
-			})
+			if m.ipVersion == getAddrIpVersion(addr) {
+				chain.Rules = append(chain.Rules, generictables.Rule{
+					Match:  m.newMatch().InInterface(interfaceName).SourceNet(addr),
+					Action: m.actions.Allow(),
+				})
+			}
 		}
 	}
 	m.rawTable.UpdateChain(chain)
@@ -1706,13 +1716,13 @@ func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
 	if m.ifaceIsForLocalBGPPeer(name) {
 		if len(m.localBGPPeerIP) == 0 {
 			logCtx.Warning("no peer ip is defined trying to configure local BGP peer ip on interface")
-			return fmt.Errorf("interface belongs to a local BGP peer but peer IP is not defined yet.")
+			return fmt.Errorf("interface belongs to a local BGP peer but peer IP is not defined yet")
 		}
 
 		ipAddr := ip.FromString(m.localBGPPeerIP)
 		if ipAddr == nil {
 			logCtx.WithField("localBGPPeerIP", m.localBGPPeerIP).Error("Failed to parse peer ip")
-			return fmt.Errorf("Failed to parse peer ip")
+			return fmt.Errorf("failed to parse peer ip")
 		}
 
 		var ipCIDR ip.CIDR

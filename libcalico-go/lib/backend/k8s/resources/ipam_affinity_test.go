@@ -16,17 +16,21 @@ package resources_test
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest/fake"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -156,5 +160,74 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 		//      filter on just the host.  Possible fix: put the host in a label
 		//      so we can filter on that.
 		Expect(url.Query()).NotTo(HaveKey("metadata.name"))
+	})
+
+	It("should auto-label v1 BlockAffinity on create", func() {
+		kvp := &model.KVPair{
+			Key: model.BlockAffinityKey{
+				Host:         "my-host",
+				CIDR:         net.MustParseCIDR("192.168.1.0/24"),
+				AffinityType: string(ipam.AffinityTypeHost),
+			},
+			Value: &model.BlockAffinity{State: model.StateConfirmed},
+		}
+
+		// We expect an error since fake REST doesn't return a response, but the request will be captured.
+		_, _ = client.Create(context.TODO(), kvp)
+
+		// Inspect the request body for labels.
+		req := fakeREST.Req
+		Expect(req).ToNot(BeNil())
+		Expect(req.URL.Path).To(Equal("/apis/blockaffinities"))
+		bodyBytes, err := io.ReadAll(req.Body)
+		Expect(err).NotTo(HaveOccurred())
+
+		var posted libapiv3.BlockAffinity
+		Expect(json.Unmarshal(bodyBytes, &posted)).To(Succeed())
+		Expect(posted.Labels).To(HaveKey(apiv3.LabelHostnameHash))
+		Expect(posted.Labels[apiv3.LabelHostnameHash]).NotTo(BeEmpty())
+		Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelAffinityType, string(ipam.AffinityTypeHost)))
+		Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelIPVersion, "4"))
+	})
+
+	It("should auto-label v3 BlockAffinity on create", func() {
+		val := &libapiv3.BlockAffinity{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       libapiv3.KindBlockAffinity,
+				APIVersion: apiv3.GroupVersionCurrent,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "ba1",
+				Labels: map[string]string{},
+			},
+			Spec: libapiv3.BlockAffinitySpec{
+				State:   string(model.StateConfirmed),
+				Node:    "v3-host",
+				Type:    string(ipam.AffinityTypeHost),
+				CIDR:    "10.20.0.0/24",
+				Deleted: "false",
+			},
+		}
+		kvp := &model.KVPair{
+			Key:   model.ResourceKey{Name: "ba1", Kind: libapiv3.KindBlockAffinity},
+			Value: val,
+		}
+
+		// We expect an error since fake REST doesn't return a response, but the request will be captured.
+		_, _ = client.Create(context.TODO(), kvp)
+
+		// Inspect the request body for labels.
+		req := fakeREST.Req
+		Expect(req).ToNot(BeNil())
+		Expect(req.URL.Path).To(Equal("/apis/blockaffinities"))
+		bodyBytes, err := io.ReadAll(req.Body)
+		Expect(err).NotTo(HaveOccurred())
+
+		var posted libapiv3.BlockAffinity
+		Expect(json.Unmarshal(bodyBytes, &posted)).To(Succeed())
+		Expect(posted.Labels).To(HaveKey(apiv3.LabelHostnameHash))
+		Expect(posted.Labels[apiv3.LabelHostnameHash]).NotTo(BeEmpty())
+		Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelAffinityType, string(ipam.AffinityTypeHost)))
+		Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelIPVersion, "4"))
 	})
 })

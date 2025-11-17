@@ -151,7 +151,6 @@ func (ws *watcherSyncer) Stop() {
 	// the results chan
 	close(ws.results)
 	ws.wgws.Wait()
-
 }
 
 // Send a status update and store the status.
@@ -204,7 +203,6 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 // instead start grouping them together so that we can send a larger single update to
 // Felix.
 func (ws *watcherSyncer) processResult(updates []api.Update, result interface{}) []api.Update {
-
 	// Switch on the result type.
 	switch r := result.(type) {
 	case []api.Update:

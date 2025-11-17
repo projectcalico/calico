@@ -15,11 +15,6 @@ struct cali_rt_key {
 	ipv46_addr_t addr; // NBO
 };
 
-union cali_rt_lpm_key {
-	struct bpf_lpm_trie_key lpm;
-	struct cali_rt_key key;
-};
-
 enum cali_rt_flags {
 	CALI_RT_UNKNOWN               = 0x00,
 	CALI_RT_IN_POOL               = 0x01,
@@ -38,12 +33,9 @@ enum cali_rt_flags {
 
 struct cali_rt {
 	__u32 flags; /* enum cali_rt_flags */
-	union {
-		// IP encap next hop for remote workload routes.
-		ipv46_addr_t next_hop;
-		// Interface index for local workload routes.
-		__u32 if_index;
-	};
+	// IP encap next hop for remote workload routes.
+	// or ifindex for local workload routes.
+	ipv46_addr_t next_hop;
 };
 
 #ifdef IPVER6
@@ -52,18 +44,18 @@ CALI_MAP_NAMED(cali_v6_routes, cali_routes,,
 CALI_MAP_NAMED(cali_v4_routes, cali_routes,,
 #endif
 		BPF_MAP_TYPE_LPM_TRIE,
-		union cali_rt_lpm_key, struct cali_rt,
+		struct cali_rt_key, struct cali_rt,
 		256*1024, BPF_F_NO_PREALLOC)
 
 static CALI_BPF_INLINE struct cali_rt *cali_rt_lookup(ipv46_addr_t *addr)
 {
-	union cali_rt_lpm_key k;
+	struct cali_rt_key k;
 #ifdef IPVER6
-	k.key.prefixlen = 128;
+	k.prefixlen = 128;
 #else
-	k.key.prefixlen = 32;
+	k.prefixlen = 32;
 #endif
-	k.key.addr = *addr;
+	k.addr = *addr;
 	return cali_routes_lookup_elem(&k);
 }
 
@@ -76,6 +68,7 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(ipv46_addr_t *add
 	return rt->flags;
 }
 
+#define CALI_RT_IFINDEX(rt) (*((__u32 *)&(rt)->next_hop))
 #define cali_rt_is_local(rt)	((rt)->flags & CALI_RT_LOCAL)
 #define cali_rt_is_host(rt)	((rt)->flags & CALI_RT_HOST)
 #define cali_rt_is_workload(rt)	((rt)->flags & CALI_RT_WORKLOAD)
@@ -96,6 +89,8 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(ipv46_addr_t *add
 #define cali_rt_flags_local_tunneled_host(t) (((t) & (CALI_RT_LOCAL | CALI_RT_HOST | CALI_RT_TUNNELED)) == (CALI_RT_LOCAL | CALI_RT_HOST | CALI_RT_TUNNELED))
 #define cali_rt_flags_is_in_pool(t) (((t) & CALI_RT_IN_POOL) == CALI_RT_IN_POOL)
 #define cali_rt_flags_skip_ingress_redirect(t) (((t) & CALI_RT_SKIP_INGRESS_REDIRECT))
+
+#define cali_rt_flags_should_set_dscp(t) (!cali_rt_flags_is_in_pool(t) && !cali_rt_flags_local_host(t))
 
 static CALI_BPF_INLINE bool rt_addr_is_local_host(ipv46_addr_t *addr)
 {
@@ -121,13 +116,9 @@ static CALI_BPF_INLINE bool rt_addr_is_local_tunneled_host(ipv46_addr_t *addr)
 // - packet is destined to an address in an IP pool;
 // - packet is destined to local host; or
 // - packet is destined to a host and the CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS global flag is set
-static CALI_BPF_INLINE bool rt_flags_should_perform_nat_outgoing(enum cali_rt_flags flags, bool exclude_hosts)
+static CALI_BPF_INLINE bool cali_rt_flags_should_perform_nat_outgoing(__u32 flags, bool exclude_hosts)
 {
-    if cali_rt_flags_is_in_pool(flags) return false;
-    if cali_rt_flags_host(flags) {
-        if cali_rt_flags_local(flags) return false;
-        if (exclude_hosts) return false;
-    }
-    return true;
+	return !(cali_rt_flags_is_in_pool(flags) ||
+			(cali_rt_flags_host(flags) && (exclude_hosts || cali_rt_flags_local(flags))));
 }
 #endif /* __CALI_ROUTES_H__ */

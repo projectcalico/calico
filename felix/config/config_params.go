@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/consistenthash"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -185,6 +186,7 @@ type Config struct {
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
+	BPFJITHardening                    string            `config:"oneof(Auto,Strict);Auto;non-zero"`
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
@@ -200,7 +202,7 @@ type Config struct {
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool              `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration     `config:"seconds;1"`
-	BPFKubeProxyEndpointSlicesEnabled  bool              `config:"bool;true"`
+	BPFKubeProxyHealthzPort            int               `config:"int;10256;non-zero"`
 	BPFExtToServiceConnmark            int               `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port  `config:"portrange;20000:29999"`
 	BPFMapSizeNATFrontend              int               `config:"int;65536;non-zero"`
@@ -219,7 +221,7 @@ type Config struct {
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
-	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);L2Only;non-zero"`
+	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);Enabled;non-zero"`
 	BPFAttachType                      string            `config:"oneof(TCX,TC);TCX;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
@@ -301,10 +303,8 @@ type Config struct {
 	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled);Disabled"`
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
-	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"`
-	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`
-	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"`
-	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"`
+	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	FeatureDetectOverride              map[string]string `config:"keyvaluelist;;"`
 	FeatureGates                       map[string]string `config:"keyvaluelist;;"`
 	IpsetsRefreshInterval              time.Duration     `config:"seconds;90"`
@@ -313,7 +313,7 @@ type Config struct {
 
 	PolicySyncPathPrefix string `config:"file;;"`
 
-	NetlinkTimeoutSecs time.Duration `config:"seconds;10"`
+	NetlinkTimeoutSecs time.Duration `config:"seconds;10"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
 	MetadataPort int    `config:"int(0:65535);8775;die-on-fail"`
@@ -375,11 +375,11 @@ type Config struct {
 
 	WorkloadSourceSpoofing string `config:"oneof(Disabled,Any);Disabled"`
 
-	ReportingIntervalSecs time.Duration `config:"seconds;30"`
-	ReportingTTLSecs      time.Duration `config:"seconds;90"`
+	ReportingIntervalSecs time.Duration `config:"seconds;30"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	ReportingTTLSecs      time.Duration `config:"seconds;90"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 
 	EndpointReportingEnabled   bool          `config:"bool;false"`
-	EndpointReportingDelaySecs time.Duration `config:"seconds;1"`
+	EndpointReportingDelaySecs time.Duration `config:"seconds;1"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 
 	// EndpointStatusPathPrefix is the path to the directory
 	// where endpoint status will be written. Endpoint status
@@ -405,6 +405,11 @@ type Config struct {
 	PrometheusProcessMetricsEnabled   bool   `config:"bool;true"`
 	PrometheusWireGuardMetricsEnabled bool   `config:"bool;true"`
 
+	PrometheusMetricsCAFile     string `config:"string;"`
+	PrometheusMetricsCertFile   string `config:"string;"`
+	PrometheusMetricsKeyFile    string `config:"string;"`
+	PrometheusMetricsClientAuth string `config:"oneof(RequireAndVerifyClientCert,RequireAnyClientCert,VerifyClientCertIfGiven,NoClientCert);RequireAndVerifyClientCert"`
+
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 
@@ -420,8 +425,8 @@ type Config struct {
 	NATOutgoingExclusions string             `config:"oneof(IPPoolsOnly,IPPoolsAndHostIPs);IPPoolsOnly"`
 
 	UsageReportingEnabled          bool          `config:"bool;true"`
-	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`
-	UsageReportingIntervalSecs     time.Duration `config:"seconds;86400"`
+	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	UsageReportingIntervalSecs     time.Duration `config:"seconds;86400"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	ClusterGUID                    string        `config:"string;baddecaf"`
 	ClusterType                    string        `config:"string;"`
 	CalicoVersion                  string        `config:"string;"`
@@ -504,6 +509,17 @@ type Config struct {
 	useNodeResourceUpdates bool
 
 	RequireMTUFile bool `config:"bool;false"`
+
+	// BPFMaglevMaxEndpointsPerService is the maximum number of endpoints
+	// expected to be part of a single Maglev-enabled service.
+	//
+	// Influences the size of the per-service Maglev lookup-tables generated by Felix
+	// and thus the amount of memory reserved.
+	BPFMaglevMaxEndpointsPerService int `config:"int(1:3000);100"`
+
+	// BPFMaglevMaxServices is the maximum number of expected Maglev-enabled
+	// services that Felix will allocate lookup-tables for.
+	BPFMaglevMaxServices int `config:"int(1:3000);100"`
 }
 
 func (config *Config) FilterAllowAction() string {
@@ -709,6 +725,14 @@ func (config *Config) KubernetesProvider() Provider {
 	log.WithField("clusterType", config.ClusterType).Debug(
 		"failed to detect a known kubernetes provider, defaulting to none")
 	return ProviderNone
+}
+
+func (config *Config) BPFLUTSizeMaglev() int {
+	return int(consistenthash.NextPrimeUint16(config.BPFMaglevMaxEndpointsPerService * consistenthash.MaglevEndpointLUTFactor))
+}
+
+func (config *Config) BPFMapSizeMaglev() int {
+	return int(config.BPFLUTSizeMaglev()) * config.BPFMaglevMaxServices
 }
 
 func (config *Config) applyDefaults() {
@@ -942,7 +966,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
-	if !(config.Encapsulation.IPIPEnabled || config.Encapsulation.VXLANEnabled || config.BPFEnabled) {
+	if !config.Encapsulation.IPIPEnabled && !config.Encapsulation.VXLANEnabled && !config.BPFEnabled {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
@@ -954,15 +978,15 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 // Validate() performs cross-field validation.
 func (config *Config) Validate() (err error) {
 	if config.FelixHostname == "" {
-		err = errors.New("Failed to determine hostname")
+		err = errors.New("failed to determine hostname")
 	}
 
 	if config.DatastoreType == "etcdv3" && len(config.EtcdEndpoints) == 0 {
 		if config.EtcdScheme == "" {
-			err = errors.New("EtcdEndpoints and EtcdScheme both missing")
+			err = errors.New("both EtcdEndpoints and EtcdScheme are missing")
 		}
 		if config.EtcdAddr == "" {
-			err = errors.New("EtcdEndpoints and EtcdAddr both missing")
+			err = errors.New("both EtcdEndpoints and EtcdAddr are missing")
 		}
 	}
 
@@ -978,9 +1002,9 @@ func (config *Config) Validate() (err error) {
 			config.TyphaCertFile == "" ||
 			config.TyphaCAFile == "" ||
 			(config.TyphaCN == "" && config.TyphaURISAN == "") {
-			err = errors.New("If any Felix-Typha TLS config parameters are specified," +
+			err = errors.New("if any Felix-Typha TLS config parameters are specified," +
 				" they _all_ must be" +
-				" - except that either TyphaCN or TyphaURISAN may be left unset.")
+				" - except that either TyphaCN or TyphaURISAN may be left unset")
 		}
 	}
 

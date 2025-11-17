@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,7 +28,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -41,28 +37,28 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Context("_BPF-SAFE_ TCP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
-	describeNamedPortTests(false, "tcp")
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ TCP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	describeNamedPortTests(false, "tcp", getInfra)
 })
 
-var _ = Context("_BPF-SAFE_ TCP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
-	describeNamedPortTests(true, "tcp")
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ TCP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	describeNamedPortTests(true, "tcp", getInfra)
 })
 
-var _ = Context("_BPF-SAFE_ UDP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
-	describeNamedPortTests(false, "udp")
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ UDP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	describeNamedPortTests(false, "udp", getInfra)
 })
 
-var _ = Context("_BPF-SAFE_ UDP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
-	describeNamedPortTests(true, "udp")
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ UDP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	describeNamedPortTests(true, "udp", getInfra)
 })
 
-var _ = Context("SCTP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
-	describeNamedPortTests(false, "sctp")
+var _ = infrastructure.DatastoreDescribe("SCTP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	describeNamedPortTests(false, "sctp", getInfra)
 })
 
-var _ = Context("SCTP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
-	describeNamedPortTests(true, "sctp")
+var _ = infrastructure.DatastoreDescribe("SCTP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	describeNamedPortTests(true, "sctp", getInfra)
 })
 
 // describeNamedPortTests describes tests for either source or destination named ports.
@@ -75,9 +71,8 @@ var _ = Context("SCTP: Source named ports: with initialized Felix, etcd datastor
 //
 //   - The policy generation is parameterized to move the match criteria from destination port
 //     to source port (and from ingress/egress to the opposite) if the flag is set.
-func describeNamedPortTests(testSourcePorts bool, protocol string) {
+func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infrastructure.InfraFactory) {
 	var (
-		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
@@ -97,7 +92,8 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	)
 
 	BeforeEach(func() {
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 		// Create some workloads, using that profile.
 		for ii := range w {
@@ -148,87 +144,13 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			log.Warn("Test failed, dumping diags...")
-			utils.Run("docker", "logs", tc.Felixes[0].Name)
-
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				if NFTMode() {
-					logNFTDiags(tc.Felixes[0])
-				} else {
-					utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
-					utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
-				}
-				utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
-				utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
-			}
-
-			profiles, err := client.Profiles().List(context.Background(), options.ListOptions{})
-			if err == nil {
-				log.Info("DIAGS: Calico Profiles:")
-				for _, profile := range profiles.Items {
-					log.Info(profile)
-				}
-			}
-			policies, err := client.NetworkPolicies().List(context.Background(), options.ListOptions{})
-			if err == nil {
-				log.Info("DIAGS: Calico NetworkPolicies:")
-				for _, policy := range policies.Items {
-					log.Info(policy)
-				}
-			}
-			gnps, err := client.GlobalNetworkPolicies().List(context.Background(), options.ListOptions{})
-			if err == nil {
-				log.Info("DIAGS: Calico GlobalNetworkPolicies:")
-				for _, gnp := range gnps.Items {
-					log.Info(gnp)
-				}
-			}
-			workloads, err := client.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
-			if err == nil {
-				log.Info("DIAGS: Calico WorkloadEndpoints:")
-				for _, w := range workloads.Items {
-					log.Info(w)
-				}
-			}
-			nodes, err := client.Nodes().List(context.Background(), options.ListOptions{})
-			if err == nil {
-				log.Info("DIAGS: Calico Nodes:")
-				for _, n := range nodes.Items {
-					log.Info(n)
-				}
-			}
-
-			tc.Felixes[0].Exec("calico-bpf", "ipsets", "dump")
-			tc.Felixes[0].Exec("bpftool", "map")
-			tc.Felixes[0].Exec("bpftool", "prog")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
-	})
-
 	type ingressEgress int
 	const (
 		applyAtW0 ingressEgress = iota
 		applyAtOthers
 	)
 
-	bpfEnabled := false
-	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		bpfEnabled = true
-	}
+	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 
 	cleanConntrack := func() {
 		if bpfEnabled && protocol == "udp" {
@@ -239,6 +161,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	// Baseline test with no named ports policy.
 	Context("with no named port policy", func() {
 		It("should give full connectivity to and from workload 0", func() {
+			cc.ResetExpectations()
 			// Outbound, w0 should be able to reach all ports on w1 & w2
 			cc.ExpectSome(w[0], w[1].Port(sharedPort))
 			cc.ExpectSome(w[0], w[2].Port(sharedPort))
@@ -327,6 +250,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			createPolicy(pol)
 
+			cc.ResetExpectations()
 			if negated {
 				// Only traffic _not_ going to listed ports is allowed.
 
@@ -484,6 +408,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		// This spec establishes a baseline for the connectivity, then the specs below run
 		// with tweaked versions of the policy.
 		expectBaselineConnectivity := func() {
+			cc.ResetExpectations()
 			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // Allowed by named port in list.
 			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // Allowed by named port in list.
 			cc.ExpectSome(w[3], w[1].Port(sharedPort)) // Allowed by named port in list.
@@ -512,6 +437,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			})
 
 			It("should have expected connectivity", func() {
+				cc.ResetExpectations()
 				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
 				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change.
 				cc.ExpectNone(w[3], w[2].Port(sharedPort)) // Disallowed by negative selector.
@@ -539,6 +465,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			})
 
 			It("should have expected connectivity", func() {
+				cc.ResetExpectations()
 				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
 				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change.
 				cc.ExpectNone(w[3], w[2].Port(sharedPort)) // Disallowed by negative selector.
@@ -556,6 +483,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		})
 
 		expectW2AndW3Blocked := func() {
+			cc.ResetExpectations()
 			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // No change
 			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // No change
 
@@ -677,6 +605,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				})
 
 				It("should give expected connectivity", func() {
+					cc.ResetExpectations()
 					cc.ExpectSome(w[0], w[1].Port(sharedPort)) // No change.
 					cc.ExpectSome(w[1], w[0].Port(sharedPort)) // No change.
 					cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
@@ -711,6 +640,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			})
 
 			It("should have expected connectivity", func() {
+				cc.ResetExpectations()
 				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change
 				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change
 				cc.ExpectNone(w[2], w[3].Port(sharedPort)) // No change
@@ -729,9 +659,8 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 }
 
 // This test reproduces a particular Kubernetes failure scenario seen during FV testing named ports.
-var _ = Describe("TCP: named port with a simulated kubernetes nginx and client", func() {
+var _ = infrastructure.DatastoreDescribe("TCP: named port with a simulated kubernetes nginx and client", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd              *containers.Container
 		tc                infrastructure.TopologyContainers
 		client            client.Interface
 		infra             infrastructure.DatastoreInfra
@@ -743,7 +672,8 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 	)
 
 	BeforeEach(func() {
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
 		// Create a namespace profile and write to the datastore.
 		infrastructure.CreateDefaultProfile(client, "kns.test", map[string]string{"name": "test"}, "")
 		// Create nginx workload.
@@ -815,32 +745,8 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 		cc = &connectivity.Checker{}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			log.Warn("Test failed, dumping diags...")
-			utils.Run("docker", "logs", tc.Felixes[0].Name)
-
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
-				utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
-			}
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
-		}
-
-		nginx.Stop()
-		nginxClient.Stop()
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
-	})
-
 	It("HTTP port policy should open up nginx port", func() {
+		cc.ResetExpectations()
 		// The profile has a default allow so we should start with connectivity.
 		cc.ExpectSome(nginxClient, nginx.Port(80))
 		cc.ExpectSome(nginxClient, nginx.Port(81))
@@ -940,31 +846,25 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 				felix.Exec("ip", "a")
 			}
 		}
-
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		infra.Stop()
+		// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
 	})
 
 	expectNoConnectivity := func() {
+		cc.ResetExpectations()
 		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8055))
 		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8055))
 		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8056))
 		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8056))
 		cc.CheckConnectivityOffset(1)
-		cc.ResetExpectations()
 	}
 
 	expectNamedPortOpen := func() {
+		cc.ResetExpectations()
 		cc.ExpectSome(tc.Felixes[0], hostW[1].Port(8055))
 		cc.ExpectSome(tc.Felixes[1], hostW[0].Port(8055))
 		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8056))
 		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8056))
 		cc.CheckConnectivityOffset(1)
-		cc.ResetExpectations()
 	}
 
 	It("should have expected initial connectivity", func() {
@@ -1044,9 +944,8 @@ var _ = infrastructure.DatastoreDescribe("named port, all-interfaces host endpoi
 	})
 
 // This test verifies that TCP named ports aren't matched by UDP rules and vice versa.
-var _ = Describe("tests with mixed TCP/UDP", func() {
+var _ = infrastructure.DatastoreDescribe("tests with mixed TCP/UDP", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd                        *containers.Container
 		tc                          infrastructure.TopologyContainers
 		client                      client.Interface
 		infra                       infrastructure.DatastoreInfra
@@ -1059,7 +958,8 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	)
 
 	BeforeEach(func() {
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
 		infrastructure.CreateDefaultProfile(client, "open", map[string]string{"default": ""}, "")
 
 		createTarget := func(ip, protocol string) *workload.Workload {
@@ -1140,37 +1040,14 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		tcpCC = &connectivity.Checker{Protocol: "tcp"}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			log.Warn("Test failed, dumping diags...")
-			utils.Run("docker", "logs", tc.Felixes[0].Name)
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
-				utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
-			}
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
-		}
-
-		targetTCPWorkload.Stop()
-		targetUDPWorkload.Stop()
-		clientWorkload.Stop()
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
-	})
-
 	It("shouldn't confuse TCP and UDP ports", func() {
+		tcpCC.ResetExpectations()
 		// The profile has a default allow so we should start with connectivity.
 		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(80))
 		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(81))
 		tcpCC.CheckConnectivity()
 
+		udpCC.ResetExpectations()
 		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(80))
 		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(81))
 		udpCC.CheckConnectivity()
@@ -1182,6 +1059,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(80))
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(81))
 		tcpCC.CheckConnectivity()
+
 		udpCC.ResetExpectations()
 		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(80))
 		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(81))

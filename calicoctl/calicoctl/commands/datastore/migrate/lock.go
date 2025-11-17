@@ -50,7 +50,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -70,13 +70,13 @@ Description:
 	// Ensure that the cluster information resource is initialized.
 	ctx := context.Background()
 	if err := client.EnsureInitialized(ctx, "", ""); err != nil {
-		return fmt.Errorf("Unable to initialize cluster information for the datastore migration: %s", err)
+		return fmt.Errorf("unable to initialize cluster information for the datastore migration: %s", err)
 	}
 
 	// Get the cluster information resource
 	clusterinfo, err := client.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("Error retrieving ClusterInformation for locking: %s", err)
+		return fmt.Errorf("error retrieving ClusterInformation for locking: %s", err)
 	}
 
 	// Change the Datastore to not ready in order to lock it.
@@ -86,7 +86,7 @@ Description:
 	// Update the cluster information resource
 	_, err = client.ClusterInformation().Update(ctx, clusterinfo, options.SetOptions{})
 	if err != nil {
-		return fmt.Errorf("Error updating ClusterInformation for locking: %s", err)
+		return fmt.Errorf("error updating ClusterInformation for locking: %s", err)
 	}
 
 	fmt.Print("Datastore locked.\n")

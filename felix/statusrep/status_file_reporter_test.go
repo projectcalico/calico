@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/proto/protoconv"
@@ -103,7 +102,7 @@ func clearDir(dirPath string) {
 		Expect(err).ShouldNot(HaveOccurred())
 	}
 
-	log.Infof("Directory %s cleared successfully!", dirPath)
+	logrus.Infof("Directory %s cleared successfully!", dirPath)
 }
 
 var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
@@ -140,7 +139,7 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		statusDir = tmpPath + "/endpoint-status"
 		Expect(err).ShouldNot(HaveOccurred())
 		filename = filepath.Join(statusDir, mapKey)
-		log.Infof("get filename %s", filename)
+		logrus.Infof("get filename %s", filename)
 
 		endpointUpdatesC = make(chan interface{})
 		ctx, cancel = context.WithCancel(context.Background())

@@ -494,6 +494,11 @@ func (in *BGPPeerSpec) DeepCopyInto(out *BGPPeerSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.KeepaliveTime != nil {
+		in, out := &in.KeepaliveTime, &out.KeepaliveTime
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.NumAllowedLocalASNumbers != nil {
 		in, out := &in.NumAllowedLocalASNumbers, &out.NumAllowedLocalASNumbers
 		*out = new(int32)
@@ -1189,11 +1194,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
-	if in.IptablesLockTimeout != nil {
-		in, out := &in.IptablesLockTimeout, &out.IptablesLockTimeout
-		*out = new(v1.Duration)
-		**out = **in
-	}
 	if in.IptablesLockProbeInterval != nil {
 		in, out := &in.IptablesLockProbeInterval, &out.IptablesLockProbeInterval
 		*out = new(v1.Duration)
@@ -1349,6 +1349,26 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.PrometheusMetricsCAFile != nil {
+		in, out := &in.PrometheusMetricsCAFile, &out.PrometheusMetricsCAFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsCertFile != nil {
+		in, out := &in.PrometheusMetricsCertFile, &out.PrometheusMetricsCertFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsKeyFile != nil {
+		in, out := &in.PrometheusMetricsKeyFile, &out.PrometheusMetricsKeyFile
+		*out = new(string)
+		**out = **in
+	}
+	if in.PrometheusMetricsClientAuth != nil {
+		in, out := &in.PrometheusMetricsClientAuth, &out.PrometheusMetricsClientAuth
+		*out = new(PrometheusMetricsClientAuthType)
+		**out = **in
+	}
 	if in.FailsafeInboundHostPorts != nil {
 		in, out := &in.FailsafeInboundHostPorts, &out.FailsafeInboundHostPorts
 		*out = new([]ProtoPort)
@@ -1495,6 +1515,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFJITHardening != nil {
+		in, out := &in.BPFJITHardening, &out.BPFJITHardening
+		*out = new(BPFJITHardeningType)
+		**out = **in
+	}
 	if in.BPFConntrackCleanupMode != nil {
 		in, out := &in.BPFConntrackCleanupMode, &out.BPFConntrackCleanupMode
 		*out = new(BPFConntrackMode)
@@ -1555,9 +1580,9 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
-	if in.BPFKubeProxyEndpointSlicesEnabled != nil {
-		in, out := &in.BPFKubeProxyEndpointSlicesEnabled, &out.BPFKubeProxyEndpointSlicesEnabled
-		*out = new(bool)
+	if in.BPFKubeProxyHealthzPort != nil {
+		in, out := &in.BPFKubeProxyHealthzPort, &out.BPFKubeProxyHealthzPort
+		*out = new(int)
 		**out = **in
 	}
 	if in.BPFPSNATPorts != nil {
@@ -1775,6 +1800,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.RequireMTUFile != nil {
 		in, out := &in.RequireMTUFile, &out.RequireMTUFile
 		*out = new(bool)
+		**out = **in
+	}
+	if in.BPFMaglevMaxEndpointsPerService != nil {
+		in, out := &in.BPFMaglevMaxEndpointsPerService, &out.BPFMaglevMaxEndpointsPerService
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMaglevMaxServices != nil {
+		in, out := &in.BPFMaglevMaxServices, &out.BPFMaglevMaxServices
+		*out = new(int)
 		**out = **in
 	}
 	return

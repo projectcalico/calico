@@ -60,25 +60,27 @@ func (r *RealK8sAPI) GetNumTyphas(ctx context.Context, namespace, serviceName, p
 		return 0, err
 	}
 
-	epClient := clientSet.CoreV1().Endpoints(namespace)
-	ep, err := epClient.Get(ctx, serviceName, metav1.GetOptions{})
+	epSliceClient := clientSet.DiscoveryV1().EndpointSlices(namespace)
+	epSlices, err := epSliceClient.List(ctx, metav1.ListOptions{LabelSelector: "kubernetes.io/service-name=" + serviceName})
 	if err != nil {
-		log.WithError(err).Error("Failed to get Typha endpoint from Kubernetes")
+		log.WithError(err).Error("Failed to get Typha EndpointSlice from Kubernetes")
 		return 0, err
 	}
 
 	ips := set.New[string]()
-	for _, s := range ep.Subsets {
+	for _, epSlice := range epSlices.Items {
 		found := false
-		for _, port := range s.Ports {
-			if port.Name == portName {
+		for _, port := range epSlice.Ports {
+			if port.Name != nil && *port.Name == portName {
 				found = true
 				break
 			}
 		}
 		if found {
-			for _, ip := range s.Addresses {
-				ips.Add(ip.IP)
+			for _, endpoint := range epSlice.Endpoints {
+				for _, ip := range endpoint.Addresses {
+					ips.Add(ip)
+				}
 			}
 		}
 	}

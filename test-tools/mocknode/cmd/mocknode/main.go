@@ -88,7 +88,7 @@ func (s *syncerCallbacks) OnUpdates(updates []api.Update) {
 		if err != nil {
 			logrus.WithError(err).Panic("Failed to serialise key")
 		}
-		if u.KVPair.Value == nil {
+		if u.Value == nil {
 			delete(s.cache, path)
 		} else {
 			s.cache[path] = u.Value

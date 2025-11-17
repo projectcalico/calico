@@ -199,7 +199,7 @@ func (s *PolicySets) ProcessIpSetUpdate(ipSetId string) []string {
 			log.WithFields(log.Fields{"IPSetId": ipSetId, "Policy": policyId}).Error("Unable to find Policy set, this set will be skipped")
 			continue
 		}
-		s.AddOrReplacePolicySet(policySet.PolicySetMetadata.SetId, policySet.Policy)
+		s.AddOrReplacePolicySet(policySet.SetId, policySet.Policy)
 	}
 
 	// Return the policies which were recalculated as a result of this update

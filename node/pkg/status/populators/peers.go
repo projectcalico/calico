@@ -91,7 +91,7 @@ func sessionNameToTypeAndPeerIP(ipSep, name string) (string, string, error) {
 		return "", "", fmt.Errorf("peer type '%s' is not recognized", sm[1])
 	}
 
-	ip := strings.Replace(sm[2], "_", ipSep, -1)
+	ip := strings.ReplaceAll(sm[2], "_", ipSep)
 	return sm[1], ip, nil
 }
 

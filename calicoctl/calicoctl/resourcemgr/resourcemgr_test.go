@@ -141,7 +141,7 @@ func createResources(specs ...string) ([]runtime.Object, error) {
 	content := strings.Join(specs, "\n---\n")
 	file := writeSpec(content)
 	By(fmt.Sprintf("Specs that will be used are: %s", content))
-	defer os.Remove(file.Name())
+	defer func() { _ = os.Remove(file.Name()) }()
 	By(fmt.Sprintf("Creating resources from file %s", file.Name()))
 	return resourcemgr.CreateResourcesFromFile(file.Name())
 }

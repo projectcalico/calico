@@ -112,11 +112,6 @@ class _TestBGPAdvert(TestBase):
             bird_peer_config=self.get_bird_conf(),
         )
 
-        # Enable debug logging
-        self.update_ds_env("calico-node",
-                           "calico-system",
-                           {"BGP_LOGSEVERITYSCREEN": "debug"})
-
         # Establish BGPPeer from cluster nodes to node-extra
         calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
@@ -280,45 +275,6 @@ EOF
             retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()))
             retry_until_success(lambda: self.assertNotIn(cluster_svc_ip, self.get_routes()))
 
-            # TODO: This assertion is actually incorrect. Kubernetes performs
-            # SNAT on all traffic destined to a service ClusterIP that doesn't
-            # originate from within the cluster's pod CIDR. This assertion
-            # pass for External / LoadBalancer IPs, though.
-            #
-            # Create a network policy that only accepts traffic from the external node.
-            # kubectl("""apply -f - << EOF
-# apiVersion: networking.k8s.io/v1
-# kind: NetworkPolicy
-# metadata:
-  # name: allow-tcp-80-ex
-  # namespace: bgp-test
-# spec:
-  # podSelector: {}
-  # policyTypes:
-  # - Ingress
-  # ingress:
-  # - from:
-    # - ipBlock: { cidr: %s/32 }
-    # ports:
-    # - protocol: TCP
-      # port: 80
-# EOF
-# """ % self.external_node_ip)
-
-            # Connectivity to nginx-local should always succeed.
-            # for i in range(attempts):
-            #   retry_until_success(curl, function_args=[local_svc_ip])
-
-            # # Connectivity to nginx-cluster will rarely succeed because it is load-balanced across all nodes.
-            # # When the traffic hits a node that doesn't host one of the service's pod, it will be re-routed
-            # #  to another node and SNAT will cause the policy to drop the traffic.
-            # # Try to curl 10 times.
-            # try:
-            #   for i in range(attempts):
-            #     curl(cluster_svc_ip)
-            #   self.fail("external node should not be able to consistently access the cluster svc")
-            # except subprocess.CalledProcessError:
-            #   pass
 
             # Scale the local_svc to 4 replicas
             self.scale_deployment(local_svc, self.ns, 4)
@@ -539,7 +495,7 @@ EOF
             self.wait_for_deployment(local_svc, self.ns)
 
             # Verify that we have ECMP routes for the external IP of the local service.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(local_svc_external_ip, [self.ips[1], self.ips[2], self.ips[3]])
 
             # Delete both services, assert only cluster CIDR route is advertised.
             self.delete_and_confirm(local_svc, "svc", self.ns)
@@ -547,6 +503,36 @@ EOF
 
             # Assert that external IP is no longer an advertised route.
             retry_until_success(lambda: self.assertNotIn(local_svc_externalips_route, self.get_routes()))
+
+    def test_fully_qualified_service_ips(self):
+        """
+        Test advertisement of /32 Service IPs.
+        """
+        with DiagsCollector():
+
+            # Allow exact IPs for each type of service IP. We expect these to be properly advertised.
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceExternalIPs:
+  - cidr: 90.15.0.1/32
+EOF
+""")
+
+            # Create a Service with the External IP above, using
+            # externalTrafficPolicy=Cluster. This should trigger advertisement
+            # from all nodes.
+            svc_name = "nginx-svc"
+            ext_ip = "90.15.0.1"
+            self.deploy(NGINX_IMAGE, svc_name, self.ns, 80, traffic_policy="Cluster", svc_type="ClusterIP", ext_ip=ext_ip)
+            self.wait_until_exists(svc_name, "svc", self.ns)
+            self.wait_for_deployment(svc_name, self.ns)
+
+            # Verify the ext IP address is advertised from all nodes.
+            self.assert_ecmp_routes(ext_ip, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]])
 
     def test_loadbalancer_ip_advertisement(self):
         """
@@ -599,14 +585,14 @@ EOF
 
             # The full range should be advertised from each node.
             lb_cidr = "80.15.0.0/24"
-            retry_until_success(lambda: self.assert_ecmp_routes(lb_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(lb_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]])
 
             # Scale the local_svc to 4 replicas.
             self.scale_deployment(local_svc, self.ns, 4)
             self.wait_for_deployment(local_svc, self.ns)
 
             # Verify that we have ECMP routes for the LB IP of the local service from nodes running it.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]])
 
             # Apply a modified BGP config that no longer enables advertisement
             # for LoadBalancer IPs.
@@ -649,7 +635,7 @@ spec:
 EOF
 """)
             # Verify that we have ECMP routes for the LB IP of the local service from nodes running it.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+            self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]])
             retry_until_success(lambda: self.assertIn(lb_cidr, self.get_routes()))
             retry_until_success(lambda: self.assertNotIn(cluster_svc_lb_route, self.get_routes()))
 

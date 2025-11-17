@@ -34,7 +34,8 @@ import (
 func Powershell(args ...string) string {
 	stdOut, stdErr, err := powershell(args...)
 	if err != nil {
-		log.Infof("Powershell() error: %s, stdOut: %s, stdErr: %s,", err, stdOut, stdErr)
+		log.Infof("Test Fail -- Powershell() error: %s, stdOut: %s, stdErr: %s,", err, stdOut, stdErr)
+		PauseForDebug()
 	}
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	return stdOut
@@ -43,6 +44,10 @@ func Powershell(args ...string) string {
 func PowershellWithError(args ...string) string {
 	stdOut, stdErr, err := powershell(args...)
 	log.Infof("PowershellWithError() error: %s, stdOut: %s, stdErr: %s,", err, stdOut, stdErr)
+	if err == nil {
+		log.Info("Test Fail -- PowershellWithError() did not return an error as expected")
+		PauseForDebug()
+	}
 	ExpectWithOffset(1, err).To(HaveOccurred())
 	return stdErr
 }
@@ -67,6 +72,34 @@ func powershell(args ...string) (string, string, error) {
 	}
 
 	return stdout.String(), stderr.String(), err
+}
+
+// PauseForDebug checks for the existence of a "pause-for-debug" namespace and waits
+// in a loop if it exists, allowing developers to pause test execution for debugging.
+// The function checks every 30 seconds and will timeout after 1 hour.
+// To use: create the namespace with `kubectl create ns pause-for-debug`
+// To resume: delete the namespace with `kubectl delete ns pause-for-debug`
+func PauseForDebug() {
+	maxWaitTime := 1 * time.Hour
+	startTime := time.Now()
+
+	for {
+		cmd := `c:\k\kubectl.exe --kubeconfig=c:\k\config get ns pause-for-debug`
+		_, stdErr, err := powershell(cmd)
+		if err != nil {
+			log.Infof("PauseForDebug: namespace 'pause-for-debug' does not exist, continuing with tests. Error: %s, stdErr: %s", err, stdErr)
+			return
+		}
+
+		elapsed := time.Since(startTime)
+		if elapsed >= maxWaitTime {
+			log.Infof("PauseForDebug: timeout reached after 1 hour, continuing with tests even though namespace 'pause-for-debug' still exists")
+			return
+		}
+
+		log.Infof("PauseForDebug: namespace 'pause-for-debug' exists, waiting 30 seconds before checking again. Elapsed time: %v", elapsed)
+		time.Sleep(30 * time.Second)
+	}
 }
 
 func getPodIP(name, namespace string) string {

@@ -92,16 +92,16 @@ func CertificateVerifier(logCxt *log.Entry, roots *x509.CertPool, requiredCN, re
 		}
 
 		if requiredCN != "" && requiredURISAN != "" {
-			if !(requiredCNFound || requiredURIFound) {
-				return errors.New("Peer certificate does not have required CN or URI SAN")
+			if !requiredCNFound && !requiredURIFound {
+				return errors.New("peer certificate does not have required CN or URI SAN")
 			}
 		} else if requiredCN != "" {
 			if !requiredCNFound {
-				return errors.New("Peer certificate does not have required CN")
+				return errors.New("peer certificate does not have required CN")
 			}
 		} else if requiredURISAN != "" {
 			if !requiredURIFound {
-				return errors.New("Peer certificate does not have required URI SAN")
+				return errors.New("peer certificate does not have required URI SAN")
 			}
 		}
 

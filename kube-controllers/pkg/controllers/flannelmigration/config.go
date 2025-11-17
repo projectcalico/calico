@@ -116,7 +116,7 @@ func (c *Config) Parse() error {
 
 	// Check pod node name is set.
 	if c.PodNodeName == "" {
-		return fmt.Errorf("Missing PodNodeName config")
+		return fmt.Errorf("missing PodNodeName config")
 	}
 
 	// Check if FlannelSubnetEnv has been populated via ConfigMap.
@@ -127,7 +127,7 @@ func (c *Config) Parse() error {
 	}
 
 	// Restore from json string to subnet.env file content.
-	data := strings.Replace(c.FlannelSubnetEnv, ";", "\n", -1)
+	data := strings.ReplaceAll(c.FlannelSubnetEnv, ";", "\n")
 	if err = c.ReadFlannelConfig(data); err != nil {
 		return err
 	}
@@ -150,28 +150,28 @@ func (c *Config) subnetEnvPopulated() bool {
 func (c *Config) ValidateFlannelConfig() error {
 	// Check cluster pod CIDR
 	if c.FlannelNetwork == "" {
-		return fmt.Errorf("Missing FlannelNetwork config")
+		return fmt.Errorf("missing FlannelNetwork config")
 	}
 	_, _, err := cnet.ParseCIDR(c.FlannelNetwork)
 	if err != nil {
-		return fmt.Errorf("Failed to parse cluster pod CIDR '%s'", c.FlannelNetwork)
+		return fmt.Errorf("failed to parse cluster pod CIDR '%s'", c.FlannelNetwork)
 	}
 
 	if c.FlannelIpv6Network != "" {
 		_, _, err := cnet.ParseCIDR(c.FlannelIpv6Network)
 		if err != nil {
-			return fmt.Errorf("Failed to parse cluster pod CIDR '%s'", c.FlannelIpv6Network)
+			return fmt.Errorf("failed to parse cluster pod CIDR '%s'", c.FlannelIpv6Network)
 		}
 	}
 
 	// Check Flannel daemonset name.
 	if c.FlannelDaemonsetName == "" {
-		return fmt.Errorf("Missing FlannelDaemonsetName config")
+		return fmt.Errorf("missing FlannelDaemonsetName config")
 	}
 
 	// Check Flannel MTU.
 	if c.FlannelMTU == 0 {
-		return fmt.Errorf("Missing FlannelMTU config")
+		return fmt.Errorf("missing FlannelMTU config")
 	}
 
 	return nil
@@ -187,7 +187,7 @@ func (c *Config) ReadFlannelConfig(data string) error {
 
 	var ok bool
 	if c.FlannelNetwork, ok = config["FLANNEL_NETWORK"]; !ok {
-		return fmt.Errorf("Failed to get config item FLANNEL_NETWORK")
+		return fmt.Errorf("failed to get config item FLANNEL_NETWORK")
 	}
 
 	// IPv6 is optional, so don't fail if not present
@@ -195,7 +195,7 @@ func (c *Config) ReadFlannelConfig(data string) error {
 
 	var masq string
 	if masq, ok = config["FLANNEL_IPMASQ"]; !ok {
-		return fmt.Errorf("Failed to get config item FLANNEL_IPMASQ")
+		return fmt.Errorf("failed to get config item FLANNEL_IPMASQ")
 	}
 	if c.FlannelIPMasq, err = strconv.ParseBool(masq); err != nil {
 		return err
@@ -203,7 +203,7 @@ func (c *Config) ReadFlannelConfig(data string) error {
 
 	var mtu string
 	if mtu, ok = config["FLANNEL_MTU"]; !ok {
-		return fmt.Errorf("Failed to get config item FLANNEL_MTU")
+		return fmt.Errorf("failed to get config item FLANNEL_MTU")
 	}
 	if c.FlannelMTU, err = strconv.Atoi(mtu); err != nil {
 		return err

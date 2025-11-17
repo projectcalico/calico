@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -66,14 +64,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w[0].InterfaceName, "all")
-			infra.DumpErrorData()
 		}
-
-		for i := 0; i < 2; i++ {
-			w[i].Stop()
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
@@ -97,6 +88,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		protoTCP := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
 		protoUDP := numorstring.ProtocolFromString(numorstring.ProtocolUDP)
 		sportRange, err := numorstring.PortFromRange(100, 105)
+		Expect(err).NotTo(HaveOccurred())
 		dportRange, err := numorstring.PortFromRange(200, 205)
 		Expect(err).NotTo(HaveOccurred())
 

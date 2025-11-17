@@ -20,9 +20,9 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
+	"sigs.k8s.io/yaml"
 
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
@@ -66,7 +66,7 @@ func populateResourceTypes() {
 func newResource(tm unversioned.TypeMetadata) (unversioned.Resource, error) {
 	rh, ok := resourceToType[tm]
 	if !ok {
-		return nil, fmt.Errorf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.APIVersion)
+		return nil, fmt.Errorf("unknown resource type (%s) and/or version (%s)", tm.Kind, tm.APIVersion)
 	}
 	log.Debugf("Found resource helper: %s", rh)
 

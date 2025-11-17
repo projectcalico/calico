@@ -29,9 +29,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
-	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // Canned hostnames.
@@ -60,26 +58,26 @@ var (
 	namedPortAllUDPID           = namedPortID(allSelector, "udp", "udpport")
 	inheritSelector             = "profile == 'prof-1'"
 	namedPortInheritIPSetID     = namedPortID(inheritSelector, "tcp", "tcpport")
-	httpMatchMethod             = HTTPMatch{Methods: []string{"GET"}}
+	httpMatchMethod             = model.HTTPMatch{Methods: []string{"GET"}}
 	serviceAccountSelector      = "name == 'sa1'"
 )
 
 // Canned workload endpoints.
 
 var (
-	localWlEpKey1 = WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
+	localWlEpKey1 = model.WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
 	localWlEp1Id  = "orch/wl1/ep1"
-	localWlEpKey2 = WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl2", EndpointID: "ep2"}
+	localWlEpKey2 = model.WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl2", EndpointID: "ep2"}
 	localWlEp2Id  = "orch/wl2/ep2"
 )
 
 // A remote workload endpoint
-var remoteWlEpKey1 = WorkloadEndpointKey{Hostname: remoteHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
+var remoteWlEpKey1 = model.WorkloadEndpointKey{Hostname: remoteHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
 
 // Same as remoteWlEpKey1 but on a different host.
-var remoteWlEpKey2 = WorkloadEndpointKey{Hostname: remoteHostname2, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
+var remoteWlEpKey2 = model.WorkloadEndpointKey{Hostname: remoteHostname2, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
 
-var localWlEp1 = WorkloadEndpoint{
+var localWlEp1 = model.WorkloadEndpoint{
 	State:      "active",
 	Name:       "cali1",
 	Mac:        mustParseMac("01:02:03:04:05:06"),
@@ -97,14 +95,14 @@ var localWlEp1 = WorkloadEndpoint{
 		"a":  "a",
 		"b":  "b",
 	}),
-	Ports: []EndpointPort{
+	Ports: []model.EndpointPort{
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
 		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 1234},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9091},
 	},
 }
 
-var localWlEp1WithLabelsButNoProfiles = WorkloadEndpoint{
+var localWlEp1WithLabelsButNoProfiles = model.WorkloadEndpoint{
 	State: "active",
 	Name:  "cali1",
 	Mac:   mustParseMac("01:02:03:04:05:06"),
@@ -121,14 +119,14 @@ var localWlEp1WithLabelsButNoProfiles = WorkloadEndpoint{
 		"a":  "a",
 		"b":  "b",
 	}),
-	Ports: []EndpointPort{
+	Ports: []model.EndpointPort{
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
 		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 1234},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9091},
 	},
 }
 
-var localWlEp1WithDupeNamedPorts = WorkloadEndpoint{
+var localWlEp1WithDupeNamedPorts = model.WorkloadEndpoint{
 	State:      "active",
 	Name:       "cali1",
 	Mac:        mustParseMac("01:02:03:04:05:06"),
@@ -146,14 +144,14 @@ var localWlEp1WithDupeNamedPorts = WorkloadEndpoint{
 		"a":  "a",
 		"b":  "b",
 	}),
-	Ports: []EndpointPort{
+	Ports: []model.EndpointPort{
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8081},
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8082},
 	},
 }
 
-var localWlEp1NoProfiles = WorkloadEndpoint{
+var localWlEp1NoProfiles = model.WorkloadEndpoint{
 	State: "active",
 	Name:  "cali1",
 	Mac:   mustParseMac("01:02:03:04:05:06"),
@@ -167,7 +165,7 @@ var localWlEp1NoProfiles = WorkloadEndpoint{
 	},
 }
 
-var localWlEp1DifferentIPs = WorkloadEndpoint{
+var localWlEp1DifferentIPs = model.WorkloadEndpoint{
 	State:      "active",
 	Name:       "cali1",
 	Mac:        mustParseMac("01:02:03:04:05:06"),
@@ -194,7 +192,7 @@ var ep1IPs = []string{
 	"fc00:fe11::2/128",
 }
 
-var localWlEp2 = WorkloadEndpoint{
+var localWlEp2 = model.WorkloadEndpoint{
 	State:      "active",
 	Name:       "cali2",
 	ProfileIDs: []string{"prof-2", "prof-3"},
@@ -211,14 +209,14 @@ var localWlEp2 = WorkloadEndpoint{
 		"a":  "a",
 		"b":  "b2",
 	}),
-	Ports: []EndpointPort{
+	Ports: []model.EndpointPort{
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
 		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 2345},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9090},
 	},
 }
 
-var localWlEp2WithLabelsButNoProfiles = WorkloadEndpoint{
+var localWlEp2WithLabelsButNoProfiles = model.WorkloadEndpoint{
 	State: "active",
 	Name:  "cali2",
 	IPv4Nets: []net.IPNet{
@@ -234,14 +232,14 @@ var localWlEp2WithLabelsButNoProfiles = WorkloadEndpoint{
 		"a":  "a",
 		"b":  "b2",
 	}),
-	Ports: []EndpointPort{
+	Ports: []model.EndpointPort{
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
 		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 2345},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9090},
 	},
 }
 
-var localWlEp2NoProfiles = WorkloadEndpoint{
+var localWlEp2NoProfiles = model.WorkloadEndpoint{
 	State: "active",
 	Name:  "cali2",
 	IPv4Nets: []net.IPNet{
@@ -254,7 +252,7 @@ var localWlEp2NoProfiles = WorkloadEndpoint{
 	},
 }
 
-var remoteWlEp1 = WorkloadEndpoint{
+var remoteWlEp1 = model.WorkloadEndpoint{
 	State:      "active",
 	Name:       "remote-wep-1",
 	Mac:        mustParseMac("01:02:03:04:05:06"),
@@ -265,13 +263,13 @@ var remoteWlEp1 = WorkloadEndpoint{
 	}),
 }
 
-var remoteWlEp1DualStack = WorkloadEndpoint{
+var remoteWlEp1DualStack = model.WorkloadEndpoint{
 	State:      "active",
 	Name:       "cali1",
 	Mac:        mustParseMac("01:02:03:04:05:06"),
 	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
-	IPv4Nets:   []calinet.IPNet{mustParseNet("10.1.0.1/32"), mustParseNet("10.1.0.2/32")},
-	IPv6Nets:   []calinet.IPNet{mustParseNet("fe80:fe11::1/128"), mustParseNet("fe80:fe11::2/128")},
+	IPv4Nets:   []net.IPNet{mustParseNet("10.1.0.1/32"), mustParseNet("10.1.0.2/32")},
+	IPv6Nets:   []net.IPNet{mustParseNet("fe80:fe11::1/128"), mustParseNet("fe80:fe11::2/128")},
 	Labels: uniquelabels.Make(map[string]string{
 		"id": "rem-ep-1",
 		"x":  "x",
@@ -279,7 +277,7 @@ var remoteWlEp1DualStack = WorkloadEndpoint{
 	}),
 }
 
-var hostEpWithName = HostEndpoint{
+var hostEpWithName = model.HostEndpoint{
 	Name:       "eth1",
 	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
 	ExpectedIPv4Addrs: []net.IP{
@@ -297,7 +295,7 @@ var hostEpWithName = HostEndpoint{
 	}),
 }
 
-var hostEpWithNamedPorts = HostEndpoint{
+var hostEpWithNamedPorts = model.HostEndpoint{
 	Name:       "eth1",
 	ProfileIDs: []string{"prof-1"},
 	ExpectedIPv4Addrs: []net.IP{
@@ -313,20 +311,20 @@ var hostEpWithNamedPorts = HostEndpoint{
 		"a":  "a",
 		"b":  "b",
 	}),
-	Ports: []EndpointPort{
+	Ports: []model.EndpointPort{
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
 		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 1234},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9091},
 	},
 }
 
-var hostEpWithNameKey = HostEndpointKey{
+var hostEpWithNameKey = model.HostEndpointKey{
 	Hostname:   localHostname,
 	EndpointID: "named",
 }
 var hostEpWithNameId = "named"
 
-var hostEp2NoName = HostEndpoint{
+var hostEp2NoName = model.HostEndpoint{
 	ProfileIDs: []string{"prof-2", "prof-3"},
 	ExpectedIPv4Addrs: []net.IP{
 		mustParseIP("10.0.0.2"),
@@ -343,7 +341,7 @@ var hostEp2NoName = HostEndpoint{
 	}),
 }
 
-var hostEp2NoNameKey = HostEndpointKey{
+var hostEp2NoNameKey = model.HostEndpointKey{
 	Hostname:   localHostname,
 	EndpointID: "unnamed",
 }
@@ -357,38 +355,38 @@ var (
 	order30 = float64(30)
 )
 
-var policy1_order20 = Policy{
+var policy1_order20 = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{SrcSelector: allSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
 	Types: []string{"ingress", "egress"},
 }
 
-var policy1_order20_always = Policy{
+var policy1_order20_always = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{SrcSelector: allSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
 	Types:            []string{"ingress", "egress"},
 	PerformanceHints: []v3.PolicyPerformanceHint{v3.PerfHintAssumeNeededOnEveryNode},
 }
 
-var policy1_order20_ondemand = Policy{
+var policy1_order20_ondemand = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{SrcSelector: allSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
 	Types:            []string{"ingress", "egress"},
@@ -398,71 +396,71 @@ var policy1_order20_ondemand = Policy{
 var (
 	protoTCP                                = numorstring.ProtocolFromStringV1("tcp")
 	protoUDP                                = numorstring.ProtocolFromStringV1("udp")
-	policy1_order20_with_named_port_tcpport = Policy{
+	policy1_order20_with_named_port_tcpport = model.Policy{
 		Order:    &order20,
 		Selector: "a == 'a'",
-		InboundRules: []Rule{
+		InboundRules: []model.Rule{
 			{
 				Protocol: &protoTCP,
 				SrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
 			},
 		},
-		OutboundRules: []Rule{
+		OutboundRules: []model.Rule{
 			{SrcSelector: bEpBSelector},
 		},
 		Types: []string{"ingress", "egress"},
 	}
 )
 
-var policy1_order20_with_named_port_tcpport_negated = Policy{
+var policy1_order20_with_named_port_tcpport_negated = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{
 			Protocol:    &protoTCP,
 			NotSrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
 		},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
 	Types: []string{"ingress", "egress"},
 }
 
-var policy_with_named_port_inherit = Policy{
+var policy_with_named_port_inherit = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: "profile == 'prof-1'",
 			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
 		},
 	},
-	OutboundRules: []Rule{},
+	OutboundRules: []model.Rule{},
 	Types:         []string{"ingress", "egress"},
 }
 
-var policy1_order20_with_selector_and_named_port_tcpport = Policy{
+var policy1_order20_with_selector_and_named_port_tcpport = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: allSelector,
 			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
 		},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
 	Types: []string{"ingress", "egress"},
 }
 
-var policy1_order20_with_selector_and_negated_named_port_tcpport = Policy{
+var policy1_order20_with_selector_and_negated_named_port_tcpport = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{
 			Protocol:       &protoTCP,
 			SrcSelector:    allSelector,
@@ -473,10 +471,10 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport = Policy{
 	Types: []string{"ingress"},
 }
 
-var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = Policy{
+var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{
 			Protocol:       &protoTCP,
 			DstSelector:    allSelector,
@@ -487,32 +485,32 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = Policy{
 	Types: []string{"ingress"},
 }
 
-var policy1_order20_with_selector_and_named_port_udpport = Policy{
+var policy1_order20_with_selector_and_named_port_udpport = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{
 			Protocol:    &protoUDP,
 			SrcSelector: allSelector,
 			SrcPorts:    []numorstring.Port{numorstring.NamedPort("udpport")},
 		},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
 	Types: []string{"ingress", "egress"},
 }
 
-var policy1_order20_with_named_port_mismatched_protocol = Policy{
+var policy1_order20_with_named_port_mismatched_protocol = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{
 			Protocol: &protoTCP,
 			SrcPorts: []numorstring.Port{numorstring.NamedPort("udpport")},
 		},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{
 			Protocol: &protoUDP,
 			SrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
@@ -521,13 +519,13 @@ var policy1_order20_with_named_port_mismatched_protocol = Policy{
 	Types: []string{"ingress", "egress"},
 }
 
-var policy1_order20_with_selector_and_named_port_tcpport2 = Policy{
+var policy1_order20_with_selector_and_named_port_tcpport2 = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: allSelector,
@@ -537,101 +535,101 @@ var policy1_order20_with_selector_and_named_port_tcpport2 = Policy{
 	Types: []string{"ingress", "egress"},
 }
 
-var policy1_order20_ingress_only = Policy{
+var policy1_order20_ingress_only = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{SrcSelector: allSelector},
 	},
 	Types: []string{"ingress"},
 }
 
-var policy1_order20_egress_only = Policy{
+var policy1_order20_egress_only = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
 	Types: []string{"egress"},
 }
 
-var policy1_order20_untracked = Policy{
+var policy1_order20_untracked = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{SrcSelector: allSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
 	DoNotTrack: true,
 }
 
-var policy1_order20_pre_dnat = Policy{
+var policy1_order20_pre_dnat = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{SrcSelector: allSelector},
 	},
 	PreDNAT: true,
 }
 
-var policy1_order20_http_match = Policy{
+var policy1_order20_http_match = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{HTTPMatch: &httpMatchMethod},
 	},
 }
 
-var policy1_order20_src_service_account = Policy{
+var policy1_order20_src_service_account = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	InboundRules: []Rule{
+	InboundRules: []model.Rule{
 		{OriginalSrcServiceAccountSelector: serviceAccountSelector},
 	},
 }
 
-var policy1_order20_dst_service_account = Policy{
+var policy1_order20_dst_service_account = model.Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{OriginalDstServiceAccountSelector: serviceAccountSelector},
 	},
 }
 
-var profileRules1 = ProfileRules{
-	InboundRules: []Rule{
+var profileRules1 = model.ProfileRules{
+	InboundRules: []model.Rule{
 		{SrcSelector: allSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: "has(tag-1)"},
 	},
 }
 
-var profileRulesWithTagInherit = ProfileRules{
-	InboundRules: []Rule{
+var profileRulesWithTagInherit = model.ProfileRules{
+	InboundRules: []model.Rule{
 		{SrcSelector: tagSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: tagFoobarSelector},
 	},
 }
 
-var profileRules1TagUpdate = ProfileRules{
-	InboundRules: []Rule{
+var profileRules1TagUpdate = model.ProfileRules{
+	InboundRules: []model.Rule{
 		{SrcSelector: bEpBSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{SrcSelector: "has(tag-2)"},
 	},
 }
 
-var profileRules1NegatedTagSelUpdate = ProfileRules{
-	InboundRules: []Rule{
+var profileRules1NegatedTagSelUpdate = model.ProfileRules{
+	InboundRules: []model.Rule{
 		{NotSrcSelector: bEpBSelector},
 	},
-	OutboundRules: []Rule{
+	OutboundRules: []model.Rule{
 		{NotSrcSelector: "has(tag-2)"},
 	},
 }
@@ -687,8 +685,8 @@ var (
 )
 
 var (
-	netSet1Key = NetworkSetKey{Name: "netset-1"}
-	netSet1    = NetworkSet{
+	netSet1Key = model.NetworkSetKey{Name: "netset-1"}
+	netSet1    = model.NetworkSet{
 		Nets: []net.IPNet{
 			mustParseNet("12.0.0.0/24"),
 			mustParseNet("12.0.0.0/24"), // A dupe, why not!
@@ -703,7 +701,7 @@ var (
 	}
 )
 
-var netSet1WithBEqB = NetworkSet{
+var netSet1WithBEqB = model.NetworkSet{
 	Nets: []net.IPNet{
 		mustParseNet("12.0.0.0/24"),
 		mustParseNet("12.0.0.0/24"), // A dupe, why not!
@@ -717,8 +715,8 @@ var netSet1WithBEqB = NetworkSet{
 }
 
 var (
-	netSet2Key = NetworkSetKey{Name: "netset-2"}
-	netSet2    = NetworkSet{
+	netSet2Key = model.NetworkSetKey{Name: "netset-2"}
+	netSet2    = model.NetworkSet{
 		Nets: []net.IPNet{
 			mustParseNet("12.0.0.0/24"), // Overlaps with netset-1
 			mustParseNet("13.1.0.0/24"),
@@ -730,8 +728,8 @@ var (
 )
 
 var (
-	netSet3Key = NetworkSetKey{Name: "netset-3"}
-	netSet3    = NetworkSet{
+	netSet3Key = model.NetworkSetKey{Name: "netset-3"}
+	netSet3    = model.NetworkSet{
 		Nets: []net.IPNet{
 			mustParseNet("12.1.2.142/32"),
 			mustParseNet("12.1.0.0/16"),
@@ -761,80 +759,80 @@ var (
 	remoteHostIPWithPrefix = "192.168.0.2/24"
 )
 
-var localHostVXLANTunnelConfigKey = HostConfigKey{
+var localHostVXLANTunnelConfigKey = model.HostConfigKey{
 	Hostname: localHostname,
 	Name:     "IPv4VXLANTunnelAddr",
 }
 
-var remoteHostVXLANTunnelConfigKey = HostConfigKey{
+var remoteHostVXLANTunnelConfigKey = model.HostConfigKey{
 	Hostname: remoteHostname,
 	Name:     "IPv4VXLANTunnelAddr",
 }
 
-var remoteHostVXLANV6TunnelConfigKey = HostConfigKey{
+var remoteHostVXLANV6TunnelConfigKey = model.HostConfigKey{
 	Hostname: remoteHostname,
 	Name:     "IPv6VXLANTunnelAddr",
 }
 
-var remoteHost2VXLANTunnelConfigKey = HostConfigKey{
+var remoteHost2VXLANTunnelConfigKey = model.HostConfigKey{
 	Hostname: remoteHostname2,
 	Name:     "IPv4VXLANTunnelAddr",
 }
 
-var remoteHostVXLANTunnelMACConfigKey = HostConfigKey{
+var remoteHostVXLANTunnelMACConfigKey = model.HostConfigKey{
 	Hostname: remoteHostname,
 	Name:     "VXLANTunnelMACAddr",
 }
 
-var remoteHostVXLANV6TunnelMACConfigKey = HostConfigKey{
+var remoteHostVXLANV6TunnelMACConfigKey = model.HostConfigKey{
 	Hostname: remoteHostname,
 	Name:     "VXLANTunnelMACAddrV6",
 }
 
-var ipPoolKey = IPPoolKey{
+var ipPoolKey = model.IPPoolKey{
 	CIDR: mustParseNet("10.0.0.0/16"),
 }
 
-var ipPoolKey2 = IPPoolKey{
+var ipPoolKey2 = model.IPPoolKey{
 	CIDR: mustParseNet("11.0.0.0/16"),
 }
 
-var hostCoveringIPPoolKey = IPPoolKey{
+var hostCoveringIPPoolKey = model.IPPoolKey{
 	CIDR: mustParseNet("192.168.0.0/24"),
 }
 
-var hostCoveringIPPool = IPPool{
+var hostCoveringIPPool = model.IPPool{
 	CIDR:       mustParseNet("192.168.0.0/24"),
 	Disabled:   true,
 	Masquerade: true,
 }
 
-var ipPoolWithIPIP = IPPool{
+var ipPoolWithIPIP = model.IPPool{
 	CIDR:     mustParseNet("10.0.0.0/16"),
 	IPIPMode: encap.Always,
 }
 
-var v6IPPoolKey = IPPoolKey{
+var v6IPPoolKey = model.IPPoolKey{
 	CIDR: mustParseNet("feed:beef::/64"),
 }
 
-var v6IPPool = IPPool{
+var v6IPPool = model.IPPool{
 	CIDR: mustParseNet("feed:beef::/64"),
 }
 
-var ipPoolWithVXLAN = IPPool{
+var ipPoolWithVXLAN = model.IPPool{
 	CIDR:       mustParseNet("10.0.0.0/16"),
 	VXLANMode:  encap.Always,
 	Masquerade: true,
 }
 
-var ipPool2WithVXLAN = IPPool{
+var ipPool2WithVXLAN = model.IPPool{
 	CIDR:       mustParseNet("11.0.0.0/16"),
 	VXLANMode:  encap.Always,
 	Masquerade: true,
 }
 
-var v6IPPoolWithVXLAN = IPPool{
+var v6IPPoolWithVXLAN = model.IPPool{
 	CIDR:       mustParseNet("feed:beef::/64"),
 	VXLANMode:  encap.Always,
 	Masquerade: true,
@@ -842,31 +840,31 @@ var v6IPPoolWithVXLAN = IPPool{
 
 var workloadIPs = "WorkloadIPs"
 
-var ipPoolWithVXLANSlash32 = IPPool{
+var ipPoolWithVXLANSlash32 = model.IPPool{
 	CIDR:       mustParseNet("10.0.0.0/32"),
 	VXLANMode:  encap.Always,
 	Masquerade: true,
 }
 
-var ipPoolWithVXLANCrossSubnet = IPPool{
+var ipPoolWithVXLANCrossSubnet = model.IPPool{
 	CIDR:       mustParseNet("10.0.0.0/16"),
 	VXLANMode:  encap.CrossSubnet,
 	Masquerade: false, // For coverage, make this different to the Always version of the pool
 }
 
-var remoteIPAMBlockKey = BlockKey{
+var remoteIPAMBlockKey = model.BlockKey{
 	CIDR: mustParseNet("10.0.1.0/29"),
 }
 
-var remoteIPAMSlash32BlockKey = BlockKey{
+var remoteIPAMSlash32BlockKey = model.BlockKey{
 	CIDR: mustParseNet("10.0.0.0/32"),
 }
 
-var remotev6IPAMBlockKey = BlockKey{
+var remotev6IPAMBlockKey = model.BlockKey{
 	CIDR: mustParseNet("feed:beef:0:0:1::/96"),
 }
 
-var localIPAMBlockKey = BlockKey{
+var localIPAMBlockKey = model.BlockKey{
 	CIDR: mustParseNet("10.0.0.0/29"),
 }
 
@@ -874,7 +872,7 @@ var (
 	localHostAffinity   = "host:" + localHostname
 	remoteHostAffinity  = "host:" + remoteHostname
 	remoteHost2Affinity = "host:" + remoteHostname2
-	remoteIPAMBlock     = AllocationBlock{
+	remoteIPAMBlock     = model.AllocationBlock{
 		CIDR:        mustParseNet("10.0.1.0/29"),
 		Affinity:    &remoteHostAffinity,
 		Allocations: make([]*int, 8),
@@ -882,21 +880,21 @@ var (
 	}
 )
 
-var remoteIPAMBlockSlash32 = AllocationBlock{
+var remoteIPAMBlockSlash32 = model.AllocationBlock{
 	CIDR:        mustParseNet("10.0.0.0/32"),
 	Affinity:    &remoteHostAffinity,
 	Allocations: make([]*int, 1),
 	Unallocated: []int{0},
 }
 
-var remotev6IPAMBlock = AllocationBlock{
+var remotev6IPAMBlock = model.AllocationBlock{
 	CIDR:        mustParseNet("feed:beef:0:0:1::/96"),
 	Affinity:    &remoteHostAffinity,
 	Allocations: make([]*int, 8),
 	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
 }
 
-var remoteIPAMBlockWithBorrows = AllocationBlock{
+var remoteIPAMBlockWithBorrows = model.AllocationBlock{
 	CIDR:     mustParseNet("10.0.1.0/29"),
 	Affinity: &remoteHostAffinity,
 	Allocations: []*int{
@@ -910,18 +908,18 @@ var remoteIPAMBlockWithBorrows = AllocationBlock{
 		nil,
 	},
 	Unallocated: []int{3, 4, 5, 6, 7},
-	Attributes: []AllocationAttribute{
+	Attributes: []model.AllocationAttribute{
 		{},
 		{AttrSecondary: map[string]string{
-			IPAMBlockAttributeNode: remoteHostname,
+			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
 		{AttrSecondary: map[string]string{
-			IPAMBlockAttributeNode: remoteHostname2,
+			model.IPAMBlockAttributeNode: remoteHostname2,
 		}},
 	},
 }
 
-var remoteIPAMBlockWithBorrowsSwitched = AllocationBlock{
+var remoteIPAMBlockWithBorrowsSwitched = model.AllocationBlock{
 	CIDR:     mustParseNet("10.0.1.0/29"),
 	Affinity: &remoteHost2Affinity,
 	Allocations: []*int{
@@ -935,18 +933,18 @@ var remoteIPAMBlockWithBorrowsSwitched = AllocationBlock{
 		nil,
 	},
 	Unallocated: []int{3, 4, 5, 6, 7},
-	Attributes: []AllocationAttribute{
+	Attributes: []model.AllocationAttribute{
 		{},
 		{AttrSecondary: map[string]string{
-			IPAMBlockAttributeNode: remoteHostname2,
+			model.IPAMBlockAttributeNode: remoteHostname2,
 		}},
 		{AttrSecondary: map[string]string{
-			IPAMBlockAttributeNode: remoteHostname,
+			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
 	},
 }
 
-var localIPAMBlockWithBorrows = AllocationBlock{
+var localIPAMBlockWithBorrows = model.AllocationBlock{
 	CIDR:     mustParseNet("10.0.0.0/29"),
 	Affinity: &localHostAffinity,
 	Allocations: []*int{
@@ -960,18 +958,18 @@ var localIPAMBlockWithBorrows = AllocationBlock{
 		nil,
 	},
 	Unallocated: []int{3, 4, 5, 6, 7},
-	Attributes: []AllocationAttribute{
+	Attributes: []model.AllocationAttribute{
 		// 10.0.0.0
 		{},
 
 		// 10.0.0.1 - assigned locally.
 		{AttrSecondary: map[string]string{
-			IPAMBlockAttributeNode: localHostname,
+			model.IPAMBlockAttributeNode: localHostname,
 		}},
 
 		// 10.0.0.2 - assigned to remoteHostname.
 		{AttrSecondary: map[string]string{
-			IPAMBlockAttributeNode: remoteHostname,
+			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
 	},
 }

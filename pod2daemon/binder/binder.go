@@ -89,7 +89,7 @@ EventLoop:
 	stopWatch <- true
 	// Close any open sockets
 	for _, wl := range b.workloads.getAll() {
-		wl.listener.Close()
+		_ = wl.listener.Close()
 	}
 	stopWG.Done()
 }
@@ -163,6 +163,6 @@ func readCredentials(path string, c *Credentials) error {
 func (b *binder) removeListener(uid string) {
 	w := b.workloads.get(uid)
 	// Closing the listener automatically removes it from the gRPC server.
-	w.listener.Close()
+	_ = w.listener.Close()
 	b.workloads.delete(uid)
 }

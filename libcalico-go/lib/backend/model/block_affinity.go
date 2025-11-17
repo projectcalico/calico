@@ -15,13 +15,19 @@
 package model
 
 import (
+	"crypto/sha3"
+	"encoding/base32"
 	"fmt"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/labels"
 
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -135,4 +141,47 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		Host:         host,
 		AffinityType: affinityType,
 	}
+}
+
+func EnsureBlockAffinityLabels(ba *libapiv3.BlockAffinity) {
+	if ba.Labels == nil {
+		ba.Labels = make(map[string]string)
+	}
+	// Hostnames can be longer than labels are allowed to be, so we hash it down.
+	ba.Labels[apiv3.LabelHostnameHash] = hashHostnameForLabel(ba.Spec.Node)
+	ba.Labels[apiv3.LabelAffinityType] = ba.Spec.Type
+	var ipVersion string
+	if strings.Contains(ba.Spec.CIDR, ":") {
+		ipVersion = "6"
+	} else {
+		ipVersion = "4"
+	}
+	ba.Labels[apiv3.LabelIPVersion] = ipVersion
+}
+
+func CalculateBlockAffinityLabelSelector(list BlockAffinityListOptions) labels.Selector {
+	labelsToMatch := map[string]string{}
+	if list.Host != "" {
+		labelsToMatch[apiv3.LabelHostnameHash] = hashHostnameForLabel(list.Host)
+	}
+	if list.AffinityType != "" {
+		labelsToMatch[apiv3.LabelAffinityType] = list.AffinityType
+	}
+	if list.IPVersion != 0 {
+		labelsToMatch[apiv3.LabelIPVersion] = strconv.Itoa(list.IPVersion)
+	}
+	var labelSelector labels.Selector
+	if len(labelsToMatch) > 0 {
+		labelSelector = labels.SelectorFromSet(labelsToMatch)
+	}
+	return labelSelector
+}
+
+var base32StdNoPad = base32.StdEncoding.WithPadding(base32.NoPadding)
+
+func hashHostnameForLabel(hostname string) string {
+	// The max length of a label is 63 chars, so we use base32 to squeeze in
+	// 256 bits.
+	h := sha3.Sum256([]byte(hostname))
+	return base32StdNoPad.EncodeToString(h[:])
 }

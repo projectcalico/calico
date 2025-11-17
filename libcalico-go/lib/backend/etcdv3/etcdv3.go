@@ -29,6 +29,8 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -478,10 +480,29 @@ func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision
 		list = append(list, resources.DefaultAllowProfile())
 	}
 
+	if ls, ok := l.(model.LabelSelectingListInterface); ok {
+		selector := ls.GetLabelSelector()
+		if selector != nil {
+			list = filterListByLabelSelector(list, selector)
+		}
+	}
+
 	return &model.KVPairList{
 		KVPairs:  list,
 		Revision: strconv.FormatInt(resp.Header.Revision, 10),
 	}, nil
+}
+
+func filterListByLabelSelector(input []*model.KVPair, sel labels.Selector) []*model.KVPair {
+	output := input[:0]
+	for _, kv := range input {
+		if labeled, ok := kv.Value.(metav1.Object); ok {
+			if sel.Matches(labels.Set(labeled.GetLabels())) {
+				output = append(output, kv)
+			}
+		}
+	}
+	return output
 }
 
 func calculateListKeyAndOptions(logCxt *log.Entry, l model.ListInterface) (string, []clientv3.OpOption) {

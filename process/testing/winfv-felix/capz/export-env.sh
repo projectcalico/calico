@@ -40,8 +40,7 @@ export KIND_VERSION="${KIND_VERSION_METADATA}"
 AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
 export AZ_KUBE_VERSION="v${AZ_VERSION:0:1}"."${AZ_VERSION:1:2}".$(echo "${AZ_VERSION}" | cut -d'.' -f2)
 
-export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.8.1"}"
-export CAPI_KUBEADM_VERSION="${CAPI_KUBEADM_VERSION:="v1.8.5"}"
-export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.16.3"}"
+export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.11.1"}"
+export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.21.0"}"
 export CONTAINERD_VERSION="${CONTAINERD_VERSION:="v1.7.22"}"
 export YQ_VERSION="${YQ_VERSION:="v4.44.5"}"

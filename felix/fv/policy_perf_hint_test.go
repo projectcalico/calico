@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -98,26 +96,5 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy performance hints te
 			ContainSubstring("10.65.0.1"),
 			"Expected IP set to be cleaned up when policy no longer has AssumeNeededOnEveryNode",
 		)
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					_ = felix.ExecMayFail("iptables-save", "-c")
-					_ = felix.ExecMayFail("ipset", "list")
-				}
-				if BPFMode() {
-					_ = felix.ExecMayFail("calico-bpf", "ipsets", "dump")
-				}
-			}
-		}
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })

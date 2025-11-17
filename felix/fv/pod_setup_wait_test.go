@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,8 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-//go:build fvtests
 
 package fv_test
 
@@ -32,8 +30,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-	const nodeCount = 1
-
 	var (
 		infra                    infrastructure.DatastoreInfra
 		topologyOptions          infrastructure.TopologyOptions
@@ -54,17 +50,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 		topologyOptions.FelixLogSeverity = "Debug"
 		topologyOptions.FelixDebugFilenameRegex = "status_file_reporter"
 
-		tc, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
+		tc, _ = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		tc.Felixes[0].Exec("rm", "-rf", "/tmp/endpoint-status")
 		dataplaneInSyncReceivedC = tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("DataplaneInSync received from upstream"))
-	})
-
-	AfterEach(func() {
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 
 	Describe("with the file-reporter writing endpoint status to '/tmp/endpoint-status'", func() {
@@ -85,7 +73,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			var statCmds [2]func() error
 			for i := range dummyWorkloads {
 				dummyWorkloads[i] = workload.New(tc.Felixes[0], fmt.Sprintf("workload-endpoint-status-tests-%d", i), "default", fmt.Sprintf("10.65.0.%d", 10+i), "8080", "tcp")
-				err := dummyWorkloads[i].Start()
+				err := dummyWorkloads[i].Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 				dummyWorkloads[i].ConfigureInInfra(infra)
 
@@ -130,7 +118,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			By("creating a workload before Felix starts")
 			wl := workload.New(tc.Felixes[0], "workload-endpoint-status-tests-0", "default", "10.65.0.10", "8080", "tcp")
 			wl.ConfigureInInfra(infra)
-			err := wl.Start()
+			err := wl.Start(infra)
 			Expect(err).NotTo(HaveOccurred(), "Couldn't start a test workload")
 
 			By("determining the filename Felix will look for")

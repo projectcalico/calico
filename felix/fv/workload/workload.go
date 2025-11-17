@@ -29,6 +29,8 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -98,32 +100,49 @@ const defaultMTU = 1440 /* wiregueard mtu */
 func (w *Workload) Stop() {
 	if w == nil {
 		log.Info("Stop no-op because nil workload")
-	} else {
-		log.WithField("workload", w.Name).Info("Stop")
-		_ = w.C.ExecMayFail("sh", "-c", fmt.Sprintf("kill -9 %s & ip link del %s & ip netns del %s & wait", w.pid, w.InterfaceName, w.NamespaceID()))
-		// Killing the process inside the container should cause our long-running
-		// docker exec command to exit.  Do the Wait on a background goroutine,
-		// so we can time it out, just in case.
-		waitDone := make(chan struct{})
-		go func() {
-			defer close(waitDone)
-			_, err := w.runCmd.Process.Wait()
-			if err != nil {
-				log.WithField("workload", w.Name).Error("Failed to wait for docker exec, attempting to kill it.")
-				_ = w.runCmd.Process.Kill()
-			}
-		}()
+		return
+	}
+	log.WithField("workload", w.Name).Info("Stop")
+	if !w.isRunning {
+		log.WithField("workload", w.Name).Info("Workload already stopped")
+		return
+	}
 
-		select {
-		case <-waitDone:
-			log.WithField("workload", w.Name).Info("Workload stopped")
-		case <-time.After(10 * time.Second):
-			log.WithField("workload", w.Name).Error("Workload docker exec failed to exit?  Killing it.")
+	cleanupCmds := []string{
+		fmt.Sprintf("kill -9 %s", w.pid),
+	}
+	if w.InterfaceName != "" {
+		// Only try to delete the veth if we created one.
+		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip link del %s", w.InterfaceName))
+	}
+	if w.NamespaceID() != "" {
+		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip netns del %s", w.NamespaceID()))
+	}
+	cleanupCmds = append(cleanupCmds, "wait")
+
+	_ = w.C.ExecMayFail("sh", "-c", strings.Join(cleanupCmds, " & "))
+	// Killing the process inside the container should cause our long-running
+	// docker exec command to exit.  Do the Wait on a background goroutine,
+	// so we can time it out, just in case.
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+		_, err := w.runCmd.Process.Wait()
+		if err != nil {
+			log.WithField("workload", w.Name).Error("Failed to wait for docker exec, attempting to kill it.")
 			_ = w.runCmd.Process.Kill()
 		}
+	}()
 
-		w.isRunning = false
+	select {
+	case <-waitDone:
+		log.WithField("workload", w.Name).Info("Workload stopped")
+	case <-time.After(10 * time.Second):
+		log.WithField("workload", w.Name).Error("Workload docker exec failed to exit?  Killing it.")
+		_ = w.runCmd.Process.Kill()
 	}
+
+	w.isRunning = false
 }
 
 func Run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) (w *Workload) {
@@ -219,10 +238,18 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 
 func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) (w *Workload, err error) {
 	w = New(c, name, profile, ip, ports, protocol, opts...)
-	return w, w.Start()
+	err = w.Start(c)
+	if err != nil {
+		return w, err
+	}
+	return w, nil
 }
 
-func (w *Workload) Start() error {
+type CleanupProvider interface {
+	AddCleanup(func())
+}
+
+func (w *Workload) Start(cleanupProvider CleanupProvider) error {
 	var err error
 
 	// Start the workload.
@@ -254,16 +281,19 @@ func (w *Workload) Start() error {
 	w.runCmd = utils.Command("docker", "exec", w.C.Name, "sh", "-c", command)
 	w.outPipe, err = w.runCmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Getting StdoutPipe failed: %v", err)
+		return fmt.Errorf("getting StdoutPipe failed: %v", err)
 	}
 	w.errPipe, err = w.runCmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("Getting StderrPipe failed: %v", err)
+		return fmt.Errorf("getting StderrPipe failed: %v", err)
 	}
 	err = w.runCmd.Start()
 	if err != nil {
 		return fmt.Errorf("runCmd Start failed: %v", err)
 	}
+
+	// Make sure we get stopped.
+	cleanupProvider.AddCleanup(w.Stop)
 
 	// Read the workload's namespace path, which it writes to its standard output.
 	stdoutReader := bufio.NewReader(w.outPipe)
@@ -551,7 +581,7 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 	return meanRtt, out
 }
 
-func (w *Workload) SendPacketsTo(ip string, count int, size int) (error, string) {
+func (w *Workload) SendPacketsTo(ip string, count int, size int) (string, error) {
 	c := fmt.Sprintf("%d", count)
 	s := fmt.Sprintf("%d", size)
 	_, err := w.ExecOutput("ping", "-c", c, "-W", "1", "-s", s, ip)
@@ -560,7 +590,7 @@ func (w *Workload) SendPacketsTo(ip string, count int, size int) (error, string)
 	if errors.As(err, &exitErr) {
 		stderr = string(exitErr.Stderr)
 	}
-	return err, stderr
+	return stderr, err
 }
 
 type SideService struct {
@@ -770,12 +800,12 @@ type SpoofedWorkload struct {
 
 func (s *SpoofedWorkload) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	opts = s.appendSourceIPOpt(opts)
-	s.Workload.preRetryCleanupInner(ip, port, protocol, "(spoofed)", opts...)
+	s.preRetryCleanupInner(ip, port, protocol, "(spoofed)", opts...)
 }
 
 func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	opts = s.appendSourceIPOpt(opts)
-	return s.Workload.canConnectToInner(ip, port, protocol, "(spoofed)", opts...)
+	return s.canConnectToInner(ip, port, protocol, "(spoofed)", opts...)
 }
 
 func (s *SpoofedWorkload) appendSourceIPOpt(opts []connectivity.CheckOption) []connectivity.CheckOption {
@@ -801,14 +831,14 @@ func (p *Port) SourceIPs() []string {
 
 func (p *Port) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	opts = p.maybeAppendPortOpt(opts)
-	p.Workload.preRetryCleanupInner(ip, port, protocol, "(with source port)", opts...)
+	p.preRetryCleanupInner(ip, port, protocol, "(with source port)", opts...)
 }
 
 // Return if a connection is good and packet loss string "PacketLoss[xx]".
 // If it is not a packet loss test, packet loss string is "".
 func (p *Port) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	opts = p.maybeAppendPortOpt(opts)
-	return p.Workload.canConnectToInner(ip, port, protocol, "(with source port)", opts...)
+	return p.canConnectToInner(ip, port, protocol, "(with source port)", opts...)
 }
 
 func (p *Port) maybeAppendPortOpt(opts []connectivity.CheckOption) []connectivity.CheckOption {
@@ -854,10 +884,10 @@ func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 		return p.Workload.ToMatcher(explicitPort...)
 	}
 	return &connectivity.Matcher{
-		IP:         p.Workload.IP,
+		IP:         p.IP,
 		Port:       fmt.Sprint(p.Port),
-		TargetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
-		IP6:        p.Workload.IP6,
+		TargetName: fmt.Sprintf("%s on port %d", p.Name, p.Port),
+		IP6:        p.IP6,
 	}
 }
 

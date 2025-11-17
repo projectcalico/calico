@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -49,15 +47,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
 		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("should upgrade conntrack entries from v2 to v3", func() {

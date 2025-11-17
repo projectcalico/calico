@@ -74,14 +74,14 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	// Validate config and get pod CIDR.
 	_, cidr, err := cnet.ParseCIDR(m.config.FlannelNetwork)
 	if err != nil {
-		return fmt.Errorf("Failed to parse the CIDR '%s'", m.config.FlannelNetwork)
+		return fmt.Errorf("failed to parse the CIDR '%s'", m.config.FlannelNetwork)
 	}
 
 	var cidrV6 *cnet.IPNet
 	if m.config.FlannelIpv6Network != "" {
 		_, cidrV6, err = cnet.ParseCIDR(m.config.FlannelIpv6Network)
 		if err != nil {
-			return fmt.Errorf("Failed to parse the CIDR '%s'", m.config.FlannelIpv6Network)
+			return fmt.Errorf("failed to parse the CIDR '%s'", m.config.FlannelIpv6Network)
 		}
 	}
 
@@ -105,14 +105,14 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	// Create default IPv4 ippool with VXLAN enabled
 	err = createDefaultVxlanIPPool(m.ctx, m.calicoClient, cidr, blockSize, m.config.FlannelIPMasq, checkVxlan)
 	if err != nil {
-		return fmt.Errorf("Failed to create default IPv4 ippool")
+		return fmt.Errorf("failed to create default IPv4 ippool")
 	}
 
 	if cidrV6 != nil {
 		// Create default IPv6 ippool with vxlan enabled
 		err = createDefaultVxlanIPPool(m.ctx, m.calicoClient, cidrV6, blockSizeV6, m.config.FlannelIPMasq, checkVxlan)
 		if err != nil {
-			return fmt.Errorf("Failed to create default IPv6 ippool")
+			return fmt.Errorf("failed to create default IPv6 ippool")
 		}
 	}
 
@@ -120,7 +120,7 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	err = updateOrCreateDefaultFelixConfiguration(m.ctx, m.calicoClient,
 		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU)
 	if err != nil {
-		return fmt.Errorf("Failed to create or update default FelixConfiguration")
+		return fmt.Errorf("failed to create or update default FelixConfiguration")
 	}
 
 	return nil
@@ -241,7 +241,7 @@ func setupCalicoNodeVxlan(ctx context.Context, c client.Interface, nodeName stri
 	} else {
 		// Failed to get assignment attributes, datastore connection issues possible.
 		log.WithError(err).Errorf("Failed to get assignment attributes for vtep IP '%s'", vtepIP.String())
-		return fmt.Errorf("Failed to get vtep IP %s attribute", vtepIP.String())
+		return fmt.Errorf("failed to get vtep IP %s attribute", vtepIP.String())
 	}
 
 	if assign {
@@ -257,7 +257,7 @@ func setupCalicoNodeVxlan(ctx context.Context, c client.Interface, nodeName stri
 			Attrs:    attrs,
 		})
 		if err != nil {
-			return fmt.Errorf("Failed to assign vtep IP %s", vtepIP.String())
+			return fmt.Errorf("failed to assign vtep IP %s", vtepIP.String())
 		}
 		log.Infof("Calico Node %s vtep IP assigned.", nodeName)
 	}
@@ -305,7 +305,7 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 	case 6:
 		poolName = defaultIpv6PoolName
 	default:
-		return fmt.Errorf("Unknown IP version for CIDR: %s", cidr.String())
+		return fmt.Errorf("unknown IP version for CIDR: %s", cidr.String())
 
 	}
 	pool := &api.IPPool{

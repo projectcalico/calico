@@ -15,6 +15,7 @@
 #include "bpf.h"
 #include "globals.h"
 #include "ctlb.h"
+#include "ctlb_map.h"
 
 #define CALI_LOG(fmt, ...) bpf_log("CTLB-V46--------: " fmt, ## __VA_ARGS__)
 
@@ -26,14 +27,6 @@
 static CALI_BPF_INLINE bool is_ipv4_as_ipv6(__u32 *addr) {
 	return addr[0] == 0 && addr[1] == 0 && addr[2] == bpf_htonl(0x0000ffff);
 }
-
-struct {
-	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
-	__type(key, __u32);
-	__type(value, __u32);
-	__uint(max_entries, 3);
-	__uint(map_flags, 0);
-}cali_ctlb_progs SEC(".maps");
 
 enum cali_ctlb_prog_index {
 	PROG_INDEX_V6_CONNECT,

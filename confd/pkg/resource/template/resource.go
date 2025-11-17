@@ -64,7 +64,7 @@ var ErrEmptySrc = errors.New("empty src template")
 // NewTemplateResource creates a TemplateResource.
 func NewTemplateResource(path string, config Config) (*TemplateResource, error) {
 	if config.StoreClient == nil {
-		return nil, errors.New("A valid StoreClient is required.")
+		return nil, errors.New("a valid StoreClient is required")
 	}
 
 	// Set the default uid and gid so we can determine if it was
@@ -74,7 +74,7 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	log.Debug("Loading template resource from " + path)
 	_, err := toml.DecodeFile(path, &tc)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot process template resource %s - %s", path, err.Error())
+		return nil, fmt.Errorf("cannot process template resource %s - %s", path, err.Error())
 	}
 
 	tr := &tc.TemplateResource
@@ -93,11 +93,11 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 			path := os.Getenv("PATH")
 			err = os.Setenv("PATH", path+";C:/Windows/System32/WindowsPowerShell/v1.0/")
 			if err != nil {
-				return nil, fmt.Errorf("Cannot add powershell to Windows PATH: %s", err.Error())
+				return nil, fmt.Errorf("cannot add powershell to Windows PATH: %s", err.Error())
 			}
 			_, err = exec.LookPath("powershell.exe")
 			if err != nil {
-				return nil, fmt.Errorf("Cannot find powershell.exe after addding default path to Windows PATH: %s", err.Error())
+				return nil, fmt.Errorf("cannot find powershell.exe after addding default path to Windows PATH: %s", err.Error())
 			}
 		}
 		tr.shellCmd = "powershell.exe"
@@ -169,7 +169,7 @@ func (t *TemplateResource) createStageFile() error {
 
 	tmpl, err := template.New(filepath.Base(t.Src)).Funcs(t.funcMap).ParseFiles(t.Src)
 	if err != nil {
-		return fmt.Errorf("Unable to process template %s, %s", t.Src, err)
+		return fmt.Errorf("unable to process template %s, %s", t.Src, err)
 	}
 
 	// create TempFile in Dest directory to avoid cross-filesystem issues

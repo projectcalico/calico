@@ -86,7 +86,8 @@ func testConnection() error {
 	}
 	if !*ci.Spec.DatastoreReady {
 		logrus.Info("Upgrade may be in progress, ready flag is not set")
-		return fmt.Errorf("Calico is currently not ready to process requests")
+		//nolint:staticcheck // Ignore ST1005: error strings should not be capitalized
+		return errors.New("Calico is currently not ready to process requests")
 	}
 
 	// If we have a kubeconfig, test connection to the APIServer
@@ -123,7 +124,7 @@ func isEndpointReady(readyEndpoint string, timeout time.Duration) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return false, fmt.Errorf("endpoint is not ready, response code returned:%d", resp.StatusCode)
 	}
@@ -231,7 +232,8 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	}
 	if !*ci.Spec.DatastoreReady {
 		logrus.Info("Upgrade may be in progress, ready flag is not set")
-		err = fmt.Errorf("Calico is currently not ready to process requests")
+		//nolint:staticcheck // Ignore ST1005: error strings should not be capitalized
+		err = errors.New("Calico is currently not ready to process requests")
 		return
 	}
 
@@ -322,7 +324,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		logger.Debugf("List of WorkloadEndpoints %v", endpoints.Items)
 		for _, ep := range endpoints.Items {
 			var match bool
-			match, err = wepIDs.WorkloadEndpointIdentifiers.NameMatches(ep.Name)
+			match, err = wepIDs.NameMatches(ep.Name)
 			if err != nil {
 				// We should never hit this error, because it should have already been
 				// caught by CalculateWorkloadEndpointName.
@@ -654,7 +656,8 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	}
 	if !*ci.Spec.DatastoreReady {
 		logrus.Info("Upgrade may be in progress, ready flag is not set")
-		err = fmt.Errorf("Calico is currently not ready to process requests")
+		//nolint:staticcheck // Ignore ST1005: error strings should not be capitalized
+		err = errors.New("Calico is currently not ready to process requests")
 		return
 	}
 
@@ -739,7 +742,7 @@ func Main(version string) {
 			Msg:     "failed to parse CLI flags",
 			Details: err.Error(),
 		}
-		cniError.Print()
+		_ = cniError.Print()
 		os.Exit(1)
 	}
 	if *versionFlag {
@@ -757,7 +760,7 @@ func Main(version string) {
 			Msg:     "data store connection failed",
 			Details: err.Error(),
 		}
-		cniError.Print()
+		_ = cniError.Print()
 		os.Exit(1)
 	}
 
@@ -768,7 +771,7 @@ func Main(version string) {
 			Msg:     "failed to set IgnoreUnknown=1",
 			Details: err.Error(),
 		}
-		cniError.Print()
+		_ = cniError.Print()
 		os.Exit(1)
 	}
 

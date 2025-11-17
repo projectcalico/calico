@@ -92,6 +92,7 @@ type IPPoolSpec struct {
 
 	// Determines the mode how IP addresses should be assigned from this pool
 	// +optional
+	// +kubebuilder:default=Automatic
 	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty" validate:"omitempty,assignmentMode"`
 }
 

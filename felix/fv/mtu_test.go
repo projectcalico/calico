@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -64,20 +62,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		}
 		return 50
 	}
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				felix.Exec("ip", "link")
-				if BPFMode() {
-					felix.Exec("calico-bpf", "ifstate", "dump")
-				}
-			}
-			infra.DumpErrorData()
-		}
-		tc.Stop()
-		infra.Stop()
-	})
 
 	for _, ipv6 := range []bool{true, false} {
 		enableIPv6 := ipv6

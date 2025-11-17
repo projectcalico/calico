@@ -267,7 +267,7 @@ func (c *IPAMController) onStatusUpdate(s bapi.SyncStatus) {
 }
 
 func (c *IPAMController) onUpdate(update bapi.Update) {
-	switch update.KVPair.Key.(type) {
+	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
 		case libapiv3.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
@@ -1255,7 +1255,7 @@ func (c *IPAMController) nodeIsBeingMigrated(name string) (bool, error) {
 		return false, fmt.Errorf("failed to check node for migration status: %w", err)
 	}
 
-	for labelName, labelVal := range node.ObjectMeta.Labels {
+	for labelName, labelVal := range node.Labels {
 		// Check against labels used by the migration controller
 		for migrationLabelName, migrationLabelValue := range flannelmigration.NodeNetworkCalico {
 			// Only the label value "calico" specifies a migrated node where we can release the affinity

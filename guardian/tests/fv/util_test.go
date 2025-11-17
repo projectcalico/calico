@@ -17,11 +17,11 @@ func createKeyCertPair(dir, certFileName, keyFileName string) (string, string) {
 
 	certFile, err := os.Create(dir + "/" + certFileName)
 	Expect(err).ShouldNot(HaveOccurred())
-	defer certFile.Close()
+	defer func() { _ = certFile.Close() }()
 
 	keyFile, err := os.Create(dir + "/" + keyFileName)
 	Expect(err).ShouldNot(HaveOccurred())
-	defer keyFile.Close()
+	defer func() { _ = keyFile.Close() }()
 
 	_, err = certFile.Write(certPEM)
 	Expect(err).ShouldNot(HaveOccurred())

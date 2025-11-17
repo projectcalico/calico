@@ -28,7 +28,6 @@ set -o pipefail
 : "${KUBE_VERSION:?Environment variable empty or not defined.}"
 : "${AZ_KUBE_VERSION:?Environment variable empty or not defined.}"
 : "${CLUSTER_API_VERSION:?Environment variable empty or not defined.}"
-: "${CAPI_KUBEADM_VERSION:?Environment variable empty or not defined.}"
 : "${AZURE_PROVIDER_VERSION:?Environment variable empty or not defined.}"
 
 : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
@@ -111,9 +110,7 @@ ${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-
 
 # Finally, initialize the management cluster
 ${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} \
-    --core cluster-api:${CLUSTER_API_VERSION} \
-    --control-plane kubeadm:${CAPI_KUBEADM_VERSION}\
-    --bootstrap kubeadm:${CAPI_KUBEADM_VERSION}
+    --core cluster-api:${CLUSTER_API_VERSION}
 
 # Generate SSH key.
 rm .sshkey* || true

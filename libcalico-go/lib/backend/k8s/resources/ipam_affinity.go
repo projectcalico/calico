@@ -94,10 +94,17 @@ func (c *blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 		}
 	}
 
+	// Default affinity type to "host" if not set. Older versions of Calico's CRD backend
+	// did not set this field, assuming "host" as the default.
+	affinityType := "host"
+	if kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type != "" {
+		affinityType = kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type
+	}
+
 	return &model.KVPair{
 		Key: model.BlockAffinityKey{
 			CIDR:         *cidr,
-			AffinityType: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type,
+			AffinityType: affinityType,
 			Host:         kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
 		},
 		Value: &model.BlockAffinity{
@@ -140,28 +147,31 @@ func (c *blockAffinityClient) parseKey(k model.Key) (name, cidr, host, affinityT
 func (c *blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	name, cidr, host, affinityType := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
+	value := &libapiv3.BlockAffinity{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       libapiv3.KindBlockAffinity,
+			APIVersion: "crd.projectcalico.org/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            name,
+			ResourceVersion: kvpv1.Revision,
+		},
+		Spec: libapiv3.BlockAffinitySpec{
+			State:   string(state),
+			Node:    host,
+			Type:    affinityType,
+			CIDR:    cidr,
+			Deleted: fmt.Sprintf("%t", kvpv1.Value.(*model.BlockAffinity).Deleted),
+		},
+	}
+	model.EnsureBlockAffinityLabels(value)
+
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
 			Kind: libapiv3.KindBlockAffinity,
 		},
-		Value: &libapiv3.BlockAffinity{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindBlockAffinity,
-				APIVersion: "crd.projectcalico.org/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            name,
-				ResourceVersion: kvpv1.Revision,
-			},
-			Spec: libapiv3.BlockAffinitySpec{
-				State:   string(state),
-				Node:    host,
-				Type:    affinityType,
-				CIDR:    cidr,
-				Deleted: fmt.Sprintf("%t", kvpv1.Value.(*model.BlockAffinity).Deleted),
-			},
-		},
+		Value:    value,
 		Revision: kvpv1.Revision,
 	}
 }
@@ -180,7 +190,7 @@ func isV1BlockAffinityKey(key model.Key) bool {
 }
 
 func (c *blockAffinityClient) createV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp, err := c.rc.Create(ctx, c.toV3(kvp))
+	nkvp, err := c.createV3(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +203,16 @@ func (c *blockAffinityClient) createV1(ctx context.Context, kvp *model.KVPair) (
 }
 
 func (c *blockAffinityClient) createV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	return c.rc.Create(ctx, kvp)
+	return c.rc.Create(ctx, ensureV3Labels(kvp))
+}
+
+func ensureV3Labels(kvp *model.KVPair) *model.KVPair {
+	v3Value := kvp.Value.(*libapiv3.BlockAffinity)
+	v3Value = v3Value.DeepCopy()
+	model.EnsureBlockAffinityLabels(v3Value)
+	newKVP := *kvp
+	newKVP.Value = v3Value
+	return &newKVP
 }
 
 func (c *blockAffinityClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -207,7 +226,7 @@ func (c *blockAffinityClient) Create(ctx context.Context, kvp *model.KVPair) (*m
 }
 
 func (c *blockAffinityClient) updateV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp, err := c.rc.Update(ctx, c.toV3(kvp))
+	nkvp, err := c.updateV3(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +239,7 @@ func (c *blockAffinityClient) updateV1(ctx context.Context, kvp *model.KVPair) (
 }
 
 func (c *blockAffinityClient) updateV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	return c.rc.Update(ctx, kvp)
+	return c.rc.Update(ctx, ensureV3Labels(kvp))
 }
 
 func (c *blockAffinityClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -358,8 +377,12 @@ func isV1List(list model.ListInterface) bool {
 }
 
 func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffinityListOptions, revision string) (*model.KVPairList, error) {
-	l := model.ResourceListOptions{Kind: libapiv3.KindBlockAffinity}
-	v3list, err := c.rc.List(ctx, l, revision)
+	log.Debugf("Listing v1 block affinities with host %s, affinity type %s, IP version %d", list.Host, list.AffinityType, list.IPVersion)
+	l := model.ResourceListOptions{
+		Kind:          libapiv3.KindBlockAffinity,
+		LabelSelector: model.CalculateBlockAffinityLabelSelector(list),
+	}
+	v3list, err := c.listV3(ctx, l, revision)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +400,9 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 		if err != nil {
 			return nil, err
 		}
-		if (host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host) && (affinityType == "" || v1kvp.Key.(model.BlockAffinityKey).AffinityType == affinityType) {
+
+		if (host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host) &&
+			(affinityType == "" || v1kvp.Key.(model.BlockAffinityKey).AffinityType == affinityType) {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
 			cidrPtr := &cidr
 			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(*model.BlockAffinity).Deleted {
@@ -390,6 +415,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 }
 
 func (c *blockAffinityClient) listV3(ctx context.Context, list model.ResourceListOptions, revision string) (*model.KVPairList, error) {
+	log.Debugf("Listing v3 block affinities matching %v, revision=%v", list, revision)
 	return c.rc.List(ctx, list, revision)
 }
 

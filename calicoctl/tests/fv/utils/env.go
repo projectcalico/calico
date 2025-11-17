@@ -17,7 +17,7 @@ package utils
 import (
 	"os"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 )
 
 func PatchEnv(key, value string) (unpatch func(), err error) {
@@ -28,11 +28,11 @@ func PatchEnv(key, value string) (unpatch func(), err error) {
 	}
 	if oldKCSet {
 		unpatch = func() {
-			Expect(os.Setenv(key, oldKC)).NotTo(HaveOccurred())
+			gomega.Expect(os.Setenv(key, oldKC)).NotTo(gomega.HaveOccurred())
 		}
 	} else {
 		unpatch = func() {
-			Expect(os.Unsetenv(key)).NotTo(HaveOccurred())
+			gomega.Expect(os.Unsetenv(key)).NotTo(gomega.HaveOccurred())
 		}
 	}
 	return

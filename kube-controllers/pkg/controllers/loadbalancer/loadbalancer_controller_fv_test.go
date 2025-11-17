@@ -162,7 +162,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 		// Write out a kubeconfig file
 		kconfigfile, err := os.CreateTemp("", "ginkgo-loadbalancercontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kconfigfile.Name())
+		defer func() { _ = os.Remove(kconfigfile.Name()) }()
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
@@ -477,8 +477,8 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 
 			service, err = k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(service.Status.LoadBalancer.Ingress).NotTo(BeEmpty(), "saw service.Status.LoadBalancer.Ingress non-empty and then empty again!")
 			Expect(service.Status.LoadBalancer.Ingress[0].IP).Should(Equal(specificIpFromAutomaticPool))
-
 		})
 	})
 })

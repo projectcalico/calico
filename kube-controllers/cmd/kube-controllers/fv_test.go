@@ -25,7 +25,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -58,7 +57,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 		// Write out a kubeconfig file
 		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kconfigfile.Name())
+		defer func() { _ = os.Remove(kconfigfile.Name()) }()
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
@@ -95,8 +94,8 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 	})
 
 	It("should initialize the datastore at start-of-day", func() {
-		var info *api.ClusterInformation
-		Eventually(func() *api.ClusterInformation {
+		var info *v3.ClusterInformation
+		Eventually(func() *v3.ClusterInformation {
 			info, _ = calicoClient.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
 			return info
 		}, 10*time.Second).ShouldNot(BeNil())
@@ -186,7 +185,7 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		// Write out a kubeconfig file
 		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kconfigfile.Name())
+		defer func() { _ = os.Remove(kconfigfile.Name()) }()
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
@@ -289,7 +288,7 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 		var err error
 		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kconfigfile.Name())
+		defer func() { _ = os.Remove(kconfigfile.Name()) }()
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
@@ -336,8 +335,8 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 	})
 
 	It("should initialize the datastore at start-of-day", func() {
-		var info *api.ClusterInformation
-		Eventually(func() *api.ClusterInformation {
+		var info *v3.ClusterInformation
+		Eventually(func() *v3.ClusterInformation {
 			info, _ = calicoClient.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
 			return info
 		}, 10*time.Second).ShouldNot(BeNil())

@@ -24,14 +24,17 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
@@ -78,6 +81,7 @@ type TopologyOptions struct {
 	IPv6PoolUsages            []api.IPPoolAllowedUse
 	NeedNodeIP                bool
 	FlowLogSource             int
+	BPFProxyHealthzPort       int // zero means disable
 }
 
 // Calico containers created during topology creation.
@@ -119,7 +123,6 @@ func DefaultTopologyOptions() TopologyOptions {
 		TyphaLogSeverity:      "info",
 		IPIPMode:              api.IPIPModeAlways,
 		IPIPStrategy:          NewDefaultTunnelStrategy(DefaultIPPoolCIDR, DefaultIPv6PoolCIDR),
-		SimulateBIRDRoutes:    true,
 		IPPoolCIDR:            DefaultIPPoolCIDR,
 		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
 		UseIPPools:            true,
@@ -176,37 +179,6 @@ func DeleteDefaultIPPool(ctx context.Context, client client.Interface) (*api.IPP
 	return DeleteIPPoolByName(ctx, client, DefaultIPPoolName)
 }
 
-// StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
-// the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology(options TopologyOptions) (tc TopologyContainers, etcd *containers.Container, calicoClient client.Interface, infra DatastoreInfra) {
-	tc, etcd, calicoClient, infra = StartNNodeEtcdTopology(1, options)
-	return
-}
-
-// StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
-// up IPIP, otherwise this is skipped.
-//
-//   - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
-//     but (for simplicity) we don't actually use IPAM to assign IPs.
-//   - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
-//     index in the returned array.  When creating workloads, use IPs from the relevant block.
-//   - Configures the Tunnel IP for each host as 10.65.x.1.
-func StartNNodeEtcdTopology(
-	n int,
-	opts TopologyOptions,
-) (tc TopologyContainers, etcd *containers.Container, client client.Interface, infra DatastoreInfra) {
-	log.Infof("Starting a %d-node etcd topology.", n)
-
-	eds, err := GetEtcdDatastoreInfra()
-	Expect(err).ToNot(HaveOccurred())
-	etcd = eds.etcdContainer
-	infra = eds
-
-	tc, client = StartNNodeTopology(n, opts, eds)
-
-	return
-}
-
 // StartSingleNodeTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
 func StartSingleNodeTopology(
@@ -235,7 +207,7 @@ func StartNNodeTopology(
 	var err error
 
 	if opts.EnableIPv6 && opts.IPIPMode != api.IPIPModeNever && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		log.Errorf("IPIP not supported in BPF with ipv6!")
+		ginkgo.Fail("IPIP not supported in BPF with ipv6!")
 		return
 	}
 
@@ -256,6 +228,10 @@ func StartNNodeTopology(
 
 	if opts.IPIPMode == "" {
 		opts.IPIPMode = api.IPIPModeNever
+	}
+
+	if !opts.SimulateBIRDRoutes {
+		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	}
 
 	// Get client.
@@ -308,6 +284,8 @@ func StartNNodeTopology(
 		opts.ExtraEnvVars["FELIX_TYPHAADDR"] = tc.Typha.IP + ":5473"
 		typhaIP = tc.Typha.IP
 	}
+
+	opts.ExtraEnvVars["FELIX_BPFKUBEPROXYHEALTZPORT"] = fmt.Sprintf("%d", opts.BPFProxyHealthzPort)
 
 	tc.Felixes = make([]*Felix, n)
 	var wg sync.WaitGroup
@@ -486,6 +464,11 @@ func StartNNodeTopology(
 	}
 
 	wg.Wait()
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		// If one of our parallel start-up goroutines fails, it will eventually
+		// fail the test but Ginkgo has no automatic way to abort the main goroutine.
+		ginkgo.Fail("StartNNodeTopology: failure on background goroutine.")
+	}
 	success = true
 	return
 }
@@ -531,4 +514,17 @@ func mustInitDatastore(client client.Interface) {
 		log.WithError(err).Info("EnsureInitialized result")
 		return err
 	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
+}
+
+func AssignIP(workload, addr, hostname string, client client.Interface) {
+	// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+	err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+		IP:       cnet.MustParseIP(addr),
+		HandleID: &workload,
+		Attrs: map[string]string{
+			ipam.AttributeNode: hostname,
+		},
+		Hostname: hostname,
+	})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }

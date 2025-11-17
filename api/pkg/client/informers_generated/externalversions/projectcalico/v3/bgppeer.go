@@ -47,13 +47,25 @@ func NewFilteredBGPPeerInformer(client clientset.Interface, resyncPeriod time.Du
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().BGPPeers().List(context.TODO(), options)
+				return client.ProjectcalicoV3().BGPPeers().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().BGPPeers().Watch(context.TODO(), options)
+				return client.ProjectcalicoV3().BGPPeers().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ProjectcalicoV3().BGPPeers().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ProjectcalicoV3().BGPPeers().Watch(ctx, options)
 			},
 		},
 		&apisprojectcalicov3.BGPPeer{},

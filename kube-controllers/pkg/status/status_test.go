@@ -33,7 +33,7 @@ var _ = Describe("Status pkg UTs", func() {
 	It("should update the status file when changes happen", func() {
 		f, err := os.CreateTemp("", "test")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(f.Name())
+		defer func() { _ = os.Remove(f.Name()) }()
 		st := New(f.Name())
 
 		By("status file should return proper Status object", func() {

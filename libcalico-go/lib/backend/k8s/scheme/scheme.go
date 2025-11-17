@@ -29,68 +29,79 @@ import (
 
 var addToSchemeOnce sync.Once
 
-func AddCalicoResourcesToScheme() {
-	addToSchemeOnce.Do(func() {
-		// We also need to register resources.
-		schemeBuilder := runtime.NewSchemeBuilder(
-			func(scheme *runtime.Scheme) error {
-				scheme.AddKnownTypes(
-					schema.GroupVersion{
-						Group:   "crd.projectcalico.org",
-						Version: "v1",
-					},
-					&apiv3.FelixConfiguration{},
-					&apiv3.FelixConfigurationList{},
-					&apiv3.IPPool{},
-					&apiv3.IPPoolList{},
-					&apiv3.IPReservation{},
-					&apiv3.IPReservationList{},
-					&apiv3.BGPPeer{},
-					&apiv3.BGPPeerList{},
-					&apiv3.BGPConfiguration{},
-					&apiv3.BGPConfigurationList{},
-					&apiv3.ClusterInformation{},
-					&apiv3.ClusterInformationList{},
-					&apiv3.GlobalNetworkSet{},
-					&apiv3.GlobalNetworkSetList{},
-					&apiv3.NetworkSet{},
-					&apiv3.NetworkSetList{},
-					&apiv3.GlobalNetworkPolicy{},
-					&apiv3.GlobalNetworkPolicyList{},
-					&apiv3.StagedGlobalNetworkPolicy{},
-					&apiv3.StagedGlobalNetworkPolicyList{},
-					&apiv3.NetworkPolicy{},
-					&apiv3.NetworkPolicyList{},
-					&apiv3.StagedNetworkPolicy{},
-					&apiv3.StagedNetworkPolicyList{},
-					&apiv3.StagedKubernetesNetworkPolicy{},
-					&apiv3.StagedKubernetesNetworkPolicyList{},
-					&apiv3.Tier{},
-					&apiv3.TierList{},
-					&apiv3.HostEndpoint{},
-					&apiv3.HostEndpointList{},
-					&libapiv3.BlockAffinity{},
-					&libapiv3.BlockAffinityList{},
-					&libapiv3.IPAMBlock{},
-					&libapiv3.IPAMBlockList{},
-					&libapiv3.IPAMHandle{},
-					&libapiv3.IPAMHandleList{},
-					&libapiv3.IPAMConfig{},
-					&libapiv3.IPAMConfigList{},
-					&apiv3.KubeControllersConfiguration{},
-					&apiv3.KubeControllersConfigurationList{},
-					&apiv3.CalicoNodeStatus{},
-					&apiv3.CalicoNodeStatusList{},
-					&apiv3.BGPFilter{},
-					&apiv3.BGPFilterList{},
-				)
-				return nil
-			})
+func BuilderCRDv1() *runtime.SchemeBuilder {
+	builder := runtime.NewSchemeBuilder(
+		func(scheme *runtime.Scheme) error {
+			scheme.AddKnownTypes(
+				schema.GroupVersion{
+					Group:   "crd.projectcalico.org",
+					Version: "v1",
+				},
+				&apiv3.FelixConfiguration{},
+				&apiv3.FelixConfigurationList{},
+				&apiv3.IPPool{},
+				&apiv3.IPPoolList{},
+				&apiv3.IPReservation{},
+				&apiv3.IPReservationList{},
+				&apiv3.BGPPeer{},
+				&apiv3.BGPPeerList{},
+				&apiv3.BGPConfiguration{},
+				&apiv3.BGPConfigurationList{},
+				&apiv3.ClusterInformation{},
+				&apiv3.ClusterInformationList{},
+				&apiv3.GlobalNetworkSet{},
+				&apiv3.GlobalNetworkSetList{},
+				&apiv3.NetworkSet{},
+				&apiv3.NetworkSetList{},
+				&apiv3.GlobalNetworkPolicy{},
+				&apiv3.GlobalNetworkPolicyList{},
+				&apiv3.StagedGlobalNetworkPolicy{},
+				&apiv3.StagedGlobalNetworkPolicyList{},
+				&apiv3.NetworkPolicy{},
+				&apiv3.NetworkPolicyList{},
+				&apiv3.StagedNetworkPolicy{},
+				&apiv3.StagedNetworkPolicyList{},
+				&apiv3.StagedKubernetesNetworkPolicy{},
+				&apiv3.StagedKubernetesNetworkPolicyList{},
+				&apiv3.Tier{},
+				&apiv3.TierList{},
+				&apiv3.HostEndpoint{},
+				&apiv3.HostEndpointList{},
+				&libapiv3.BlockAffinity{},
+				&libapiv3.BlockAffinityList{},
+				&libapiv3.IPAMBlock{},
+				&libapiv3.IPAMBlockList{},
+				&libapiv3.IPAMHandle{},
+				&libapiv3.IPAMHandleList{},
+				&libapiv3.IPAMConfig{},
+				&libapiv3.IPAMConfigList{},
+				&apiv3.KubeControllersConfiguration{},
+				&apiv3.KubeControllersConfigurationList{},
+				&apiv3.CalicoNodeStatus{},
+				&apiv3.CalicoNodeStatusList{},
+				&apiv3.BGPFilter{},
+				&apiv3.BGPFilterList{},
+			)
+			return nil
+		})
+	return &builder
+}
 
-		err := schemeBuilder.AddToScheme(scheme.Scheme)
+func AddCalicoResourcesToGlobalScheme() {
+	addToSchemeOnce.Do(func() {
+		err := AddCalicoResourcesToScheme(scheme.Scheme)
 		if err != nil {
-			log.WithError(err).Fatal("failed to add calico resources to scheme")
+			log.WithError(err).Panic("failed to add calico resources to scheme")
 		}
-		metav1.AddToGroupVersion(scheme.Scheme, schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"})
 	})
+}
+
+func AddCalicoResourcesToScheme(s *runtime.Scheme) error {
+	schemeBuilder := BuilderCRDv1()
+	err := schemeBuilder.AddToScheme(s)
+	if err != nil {
+		return err
+	}
+	metav1.AddToGroupVersion(s, schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"})
+	return nil
 }

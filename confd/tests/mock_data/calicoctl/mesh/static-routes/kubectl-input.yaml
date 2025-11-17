@@ -22,23 +22,45 @@ status:
       - ip: 80.15.0.1/32
       # Not within the range in BGP config.
       - ip: 90.15.0.1/32
+---
+kind: EndpointSlice
+apiVersion: discovery.k8s.io/v1
+metadata:
+  name: service-1-abc
+  labels:
+    kubernetes.io/service-name: service-1
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 192.168.2.10
+    nodeName: kube-node-1
+    targetRef:
+      kind: Pod
+      name: nginx-1
+      namespace: default
+ports:
+  - port: 80
+    protocol: TCP
 
 ---
-kind: Endpoints
-apiVersion: v1
+kind: EndpointSlice
+apiVersion: discovery.k8s.io/v1
 metadata:
-  name: service-1
-subsets:
+  name: service-1-def
+  labels:
+    kubernetes.io/service-name: service-1
+addressType: IPv4
+endpoints:
   - addresses:
-      - ip: 192.168.2.1
-        nodeName: kube-master
-        targetRef:
-          kind: Pod
-          name: nginx-1
-          namespace: default
-    ports:
-      - port: 80
-        protocol: TCP
+      - 192.168.2.1
+    nodeName: kube-master
+    targetRef:
+      kind: Pod
+      name: nginx-1
+      namespace: default
+ports:
+  - port: 80
+    protocol: TCP
 
 ---
 # A Service and corresponding endpoints object.
@@ -57,21 +79,24 @@ spec:
       targetPort: 80
 
 ---
-kind: Endpoints
-apiVersion: v1
+kind: EndpointSlice
+apiVersion: discovery.k8s.io/v1
 metadata:
   name: service-2
-subsets:
+  labels:
+    kubernetes.io/service-name: service-2
+addressType: IPv4
+endpoints:
   - addresses:
-      - ip: 192.168.2.2
-        nodeName: kube-node-1
-        targetRef:
-          kind: Pod
-          name: nginx-2
-          namespace: default
-    ports:
-      - port: 80
-        protocol: TCP
+      - 192.168.2.2
+    nodeName: kube-node-1
+    targetRef:
+      kind: Pod
+      name: nginx-2
+      namespace: default
+ports:
+  - port: 80
+    protocol: TCP
 
 ---
 # An IPv6 service with a corresponding but IPv4 endpoint on the local
@@ -90,21 +115,24 @@ spec:
       targetPort: 80
 
 ---
-kind: Endpoints
-apiVersion: v1
+kind: EndpointSlice
+apiVersion: discovery.k8s.io/v1
 metadata:
   name: service-v6-1
-subsets:
+  labels:
+    kubernetes.io/service-name: service-v6-1
+addressType: IPv4
+endpoints:
   - addresses:
-      - ip: 192.168.2.1
-        nodeName: kube-master
-        targetRef:
-          kind: Pod
-          name: nginx-1
-          namespace: default
-    ports:
-      - port: 80
-        protocol: TCP
+      - 192.168.2.1
+    nodeName: kube-master
+    targetRef:
+      kind: Pod
+      name: nginx-1
+      namespace: default
+ports:
+  - port: 80
+    protocol: TCP
 
 ---
 # An IPv6 service with a corresponding IPv6 endpoint on the local
@@ -123,18 +151,21 @@ spec:
       targetPort: 80
 
 ---
-kind: Endpoints
-apiVersion: v1
+kind: EndpointSlice
+apiVersion: discovery.k8s.io/v1
 metadata:
   name: service-v6-2
-subsets:
+  labels:
+    kubernetes.io/service-name: service-v6-2
+addressType: IPv6
+endpoints:
   - addresses:
-      - ip: fd5f:807a:4532::43
-        nodeName: kube-master
-        targetRef:
-          kind: Pod
-          name: nginx-1
-          namespace: default
-    ports:
-      - port: 80
-        protocol: TCP
+      - fd5f:807a:4532::43
+    nodeName: kube-master
+    targetRef:
+      kind: Pod
+      name: nginx-1
+      namespace: default
+ports:
+  - port: 80
+    protocol: TCP

@@ -1,0 +1,67 @@
+- title: v3.31.0
+  manifest_url: https://test-release.docs.eng.tigera.net
+  release_name: test-release
+  note: test-release - generated at [Date1] using release-v3.31 release branch with release-v1.40 operator branch
+  full_hash: v3.31.0-v1.40.0
+  tigera-operator:
+    version: v1.40.0-v3.31.0
+    image: tigera/operator
+    registry: docker.io
+  components:
+    api:
+      version: v3.31.0
+    apiserver:
+      version: v3.31.0
+    calico:
+      version: v3.31.0
+    calicoctl:
+      version: v3.31.0
+      image: ctl
+    cni:
+      version: v3.31.0
+    cni-windows:
+      version: v3.31.0
+    csi:
+      version: v3.31.0
+    csi-node-driver-registrar:
+      version: v3.31.0
+      image: node-driver-registrar
+    dikastes:
+      version: v3.31.0
+    envoy-gateway:
+      version: v3.31.0
+    envoy-proxy:
+      version: v3.31.0
+    envoy-ratelimit:
+      version: v3.31.0
+    flannel:
+      version: v0.12.0
+      image: coreos/flannel
+      registry: quay.io
+    flannel-migration-controller:
+      version: v3.31.0
+    flexvol:
+      version: v3.31.0
+      image: pod2daemon-flexvol
+    goldmane:
+      version: v3.31.0
+    guardian:
+      version: v3.31.0
+    key-cert-provisioner:
+      version: v3.31.0
+    kube-controllers:
+      version: v3.31.0
+    networking-calico:
+      version: release-v3.31
+    node:
+      version: v3.31.0
+    node-windows:
+      version: v3.31.0
+    test-signer:
+      version: v3.31.0
+    typha:
+      version: v3.31.0
+    whisker:
+      version: v3.31.0
+    whisker-backend:
+      version: v3.31.0

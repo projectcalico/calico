@@ -113,7 +113,7 @@ func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
 			Name:           name,
 		}
 	default:
-		return Metadata{}, fmt.Errorf("Unknown key %#v of type %v", key, reflect.TypeOf(key))
+		return Metadata{}, fmt.Errorf("unknown key %#v of type %v", key, reflect.TypeOf(key))
 	}
 
 	return em, nil
@@ -137,5 +137,5 @@ func deconstructNamespaceAndNameFromWepName(wepName string) (string, string, err
 	if len(parts) == 2 {
 		return parts[0], parts[1], nil
 	}
-	return "", "", fmt.Errorf("Could not parse name %v", wepName)
+	return "", "", fmt.Errorf("could not parse name %v", wepName)
 }

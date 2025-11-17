@@ -151,7 +151,7 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	// Export the data
 	// Create a temporary file
 	tempfile, err := os.CreateTemp("", "ipam-migration-test")
-	defer os.Remove(tempfile.Name())
+	defer func() { _ = os.Remove(tempfile.Name()) }()
 	Expect(err).NotTo(HaveOccurred())
 	out = Calicoctl(false, "datastore", "migrate", "export")
 	_, err = tempfile.WriteString(out)
@@ -226,7 +226,7 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 		err = client.IPAM().ReleaseAffinity(ctx, cidr, "node4", false)
 		Expect(err).NotTo(HaveOccurred())
 		ip := cnet.ParseIP(cidr.IP.String())
-		ips = append(ips, ipam.ReleaseOptions{Address: ip.IP.String()})
+		ips = append(ips, ipam.ReleaseOptions{Address: ip.String()})
 	}
 	// Release the IPs
 	_, _, err = client.IPAM().ReleaseIPs(ctx, ips...)

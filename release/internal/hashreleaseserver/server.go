@@ -114,16 +114,7 @@ func Publish(productCode string, h *Hashrelease, cfg *Config) error {
 }
 
 func publishFiles(h *Hashrelease, cfg *Config) error {
-	logrus.WithFields(logrus.Fields{
-		"hashrelease": h.Name,
-		"srcDir":      h.Source,
-	}).Info("Publishing hashrelease files")
 	// publish to cloud storage
-	account, err := cfg.credentialsAccount()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get credentials email for hashrelease server")
-		return fmt.Errorf("failed to get credentials email for hashrelease publishing: %w", err)
-	}
 	logrus.WithFields(logrus.Fields{
 		"hashrelease": h.Name,
 		"srcDir":      h.Source,
@@ -132,7 +123,6 @@ func publishFiles(h *Hashrelease, cfg *Config) error {
 		"storage", "rsync",
 		h.Source, fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name),
 		"--recursive", "--delete-unmatched-destination-objects",
-		fmt.Sprintf("--account=%s", account),
 	}
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		args = append(args, "--verbosity=debug")
@@ -161,7 +151,7 @@ func HasHashrelease(hash string, cfg *Config) (bool, error) {
 		logrus.WithError(err).Error("Failed to read hashrelease library from bucket")
 		return false, fmt.Errorf("failed to read hashrelease library from bucket: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -239,7 +229,7 @@ func updateBucketTextFile(bucket *storage.BucketHandle, filePath, content string
 				return fmt.Errorf("failed to read existing content from bucket %s: %w", filePath, err)
 			}
 		} else {
-			defer existingReader.Close()
+			defer func() { _ = existingReader.Close() }()
 			existingContent, err := io.ReadAll(existingReader)
 			if err != nil {
 				logrus.WithError(err).Errorf("Failed to read existing content from bucket: %s", filePath)

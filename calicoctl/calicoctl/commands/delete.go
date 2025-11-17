@@ -100,20 +100,20 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
 	}
 	if context := parsedArgs["--context"]; context != nil {
-		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
+		_ = os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	results := common.ExecuteConfigCommand(parsedArgs, common.ActionDelete)
 	log.Infof("results: %+v", results)
 
 	if results.FileInvalid {
-		return fmt.Errorf("Failed to execute command: %v", results.Err)
+		return fmt.Errorf("failed to execute command: %v", results.Err)
 	} else if results.NumResources == 0 {
 		// No resources specified. If there is an associated error use that, otherwise print message with no error.
 		if results.Err != nil {
@@ -127,7 +127,7 @@ Description:
 			fmt.Printf("Successfully deleted %d resource(s)\n", results.NumHandled)
 		}
 	} else if results.Err != nil {
-		return fmt.Errorf("Hit error: %v", results.Err)
+		return fmt.Errorf("hit error: %v", results.Err)
 	}
 
 	if len(results.ResErrs) > 0 {

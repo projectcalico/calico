@@ -59,8 +59,8 @@ const (
 type NFTablesMode string
 
 const (
-	NFTablesModeEnabled  = "Enabled"
-	NFTablesModeDisabled = "Disabled"
+	NFTablesModeEnabled  NFTablesMode = "Enabled"
+	NFTablesModeDisabled NFTablesMode = "Disabled"
 )
 
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
@@ -114,6 +114,14 @@ const (
 	BPFConntrackModeBPFProgram BPFConntrackMode = "BPFProgram"
 )
 
+// +kubebuilder:validation:Enum=Auto;Strict
+type BPFJITHardeningType string
+
+const (
+	BPFJITHardeningAuto   BPFJITHardeningType = "Auto"
+	BPFJITHardeningStrict BPFJITHardeningType = "Strict"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type WindowsManageFirewallRulesMode string
 
@@ -136,6 +144,16 @@ type NATOutgoingExclusionsType string
 const (
 	NATOutgoingExclusionsIPPoolsOnly       NATOutgoingExclusionsType = "IPPoolsOnly"
 	NATOutgoingExclusionsIPPoolsAndHostIPs NATOutgoingExclusionsType = "IPPoolsAndHostIPs"
+)
+
+// +kubebuilder:validation:enum=RequireAndVerifyClientCert;RequireAnyClientCert;VerifyClientCertIfGiven;NoClientCert
+type PrometheusMetricsClientAuthType string
+
+const (
+	RequireAndVerifyClientCert PrometheusMetricsClientAuthType = "RequireAndVerifyClientCert"
+	RequireAnyClientCert       PrometheusMetricsClientAuthType = "RequireAnyClientCert"
+	VerifyClientCertIfGiven    PrometheusMetricsClientAuthType = "VerifyClientCertIfGiven"
+	NoClientCert               PrometheusMetricsClientAuthType = "NoClientCert"
 )
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
@@ -186,23 +204,8 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	IptablesPostWriteCheckInterval *metav1.Duration `json:"iptablesPostWriteCheckInterval,omitempty" configv1timescale:"seconds" confignamev1:"IptablesPostWriteCheckIntervalSecs"`
 
-	// IptablesLockFilePath is the location of the iptables lock file. You may need to change this
-	// if the lock file is not in its standard location (for example if you have mapped it into Felix's
-	// container at a different path). [Default: /run/xtables.lock]
-	IptablesLockFilePath string `json:"iptablesLockFilePath,omitempty"`
-
-	// IptablesLockTimeout is the time that Felix itself will wait for the iptables lock (rather than delegating the
-	// lock handling to the `iptables` command).
-	//
-	// Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock.
-	// [Default: 0s disabled]
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
-	IptablesLockTimeout *metav1.Duration `json:"iptablesLockTimeout,omitempty" configv1timescale:"seconds" confignamev1:"IptablesLockTimeoutSecs"`
-
-	// IptablesLockProbeInterval when IptablesLockTimeout is enabled: the time that Felix will wait between
-	// attempts to acquire the iptables lock if it is not available. Lower values make Felix more
-	// responsive when the lock is contended, but use more CPU. [Default: 50ms]
+	// IptablesLockProbeInterval configures the interval between attempts to claim
+	// the xtables lock.  Shorter intervals are more responsive but use more CPU.  [Default: 50ms]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	IptablesLockProbeInterval *metav1.Duration `json:"iptablesLockProbeInterval,omitempty" configv1timescale:"milliseconds" confignamev1:"IptablesLockProbeIntervalMillis"`
@@ -450,6 +453,22 @@ type FelixConfigurationSpec struct {
 	// set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
 	PrometheusWireGuardMetricsEnabled *bool `json:"prometheusWireGuardMetricsEnabled,omitempty"`
 
+	// PrometheusMetricsCAFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
+	// This certificate must be valid and accessible by the calico-node process.
+	PrometheusMetricsCAFile *string `json:"prometheusMetricsCAFile,omitempty"`
+
+	// PrometheusMetricsCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
+	// This certificate must be valid and accessible by the calico-node process.
+	PrometheusMetricsCertFile *string `json:"prometheusMetricsCertFile,omitempty"`
+
+	// PrometheusMetricsKeyFile defines the absolute path to the private key file corresponding to the TLS certificate
+	// used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
+	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
+
+	// PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
+	// This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+	PrometheusMetricsClientAuth *PrometheusMetricsClientAuthType `json:"prometheusMetricsClientAuth,omitempty" validate:"omitempty,oneof=RequireAndVerifyClientCert RequireAnyClientCert VerifyClientCertIfGiven NoClientCert"`
+
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
 	// allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
 	// cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified,
@@ -627,6 +646,12 @@ type FelixConfigurationSpec struct {
 	// cannot insert their own BPF programs to interfere with Calico's. [Default: true]
 	BPFDisableUnprivileged *bool `json:"bpfDisableUnprivileged,omitempty" validate:"omitempty"`
 
+	// BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
+	// if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
+	// Felix will not modify the JIT hardening setting. [Default: Auto]
+	// +kubebuilder:validation:Enum=Auto;Strict
+	BPFJITHardening *BPFJITHardeningType `json:"bpfJITHardening,omitempty" validate:"omitempty,oneof=Auto Strict"`
+
 	// BPFLogLevel controls the log level of the BPF programs when in BPF dataplane mode.  One of "Off", "Info", or
 	// "Debug".  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`.
 	// [Default: Off].
@@ -740,10 +765,9 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	BPFKubeProxyMinSyncPeriod *metav1.Duration `json:"bpfKubeProxyMinSyncPeriod,omitempty" validate:"omitempty" configv1timescale:"seconds"`
 
-	// BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
-	// kube-proxy always accepts endpoint slices. This option will be removed in
-	// the next release.
-	BPFKubeProxyEndpointSlicesEnabled *bool `json:"bpfKubeProxyEndpointSlicesEnabled,omitempty" validate:"omitempty"`
+	// BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
+	// The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
+	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=1,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
 
 	// BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
 	// collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and
@@ -847,14 +871,12 @@ type FelixConfigurationSpec struct {
 	// [Default: Continuous]
 	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
 
-	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
-	// peer side of the workload devices. It is allowed for any host L2 devices by default
-	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
-	// it on ingress. Value of Enabled also allows redirection from L3 host devices like
-	// IPIP tunnel or Wireguard directly to the peer side of the workload's device. This
-	// makes redirection faster, however, it breaks tools like tcpdump on the peer side.
-	// Use Enabled with caution. [Default: L2Only]
-	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
+	// BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device.
+	// Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+	// Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
+	// which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
+	// As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]
+	//+kubebuilder:validation:Enum=Enabled;Disabled
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
 	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
@@ -1015,6 +1037,23 @@ type FelixConfigurationSpec struct {
 	// RequireMTUFile specifies whether mtu file is required to start the felix.
 	// Optional as to keep the same as previous behavior. [Default: false]
 	RequireMTUFile *bool `json:"requireMTUFile,omitempty"`
+
+	// BPFMaglevMaxEndpointsPerService is the maximum number of endpoints
+	// expected to be part of a single Maglev-enabled service.
+	//
+	// Influences the size of the per-service Maglev lookup-tables generated by Felix
+	// and thus the amount of memory reserved.
+	//
+	// [Default: 100]
+	// +optional
+	BPFMaglevMaxEndpointsPerService *int `json:"bpfMaglevMaxEndpointsPerService,omitempty" validate:"omitempty,gt=0,lte=3000"`
+
+	// BPFMaglevMaxServices is the maximum number of expected Maglev-enabled
+	// services that Felix will allocate lookup-tables for.
+	//
+	// [Default: 100]
+	// +optional
+	BPFMaglevMaxServices *int `json:"bpfMaglevMaxServices,omitempty" validate:"omitempty,gt=0,lte=3000"`
 }
 
 type HealthTimeoutOverride struct {

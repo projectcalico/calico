@@ -18,6 +18,8 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
@@ -86,7 +88,7 @@ type target struct {
 
 func (t *target) Destination() string {
 	if t.port != 0 {
-		return fmt.Sprintf("[%s]:%d", t.destination, t.port)
+		return net.JoinHostPort(t.destination, strconv.Itoa(t.port))
 	}
 	return t.destination
 }
@@ -109,7 +111,7 @@ func (t *target) String() string {
 		}
 		if t.http != nil {
 			sha := sha1.New()
-			sha.Write([]byte(fmt.Sprintf("%s:%s %v", t.http.Method, t.http.Path, t.http.Headers)))
+			_, _ = fmt.Fprintf(sha, "%s:%s %v", t.http.Method, t.http.Path, t.http.Headers)
 			chunks = append(chunks, base64.URLEncoding.EncodeToString(sha.Sum(nil))[:7])
 		}
 		return strings.Join(chunks, ":")

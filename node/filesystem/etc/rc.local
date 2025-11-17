@@ -79,7 +79,6 @@ if [ "$CALICO_DISABLE_FILE_LOGGING" = "true" ]; then
 	rm -rf /etc/service/enabled/bird6/log
 	rm -rf /etc/service/enabled/confd/log
 	rm -rf /etc/service/enabled/felix/log
-	rm -rf /etc/service/enabled/calico-bgp-daemon/log
 	rm -rf /etc/service/enabled/cni/log
 	rm -rf /etc/service/enabled/monitor-addresses/log
 	rm -rf /etc/service/enabled/node-status-reporter/log

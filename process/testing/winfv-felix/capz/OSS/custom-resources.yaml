@@ -10,6 +10,7 @@ spec:
     type: Calico
   calicoNetwork:
     bgp: Disabled
+    linuxDataplane: Iptables
     ipPools:
       - cidr: 192.168.0.0/16
         encapsulation: VXLAN

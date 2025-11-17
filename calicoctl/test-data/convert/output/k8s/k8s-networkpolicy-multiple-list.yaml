@@ -3,14 +3,11 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: NetworkPolicy
   metadata:
-    creationTimestamp: null
     name: allow-all-egress
     namespace: default
   spec:
     egress:
     - action: Allow
-      destination: {}
-      source: {}
     order: 1000
     selector: projectcalico.org/orchestrator == 'k8s'
     types:
@@ -18,7 +15,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: NetworkPolicy
   metadata:
-    creationTimestamp: null
     name: default-deny-ingress
     namespace: default
   spec:
@@ -29,7 +25,6 @@ items:
 - apiVersion: projectcalico.org/v3
   kind: NetworkPolicy
   metadata:
-    creationTimestamp: null
     name: test-network-policy1
     namespace: test-ns
   spec:
@@ -41,7 +36,6 @@ items:
         ports:
         - 5978
       protocol: TCP
-      source: {}
     ingress:
     - action: Allow
       destination:
