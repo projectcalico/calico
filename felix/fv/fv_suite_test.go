@@ -47,12 +47,29 @@ func init() {
 
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
-	reportName := "fv_suite"
-	if NFTMode() {
-		reportName = "fv_nft_suite"
+	// OS_RELEASE is set by run-batches. On ubuntu, it looks like 24.04.
+	osRel := os.Getenv("OS_RELEASE")
+	extraSuffix := os.Getenv("EXTRA_REPORT_SUFFIX")
+	descSuffix := osRel
+	fileSuffix := osRel
+	if BPFMode() {
+		fileSuffix += "_bpf"
+		descSuffix += " BPF"
+	} else {
+		descSuffix += " non-BPF"
 	}
-	junitReporter := reporters.NewJUnitReporter(fmt.Sprintf("../report/%s.xml", reportName))
-	RunSpecsWithDefaultAndCustomReporters(t, "FV Suite", []Reporter{junitReporter})
+	if NFTMode() {
+		fileSuffix += "_nft"
+		descSuffix += " (nftables)"
+	} else {
+		fileSuffix += "_ipt"
+		descSuffix += " (iptables)"
+	}
+	if extraSuffix != "" {
+		descSuffix += " " + extraSuffix
+	}
+	junitReporter := reporters.NewJUnitReporter(fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix))
+	RunSpecsWithDefaultAndCustomReporters(t, "FV: Felix "+descSuffix, []Reporter{junitReporter})
 }
 
 var _ = BeforeEach(func() {

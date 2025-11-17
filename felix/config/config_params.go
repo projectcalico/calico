@@ -304,8 +304,6 @@ type Config struct {
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
-	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`
-	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	FeatureDetectOverride              map[string]string `config:"keyvaluelist;;"`
 	FeatureGates                       map[string]string `config:"keyvaluelist;;"`

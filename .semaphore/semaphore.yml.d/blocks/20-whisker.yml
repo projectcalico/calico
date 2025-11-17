@@ -1,4 +1,4 @@
-- name: whisker
+- name: Whisker
   run:
     when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
@@ -10,10 +10,10 @@
       commands:
         - cd whisker
     jobs:
-      - name: make ci
+      - name: "Whisker: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
-      - name: Build binary
+      - name: "Whisker: build multi-arch images"
         matrix:
           - env_var: ARCH
             values:

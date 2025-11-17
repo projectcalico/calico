@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# No set -e so that we continue to collect artifacts even if some fail.
+set -x
+
+my_dir="$(dirname "$0")"
+repo_dir="$my_dir/.."
+skip_binaries=false
+
+for arg in "$@"; do
+  if [ "$arg" = "--skip-binaries" ]; then
+    echo "Skipping collecting binaries."
+    skip_binaries=true
+  fi
+done
+
+cd "$repo_dir" || exit 1
+
+mkdir -p "artifacts"
+
+if [ "$COMPONENT" = "felix" ]; then
+
+  echo "Collecting artifacts for felix..."
+  for file in /tmp/core_felix* ; do
+    if [ -f "$file" ]; then
+      echo "Adding core file: $file"
+      sudo chmod a+r "$file"
+      out_file="artifacts/$(basename "$file").xz"
+      xz < "$file" > "$out_file"
+    fi
+  done
+  races="felix/fv/data-races.log"
+  if [ -s "$races" ]; then
+    # Only save the log if it's non-empty.
+    xz < "$races" > artifacts/data-races.log.xz
+  fi
+  if ! $skip_binaries; then
+    tar -cJf artifacts/binaries.tar.xz --ignore-failed-read \
+      "felix/bin/"calico-felix*amd64 \
+      "felix/bin/calico-bpf" \
+      "felix/bin/"test-*
+  fi
+  mkdir -p "artifacts/report"
+  cp felix/report/*.xml "artifacts/report" || echo "Failed to copy XML reports (maybe there are none)."
+  cp felix/report/*.json "artifacts/report" || echo "Failed to copy JSON reports (maybe there are none)."
+
+elif [ "$COMPONENT" = "node" ]; then
+
+  echo "Collecting artifacts for node..."
+  mkdir -p "artifacts/report"
+  cp node/report/*.xml "artifacts/report" || echo "Failed to copy reports."
+
+fi
+
+exit 0

@@ -20,6 +20,8 @@ import (
 
 const (
 	DefaultTierName                    = "default"
+	KubeAdminTierName                  = "kube-admin"
+	KubeBaselineTierName               = "kube-baseline"
 	AdminNetworkPolicyTierName         = "adminnetworkpolicy"
 	BaselineAdminNetworkPolicyTierName = "baselineadminnetworkpolicy"
 
@@ -34,6 +36,8 @@ const (
 	// BaselineAdminNetworkPolicy resource, which is cluster-scoped and lives
 	// in a tier after the default tier.
 	K8sBaselineAdminNetworkPolicyNamePrefix = "kbanp.baselineadminnetworkpolicy."
+	K8sCNPAdminTierNamePrefix               = "kcnp.kube-admin."
+	K8sCNPBaselineTierNamePrefix            = "kcnp.kube-baseline."
 
 	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
 	OpenStackNetworkPolicyNamePrefix = "ossg."
@@ -54,4 +58,9 @@ func TierOrDefault(tier string) string {
 	} else {
 		return tier
 	}
+}
+
+func TierIsStatic(name string) bool {
+	return name == DefaultTierName || name == KubeAdminTierName || name == KubeBaselineTierName ||
+		name == AdminNetworkPolicyTierName || name == BaselineAdminNetworkPolicyTierName
 }
