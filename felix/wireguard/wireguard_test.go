@@ -1523,6 +1523,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_LINK,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 								Expect(rtDataplaneV6.RouteKeyToRoute[routekeyV6_2]).To(Equal(netlink.Route{
 									Family:    unix.AF_INET6,
@@ -1532,6 +1533,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_LINK,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 								Expect(rtDataplaneV6.RouteKeyToRoute[routekeyV6_3]).To(Equal(netlink.Route{
 									Family:    unix.AF_INET6,
@@ -1541,6 +1543,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_LINK,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 								Expect(rtDataplaneV6.RouteKeyToRoute[routekeyV6_4]).To(Equal(netlink.Route{
 									Family:    unix.AF_INET6,
@@ -1550,6 +1553,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 							}
 						})
@@ -1796,6 +1800,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 
 								// Remove the wireguard config for this peer. Should have no further impact.
@@ -2005,6 +2010,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 								Expect(linkV6.WireguardPeers).To(HaveLen(1))
 								Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer1))
@@ -2118,6 +2124,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 
 								// Re-add the endpoint. Wireguard config will be added back in.
@@ -2143,6 +2150,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_LINK,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 							}
 						})
@@ -2301,6 +2309,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 
 								By("Deleting local route")
@@ -2328,6 +2337,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Protocol:  FelixRouteProtocol,
 									Scope:     netlink.SCOPE_LINK,
 									Table:     tableIndex,
+									Priority:  1024,
 								}))
 							}
 						})
@@ -2420,6 +2430,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 										Protocol:  FelixRouteProtocol,
 										Scope:     netlink.SCOPE_UNIVERSE,
 										Table:     tableIndex,
+										Priority:  1024,
 									}))
 								}
 							})
@@ -2534,6 +2545,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 										Protocol:  FelixRouteProtocol,
 										Scope:     netlink.SCOPE_LINK,
 										Table:     tableIndex,
+										Priority:  1024,
 									}))
 								}
 							})
