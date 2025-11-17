@@ -194,16 +194,9 @@
     epilogue:
       always:
         commands:
-<<<<<<< HEAD
-          - ../.semaphore/vms/collect-artifacts
-          - ../.semaphore/vms/publish-artifacts
-          - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
-          - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
-=======
           # We're still in the felix directory here.
           - 'test-results publish report/*.xml --name "Felix: FV" || true'
           - ../.semaphore/collect-artifacts
->>>>>>> origin/master
 - name: "Felix: BPF tests on Ubuntu 24.04"
   run:
     when: "${CHANGE_IN(felix,typha)}"
