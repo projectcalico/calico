@@ -83,11 +83,11 @@ dnsConfig: {}
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
   image: tigera/operator
-  version: v1.40.1
+  version: v1.40.2
   registry: quay.io
 calicoctl:
   image: quay.io/calico/ctl
-  tag: v3.31.1
+  tag: v3.31.2
 
 # Optionally configure the host and port used to access the Kubernetes API server.
 kubernetesServiceEndpoint:
