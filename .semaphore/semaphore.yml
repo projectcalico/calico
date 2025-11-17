@@ -446,6 +446,11 @@ blocks:
             - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
             - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
             - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
+            - pushd ../..
+            - tar -cz calico | gcloud storage cp - gs://calico-transient-build-artifacts-ew3/${SEMAPHORE_PIPELINE_ID}/working-copy.tgz
+            - gcloud storage cp /tmp/calico-felix-test.tar gs://calico-transient-build-artifacts-ew3/${SEMAPHORE_PIPELINE_ID}/calico-felix-test.tar
+            - gcloud storage cp /tmp/felixtest-typha.tar gs://calico-transient-build-artifacts-ew3/${SEMAPHORE_PIPELINE_ID}/felixtest-typha.tar
+            - popd
             - ../.semaphore/run-and-monitor ut.log make ut
             - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
             - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
