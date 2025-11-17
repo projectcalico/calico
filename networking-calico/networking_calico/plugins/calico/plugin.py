@@ -24,6 +24,8 @@ from oslo_config import cfg
 
 from oslo_log import log
 
+from networking_calico.plugins.calico.context import SGRUpdateContext
+
 
 LOG = log.getLogger(__name__)
 
@@ -120,6 +122,29 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
 
         super(CalicoPlugin, self).__init__()
 
+        # Override the agent notifier as we don't need it, except for it
+        # providing a hook for security group rule updates.
+        #
+        # In Calico, Felix is the closest analogue to an OpenStack agent, but we don't
+        # have an RPC interface directly from the Neutron driver to Felix.  Instead our
+        # Neutron driver writes Calico data (WorkloadEndpoints, NetworkPolicies etc.) to
+        # etcd and Felix responds to changes in the etcd datastore.  The same is true
+        # for the Calico DHCP agent.  Therefore we don't need most of what the "agent
+        # notifier" does.
+        #
+        # The exception is when rules are changed/added/delete for an existing security
+        # group, which might already be in use by Calico endpoints.  The Neutron DB code
+        # has three possible entrypoints for this kind of change, which all call
+        # self.notifier.security_groups_rule_updated, and there are no other obvious
+        # hooks that we can use to trigger our Neutron driver to update its
+        # NetworkPolicy programming for the relevant security group.  (Possibly we could
+        # also use the generic "callbacks" mechanism.  I haven't fully investigated this
+        # option.)
+        #
+        # Hence we replace self.notifier with one that handles the
+        # security_groups_rule_updated call and does nothing for all other calls.
+        self.notifier = CalicoNotifier(self)
+
     # Intercept floating IP associates/disassociates so we can trigger an
     # appropriate endpoint update.
     def _update_floatingip(self, context, id, floatingip):
@@ -152,3 +177,19 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
             context.fip_update_port_id = new_floatingip["port_id"]
             self.mechanism_manager._call_on_drivers("update_floatingip", context)
         return new_floatingip
+
+
+class CalicoNotifier(object):
+    def __init__(self, plugin):
+        self.plugin = plugin
+
+    def security_groups_rule_updated(self, context, sgids):
+        self.plugin.mechanism_manager._call_on_drivers(
+            "security_groups_rule_updated", SGRUpdateContext(context, sgids)
+        )
+
+    def __getattr__(self, name):
+        def fn(*args, **kwargs):
+            LOG.debug("CalicoNotifier no-op: %s %r %r", name, args, kwargs)
+
+        return fn
