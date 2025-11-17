@@ -580,7 +580,8 @@ var (
 	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6   maps.Map
 	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP maps.Map
 	perfMap                                                                                 maps.Map
-	profilingMap, ctlbProgsMap                                                              maps.Map
+	profilingMap                                                                            maps.Map
+	ctlbProgsMap                                                                            []maps.Map
 	allMaps                                                                                 []maps.Map
 )
 
@@ -616,7 +617,7 @@ func initMapsOnce() {
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ifstateMap, profilingMap,
-			policyJumpMap, policyJumpMapXDP, ctlbProgsMap}
+			policyJumpMap, policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2]}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
