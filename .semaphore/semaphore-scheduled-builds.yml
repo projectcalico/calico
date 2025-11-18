@@ -432,11 +432,15 @@ blocks:
           - cd felix
           - cache restore go-pkg-cache
           - cache restore go-mod-cache
+      secrets:
+        - name: google-service-account-for-gce
       jobs:
         - name: "Felix: Build and run UT, k8sfv"
           execution_time_limit:
             minutes: 60
           commands:
+            - gcloud config set project unique-caldron-775
+            - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
             - make build image fv-prereqs
             - "cache store bin-${SEMAPHORE_GIT_SHA} bin"
             - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
