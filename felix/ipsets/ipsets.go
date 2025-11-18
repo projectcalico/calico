@@ -1097,9 +1097,7 @@ func (s *IPSets) tryTempIPSetDeletions() {
 			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
 			return deltatracker.IterActionNoOpStopIteration
 		}
-		_, exists := s.setNameToProgrammedMetadata.Desired().Get(setName)
-
-		if !s.IPVersionConfig.IsTempIPSetName(setName) || exists {
+		if !s.IPVersionConfig.IsTempIPSetName(setName) {
 			return deltatracker.IterActionNoOp
 		}
 		meta, _ := s.setNameToProgrammedMetadata.Dataplane().Get(setName)
