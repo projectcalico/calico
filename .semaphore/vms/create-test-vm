@@ -71,7 +71,8 @@ EOF' && \
   ${ssh_cmd} -- gcloud storage cp "${GCS_TRANSIENT_DIR_URL}/*" /tmp && \
   ${ssh_cmd} -- tar -xzf /tmp/working-copy.tgz && \
   ${ssh_cmd} -- docker load -i /tmp/calico-felix-test.tar && \
-  ${ssh_cmd} -- docker load -i /tmp/felixtest-typha.tar
+  ${ssh_cmd} -- docker load -i /tmp/felixtest-typha.tar && \
+  ${ssh_cmd} -- docker tag calico/felix-test:latest-amd64 felix-test:latest-amd64
 }
 
 function delete-vm() {
