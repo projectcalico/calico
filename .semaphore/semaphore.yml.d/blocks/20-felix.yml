@@ -9,6 +9,11 @@
         - cd felix
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
+        - export GCS_TRANSIENT_DIR_URL=gs://calico-transient-build-artifacts-ew3/workflow-${SEMAPHORE_WORKFLOW_ID}
+        - gcloud config set project unique-caldron-775
+        - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
+    secrets:
+      - name: google-service-account-for-gce
     jobs:
       - name: "Felix: Build and run UT, k8sfv"
         execution_time_limit:
@@ -23,6 +28,11 @@
           - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
           - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
           - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
+          - pushd ../..
+          - tar -czf /tmp/working-copy.tgz --exclude=.go-pkg-cache --exclude=artifacts calico
+          - gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar ${GCS_TRANSIENT_DIR_URL}/
+          - rm /tmp/working-copy.tgz
+          - popd
           - ../.semaphore/run-and-monitor ut.log make ut
           - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
           - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
@@ -205,6 +215,9 @@
   task:
     prologue:
       commands:
+        - export GCS_TRANSIENT_DIR_URL=gs://calico-transient-build-artifacts-ew3/workflow-${SEMAPHORE_WORKFLOW_ID}
+        - gcloud config set project unique-caldron-775
+        - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
         - cd felix
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
