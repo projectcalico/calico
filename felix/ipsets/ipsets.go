@@ -355,6 +355,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		retryDelay *= 2
 	}
 
+	var resyncErr, updateErr error
 	for attempt := 0; attempt < MaxRetryAttempt; attempt++ {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
@@ -366,44 +367,50 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 			s.logCxt.Debug("Resyncing ipsets with dataplane.")
 			s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
 
-			if err := s.tryResync(); err != nil {
-				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
+			if resyncErr = s.tryResync(); resyncErr != nil {
+				s.logCxt.WithError(resyncErr).Warning("Failed to resync with dataplane")
 
 				// After a few attempts, most likely, we are dealing with a persistent failure.
 				// This could be due to different failures, like userspace and kernel incompatibility.
 				// The incompatibility failure can be fixed by swapping the one Felix understand (created from
 				// desired state) and the one (with higher revision) in dataplane. As such, we should stop re-trying
-				// to re-sync, and instead continue with the next steps.
+				// and instead fall through to the next steps.
 				if treatFailureAsTransient {
 					backOff()
 					continue
 				}
 			}
-			s.fullResyncRequired = false
 		}
 
 		// Opportunistically delete some temporary IP sets.  It's possible
 		// that ApplyDeletions doesn't get called if there's another failure
 		// and deleting some temp sets might free up some room.
 		s.tryTempIPSetDeletions()
+		if resyncErr != nil {
+			_ = s.ApplyDeletions()
+		}
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
-		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
+		if updateErr = s.tryUpdates(dirtyIPSets, listener); updateErr != nil {
 			if treatFailureAsTransient {
 				// Transient failure, resync the IP sets that we failed to update.
-				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
+				s.logCxt.WithError(updateErr).WithField("attempt", attempt).Warning(
 					"Failed to update IP sets. Will do partial resync.")
 			} else {
 				// Persistent failures, try a full resync.
-				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
+				s.logCxt.WithError(updateErr).WithField("attempt", attempt).Warning(
 					"Persistently failed to update IP sets. Will do full resync.")
 				s.QueueResync()
 			}
 			countNumIPSetErrors.Inc()
+		}
+
+		if resyncErr != nil || updateErr != nil {
 			backOff()
 			continue
 		}
 
+		s.fullResyncRequired = false
 		success = true
 		break
 	}
@@ -1028,7 +1035,8 @@ func (s *IPSets) ApplyDeletions() bool {
 		if numDeletions >= MaxIPSetDeletionsPerIteration {
 			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
 			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
-			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.", MaxIPSetDeletionsPerIteration)
+			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.",
+				MaxIPSetDeletionsPerIteration)
 			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
 			return deltatracker.IterActionNoOpStopIteration
 		}
@@ -1084,11 +1092,14 @@ func (s *IPSets) tryTempIPSetDeletions() {
 		if numDeletions >= MaxIPSetDeletionsPerIteration {
 			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
 			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
-			log.Debugf("Deleted batch of 20 temp IP sets, rate limiting further IP set deletions.")
+			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.",
+				MaxIPSetDeletionsPerIteration)
 			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
 			return deltatracker.IterActionNoOpStopIteration
 		}
-		if !s.IPVersionConfig.IsTempIPSetName(setName) {
+		_, exists := s.setNameToProgrammedMetadata.Desired().Get(setName)
+
+		if !s.IPVersionConfig.IsTempIPSetName(setName) || exists {
 			return deltatracker.IterActionNoOp
 		}
 		meta, _ := s.setNameToProgrammedMetadata.Dataplane().Get(setName)
