@@ -47,7 +47,7 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #else /* CALI_F_XDP */
 
-#define cali_jump_map map_symbol(cali_progs, 3)
+#define cali_jump_map map_symbol(cali_progs, 4)
 
 CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 

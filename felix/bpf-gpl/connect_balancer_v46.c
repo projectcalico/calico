@@ -28,12 +28,6 @@ static CALI_BPF_INLINE bool is_ipv4_as_ipv6(__u32 *addr) {
 	return addr[0] == 0 && addr[1] == 0 && addr[2] == bpf_htonl(0x0000ffff);
 }
 
-enum cali_ctlb_prog_index {
-	PROG_INDEX_V6_CONNECT,
-	PROG_INDEX_V6_SENDMSG,
-	PROG_INDEX_V6_RECVMSG,
-};
-
 SEC("cgroup/connect6")
 int calico_connect_v46(struct bpf_sock_addr *ctx)
 {
@@ -55,7 +49,7 @@ int calico_connect_v46(struct bpf_sock_addr *ctx)
 		goto v4;
 	}
 
-	bpf_tail_call(ctx, &cali_ctlb_progs, PROG_INDEX_V6_CONNECT);
+	bpf_tail_call(ctx, &cali_ctlb_conn, 0);
 	goto out;
 
 v4:
@@ -95,7 +89,7 @@ int calico_sendmsg_v46(struct bpf_sock_addr *ctx)
 		goto v4;
 	}
 
-	bpf_tail_call(ctx, &cali_ctlb_progs, PROG_INDEX_V6_SENDMSG);
+	bpf_tail_call(ctx, &cali_ctlb_send, 0);
 	goto out;
 
 v4:
@@ -136,7 +130,7 @@ int calico_recvmsg_v46(struct bpf_sock_addr *ctx)
 		goto v4;
 	}
 
-	bpf_tail_call(ctx, &cali_ctlb_progs, PROG_INDEX_V6_RECVMSG);
+	bpf_tail_call(ctx, &cali_ctlb_recv, 0);
 	goto out;
 
 

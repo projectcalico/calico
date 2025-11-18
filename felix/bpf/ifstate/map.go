@@ -50,7 +50,8 @@ const (
 	FlgWireguard  = uint32(0x100)
 	FlgL3         = uint32(0x200)
 	FlgNotManaged = uint32(0x400)
-	FlgMax        = uint32(0x7ff)
+	FlgTC         = uint32(0x800)
+	FlgMax        = uint32(0x1000)
 )
 
 var flagsToStr = map[uint32]string{
@@ -65,6 +66,7 @@ var flagsToStr = map[uint32]string{
 	FlgWireguard:  "wg",
 	FlgL3:         "l3",
 	FlgNotManaged: "notmanaged",
+	FlgTC:         "tc",
 }
 
 var MapParams = maps.MapParameters{

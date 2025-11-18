@@ -109,7 +109,7 @@ OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
 OBJS+=$(MAP_OBJS)
-C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
+C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_connect_v46.c connect_balancer_sendmsg_v46.c connect_balancer_recvmsg_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
