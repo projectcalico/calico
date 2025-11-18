@@ -56,6 +56,7 @@ type CommonMaps struct {
 	JumpMap         maps.MapWithDeleteIfExists
 	XDPProgramsMap  maps.Map
 	XDPJumpMap      maps.MapWithDeleteIfExists
+	CTLBProgramsMap []maps.Map
 }
 
 type Maps struct {
@@ -87,6 +88,7 @@ func getCommonMaps() *CommonMaps {
 		JumpMap:         jump.Map().(maps.MapWithDeleteIfExists),
 		XDPProgramsMap:  hook.NewXDPProgramsMap(),
 		XDPJumpMap:      jump.XDPMap().(maps.MapWithDeleteIfExists),
+		CTLBProgramsMap: nat.ProgramsMap(),
 	}
 }
 
@@ -168,6 +170,9 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.JumpMap,
 		c.XDPProgramsMap,
 		c.XDPJumpMap,
+		c.CTLBProgramsMap[0],
+		c.CTLBProgramsMap[1],
+		c.CTLBProgramsMap[2],
 	}
 }
 
