@@ -42,7 +42,7 @@ export KIND_VERSION="${KIND_VERSION_METADATA}"
 # AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
 # export AZ_KUBE_VERSION="v${AZ_VERSION:0:1}"."${AZ_VERSION:1:2}".$(echo "${AZ_VERSION}" | cut -d'.' -f2)
 # Use Kubernetes 1.33.6 from community gallery (confirmed available in eastus)
-export AZ_KUBE_VERSION="v1.33.6"
+export AZ_KUBE_VERSION="v1.32.10"
 
 export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.11.1"}"
 export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.21.0"}"
