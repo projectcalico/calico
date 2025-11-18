@@ -20,7 +20,7 @@
 #   to https://github.com/redhat-openshift-ecosystem/certified-operators
 # - running the Openshift End-to-End tests - we run them for CNI and CNV.  The results need to be passed to the Certification team for verification.
 
-set -x
+set -eu
 
 # Version of openshift preflight to use
 PREFLIGHT_TAG="${PREFLIGHT_TAG:-stable}"
@@ -86,7 +86,7 @@ certify_image () {
             --env PFLT_LOGLEVEL=trace \
             --env PFLT_ARTIFACTS=/artifacts \
             --env PFLT_LOGFILE=/artifacts/preflight.log \
-            --env PFLT_CERTIFICATION_PROJECT_ID="${PROJECT}" \
+            --env PFLT_CERTIFICATION_COMPONENT_ID="${PROJECT}" \
             --env PFLT_PYXIS_API_TOKEN="$RH_API_KEY" \
             -v "$PWD":/artifacts \
             quay.io/opdev/preflight:$PREFLIGHT_TAG check container ${ORG}/${IMAGE}:${VERSION} ${SUBMIT}
