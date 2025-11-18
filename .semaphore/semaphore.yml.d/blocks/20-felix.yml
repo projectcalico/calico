@@ -28,9 +28,10 @@
           - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
           - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
           - pushd ../..
-          - tar -cz calico | gcloud storage cp - gs://calico-transient-build-artifacts-ew3/${SEMAPHORE_PIPELINE_ID}/working-copy.tgz
-          - gcloud storage cp /tmp/calico-felix-test.tar gs://calico-transient-build-artifacts-ew3/${SEMAPHORE_PIPELINE_ID}/calico-felix-test.tar
-          - gcloud storage cp /tmp/felixtest-typha.tar gs://calico-transient-build-artifacts-ew3/${SEMAPHORE_PIPELINE_ID}/felixtest-typha.tar
+          - tar -czf /tmp/working-copy.tgz --exclude=.go-pkg-cache calico
+          - export PIPELINE_GCS_URL=gs://calico-transient-build-artifacts-ew3/${SEMAPHORE_PIPELINE_ID}
+          - gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar ${PIPELINE_GCS_URL}/
+          - rm /tmp/working-copy.tgz
           - popd
           - ../.semaphore/run-and-monitor ut.log make ut
           - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
