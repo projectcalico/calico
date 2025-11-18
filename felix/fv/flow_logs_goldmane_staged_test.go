@@ -69,7 +69,7 @@ import (
 
 // These tests include tests of Kubernetes policies as well as other policy types. To ensure we have the correct
 // behavior, run using the Kubernetes infrastructure only.
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ FOCUS goldmane flow log with staged policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with staged policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPort = 8055
 		svcPort = 8066
@@ -342,10 +342,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ FOCUS goldmane flow log wit
 
 			Eventually(checkNat, "10s", "1s").Should(BeTrue(), "Expected NAT to be programmed")
 
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
-				"ingress", "default.ep1-1-allow-all")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_2.InterfaceName,
-				"ingress", "NetworkPolicy/default/tier1.np1-1")
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default.ep1-1-allow-all")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_2.InterfaceName, "ingress", "tier1.np1-1")
+
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))

@@ -1601,18 +1601,6 @@ var _ = Describe("Conntrack Datasource", func() {
 
 func policyIDStrToRuleIDParts(r *calc.RuleID) [64]byte {
 	var byt64 [64]byte
-
-	// TODO: CASEY: Review this logic vs. the IDMaker.
-	// if r.Namespace != "" {
-	// 	if strings.HasPrefix(r.Name, "knp.default.") {
-	// 		name = fmt.Sprintf("%s/%s", r.Namespace, r.Name)
-	// 	} else {
-	// 		name = fmt.Sprintf("%s/%s.%s", r.Namespace, r.Tier, r.Name)
-	// 	}
-	// } else {
-	// 	name = fmt.Sprintf("%s.%s", r.Tier, r.Name)
-	// }
-
 	id := types.PolicyID{Name: r.Name, Namespace: r.Namespace, Kind: r.Kind}
 	prefix := rules.CalculateNFLOGPrefixStr(r.Action, rules.RuleOwnerTypePolicy, r.Direction, r.Index, id)
 	copy(byt64[:], []byte(prefix))
