@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -320,25 +321,27 @@ func MarkNetworkAvailable() error {
 	}
 
 	config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
-	if err != nil {
+	if err == nil {
+		// Create the k8s clientset.
+		config.Timeout = 2 * time.Second
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.WithError(err).Error("Failed to create clientset")
+			return err
+		}
+
+		// All done. Set NetworkUnavailable to false if using Calico for networking.
+		// We do it late in the process to avoid node resource update conflict because setting
+		// node condition will trigger node-controller updating node taints.
+		err = utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
+		if err != nil {
+			log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+			return err
+		}
+	} else if clientcmd.IsEmptyConfig(err) && os.Getenv("DATASTORE_TYPE") != "kubernetes" {
+		log.Info("Kubernetes configuration not detected; skipping NetworkUnavailable condition update")
+	} else {
 		log.WithError(err).Error("Failed to build Kubernetes config")
-		return err
-	}
-	config.Timeout = 2 * time.Second
-
-	// Create the k8s clientset.
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.WithError(err).Error("Failed to create clientset")
-		return err
-	}
-
-	// All done. Set NetworkUnavailable to false if using Calico for networking.
-	// We do it late in the process to avoid node resource update conflict because setting
-	// node condition will trigger node-controller updating node taints.
-	err = utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
-	if err != nil {
-		log.WithError(err).Error("Unable to set NetworkUnavailable to False")
 		return err
 	}
 
