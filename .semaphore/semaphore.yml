@@ -445,17 +445,18 @@ blocks:
             - make build image fv-prereqs
             - "cache store bin-${SEMAPHORE_GIT_SHA} bin"
             - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
-            - cache store go-pkg-cache .go-pkg-cache
-            - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache"
+            - "cache store go-pkg-cache .go-pkg-cache &"
+            - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache &"
             - docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
-            - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
+            - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar &"
             - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
-            - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
+            - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar &"
             - pushd ../..
             - tar -czf /tmp/working-copy.tgz --exclude=.go-pkg-cache --exclude=artifacts calico
-            - gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar ${GCS_TRANSIENT_DIR_URL}/
-            - rm /tmp/working-copy.tgz
+            - gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar ${GCS_TRANSIENT_DIR_URL}/ &
             - popd
+            - wait
+            - rm /tmp/working-copy.tgz
   #          - ../.semaphore/run-and-monitor ut.log make ut
   #          - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
   #          - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
