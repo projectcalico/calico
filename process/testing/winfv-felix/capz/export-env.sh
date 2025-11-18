@@ -11,8 +11,8 @@ export USER_IDENTITY="cloud-provider-user-identity"
 # Optional, can be windows-2019 (default) or windows-2022
 # https://capz.sigs.k8s.io/developers/development.html
 # https://github.com/kubernetes-sigs/cluster-api-provider-azure/blob/main/templates/flavors/machinepool-windows/machine-pool-deployment-windows.yaml#L29
-# Default changed to 2019 due to this 2022 issue: https://github.com/microsoft/Windows-Containers/issues/516
-export WINDOWS_SERVER_VERSION="${WINDOWS_SERVER_VERSION:="windows-2019"}"
+# Using Windows Server 2022 for better compatibility with newer Kubernetes versions
+export WINDOWS_SERVER_VERSION="${WINDOWS_SERVER_VERSION:="windows-2022"}"
 
 # Select VM types ("Standard_D2s_v3" is recommented for OSS Calico)
 export AZURE_CONTROL_PLANE_MACHINE_TYPE="${AZURE_CONTROL_PLANE_MACHINE_TYPE:="Standard_D2s_v3"}"
@@ -42,7 +42,7 @@ export KIND_VERSION="${KIND_VERSION_METADATA}"
 # AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
 # export AZ_KUBE_VERSION="v${AZ_VERSION:0:1}"."${AZ_VERSION:1:2}".$(echo "${AZ_VERSION}" | cut -d'.' -f2)
 # Use Kubernetes 1.33.6 from community gallery (confirmed available in eastus)
-export AZ_KUBE_VERSION="v1.32.10"
+export AZ_KUBE_VERSION="v1.32.9"
 
 export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.11.1"}"
 export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.21.0"}"
