@@ -649,7 +649,7 @@ blocks:
           - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
           - echo VM_PREFIX=${VM_PREFIX}
           - export COMPONENT=felix
-          - export NUM_FV_BATCHES=8
+          - export NUM_FV_BATCHES=25
           - export RUN_UT=true
           - export FV_FOCUS=BPF-SAFE
           - export IMAGE=ubuntu-2404-noble-amd64-v20250502a
