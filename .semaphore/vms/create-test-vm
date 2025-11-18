@@ -65,9 +65,13 @@ EOF' && \
   set +x && \
   echo "$DOCKERHUB_PASSWORD" | gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
   set -x && \
-  gcloud --quiet compute scp --zone=${zone} --recurse --compress "$(dirname $(pwd))" "ubuntu@${vm_name}:/home/ubuntu/calico" && \
   gcloud --quiet compute scp --zone=${zone} --recurse --compress "$HOME/secrets" "ubuntu@${vm_name}:/home/ubuntu/secrets" && \
-  ${ssh_cmd} -- rm -rf '/home/ubuntu/calico/artifacts'
+  ${ssh_cmd} -- gcloud config set project unique-caldron-775 && \
+  ${ssh_cmd} -- gcloud auth activate-service-account --key-file=/home/ubuntu/secrets/secret.google-service-account-key.json && \
+  ${ssh_cmd} -- gcloud storage cp "${GCS_TRANSIENT_DIR_URL}/*" /tmp && \
+  ${ssh_cmd} -- tar -xzf /tmp/working-copy.tgz && \
+  ${ssh_cmd} -- docker load -i /tmp/calico-felix-test.tar && \
+  ${ssh_cmd} -- docker load -i /tmp/felixtest-typha.tar
 }
 
 function delete-vm() {
