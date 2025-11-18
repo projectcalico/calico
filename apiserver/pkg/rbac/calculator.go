@@ -285,7 +285,7 @@ func (c *calculator) CalculatePermissions(user user.Info, rvs []ResourceVerbs) (
 	}
 
 	// Create a new user calculator using the current set of resources and return the authorized verbs for the user and any errors that were hit.
-	// This may result in an update to the cached resource types if the calculcator does not know about a requested resource type.
+	// This may result in an update to the cached resource types if the calculator does not know about a requested resource type.
 	return newUserCalculator(c, user, resources, resourceUpdateTime).Calculate(rvs)
 }
 
@@ -416,7 +416,7 @@ func (u *userCalculator) getMatches(verb Verb, res apiResource, subresource stri
 	//   get access for that resource. This is to allow RBAC controls being set to not permit "list" access, but provide
 	//   a way for the UI to determine the limited subset of tiers and namespaces the user is allowed to see.
 	//   We may wish to expand this to include other resource types too - especially anywhere the UI provides
-	//   field selections refering to another resource.
+	//   field selections referring to another resource.
 	// - "watch" queries for namespaces, tiers, and managedclusters will be expanded out by name iff the user does not have cluster-scoped
 	//   watch access.
 	// - Any action for tiered policies is expanded across the "gettable" tiers. The RBAC calculator never wildcards the

@@ -14353,7 +14353,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeStatus(ref common.ReferenceCallbac
 					},
 					"lastPhaseTransitionTime": {
 						SchemaProps: spec.SchemaProps{
-							Description: "lastPhaseTransitionTime is the time the phase transitioned from one to another and automatically resets to current time everytime a volume phase transitions.",
+							Description: "lastPhaseTransitionTime is the time the phase transitioned from one to another and automatically resets to current time every time a volume phase transitions.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
