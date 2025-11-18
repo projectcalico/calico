@@ -1,5 +1,5 @@
 export CLUSTER_NAME_CAPZ="${CLUSTER_NAME_CAPZ:=${USER}-capz-win}"
-export AZURE_LOCATION="${AZURE_LOCATION:="westus2"}"
+export AZURE_LOCATION="${AZURE_LOCATION:="eastus"}"
 
 # [Optional] Select resource group. The default value is ${CLUSTER_NAME_CAPZ}-rg.
 export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME_CAPZ}-rg}"
@@ -11,8 +11,8 @@ export USER_IDENTITY="cloud-provider-user-identity"
 # Optional, can be windows-2019 (default) or windows-2022
 # https://capz.sigs.k8s.io/developers/development.html
 # https://github.com/kubernetes-sigs/cluster-api-provider-azure/blob/main/templates/flavors/machinepool-windows/machine-pool-deployment-windows.yaml#L29
-# Default changed to 2019 due to this 2022 issue: https://github.com/microsoft/Windows-Containers/issues/516
-export WINDOWS_SERVER_VERSION="${WINDOWS_SERVER_VERSION:="windows-2019"}"
+# Using Windows Server 2022 for better compatibility with newer Kubernetes versions
+export WINDOWS_SERVER_VERSION="${WINDOWS_SERVER_VERSION:="windows-2022"}"
 
 # Select VM types ("Standard_D2s_v3" is recommented for OSS Calico)
 export AZURE_CONTROL_PLANE_MACHINE_TYPE="${AZURE_CONTROL_PLANE_MACHINE_TYPE:="Standard_D2s_v3"}"
@@ -37,8 +37,12 @@ export KUBE_VERSION="${KINDEST_NODE_VERSION_METADATA}"
 export KIND_VERSION="${KIND_VERSION_METADATA}"
 
 # Azure image versions use versions corresponding to kubernetes versions, e.g. 129.7.20240717 corresponds to k8s v1.29.7
-AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
-export AZ_KUBE_VERSION="v${AZ_VERSION:0:1}"."${AZ_VERSION:1:2}".$(echo "${AZ_VERSION}" | cut -d'.' -f2)
+# The marketplace images (cncf-upstream) only go up to 1.30.x, but CAPZ uses community gallery images
+# which have newer versions available. We verified 1.33.6 is available in eastus.
+# AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
+# export AZ_KUBE_VERSION="v${AZ_VERSION:0:1}"."${AZ_VERSION:1:2}".$(echo "${AZ_VERSION}" | cut -d'.' -f2)
+# Use Kubernetes 1.33.6 from community gallery (confirmed available in eastus)
+export AZ_KUBE_VERSION="v1.32.9"
 
 export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.11.1"}"
 export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.21.0"}"
