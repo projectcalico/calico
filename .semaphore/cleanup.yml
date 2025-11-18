@@ -1,5 +1,5 @@
 version: v1.0
-name: Felix
+name: Clean up cloud resources
 agent:
   machine:
     type: f1-standard-2
@@ -23,8 +23,7 @@ blocks:
       jobs:
         - name: Clean up GCE instances
           commands:
-            - cd felix
-            - ./.semaphore/clean-up-vms ${VM_PREFIX}
+            - ./.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
 
