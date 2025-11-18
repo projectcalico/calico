@@ -102,16 +102,40 @@ type program struct {
 	layout Layout
 }
 
-var ProgramsMapParameters = bpfmaps.MapParameters{
+var IngressProgramsMapParameters = bpfmaps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: maxPrograms,
-	Name:       "cali_progs",
-	Version:    3,
+	Name:       "cali_progs_ing",
+	Version:    2,
 }
 
-func NewProgramsMap() bpfmaps.Map {
+var EgressProgramsMapParameters = bpfmaps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: maxPrograms,
+	Name:       "cali_progs_eg",
+	Version:    2,
+}
+
+func NewProgramsMap() []bpfmaps.Map {
+	return []bpfmaps.Map{
+		NewIngressProgramsMap(),
+		NewEgressProgramsMap(),
+	}
+}
+
+func NewIngressProgramsMap() bpfmaps.Map {
+	return newProgramsMap(IngressProgramsMapParameters)
+}
+
+func NewEgressProgramsMap() bpfmaps.Map {
+	return newProgramsMap(EgressProgramsMapParameters)
+}
+
+func newProgramsMap(ProgramsMapParameters bpfmaps.MapParameters) bpfmaps.Map {
 	return &ProgramsMap{
 		PinnedMap: bpfmaps.NewPinnedMap(ProgramsMapParameters),
 		programs:  make(map[AttachType]*program),
@@ -137,7 +161,7 @@ func (pm *ProgramsMap) LoadObj(at AttachType) (Layout, error) {
 	if file == "" {
 		return nil, fmt.Errorf("no object for attach type %+v", at)
 	}
-	log.WithField("AttachType", at).Debugf("Looked up file for attach type: %s", file)
+	log.WithField("AttachType", at).Debugf("Sridhar Looked up file for attach type: %s", file)
 
 	pi := pm.getOrCreateProgramInfo(at)
 
@@ -207,6 +231,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 		return nil, fmt.Errorf("error loading program: %w", err)
 	}
 
+	log.Infof("Sridhar Loaded object file: %s", file)
 	layout, err := pm.allocateLayout(at, obj)
 	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s", file)
 

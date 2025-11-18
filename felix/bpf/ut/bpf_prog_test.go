@@ -422,7 +422,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	defer o.Close()
 
 	if rules != nil {
-		staticProgMap := progMap
+		staticProgMap := progMap[hook.Ingress]
 		polMap := policyJumpMap
 		popts := []polprog.Option{}
 		stride := jump.TCMaxEntryPoints
@@ -588,11 +588,12 @@ var (
 
 	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap maps.Map
 	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6       maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                  maps.Map
+	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                           maps.Map
 	perfMap                                                                                                                  maps.Map
 	profilingMap, ipfragsMapTmp                                                                                              maps.Map
 	qosMap                                                                                                                   maps.Map
 	ctlbProgsMap                                                                                                             []maps.Map
+	progMap                                                                                                                  []maps.Map
 	allMaps                                                                                                                  []maps.Map
 )
 
@@ -626,6 +627,7 @@ func initMapsOnce() {
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
 		ctlbProgsMap = nat.ProgramsMap()
+		progMap = hook.NewProgramsMap()
 		qosMap = qos.Map()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
@@ -659,7 +661,7 @@ func cleanUpMaps() {
 	defer log.SetLevel(logLevel)
 
 	for _, m := range allMaps {
-		if m == stateMap || m == testStateMap || m == progMap || m == countersMap || m == ipfragsMapTmp {
+		if m == stateMap || m == testStateMap || m == progMap[hook.Ingress] || m == progMap[hook.Egress] || m == countersMap || m == ipfragsMapTmp {
 			continue // Can't clean up array maps
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
@@ -733,7 +735,7 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 			}
 		}
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
-		err := obj.UpdateJumpMap(progMap.GetName(), tcdefs.ProgramNames[idx], idx)
+		err := obj.UpdateJumpMap(progMap[hook.Ingress].GetName(), tcdefs.ProgramNames[idx], idx)
 		if err != nil {
 			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
 		}
@@ -753,12 +755,15 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	progMapXDP = hook.NewXDPProgramsMap()
 	policyJumpMapXDP = jump.XDPMap()
 	if ipFamily == "preamble" {
-		_ = unix.Unlink(progMap.Path())
+		_ = unix.Unlink(progMap[hook.Ingress].Path())
+		_ = unix.Unlink(progMap[hook.Egress].Path())
 		_ = unix.Unlink(policyJumpMap.Path())
 		_ = unix.Unlink(progMapXDP.Path())
 		_ = unix.Unlink(policyJumpMapXDP.Path())
 	}
-	err := progMap.EnsureExists()
+	err := progMap[hook.Ingress].EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = progMap[hook.Egress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	err = policyJumpMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
@@ -2195,10 +2200,12 @@ func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
 	progMap = hook.NewProgramsMap()
-	err := progMap.EnsureExists()
+	err := progMap[hook.Ingress].EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = progMap[hook.Egress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	jumpMapFD := progMap.MapFD()
+	jumpMapFD := progMap[hook.Ingress].MapFD()
 	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, policyJumpMap.MapFD(),
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	rules := polprog.Rules{}

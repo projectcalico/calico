@@ -56,7 +56,7 @@ type CommonMaps struct {
 	IfStateMap      maps.Map
 	RuleCountersMap maps.Map
 	CountersMap     maps.Map
-	ProgramsMap     maps.Map
+	ProgramsMap     []maps.Map
 	JumpMap         maps.MapWithDeleteIfExists
 	XDPProgramsMap  maps.Map
 	XDPJumpMap      maps.MapWithDeleteIfExists
@@ -174,7 +174,8 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.IfStateMap,
 		c.RuleCountersMap,
 		c.CountersMap,
-		c.ProgramsMap,
+		c.ProgramsMap[0],
+		c.ProgramsMap[1],
 		c.JumpMap,
 		c.XDPProgramsMap,
 		c.XDPJumpMap,

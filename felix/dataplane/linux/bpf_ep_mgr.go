@@ -43,6 +43,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
@@ -720,7 +721,8 @@ func (m *bpfEndpointManager) repinJumpMaps() error {
 	}
 
 	mps := []maps.Map{
-		m.commonMaps.ProgramsMap,
+		m.commonMaps.ProgramsMap[0],
+		m.commonMaps.ProgramsMap[1],
 		m.commonMaps.JumpMap,
 		m.commonMaps.XDPProgramsMap,
 		m.commonMaps.XDPJumpMap,
@@ -3752,8 +3754,19 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
 }
 
 func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) {
-	pm := m.commonMaps.ProgramsMap.(*hook.ProgramsMap)
+	pm := m.commonMaps.ProgramsMap[hook.Ingress].(*hook.ProgramsMap)
+	if at.Hook == hook.Egress {
+		pm = m.commonMaps.ProgramsMap[hook.Egress].(*hook.ProgramsMap)
+	}
 
+	if at.Type == tcdefs.EpTypeWorkload {
+		pm = m.commonMaps.ProgramsMap[hook.Egress].(*hook.ProgramsMap)
+		if at.Hook == hook.Egress {
+			pm = m.commonMaps.ProgramsMap[hook.Ingress].(*hook.ProgramsMap)
+		}
+	}
+
+	log.Infof("Sridhar loading TC obj: %+v", at)
 	layout, err := pm.LoadObj(at)
 	if err != nil {
 		return nil, err
@@ -3978,8 +3991,11 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 }
 
 func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
-	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter,
-		m.commonMaps.ProgramsMap.MapFD(), m.commonMaps.StateMap.MapFD())
+	programsMapFD := m.commonMaps.ProgramsMap[hook.Ingress].MapFD()
+	if ap.Hook == hook.Egress {
+		programsMapFD = m.commonMaps.ProgramsMap[hook.Egress].MapFD()
+	}
+	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, programsMapFD, m.commonMaps.StateMap.MapFD())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -4112,7 +4128,10 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 		opts = append(opts, polprog.WithPolicyDebugEnabled())
 	}
 
-	staticProgsMap := m.commonMaps.ProgramsMap
+	staticProgsMap := m.commonMaps.ProgramsMap[hook.Ingress]
+	if hk == hook.Egress {
+		staticProgsMap = m.commonMaps.ProgramsMap[hook.Egress]
+	}
 	if hk == hook.XDP {
 		staticProgsMap = m.commonMaps.XDPProgramsMap
 	}

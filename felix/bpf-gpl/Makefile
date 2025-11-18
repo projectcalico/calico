@@ -65,7 +65,7 @@ IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_typ
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
 
-MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
+MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o common_map_stub_ing.o)
 
 # Map stub ojbs cannot have '-emit-llvm' in flags
 MAP_CFLAGS := $(subst -emit-llvm,,$(CFLAGS))
@@ -95,6 +95,9 @@ xdp_map_stub.c: $(XDP_MAP_HEADERS)
 
 bin/common_map_stub.o bin/ipv4_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -c $< -o $@
+
+bin/common_map_stub_ing.o: bin/%.o: common_map_stub.c common_map_stub.d | bin
+	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=2 -c $< -o $@
 
 bin/ipv6_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DIPVER6 -c $< -o $@
