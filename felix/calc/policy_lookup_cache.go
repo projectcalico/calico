@@ -532,8 +532,9 @@ func (r *RuleID) setFlowLogPolicyName() {
 		)
 	} else if r.Kind == v3.KindGlobalNetworkPolicy ||
 		r.Kind == model.KindKubernetesAdminNetworkPolicy ||
-		r.Kind == model.KindKubernetesBaselineAdminNetworkPolicy {
-		// GlobalNetworkPolicy, AdminNetworkPolicy, BaselineAdminNetworkPolicy.
+		r.Kind == model.KindKubernetesBaselineAdminNetworkPolicy ||
+		r.Kind == model.KindKubernetesClusterNetworkPolicy {
+		// GlobalNetworkPolicy, AdminNetworkPolicy, BaselineAdminNetworkPolicy, ClusterNetworkPolicy.
 		r.fpName = fmt.Sprintf(
 			"%s|%s|%s",
 			r.TierString(),
