@@ -26,7 +26,7 @@ global_job_config:
       - sudo apt-get install -y lz4
       - gcloud storage cp ${GCS_CACHE_DIR_URL}/cache.tar.lz4 /tmp/cache.tar.lz4 || true
       - >-
-        if [ -f /tmp/cache.tar.gz ]; then
+        if [ -f /tmp/cache.tar.lz4 ]; then
           echo "Cache hit, extracting cache...";
           lz4 -d < /tmp/cache.tar.lz4 | tar -x; 
           rm /tmp/cache.tar.lz4;
