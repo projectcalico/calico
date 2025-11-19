@@ -24,6 +24,7 @@ disk_size=${VM_DISK_SIZE:-20GB}
 project=${GCP_PROJECT:-unique-caldron-775}
 gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key.json}
 
+# Note: these all get overridden in the fv-preamble script.
 : ${IMAGE:=ubuntu-2204-jammy-v20250312}
 : ${DOCKER_VERSION=5:20.10.14~3-0~ubuntu-jammy}
 : ${UBUNTU_VERSION=jammy}

@@ -443,23 +443,10 @@ blocks:
             minutes: 60
           commands:
             - make build image fv-prereqs
-            - "cache store bin-${SEMAPHORE_GIT_SHA} bin"
-            - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
-            - "cache store go-pkg-cache .go-pkg-cache &"
-            - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache &"
-            - docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
-            - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar &"
-            - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
-            - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar &"
-            - pushd ../..
-            - tar -czf /tmp/working-copy.tgz --exclude=.go-pkg-cache --exclude=artifacts calico
-            - gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar ${GCS_TRANSIENT_DIR_URL}/ &
-            - popd
-            - wait
-            - rm /tmp/working-copy.tgz
-  #          - ../.semaphore/run-and-monitor ut.log make ut
-  #          - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-  #          - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+            - ./semaphore/cache-fv-artifacts
+            - ../.semaphore/run-and-monitor ut.log make ut
+            - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+            - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
         - name: "Felix: Static checks"
           execution_time_limit:
             minutes: 60
@@ -637,39 +624,21 @@ blocks:
     dependencies:
       - "Felix: Build"
     task:
-      prologue:
-        commands:
-          - export GCS_TRANSIENT_DIR_URL=gs://calico-transient-build-artifacts-ew3/workflow-${SEMAPHORE_WORKFLOW_ID}
-          - gcloud config set project unique-caldron-775
-          - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
-          - cd felix
-          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
-          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export ZONE=europe-west3-c
-          - export JOB_TAG=felix-ipt
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
-          - echo VM_PREFIX=${VM_PREFIX}
-          - export COMPONENT=felix
-          - export NUM_FV_BATCHES=25
-          - export RUN_UT=true
-          - export FV_FOCUS=BPF-SAFE
-          - export IMAGE=ubuntu-2404-noble-amd64-v20250502a
-          - export UBUNTU_VERSION=noble
-          - export DOCKER_VERSION=5:27.5.1-1~ubuntu.24.04~noble
-          - mkdir artifacts
-          - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
         - name: "Felix: BPF tests on Ubuntu 24.04"
           execution_time_limit:
             minutes: 180
+          env_vars:
+          - name: FELIX_TEST_GROUP
+            value: "bpf-24.04-ipt-with-ut"
           commands:
-            - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-prologue
+            - .semaphore/vms/create-test-vms ${VM_PREFIX}
+            - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
           commands:
-            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-24.04/nftables"'
-            - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
   #- name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
