@@ -1237,7 +1237,14 @@ func (r *RouteTable) refreshIfaceStateBestEffort(nl netlinkshim.Interface, iface
 }
 
 func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
-	return kernelRouteKey{CIDR: cidr}
+	key := kernelRouteKey{CIDR: cidr}
+	// For IPv6, set priority to 1024. The kernel treats priority 0 as a sigil
+	// meaning "use the default value", which is 1024 for IPv6. We need to set
+	// an explicit priority so that routes round trip cleanly.
+	if r.ipVersion == 6 {
+		key.Priority = 1024
+	}
+	return key
 }
 
 func (r *RouteTable) routeIsOurs(route *netlink.Route) bool {

@@ -99,6 +99,7 @@ var _ = Describe("RouteTable v6", func() {
 				Protocol:  syscall.RTPROT_BOOT,
 				Scope:     netlink.SCOPE_UNIVERSE,
 				Table:     unix.RT_TABLE_MAIN,
+				Priority:  1024,
 			},
 		))
 	})
