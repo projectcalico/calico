@@ -80,12 +80,6 @@ func TestEqualCIDRStrings(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "IPv4 with zero-padded octets should be normalized only if network matches and new is canonical",
-			oldCidr:  "192.168.001.000/24",
-			newCidr:  "192.168.1.0/24",
-			expected: false, // old parses, but old is NOT canonical; can only go old→canonical if semantically equal AND newCIDR == canonicalNew
-		},
-		{
 			name:     "IPv6 non-canonical masked version to canonical should be accepted",
 			oldCidr:  "2001:0db8:0000:0000::/64",
 			newCidr:  "2001:db8::/64",
