@@ -21,7 +21,7 @@ upper-constraints-yoga.txt:
 	curl -fsSL --retry 5 https://releases.openstack.org/constraints/upper/yoga -o $@
 
 upper-constraints-caracal.txt:
-	curl -fsSL --retry 5 https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt -o $@
+	curl -fsSL --retry 5 https://raw.githubusercontent.com/openstack/requirements/refs/heads/unmaintained/2024.1/upper-constraints.txt -o $@
 
 fmtpy: build-test-container
 	$(RUN_TEST_CONTAINER) tox -e black

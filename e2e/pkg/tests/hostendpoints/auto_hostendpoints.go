@@ -17,7 +17,9 @@ import (
 	"reflect"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -82,7 +84,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			},
 		}
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			// The following code tries to get config information from k8s ConfigMap.
 			// A framework clientset is needed to access k8s configmap but it will only be created in the context of BeforeEach or IT.
 			// Current solution is to use BeforeEach because this function is not a test case.
@@ -126,7 +128,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			}
 		})
 
-		AfterEach(func() {
+		ginkgo.AfterEach(func() {
 			// We've updated the kubecontrollersconfiguration, so we need to restore it to its original state.
 			if !reflect.DeepEqual(originalKCC.Spec.Controllers.Node.HostEndpoint, testKCC.Spec.Controllers.Node.HostEndpoint) {
 				logrus.Info("AfterEach: auto host endpoints not previously enabled so disabling")
@@ -141,12 +143,12 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			}
 		})
 
-		Context("with policies in place", func() {
+		ginkgo.Context("with policies in place", func() {
 			var checker conncheck.ConnectionTester
 			var server *conncheck.Server
 			var cliHostNet *conncheck.Client
 
-			BeforeEach(func() {
+			ginkgo.BeforeEach(func() {
 				checker = conncheck.NewConnectionTester(f)
 
 				// Ensure the host networked server pod is on node 0, and client is on node 1.
@@ -171,14 +173,14 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 				checker.Deploy()
 			})
 
-			AfterEach(func() {
+			ginkgo.AfterEach(func() {
 				checker.Stop()
 			})
 
-			Context("with ingress policy", func() {
+			ginkgo.Context("with ingress policy", func() {
 				var denyIngressPolicy *v3.GlobalNetworkPolicy
 
-				BeforeEach(func() {
+				ginkgo.BeforeEach(func() {
 					// Declare a policy that blocks ingress to the server
 					// pod on port 9090. But don't apply the policy yet.
 					denyIngressPolicy = &v3.GlobalNetworkPolicy{
@@ -212,12 +214,12 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 					}
 				})
 
-				AfterEach(func() {
+				ginkgo.AfterEach(func() {
 					err := cli.Delete(context.Background(), denyIngressPolicy)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should block one node 1 from entering node 0 on port 9090 with ingress policy", func() {
+				ginkgo.It("should block one node 1 from entering node 0 on port 9090 with ingress policy", func() {
 					// Without any policy, the test pod should be able to hit the service on both ports.
 					checker.ExpectSuccess(cliHostNet, server.ClusterIP().Port(port9090))
 					checker.ExpectSuccess(cliHostNet, server.ClusterIP().Port(port9091))
@@ -234,10 +236,10 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 				})
 			})
 
-			Context("with egress policy", func() {
+			ginkgo.Context("with egress policy", func() {
 				var clientPod *conncheck.Client
 
-				BeforeEach(func() {
+				ginkgo.BeforeEach(func() {
 					clientNode := getNodeHostname(nodes.Items[1])
 					clientPodOnNodeOne := func(pod *v1.Pod) {
 						pod.Spec.NodeSelector = map[string]string{"kubernetes.io/hostname": clientNode}
@@ -248,12 +250,12 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 					checker.Deploy()
 				})
 
-				AfterEach(func() {
+				ginkgo.AfterEach(func() {
 					err := cli.Delete(context.Background(), denyEgressPolicy)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should block one node 1 from reaching node 0 on port 9091 with egress policy", func() {
+				ginkgo.It("should block one node 1 from reaching node 0 on port 9091 with egress policy", func() {
 					// Without any policy, the test pod should be able to hit the service on both ports.
 					checker.ExpectSuccess(clientPod, server.ClusterIP().Port(port9090))
 					checker.ExpectSuccess(clientPod, server.ClusterIP().Port(port9091))

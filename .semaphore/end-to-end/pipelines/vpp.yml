@@ -53,7 +53,11 @@ global_job_config:
     - name: USE_PRIVATE_REGISTRY
       value: "true"
     - name: PRIVATE_REGISTRY
-      value: "quay.io/calico/"
+      value: "quay.io/"
+    - name: RELEASE_STREAM
+      value: "master"
+    - name: VPP_VERSION
+      value: "master"
 
 blocks:
   - name: k8s-e2e ST

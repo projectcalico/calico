@@ -24,7 +24,6 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -261,9 +260,6 @@ type Table struct {
 	peakIptablesSaveTime    time.Duration
 	peakIptablesRestoreTime time.Duration
 
-	// calicoXtablesLock, if enabled, our implementation of the xtables lock.
-	calicoXtablesLock sync.Locker
-
 	// lockTimeout is the timeout used for iptables-restore's native xtables lock implementation.
 	lockTimeout time.Duration
 	// lockTimeout is the lock probe interval used for iptables-restore's native xtables lock
@@ -302,8 +298,6 @@ type TableOptions struct {
 	RefreshInterval          time.Duration
 	PostWriteInterval        time.Duration
 
-	// LockTimeout is the timeout to use for iptables-restore's native xtables lock.
-	LockTimeout time.Duration
 	// LockProbeInterval is the probe interval to use for iptables-restore's native xtables lock.
 	LockProbeInterval time.Duration
 
@@ -325,7 +319,6 @@ func NewTable(
 	name string,
 	ipVersion uint8,
 	hashPrefix string,
-	iptablesWriteLock sync.Locker,
 	featureDetector environment.FeatureDetectorIface,
 	options TableOptions,
 ) *Table {
@@ -436,9 +429,6 @@ func NewTable(
 
 		refreshInterval: options.RefreshInterval,
 
-		calicoXtablesLock: iptablesWriteLock,
-
-		lockTimeout:       options.LockTimeout,
 		lockProbeInterval: options.LockProbeInterval,
 
 		newCmd:    newCmd,
@@ -1462,11 +1452,7 @@ func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
 	cmd.SetStdout(&outputBuf)
 	cmd.SetStderr(&errBuf)
 	countNumRestoreCalls.Inc()
-	// Note: calicoXtablesLock will be a dummy lock if our xtables lock is disabled (i.e. if iptables-restore
-	// supports the xtables lock itself, or if our implementation is disabled by config.
-	t.calicoXtablesLock.Lock()
 	err := cmd.Run()
-	t.calicoXtablesLock.Unlock()
 	if err != nil {
 		// To log out the input, we must convert to string here since, after we return, the buffer can be re-used
 		// (and the logger may convert to string on a background thread).

@@ -45,6 +45,8 @@ func init() {
 	var V100000000 = 0x100000000
 	var tierOrder = float64(100.0)
 	var defaultTierOrder = api.DefaultTierOrder
+	var adminTierOrder = api.KubeAdminTierOrder
+	var baselineTierOrder = api.KubeBaselineTierOrder
 	var defaultTierBadOrder = float64(10.0)
 
 	// We need pointers to bools, so define the values here.
@@ -2697,6 +2699,26 @@ func init() {
 			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierOrder,
+			}}, true),
+		Entry("Tier: disallow kube-admin tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
+			Spec: api.TierSpec{
+				Order: &defaultTierBadOrder,
+			}}, false),
+		Entry("Tier: allow kube-admin tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
+			Spec: api.TierSpec{
+				Order: &adminTierOrder,
+			}}, true),
+		Entry("Tier: disallow kube-baseline tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
+			Spec: api.TierSpec{
+				Order: &defaultTierBadOrder,
+			}}, false),
+		Entry("Tier: allow kube-baseline tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
+			Spec: api.TierSpec{
+				Order: &baselineTierOrder,
 			}}, true),
 		Entry("Tier: allow a tier with a valid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "platform"},

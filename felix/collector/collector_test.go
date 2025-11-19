@@ -1988,249 +1988,280 @@ func TestLoopDataplaneInfoUpdates(t *testing.T) {
 func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	RegisterTestingT(t)
 
-	data1 := &Data{
-		Tuple: tuple.Tuple{
-			Src:   utils.IpStrTo16Byte("192.168.1.1"),
-			Dst:   utils.IpStrTo16Byte("10.0.0.1"),
-			Proto: proto_tcp,
-			L4Src: 12345,
-			L4Dst: 80,
-		},
-		SrcEp: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					OrchestratorID: "k8s",
-					WorkloadID:     "default.workload1",
-					EndpointID:     "eth0",
-				},
-				&model.WorkloadEndpoint{},
-			),
-		},
-		DstEp: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					OrchestratorID: "k8s",
-					WorkloadID:     "default.workload2",
-					EndpointID:     "eth0",
-				},
-				&model.WorkloadEndpoint{},
-			),
-		},
+	// Helper function to convert model workload endpoint key to protobuf endpoint ID
+	convertWorkloadId := func(key model.WorkloadEndpointKey) types.WorkloadEndpointID {
+		return types.WorkloadEndpointID{
+			OrchestratorId: key.OrchestratorID,
+			WorkloadId:     key.WorkloadID,
+			EndpointId:     key.EndpointID,
+		}
 	}
 
+	// Setup test environment
+	epMap := map[[16]byte]calc.EndpointData{
+		localIp1:  localEd1,
+		localIp2:  localEd2,
+		remoteIp1: remoteEd1,
+	}
+
+	lm := newMockLookupsCache(epMap, nil, nil, nil)
 	policyStoreManager := policystore.NewPolicyStoreManager()
+
+	conf := &Config{
+		AgeTimeout:            time.Duration(10) * time.Second,
+		InitialReportingDelay: time.Duration(5) * time.Second,
+		ExportingInterval:     time.Duration(1) * time.Second,
+		FlowLogsFlushInterval: time.Duration(100) * time.Second,
+		DisplayDebugTraceLogs: true,
+		PolicyStoreManager:    policyStoreManager,
+	}
+	c := newCollector(lm, conf).(*collector)
+
+	// Create test flow tuples
+	// Flow 1: Local-to-local communication (localIp1 -> localIp2)
+	flowTuple1 := tuple.New(localIp1, localIp2, proto_tcp, 1000, 1000)
+
+	// Flow 2: Local-to-remote communication (localIp2 -> remoteIp1)
+	flowTuple2 := tuple.New(localIp2, remoteIp1, proto_tcp, 1000, 1000)
+
+	// Setup initial policy configuration
+	// localWlEp1 has policy1 for both ingress and egress
+	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, []*proto.TierInfo{
+		{Name: "default", IngressPolicies: []string{"policy1"}, EgressPolicies: []string{"policy1"}},
+	})
+
+	// localWlEp2 initially has policy2 (deny) for both ingress and egress
+	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+		{Name: "default", IngressPolicies: []string{"policy2"}, EgressPolicies: []string{"policy2"}},
+	})
+
+	// remoteWlEp1 has no policies
+	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, []*proto.TierInfo{})
+
+	// Initialize policy store with endpoints and policies
 	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-		ps.Endpoints[types.WorkloadEndpointID{
-			OrchestratorId: "k8s",
-			WorkloadId:     "default.workload1",
-			EndpointId:     "eth0",
-		}] = &proto.WorkloadEndpoint{
-			State: "active",
-			Name:  "eth0",
-			Tiers: []*proto.TierInfo{
-				{
-					Name:           "default",
-					EgressPolicies: []string{"policy1"},
-				},
-			},
-		}
-		ps.Endpoints[types.WorkloadEndpointID{
-			OrchestratorId: "k8s",
-			WorkloadId:     "default.workload2",
-			EndpointId:     "eth0",
-		}] = &proto.WorkloadEndpoint{
-			State: "active",
-			Name:  "eth0",
-			Tiers: []*proto.TierInfo{
-				{
-					Name:            "default",
-					IngressPolicies: []string{"policy1"},
-				},
-			},
+		// Add endpoint configurations
+		ps.Endpoints[convertWorkloadId(localWlEPKey1)] = localWlEp1Proto
+		ps.Endpoints[convertWorkloadId(localWlEPKey2)] = localWlEp2Proto
+		ps.Endpoints[convertWorkloadId(remoteWlEpKey1)] = remoteWlEp1Proto
+
+		// Add policy definitions
+		// policy1: Allow all traffic
+		ps.PolicyByID[types.PolicyID{Tier: "default", Name: "policy1"}] = &proto.Policy{
+			InboundRules:  []*proto.Rule{{Action: "allow"}},
+			OutboundRules: []*proto.Rule{{Action: "allow"}},
 		}
 
-		ps.PolicyByID[types.PolicyID{
-			Tier: "default",
-			Name: "policy1",
-		}] = &proto.Policy{
-			InboundRules: []*proto.Rule{
-				{
-					Action: "allow",
-				},
-			},
-			OutboundRules: []*proto.Rule{
-				{
-					Action: "allow",
-				},
-			},
-		}
-
-		ps.PolicyByID[types.PolicyID{
-			Tier: "tier1",
-			Name: "policy11",
-		}] = &proto.Policy{
-			InboundRules: []*proto.Rule{
-				{
-					Action: "allow",
-				},
-			},
-			OutboundRules: []*proto.Rule{
-				{
-					Action: "deny",
-				},
-			},
+		// policy2: Deny all traffic
+		ps.PolicyByID[types.PolicyID{Tier: "default", Name: "policy2"}] = &proto.Policy{
+			InboundRules:  []*proto.Rule{{Action: "deny"}},
+			OutboundRules: []*proto.Rule{{Action: "deny"}},
 		}
 	})
 	policyStoreManager.OnInSync()
-	c := &collector{
-		epStats:               make(map[tuple.Tuple]*Data),
-		policyStoreManager:    policyStoreManager,
-		displayDebugTraceLogs: false,
+
+	// Simulate packet processing to create flow data
+	ruleIDIngressPolicy1 := calc.NewRuleID("default", "policy1", "", 0, rules.RuleDirIngress, rules.RuleActionAllow)
+	packetInfoIngress1 := clttypes.PacketInfo{
+		Tuple:     *flowTuple1,
+		Direction: rules.RuleDirIngress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDIngressPolicy1, Hits: 1, Bytes: 100}},
+	}
+	c.applyPacketInfo(packetInfoIngress1)
+
+	ruleIDEgressPolicy1 := calc.NewRuleID("default", "policy1", "", 0, rules.RuleDirEgress, rules.RuleActionAllow)
+	packetInfoEgress1 := clttypes.PacketInfo{
+		Tuple:     *flowTuple1,
+		Direction: rules.RuleDirEgress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDEgressPolicy1, Hits: 1, Bytes: 100}},
+	}
+	c.applyPacketInfo(packetInfoEgress1)
+
+	// Process egress packet for flow 2 (localIp2 -> remoteIp1)
+	ruleIDEgressPolicy2 := calc.NewRuleID("default", "policy2", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
+	packetInfoEgress2 := clttypes.PacketInfo{
+		Tuple:     *flowTuple2,
+		Direction: rules.RuleDirEgress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDEgressPolicy2, Hits: 1, Bytes: 100}},
+	}
+	c.applyPacketInfo(packetInfoEgress2)
+
+	// Retrieve flow data from collector
+	flowData1 := c.epStats[*flowTuple1]
+	flowData2 := c.epStats[*flowTuple2]
+
+	// Verify initial pending rule trace evaluation
+	testCases := []struct {
+		name           string
+		pendingRuleIDs []*calc.RuleID
+		expectedRuleID *calc.RuleID
+		expectedLength int
+		description    string
+	}{
+		{
+			name:           "Flow1 Ingress",
+			pendingRuleIDs: flowData1.IngressPendingRuleIDs,
+			expectedRuleID: defTierPolicy2DenyIngressRuleID,
+			expectedLength: 1,
+			description:    "Flow1 destination (localEd2) should have policy2 deny rule for ingress",
+		},
+		{
+			name:           "Flow1 Egress",
+			pendingRuleIDs: flowData1.EgressPendingRuleIDs,
+			expectedRuleID: defTierPolicy1AllowEgressRuleID,
+			expectedLength: 1,
+			description:    "Flow1 source (localEd1) should have policy1 allow rule for egress",
+		},
+		{
+			name:           "Flow2 Ingress",
+			pendingRuleIDs: flowData2.IngressPendingRuleIDs,
+			expectedRuleID: nil,
+			expectedLength: 0,
+			description:    "Flow2 destination (remoteEd1) has no policies, so no ingress rules",
+		},
+		{
+			name:           "Flow2 Egress",
+			pendingRuleIDs: flowData2.EgressPendingRuleIDs,
+			expectedRuleID: defTierPolicy2DenyEgressRuleID,
+			expectedLength: 1,
+			description:    "Flow2 source (localEd2) should have policy2 deny rule for egress",
+		},
 	}
 
-	c.epStats[data1.Tuple] = data1
-
-	// Add a second data entry
-	data2 := &Data{
-		Tuple: tuple.Tuple{
-			Src:   utils.IpStrTo16Byte("192.168.1.2"),
-			Dst:   utils.IpStrTo16Byte("10.0.0.2"),
-			Proto: proto_tcp,
-			L4Src: 12346,
-			L4Dst: 81,
-		},
-		SrcEp: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					OrchestratorID: "k8s",
-					WorkloadID:     "default.workload3",
-					EndpointID:     "eth1",
-				},
-				&model.WorkloadEndpoint{},
-			),
-		},
-		DstEp: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					OrchestratorID: "k8s",
-					WorkloadID:     "default.workload4",
-					EndpointID:     "eth1",
-				},
-				&model.WorkloadEndpoint{},
-			),
-		},
-	}
-	c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-		ps.Endpoints[types.WorkloadEndpointID{
-			OrchestratorId: "k8s",
-			WorkloadId:     "default.workload3",
-			EndpointId:     "eth1",
-		}] = &proto.WorkloadEndpoint{
-			State: "active",
-			Name:  "eth1",
-			Tiers: []*proto.TierInfo{
-				{
-					Name:           "tier1",
-					EgressPolicies: []string{"policy11"},
-				},
-			},
-		}
-		ps.Endpoints[types.WorkloadEndpointID{
-			OrchestratorId: "k8s",
-			WorkloadId:     "default.workload4",
-			EndpointId:     "eth1",
-		}] = &proto.WorkloadEndpoint{
-			State: "active",
-			Name:  "eth1",
-			Tiers: []*proto.TierInfo{
-				{
-					Name:            "tier1",
-					IngressPolicies: []string{"policy11"},
-				},
-			},
-		}
-	})
-	c.epStats[data2.Tuple] = data2
-
-	t.Run("updatePendingRuleTraces", func(t *testing.T) {
-		// Update pending rule traces
-		c.updatePendingRuleTraces()
-
-		for _, ruleID := range []struct {
-			iteration      int
-			pendingRuleIDs []*calc.RuleID
-			expectedRuleID *calc.RuleID
-		}{
-			{0, data1.IngressPendingRuleIDs, defTierPolicy1AllowIngressRuleID},
-			{1, data1.EgressPendingRuleIDs, defTierPolicy1AllowEgressRuleID},
-			{2, data2.IngressPendingRuleIDs, tier1TierPolicy1AllowIngressRuleID},
-			{3, data2.EgressPendingRuleIDs, tier1TierPolicy1DenyEgressRuleID},
-		} {
-			Expect(ruleID.pendingRuleIDs).To(HaveLen(1), "Iteration: %s.Expected PendingRuleIDs to be updated")
-			Expect(ruleID.pendingRuleIDs[0].Name).To(Equal(ruleID.expectedRuleID.Name), "Iteration: %s.Expected policy name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Name)
-			Expect(ruleID.pendingRuleIDs[0].Tier).To(Equal(ruleID.expectedRuleID.Tier), "Iteration: %s.Expected tier name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Tier)
-			Expect(ruleID.pendingRuleIDs[0].Namespace).To(Equal(ruleID.expectedRuleID.Namespace), "Iteration: %s.Expected namespace to be: %s", ruleID.iteration, ruleID.expectedRuleID.Namespace)
-			Expect(ruleID.pendingRuleIDs[0].Action).To(Equal(ruleID.expectedRuleID.Action), "Iteration: %s.Expected action to be: %s", ruleID.iteration, ruleID.expectedRuleID.Action)
-			Expect(ruleID.pendingRuleIDs[0].Direction).To(Equal(ruleID.expectedRuleID.Direction), "Iteration: %s.Expected direction to be: %s", ruleID.iteration, ruleID.expectedRuleID.Direction)
-			Expect(ruleID.pendingRuleIDs[0].Index).To(Equal(ruleID.expectedRuleID.Index), "Iteration: %s.Expected index to be: %s", ruleID.iteration, ruleID.expectedRuleID.Index)
-		}
-
-		// Update the policies
-		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-			ps.Endpoints[types.WorkloadEndpointID{
-				OrchestratorId: "k8s",
-				WorkloadId:     "default.workload1",
-				EndpointId:     "eth0",
-			}] = &proto.WorkloadEndpoint{
-				State: "active",
-				Name:  "eth0",
-				Tiers: []*proto.TierInfo{
-					{
-						Name:           "tier1",
-						EgressPolicies: []string{"policy11"},
-					},
-				},
-			}
-			ps.Endpoints[types.WorkloadEndpointID{
-				OrchestratorId: "k8s",
-				WorkloadId:     "default.workload2",
-				EndpointId:     "eth0",
-			}] = &proto.WorkloadEndpoint{
-				State: "active",
-				Name:  "eth0",
-				Tiers: []*proto.TierInfo{
-					{
-						Name:            "tier1",
-						IngressPolicies: []string{"policy11"},
-					},
-				},
+	// Test initial policy evaluation
+	for _, tc := range testCases {
+		t.Run("Initial_"+tc.name, func(t *testing.T) {
+			Expect(tc.pendingRuleIDs).To(HaveLen(tc.expectedLength), tc.description)
+			if tc.expectedLength == 1 {
+				validateRuleID(t, tc.pendingRuleIDs[0], tc.expectedRuleID, tc.name)
 			}
 		})
+	}
 
-		// Update pending rule traces again
+	// Test policy update scenario
+	t.Run("PolicyUpdate", func(t *testing.T) {
+		// Change localWlEp2 from policy2 (deny) to policy1 (allow)
+		updatedLocalWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+			{Name: "default", IngressPolicies: []string{"policy1"}, EgressPolicies: []string{"policy1"}},
+		})
+
+		// Update the policy store
+		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+			ps.Endpoints[convertWorkloadId(localWlEPKey2)] = updatedLocalWlEp2Proto
+		})
+		c.policyStoreManager.OnInSync()
+
+		// Trigger pending rule trace update
 		c.updatePendingRuleTraces()
 
-		// The pending rule traces should be updated for data1, but not data2
-		for _, ruleID := range []struct {
-			iteration      int
+		// Get updated flow data
+		updatedFlowData1 := c.epStats[*flowTuple1]
+		updatedFlowData2 := c.epStats[*flowTuple2]
+
+		// Verify updated policy evaluation
+		updatedTestCases := []struct {
+			name           string
 			pendingRuleIDs []*calc.RuleID
 			expectedRuleID *calc.RuleID
+			expectedLength int
+			description    string
 		}{
-			{0, data1.IngressPendingRuleIDs, tier1TierPolicy1AllowIngressRuleID},
-			{1, data1.EgressPendingRuleIDs, tier1TierPolicy1DenyEgressRuleID},
-			{2, data2.IngressPendingRuleIDs, tier1TierPolicy1AllowIngressRuleID},
-			{3, data2.EgressPendingRuleIDs, tier1TierPolicy1DenyEgressRuleID},
-		} {
-			Expect(ruleID.pendingRuleIDs).To(HaveLen(1), "Iteration: %s. Expected PendingRuleIDs to be updated", ruleID.iteration)
-			Expect(ruleID.pendingRuleIDs[0].Name).To(Equal(ruleID.expectedRuleID.Name), "Iteration: %s.Expected policy name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Name)
-			Expect(ruleID.pendingRuleIDs[0].Tier).To(Equal(ruleID.expectedRuleID.Tier), "Iteration: %s.Expected tier name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Tier)
-			Expect(ruleID.pendingRuleIDs[0].Namespace).To(Equal(ruleID.expectedRuleID.Namespace), "Iteration: %s.Expected namespace to be: %s", ruleID.iteration, ruleID.expectedRuleID.Namespace)
-			Expect(ruleID.pendingRuleIDs[0].Action).To(Equal(ruleID.expectedRuleID.Action), "Iteration: %s.Expected action to be: %s", ruleID.iteration, ruleID.expectedRuleID.Action)
-			Expect(ruleID.pendingRuleIDs[0].Direction).To(Equal(ruleID.expectedRuleID.Direction), "Iteration: %s.Expected direction to be: %s", ruleID.iteration, ruleID.expectedRuleID.Direction)
-			Expect(ruleID.pendingRuleIDs[0].Index).To(Equal(ruleID.expectedRuleID.Index), "Iteration: %s.Expected index to be: %s", ruleID.iteration, ruleID.expectedRuleID.Index)
+			{
+				name:           "Flow1 Ingress After Update",
+				pendingRuleIDs: updatedFlowData1.IngressPendingRuleIDs,
+				expectedRuleID: defTierPolicy1AllowIngressRuleID,
+				expectedLength: 1,
+				description:    "After update, Flow1 destination should have policy1 allow rule for ingress",
+			},
+			{
+				name:           "Flow1 Egress After Update",
+				pendingRuleIDs: updatedFlowData1.EgressPendingRuleIDs,
+				expectedRuleID: defTierPolicy1AllowEgressRuleID,
+				expectedLength: 1,
+				description:    "Flow1 source should still have policy1 allow rule for egress",
+			},
+			{
+				name:           "Flow2 Ingress After Update",
+				pendingRuleIDs: updatedFlowData2.IngressPendingRuleIDs,
+				expectedRuleID: nil,
+				expectedLength: 0,
+				description:    "Flow2 destination (remoteEd1) still has no policies",
+			},
+			{
+				name:           "Flow2 Egress After Update",
+				pendingRuleIDs: updatedFlowData2.EgressPendingRuleIDs,
+				expectedRuleID: defTierPolicy1AllowEgressRuleID,
+				expectedLength: 1,
+				description:    "After update, Flow2 source should have policy1 allow rule for egress",
+			},
+		}
+
+		for _, tc := range updatedTestCases {
+			t.Run(tc.name, func(t *testing.T) {
+				Expect(tc.pendingRuleIDs).To(HaveLen(tc.expectedLength), tc.description)
+				if tc.expectedLength == 1 {
+					validateRuleID(t, tc.pendingRuleIDs[0], tc.expectedRuleID, tc.name)
+				}
+			})
 		}
 	})
 
+	// Test endpoint deletion scenario
+	t.Run("EndpointDeletion", func(t *testing.T) {
+		// Remove localEd1 from the lookup cache to simulate endpoint deletion
+		epMapWithoutLocalEd1 := map[[16]byte]calc.EndpointData{
+			localIp2:  localEd2,
+			remoteIp1: remoteEd1,
+		}
+		lm = newMockLookupsCache(epMapWithoutLocalEd1, nil, nil, nil)
+		c.luc = lm
+
+		// Make another policy change to trigger evaluation
+		localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+			{Name: "default", IngressPolicies: []string{"policy1"}, EgressPolicies: []string{"policy1"}},
+		})
+
+		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+			ps.Endpoints[convertWorkloadId(localWlEPKey2)] = localWlEp2Proto
+		})
+		c.policyStoreManager.OnInSync()
+
+		// Store original pending rule IDs before update
+		originalFlow1IngressRules := append([]*calc.RuleID(nil), c.epStats[*flowTuple1].IngressPendingRuleIDs...)
+		originalFlow1EgressRules := append([]*calc.RuleID(nil), c.epStats[*flowTuple1].EgressPendingRuleIDs...)
+
+		// Trigger update - should skip flow1 since localEd1 is deleted
+		c.updatePendingRuleTraces()
+
+		currentFlowData1 := c.epStats[*flowTuple1]
+		currentFlowData2 := c.epStats[*flowTuple2]
+
+		// Verify that flow1 rules remain unchanged (endpoint deleted, so no update)
+		Expect(currentFlowData1.IngressPendingRuleIDs).To(Equal(originalFlow1IngressRules),
+			"Flow1 ingress rules should remain unchanged when source endpoint is deleted")
+		Expect(currentFlowData1.EgressPendingRuleIDs).To(Equal(originalFlow1EgressRules),
+			"Flow1 egress rules should remain unchanged when source endpoint is deleted")
+
+		// Verify that flow2 ingress rules remain empty
+		Expect(currentFlowData2.IngressPendingRuleIDs).To(HaveLen(0),
+			"Flow2 ingress rules should remain empty as destination endpoint has no policies")
+		// Verify that flow2 rules are still updated (both endpoints exist)
+		Expect(currentFlowData2.EgressPendingRuleIDs).To(HaveLen(1),
+			"Flow2 egress rules should still be updated when both endpoints exist")
+		if len(currentFlowData2.EgressPendingRuleIDs) == 1 {
+			validateRuleID(t, currentFlowData2.EgressPendingRuleIDs[0], defTierPolicy1AllowEgressRuleID, "Flow2 Egress After Endpoint Deletion")
+		}
+	})
+}
+
+// Helper function to validate rule ID fields
+func validateRuleID(t *testing.T, actual, expected *calc.RuleID, context string) {
+	Expect(actual.Name).To(Equal(expected.Name), "Policy name mismatch in %s", context)
+	Expect(actual.Tier).To(Equal(expected.Tier), "Tier name mismatch in %s", context)
+	Expect(actual.Namespace).To(Equal(expected.Namespace), "Namespace mismatch in %s", context)
+	Expect(actual.Action).To(Equal(expected.Action), "Action mismatch in %s", context)
+	Expect(actual.Direction).To(Equal(expected.Direction), "Direction mismatch in %s", context)
+	Expect(actual.Index).To(Equal(expected.Index), "Index mismatch in %s", context)
 }
 
 func TestEqualFunction(t *testing.T) {

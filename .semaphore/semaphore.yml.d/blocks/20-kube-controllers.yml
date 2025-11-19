@@ -8,6 +8,6 @@
       commands:
         - cd kube-controllers
     jobs:
-      - name: "kube-controllers: tests"
+      - name: "kube-controllers: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci

@@ -39,7 +39,7 @@ VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 # Note: OS is always set on Windows
 ifeq ($(OS),Windows_NT)
 BUILDARCH = x86_64
-BUILDOS = x86_64
+BUILDOS = Windows
 else
 BUILDARCH ?= $(shell uname -m)
 BUILDOS ?= $(shell uname -s | tr A-Z a-z)
@@ -1071,6 +1071,14 @@ var-require-all-%:
 var-require-one-of-%:
 	@$(MAKE) --quiet --no-print-directory var-require REQUIRED_VARS=$*
 
+# build-images echos the images that would be built.
+# If WINDOWS_IMAGE is set then it echos the windows image that would be built as well.
+build-images: var-require-all-BUILD_IMAGES
+	$(if $(WINDOWS_IMAGE),\
+		@echo $(BUILD_IMAGES) $(WINDOWS_IMAGE),\
+		@echo $(BUILD_IMAGES)\
+	)
+
 # sem-cut-release triggers the cut-release pipeline (or test-cut-release if CONFIRM is not specified) in semaphore to
 # cut the release. The pipeline is triggered for the current commit, and the branch it's triggered on is calculated
 # from the RELEASE_VERSION, CNX, and OS variables given.
@@ -1253,28 +1261,22 @@ bin/yq:
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
-# This setup is used to download and install the 'crane' binary into the local bin/ directory.
-# The binary will be placed at: ./bin/crane
+# This setup is used to download and install the `crane` binary into $(REPOROOT)/bin/crane.
 # Normalize architecture for go-containerregistry filenames
-CRANE_BUILDARCH := $(shell uname -m | sed 's/aarch64/arm64/')
-CRANE_OS := $(shell uname -s)
-ifeq ($(CRANE_BUILDARCH),)
-  $(error Unsupported or unknown architecture: $(shell uname -m))
+CRANE_ARCH = $(subst amd64,x86_64,$(BUILDARCH))
+ifeq ($(OS),Windows_NT)
+CRANE_OS = Windows
+else
+CRANE_OS = $(shell uname -s)
 endif
-ifeq ($(CRANE_OS),)
-  $(error Unsupported or unknown OS: $(shell uname -s))
-endif
+CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_$(CRANE_OS)_$(CRANE_ARCH).tar.gz
 
-CRANE_FILENAME := go-containerregistry_$(CRANE_OS)_$(CRANE_BUILDARCH).tar.gz
-CRANE_URL := https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/$(CRANE_FILENAME)
-
-# Install crane binary into bin/
 .PHONY: bin/crane
 bin/crane: $(REPO_ROOT)/bin/crane
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 $(CRANE_URL) | tar zx -C $(REPO_ROOT)/bin crane
+	@curl -sSfL --retry 5 $(CRANE_URL) | tar xz -C $(REPO_ROOT)/bin crane
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.

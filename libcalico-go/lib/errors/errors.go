@@ -248,6 +248,80 @@ func (e ErrorParsingDatastoreEntry) Error() string {
 	return fmt.Sprintf("failed to parse datastore entry key=%s; value=%s: %v", e.RawKey, e.RawValue, e.Err)
 }
 
+type ErrorClusterNetworkPolicyConversion struct {
+	PolicyName string
+	Rules      []ErrorClusterNetworkPolicyConversionRule
+}
+
+func (e *ErrorClusterNetworkPolicyConversion) BadEgressRule(rule any, reason string) {
+	e.Rules = append(e.Rules, ErrorClusterNetworkPolicyConversionRule{
+		EgressRule:  rule,
+		IngressRule: nil,
+		Reason:      reason,
+	})
+}
+
+func (e *ErrorClusterNetworkPolicyConversion) BadIngressRule(rule any, reason string) {
+	e.Rules = append(e.Rules, ErrorClusterNetworkPolicyConversionRule{
+		EgressRule:  nil,
+		IngressRule: rule,
+		Reason:      reason,
+	})
+}
+
+func (e ErrorClusterNetworkPolicyConversion) Error() string {
+	s := fmt.Sprintf("policy: %s", e.PolicyName)
+
+	switch {
+	case len(e.Rules) == 0:
+		s += ": unknown policy conversion error"
+	case len(e.Rules) == 1:
+		f := e.Rules[0]
+
+		s += fmt.Sprintf(": error with rule %s", f)
+	default:
+		s += ": error with the following rules:\n"
+		for _, f := range e.Rules {
+			s += fmt.Sprintf("-  %s\n", f)
+		}
+	}
+
+	return s
+}
+
+func (e ErrorClusterNetworkPolicyConversion) GetError() error {
+	if len(e.Rules) == 0 {
+		return nil
+	}
+
+	return e
+}
+
+type ErrorClusterNetworkPolicyConversionRule struct {
+	EgressRule  any
+	IngressRule any
+	Reason      string
+}
+
+func (e ErrorClusterNetworkPolicyConversionRule) String() string {
+	var fieldString string
+
+	switch {
+	case e.EgressRule != nil:
+		fieldString = fmt.Sprintf("%+v", e.EgressRule)
+	case e.IngressRule != nil:
+		fieldString = fmt.Sprintf("%+v", e.IngressRule)
+	default:
+		fieldString = "unknown rule"
+	}
+
+	if e.Reason != "" {
+		fieldString = fmt.Sprintf("%s (%s)", fieldString, e.Reason)
+	}
+
+	return fieldString
+}
+
 type ErrorPolicyConversion struct {
 	PolicyName string
 	Rules      []ErrorPolicyConversionRule

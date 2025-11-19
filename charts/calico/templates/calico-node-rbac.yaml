@@ -68,6 +68,13 @@ rules:
     verbs:
       - watch
       - list
+  # Watch for changes to Kubernetes ClusterNetworkPolicies.
+  - apiGroups: ["policy.networking.k8s.io"]
+    resources:
+      - clusternetworkpolicies
+    verbs:
+      - watch
+      - list
   # Used by Calico for policy information.
   - apiGroups: [""]
     resources:

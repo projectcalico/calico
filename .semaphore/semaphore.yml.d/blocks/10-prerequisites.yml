@@ -1,4 +1,6 @@
 - name: Prerequisites
+  run:
+    when: "${FORCE_RUN} or change_in(['/'], {pipeline_file: 'track'})"
   dependencies: []
   task:
     agent:

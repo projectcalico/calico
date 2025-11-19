@@ -98,47 +98,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				cc = &connectivity.Checker{}
 			})
 
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range tc.Felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ip", "r")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-						}
-						felix.Exec("ip", "a")
-						if BPFMode() {
-							felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-						}
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
-			})
-
-			// Only applicable to IPIP encap
+			// These tests are only applicable to IPIP encap
 			if ipipMode != api.IPIPModeNever {
 				if brokenXSum {
 					It("should disable checksum offload", func() {
@@ -176,6 +136,162 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							}, "15s", "100ms").Should(ContainSubstring("--random-fully"))
 						}
 					}
+				})
+
+				It("should configure the ipip device correctly", func() {
+					// The ipip device should appear with default MTU, etc. FV environment uses MTU 1500,
+					// which means that we should expect 1480 after subtracting IPIP overhead for IPv4.
+					mtuStr := "mtu 1480"
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
+							return out
+						}, "60s", "500ms").Should(ContainSubstring(mtuStr))
+					}
+
+					// Change the host device's MTU, and expect the IPIP device to be updated.
+					for _, felix := range felixes {
+						Eventually(func() error {
+							_, err := felix.ExecOutput("ip", "link", "set", "eth0", "mtu", "1400")
+							return err
+						}, "15s", "100ms").Should(BeNil())
+					}
+
+					// MTU should be auto-detected, and updated to the host MTU minus 20 bytes overhead IPIP.
+					mtuStr = "mtu 1380"
+					mtuValue := "1380"
+					for _, felix := range felixes {
+						// Felix checks host MTU every 30s
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
+							return out
+						}, "60s", "500ms").Should(ContainSubstring(mtuStr))
+
+						// And expect the MTU file on disk to be updated.
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
+							return out
+						}, "30s", "100ms").Should(ContainSubstring(mtuValue))
+					}
+
+					// Explicitly configure the MTU.
+					felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
+					felixConfig.Name = "default"
+					mtu := 1300
+					felixConfig.Spec.IPIPMTU = &mtu
+					_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Expect the settings to be changed on the device.
+					for _, felix := range felixes {
+						// Felix checks host MTU every 30s
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
+							return out
+						}, "60s", "500ms").Should(ContainSubstring("mtu 1300"))
+					}
+				})
+
+				Context("external nodes configured", func() {
+					var externalClient *containers.Container
+
+					BeforeEach(func() {
+						externalClient = infrastructure.RunExtClient(infra, "ext-client")
+
+						Eventually(func() error {
+							err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
+							if err != nil && strings.Contains(err.Error(), "SIOCADDTUNNEL: File exists") {
+								return nil
+							}
+							return err
+						}).Should(Succeed())
+
+						externalClient.Exec("ip", "link", "set", "tunl0", "up")
+						externalClient.Exec("ip", "addr", "add", "dev", "tunl0", "10.65.222.1")
+						externalClient.Exec("ip", "route", "add", "10.65.0.0/24", "via",
+							tc.Felixes[0].IP, "dev", "tunl0", "onlink")
+					})
+
+					JustAfterEach(func() {
+						if CurrentGinkgoTestDescription().Failed {
+							externalClient.Exec("ip", "r")
+							externalClient.Exec("ip", "l")
+							externalClient.Exec("ip", "a")
+						}
+					})
+
+					It("should allow IPIP to external client if it is in ExternalNodesCIDRList", func() {
+						By("testing that ext client ipip does not work if not part of ExternalNodesCIDRList")
+						for _, f := range tc.Felixes {
+							// Make sure that only the internal nodes are present in the ipset
+							if BPFMode() {
+								Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(f.IP))
+								Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
+							} else if NFTMode() {
+								Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+							} else {
+								Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+							}
+						}
+
+						cc.ExpectNone(externalClient, w[0])
+						cc.CheckConnectivityWithTimeout(timeout)
+
+						By("changing configuration to include the external client")
+
+						updateConfig := func(addr string) {
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+							c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+							if err != nil {
+								// Create the default config if it doesn't already exist.
+								if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+									c = api.NewFelixConfiguration()
+									c.Name = "default"
+									c, err = client.FelixConfigurations().Create(ctx, c, options.SetOptions{})
+									Expect(err).NotTo(HaveOccurred())
+								} else {
+									Expect(err).NotTo(HaveOccurred())
+								}
+							}
+							c.Spec.ExternalNodesCIDRList = &[]string{addr}
+							logrus.WithFields(logrus.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
+							_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+						}
+
+						updateConfig(externalClient.IP)
+
+						// Wait for the config to take
+						for _, f := range tc.Felixes {
+							if BPFMode() {
+								Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(externalClient.IP))
+								Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
+									"BPF mode shouldn't program IP sets")
+							} else if NFTMode() {
+								Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes) + 1))
+							} else {
+								Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes) + 1))
+							}
+						}
+
+						// Pause felix[0], so it can't touch the dataplane; we want to
+						// test that felix[0] blocks the traffic.
+						pid := felixes[0].GetFelixPID()
+						felixes[0].Exec("kill", "-STOP", fmt.Sprint(pid))
+
+						tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
+							externalClient.IP, "dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", "90")
+
+						if BPFMode() {
+							tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
+						}
+
+						By("testing that the ext client can connect via ipip")
+						cc.ResetExpectations()
+						cc.ExpectSome(externalClient, w[0])
+						cc.CheckConnectivityWithTimeout(timeout)
+					})
 				})
 			}
 
@@ -717,169 +833,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					})
 				}
 			})
-
-			It("should configure the ipip device correctly", func() {
-				if ipipMode == api.IPIPModeNever {
-					Skip("ipip device is not available in no encap routing")
-				}
-				// The ipip device should appear with default MTU, etc. FV environment uses MTU 1500,
-				// which means that we should expect 1480 after subtracting IPIP overhead for IPv4.
-				mtuStr := "mtu 1480"
-				for _, felix := range felixes {
-					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
-						return out
-					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
-				}
-
-				// Change the host device's MTU, and expect the IPIP device to be updated.
-				for _, felix := range felixes {
-					Eventually(func() error {
-						_, err := felix.ExecOutput("ip", "link", "set", "eth0", "mtu", "1400")
-						return err
-					}, "15s", "100ms").Should(BeNil())
-				}
-
-				// MTU should be auto-detected, and updated to the host MTU minus 20 bytes overhead IPIP.
-				mtuStr = "mtu 1380"
-				mtuValue := "1380"
-				for _, felix := range felixes {
-					// Felix checks host MTU every 30s
-					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
-						return out
-					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
-
-					// And expect the MTU file on disk to be updated.
-					Eventually(func() string {
-						out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
-						return out
-					}, "30s", "100ms").Should(ContainSubstring(mtuValue))
-				}
-
-				// Explicitly configure the MTU.
-				felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
-				felixConfig.Name = "default"
-				mtu := 1300
-				felixConfig.Spec.IPIPMTU = &mtu
-				_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				// Expect the settings to be changed on the device.
-				for _, felix := range felixes {
-					// Felix checks host MTU every 30s
-					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
-						return out
-					}, "60s", "500ms").Should(ContainSubstring("mtu 1300"))
-				}
-			})
-
-			Context("external nodes configured", func() {
-				var externalClient *containers.Container
-
-				BeforeEach(func() {
-					externalClient = infrastructure.RunExtClient("ext-client")
-
-					Eventually(func() error {
-						err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
-						if err != nil && strings.Contains(err.Error(), "SIOCADDTUNNEL: File exists") {
-							return nil
-						}
-						return err
-					}).Should(Succeed())
-
-					externalClient.Exec("ip", "link", "set", "tunl0", "up")
-					externalClient.Exec("ip", "addr", "add", "dev", "tunl0", "10.65.222.1")
-					externalClient.Exec("ip", "route", "add", "10.65.0.0/24", "via",
-						tc.Felixes[0].IP, "dev", "tunl0", "onlink")
-				})
-
-				JustAfterEach(func() {
-					if CurrentGinkgoTestDescription().Failed {
-						externalClient.Exec("ip", "r")
-						externalClient.Exec("ip", "l")
-						externalClient.Exec("ip", "a")
-					}
-				})
-
-				AfterEach(func() {
-					externalClient.Stop()
-				})
-
-				It("should allow IPIP to external client if it is in ExternalNodesCIDRList", func() {
-					if ipipMode == api.IPIPModeNever {
-						Skip("external nodes is not applicable to no encap routing")
-					}
-
-					By("testing that ext client ipip does not work if not part of ExternalNodesCIDRList")
-					for _, f := range tc.Felixes {
-						// Make sure that only the internal nodes are present in the ipset
-						if BPFMode() {
-							Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(f.IP))
-							Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
-						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
-						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
-						}
-					}
-
-					cc.ExpectNone(externalClient, w[0])
-					cc.CheckConnectivityWithTimeout(timeout)
-
-					By("changing configuration to include the external client")
-
-					updateConfig := func(addr string) {
-						ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-						defer cancel()
-						c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
-						if err != nil {
-							// Create the default config if it doesn't already exist.
-							if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-								c = api.NewFelixConfiguration()
-								c.Name = "default"
-								c, err = client.FelixConfigurations().Create(ctx, c, options.SetOptions{})
-								Expect(err).NotTo(HaveOccurred())
-							} else {
-								Expect(err).NotTo(HaveOccurred())
-							}
-						}
-						c.Spec.ExternalNodesCIDRList = &[]string{addr}
-						logrus.WithFields(logrus.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
-						_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-					}
-
-					updateConfig(externalClient.IP)
-
-					// Wait for the config to take
-					for _, f := range tc.Felixes {
-						if BPFMode() {
-							Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(externalClient.IP))
-							Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
-								"BPF mode shouldn't program IP sets")
-						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes) + 1))
-						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes) + 1))
-						}
-					}
-
-					// Pause felix[0], so it can't touch the dataplane; we want to
-					// test that felix[0] blocks the traffic.
-					pid := felixes[0].GetFelixPID()
-					felixes[0].Exec("kill", "-STOP", fmt.Sprint(pid))
-
-					tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-						externalClient.IP, "dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", "90")
-
-					By("testing that the ext client can connect via ipip")
-					cc.ResetExpectations()
-					cc.ExpectSome(externalClient, w[0])
-					cc.CheckConnectivityWithTimeout(timeout)
-				})
-			})
 		})
 
 		Describe("with a borrowed tunnel IP on one host", func() {
@@ -890,8 +843,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 				timeout         = time.Second * 30
@@ -912,51 +863,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
 				assignTunnelAddresses(infra, tc, client)
-			})
-
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ipset", "list")
-						felix.Exec("ip", "r")
-						felix.Exec("ip", "a")
-						felix.Exec("calico-bpf", "routes", "dump")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-							felix.Exec("calico-bpf", "-6", "routes", "dump")
-						}
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
 			})
 
 			It("should have host to workload connectivity", func() {
@@ -1167,10 +1078,8 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions.IPIPMode = ipipMode
 	topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.VXLANMode = api.VXLANModeNever
-	topologyOptions.SimulateBIRDRoutes = false
 	topologyOptions.EnableIPv6 = enableIPv6
 	topologyOptions.FelixLogSeverity = "Debug"
-	topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
@@ -1207,4 +1116,33 @@ func allHostsIPSetSize(felixes []*infrastructure.Felix, ipipMode api.IPIPMode) i
 
 func ipipTunnelSupported(ipipMode api.IPIPMode, routeSource string) bool {
 	return ipipMode != api.IPIPModeAlways || routeSource != "WorkloadIPs"
+}
+
+func ensureRoutesProgrammed(felixes []*infrastructure.Felix) {
+	for _, felix := range felixes {
+		ensureFelixRoutesProgrammed(felix)
+	}
+}
+
+func ensureFelixRoutesProgrammed(felix *infrastructure.Felix) {
+	routesExist := func() bool {
+		cmdv4 := []string{"ip", "route", "show"}
+		outv4, err := felix.ExecOutput(cmdv4...)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check for the default route protocol used in Felix or Calico vxlan devices.
+		if strings.Contains(outv4, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
+			strings.Contains(outv4, dataplanedefs.VXLANIfaceNameV4) {
+			return true
+		}
+
+		cmdv6 := []string{"ip", "-6", "route", "show"}
+		outv6, err := felix.ExecOutput(cmdv6...)
+		Expect(err).NotTo(HaveOccurred())
+		// Check for the default route protocol used in Felix or Calico vxlan devices.
+		return strings.Contains(outv6, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
+			strings.Contains(outv6, dataplanedefs.VXLANIfaceNameV6)
+	}
+	EventuallyWithOffset(2, routesExist, "1m", "1s").Should(BeTrue())
+	ConsistentlyWithOffset(2, routesExist, "3s", "1s").Should(BeTrue())
 }

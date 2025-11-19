@@ -61,21 +61,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		ensureBPFProgramsAttached(tc.Felixes[0])
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			for _, felix := range tc.Felixes {
-				felix.Exec("calico-bpf", "counters", "dump")
-			}
-		}
-
-		for i := 0; i < 2; i++ {
-			w[i].Stop()
-		}
-		tc.Stop()
-		infra.Stop()
-	})
-
 	createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
 		log.WithField("policy", dumpResource(policy)).Info("Creating policy")
 		policy, err := calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)

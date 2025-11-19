@@ -522,8 +522,25 @@ func TestTierList(t *testing.T) {
 	}
 
 	opts := storage.GetOptions{IgnoreNotFound: false}
+
+	tierPath := func(name string) string {
+		return fmt.Sprintf("projectcalico.org/tiers/%s", name)
+	}
+
+	kubeAdminTier := makeTier(names.KubeAdminTierName, "", v3.KubeAdminTierOrder)
+	err := store.Get(ctx, tierPath(names.KubeAdminTierName), opts, kubeAdminTier)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
 	defaultTier := makeTier(names.DefaultTierName, "", v3.DefaultTierOrder)
-	err := store.Get(ctx, "projectcalico.org/tiers/default", opts, defaultTier)
+	err = store.Get(ctx, tierPath(names.DefaultTierName), opts, defaultTier)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	kubeBaselineTier := makeTier(names.KubeBaselineTierName, "", v3.KubeBaselineTierOrder)
+	err = store.Get(ctx, tierPath(names.KubeBaselineTierName), opts, kubeBaselineTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -547,7 +564,7 @@ func TestTierList(t *testing.T) {
 			},
 		},
 		// Tiers are returned in name order.
-		expectedOut: []*v3.Tier{preset[1].storedObj, defaultTier},
+		expectedOut: []*v3.Tier{preset[1].storedObj, defaultTier, kubeAdminTier, kubeBaselineTier},
 	}}
 
 	for i, tt := range tests {

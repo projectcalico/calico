@@ -15,7 +15,6 @@
 package fv_test
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -33,8 +32,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
@@ -70,38 +67,6 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 		}
 	})
 
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				}
-				for _, table := range []string{"filter", "mangle", "raw", "nat"} {
-					felix.Exec("ip6tables-save", "-c", "-t", table)
-				}
-				felix.Exec("conntrack", "-L")
-				felix.Exec("ip", "-6", "link")
-				felix.Exec("ip", "-6", "addr")
-				felix.Exec("ip", "-6", "rule")
-				felix.Exec("ip", "-6", "route")
-				felix.Exec("ip", "-6", "route", "show", "table", "1")
-				felix.Exec("ip", "-6", "neigh")
-			}
-		}
-	})
-
-	AfterEach(func() {
-		log.Info("AfterEach starting")
-		for _, f := range tc.Felixes {
-			f.Stop()
-		}
-		log.Info("AfterEach done")
-	})
-
-	AfterEach(func() {
-		infra.Stop()
-	})
-
 	var w [2][2]*workload.Workload
 
 	setupCluster := func() {
@@ -114,6 +79,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 
 			wIP := net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()
 			wName := fmt.Sprintf("w%d%d", ii, wi)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
 
 			w := workload.New(tc.Felixes[ii], wName, "default",
 				wIP, strconv.Itoa(port), "tcp")
@@ -122,23 +88,10 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 
 			w.WorkloadEndpoint.Labels = labels
 			if run {
-				err := w.Start()
+				err := w.Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 				w.ConfigureInInfra(infra)
 			}
-			if options.UseIPPools {
-				// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-				err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-					IP:       cnet.MustParseIP(wIP),
-					HandleID: &w.Name,
-					Attrs: map[string]string{
-						ipam.AttributeNode: tc.Felixes[ii].Hostname,
-					},
-					Hostname: tc.Felixes[ii].Hostname,
-				})
-				Expect(err).NotTo(HaveOccurred())
-			}
-
 			return w
 		}
 

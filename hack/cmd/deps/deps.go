@@ -258,6 +258,12 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	// Some jobs depend on secondary packages.  For example, the node tests
 	// also run typha, api server, etc.  Add inclusions for those.
 	for _, otherPkg := range otherPkgs {
+		const nonGoPrefix = "non-go:"
+		if strings.HasPrefix(otherPkg, nonGoPrefix) {
+			inclusions.Add(strings.TrimPrefix(otherPkg, nonGoPrefix))
+			continue
+		}
+
 		// For secondary dependencies, we only list dependencies of "main"
 		// packages.  This prevents us from picking up test-only dependencies.
 		// For example, kube-controllers FV has utility packages that depend on

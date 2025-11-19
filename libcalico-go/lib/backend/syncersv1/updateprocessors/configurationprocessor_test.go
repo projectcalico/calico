@@ -16,6 +16,7 @@ package updateprocessors_test
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -42,8 +43,8 @@ const (
 	wireguardMarker = "*WIREGUARDMARKER*"
 )
 
-const (
-	numBaseFelixConfigs = 172
+var (
+	numBaseFelixConfigs = reflect.TypeOf(apiv3.FelixConfigurationSpec{}).NumField()
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
@@ -222,6 +223,8 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res.Spec.NftablesFilterDenyAction = "Accept"
 		res.Spec.NftablesFilterAllowAction = "Drop"
 		res.Spec.NftablesMangleAllowAction = "Accept"
+		res.Spec.BPFMaglevMaxEndpointsPerService = &intype
+		res.Spec.BPFMaglevMaxServices = &intype
 		expected := map[string]interface{}{
 			"RouteRefreshInterval":               "12.345",
 			"IptablesLockProbeIntervalMillis":    "54.321",
@@ -240,6 +243,8 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			"NftablesFilterDenyAction":           "Accept",
 			"NftablesFilterAllowAction":          "Drop",
 			"NftablesMangleAllowAction":          "Accept",
+			"BPFMaglevMaxServices":               "3",
+			"BPFMaglevMaxEndpointsPerService":    "3",
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,
