@@ -17,9 +17,9 @@ func TestConversion(t *testing.T) {
 		"1|tier|tier.staged:name|deny|2",
 		"1|tier|tier.staged:name.with.dots|deny|2",
 
-		// GNP in baseline / anp namespaces.
-		"0|adminnetworkpolicy|adminnetworkpolicy.name|deny|1",
-		"1|baselineadminnetworkpolicy|baselineadminnetworkpolicy.name|deny|2",
+		// GNP in ClusterNetworkPolicy namespaces.
+		"0|kube-admin|kube-admin.name|deny|1",
+		"1|kube-baseline|kube-baseline.name|deny|2",
 
 		// Namespaced Calico NP
 		"0|tier|namespace/tier.name|allow|1",
@@ -40,15 +40,15 @@ func TestConversion(t *testing.T) {
 		"1|default|namespace/staged:knp.default.name|deny|3",
 		"1|default|namespace/staged:knp.default.name.with.dots|deny|3",
 
-		// AdminNetworkPolicy
-		"3|adminnetworkpolicy|kanp.adminnetworkpolicy.name|pass|4",
-		"3|adminnetworkpolicy|kanp.adminnetworkpolicy.name.with.dots|pass|4",
-		"2|adminnetworkpolicy|kanp.adminnetworkpolicy.name.with.dots|pass|1",
+		// ClusterNetworkPolicy - Admin Tier
+		"3|kube-admin|kcnp.kube-admin.name|pass|4",
+		"3|kube-admin|kcnp.kube-admin.name.with.dots|pass|4",
+		"2|kube-admin|kcnp.kube-admin.name.with.dots|pass|1",
 
-		// BaslineAdminNetworkPolicy
-		"0|baselineadminnetworkpolicy|kbanp.baselineadminnetworkpolicy.name|pass|4",
-		"3|baselineadminnetworkpolicy|kbanp.baselineadminnetworkpolicy.name.with.dots|pass|4",
-		"2|baselineadminnetworkpolicy|kbanp.baselineadminnetworkpolicy.name.with.dots|pass|1",
+		// ClusterNetworkPolicy - Baseline Tier
+		"3|kube-baseline|kcnp.kube-baseline.name|pass|4",
+		"3|kube-baseline|kcnp.kube-baseline.name.with.dots|pass|4",
+		"2|kube-baseline|kcnp.kube-baseline.name.with.dots|pass|1",
 
 		// Profile rules.
 		"1|__PROFILE__|__PROFILE__.kns.default|allow|0",
@@ -58,8 +58,8 @@ func TestConversion(t *testing.T) {
 		// End of tier rules - indicated by -1.
 		"0|tier1|ns1/tier1.policy1|deny|-1",
 		"1|tier1|ns1/tier1.policy1|allow|-1",
-		"0|adminnetworkpolicy|kanp.adminnetworkpolicy.policy1|allow|-1",
-		"2|adminnetworkpolicy|adminnetworkpolicy.policy1|allow|-1",
+		"0|kube-admin|kcnp.kube-admin.policy1|allow|-1",
+		"2|kube-admin|kube-admin.policy1|allow|-1",
 
 		"0|tier2|default/tier2.staged:np2-1|deny|-1",
 		"1|tier2|default/tier2.staged:np2-1|deny|-1",
@@ -85,8 +85,8 @@ func TestInvalidStrings(t *testing.T) {
 	tests := []string{
 		// Invalid integer values.
 		"1|tier|staged:tier.name|deny|notInt",
-		"notint|baselineadminnetworkpolicy|baselineadminnetworkpolicy.name|deny|2",
-		"notint|baselineadminnetworkpolicy|kbanp.baselineadminnetworkpolicy.name|pass|4",
+		"notint|kube-baseline|kube-baseline.name|deny|2",
+		"notint|kube-baseline|kcnp.kube-baseline.name|pass|4",
 		"notint|tier1|ns1/tier1.policy1|deny|-1",
 
 		// An extra section.
@@ -95,14 +95,14 @@ func TestInvalidStrings(t *testing.T) {
 		// Invalid characters.
 		"1|tier|invalid-ch@aracter|deny|2",
 		"1|_|namespace/staged:tier.name|deny|0",
-		"0|@dminnetworkpolicy|kanp.adminnetworkpolicy.policy1|allow|-1",
+		"0|@kube-baseline|kcnp.kube-baseline.policy1|allow|-1",
 
 		// Bad action field.
-		"0|adminnetworkpolicy|adminnetworkpolicy.name|badaction|1",
+		"0|kube-admin|kcnp.kube-admin.name|badaction|1",
 
 		// Tier fields do not match.
 		"0|tier|namespace/knp.default.name|allow|2",
-		"0|adminnetworkpolicy|kanp.foobar.policy1|allow|-1",
+		"0|kube-admin|kcnp.foobar.policy1|allow|-1",
 		"1|tier|tier2.name|allow|0",
 		"0||namespace/tier.name|allow|1",
 
