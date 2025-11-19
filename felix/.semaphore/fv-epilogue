@@ -1,0 +1,3 @@
+.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
+.semaphore/vms/publish-reports "${TEST_REPORT_NAME}"
+.semaphore/vms/clean-up-vms ${VM_PREFIX}
