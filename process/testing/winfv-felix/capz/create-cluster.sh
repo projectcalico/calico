@@ -155,9 +155,12 @@ echo "Waiting for ${TOTAL_NODES} nodes to have been provisioned..."
 timeout --foreground 600 bash -c "while ! ${KCAPZ} get nodes | grep ${AZ_KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
 echo "Seen all ${TOTAL_NODES} nodes"
 
-# Do NOT instal Azure cloud provider (clear taint instead)
-retry_command 300 "${KCAPZ} taint nodes --all node.cloudprovider.kubernetes.io/uninitialized:NoSchedule-"
+# Do NOT install Azure cloud provider (clear taints instead if they exist)
+# These taints may not exist on newer CAPZ versions, so ignore errors if taint is not found
+echo "Attempting to remove node.cloudprovider.kubernetes.io/uninitialized taint (if present)..."
+${KCAPZ} taint nodes --all node.cloudprovider.kubernetes.io/uninitialized:NoSchedule- 2>&1 | grep -v "taint.*not found" || true
 # This one is a workaround for https://github.com/kubernetes-sigs/cluster-api-provider-azure/issues/3472
-retry_command 300 "${KCAPZ} taint nodes --selector=!node-role.kubernetes.io/control-plane node.cluster.x-k8s.io/uninitialized:NoSchedule-"
+echo "Attempting to remove node.cluster.x-k8s.io/uninitialized taint (if present)..."
+${KCAPZ} taint nodes --selector=!node-role.kubernetes.io/control-plane node.cluster.x-k8s.io/uninitialized:NoSchedule- 2>&1 | grep -v "taint.*not found" || true
 
 echo "Done creating cluster"
