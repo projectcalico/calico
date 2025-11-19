@@ -33,13 +33,13 @@ gcloud config set project $project
 gcloud auth activate-service-account --key-file=$gcp_secret_key
 
 function create-vm() {
-  gcloud --quiet compute instances create "${vm_name}" \
-           --zone=${zone} \
-           --machine-type=n4-standard-4 \
-           --image=${IMAGE} \
-           --image-project=ubuntu-os-cloud \
-           --boot-disk-size=$disk_size \
-           --boot-disk-type=hyperdisk-balanced && \
+#  gcloud --quiet compute instances create "${vm_name}" \
+#           --zone=${zone} \
+#           --machine-type=n4-standard-4 \
+#           --image=${IMAGE} \
+#           --image-project=ubuntu-os-cloud \
+#           --boot-disk-size=$disk_size \
+#           --boot-disk-type=hyperdisk-balanced && \
 
   ssh_cmd="gcloud --quiet compute ssh --zone=${zone} ubuntu@${vm_name}"
 
