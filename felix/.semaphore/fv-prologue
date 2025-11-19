@@ -13,12 +13,17 @@ export NUM_FV_BATCHES=8
 
 JOB_TAG=""
 TEST_REPORT_NAME=""
+
 # In BPF runs, only run BPF-SAFE tagged tests
 if [[ $FELIX_TEST_GROUP =~ bpf ]]; then
   export FV_FOCUS=BPF-SAFE
   JOB_TAG+="bpf-"
   TEST_REPORT_NAME+="BPF/"
+  FV_NO_PREREQ_TARGET=fv-bpf-no-prereqs
+else
+  FV_NO_PREREQ_TARGET=fv-no-prereqs
 fi
+export FV_NO_PREREQ_TARGET
 
 if [[ $FELIX_TEST_GROUP =~ 22.04 ]]; then
   export IMAGE=ubuntu-2204-jammy-v20250312
@@ -50,9 +55,8 @@ if [[ $FELIX_TEST_GROUP =~ ipt ]]; then
 elif [[ $FELIX_TEST_GROUP =~ nft ]]; then
   JOB_TAG+="nft"
   TEST_REPORT_NAME+="nftables"
+  export FELIX_FV_NFTABLES=Enabled
 fi
-export JOB_TAG
-export TEST_REPORT_NAME
 
 if [[ $FELIX_TEST_GROUP =~ with-ut ]]; then
   echo "Test group includes UTs, setting RUN_UT=true"
@@ -60,6 +64,18 @@ if [[ $FELIX_TEST_GROUP =~ with-ut ]]; then
 else
   export RUN_UT=false
 fi
+
+if [[ $FELIX_TEST_GROUP =~ no-fv ]]; then
+  echo "UT-only run, setting NUM_FV_BATCHES=0"
+  export NUM_FV_BATCHES=0
+fi
+
+if [[ $FELIX_TEST_GROUP =~ jitharden ]]; then
+  JOB_TAG+="-jit"
+  TEST_REPORT_NAME+="/jitharden=2"
+fi
+export JOB_TAG
+export TEST_REPORT_NAME
 
 # Calculate short IDs for use in VM names (which are limited to 63 chars).
 SHORT_WORKFLOW_ID=$(echo "${SEMAPHORE_WORKFLOW_ID}" | sha256sum | cut -c -8)
