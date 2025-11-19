@@ -95,7 +95,7 @@ func TestInvalidStrings(t *testing.T) {
 		// Invalid characters.
 		"1|tier|invalid-ch@aracter|deny|2",
 		"1|_|namespace/staged:tier.name|deny|0",
-		"0|@kube-baseline|kcnp.kube-admin.policy1|allow|-1",
+		"0|@kube-baseline|kcnp.kube-baseline.policy1|allow|-1",
 
 		// Bad action field.
 		"0|kube-admin|kcnp.kube-admin.name|badaction|1",
