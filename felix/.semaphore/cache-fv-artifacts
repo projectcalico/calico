@@ -14,9 +14,16 @@
 # limitations under the License.
 
 set -e
+set -x
 
 docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
 docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
 cd ../..
 tar -czf /tmp/working-copy.tgz --exclude=.go-pkg-cache --exclude=artifacts calico
 gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar ${GCS_TRANSIENT_DIR_URL}/
+
+echo "Pushing cache..."
+tar -c calico go | lz4 > /tmp/cache.tar.lz4
+echo "Done making tarball."
+gcloud storage cp /tmp/cache.tar.lz4 ${GCS_CACHE_DIR_URL}/cache.tar.lz4
+echo "Done uploading."

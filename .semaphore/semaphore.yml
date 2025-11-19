@@ -17,9 +17,27 @@ auto_cancel:
 global_job_config:
   secrets:
     - name: docker-hub
+    - name: google-service-account-for-gce
   prologue:
     commands:
-      - checkout
+      - export GCS_CACHE_DIR_URL=gs://calico-transient-build-artifacts-ew3/cache
+      - gcloud config set project unique-caldron-775
+      - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
+      - apt-get install -y lz4
+      - gcloud storage cp ${GCS_CACHE_DIR_URL}/cache.tar.lz4 /tmp/cache.tar.lz4 || true
+      - >-
+        if [ -f /tmp/cache.tar.gz ]; then
+          echo "Cache hit, extracting cache...";
+          lz4 -d < /tmp/cache.tar.lz4 | tar -x; 
+          rm /tmp/cache.tar.lz4;
+          cd $SEMAPHORE_GIT_DIR;
+          git fetch origin $SEMAPHORE_GIT_SHA;
+          git checkout $SEMAPHORE_GIT_SHA;
+        else
+          echo "No cache found. Doing normal checkout.";
+          git clone --filter=blob:none --revision=$SEMAPHORE_GIT_SHA git@github.com:$SEMAPHORE_GIT_REPO_SLUG.git $SEMAPHORE_GIT_DIR
+          cd $SEMAPHORE_GIT_DIR;
+        fi
       - export CALICO_DIR="$(pwd)"
       - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
       - mkdir artifacts
@@ -162,7 +180,7 @@ blocks:
       jobs:
         - name: Pre-flight checks
           commands:
-            - true || make ci-preflight-checks
+            - make ci-preflight-checks
   - name: API
     run:
       when: "false or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -444,9 +462,9 @@ blocks:
           commands:
             - make build image fv-prereqs
             - ./.semaphore/cache-fv-artifacts
-#            - ../.semaphore/run-and-monitor ut.log make ut
-#            - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-#            - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+            - ../.semaphore/run-and-monitor ut.log make ut
+            - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+            - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
         - name: "Felix: Static checks"
           execution_time_limit:
             minutes: 60
