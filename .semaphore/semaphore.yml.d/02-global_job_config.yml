@@ -1,15 +1,30 @@
 global_job_config:
   secrets:
     - name: docker-hub
+    - name: google-service-account-for-gce
   prologue:
     commands:
-      - checkout
+      - export GCS_CACHE_DIR_URL=gs://calico-transient-build-artifacts-ew3/cache
+      - gcloud config set project unique-caldron-775
+      - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
+      - sudo apt-get install -y lz4
+      - gcloud storage cp ${GCS_CACHE_DIR_URL}/cache.tar.lz4 /tmp/cache.tar.lz4 || true
+      - >-
+        if [ -f /tmp/cache.tar.lz4 ]; then
+          echo "Cache hit, extracting cache...";
+          lz4 -d < /tmp/cache.tar.lz4 | tar -x; 
+          rm /tmp/cache.tar.lz4;
+          cd $SEMAPHORE_GIT_DIR;
+          git fetch origin $SEMAPHORE_GIT_SHA;
+          git checkout $SEMAPHORE_GIT_SHA;
+        else
+          echo "No cache found. Doing normal checkout.";
+          git clone --filter=blob:none --revision=$SEMAPHORE_GIT_SHA git@github.com:$SEMAPHORE_GIT_REPO_SLUG.git $SEMAPHORE_GIT_DIR
+          cd $SEMAPHORE_GIT_DIR;
+        fi
       - export CALICO_DIR="$(pwd)"
-      - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
-      - mkdir artifacts
-      # Semaphore is doing shallow clone on a commit without tags.
-      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - if [[ "${SEMAPHORE_BLOCK_NAME}" != "Prerequisites" ]]; then retry git fetch --unshallow; fi
+      - export CALICO_DIR_NAME="$SEMAPHORE_GIT_DIR"
+      - mkdir -p artifacts
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
