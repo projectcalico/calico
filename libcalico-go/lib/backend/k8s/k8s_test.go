@@ -3491,28 +3491,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			}
 		})
 
-		It("supports watching from part way through a list of Admin Network Policies", func() {
-			// Only 2 k8s ANPs
-			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(l.KVPairs).To(HaveLen(2))
-
-			// Watch from part way
-			for i := 0; i < 2; i++ {
-				revision := l.KVPairs[i].Revision
-				log.WithFields(log.Fields{
-					"revision": revision,
-					"key":      l.KVPairs[i].Key.String(),
-				}).Info("[Test] starting watch")
-				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, api.WatchOptions{Revision: revision})
-				Expect(err).ToNot(HaveOccurred())
-				// Since the items in the list aren't guaranteed to be in any specific order, we
-				// can't assert anything useful about what you should get out of this watch, so we
-				// just confirm that there is no error.
-				watch.Stop()
-			}
-		})
-
 		It("supports watching from part way through a list of Cluster Network Policies", func() {
 			// Only 2 k8s CNPs
 			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, "")
