@@ -611,6 +611,7 @@ blocks:
               value: "bpf-24.04-ipt-with-ut"
           commands:
             - source felix/.semaphore/fv-prologue
+            - export NUM_FV_BATCHES=25
             - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
