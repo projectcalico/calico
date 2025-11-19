@@ -456,7 +456,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				cur, _ := tc.Felixes[i].ExecOutput("bpftool", "-jp", "prog", "show")
 				curUnmarshalled := make(map[string]any)
-				json.Unmarshal([]byte(cur), &curUnmarshalled)
+				_ = json.Unmarshal([]byte(cur), &curUnmarshalled)
 
 				if prev != nil {
 					Expect(prev).To(BeEquivalentTo(curUnmarshalled))
