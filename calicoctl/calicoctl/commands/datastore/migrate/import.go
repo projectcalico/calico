@@ -264,8 +264,7 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 						}
 
 						// Make sure that the global network policy is a K8s cluster network policy
-						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) ||
-							!strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
+						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
 							!strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) {
 							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
 						}

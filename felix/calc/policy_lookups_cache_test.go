@@ -102,40 +102,40 @@ var (
 	prefix_knp1_t1_i0D = toprefix("DPI0|namespace-1/knp.default.policy-1.1.1.1")
 	ruleID_knp1_t1_i0D = NewRuleID("default", "knp.default.policy-1.1.1.1", "namespace-1", 0, rules.RuleDirIngress, rules.RuleActionDeny)
 
-	// K8s AdminNetworkPolicy kanp.adminnetworkpolicy.policy-1.1
-	kanp1_t1_1i0e_key = model.PolicyKey{
-		Tier: "adminnetworkpolicy",
-		Name: "kanp.adminnetworkpolicy.policy-1.1.1.1",
+	// K8s ClusterNetworkPolicy kcnp.kube-admin.policy-1.1
+	kcnpAdmin1_t1_1i0e_key = model.PolicyKey{
+		Tier: "kube-admin",
+		Name: "kcnp.kube-admin.policy-1.1.1.1",
 	}
-	kanp1_t1_1i0e = &model.Policy{
+	kcnpAdmin1_t1_1i0e = &model.Policy{
 		InboundRules: []model.Rule{
 			{Action: "deny"},
 		},
 	}
-	prefix_kanp1_t1_i0D = toprefix("DPI0|kanp.adminnetworkpolicy.policy-1.1.1.1")
-	ruleID_kanp1_t1_i0D = NewRuleID(
-		"adminnetworkpolicy",
-		"kanp.adminnetworkpolicy.policy-1.1.1.1",
+	prefix_kcnpAdmin1_t1_i0D = toprefix("DPI0|kcnp.kube-admin.policy-1.1.1.1")
+	ruleID_kcnpAdmin1_t1_i0D = NewRuleID(
+		"kube-admin",
+		"kcnp.kube-admin.policy-1.1.1.1",
 		"",
 		0,
 		rules.RuleDirIngress,
 		rules.RuleActionDeny,
 	)
 
-	// K8s BaselineAdminNetworkPolicy kbanp.baselineadminnetworkpolicy.policy-1.1
-	kbanp1_t1_1i0e_key = model.PolicyKey{
-		Tier: "baselineadminnetworkpolicy",
-		Name: "kbanp.baselineadminnetworkpolicy.policy-1.1.1.1",
+	// K8s ClusterNetworkPolicy kcnp.kube-baseline.policy-1.1
+	kcnpBaseline1_t1_1i0e_key = model.PolicyKey{
+		Tier: "kube-baseline",
+		Name: "kcnp.kube-baseline.policy-1.1.1.1",
 	}
-	kbanp1_t1_1i0e = &model.Policy{
+	kcnpBaseline1_t1_1i0e = &model.Policy{
 		InboundRules: []model.Rule{
 			{Action: "deny"},
 		},
 	}
-	prefix_kbanp1_t1_i0D = toprefix("DPI0|kbanp.baselineadminnetworkpolicy.policy-1.1.1.1")
-	ruleID_kbanp1_t1_i0D = NewRuleID(
-		"baselineadminnetworkpolicy",
-		"kbanp.baselineadminnetworkpolicy.policy-1.1.1.1",
+	prefix_kcnpBaseline1_t1_i0D = toprefix("DPI0|kcnp.kube-baseline.policy-1.1.1.1")
+	ruleID_kcnpBaseline1_t1_i0D = NewRuleID(
+		"kube-baseline",
+		"kcnp.kube-baseline.policy-1.1.1.1",
 		"",
 		0,
 		rules.RuleDirIngress,
@@ -160,22 +160,22 @@ var (
 	ruleID_prof_e0D = NewRuleID("", "profile-1", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
 
 	// Tier no-matches
-	prefix_nomatch_t1_i    = toprefix("DPI|tier-1")
-	ruleID_nomatch_t1_i    = NewRuleID("tier-1", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
-	prefix_nomatch_t1_e    = toprefix("DPE|tier-1")
-	ruleID_nomatch_t1_e    = NewRuleID("tier-1", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
-	prefix_nomatch_td_i    = toprefix("DPI|default")
-	ruleID_nomatch_td_i    = NewRuleID("default", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
-	prefix_nomatch_td_e    = toprefix("DPE|default")
-	ruleID_nomatch_td_e    = NewRuleID("default", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
-	prefix_nomatch_tanp_i  = toprefix("DPI|adminnetworkpolicy")
-	ruleID_nomatch_tanp_i  = NewRuleID("adminnetworkpolicy", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
-	prefix_nomatch_tanp_e  = toprefix("DPE|adminnetworkpolicy")
-	ruleID_nomatch_tanp_e  = NewRuleID("adminnetworkpolicy", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
-	prefix_nomatch_tbanp_i = toprefix("DPI|baselineadminnetworkpolicy")
-	ruleID_nomatch_tbanp_i = NewRuleID("baselineadminnetworkpolicy", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
-	prefix_nomatch_tbanp_e = toprefix("DPE|baselineadminnetworkpolicy")
-	ruleID_nomatch_tbanp_e = NewRuleID("baselineadminnetworkpolicy", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
+	prefix_nomatch_t1_i            = toprefix("DPI|tier-1")
+	ruleID_nomatch_t1_i            = NewRuleID("tier-1", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
+	prefix_nomatch_t1_e            = toprefix("DPE|tier-1")
+	ruleID_nomatch_t1_e            = NewRuleID("tier-1", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
+	prefix_nomatch_td_i            = toprefix("DPI|default")
+	ruleID_nomatch_td_i            = NewRuleID("default", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
+	prefix_nomatch_td_e            = toprefix("DPE|default")
+	ruleID_nomatch_td_e            = NewRuleID("default", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
+	prefix_nomatch_tkcnpAdmin_i    = toprefix("DPI|kube-admin")
+	ruleID_nomatch_tkcnpAdmin_i    = NewRuleID("kube-admin", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
+	prefix_nomatch_tkcnpAdmin_e    = toprefix("DPE|kube-admin")
+	ruleID_nomatch_tkcnpAdmin_e    = NewRuleID("kube-admin", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
+	prefix_nomatch_tkcnpBaseline_i = toprefix("DPI|kube-baseline")
+	ruleID_nomatch_tkcnpBaseline_i = NewRuleID("kube-baseline", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
+	prefix_nomatch_tkcnpBaseline_e = toprefix("DPE|kube-baseline")
+	ruleID_nomatch_tkcnpBaseline_e = NewRuleID("kube-baseline", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
 
 	// Profile no-matches
 	prefix_nomatch_prof_i = toprefix("DRI")
@@ -229,12 +229,12 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 		Entry("KNP1 (1i0e) no match default ingress", knp1_t1_1i0e_key, knp1_t1_1i0e, prefix_nomatch_td_i, ruleID_nomatch_td_i),
 		Entry("KNP1 (1i0e) no match default egress", knp1_t1_1i0e_key, knp1_t1_1i0e, prefix_nomatch_td_e, ruleID_nomatch_td_e),
 		Entry("KNP1 (1i0e) i0", knp1_t1_1i0e_key, knp1_t1_1i0e, prefix_knp1_t1_i0D, ruleID_knp1_t1_i0D),
-		Entry("KANP1 (1i0e) no match default ingress", kanp1_t1_1i0e_key, kanp1_t1_1i0e, prefix_nomatch_tanp_i, ruleID_nomatch_tanp_i),
-		Entry("KANP1 (1i0e) no match default egress", kanp1_t1_1i0e_key, kanp1_t1_1i0e, prefix_nomatch_tanp_e, ruleID_nomatch_tanp_e),
-		Entry("KANP1 (1i0e) i0", kanp1_t1_1i0e_key, kanp1_t1_1i0e, prefix_kanp1_t1_i0D, ruleID_kanp1_t1_i0D),
-		Entry("KBANP1 (1i0e) no match default ingress", kbanp1_t1_1i0e_key, kbanp1_t1_1i0e, prefix_nomatch_tbanp_i, ruleID_nomatch_tbanp_i),
-		Entry("KBANP1 (1i0e) no match default egress", kbanp1_t1_1i0e_key, kbanp1_t1_1i0e, prefix_nomatch_tbanp_e, ruleID_nomatch_tbanp_e),
-		Entry("KBANP1 (1i0e) i0", kbanp1_t1_1i0e_key, kbanp1_t1_1i0e, prefix_kbanp1_t1_i0D, ruleID_kbanp1_t1_i0D),
+		Entry("KCNP1_Admin (1i0e) no match default ingress", kcnpAdmin1_t1_1i0e_key, kcnpAdmin1_t1_1i0e, prefix_nomatch_tkcnpAdmin_i, ruleID_nomatch_tkcnpAdmin_i),
+		Entry("KCNP1_Admin (1i0e) no match default egress", kcnpAdmin1_t1_1i0e_key, kcnpAdmin1_t1_1i0e, prefix_nomatch_tkcnpAdmin_e, ruleID_nomatch_tkcnpAdmin_e),
+		Entry("KCNP1_Admin (1i0e) i0", kcnpAdmin1_t1_1i0e_key, kcnpAdmin1_t1_1i0e, prefix_kcnpAdmin1_t1_i0D, ruleID_kcnpAdmin1_t1_i0D),
+		Entry("KCNP1_Baseline (1i0e) no match default ingress", kcnpBaseline1_t1_1i0e_key, kcnpBaseline1_t1_1i0e, prefix_nomatch_tkcnpBaseline_i, ruleID_nomatch_tkcnpBaseline_i),
+		Entry("KCNP1_Baseline (1i0e) no match default egress", kcnpBaseline1_t1_1i0e_key, kcnpBaseline1_t1_1i0e, prefix_nomatch_tkcnpBaseline_e, ruleID_nomatch_tkcnpBaseline_e),
+		Entry("KCNP1_Baseline (1i0e) i0", kcnpBaseline1_t1_1i0e_key, kcnpBaseline1_t1_1i0e, prefix_kcnpBaseline1_t1_i0D, ruleID_kcnpBaseline1_t1_i0D),
 	)
 
 	DescribeTable(
