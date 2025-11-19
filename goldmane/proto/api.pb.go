@@ -196,9 +196,9 @@ const (
 	PolicyKind_StagedGlobalNetworkPolicy     PolicyKind = 4
 	PolicyKind_StagedKubernetesNetworkPolicy PolicyKind = 5
 	// Native Kubernetes types.
-	PolicyKind_NetworkPolicy              PolicyKind = 6
-	PolicyKind_AdminNetworkPolicy         PolicyKind = 7
-	PolicyKind_BaselineAdminNetworkPolicy PolicyKind = 8
+	PolicyKind_NetworkPolicy                    PolicyKind = 6
+	PolicyKind_ClusterNetworkPolicyAdminTier    PolicyKind = 7
+	PolicyKind_ClusterNetworkPolicyBaselineTier PolicyKind = 8
 	// Calico Profiles.
 	PolicyKind_Profile   PolicyKind = 9
 	PolicyKind_EndOfTier PolicyKind = 10
@@ -214,23 +214,23 @@ var (
 		4:  "StagedGlobalNetworkPolicy",
 		5:  "StagedKubernetesNetworkPolicy",
 		6:  "NetworkPolicy",
-		7:  "AdminNetworkPolicy",
-		8:  "BaselineAdminNetworkPolicy",
+		7:  "ClusterNetworkPolicyAdminTier",
+		8:  "ClusterNetworkPolicyBaselineTier",
 		9:  "Profile",
 		10: "EndOfTier",
 	}
 	PolicyKind_value = map[string]int32{
-		"KindUnspecified":               0,
-		"CalicoNetworkPolicy":           1,
-		"GlobalNetworkPolicy":           2,
-		"StagedNetworkPolicy":           3,
-		"StagedGlobalNetworkPolicy":     4,
-		"StagedKubernetesNetworkPolicy": 5,
-		"NetworkPolicy":                 6,
-		"AdminNetworkPolicy":            7,
-		"BaselineAdminNetworkPolicy":    8,
-		"Profile":                       9,
-		"EndOfTier":                     10,
+		"KindUnspecified":                  0,
+		"CalicoNetworkPolicy":              1,
+		"GlobalNetworkPolicy":              2,
+		"StagedNetworkPolicy":              3,
+		"StagedGlobalNetworkPolicy":        4,
+		"StagedKubernetesNetworkPolicy":    5,
+		"NetworkPolicy":                    6,
+		"ClusterNetworkPolicyAdminTier":    7,
+		"ClusterNetworkPolicyBaselineTier": 8,
+		"Profile":                          9,
+		"EndOfTier":                        10,
 	}
 )
 
@@ -2467,7 +2467,7 @@ const file_api_proto_rawDesc = "" +
 	"\x04Pass\x10\x03*!\n" +
 	"\tMatchType\x12\t\n" +
 	"\x05Exact\x10\x00\x12\t\n" +
-	"\x05Fuzzy\x10\x01*\x95\x02\n" +
+	"\x05Fuzzy\x10\x01*\xa6\x02\n" +
 	"\n" +
 	"PolicyKind\x12\x13\n" +
 	"\x0fKindUnspecified\x10\x00\x12\x17\n" +
@@ -2476,9 +2476,9 @@ const file_api_proto_rawDesc = "" +
 	"\x13StagedNetworkPolicy\x10\x03\x12\x1d\n" +
 	"\x19StagedGlobalNetworkPolicy\x10\x04\x12!\n" +
 	"\x1dStagedKubernetesNetworkPolicy\x10\x05\x12\x11\n" +
-	"\rNetworkPolicy\x10\x06\x12\x16\n" +
-	"\x12AdminNetworkPolicy\x10\a\x12\x1e\n" +
-	"\x1aBaselineAdminNetworkPolicy\x10\b\x12\v\n" +
+	"\rNetworkPolicy\x10\x06\x12!\n" +
+	"\x1dClusterNetworkPolicyAdminTier\x10\a\x12$\n" +
+	" ClusterNetworkPolicyBaselineTier\x10\b\x12\v\n" +
 	"\aProfile\x10\t\x12\r\n" +
 	"\tEndOfTier\x10\n" +
 	"*v\n" +
