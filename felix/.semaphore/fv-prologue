@@ -17,7 +17,7 @@ TEST_REPORT_NAME=""
 # In BPF runs, only run BPF-SAFE tagged tests
 if [[ $FELIX_TEST_GROUP =~ bpf ]]; then
   export FV_FOCUS=BPF-SAFE
-  JOB_TAG+="bpf-"
+  JOB_TAG+="bpf"
   TEST_REPORT_NAME+="BPF/"
   FV_NO_PREREQ_TARGET=fv-bpf-no-prereqs
 else
@@ -29,19 +29,19 @@ if [[ $FELIX_TEST_GROUP =~ 22.04 ]]; then
   export IMAGE=ubuntu-2204-jammy-v20250312
   export UBUNTU_VERSION=jammy
   export DOCKER_VERSION=5:20.10.14~3-0~ubuntu-jammy
-  JOB_TAG+="2204-"
+  JOB_TAG+="2204"
   TEST_REPORT_NAME+="Ubuntu-22.04/"
 elif [[ $FELIX_TEST_GROUP =~ 24.04 ]]; then
   export IMAGE=ubuntu-2404-noble-amd64-v20250502a
   export UBUNTU_VERSION=noble
   export DOCKER_VERSION=5:27.5.1-1~ubuntu.24.04~noble
-  JOB_TAG+="2404-"
+  JOB_TAG+="2404"
   TEST_REPORT_NAME+="Ubuntu-24.04/"
 elif [[ $FELIX_TEST_GROUP =~ 25.04 ]]; then
   export IMAGE=ubuntu-2504-plucky-amd64-v20250805
   export UBUNTU_VERSION=plucky
   export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
-  JOB_TAG+="2504-"
+  JOB_TAG+="2504"
   TEST_REPORT_NAME+="Ubuntu-25.04/"
 else
   echo "Unknown OS version in FELIX_TEST_GROUP: $FELIX_TEST_GROUP"
@@ -71,7 +71,7 @@ if [[ $FELIX_TEST_GROUP =~ no-fv ]]; then
 fi
 
 if [[ $FELIX_TEST_GROUP =~ jitharden ]]; then
-  JOB_TAG+="-jit"
+  JOB_TAG+="jit"
   TEST_REPORT_NAME+="/jitharden=2"
 fi
 export JOB_TAG
