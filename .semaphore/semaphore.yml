@@ -40,7 +40,7 @@ global_job_config:
         fi
       - export CALICO_DIR="$(pwd)"
       - export CALICO_DIR_NAME="$SEMAPHORE_GIT_DIR"
-      - mkdir artifacts
+      - mkdir -p artifacts
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
