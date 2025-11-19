@@ -82,8 +82,6 @@ blocks:
             - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
-          commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
 after_pipeline:
   task:
     jobs:
