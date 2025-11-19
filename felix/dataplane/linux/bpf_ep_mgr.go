@@ -3767,7 +3767,7 @@ func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) 
 	}
 
 	log.Infof("Sridhar loading TC obj: %+v", at)
-	layout, err := pm.LoadObj(at)
+	layout, err := pm.LoadObj(at, string(m.bpfAttachType))
 	if err != nil {
 		return nil, err
 	}
@@ -3777,7 +3777,7 @@ func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) 
 	}
 
 	at.LogLevel = "off"
-	layoutNoDebug, err := pm.LoadObj(at)
+	layoutNoDebug, err := pm.LoadObj(at, string(m.bpfAttachType))
 	if err != nil {
 		return nil, err
 	}
@@ -3812,6 +3812,7 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 			}
 		}
 
+		log.Infof("Sridhar layout after loading TC obj: %+v", aptc.HookLayoutV4)
 		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
@@ -3834,11 +3835,11 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 		at.Family = int(ipFamily)
 		pm := m.commonMaps.XDPProgramsMap.(*hook.ProgramsMap)
 		if ipFamily == proto.IPVersion_IPV6 {
-			if apxdp.HookLayoutV6, err = pm.LoadObj(at); err != nil {
+			if apxdp.HookLayoutV6, err = pm.LoadObj(at, ""); err != nil {
 				return fmt.Errorf("loading generic xdp hook program: %w", err)
 			}
 		} else {
-			if apxdp.HookLayoutV4, err = pm.LoadObj(at); err != nil {
+			if apxdp.HookLayoutV4, err = pm.LoadObj(at, ""); err != nil {
 				return fmt.Errorf("loading generic xdp hook program: %w", err)
 			}
 		}
@@ -3972,6 +3973,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 		opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
 	}
 	insns, err := m.doUpdatePolicyProgram(
+		m.isWorkloadIface(ap.IfaceName()),
 		ap.HookName(),
 		progName,
 		ap.PolicyJmp(ipFamily),
@@ -3992,9 +3994,20 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 
 func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
 	programsMapFD := m.commonMaps.ProgramsMap[hook.Ingress].MapFD()
+	pmap := m.commonMaps.ProgramsMap[hook.Ingress]
 	if ap.Hook == hook.Egress {
 		programsMapFD = m.commonMaps.ProgramsMap[hook.Egress].MapFD()
+		pmap = m.commonMaps.ProgramsMap[hook.Egress]
 	}
+	if ap.Type == tcdefs.EpTypeWorkload {
+		programsMapFD = m.commonMaps.ProgramsMap[hook.Egress].MapFD()
+		pmap = m.commonMaps.ProgramsMap[hook.Egress]
+		if ap.Hook == hook.Egress {
+			programsMapFD = m.commonMaps.ProgramsMap[hook.Ingress].MapFD()
+			pmap = m.commonMaps.ProgramsMap[hook.Ingress]
+		}
+	}
+	log.Infof("Sridhar loading TC log filter: %+v %s", ap, pmap.GetName())
 	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, programsMapFD, m.commonMaps.StateMap.MapFD())
 	if err != nil {
 		return nil, 0, err
@@ -4117,6 +4130,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 }
 
 func (m *bpfEndpointManager) doUpdatePolicyProgram(
+	isWorkload bool,
 	hk hook.Hook,
 	progName string,
 	polJumpMapIdx int,
@@ -4131,6 +4145,12 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 	staticProgsMap := m.commonMaps.ProgramsMap[hook.Ingress]
 	if hk == hook.Egress {
 		staticProgsMap = m.commonMaps.ProgramsMap[hook.Egress]
+	}
+	if isWorkload {
+		staticProgsMap = m.commonMaps.ProgramsMap[hook.Egress]
+		if hk == hook.Egress {
+			staticProgsMap = m.commonMaps.ProgramsMap[hook.Ingress]
+		}
 	}
 	if hk == hook.XDP {
 		staticProgsMap = m.commonMaps.XDPProgramsMap
