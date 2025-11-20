@@ -19,7 +19,7 @@ global_job_config:
           git checkout $SEMAPHORE_GIT_SHA;
         else
           echo "No cache found. Doing normal checkout.";
-          git clone --filter=blob:none --revision=$SEMAPHORE_GIT_SHA git@github.com:$SEMAPHORE_GIT_REPO_SLUG.git $SEMAPHORE_GIT_DIR
+          git clone --filter=blob:none --revision=$SEMAPHORE_GIT_SHA $SEMAPHORE_GIT_URL $SEMAPHORE_GIT_DIR
           cd $SEMAPHORE_GIT_DIR;
         fi
       - export CALICO_DIR="$(pwd)"
