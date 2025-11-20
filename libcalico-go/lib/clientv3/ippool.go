@@ -297,7 +297,17 @@ func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Int
 	return r.client.resources.Watch(ctx, opts, apiv3.KindIPPool, nil)
 }
 
-func equalCIDRStrings(oldCIDR, newCIDR string) bool {
+// cidrChangeOK returns true if the new CIDR is an acceptable update to the old one.
+//
+// Allowed cases:
+//   - The CIDRs match exactly.
+//   - The CIDRs are semantically identical and the new CIDR is simply the canonical
+//     form of the old one (i.e., the update only normalizes formatting).
+//
+// This accounts for clients that may have stored non-canonical CIDRs by bypassing
+// our validation logic, allowing updates that preserve the same network while
+// converting the CIDR to its canonical form.
+func cidrChangeOK(oldCIDR, newCIDR string) bool {
 	// 1. If strings match exactly, allow.
 	if oldCIDR == newCIDR {
 		return true
@@ -367,7 +377,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 	// If there was a previous pool then this must be an Update, validate that the
 	// CIDR has not changed. Use semantic comparison to handle different textual
 	// representations of the same CIDR (e.g., IPv6 with different zero compression).
-	if old != nil && !equalCIDRStrings(old.Spec.CIDR, new.Spec.CIDR) {
+	if old != nil && !cidrChangeOK(old.Spec.CIDR, new.Spec.CIDR) {
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.CIDR",
 			Reason: "IPPool CIDR cannot be modified",

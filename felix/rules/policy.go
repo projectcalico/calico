@@ -16,7 +16,6 @@ package rules
 
 import (
 	"fmt"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -158,14 +157,7 @@ func filterNets(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered 
 // isCatchAllCIDR returns true if the CIDR represents "all addresses" for the given IP version.
 // This is used to detect problematic negated matches that would create logical contradictions.
 func isCatchAllCIDR(cidr string, ipVersion uint8) bool {
-	_, parsed, err := cnet.ParseCIDR(cidr)
-	if err != nil {
-		return false // invalid CIDR cannot be catch-all
-	}
-
-	normalizedCidr := parsed.String()
-
-	return (ipVersion == 4 && normalizedCidr == "0.0.0.0/0") || (ipVersion == 6 && normalizedCidr == "::/0")
+	return (ipVersion == 4 && cidr == "0.0.0.0/0") || (ipVersion == 6 && cidr == "::/0")
 }
 
 // FilterRuleToIPVersion: If the rule applies to the given IP version, returns a copy of the rule

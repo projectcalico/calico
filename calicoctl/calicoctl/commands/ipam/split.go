@@ -117,7 +117,7 @@ Examples:
 		}
 
 		for _, pool := range poolList.Items {
-			if equalCIDRStrings(oldPoolCIDR, pool.Spec.CIDR) {
+			if pool.Spec.CIDR == oldPoolCIDR {
 				oldPool = &pool
 			}
 		}
@@ -202,21 +202,6 @@ Examples:
 	fmt.Print("Please refer to the documentation for final steps.")
 
 	return nil
-}
-
-func equalCIDRStrings(a, b string) bool {
-	if a == b {
-		return true
-	}
-
-	_, na, errA := net.ParseCIDR(a)
-	_, nb, errB := net.ParseCIDR(b)
-
-	if errA != nil || errB != nil {
-		return false
-	}
-
-	return na.String() == nb.String()
 }
 
 func splitCIDR(oldCIDR string, parts int) ([]string, error) {
