@@ -47,7 +47,7 @@ function create-vm() {
     ${ssh_cmd} -- echo "Success" && break
     sleep 1
   done  && \
-  ${ssh_cmd} -- sudo apt install apt-transport-https ca-certificates curl software-properties-common && \
+  ${ssh_cmd} -- sudo apt install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common && \
   ${ssh_cmd} -- "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg" && \
   ${ssh_cmd} -- "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${UBUNTU_VERSION} stable' | sudo tee /etc/apt/sources.list.d/docker.list" && \
   ${ssh_cmd} -- sudo apt update -y && \
