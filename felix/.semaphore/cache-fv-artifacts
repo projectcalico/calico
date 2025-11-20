@@ -15,24 +15,8 @@
 
 set -e
 
-my_dir="$(dirname $0)"
-repo_dir="$my_dir/../.."
-
-# COMPONENT might be node or felix; give shellcheck something to work with.
-# shellcheck source=../../felix/.semaphore/batches.sh
-source "${repo_dir}/${COMPONENT}/.semaphore/batches.sh"
-
-my_dir="$(dirname $0)"
-vm_name_prefix=$1
-shift 1
-
-echo
-echo "===== Starting tests ====="
-echo
-
-for batch in "${batches[@]}"; do
-  vm_name="$vm_name_prefix$batch"
-  VM_NAME="$vm_name" "$my_dir/on-test-vm" "$@"
-done
-
-echo "===== Done ====="
+docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
+cd ../..
+tar -czf /tmp/working-copy.tgz --exclude=.go-pkg-cache --exclude=artifacts calico
+gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar ${GCS_TRANSIENT_DIR_URL}/
