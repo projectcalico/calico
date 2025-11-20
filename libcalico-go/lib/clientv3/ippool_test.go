@@ -24,7 +24,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-func TestEqualCIDRStrings(t *testing.T) {
+func TestChangeCidrOK(t *testing.T) {
 	testCases := []struct {
 		name     string
 		oldCidr  string
@@ -101,9 +101,9 @@ func TestEqualCIDRStrings(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := equalCIDRStrings(tc.oldCidr, tc.newCidr)
+			result := cidrChangeOK(tc.oldCidr, tc.newCidr)
 			if result != tc.expected {
-				t.Errorf("equalCIDRStrings(%q, %q) = %v, want %v",
+				t.Errorf("cidrChangeOK(%q, %q) = %v, want %v",
 					tc.oldCidr, tc.newCidr, result, tc.expected)
 			}
 		})
