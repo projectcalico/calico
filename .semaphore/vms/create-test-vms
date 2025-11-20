@@ -49,7 +49,8 @@ gcloud --quiet compute instances bulk create \
        --image-project=ubuntu-os-cloud \
        --boot-disk-size=$disk_size \
        --boot-disk-type=hyperdisk-balanced \
-       --max-run-duration="${MAX_RUN_DURATION}"
+       --max-run-duration="${MAX_RUN_DURATION}" \
+       --instance-termination-action=DELETE
 
 for batch in "${batches[@]}"; do
   log_file="$artifacts_dir/create-vm-$batch.log"

@@ -45,7 +45,8 @@ function create-vm() {
              --image-project=ubuntu-os-cloud \
              --boot-disk-size=$disk_size \
              --boot-disk-type=hyperdisk-balanced \
-             --max-run-duration="${MAX_RUN_DURATION}"
+             --max-run-duration="${MAX_RUN_DURATION}" \
+             --instance-termination-action=DELETE
   fi && \
 
   ssh_cmd="gcloud --quiet compute ssh --zone=${zone} ubuntu@${vm_name}"
