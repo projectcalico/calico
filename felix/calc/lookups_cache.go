@@ -1,16 +1,4 @@
 // Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 package calc
 
@@ -47,7 +35,7 @@ func NewLookupsCache() *LookupsCache {
 	return lc
 }
 
-// GetEndpoint returns the ordered list of tiers for a particular endpoint.
+// GetEndpoint returns the endpoint data for a given IP address.
 func (lc *LookupsCache) GetEndpoint(addr [16]byte) (EndpointData, bool) {
 	return lc.epCache.GetEndpoint(addr)
 }
@@ -77,6 +65,12 @@ func (lc *LookupsCache) GetNode(addr [16]byte) (string, bool) {
 // It returns the first networkset it finds that contains the given address.
 func (lc *LookupsCache) GetNetworkSet(addr [16]byte) (EndpointData, bool) {
 	return lc.nsCache.GetNetworkSetFromIP(addr)
+}
+
+// GetNetworkSetWithNamespace returns the NetworkSet information for an address with namespace
+// precedence. If preferredNamespace is provided, NetworkSets in that namespace are prioritized.
+func (lc *LookupsCache) GetNetworkSetWithNamespace(addr [16]byte, preferredNamespace string) (EndpointData, bool) {
+	return lc.nsCache.GetNetworkSetFromIPWithNamespace(addr, preferredNamespace)
 }
 
 // GetRuleIDFromNFLOGPrefix returns the RuleID associated with the supplied NFLOG prefix.

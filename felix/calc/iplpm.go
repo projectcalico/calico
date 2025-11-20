@@ -15,8 +15,11 @@
 package calc
 
 import (
+	"slices"
 	"strings"
+	"unique"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tchap/go-patricia/v2/patricia"
 
 	"github.com/projectcalico/calico/felix/ip"
@@ -24,19 +27,17 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// Node is represented by cidr as KEY and v1 key data stored in keys.
+// Node is represented by cidr as KEY and stores all keys for that CIDR.
 type IPTrieNode struct {
 	cidr ip.CIDR
-	keys []model.Key
+	keys []unique.Handle[model.Key]
 }
 
-// Root of IpTree
 type IpTrie struct {
 	lpmCache      *patricia.Trie
 	existingCidrs set.Set[ip.CIDR]
 }
 
-// NewIpTrie creates new Patricia trie and Initializes
 func NewIpTrie() *IpTrie {
 	return &IpTrie{
 		lpmCache:      patricia.NewTrie(),
@@ -44,17 +45,70 @@ func NewIpTrie() *IpTrie {
 	}
 }
 
-// newIPTrieNode Function creates new empty node containing the CIDR and single key.
-func newIPTrieNode(cidr ip.CIDR, key model.Key) *IPTrieNode {
-	return &IPTrieNode{cidr: cidr, keys: []model.Key{key}}
+// getLowestSortingKey returns the key with the lexicographically smallest name from a slice of
+// keys. This provides deterministic tie-breaking for network sets with the same prefix length.
+func getLowestSortingKey(keys []unique.Handle[model.Key]) model.Key {
+	if len(keys) == 0 {
+		return nil
+	}
+	if len(keys) == 1 {
+		return keys[0].Value()
+	}
+
+	// Linear scan to find the lexicographically lowest key
+	lowestHandle := keys[0]
+	lowestKeyStr := lowestHandle.Value().String()
+
+	for i := 1; i < len(keys); i++ {
+		keyStr := keys[i].Value().String()
+		if keyStr < lowestKeyStr {
+			lowestHandle = keys[i]
+			lowestKeyStr = keyStr
+		}
+	}
+
+	return lowestHandle.Value()
 }
 
-// GetLongestPrefixCidr finds longest prefix match CIDR for the Given IP and if successful return the last key
-// recorded.
-func (t *IpTrie) GetLongestPrefixCidr(ipAddr ip.Addr) (model.Key, bool) {
+func newIPTrieNode(cidr ip.CIDR, key model.Key) *IPTrieNode {
+	return &IPTrieNode{
+		cidr: cidr,
+		keys: []unique.Handle[model.Key]{unique.Make(key)},
+	}
+}
+
+// NamespaceFilterFunc defines a function that filters keys based on namespace preferences.
+// Returns: (isNamespaceMatch, isGlobal, accept)
+// - isNamespaceMatch: true if the key matches the preferred namespace
+// - isGlobal: true if the key is a global (non-namespaced) NetworkSet
+// - accept: true if the key should be accepted for processing
+type NamespaceFilterFunc func(key model.Key, preferredNamespace string) (isNamespaceMatch bool, isGlobal bool, accept bool)
+
+// DefaultNamespaceFilter is the standard namespace filtering logic
+func DefaultNamespaceFilter(key model.Key, preferredNamespace string) (isNamespaceMatch bool, isGlobal bool, accept bool) {
+	nsKey, ok := key.(model.NetworkSetKey)
+	if !ok {
+		logrus.Debugf("Non-NetworkSet key detected: %v", key)
+		return false, false, false // Non-NetworkSet keys are treated as global
+	}
+
+	namespace := nsKey.Namespace()
+	if namespace != "" {
+		// Namespaced NetworkSet
+		isMatch := namespace == preferredNamespace
+		return isMatch, false, true
+	}
+
+	// Global NetworkSet
+	return false, true, true
+}
+
+// GetLongestPrefixCidr finds the longest prefix match CIDR for the given IP and if successful returns the
+// lexicographically lowest key associated with that CIDR.
+func (trie *IpTrie) GetLongestPrefixCidr(ipAddr ip.Addr) (model.Key, bool) {
 	var longestPrefix patricia.Prefix
 	var longestItem patricia.Item
-	ptrie := t.lpmCache
+	ptrie := trie.lpmCache
 
 	err := ptrie.VisitPrefixes(patricia.Prefix(ipAddr.AsBinary()),
 		func(prefix patricia.Prefix, item patricia.Item) error {
@@ -64,11 +118,79 @@ func (t *IpTrie) GetLongestPrefixCidr(ipAddr ip.Addr) (model.Key, bool) {
 			}
 			return nil
 		})
-	if err != nil || longestItem == nil {
+
+	if err != nil || len(longestPrefix) == 0 {
 		return nil, false
 	}
+
 	node := longestItem.(*IPTrieNode)
-	return node.keys[len(node.keys)-1], true
+	return getLowestSortingKey(node.keys), true
+}
+
+// GetLongestPrefixCidrWithNamespaceIsolation finds the best prefix match with namespace isolation.
+// Priority order:
+// 1) preferred namespace match
+// 2) global match
+// 3) any other namespace match
+func (trie *IpTrie) GetLongestPrefixCidrWithNamespaceIsolation(ipAddr ip.Addr, preferredNamespace string) (model.Key, bool) {
+	ptrie := trie.lpmCache
+	searchPrefix := patricia.Prefix(ipAddr.AsBinary())
+
+	type bestMatch struct {
+		keys   []unique.Handle[model.Key]
+		prefix patricia.Prefix
+	}
+
+	var (
+		bestPreferred bestMatch
+		bestGlobal    bestMatch
+		bestOther     bestMatch
+	)
+
+	updateBest := func(b *bestMatch, prefix patricia.Prefix, keyHandle unique.Handle[model.Key]) {
+		switch {
+		case len(prefix) > len(b.prefix):
+			b.keys = append(b.keys[:0], keyHandle)
+			b.prefix = prefix
+		case len(prefix) == len(b.prefix):
+			b.keys = append(b.keys, keyHandle)
+		}
+	}
+
+	if err := ptrie.VisitPrefixes(searchPrefix, func(prefix patricia.Prefix, item patricia.Item) error {
+		node := item.(*IPTrieNode)
+		for _, keyHandle := range node.keys {
+			key := keyHandle.Value()
+			nsKey, ok := key.(model.NetworkSetKey)
+			if !ok {
+				continue
+			}
+			ns := nsKey.Namespace()
+
+			switch {
+			case preferredNamespace != "" && ns == preferredNamespace:
+				updateBest(&bestPreferred, prefix, keyHandle)
+			case ns == "":
+				updateBest(&bestGlobal, prefix, keyHandle)
+			default:
+				updateBest(&bestOther, prefix, keyHandle)
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, false
+	}
+
+	switch {
+	case len(bestPreferred.keys) > 0:
+		return getLowestSortingKey(bestPreferred.keys), true
+	case len(bestGlobal.keys) > 0:
+		return getLowestSortingKey(bestGlobal.keys), true
+	case len(bestOther.keys) > 0:
+		return getLowestSortingKey(bestOther.keys), true
+	default:
+		return nil, false
+	}
 }
 
 // GetKeys return list of keys for the Given CIDR
@@ -79,7 +201,12 @@ func (t *IpTrie) GetKeys(cidr ip.CIDR) ([]model.Key, bool) {
 
 	if val != nil {
 		node := val.(*IPTrieNode)
-		return node.keys, true
+		// Convert handles back to keys
+		keys := make([]model.Key, len(node.keys))
+		for i, h := range node.keys {
+			keys[i] = h.Value()
+		}
+		return keys, true
 	}
 
 	return nil, false
@@ -100,14 +227,9 @@ func (t *IpTrie) DeleteKey(cidr ip.CIDR, key model.Key) {
 		t.existingCidrs.Discard(cidr)
 		ptrie.Delete(patricia.Prefix(cidrb))
 	} else {
-		ii := 0
-		for _, val := range node.keys {
-			if val != key {
-				node.keys[ii] = val
-				ii++
-			}
-		}
-		node.keys = node.keys[:ii]
+		node.keys = slices.DeleteFunc(node.keys, func(h unique.Handle[model.Key]) bool {
+			return h.Value() == key
+		})
 	}
 }
 
@@ -126,16 +248,17 @@ func (t *IpTrie) InsertKey(cidr ip.CIDR, key model.Key) {
 		ptrie.Insert(patricia.Prefix(cidrb), newNode)
 	} else {
 		node := val.(*IPTrieNode)
+		keyHandle := unique.Make(key)
 		isExistingNetset := false
-		for i, val := range node.keys {
-			if key == val {
-				node.keys[i] = key
+		for i, existingHandle := range node.keys {
+			if key == existingHandle.Value() {
+				node.keys[i] = keyHandle
 				isExistingNetset = true
 				break
 			}
 		}
 		if !isExistingNetset {
-			node.keys = append(node.keys, key)
+			node.keys = append(node.keys, keyHandle)
 		}
 	}
 }

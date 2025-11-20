@@ -1,16 +1,4 @@
 // Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 package calc
 
@@ -64,6 +52,10 @@ func (n networkSetData) IsHostEndpoint() bool {
 	return false
 }
 
+func (n networkSetData) IsNetworkSet() bool {
+	return true
+}
+
 func (n networkSetData) Key() model.Key {
 	return n.key
 }
@@ -76,11 +68,17 @@ func (n networkSetData) GenerateName() string {
 	return ""
 }
 
+func (n networkSetData) InterfaceName() string {
+	// NetworkSet does not have an interface name.
+	return ""
+}
+
 var _ EndpointData = &networkSetData{}
 
 // Networkset data is stored in the EndpointData object for easier type processing for flow logs.
 type NetworkSetLookupsCache struct {
-	nsMutex     sync.RWMutex
+	nsMutex sync.RWMutex
+
 	networkSets map[model.Key]*networkSetData
 	ipTree      *IpTrie
 }
@@ -92,7 +90,7 @@ func NewNetworkSetLookupsCache() *NetworkSetLookupsCache {
 		// NetworkSet data.
 		networkSets: make(map[model.Key]*networkSetData),
 
-		// Reverse lookups by CIDR and egress domain.
+		// Reverse lookups by CIDR.
 		ipTree: NewIpTrie(),
 	}
 
@@ -104,7 +102,7 @@ func (nc *NetworkSetLookupsCache) RegisterWith(allUpdateDispatcher *dispatcher.D
 }
 
 // OnUpdate is the callback method registered with the AllUpdatesDispatcher for
-// the model.NetworkSet type. This method updates the mapping between networkSets
+// the NetworkSet type. This method updates the mapping between networkSets
 // and the corresponding CIDRs that they contain.
 func (nc *NetworkSetLookupsCache) OnUpdate(nsUpdate api.Update) (_ bool) {
 	switch k := nsUpdate.Key.(type) {
@@ -184,19 +182,33 @@ func (nc *NetworkSetLookupsCache) removeNetworkSet(key model.Key) {
 // GetNetworkSetFromIP finds Longest Prefix Match CIDR from given IP ADDR and return last observed
 // Networkset for that CIDR
 func (nc *NetworkSetLookupsCache) GetNetworkSetFromIP(addr [16]byte) (ed EndpointData, ok bool) {
+	return nc.GetNetworkSetFromIPWithNamespace(addr, "")
+}
+
+// GetNetworkSetFromIPWithNamespace finds NetworkSet for the Given IP with namespace precedence.
+// It prioritizes NetworkSets in the preferredNamespace, falling back to longest prefix match of
+// the global networkSets if none found, then the first lexicographically ordered matching
+// NetworkSet if no other matches are found. If no preferred namespace is provided, it prioritizes
+// global NetworkSets.
+func (nc *NetworkSetLookupsCache) GetNetworkSetFromIPWithNamespace(ipAddr [16]byte, preferredNamespace string) (ed EndpointData, ok bool) {
+	netIP := net.IP(ipAddr[:])
+	addr := ip.FromNetIP(netIP)
+
 	nc.nsMutex.RLock()
 	defer nc.nsMutex.RUnlock()
 
-	// Find the first cidr that contains the ip address to use for the lookup.
-	ipAddr := ip.FromNetIP(net.IP(addr[:]))
-	if key, _ := nc.ipTree.GetLongestPrefixCidr(ipAddr); key != nil {
-		if ns := nc.networkSets[key]; ns != nil {
-			// Found a NetworkSet, so set the return variables.
-			ed = ns
-			ok = true
-		}
+	// Use the namespace isolation lookup from IpTrie for collector use case
+	key, found := nc.ipTree.GetLongestPrefixCidrWithNamespaceIsolation(addr, preferredNamespace)
+	if !found {
+		return nil, false
 	}
-	return
+
+	// Get the NetworkSet data for the key
+	if ns := nc.networkSets[key]; ns != nil {
+		return ns, true
+	}
+
+	return nil, false
 }
 
 func (nc *NetworkSetLookupsCache) DumpNetworksets() string {
@@ -210,11 +222,9 @@ func (nc *NetworkSetLookupsCache) DumpNetworksets() string {
 			cidrStr = append(cidrStr, cidr.String())
 			return nil
 		})
-		domainStr := []string{}
 		lines = append(lines,
 			key.(model.NetworkSetKey).Name,
 			"   cidrs: "+strings.Join(cidrStr, ","),
-			" domains: "+strings.Join(domainStr, ","),
 		)
 	}
 	return strings.Join(lines, "\n")
