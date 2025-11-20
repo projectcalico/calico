@@ -15,5 +15,5 @@
 
 vm_name=$1
 
-exec gcloud --quiet compute scp "ubuntu@${vm_name}:$2" "$3" "--zone=${ZONE}" --scp-flag="-o ServerAliveInterval=10"
+exec gcloud --quiet beta compute scp "ubuntu@${vm_name}:$2" "$3" "--zone=${ZONE}" --scp-flag="-o ServerAliveInterval=10"
 

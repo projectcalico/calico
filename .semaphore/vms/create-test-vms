@@ -50,7 +50,8 @@ gcloud --quiet compute instances bulk create \
        --boot-disk-size=$disk_size \
        --boot-disk-type=hyperdisk-balanced \
        --max-run-duration="${MAX_RUN_DURATION}" \
-       --instance-termination-action=DELETE
+       --instance-termination-action=DELETE \
+       --metadata enable-oslogin=TRUE,enable-oslogin-certificates=TRUE
 
 for batch in "${batches[@]}"; do
   log_file="$artifacts_dir/create-vm-$batch.log"
