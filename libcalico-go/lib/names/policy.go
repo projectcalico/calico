@@ -164,7 +164,7 @@ func ClientTieredPolicyName(policy string) (string, error) {
 }
 
 func policyNameIsFormatted(policy string) bool {
-	// If it is a K8s network policy, or derived from an OpenStack security group, we
+	// If it is a K8s (cluster) network policy, or derived from an OpenStack security group, we
 	// expect the policy name to be formatted properly in the first place.
 	return strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) ||
 		strings.HasPrefix(policy, K8sCNPAdminTierNamePrefix) ||

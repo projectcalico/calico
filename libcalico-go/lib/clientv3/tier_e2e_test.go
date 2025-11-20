@@ -490,7 +490,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
 
-			By("Listing all Tiers and expecting only the default tier")
+			By("Listing all Tiers and expecting only the default, kube-admin and kube-baseline tiers")
 			outList, outError = c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			nonDefaultTiers = checkAndFilterDefaultTiers(outList)
