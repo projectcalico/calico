@@ -29,6 +29,7 @@ gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key
 : "${DOCKER_VERSION=5:20.10.14~3-0~ubuntu-jammy}"
 : "${UBUNTU_VERSION=jammy}"
 : "${SKIP_FIRST_CREATE=false}"
+: "${MAX_RUN_DURATION:=4h}"
 
 gcloud config set project $project
 gcloud auth activate-service-account --key-file=$gcp_secret_key
@@ -43,7 +44,8 @@ function create-vm() {
              --image=${IMAGE} \
              --image-project=ubuntu-os-cloud \
              --boot-disk-size=$disk_size \
-             --boot-disk-type=hyperdisk-balanced
+             --boot-disk-type=hyperdisk-balanced \
+             --max-run-duration="${MAX_RUN_DURATION}"
   fi && \
 
   ssh_cmd="gcloud --quiet compute ssh --zone=${zone} ubuntu@${vm_name}"
@@ -53,6 +55,7 @@ function create-vm() {
     ${ssh_cmd} -- echo "Success" && break
     sleep 1
   done  && \
+  ${ssh_cmd} -- sudo apt update -y && \
   ${ssh_cmd} -- sudo apt install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common && \
   ${ssh_cmd} -- "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg" && \
   ${ssh_cmd} -- "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${UBUNTU_VERSION} stable' | sudo tee /etc/apt/sources.list.d/docker.list" && \
