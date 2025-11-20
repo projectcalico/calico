@@ -149,32 +149,49 @@ EOF
 function join_windows_worker_node() {
   echo "Joining Windows worker node to the cluster..."
   
-  # Install kubeadm on Windows
+  # Create a PowerShell script for installing kubeadm on Windows
+  cat > /tmp/install-kubeadm-windows.ps1 <<'PSEOF'
+# Download kubeadm, kubelet, and kubectl for Windows
+$K8S_VERSION = "v1.33.0"
+$KUBE_BIN_DIR = "C:\k"
+
+Write-Host "Downloading Kubernetes binaries for Windows..."
+Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubeadm.exe" -OutFile "$KUBE_BIN_DIR\kubeadm.exe"
+Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubelet.exe" -OutFile "$KUBE_BIN_DIR\kubelet.exe"
+Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubectl.exe" -OutFile "$KUBE_BIN_DIR\kubectl.exe"
+
+# Add to PATH if not already there
+$existingPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+if ($existingPath -notlike "*$KUBE_BIN_DIR*") {
+    [Environment]::SetEnvironmentVariable("Path", "$existingPath;$KUBE_BIN_DIR", "Machine")
+    $env:Path = "$existingPath;$KUBE_BIN_DIR"
+}
+
+Write-Host "Kubernetes binaries installed successfully"
+Write-Host "Kubeadm version: $(& $KUBE_BIN_DIR\kubeadm.exe version)"
+PSEOF
+
+  # Copy script to Windows node
   echo "Installing kubeadm on Windows node..."
-  ${WINDOWS_CONNECT_COMMAND} 'powershell -Command "
-    # Download kubeadm, kubelet, and kubectl for Windows
-    \$K8S_VERSION = \"v1.33.0\"
-    \$KUBE_BIN_DIR = \"C:\\k\"
-    
-    Write-Host \"Downloading Kubernetes binaries for Windows...\"
-    Invoke-WebRequest -Uri \"https://dl.k8s.io/\$K8S_VERSION/bin/windows/amd64/kubeadm.exe\" -OutFile \"\$KUBE_BIN_DIR\\kubeadm.exe\"
-    Invoke-WebRequest -Uri \"https://dl.k8s.io/\$K8S_VERSION/bin/windows/amd64/kubelet.exe\" -OutFile \"\$KUBE_BIN_DIR\\kubelet.exe\"
-    Invoke-WebRequest -Uri \"https://dl.k8s.io/\$K8S_VERSION/bin/windows/amd64/kubectl.exe\" -OutFile \"\$KUBE_BIN_DIR\\kubectl.exe\"
-    
-    # Add to PATH if not already there
-    \$existingPath = [Environment]::GetEnvironmentVariable(\"Path\", \"Machine\")
-    if (\$existingPath -notlike \"*\$KUBE_BIN_DIR*\") {
-        [Environment]::SetEnvironmentVariable(\"Path\", \"\$existingPath;\$KUBE_BIN_DIR\", \"Machine\")
-        \$env:Path = \$existingPath + \";\$KUBE_BIN_DIR\"
-    }
-    
-    Write-Host \"Kubernetes binaries installed successfully\"
-    Write-Host \"Kubeadm version: \$(& \$KUBE_BIN_DIR\\kubeadm.exe version -o short)\"
-  "'
+  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/install-kubeadm-windows.ps1 winfv@${WINDOWS_EIP}:c:\\k\\
   
-  # Join Windows node to the cluster
+  # Execute the script on Windows
+  ${WINDOWS_CONNECT_COMMAND} "powershell -ExecutionPolicy Bypass -File c:\\k\\install-kubeadm-windows.ps1"
+  
+  # Create join script with the actual join command
+  # Extract just the token and discovery hash from the join command
+  JOIN_ARGS=$(echo "${KUBEADM_JOIN_COMMAND}" | sed 's/kubeadm join //')
+  
+  cat > /tmp/join-cluster-windows.ps1 <<PSEOF
+# Join Windows node to Kubernetes cluster
+Write-Host "Joining cluster at ${LINUX_PIP}:6443..."
+& C:\k\kubeadm.exe join ${JOIN_ARGS} --cri-socket npipe:////./pipe/containerd-containerd
+PSEOF
+
+  # Copy and execute join script
   echo "Joining Windows node to cluster..."
-  ${WINDOWS_CONNECT_COMMAND} "powershell -Command \"& C:\\k\\kubeadm.exe join ${LINUX_PIP}:6443 ${KUBEADM_JOIN_COMMAND#*join } --cri-socket npipe:////./pipe/containerd-containerd\""
+  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/join-cluster-windows.ps1 winfv@${WINDOWS_EIP}:c:\\k\\
+  ${WINDOWS_CONNECT_COMMAND} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster-windows.ps1"
   
   echo "Windows worker node joined successfully!"
   ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
