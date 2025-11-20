@@ -166,9 +166,8 @@ const (
 	PolicyKindStagedGlobalNetworkPolicy     = PolicyKind(proto.PolicyKind_StagedGlobalNetworkPolicy)
 	PolicyKindStagedKubernetesNetworkPolicy = PolicyKind(proto.PolicyKind_StagedKubernetesNetworkPolicy)
 
-	PolicyKindNetworkPolicy                    = PolicyKind(proto.PolicyKind_NetworkPolicy)
-	PolicyKindClusterNetworkPolicyAdminTier    = PolicyKind(proto.PolicyKind_ClusterNetworkPolicyAdminTier)
-	PolicyKindClusterNetworkPolicyBaselineTier = PolicyKind(proto.PolicyKind_ClusterNetworkPolicyBaselineTier)
+	PolicyKindNetworkPolicy        = PolicyKind(proto.PolicyKind_NetworkPolicy)
+	PolicyKindClusterNetworkPolicy = PolicyKind(proto.PolicyKind_ClusterNetworkPolicy)
 
 	PolicyKindProfile   = PolicyKind(proto.PolicyKind_Profile)
 	PolicyKindEndOfTier = PolicyKind(proto.PolicyKind_EndOfTier)
