@@ -115,6 +115,12 @@ sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 EOF
   
+  # Get the API server port (default is 6443 for kubeadm)
+  APISERVER_PORT=6443
+  export APISERVER_PORT
+  
+  # Note: The node will be in NotReady state until a CNI plugin is installed
+  # This is expected behavior for a fresh kubeadm cluster
   echo "Waiting for API server to be responsive..."
   ${MASTER_CONNECT_COMMAND} "kubectl wait --for=condition=Ready --timeout=60s pod -n kube-system -l component=kube-apiserver || true"
   
@@ -122,17 +128,56 @@ EOF
   echo "Verifying cluster accessibility..."
   ${MASTER_CONNECT_COMMAND} "kubectl cluster-info"
   
-  # Remove control plane taints to allow scheduling pods on master (for single-node testing)
+  # Remove control plane taints to allow scheduling pods on master
   echo "Removing control plane taints..."
   ${MASTER_CONNECT_COMMAND} "kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true"
   
   echo
   echo "Kubernetes cluster info:"
-  echo
-  ${MASTER_CONNECT_COMMAND} kubectl version --short
-  echo
+  ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
+  
+  # Save the join command for Windows worker node
+  echo "Generating kubeadm join command for Windows node..."
+  ${MASTER_CONNECT_COMMAND} "kubeadm token create --print-join-command" > /tmp/kubeadm_join_command.txt
+  KUBEADM_JOIN_COMMAND=$(cat /tmp/kubeadm_join_command.txt)
+  export KUBEADM_JOIN_COMMAND
+  echo "Join command saved: ${KUBEADM_JOIN_COMMAND}"
   
   echo "Kubernetes cluster setup completed successfully!"
+}
+
+function join_windows_worker_node() {
+  echo "Joining Windows worker node to the cluster..."
+  
+  # Install kubeadm on Windows
+  echo "Installing kubeadm on Windows node..."
+  ${WINDOWS_CONNECT_COMMAND} 'powershell -Command "
+    # Download kubeadm, kubelet, and kubectl for Windows
+    \$K8S_VERSION = \"v1.33.0\"
+    \$KUBE_BIN_DIR = \"C:\\k\"
+    
+    Write-Host \"Downloading Kubernetes binaries for Windows...\"
+    Invoke-WebRequest -Uri \"https://dl.k8s.io/\$K8S_VERSION/bin/windows/amd64/kubeadm.exe\" -OutFile \"\$KUBE_BIN_DIR\\kubeadm.exe\"
+    Invoke-WebRequest -Uri \"https://dl.k8s.io/\$K8S_VERSION/bin/windows/amd64/kubelet.exe\" -OutFile \"\$KUBE_BIN_DIR\\kubelet.exe\"
+    Invoke-WebRequest -Uri \"https://dl.k8s.io/\$K8S_VERSION/bin/windows/amd64/kubectl.exe\" -OutFile \"\$KUBE_BIN_DIR\\kubectl.exe\"
+    
+    # Add to PATH if not already there
+    \$existingPath = [Environment]::GetEnvironmentVariable(\"Path\", \"Machine\")
+    if (\$existingPath -notlike \"*\$KUBE_BIN_DIR*\") {
+        [Environment]::SetEnvironmentVariable(\"Path\", \"\$existingPath;\$KUBE_BIN_DIR\", \"Machine\")
+        \$env:Path = \$existingPath + \";\$KUBE_BIN_DIR\"
+    }
+    
+    Write-Host \"Kubernetes binaries installed successfully\"
+    Write-Host \"Kubeadm version: \$(& \$KUBE_BIN_DIR\\kubeadm.exe version -o short)\"
+  "'
+  
+  # Join Windows node to the cluster
+  echo "Joining Windows node to cluster..."
+  ${WINDOWS_CONNECT_COMMAND} "powershell -Command \"& C:\\k\\kubeadm.exe join ${LINUX_PIP}:6443 ${KUBEADM_JOIN_COMMAND#*join } --cri-socket npipe:////./pipe/containerd-containerd\""
+  
+  echo "Windows worker node joined successfully!"
+  ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
 }
 
 function copy_files_from_linux() {
@@ -180,6 +225,13 @@ setup_kubeadm_cluster
 copy_files_from_linux
 prepare_and_copy_windows_dir
 prepare_windows_node
+join_windows_worker_node
+
+echo
+echo "Cluster setup complete! Final node status:"
+${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
+echo
+
 exit 0
 
 if [[ "$BACKEND" == "overlay" ]]; then
