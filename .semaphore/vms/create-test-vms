@@ -37,12 +37,9 @@ for batch in "${batches[@]}"; do
   else
     names="$vm_name"
   fi
-  log_file="$artifacts_dir/create-vm-$batch.log"
-  echo "Creating test VM $vm_name in background. Redirecting log to $log_file."
-  "${my_dir}/create-test-vm" "$vm_name" >& "$log_file" &
-  pids+=( $! )
 done
 
+# Do a bulk create; this is faster and it saves API quota.
 gcloud --quiet compute instances bulk create \
        --predefined-names="$names" \
        --zone=${zone} \
@@ -51,6 +48,13 @@ gcloud --quiet compute instances bulk create \
        --image-project=ubuntu-os-cloud \
        --boot-disk-size=$disk_size \
        --boot-disk-type=hyperdisk-balanced
+
+for batch in "${batches[@]}"; do
+  log_file="$artifacts_dir/create-vm-$batch.log"
+  echo "Creating test VM $vm_name in background. Redirecting log to $log_file."
+  SKIP_FIRST_CREATE=true "${my_dir}/create-test-vm" "$vm_name" >& "$log_file" &
+  pids+=( $! )
+done
 
 for pid in "${pids[@]}"; do
   echo "Waiting for create-test-vm process PID=$pid to finish"

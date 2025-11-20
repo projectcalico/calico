@@ -588,6 +588,7 @@ blocks:
               value: "22.04-nft"
           commands:
             - source felix/.semaphore/fv-prologue
+            - export NUM_FV_BATCHES=12
             - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
@@ -611,6 +612,7 @@ blocks:
               value: "bpf-24.04-ipt-with-ut"
           commands:
             - source felix/.semaphore/fv-prologue
+            - export NUM_FV_BATCHES=30
             - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
@@ -626,7 +628,7 @@ blocks:
       - "Felix: Build"
     task:
       jobs:
-        - name: "Felix: BPF tests on Ubuntu 24.04"
+        - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
           execution_time_limit:
             minutes: 180
           env_vars:
@@ -638,6 +640,7 @@ blocks:
             - source felix/.semaphore/fv-prologue
             # Limit to BPF conntrack tests to reduce overall runtime.
             - export FV_FOCUS='_BPF_.*ct=true'
+            - export NUM_FV_BATCHES=10
             - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
@@ -692,6 +695,7 @@ blocks:
             - source felix/.semaphore/fv-prologue
             # Limit to BPF TCP+conntrack tests to reduce overall runtime.
             - export FV_FOCUS='_BPF_.*tcp.*ct=true'
+            - export NUM_FV_BATCHES=12
             - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
@@ -860,8 +864,12 @@ blocks:
     task:
       prologue:
         commands:
-          - cd node
+          - # Set up access to GCP buckets.
+          - export GCS_TRANSIENT_DIR_URL=gs://calico-transient-build-artifacts-ew3/workflow-${SEMAPHORE_WORKFLOW_ID}
+          - gcloud config set project unique-caldron-775
+          - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+          - cd node
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
           - export ZONE=europe-west3-c
           - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
