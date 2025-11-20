@@ -279,7 +279,7 @@ func (c *collector) startStatsCollectionAndReporting() {
 func (c *collector) loopProcessingDataplaneInfoUpdates(dpInfoC <-chan *proto.ToDataplane) {
 	for dpInfo := range dpInfoC {
 		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-			log.Debugf("Dataplane payload: %v and sequenceNumber: %d, ", dpInfo.Payload, dpInfo.SequenceNumber)
+			log.Debugf("Dataplane payload: %+v and sequenceNumber: %d, ", dpInfo.Payload, dpInfo.SequenceNumber)
 			// Get the data and update the endpoints.
 			ps.ProcessUpdate(perHostPolicySubscription, dpInfo, true)
 		})
