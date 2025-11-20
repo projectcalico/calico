@@ -9,6 +9,9 @@ func newStdClock() Clock {
 }
 
 func (std *stdClock) Now() Time {
+	if localOverride != nil {
+		return time.Now().In(localOverride)
+	}
 	return time.Now()
 }
 
