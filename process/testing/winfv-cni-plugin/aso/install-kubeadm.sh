@@ -54,23 +54,30 @@ sudo sysctl --system
 
 # Install containerd if not already installed
 if ! command -v containerd &> /dev/null; then
-  echo "Installing containerd..."
-  sudo apt-get update
-  sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-  
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-  
-  sudo apt-get update
-  sudo apt-get install -y containerd.io
-  
-  # Configure containerd
-  sudo mkdir -p /etc/containerd
-  containerd config default | sudo tee /etc/containerd/config.toml
-  sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
-  sudo systemctl restart containerd
-  sudo systemctl enable containerd
+  echo "ERROR: containerd is not installed!"
+  echo "Please ensure the VM extension in vmss-linux.yaml has installed containerd."
+  exit 1
 fi
+
+echo "Containerd found: $(containerd --version)"
+
+# Verify containerd configuration
+if [ ! -f /etc/containerd/config.toml ]; then
+  echo "ERROR: containerd config file /etc/containerd/config.toml not found!"
+  exit 1
+fi
+
+# Verify systemd cgroup is enabled
+if ! grep -q "SystemdCgroup = true" /etc/containerd/config.toml; then
+  echo "WARNING: SystemdCgroup is not enabled in containerd config"
+  echo "This may cause issues with Kubernetes. Please check vmss-linux.yaml extension."
+fi
+
+# Ensure containerd is running
+sudo systemctl status containerd --no-pager || {
+  echo "ERROR: containerd service is not running!"
+  exit 1
+}
 
 # Install kubeadm, kubelet, and kubectl for Kubernetes 1.33
 echo "Installing kubeadm, kubelet, and kubectl v1.33..."
@@ -107,14 +114,13 @@ mkdir -p $HOME/.kube
 sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 EOF
-
-  # Get the API server port (default is 6443 for kubeadm)
-  APISERVER_PORT=6443
-  export APISERVER_PORT
   
-  # Wait for API server to be ready
-  echo "Waiting for API server to be ready..."
-  ${MASTER_CONNECT_COMMAND} "kubectl wait --for=condition=Ready node --all --timeout=300s"
+  echo "Waiting for API server to be responsive..."
+  ${MASTER_CONNECT_COMMAND} "kubectl wait --for=condition=Ready --timeout=60s pod -n kube-system -l component=kube-apiserver || true"
+  
+  # Verify cluster is accessible
+  echo "Verifying cluster accessibility..."
+  ${MASTER_CONNECT_COMMAND} "kubectl cluster-info"
   
   # Remove control plane taints to allow scheduling pods on master (for single-node testing)
   echo "Removing control plane taints..."
@@ -122,7 +128,6 @@ EOF
   
   echo
   echo "Kubernetes cluster info:"
-  ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
   echo
   ${MASTER_CONNECT_COMMAND} kubectl version --short
   echo
@@ -192,5 +197,4 @@ fi
 rm -r ./report || true
 scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -r winfv@${WINDOWS_EIP}:c:\\k\\report .
 
-echo "All done."
 echo "All done."
