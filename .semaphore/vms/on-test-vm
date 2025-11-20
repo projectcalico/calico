@@ -14,4 +14,4 @@
 # limitations under the License.
 #
 
-exec gcloud --quiet compute ssh "--zone=${ZONE}" "ubuntu@${VM_NAME}" -- -n -A -o ServerAliveInterval=10 "$@"
+exec gcloud --quiet beta compute ssh "--zone=${ZONE}" "ubuntu@${VM_NAME}" -- -n -A -o ServerAliveInterval=10 "$@"
