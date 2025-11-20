@@ -17,6 +17,7 @@
 set -e
 set -x
 
+my_dir="$(dirname $0)"
 vm_name=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
@@ -46,36 +47,39 @@ function create-vm() {
              --boot-disk-size=$disk_size \
              --boot-disk-type=hyperdisk-balanced \
              --max-run-duration="${MAX_RUN_DURATION}" \
-             --instance-termination-action=DELETE
+             --instance-termination-action=DELETE \
+             --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
+             --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
   fi && \
 
-  ssh_cmd="gcloud --quiet compute ssh --zone=${zone} ubuntu@${vm_name}"
+  local vm_ip
+  local vm_pub_key
+  vm_pub_key=""
+  while [ -z "$vm_pub_key" ]; do
+    echo "Waiting for VM SSH host key..."
+    sleep 2
+    vm_pub_key=$(gcloud compute instances get-guest-attributes ${vm_name} --zone=${zone} --query-path="hostkeys/ssh-ed25519" --format='value(value)')
+    echo "VM SSH host key: $vm_pub_key"
+  done
+  vm_ip=$(gcloud compute instances describe ${vm_name} --zone=${zone} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+  echo "$vm_ip ssh-ed25519 $vm_pub_key" >> ~/.ssh/known_hosts
+
+  ssh_cmd="ssh ubuntu@${vm_ip}"
 
   for ssh_try in $(seq 1 10); do
     echo "Trying to SSH in: $ssh_try"
     ${ssh_cmd} -- echo "Success" && break
     sleep 1
   done  && \
-  ${ssh_cmd} -- sudo apt update -y && \
-  ${ssh_cmd} -- sudo apt install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common && \
-  ${ssh_cmd} -- "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg" && \
-  ${ssh_cmd} -- "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${UBUNTU_VERSION} stable' | sudo tee /etc/apt/sources.list.d/docker.list" && \
-  ${ssh_cmd} -- sudo apt update -y && \
-  ${ssh_cmd} -- sudo apt install -y --no-install-recommends git docker-ce=${DOCKER_VERSION} docker-ce-cli=${DOCKER_VERSION} docker-buildx-plugin containerd.io make iproute2 wireguard && \
-  ${ssh_cmd} -- sudo usermod -a -G docker ubuntu && \
-  ${ssh_cmd} -- sudo modprobe ipip && \
-  ${ssh_cmd} -- 'if [ -s /etc/docker/daemon.json ] ; then cat /etc/docker/daemon.json | sed "\$d" | sed "\$s/\$/,/" > /tmp/daemon.json ; else echo -en {\\n > /tmp/daemon.json ; fi' && \
-  ${ssh_cmd} -- 'cat >> /tmp/daemon.json << EOF
-  "ipv6": true,
-  "fixed-cidr-v6": "2001:db8:1::/64"
-}
-EOF' && \
-  ${ssh_cmd} --  sudo mv /tmp/daemon.json /etc/docker/daemon.json && \
-  ${ssh_cmd} --  sudo systemctl restart docker && \
+  for ssh_try in $(seq 1 100); do
+    echo "Trying to SSH in: $ssh_try"
+    ${ssh_cmd} -- test -e /tmp/startup-complete && break
+    sleep 1
+  done  && \
   set +x && \
   echo "$DOCKERHUB_PASSWORD" | gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
   set -x && \
-  gcloud --quiet compute scp --zone=${zone} --recurse --compress "$HOME/secrets" "ubuntu@${vm_name}:/home/ubuntu/secrets" && \
+  scp --recurse --compress "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets" && \
   ${ssh_cmd} -- gcloud config set project unique-caldron-775 && \
   ${ssh_cmd} -- gcloud auth activate-service-account --key-file=/home/ubuntu/secrets/secret.google-service-account-key.json && \
   ${ssh_cmd} -- gcloud storage cp "${GCS_TRANSIENT_DIR_URL}/*" /tmp && \

@@ -50,7 +50,9 @@ gcloud --quiet compute instances bulk create \
        --boot-disk-size=$disk_size \
        --boot-disk-type=hyperdisk-balanced \
        --max-run-duration="${MAX_RUN_DURATION}" \
-       --instance-termination-action=DELETE
+       --instance-termination-action=DELETE \
+       --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
+       --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
 
 for batch in "${batches[@]}"; do
   log_file="$artifacts_dir/create-vm-$batch.log"
