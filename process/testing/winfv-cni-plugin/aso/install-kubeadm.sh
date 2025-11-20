@@ -155,20 +155,51 @@ function join_windows_worker_node() {
 $K8S_VERSION = "v1.33.0"
 $KUBE_BIN_DIR = "C:\k"
 
-Write-Host "Downloading Kubernetes binaries for Windows..."
-Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubeadm.exe" -OutFile "$KUBE_BIN_DIR\kubeadm.exe"
-Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubelet.exe" -OutFile "$KUBE_BIN_DIR\kubelet.exe"
-Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubectl.exe" -OutFile "$KUBE_BIN_DIR\kubectl.exe"
-
-# Add to PATH if not already there
-$existingPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-if ($existingPath -notlike "*$KUBE_BIN_DIR*") {
-    [Environment]::SetEnvironmentVariable("Path", "$existingPath;$KUBE_BIN_DIR", "Machine")
-    $env:Path = "$existingPath;$KUBE_BIN_DIR"
+# Ensure C:\k directory exists
+if (!(Test-Path $KUBE_BIN_DIR)) {
+    New-Item -ItemType Directory -Path $KUBE_BIN_DIR -Force
 }
 
+Write-Host "Downloading Kubernetes binaries for Windows (version: $K8S_VERSION)..."
+
+# Download kubeadm
+Write-Host "Downloading kubeadm.exe..."
+Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubeadm.exe" -OutFile "$KUBE_BIN_DIR\kubeadm.exe" -UseBasicParsing
+if (!(Test-Path "$KUBE_BIN_DIR\kubeadm.exe")) {
+    Write-Error "Failed to download kubeadm.exe"
+    exit 1
+}
+
+# Download kubelet
+Write-Host "Downloading kubelet.exe..."
+Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubelet.exe" -OutFile "$KUBE_BIN_DIR\kubelet.exe" -UseBasicParsing
+if (!(Test-Path "$KUBE_BIN_DIR\kubelet.exe")) {
+    Write-Error "Failed to download kubelet.exe"
+    exit 1
+}
+
+# Download kubectl
+Write-Host "Downloading kubectl.exe..."
+Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubectl.exe" -OutFile "$KUBE_BIN_DIR\kubectl.exe" -UseBasicParsing
+if (!(Test-Path "$KUBE_BIN_DIR\kubectl.exe")) {
+    Write-Error "Failed to download kubectl.exe"
+    exit 1
+}
+
+# Add to PATH
+$existingPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+if ($existingPath -notlike "*$KUBE_BIN_DIR*") {
+    Write-Host "Adding $KUBE_BIN_DIR to PATH..."
+    [Environment]::SetEnvironmentVariable("Path", "$existingPath;$KUBE_BIN_DIR", "Machine")
+}
+# Update current session PATH
+$env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine")
+
 Write-Host "Kubernetes binaries installed successfully"
+Write-Host "Verifying installations..."
 Write-Host "Kubeadm version: $(& $KUBE_BIN_DIR\kubeadm.exe version)"
+Write-Host "Kubelet version: $(& $KUBE_BIN_DIR\kubelet.exe --version)"
+Write-Host "Kubectl version: $(& $KUBE_BIN_DIR\kubectl.exe version --client --short)"
 PSEOF
 
   # Copy script to Windows node
@@ -184,8 +215,23 @@ PSEOF
   
   cat > /tmp/join-cluster-windows.ps1 <<PSEOF
 # Join Windows node to Kubernetes cluster
+\$KUBE_BIN_DIR = "C:\k"
+
+# Ensure PATH includes C:\k
+\$env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine")
+
 Write-Host "Joining cluster at ${LINUX_PIP}:6443..."
-& C:\k\kubeadm.exe join ${JOIN_ARGS} --cri-socket npipe:////./pipe/containerd-containerd
+Write-Host "Using kubeadm at: \$KUBE_BIN_DIR\kubeadm.exe"
+Write-Host "Kubelet location: \$KUBE_BIN_DIR\kubelet.exe"
+
+# Verify kubelet exists
+if (!(Test-Path "\$KUBE_BIN_DIR\kubelet.exe")) {
+    Write-Error "kubelet.exe not found at \$KUBE_BIN_DIR\kubelet.exe"
+    exit 1
+}
+
+# Run kubeadm join with full path
+& \$KUBE_BIN_DIR\kubeadm.exe join ${JOIN_ARGS} --cri-socket npipe:////./pipe/containerd-containerd
 PSEOF
 
   # Copy and execute join script
