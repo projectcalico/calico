@@ -54,6 +54,10 @@ global_job_config:
       value: "true"
     - name: PRIVATE_REGISTRY
       value: "quay.io/"
+    - name: RELEASE_STREAM
+      value: "master"
+    - name: VPP_VERSION
+      value: "master"
 
 blocks:
   - name: k8s-e2e ST

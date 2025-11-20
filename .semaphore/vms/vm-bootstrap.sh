@@ -7,8 +7,8 @@ apt-get install -y --no-install-recommends apt-transport-https ca-certificates c
 
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${UBUNTU_VERSION} stable' | tee /etc/apt/sources.list.d/docker.list
-apt update -y
-apt install -y --no-install-recommends git docker-ce=${DOCKER_VERSION} docker-ce-cli=${DOCKER_VERSION} docker-buildx-plugin containerd.io make iproute2 wireguard
+apt-get update -y
+apt-get install -y --no-install-recommends git docker-ce=${DOCKER_VERSION} docker-ce-cli=${DOCKER_VERSION} docker-buildx-plugin containerd.io make iproute2 wireguard
 usermod -a -G docker ubuntu
 modprobe ipip
 if [ -s /etc/docker/daemon.json ] ; then

@@ -13,27 +13,38 @@ type (
 
 	Duration = time.Duration
 
+	Weekday = time.Weekday
+
 	Month = time.Month
 
 	Location = time.Location
 )
 
 const (
-	January Month = 1 + iota
-	February
-	March
-	April
-	May
-	June
-	July
-	August
-	September
-	October
-	November
-	December
+	Sunday    Weekday = time.Sunday
+	Monday    Weekday = time.Monday
+	Tuesday   Weekday = time.Tuesday
+	Wednesday Weekday = time.Wednesday
+	Thursday  Weekday = time.Thursday
+	Friday    Weekday = time.Friday
+	Saturday  Weekday = time.Saturday
+
+	January   Month = time.January
+	February  Month = time.February
+	March     Month = time.March
+	April     Month = time.April
+	May       Month = time.May
+	June      Month = time.June
+	July      Month = time.July
+	August    Month = time.August
+	September Month = time.September
+	October   Month = time.October
+	November  Month = time.November
+	December  Month = time.December
 )
 
 const (
+	Day         = 24 * time.Hour
 	Hour        = time.Hour
 	Minute      = time.Minute
 	Second      = time.Second
@@ -50,6 +61,9 @@ const (
 	RFC850      = time.RFC850
 	Kitchen     = time.Kitchen
 	Stamp       = time.Stamp
+	DateOnly    = time.DateOnly
+	DateTime    = time.DateTime
+	UnixDate    = time.UnixDate
 )
 
 var (
@@ -142,4 +156,16 @@ func Parse(layout, value string) (Time, error) {
 
 func Date(year int, month Month, day, hour, min, sec, nsec int, loc *Location) Time {
 	return time.Date(year, month, day, hour, min, sec, nsec, loc)
+}
+
+func FixedZone(name string, offset int) *Location {
+	return time.FixedZone(name, offset)
+}
+
+func ParseDuration(s string) (Duration, error) {
+	return time.ParseDuration(s)
+}
+
+func ParseInLocation(layout, value string, loc *Location) (Time, error) {
+	return time.ParseInLocation(layout, value, loc)
 }
