@@ -24,6 +24,8 @@ from oslo_config import cfg
 
 from oslo_log import log
 
+from networking_calico.plugins.calico.context import SGRUpdateContext
+
 
 LOG = log.getLogger(__name__)
 
@@ -152,3 +154,27 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
             context.fip_update_port_id = new_floatingip["port_id"]
             self.mechanism_manager._call_on_drivers("update_floatingip", context)
         return new_floatingip
+
+    def create_security_group_rule(self, context, security_group_rule):
+        rule = super().create_security_group_rule(context, security_group_rule)
+        sgids = [rule["security_group_id"]]
+        self._notify_sg_rule_updated(context, sgids)
+        return rule
+
+    def create_security_group_rule_bulk(self, context, security_group_rules):
+        rules = super().create_security_group_rule_bulk_native(
+            context, security_group_rules
+        )
+        sgids = set([r["security_group_id"] for r in rules])
+        self._notify_sg_rule_updated(context, list(sgids))
+        return rules
+
+    def delete_security_group_rule(self, context, sgrid):
+        rule = self.get_security_group_rule(context, sgrid)
+        super().delete_security_group_rule(context, sgrid)
+        self._notify_sg_rule_updated(context, [rule["security_group_id"]])
+
+    def _notify_sg_rule_updated(self, context, sgids):
+        self.mechanism_manager._call_on_drivers(
+            "security_groups_rule_updated", SGRUpdateContext(context, sgids)
+        )
