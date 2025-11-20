@@ -16,7 +16,6 @@ package rules
 
 import (
 	"fmt"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -30,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // ruleRenderer defined in rules_defs.go.
