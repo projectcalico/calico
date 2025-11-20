@@ -593,16 +593,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				pol = createPolicy(pol)
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-1", "allow", true)
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-1", "allow", true)
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-1", "allow", true)
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-1", "allow", true)
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 			})
 
@@ -776,6 +776,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				BeforeEach(func() {
 					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
 				})
+
 				It("should allow traffic from workload to workload and to/from host", func() {
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
@@ -1602,7 +1603,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pol = createPolicy(pol)
 						})
 
-						bpfWaitForPolicy(tc.Felixes[0], "eth0", "egress", "default.host-0-1")
+						bpfWaitForPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
 					})
 
 					It("should handle NAT outgoing", func() {
