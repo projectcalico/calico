@@ -46,13 +46,11 @@ const (
 	MinAggregationLevel = FlowDefault
 )
 
-var (
-	gaugeFlowStoreCacheSizeLength = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "felix_collector_allowed_flowlog_aggregator_store",
-		Help: "Total number of FlowEntries with a given action currently residing in the FlowStore cache used by the aggregator.",
-	},
-		[]string{"action"})
-)
+var gaugeFlowStoreCacheSizeLength = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "felix_collector_allowed_flowlog_aggregator_store",
+	Help: "Total number of FlowEntries with a given action currently residing in the FlowStore cache used by the aggregator.",
+},
+	[]string{"action"})
 
 func init() {
 	prometheus.MustRegister(gaugeFlowStoreCacheSizeLength)
