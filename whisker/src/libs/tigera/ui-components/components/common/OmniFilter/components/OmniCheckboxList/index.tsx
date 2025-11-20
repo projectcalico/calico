@@ -37,36 +37,49 @@ const CheckBoxListItem: React.FC<{
     (
         { isChecked, option, onCheck, index, DescriptionComponent, ...rest },
         ref,
-    ) => (
-        <Checkbox
-            {...checkboxStyles}
-            isChecked={isChecked}
-            onChange={(event) => onCheck(event)}
-            ref={index === 0 ? ref : undefined}
-            {...(DescriptionComponent && {
-                alignItems: 'flex-start',
-                py: 2,
-            })}
-            {...rest}
-        >
-            <Text
-                isTruncated
-                maxWidth='240px'
-                title={option.label}
-                {...(DescriptionComponent && {
-                    lineHeight: 1,
-                    overflowX: 'clip',
-                    overflowY: 'visible',
-                })}
-            >
-                {option.label}
-            </Text>
+    ) => {
+        const checkboxRef = React.useRef<HTMLInputElement>(null);
 
-            {DescriptionComponent && (
-                <DescriptionComponent data={option.data} />
-            )}
-        </Checkbox>
-    ),
+        return (
+            <Box
+                ref={index === 0 ? ref : undefined}
+                onClick={(e) => {
+                    // issue with Chakra checkbox when in a react-window list inside a popover inside another popover
+                    e.stopPropagation();
+                    checkboxRef.current?.click();
+                }}
+            >
+                <Checkbox
+                    {...checkboxStyles}
+                    isChecked={isChecked}
+                    onChange={(event) => onCheck(event)}
+                    ref={checkboxRef}
+                    {...(DescriptionComponent && {
+                        alignItems: 'flex-start',
+                        py: 2,
+                    })}
+                    {...rest}
+                >
+                    <Text
+                        isTruncated
+                        maxWidth='240px'
+                        title={option.label}
+                        {...(DescriptionComponent && {
+                            lineHeight: 1,
+                            overflowX: 'clip',
+                            overflowY: 'visible',
+                        })}
+                    >
+                        {option.label}
+                    </Text>
+
+                    {DescriptionComponent && (
+                        <DescriptionComponent data={option.data} />
+                    )}
+                </Checkbox>
+            </Box>
+        );
+    },
 );
 
 // replace with checkbox list props
@@ -194,7 +207,6 @@ const OmniCheckboxList: React.FC<OmniCheckboxListProps> = forwardRef(
                                         }
                                         {...ref}
                                     />
-
                                     {showMoreButton &&
                                     index === optionsForRender.length - 1 ? (
                                         <Box>

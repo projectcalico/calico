@@ -1,0 +1,459 @@
+@import 'tailwindcss';
+
+/* when dark class is on html ensure all .dark code below overrides default variables */
+@custom-variant dark (&:is(html .chakra-ui-dark *));
+
+/*
+   Tailwind 4 generated: The default border color has changed to `currentColor` in Tailwind CSS v4,
+   so we've added these compatibility styles to make sure everything still
+   looks the same as it did with Tailwind CSS v3.
+ 
+   If we ever want to remove these styles, we need to add an explicit border
+   color utility to any element that depends on these defaults.
+ */
+@layer base {
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-gray-200, currentColor);
+    }
+    /* shadcn  */
+    * {
+        @apply border-border outline-ring/50;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/*** Shadcn default theme 
+***/
+
+:root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.646 0.222 41.116);
+    --chart-2: oklch(0.6 0.118 184.704);
+    --chart-3: oklch(0.398 0.07 227.392);
+    --chart-4: oklch(0.828 0.189 84.429);
+    --chart-5: oklch(0.769 0.188 70.08);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.145 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.145 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.396 0.141 25.723);
+    --destructive-foreground: oklch(0.637 0.237 25.331);
+    --border: oklch(0.269 0 0);
+    --input: oklch(0.269 0 0);
+    --ring: oklch(0.439 0 0);
+    --chart-1: oklch(0.488 0.243 264.376);
+    --chart-2: oklch(0.696 0.17 162.48);
+    --chart-3: oklch(0.769 0.188 70.08);
+    --chart-4: oklch(0.627 0.265 303.9);
+    --chart-5: oklch(0.645 0.246 16.439);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(0.269 0 0);
+    --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/*** Tigera Design System
+***/
+
+@layer components {
+    .focus-ring-tigera {
+        @apply focus:border-[rgba(88,144,255,0.75)] focus:ring-[3px] focus:ring-[rgba(88,144,255,0.75)] focus-visible:border-[rgba(88,144,255,0.75)] focus-visible:ring-[3px] focus-visible:ring-[rgba(88,144,255,0.75)];
+    }
+}
+
+@layer utilities {
+    @keyframes animation-shimmer {
+        0% {
+            transform: translateX(-100%);
+        }
+        100% {
+            transform: translateX(100%);
+        }
+    }
+
+    @keyframes animation-loader-dots {
+        33% {
+            background-size:
+                calc(100% / 3) 0%,
+                calc(100% / 3) 100%,
+                calc(100% / 3) 100%;
+        }
+        50% {
+            background-size:
+                calc(100% / 3) 100%,
+                calc(100% / 3) 0%,
+                calc(100% / 3) 100%;
+        }
+        66% {
+            background-size:
+                calc(100% / 3) 100%,
+                calc(100% / 3) 100%,
+                calc(100% / 3) 0%;
+        }
+    }
+
+    @keyframes text-shimmer {
+        0% {
+            background-position: 200% 50%;
+        }
+        100% {
+            background-position: 0% 50%;
+        }
+    }
+
+    .animation-text-gradient-shimmer {
+        @apply bg-clip-text text-transparent;
+        background-image: linear-gradient(
+            90deg,
+            var(--color-tigera-grey-700),
+            var(--color-tigera-grey-100),
+            var(--color-tigera-grey-700)
+        );
+        background-size: 200% 100%;
+        animation: text-shimmer 2.5s linear infinite;
+    }
+}
+
+@theme {
+    /* === Base Colors === */
+    /* Grey */
+    --color-tigera-grey-50: #f5f5f5;
+    --color-tigera-grey-100: #f5f5f5;
+    --color-tigera-grey-200: #dcdde0;
+    --color-tigera-grey-300: #dcdde0;
+    --color-tigera-grey-400: #b0b2b8;
+    --color-tigera-grey-500: #b0b2b8;
+    --color-tigera-grey-600: #5f5f5f;
+    --color-tigera-grey-700: #5f5f5f;
+    --color-tigera-grey-800: #424346;
+    --color-tigera-grey-900: #424346;
+    --color-tigera-grey-1000: #343537;
+
+    /* Darker Grey */
+    --color-tigera-grey-50: #f5f5f5;
+    --color-tigera-grey-100: #f5f5f5;
+    --color-tigera-grey-200: #dcdde0;
+    --color-tigera-grey-300: #dcdde0;
+    --color-tigera-grey-400: #b0b2b8;
+    --color-tigera-grey-500: #b0b2b8;
+    --color-tigera-grey-600: #5f5f5f;
+    --color-tigera-grey-700: #5f5f5f;
+    --color-tigera-grey-800: #424346;
+    --color-tigera-grey-900: #424346;
+    --color-tigera-grey-1000: #343537;
+
+    /* Green */
+    --color-tigera-green-50: #e6f9f1;
+    --color-tigera-green-100: #e6f9f1;
+    --color-tigera-green-200: #ccf4e3;
+    --color-tigera-green-300: #ccf4e3;
+    --color-tigera-green-400: #99e9c6;
+    --color-tigera-green-500: #99e9c6;
+    --color-tigera-green-600: #66ddaa;
+    --color-tigera-green-700: #66ddaa;
+    --color-tigera-green-800: #33d28d;
+    --color-tigera-green-900: #33d28d;
+    --color-tigera-green-1000: #00c771;
+
+    /* Red */
+    --color-tigera-red-50: #fef5f5;
+    --color-tigera-red-100: #fcd9d8;
+    --color-tigera-red-200: #f9b3b2;
+    --color-tigera-red-300: #f9b3b2;
+    --color-tigera-red-400: #f78c8b;
+    --color-tigera-red-500: #f78c8b;
+    --color-tigera-red-600: #f46665;
+    --color-tigera-red-700: #f46665;
+    --color-tigera-red-800: #f1403e;
+    --color-tigera-red-900: #f1403e;
+    --color-tigera-red-1000: #e1302e;
+
+    /* Blues */
+    --color-tigera-blue-light: #dceaf3;
+    --color-tigera-blue-medium-40: #9dcbe2;
+    --color-tigera-blue-medium-80: #3a97c5;
+    --color-tigera-blue-medium: #1084bd;
+    --color-tigera-blue-medium-alpha-40: rgba(9, 125, 182, 0.4);
+    --color-tigera-blue-dark: #273981;
+
+    /* Golds */
+    --color-tigera-gold-light: #fce181;
+    --color-tigera-gold-medium-20: #fde9d2;
+    --color-tigera-gold-medium-40: #fbd4a6;
+    --color-tigera-gold-medium: #f69320;
+    --color-tigera-gold-dark: #f37828;
+
+    --color-tigera-gold-100: #fef4e9;
+    --color-tigera-gold-200: #fde9d2;
+    --color-tigera-gold-400: #fbd4a6;
+    --color-tigera-gold-600: #fabe79;
+    --color-tigera-gold-800: #f8a94d;
+    --color-tigera-gold-1000: #f69320;
+
+    /* Additional Colors */
+    --color-tigera-peach: #ff7455;
+    --color-tigera-rose: #ff5eab;
+    --color-tigera-lilac: #7e70ff;
+    --color-tigera-sky: #58cdff;
+    --color-tigera-coast: #21cfc2;
+    --color-tigera-zest: #bee846;
+    --color-tigera-black: #141414;
+    --color-tigera-white: #ffffff;
+    --color-tigera-dark-blue: #273981;
+    --color-tigera-cloud-grey: #e6eaf0;
+
+    /* === Light Mode Semantic Tokens (default) === */
+
+    /* Accent Colors */
+    --color-tigera-semantic-accent-primary: var(--color-tigera-blue-dark);
+    --color-tigera-semantic-accent-on-primary: var(--color-tigera-white);
+
+    --color-tigera-semantic-accent-secondary: var(--color-tigera-grey-800);
+    --color-tigera-semantic-accent-on-secondary: var(--color-tigera-white);
+
+    --color-tigera-semantic-accent-tertiary: var(--color-tigera-blue-medium);
+    --color-tigera-semantic-accent-on-tertiary: var(--color-tigera-white);
+
+    --color-tigera-semantic-accent-error: var(--color-tigera-red-1000);
+    --color-tigera-semantic-accent-on-error: var(--color-tigera-white);
+
+    /* Container Colors */
+    --color-tigera-semantic-container-primary: var(--color-tigera-blue-light);
+    --color-tigera-semantic-container-on-primary: var(--color-tigera-blue-dark);
+
+    --color-tigera-semantic-container-secondary: var(--color-tigera-grey-200);
+    --color-tigera-semantic-container-on-secondary: var(--color-tigera-black);
+
+    --color-tigera-semantic-container-tertiary: var(--color-tigera-grey-100);
+    --color-tigera-semantic-container-on-tertiary: var(
+        --color-tigera-blue-medium
+    );
+
+    --color-tigera-semantic-container-error: var(--color-tigera-red-100);
+    --color-tigera-semantic-container-on-error: var(--color-tigera-red-1000);
+
+    /* Surface Colors */
+    --color-tigera-semantic-surface-surface: var(--color-tigera-white);
+    --color-tigera-semantic-surface-on-surface: var(--color-tigera-black);
+
+    --color-tigera-semantic-surface-secondary: var(--color-tigera-grey-100);
+    --color-tigera-semantic-surface-on-surface-secondary: var(
+        --color-tigera-black
+    );
+
+    --color-tigera-semantic-surface-on-surface-variant: var(
+        --color-tigera-grey-600
+    );
+
+    /* Surface Containers */
+    --color-tigera-semantic-surface-container-low: var(--color-tigera-white);
+    --color-tigera-semantic-surface-on-surface-container-low: var(
+        --color-tigera-black
+    );
+
+    --color-tigera-semantic-surface-container: var(--color-tigera-grey-100);
+    --color-tigera-semantic-surface-on-surface-container: var(
+        --color-tigera-black
+    );
+
+    --color-tigera-semantic-surface-container-high: var(
+        --color-tigera-grey-200
+    );
+    --color-tigera-semantic-surface-on-surface-container-high: var(
+        --color-tigera-black
+    );
+
+    --color-tigera-semantic-surface-container-highest: var(
+        --color-tigera-grey-400
+    );
+    --color-tigera-semantic-surface-on-surface-container-highest: var(
+        --color-tigera-black
+    );
+
+    /* Borders */
+    --color-tigera-semantic-border-outline: var(--color-tigera-grey-200);
+    --color-tigera-semantic-border-outline-on-surface-container-high: var(
+        --color-tigera-grey-200
+    );
+}
+
+/* === Dark Mode Semantic Tokens === */
+.dark {
+    /* Accent Colors */
+    --color-tigera-semantic-accent-primary: var(--color-tigera-gold-medium);
+    --color-tigera-semantic-accent-on-primary: var(--color-tigera-black);
+
+    --color-tigera-semantic-accent-secondary: var(--color-tigera-grey-200);
+    --color-tigera-semantic-accent-on-secondary: var(--color-tigera-black);
+
+    --color-tigera-semantic-accent-tertiary: var(--color-tigera-gold-light);
+    --color-tigera-semantic-accent-on-tertiary: var(--color-tigera-black);
+
+    --color-tigera-semantic-accent-error: var(--color-tigera-red-100);
+    --color-tigera-semantic-accent-on-error: var(--color-tigera-red-1000);
+
+    /* Container Colors */
+    --color-tigera-semantic-container-primary: var(
+        --color-tigera-gold-medium-20
+    );
+    --color-tigera-semantic-container-on-primary: var(--color-tigera-black);
+
+    --color-tigera-semantic-container-secondary: var(--color-tigera-grey-1000);
+    --color-tigera-semantic-container-on-secondary: var(--color-tigera-white);
+
+    --color-tigera-semantic-container-tertiary: var(--color-tigera-black);
+    --color-tigera-semantic-container-on-tertiary: var(
+        --color-tigera-gold-light
+    );
+
+    --color-tigera-semantic-container-error: var(--color-tigera-red-1000);
+    --color-tigera-semantic-container-on-error: var(--color-tigera-white);
+
+    /* Surface Colors */
+    --color-tigera-semantic-surface-surface: var(--color-tigera-black);
+    --color-tigera-semantic-surface-on-surface: var(--color-tigera-grey-200);
+
+    --color-tigera-semantic-surface-secondary: var(--color-tigera-black);
+    --color-tigera-semantic-surface-on-surface-secondary: var(
+        --color-tigera-white
+    );
+
+    --color-tigera-semantic-surface-on-surface-variant: var(
+        --color-tigera-grey-400
+    );
+
+    /* Surface Containers */
+    --color-tigera-semantic-surface-container-low: var(--color-tigera-black);
+    --color-tigera-semantic-surface-on-surface-container-low: var(
+        --color-tigera-white
+    );
+
+    --color-tigera-semantic-surface-container: var(--color-tigera-grey-1000);
+    --color-tigera-semantic-surface-on-surface-container: var(
+        --color-tigera-white
+    );
+
+    --color-tigera-semantic-surface-container-high: var(
+        --color-tigera-grey-800
+    );
+    --color-tigera-semantic-surface-on-surface-container-high: var(
+        --color-tigera-white
+    );
+
+    --color-tigera-semantic-surface-container-highest: var(
+        --color-tigera-grey-600
+    );
+    --color-tigera-semantic-surface-on-surface-container-highest: var(
+        --color-tigera-black
+    );
+
+    /* Borders */
+    --color-tigera-semantic-border-outline: var(--color-tigera-grey-1000);
+    --color-tigera-semantic-border-outline-on-surface-container-high: var(
+        --color-tigera-grey-600
+    );
+}
