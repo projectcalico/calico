@@ -545,6 +545,7 @@ func (f *Felix) FlowLogsFromLocalSocket() ([]flowlog.FlowLog, error) {
 	if len(flows) == 0 {
 		return nil, fmt.Errorf("no flow log received yet")
 	}
+
 	var flogs []flowlog.FlowLog
 	for _, f := range flows {
 		flogs = append(flogs, goldmane.ConvertGoldmaneToFlowlog(types.FlowToProto(f)))
