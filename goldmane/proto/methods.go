@@ -78,8 +78,7 @@ func (h *PolicyHit) Validate() error {
 	switch h.Kind {
 	case PolicyKind_GlobalNetworkPolicy,
 		PolicyKind_StagedGlobalNetworkPolicy,
-		PolicyKind_ClusterNetworkPolicyAdminTier,
-		PolicyKind_ClusterNetworkPolicyBaselineTier:
+		PolicyKind_ClusterNetworkPolicy:
 		if h.Namespace != "" {
 			return fmt.Errorf("unexpected namespace for global policy")
 		}
@@ -119,10 +118,12 @@ func makeNamePart(h *PolicyHit) (string, error) {
 		namePart = fmt.Sprintf("%s.staged:%s", h.Tier, h.Name)
 	case PolicyKind_StagedNetworkPolicy:
 		namePart = fmt.Sprintf("%s/%s.staged:%s", h.Namespace, h.Tier, h.Name)
-	case PolicyKind_ClusterNetworkPolicyAdminTier:
-		namePart = names.K8sCNPAdminTierNamePrefix + h.Name
-	case PolicyKind_ClusterNetworkPolicyBaselineTier:
-		namePart = names.K8sCNPBaselineTierNamePrefix + h.Name
+	case PolicyKind_ClusterNetworkPolicy:
+		if h.Tier == names.KubeAdminTierName {
+			namePart = names.K8sCNPAdminTierNamePrefix + h.Name
+		} else {
+			namePart = names.K8sCNPBaselineTierNamePrefix + h.Name
+		}
 	case PolicyKind_Profile:
 		// Profile names are __PROFILE__.name. The name part may include indicators of the kind of
 		// profile - e.g., __PROFILE__.kns.default, __PROFILE__.ksa.svcacct.
@@ -183,11 +184,9 @@ func HitFromString(s string) (*PolicyHit, error) {
 		if strings.Contains(n, "staged:") {
 			kind = PolicyKind_StagedGlobalNetworkPolicy
 			n = strings.Replace(n, "staged:", "", 1)
-		} else if strings.HasPrefix(n, names.K8sCNPAdminTierNamePrefix) {
-			kind = PolicyKind_ClusterNetworkPolicyAdminTier
-			n = strings.TrimPrefix(n, "kcnp.")
-		} else if strings.HasPrefix(n, names.K8sCNPBaselineTierNamePrefix) {
-			kind = PolicyKind_ClusterNetworkPolicyBaselineTier
+		} else if strings.HasPrefix(n, names.K8sCNPAdminTierNamePrefix) ||
+			strings.HasPrefix(n, names.K8sCNPBaselineTierNamePrefix) {
+			kind = PolicyKind_ClusterNetworkPolicy
 			n = strings.TrimPrefix(n, "kcnp.")
 		} else if strings.HasPrefix(n, "__PROFILE__.") {
 			kind = PolicyKind_Profile
