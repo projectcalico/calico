@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -58,7 +60,7 @@ func (key WorkloadEndpointKey) defaultPath() (string, error) {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
-		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID), escapeName(key.EndpointID)), nil
+		escapeName(key.Hostname), escapeName(key.OrchestratorID), escapeName(key.WorkloadID), escapeName(key.EndpointID)), nil
 }
 
 func (key WorkloadEndpointKey) defaultDeletePath() (string, error) {
@@ -76,7 +78,7 @@ func (key WorkloadEndpointKey) defaultDeleteParentPaths() ([]string, error) {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	workload := fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s",
-		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID))
+		escapeName(key.Hostname), escapeName(key.OrchestratorID), escapeName(key.WorkloadID))
 	endpoints := workload + "/endpoint"
 	return []string{endpoints, workload}, nil
 }
@@ -88,6 +90,17 @@ func (key WorkloadEndpointKey) valueType() (reflect.Type, error) {
 func (key WorkloadEndpointKey) String() string {
 	return fmt.Sprintf("WorkloadEndpoint(node=%s, orchestrator=%s, workload=%s, name=%s)",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
+}
+
+// GetNamespace extracts and returns the namespace from the WorkloadID.
+// WorkloadID is expected to be in the format "namespace/name".
+// Returns an empty string if the WorkloadID doesn't contain a namespace.
+func (key WorkloadEndpointKey) GetNamespace() string {
+	parts := strings.SplitN(key.WorkloadID, "/", 2)
+	if len(parts) == 2 {
+		return parts[0]
+	}
+	return ""
 }
 
 var _ EndpointKey = WorkloadEndpointKey{}
@@ -104,7 +117,7 @@ func (options WorkloadEndpointListOptions) defaultPathRoot() string {
 	if options.Hostname == "" {
 		return k
 	}
-	k = k + fmt.Sprintf("/%s/workload", options.Hostname)
+	k = k + fmt.Sprintf("/%s/workload", escapeName(options.Hostname))
 	if options.OrchestratorID == "" {
 		return k
 	}
@@ -127,7 +140,7 @@ func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match regex")
 		return nil
 	}
-	hostname := r[0][1]
+	hostname := unescapeName(r[0][1])
 	orch := unescapeName(r[0][2])
 	workload := unescapeName(r[0][3])
 	endpointID := unescapeName(r[0][4])
@@ -173,6 +186,16 @@ type WorkloadEndpoint struct {
 	AllowSpoofedSourcePrefixes []net.IPNet       `json:"allow_spoofed_source_ips,omitempty"`
 	Annotations                map[string]string `json:"annotations,omitempty"`
 	QoSControls                *QoSControls      `json:"qosControls,omitempty"`
+
+	// EE properties below
+	EgressSelector             string            `json:"egress_selector,omitempty"`
+	EgressMaxNextHops          int               `json:"egress_max_next_hops,omitempty" validate:"omitempty"`
+	EgressGatewayPolicy        string            `json:"egress_gateway_policy,omitempty"`
+	DeletionTimestamp          time.Time         `json:"deletion_timestamp,omitempty"`
+	DeletionGracePeriodSeconds int64             `json:"deletion_grace_period_seconds,omitempty"`
+	AWSElasticIPs              []string          `json:"aws_elastic_ips,omitempty"`
+	ExternalNetworkNames       []string          `json:"external_network_names,omitempty"`
+	ApplicationLayer           *ApplicationLayer `json:"application_layer,omitempty"`
 }
 
 func (e *WorkloadEndpoint) WorkloadOrHostEndpoint() {}
@@ -199,6 +222,13 @@ type IPNAT struct {
 
 	// The external IP address.
 	ExtIP net.IP `json:"ext_ip" validate:"ip"`
+}
+
+type ApplicationLayer struct {
+	Logging      string `json:"logging"`
+	Policy       string `json:"policy"`
+	WAF          string `json:"waf"`
+	WAFConfigMap string `json:"waf_config_map"`
 }
 
 type QoSControls = v3.QoSControls
