@@ -501,7 +501,7 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 
 	// TTL security
 	if ttl, ok := raw["ttl_security"].(float64); ok && ttl > 0 {
-		peer.TTLSecurity = fmt.Sprintf("on multihop %.0f", ttl)
+		peer.TTLSecurity = fmt.Sprintf("on;\n  multihop %.0f", ttl)
 	} else {
 		peer.TTLSecurity = "off"
 	}
