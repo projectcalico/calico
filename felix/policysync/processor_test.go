@@ -38,10 +38,12 @@ import (
 	"github.com/projectcalico/calico/pod2daemon/binder"
 )
 
-const IPSetName = "testset"
-const ProfileName = "testpro"
-const TierName = "testtier"
-const PolicyName = "testpolicy"
+const (
+	IPSetName   = "testset"
+	ProfileName = "testpro"
+	tierName    = "testtier"
+	PolicyName  = "testpolicy"
+)
 
 func init() {
 	resolver.SetDefaultScheme("passthrough")
@@ -103,15 +105,12 @@ var _ = Describe("Processor", func() {
 	})
 
 	Context("with Processor started", func() {
-
 		BeforeEach(func() {
 			uut.Start()
 		})
 
 		Describe("ServiceAccount update/remove", func() {
-
 			Context("updates before any join", func() {
-
 				BeforeEach(func() {
 					// Add, delete, re-add
 					updateServiceAccount("test_serviceaccount0", "test_namespace0")
@@ -143,11 +142,14 @@ var _ = Describe("Processor", func() {
 
 					It("should get 3 updates", func() {
 						Expect(accounts).To(ContainElement(types.ServiceAccountID{
-							Name: "test_serviceaccount0", Namespace: "test_namespace0"}))
+							Name: "test_serviceaccount0", Namespace: "test_namespace0",
+						}))
 						Expect(accounts).To(ContainElement(types.ServiceAccountID{
-							Name: "test_serviceaccount0", Namespace: "test_namespace1"}))
+							Name: "test_serviceaccount0", Namespace: "test_namespace1",
+						}))
 						Expect(accounts).To(ContainElement(types.ServiceAccountID{
-							Name: "test_serviceaccount1", Namespace: "test_namespace0"}))
+							Name: "test_serviceaccount1", Namespace: "test_namespace0",
+						}))
 					})
 
 					It("should pass updates", func() {
@@ -156,7 +158,6 @@ var _ = Describe("Processor", func() {
 						Expect(googleproto.Equal(
 							msg.GetServiceAccountUpdate().GetId(), &proto.ServiceAccountID{Name: "t0", Namespace: "t5"},
 						)).To(BeTrue())
-
 					})
 
 					It("should pass removes", func() {
@@ -227,14 +228,11 @@ var _ = Describe("Processor", func() {
 						},
 					})).To(BeTrue())
 				})
-
 			})
 		})
 
 		Describe("Namespace update/remove", func() {
-
 			Context("updates before any join", func() {
-
 				BeforeEach(func() {
 					// Add, delete, re-add
 					updateNamespace("test_namespace0")
@@ -333,12 +331,10 @@ var _ = Describe("Processor", func() {
 						},
 					})).To(BeTrue())
 				})
-
 			})
 		})
 
 		Describe("IP Set updates", func() {
-
 			Context("with two joined endpoints, one with active profile", func() {
 				var refdOutput chan *proto.ToDataplane
 				var unrefdOutput chan *proto.ToDataplane
@@ -424,7 +420,6 @@ var _ = Describe("Processor", func() {
 				})
 
 				It("should send IPSetDeltaUpdate to ref'd endpoint", func(done Done) {
-
 					// Try combinations of adds, removes, and both to ensure the splitting logic
 					// doesn't split these up strangely.
 
@@ -432,7 +427,8 @@ var _ = Describe("Processor", func() {
 					updates <- msg2
 					g := <-refdOutput
 					Expect(googleproto.Equal(g, &proto.ToDataplane{
-						Payload: &proto.ToDataplane_IpsetDeltaUpdate{IpsetDeltaUpdate: msg2}})).To(BeTrue())
+						Payload: &proto.ToDataplane_IpsetDeltaUpdate{IpsetDeltaUpdate: msg2},
+					})).To(BeTrue())
 
 					msg2 = deltaUpdateIpSet(IPSetName, 2, 0)
 					updates <- msg2
@@ -580,10 +576,12 @@ var _ = Describe("Processor", func() {
 
 				It("should send IPSetUpdate/Remove when endpoint newly refs policy update", func(done Done) {
 					// Create the policy without the ref, and link it to the unref'd WEP.
-					policyID := &proto.PolicyID{Tier: "tier0", Name: "testpolicy"}
+					policyID := &proto.PolicyID{Name: "testpolicy"}
+					tier := "tier0"
 					pu := &proto.ActivePolicyUpdate{
 						Id: policyID,
 						Policy: &proto.Policy{
+							Tier: tier,
 							OutboundRules: []*proto.Rule{
 								{Action: "allow", SrcIpSetIds: []string{}},
 							},
@@ -595,8 +593,8 @@ var _ = Describe("Processor", func() {
 						Endpoint: &proto.WorkloadEndpoint{
 							Tiers: []*proto.TierInfo{
 								{
-									Name:            policyID.Tier,
-									IngressPolicies: []string{policyID.Name},
+									Name:            tier,
+									IngressPolicies: []*proto.PolicyID{policyID},
 								},
 							},
 						},
@@ -645,10 +643,12 @@ var _ = Describe("Processor", func() {
 
 				It("should send IPSetUpdate/Remove when policy changes IPset", func(done Done) {
 					// Create policy referencing the existing IPSet and link to the unreferenced WEP
-					policyID := &proto.PolicyID{Tier: "tier0", Name: "testpolicy"}
+					policyID := &proto.PolicyID{Name: "testpolicy"}
+					tier := "tier0"
 					pu := &proto.ActivePolicyUpdate{
 						Id: policyID,
 						Policy: &proto.Policy{
+							Tier: tier,
 							OutboundRules: []*proto.Rule{
 								{Action: "allow", SrcIpSetIds: []string{IPSetName}},
 							},
@@ -660,8 +660,8 @@ var _ = Describe("Processor", func() {
 						Endpoint: &proto.WorkloadEndpoint{
 							Tiers: []*proto.TierInfo{
 								{
-									Name:            policyID.Tier,
-									IngressPolicies: []string{policyID.Name},
+									Name:            tier,
+									IngressPolicies: []*proto.PolicyID{policyID},
 								},
 							},
 						},
@@ -886,7 +886,6 @@ var _ = Describe("Processor", func() {
 		})
 
 		Describe("Profile & Policy updates", func() {
-
 			Context("with two joined endpoints", func() {
 				var output [2]chan *proto.ToDataplane
 				var wepID [2]types.WorkloadEndpointID
@@ -911,11 +910,10 @@ var _ = Describe("Processor", func() {
 						// Ensure the joins are completed by sending a workload endpoint for each.
 						assertNoUpdate(i)
 					}
-
 				})
 
 				Context("with active profile", func() {
-					var profileID = proto.ProfileID{Name: ProfileName}
+					profileID := proto.ProfileID{Name: ProfileName}
 					var proUpdate *proto.ActiveProfileUpdate
 
 					BeforeEach(func() {
@@ -1011,7 +1009,7 @@ var _ = Describe("Processor", func() {
 				})
 
 				Context("with active policy", func() {
-					var policyID = proto.PolicyID{Tier: TierName, Name: PolicyName}
+					policyID := proto.PolicyID{Name: PolicyName}
 					var polUpd *proto.ActivePolicyUpdate
 
 					BeforeEach(func() {
@@ -1026,8 +1024,8 @@ var _ = Describe("Processor", func() {
 							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 								{
-									Name:            TierName,
-									IngressPolicies: []string{PolicyName},
+									Name:            tierName,
+									IngressPolicies: []*proto.PolicyID{&policyID},
 								},
 							}},
 						}
@@ -1043,7 +1041,7 @@ var _ = Describe("Processor", func() {
 							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 								{
-									Name: TierName,
+									Name: tierName,
 								},
 							}},
 						}
@@ -1070,7 +1068,7 @@ var _ = Describe("Processor", func() {
 					It("should add new & remove old when ref changes", func(done Done) {
 						// Add new policy
 						newName := "new-policy-name"
-						newPolicyID := proto.PolicyID{Tier: TierName, Name: newName}
+						newPolicyID := proto.PolicyID{Name: newName}
 						msg := &proto.ActivePolicyUpdate{Id: &newPolicyID}
 						updates <- msg
 
@@ -1078,8 +1076,8 @@ var _ = Describe("Processor", func() {
 							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 								{
-									Name:           TierName,
-									EgressPolicies: []string{PolicyName},
+									Name:           tierName,
+									EgressPolicies: []*proto.PolicyID{&policyID},
 								},
 							}},
 						}
@@ -1095,8 +1093,8 @@ var _ = Describe("Processor", func() {
 							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 								{
-									Name:           TierName,
-									EgressPolicies: []string{newName},
+									Name:           tierName,
+									EgressPolicies: []*proto.PolicyID{&newPolicyID},
 								},
 							}},
 						}
@@ -1121,13 +1119,12 @@ var _ = Describe("Processor", func() {
 
 						close(done)
 					})
-
 				})
 			})
 
 			Context("with profile & wep added before joining", func() {
-				var profileID = proto.ProfileID{Name: ProfileName}
-				var wepId = testId("test")
+				profileID := proto.ProfileID{Name: ProfileName}
+				wepId := testId("test")
 				var wepUpd *proto.WorkloadEndpointUpdate
 				var proUpdate *proto.ActiveProfileUpdate
 
@@ -1197,12 +1194,11 @@ var _ = Describe("Processor", func() {
 
 					close(done)
 				})
-
 			})
 
 			Context("with policy & wep added before joining", func() {
-				var policyID = proto.PolicyID{Tier: TierName, Name: PolicyName}
-				var wepId = testId("test")
+				policyID := proto.PolicyID{Name: PolicyName}
+				wepId := testId("test")
 				var wepUpd *proto.WorkloadEndpointUpdate
 				var polUpd *proto.ActivePolicyUpdate
 
@@ -1215,8 +1211,8 @@ var _ = Describe("Processor", func() {
 						Id: types.WorkloadEndpointIDToProto(wepId),
 						Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 							{
-								Name:           TierName,
-								EgressPolicies: []string{PolicyName},
+								Name:           tierName,
+								EgressPolicies: []*proto.PolicyID{&policyID},
 							},
 						}},
 					}
@@ -1280,9 +1276,8 @@ var _ = Describe("Processor", func() {
 		})
 
 		Describe("join / leave processing", func() {
-
 			Context("with WEP before any join", func() {
-				var wepId = testId("test")
+				wepId := testId("test")
 				var wepUpd *proto.WorkloadEndpointUpdate
 
 				BeforeEach(func() {
@@ -1420,7 +1415,8 @@ func makeIPAndPort(i int) string {
 func getDialOptions() []grpc.DialOption {
 	return []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(getDialer("unix"))}
+		grpc.WithContextDialer(getDialer("unix")),
+	}
 }
 
 func getDialer(proto string) func(context.Context, string) (net.Conn, error) {
@@ -1445,12 +1441,12 @@ func openListener(dir string) net.Listener {
 	return lis
 }
 
-type testCreds struct {
-}
+type testCreds struct{}
 
 func (t testCreds) ClientHandshake(cxt context.Context, _ string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return conn, binder.Credentials{}, errors.New("client handshake unsupported")
 }
+
 func (t testCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return conn, binder.Credentials{
 		Uid:            "test",
