@@ -95,7 +95,7 @@ var (
 // with debug disabled and that can lead to verifier issues.
 var _ = describeBPFTests(withProto("tcp"),
 	withConnTimeLoadBalancingEnabled(),
-	withBPFLogLevel("info"))
+	withBPFLogLevel("off"))
 
 type bpfTestOptions struct {
 	connTimeEnabled bool
@@ -593,16 +593,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				pol = createPolicy(pol)
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-1", "allow", true)
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-1", "allow", true)
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-1", "allow", true)
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-1", "allow", true)
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 			})
 
@@ -776,6 +776,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				BeforeEach(func() {
 					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
 				})
+
 				It("should allow traffic from workload to workload and to/from host", func() {
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
@@ -1602,8 +1603,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pol = createPolicy(pol)
 						})
 
-						bpfWaitForPolicy(tc.Felixes[0], "eth0", "egress", "default.host-0-1")
+						bpfWaitForPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
 					})
+
 					It("should handle NAT outgoing", func() {
 						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
@@ -2111,7 +2113,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						// Connection should persist after the changeover.
 						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
-
 					}
 
 					It("should maintain connections to a cluster IP across loadbalancer failover using maglev", func() { testFailover(clusterIP) })
@@ -2253,6 +2254,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						pol = updatePolicy(pol)
 					})
+
 					It("should not have connectivity from external client, and return connection refused", func() {
 						icmpProto := "icmp"
 						if testOpts.ipv6 {
@@ -4835,7 +4837,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					})
 				})
-
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
@@ -5121,14 +5122,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				pol.Spec.Selector = "all()"
 
 				pol = createPolicy(pol)
-
 			})
 
 			if testOpts.protocol == "udp" || testOpts.tunnel == "ipip" || testOpts.ipv6 {
 				return
 			}
 			It("should allow traffic from workload to this host device", func() {
-
 				var (
 					test30            *workload.Workload
 					test30IP          string
