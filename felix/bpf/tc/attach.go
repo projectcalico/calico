@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 )
@@ -75,6 +76,7 @@ type AttachPoint struct {
 	EgressPacketRateConfigured  bool
 	DSCP                        int8
 	MaglevLUTSize               uint32
+	ProgramsMap                 maps.Map
 }
 
 var ErrDeviceNotFound = errors.New("device not found")

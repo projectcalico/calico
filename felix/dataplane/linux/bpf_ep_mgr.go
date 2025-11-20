@@ -43,7 +43,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
@@ -3125,6 +3124,11 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 		}
 	}
 
+	ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Egress]
+	if policyDirection == PolDirnIngress {
+		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Ingress]
+	}
+
 	if d.mgr.FlowLogsEnabled() {
 		ap.FlowLogsEnabled = true
 	}
@@ -3753,20 +3757,7 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
 	return tc.EnsureQdisc(iface)
 }
 
-func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) {
-	pm := m.commonMaps.ProgramsMap[hook.Ingress].(*hook.ProgramsMap)
-	if at.Hook == hook.Egress {
-		pm = m.commonMaps.ProgramsMap[hook.Egress].(*hook.ProgramsMap)
-	}
-
-	if at.Type == tcdefs.EpTypeWorkload {
-		pm = m.commonMaps.ProgramsMap[hook.Egress].(*hook.ProgramsMap)
-		if at.Hook == hook.Egress {
-			pm = m.commonMaps.ProgramsMap[hook.Ingress].(*hook.ProgramsMap)
-		}
-	}
-
-	log.Infof("Sridhar loading TC obj: %+v", at)
+func (m *bpfEndpointManager) loadTCObj(at hook.AttachType, pm *hook.ProgramsMap) (hook.Layout, error) {
 	layout, err := pm.LoadObj(at, string(m.bpfAttachType))
 	if err != nil {
 		return nil, err
@@ -3802,17 +3793,16 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 		policyIdx := aptc.PolicyIdxV4
 		ap.Log().Debugf("ensureProgramLoaded %d", ipFamily)
 		if ipFamily == proto.IPVersion_IPV6 {
-			if aptc.HookLayoutV6, err = m.loadTCObj(at); err != nil {
+			if aptc.HookLayoutV6, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap)); err != nil {
 				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 			}
 			policyIdx = aptc.PolicyIdxV6
 		} else {
-			if aptc.HookLayoutV4, err = m.loadTCObj(at); err != nil {
+			if aptc.HookLayoutV4, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap)); err != nil {
 				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 			}
 		}
 
-		log.Infof("Sridhar layout after loading TC obj: %+v", aptc.HookLayoutV4)
 		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
@@ -3973,7 +3963,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 		opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
 	}
 	insns, err := m.doUpdatePolicyProgram(
-		m.isWorkloadIface(ap.IfaceName()),
+		polDir,
 		ap.HookName(),
 		progName,
 		ap.PolicyJmp(ipFamily),
@@ -3993,21 +3983,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 }
 
 func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
-	programsMapFD := m.commonMaps.ProgramsMap[hook.Ingress].MapFD()
-	pmap := m.commonMaps.ProgramsMap[hook.Ingress]
-	if ap.Hook == hook.Egress {
-		programsMapFD = m.commonMaps.ProgramsMap[hook.Egress].MapFD()
-		pmap = m.commonMaps.ProgramsMap[hook.Egress]
-	}
-	if ap.Type == tcdefs.EpTypeWorkload {
-		programsMapFD = m.commonMaps.ProgramsMap[hook.Egress].MapFD()
-		pmap = m.commonMaps.ProgramsMap[hook.Egress]
-		if ap.Hook == hook.Egress {
-			programsMapFD = m.commonMaps.ProgramsMap[hook.Ingress].MapFD()
-			pmap = m.commonMaps.ProgramsMap[hook.Ingress]
-		}
-	}
-	log.Infof("Sridhar loading TC log filter: %+v %s", ap, pmap.GetName())
+	programsMapFD := ap.ProgramsMap.MapFD()
 	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, programsMapFD, m.commonMaps.StateMap.MapFD())
 	if err != nil {
 		return nil, 0, err
@@ -4130,7 +4106,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 }
 
 func (m *bpfEndpointManager) doUpdatePolicyProgram(
-	isWorkload bool,
+	polDir string,
 	hk hook.Hook,
 	progName string,
 	polJumpMapIdx int,
@@ -4143,14 +4119,8 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 	}
 
 	staticProgsMap := m.commonMaps.ProgramsMap[hook.Ingress]
-	if hk == hook.Egress {
+	if polDir == PolDirnEgress.RuleDir().String() {
 		staticProgsMap = m.commonMaps.ProgramsMap[hook.Egress]
-	}
-	if isWorkload {
-		staticProgsMap = m.commonMaps.ProgramsMap[hook.Egress]
-		if hk == hook.Egress {
-			staticProgsMap = m.commonMaps.ProgramsMap[hook.Ingress]
-		}
 	}
 	if hk == hook.XDP {
 		staticProgsMap = m.commonMaps.XDPProgramsMap
