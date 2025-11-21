@@ -864,7 +864,7 @@ blocks:
     task:
       prologue:
         commands:
-          - # Set up access to GCP buckets.
+          # Set up access to GCP buckets.
           - export GCS_TRANSIENT_DIR_URL=gs://calico-transient-build-artifacts-ew3/workflow-${SEMAPHORE_WORKFLOW_ID}
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
