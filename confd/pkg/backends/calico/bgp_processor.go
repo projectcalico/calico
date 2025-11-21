@@ -380,7 +380,7 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 
 			peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID)
 			if peer != nil {
-				peer.Comment = fmt.Sprintf("For peer %s", key)
+				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
 				config.Peers = append(config.Peers, *peer)
 			}
 		}
@@ -401,7 +401,7 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 
 			peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID)
 			if peer != nil {
-				peer.Comment = fmt.Sprintf("For peer %s", key)
+				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
 				config.Peers = append(config.Peers, *peer)
 			}
 		}
@@ -430,7 +430,7 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 
 			peer := c.buildPeerFromData(peerData, "Node", config, nodeClusterID)
 			if peer != nil {
-				peer.Comment = fmt.Sprintf("For peer %s", key)
+				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
 				config.Peers = append(config.Peers, *peer)
 			}
 		}
@@ -451,7 +451,7 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 
 			peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID)
 			if peer != nil {
-				peer.Comment = fmt.Sprintf("For peer %s", key)
+				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
 				config.Peers = append(config.Peers, *peer)
 			}
 		}
@@ -583,7 +583,7 @@ func (c *client) buildImportFilter(raw map[string]interface{}) string {
 					if json.Unmarshal([]byte(filterValue), &filterSpec) == nil {
 						if spec, ok := filterSpec["spec"].(map[string]interface{}); ok {
 							if importV4, ok := spec["importV4"].([]interface{}); ok && len(importV4) > 0 {
-								filterLines = append(filterLines, fmt.Sprintf("%s_import_4();", filterName))
+								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilterV4'();", filterName))
 							}
 						}
 					}
@@ -593,7 +593,7 @@ func (c *client) buildImportFilter(raw map[string]interface{}) string {
 	}
 
 	filterLines = append(filterLines, "accept;")
-	return strings.Join(filterLines, " ")
+	return strings.Join(filterLines, "\n    ")
 }
 
 // buildExportFilter builds the export filter block
@@ -610,7 +610,7 @@ func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS st
 					if json.Unmarshal([]byte(filterValue), &filterSpec) == nil {
 						if spec, ok := filterSpec["spec"].(map[string]interface{}); ok {
 							if exportV4, ok := spec["exportV4"].([]interface{}); ok && len(exportV4) > 0 {
-								filterLines = append(filterLines, fmt.Sprintf("%s_export_4();", filterName))
+								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilterV4'();", filterName))
 							}
 						}
 					}
