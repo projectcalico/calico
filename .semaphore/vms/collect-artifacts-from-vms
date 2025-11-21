@@ -34,6 +34,7 @@ pids=()
 log_files=()
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
+  vm_ip=$(gcloud compute instances describe ${vm_name} --zone=${zone} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
   log_file="$artifacts_dir/collect-artifacts-$batch.log"
   log_files+=( "$log_file" )
   echo "Collecting artifacts from $vm_name. Logging to $log_file."
@@ -44,7 +45,7 @@ for batch in "${batches[@]}"; do
       args+=("--skip-binaries")
     fi
     VM_NAME=$vm_name "$my_dir/on-test-vm" COMPONENT=${COMPONENT} "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" "${args[@]}" || echo "Failed to collect artifacts from ${vm_name}."
-    timeout 10m gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" --recurse || echo "Failed to SCP from ${vm_name}"
+    timeout 10m scp "--zone=${ZONE}" "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" --recurse || echo "Failed to SCP from ${vm_name}"
   ) >& "$log_file" &
   pid=$!
   pids+=( "$pid" )
