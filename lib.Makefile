@@ -207,7 +207,12 @@ ifeq ($(GIT_USE_SSH),true)
 endif
 
 # Get version from git. We allow setting this manually for the hashrelease process.
-GIT_VERSION ?= $(shell git describe --tags --dirty --always --abbrev=12)
+# By default, includes commit count and hash (--long). During releases (RELEASE=true), 
+# only the tag is used without the commit count suffix.
+GIT_VERSION ?= $(shell git describe --tags --dirty --always --abbrev=12 --long)
+ifeq ($(RELEASE),true)
+	GIT_VERSION := $(shell git describe --tags --dirty --always --abbrev=12)
+endif
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
