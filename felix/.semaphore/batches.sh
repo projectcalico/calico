@@ -21,7 +21,7 @@ run_batch() {
       FOCUS="${UT_FOCUS}" \
       ut-bpf check-wireguard >& "$log_file"
   else
-    VM_NAME="$vm_name" ${remote_exec} make --directory=${CALICO_DIR_NAME}/felix fv-bpf \
+    VM_NAME="$vm_name" ${remote_exec} make --directory=${CALICO_DIR_NAME}/felix $FV_NO_PREREQ_TARGET \
       FELIX_FV_NFTABLES="$FELIX_FV_NFTABLES" \
       FV_EXTRA_REPORT_SUFFIX="$FV_EXTRA_REPORT_SUFFIX" \
       FELIX_FV_BPFATTACHTYPE="$FELIX_FV_BPFATTACHTYPE" \

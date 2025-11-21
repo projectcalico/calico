@@ -389,6 +389,9 @@ fv-no-prereqs:
 fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
 
+fv-bpf-no-prereqs:
+	$(MAKE) fv-no-prereqs FELIX_FV_ENABLE_BPF=true
+
 fv-nft:
 	$(MAKE) fv FELIX_FV_NFTABLES=Enabled
 
