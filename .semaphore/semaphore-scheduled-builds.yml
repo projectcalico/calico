@@ -516,7 +516,7 @@ blocks:
             - make bin/calico-felix.exe fv/win-fv.exe
   - name: "Felix: Windows FV capz"
     run:
-      when: "false or true"
+      when: "false"
     dependencies: ["Felix: Build Windows binaries"]
     task:
       secrets:
