@@ -77,7 +77,7 @@ function create-vm() {
     sleep 1
   done  && \
   set +x && \
-  echo "$DOCKERHUB_PASSWORD" | gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
+  echo "$DOCKERHUB_PASSWORD" | ssh "ubuntu@${vm_ip}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
   set -x && \
   scp -r -C "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets" && \
   ${ssh_cmd} -- gcloud config set project unique-caldron-775 && \
