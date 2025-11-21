@@ -36,4 +36,4 @@ EOF
  
 mv /tmp/daemon.json /etc/docker/daemon.json
 systemctl restart docker
-touch /tmp/startup-complete
+touch /var/run/startup-script-complete

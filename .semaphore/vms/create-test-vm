@@ -72,8 +72,8 @@ function create-vm() {
     sleep 1
   done  && \
   for ssh_try in $(seq 1 100); do
-    echo "Trying to SSH in: $ssh_try"
-    ${ssh_cmd} -- test -e /tmp/startup-complete && break
+    echo "Checking startup script completion: $ssh_try"
+    ${ssh_cmd} -- test -e /var/run/startup-script-complete && break
     sleep 1
   done  && \
   set +x && \
