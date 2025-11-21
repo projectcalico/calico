@@ -24,13 +24,13 @@ execute_test_suite() {
     rm $LOGPATH/rendered/*.cfg || true
 
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
-    #      run_extra_test test_node_mesh_bgp_password
-    #      run_extra_test test_bgp_password_deadlock
+          run_extra_test test_node_mesh_bgp_password
+          run_extra_test test_bgp_password_deadlock
           run_extra_test test_bgp_ttl_security
           run_extra_test test_bgp_ignored_interfaces
           run_extra_test test_bgp_reachable_by
-    #     run_extra_test test_bgp_filters
-    #     run_extra_test test_bgp_local_bgp_peer
+         run_extra_test test_bgp_filters
+         run_extra_test test_bgp_local_bgp_peer
     #     run_extra_test test_bgp_next_hop_mode
     #     run_extra_test test_bgp_reverse_peering
     fi
@@ -913,7 +913,6 @@ diff_files_ignoring_comments_and_blank_lines() {
         diff -q <(normalize_file ${expected}) <(normalize_file ${actual}) 1>/dev/null 2>&1
     else
         diff <(normalize_file ${expected}) <(normalize_file ${actual})
-        exit 1
     fi
 }
 
