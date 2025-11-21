@@ -515,7 +515,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				Key: model.NetworkSetKey{Name: "anetworkset"},
 				Value: &model.NetworkSet{
 					Labels: uniquelabels.Make(map[string]string{
-						"a": "b",
+						"a":             "b",
+						model.KindLabel: apiv3.KindGlobalNetworkSet,
 					}),
 					Nets: []net.IPNet{
 						*expGNet,
@@ -550,6 +551,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Labels: uniquelabels.Make(map[string]string{
 						"a":                           "b",
 						"projectcalico.org/namespace": "namespace-1",
+						model.KindLabel:               apiv3.KindNetworkSet,
 					}),
 					Nets: []net.IPNet{
 						*expNet,
@@ -604,7 +606,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					ExpectedIPv4Addrs: []net.IP{net.MustParseIP("1.2.3.4")},
 					ExpectedIPv6Addrs: []net.IP{net.MustParseIP("aa:bb::cc:dd")},
 					Labels: uniquelabels.Make(map[string]string{
-						"label1": "value1",
+						"label1":        "value1",
+						model.KindLabel: apiv3.KindHostEndpoint,
 					}),
 					ProfileIDs: []string{"profile1", "profile2"},
 					Ports: []model.EndpointPort{
