@@ -16,5 +16,5 @@
 vm_name=$1
 
 vm_ip=$(gcloud compute instances describe ${vm_name} --zone=${ZONE} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
-exec scp "ubuntu@${vm_ip}:$2" "$3" "--zone=${ZONE}" -o ServerAliveInterval=10
+exec scp -o ServerAliveInterval=10 "ubuntu@${vm_ip}:$2" "$3"
 
