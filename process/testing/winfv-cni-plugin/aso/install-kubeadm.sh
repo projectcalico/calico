@@ -199,7 +199,7 @@ Write-Host "Kubernetes binaries installed successfully"
 Write-Host "Verifying installations..."
 Write-Host "Kubeadm version: $(& $KUBE_BIN_DIR\kubeadm.exe version)"
 Write-Host "Kubelet version: $(& $KUBE_BIN_DIR\kubelet.exe --version)"
-Write-Host "Kubectl version: $(& $KUBE_BIN_DIR\kubectl.exe version --client --short)"
+Write-Host "Kubectl version: $(& $KUBE_BIN_DIR\kubectl.exe version)"
 PSEOF
 
   # Copy script to Windows node
@@ -227,11 +227,34 @@ Write-Host "Kubelet location: \$KUBE_BIN_DIR\kubelet.exe"
 # Verify kubelet exists
 if (!(Test-Path "\$KUBE_BIN_DIR\kubelet.exe")) {
     Write-Error "kubelet.exe not found at \$KUBE_BIN_DIR\kubelet.exe"
+    Start-Sleep -Seconds 600
     exit 1
 }
 
+# Print the actual join command
+Write-Host ""
+Write-Host "=========================================="
+Write-Host "Executing kubeadm join command:"
+Write-Host "\$KUBE_BIN_DIR\kubeadm.exe join ${JOIN_ARGS} --cri-socket npipe:////./pipe/containerd-containerd"
+Write-Host "=========================================="
+Write-Host ""
+
 # Run kubeadm join with full path
-& \$KUBE_BIN_DIR\kubeadm.exe join ${JOIN_ARGS} --cri-socket npipe:////./pipe/containerd-containerd
+\$joinResult = & \$KUBE_BIN_DIR\kubeadm.exe join ${JOIN_ARGS} --cri-socket npipe:////./pipe/containerd-containerd
+
+# Check if join failed
+if (\$LASTEXITCODE -ne 0) {
+    Write-Error "Kubeadm join failed with exit code \$LASTEXITCODE"
+    Write-Host ""
+    Write-Host "=========================================="
+    Write-Host "Join failed! Sleeping for 10 minutes for debugging..."
+    Write-Host "You can SSH to this node at: ${WINDOWS_EIP}"
+    Write-Host "=========================================="
+    Start-Sleep -Seconds 600
+    exit \$LASTEXITCODE
+}
+
+Write-Host "Successfully joined the cluster!"
 PSEOF
 
   # Copy and execute join script
