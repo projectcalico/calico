@@ -129,7 +129,7 @@
           - ./.semaphore/run-win-fv
 - name: "Felix: iptables tests on Ubuntu 22.04"
   run:
-    when:  "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
@@ -152,7 +152,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: nftables tests on Ubuntu 22.04"
   run:
-    when:  "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
@@ -176,7 +176,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
   run:
-    when:  "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
@@ -200,7 +200,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
   run:
-    when:  "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
@@ -228,7 +228,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF program-loading check on 25.04 (nftables)"
   run:
-    when:  "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
@@ -255,7 +255,7 @@
       - name: google-service-account-for-gce
 - name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2 (nftables)"
   run:
-    when:  "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
@@ -282,4 +282,3 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
-
