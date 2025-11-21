@@ -138,8 +138,6 @@ rules:
       - delete
     resourceNames:
       - clusternetworkpolicies.policy.networking.k8s.io
-      - adminnetworkpolicies.policy.networking.k8s.io
-      - baselineadminnetworkpolicies.policy.networking.k8s.io
   - apiGroups:
       - ""
     resources:

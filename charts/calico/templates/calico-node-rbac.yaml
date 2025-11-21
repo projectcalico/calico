@@ -71,8 +71,6 @@ rules:
   # Watch for changes to Kubernetes ClusterNetworkPolicies.
   - apiGroups: ["policy.networking.k8s.io"]
     resources:
-      - adminnetworkpolicies
-      - baselineadminnetworkpolicies
       - clusternetworkpolicies
     verbs:
       - watch

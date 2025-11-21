@@ -2700,26 +2700,6 @@ func init() {
 			Spec: api.TierSpec{
 				Order: &defaultTierOrder,
 			}}, true),
-		Entry("Tier: disallow adminnetworkpolicy tier with an invalid order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
-			Spec: api.TierSpec{
-				Order: &defaultTierBadOrder,
-			}}, false),
-		Entry("Tier: allow adminnetworkpolicy tier with the predefined order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
-			Spec: api.TierSpec{
-				Order: &adminTierOrder,
-			}}, true),
-		Entry("Tier: disallow baselineadminnetworkpolicy tier with an invalid order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
-			Spec: api.TierSpec{
-				Order: &defaultTierBadOrder,
-			}}, false),
-		Entry("Tier: allow baselineadminnetworkpolicy tier with the predefined order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
-			Spec: api.TierSpec{
-				Order: &baselineTierOrder,
-			}}, true),
 		Entry("Tier: disallow kube-admin tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{

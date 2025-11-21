@@ -1294,12 +1294,10 @@ class TestCalicoctlCommands(TestBase):
 
         # Validate the tiers are ordered correctly.
         self.assertEqual(tierList['items'][0]['metadata']['name'], name(tier_name2_rev1))
-        self.assertEqual(tierList['items'][1]['metadata']['name'], 'adminnetworkpolicy')
-        self.assertEqual(tierList['items'][2]['metadata']['name'], 'kube-admin')
-        self.assertEqual(tierList['items'][3]['metadata']['name'], name(tier_name1_rev1))
-        self.assertEqual(tierList['items'][4]['metadata']['name'], 'default')
-        self.assertEqual(tierList['items'][5]['metadata']['name'], 'baselineadminnetworkpolicy')
-        self.assertEqual(tierList['items'][6]['metadata']['name'], 'kube-baseline')
+        self.assertEqual(tierList['items'][1]['metadata']['name'], 'kube-admin')
+        self.assertEqual(tierList['items'][2]['metadata']['name'], name(tier_name1_rev1))
+        self.assertEqual(tierList['items'][3]['metadata']['name'], 'default')
+        self.assertEqual(tierList['items'][4]['metadata']['name'], 'kube-baseline')
 
         # Delete the resources
         rc = calicoctl("delete", data=resources)

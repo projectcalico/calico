@@ -150,18 +150,6 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		model.KindKubernetesAdminNetworkPolicy,
-		resources.NewKubernetesAdminNetworkPolicyClient(k8sAdminPolicyClient),
-	)
-	kubeClient.registerResourceClient(
-		reflect.TypeOf(model.ResourceKey{}),
-		reflect.TypeOf(model.ResourceListOptions{}),
-		model.KindKubernetesBaselineAdminNetworkPolicy,
-		resources.NewKubernetesBaselineAdminNetworkPolicyClient(k8sAdminPolicyClient),
-	)
-	kubeClient.registerResourceClient(
-		reflect.TypeOf(model.ResourceKey{}),
-		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindGlobalNetworkSet,
 		resources.NewGlobalNetworkSetClient(cs, crdClientV1),
 	)

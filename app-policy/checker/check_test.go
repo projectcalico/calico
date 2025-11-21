@@ -997,8 +997,8 @@ func TestGetPolicyName(t *testing.T) {
 		{"default/knp.default.policy", "knp.default.policy"},
 		{"default/staged:knp.default.policy", "staged:knp.default.policy"},
 		{"default/knp.default.staged:policy", "knp.default.staged:policy"},
-		{"kanp.adminnetworkpolicy.policy", "kanp.adminnetworkpolicy.policy"},
-		{"kbanp.baselineadminnetworkpolicy.policy", "kbanp.baselineadminnetworkpolicy.policy"},
+		{"kcnp.kube-admin.policy", "kcnp.kube-admin.policy"},
+		{"kcnp.kube-baseline.policy", "kcnp.kube-baseline.policy"},
 	}
 
 	for _, test := range tests {

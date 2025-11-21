@@ -307,7 +307,7 @@ func getPoliciesByDirection(dir rules.RuleDir, tier *proto.TierInfo) []string {
 }
 
 // getPolicyName Removes any namespace and tier prefix to get the name of the policy only; preserves
-// the "staged:", knp.default, kanp.adminnetworkpolicy, and kbnp.baselinenetworkpolicy prefixes, if
+// the "staged:", knp.default, kcnp.kube-admin, and kcnp.kube-baseline prefixes, if
 // present.
 // The patterns that are handled are:
 // - "<namespace>/<tier>.<policy>"					=> "<policy>"
@@ -315,8 +315,8 @@ func getPoliciesByDirection(dir rules.RuleDir, tier *proto.TierInfo) []string {
 // - "default/knp.default.<policy>" 				=> "knp.default.<policy>"
 // - "default/staged:knp.default.<policy>" 			=> "staged:knp.default.<policy>"
 // - "default/knp.default.staged:<policy>" 			=> "knp.default.staged:<policy>"
-// - "kanp.adminnetworkpolicy.<policy>" 			=> "kanp.adminnetworkpolicy.<policy>"
-// - "kbanp.baselineadminnetworkpolicy.<policy>" 	=> "kbanp.baselinenetworkpolicy.<policy>"
+// - "kcnp.kube-admin.<policy>" 			        => "kcnp.kube-admin.<policy>"
+// - "kcnp.kube-baseline.<policy>" 	                => "kcnp.kube-baseline.<policy>"
 func getPolicyName(s string) string {
 	// Remove namespace if present
 	if idx := strings.IndexByte(s, '/'); idx >= 0 && idx < len(s)-1 {
@@ -331,11 +331,7 @@ func getPolicyName(s string) string {
 	}
 
 	// If not one of the special prefixes, strip off the tier part
-	isSpecialPrefix := strings.HasPrefix(s, names.K8sNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(s, names.K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(s, names.K8sBaselineAdminNetworkPolicyNamePrefix)
-
-	if !isSpecialPrefix {
+	if !names.TierIsStatic(s) {
 		if idx := strings.IndexByte(s, '.'); idx >= 0 && idx < len(s)-1 {
 			s = s[idx+1:]
 		}

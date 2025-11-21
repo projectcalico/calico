@@ -1713,30 +1713,6 @@ func validateTier(structLevel validator.StructLevel) {
 		}
 	}
 
-	if tier.Name == names.AdminNetworkPolicyTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.AdminNetworkPolicyTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("adminnetworkpolicy tier order must be %v", api.AdminNetworkPolicyTierOrder)),
-				"",
-			)
-		}
-	}
-
-	if tier.Name == names.BaselineAdminNetworkPolicyTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.BaselineAdminNetworkPolicyTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("baselineadminnetworkpolicy tier order must be %v", api.BaselineAdminNetworkPolicyTierOrder)),
-				"",
-			)
-		}
-	}
-
 	if tier.Name == names.KubeAdminTierName {
 		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeAdminTierOrder {
 			structLevel.ReportError(

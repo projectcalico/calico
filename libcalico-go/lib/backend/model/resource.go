@@ -113,16 +113,6 @@ func init() {
 		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
 	)
 	registerResourceInfo(
-		KindKubernetesAdminNetworkPolicy,
-		"kubernetesadminnetworkpolicies",
-		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
-	)
-	registerResourceInfo(
-		KindKubernetesBaselineAdminNetworkPolicy,
-		"kubernetesbaselineadminnetworkpolicies",
-		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
-	)
-	registerResourceInfo(
 		apiv3.KindIPPool,
 		"ippools",
 		reflect.TypeOf(apiv3.IPPool{}),

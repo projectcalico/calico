@@ -43,13 +43,6 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsANP(r) {
-				return nil, cerrors.ErrorOperationNotSupported{
-					Operation:  "create or apply",
-					Identifier: resource,
-					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
-				}
-			}
 			if policyIsK8sCNP(r) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "create or apply",
@@ -61,13 +54,6 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsANP(r) {
-				return nil, cerrors.ErrorOperationNotSupported{
-					Operation:  "create or apply",
-					Identifier: resource,
-					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
-				}
-			}
 			if policyIsK8sCNP(r) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "create or apply",
@@ -79,13 +65,6 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsANP(r) {
-				return nil, cerrors.ErrorOperationNotSupported{
-					Operation:  "create or apply",
-					Identifier: resource,
-					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
-				}
-			}
 			if policyIsK8sCNP(r) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "create or apply",
@@ -104,11 +83,6 @@ func init() {
 			return client.GlobalNetworkPolicies().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
-}
-
-func policyIsANP(r *api.GlobalNetworkPolicy) bool {
-	return strings.HasPrefix(r.Name, names.K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(r.Name, names.K8sBaselineAdminNetworkPolicyNamePrefix)
 }
 
 func policyIsK8sCNP(r *api.GlobalNetworkPolicy) bool {

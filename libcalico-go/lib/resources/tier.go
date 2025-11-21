@@ -20,7 +20,7 @@ import (
 
 func DefaultTierFields(res *apiv3.Tier) {
 	// nil order was allowed before, and it was used for the default tier.
-	// For the implementation of BaselineAdminNetworkPolicy, we need to add a tier
+	// For the implementation of ClusterNetworkPolicy, we need to add a tier
 	// after the default one. As such, the default tier order is changed to 1,000,000 from nil.
 	// To keep the behavior in sync with user defined tiers with nil order, nil order is
 	// treated similar to the value of 1,000,000.
