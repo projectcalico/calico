@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
-vm_ip=$(gcloud compute instances describe ${VM_NAME} --zone=${ZONE} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
-exec ssh "--zone=${ZONE}" "ubuntu@${vm_ip}" -n -A -o ServerAliveInterval=10 "$@"
+set -e
+
+docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
+cd ../..
+tar -czf /tmp/working-copy.tgz --exclude=.go-pkg-cache --exclude=artifacts calico
+gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar ${GCS_TRANSIENT_DIR_URL}/
