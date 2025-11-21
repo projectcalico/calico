@@ -621,6 +621,29 @@ blocks:
             - name: K8S_E2E_FLAGS
               value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort)
 
+  - name: Maglev
+    dependencies: []
+    task:
+      jobs:
+        - name: BPF + AWS-kubeadm w External Node
+          execution_time_limit:
+            hours: 1
+          commands:
+            ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: VPC_SUBNETS
+              value: '["172.16.101.0/24"]' # single subnet because no encapsulation is being used
+            - name: IPAM_TEST_POOL_SUBNET
+              value: "10.0.0.0/29"
+            - name: ENABLE_DSR
+              value: "true"
+            - name: ENCAPSULATION_TYPE
+              value: "None"
+            - name: BGP_STATUS
+              value: Enabled
+
   - name: Wireguard
     dependencies: []
     task:
