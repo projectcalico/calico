@@ -169,22 +169,20 @@ func (m *Maps) slice() []maps.Map {
 }
 
 func (c *CommonMaps) slice() []maps.Map {
-	return []maps.Map{
+	mapslice := []maps.Map{
 		c.StateMap,
 		c.IfStateMap,
 		c.RuleCountersMap,
 		c.CountersMap,
-		c.ProgramsMap[0],
-		c.ProgramsMap[1],
 		c.JumpMap,
 		c.XDPProgramsMap,
 		c.XDPJumpMap,
 		c.ProfilingMap,
-		c.CTLBProgramsMap[0],
-		c.CTLBProgramsMap[1],
-		c.CTLBProgramsMap[2],
 		c.QoSMap,
 	}
+	mapslice = append(mapslice, c.ProgramsMap...)
+	mapslice = append(mapslice, c.CTLBProgramsMap...)
+	return mapslice
 }
 
 func (i *IPMaps) slice() []maps.Map {

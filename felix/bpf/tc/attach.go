@@ -165,7 +165,7 @@ func (ap *AttachPoint) AttachProgram() error {
 		if err != nil {
 			log.Errorf("error removing qdisc from %s:%s", ap.Iface, err)
 		}
-		logCxt.Infof("Program attached to tcx. %s %s", fileName, ap.ProgramsMap.GetName())
+		logCxt.Info("Program attached to tcx")
 		return nil
 	}
 

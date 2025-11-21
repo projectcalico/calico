@@ -719,7 +719,6 @@ func (b *PinnedMap) EnsureExists() error {
 
 	// Determine if the map b.Name is in a .o stub file (and which .o stub)
 	var objName string
-	fmt.Printf("Sridhar b.Name=%s\n", b.Name)
 	switch {
 	case strings.HasPrefix(b.Name, "cali_v4_"):
 		objName = "ipv4_map_stub.o"

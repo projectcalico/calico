@@ -163,7 +163,7 @@ func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
 	if file == "" {
 		return nil, fmt.Errorf("no object for attach type %+v", at)
 	}
-	log.WithField("AttachType", at).Debugf("Sridhar Looked up file for attach type: %s %s", file, pm.GetName())
+	log.WithField("AttachType", at).Debugf("Looked up file for attach type: %s", file)
 
 	pi := pm.getOrCreateProgramInfo(at)
 
@@ -235,13 +235,9 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 			if pm.expectedAttachType == "ingress" {
 				attachType = libbpf.AttachTypeTcxIngress
 			}
-			log.Infof("Sridhar setting attach type %d for program %s in generic object file %s: %s",
-				attachType, prog.Name(), file, pm.GetName())
 			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
 				return nil, fmt.Errorf("error setting attach type for program %s: %w", prog.Name(), err)
 			}
-			log.Infof("Sridhar set attach type %d for program %s in generic object file %s: %s",
-				attachType, prog.Name(), file, pm.GetName())
 		}
 	}
 
@@ -250,7 +246,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 	}
 
 	layout, err := pm.allocateLayout(at, obj)
-	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s %s", file, pm.GetName())
+	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s into %s", file, pm.GetName())
 
 	return layout, err
 }

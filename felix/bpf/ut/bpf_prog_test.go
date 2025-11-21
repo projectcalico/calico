@@ -746,7 +746,6 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 		if useIngressProgMap {
 			pmName = progMap[hook.Ingress].GetName()
 		}
-		log.Infof("Sridhar use pm map name %s", pmName)
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
 		err := obj.UpdateJumpMap(pmName, tcdefs.ProgramNames[idx], idx)
 		if err != nil {
@@ -758,7 +757,7 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 }
 
 func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg, hasMaglev, useIngressProgMap bool) (*libbpf.Obj, error) {
-	log.WithField("program", fname).Debug("Sridhar Loading BPF program")
+	log.WithField("program", fname).Debug("Loading BPF program")
 
 	forXDP := topts.xdp
 
