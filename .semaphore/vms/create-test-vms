@@ -58,12 +58,12 @@ for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   log_file="$artifacts_dir/create-vm-$batch.log"
   echo "Creating test VM $vm_name in background. Redirecting log to $log_file."
-  SKIP_FIRST_CREATE=true "${my_dir}/create-test-vm" "$vm_name" >& "$log_file" &
+  "${my_dir}/configure-test-vm" "$vm_name" >& "$log_file" &
   pids+=( $! )
 done
 
 for pid in "${pids[@]}"; do
-  echo "Waiting for create-test-vm process PID=$pid to finish"
+  echo "Waiting for configure-test-vm process PID=$pid to finish"
   if ! wait "$pid"; then
     echo "Creating one of the test VMs failed, exiting. Logs should be attached as artifacts."
     exit 1
