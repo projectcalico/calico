@@ -36,7 +36,14 @@
     }
   ],
   "actions": [
-    "Deny", "Pass"
+    {
+      "value": "Deny",
+      "type": "Exact"
+    },
+    {
+      "value": "Pass",
+      "type": "Exact"
+    }
   ],
   "policies": [
     {
