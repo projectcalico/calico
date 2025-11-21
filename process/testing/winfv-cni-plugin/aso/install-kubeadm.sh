@@ -118,7 +118,7 @@ EOF
   # Get the API server port (default is 6443 for kubeadm)
   APISERVER_PORT=6443
   export APISERVER_PORT
-  
+
   # Note: The node will be in NotReady state until a CNI plugin is installed
   # This is expected behavior for a fresh kubeadm cluster
   echo "Waiting for API server to be responsive..."
@@ -149,9 +149,9 @@ EOF
 function join_windows_worker_node() {
   echo "Joining Windows worker node to the cluster..."
   
-  # Create a PowerShell script for installing kubeadm on Windows
+  # Create a PowerShell script for installing kubeadm on Windows using PrepareNode.ps1
   cat > /tmp/install-kubeadm-windows.ps1 <<'PSEOF'
-# Download kubeadm, kubelet, and kubectl for Windows
+# Use PrepareNode.ps1 from sig-windows-tools to set up Kubernetes binaries
 $K8S_VERSION = "v1.33.0"
 $KUBE_BIN_DIR = "C:\k"
 
@@ -160,46 +160,43 @@ if (!(Test-Path $KUBE_BIN_DIR)) {
     New-Item -ItemType Directory -Path $KUBE_BIN_DIR -Force
 }
 
-Write-Host "Downloading Kubernetes binaries for Windows (version: $K8S_VERSION)..."
+Write-Host "Downloading PrepareNode.ps1 from sig-windows-tools..."
+curl.exe -L -o PrepareNode.ps1 https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/PrepareNode.ps1
 
-# Download kubeadm
-Write-Host "Downloading kubeadm.exe..."
-Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubeadm.exe" -OutFile "$KUBE_BIN_DIR\kubeadm.exe" -UseBasicParsing
-if (!(Test-Path "$KUBE_BIN_DIR\kubeadm.exe")) {
-    Write-Error "Failed to download kubeadm.exe"
+if (!(Test-Path ".\PrepareNode.ps1")) {
+    Write-Error "Failed to download PrepareNode.ps1"
     exit 1
 }
 
-# Download kubelet
-Write-Host "Downloading kubelet.exe..."
-Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubelet.exe" -OutFile "$KUBE_BIN_DIR\kubelet.exe" -UseBasicParsing
-if (!(Test-Path "$KUBE_BIN_DIR\kubelet.exe")) {
-    Write-Error "Failed to download kubelet.exe"
-    exit 1
-}
+Write-Host "Running PrepareNode.ps1 to install Kubernetes binaries (version: $K8S_VERSION)..."
+.\PrepareNode.ps1 -KubernetesVersion $K8S_VERSION
 
-# Download kubectl
-Write-Host "Downloading kubectl.exe..."
-Invoke-WebRequest -Uri "https://dl.k8s.io/$K8S_VERSION/bin/windows/amd64/kubectl.exe" -OutFile "$KUBE_BIN_DIR\kubectl.exe" -UseBasicParsing
-if (!(Test-Path "$KUBE_BIN_DIR\kubectl.exe")) {
-    Write-Error "Failed to download kubectl.exe"
-    exit 1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "PrepareNode.ps1 failed with exit code $LASTEXITCODE"
+    exit $LASTEXITCODE
 }
-
-# Add to PATH
-$existingPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-if ($existingPath -notlike "*$KUBE_BIN_DIR*") {
-    Write-Host "Adding $KUBE_BIN_DIR to PATH..."
-    [Environment]::SetEnvironmentVariable("Path", "$existingPath;$KUBE_BIN_DIR", "Machine")
-}
-# Update current session PATH
-$env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine")
 
 Write-Host "Kubernetes binaries installed successfully"
 Write-Host "Verifying installations..."
-Write-Host "Kubeadm version: $(& $KUBE_BIN_DIR\kubeadm.exe version)"
-Write-Host "Kubelet version: $(& $KUBE_BIN_DIR\kubelet.exe --version)"
-Write-Host "Kubectl version: $(& $KUBE_BIN_DIR\kubectl.exe version)"
+if (Test-Path "$KUBE_BIN_DIR\kubeadm.exe") {
+    Write-Host "Kubeadm version: $(& $KUBE_BIN_DIR\kubeadm.exe version)"
+} else {
+    Write-Error "kubeadm.exe not found at $KUBE_BIN_DIR\kubeadm.exe"
+    exit 1
+}
+
+if (Test-Path "$KUBE_BIN_DIR\kubelet.exe") {
+    Write-Host "Kubelet version: $(& $KUBE_BIN_DIR\kubelet.exe --version)"
+} else {
+    Write-Error "kubelet.exe not found at $KUBE_BIN_DIR\kubelet.exe"
+    exit 1
+}
+
+if (Test-Path "$KUBE_BIN_DIR\kubectl.exe") {
+    Write-Host "Kubectl version: $(& $KUBE_BIN_DIR\kubectl.exe version)"
+} else {
+    Write-Warning "kubectl.exe not found at $KUBE_BIN_DIR\kubectl.exe"
+}
 PSEOF
 
   # Copy script to Windows node
