@@ -56,7 +56,7 @@ ssh_cmd="ssh ubuntu@${vm_ip}"
 startup_success=false
 for ssh_try in $(seq 1 100); do
   echo "Checking startup script completion: $ssh_try"
-  if ${ssh_cmd} -- test -e /var/run/startup-script-complete; then
+  if ${ssh_cmd} test -e /var/run/startup-script-complete; then
     echo "Startup script completed"
     startup_success=true
     break
@@ -75,9 +75,9 @@ set +x
 echo "$DOCKERHUB_PASSWORD" | ssh "ubuntu@${vm_ip}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 scp -r -C "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets"
 set -x
-${ssh_cmd} -- bash -c "gcloud config set project unique-caldron-775 && \
+${ssh_cmd} bash -x -c "gcloud config set project unique-caldron-775 && \
   gcloud auth activate-service-account --key-file=/home/ubuntu/secrets/secret.google-service-account-key.json && \
-  gcloud storage cp "${GCS_TRANSIENT_DIR_URL}/*" /tmp && \
+  gcloud storage cp '${GCS_TRANSIENT_DIR_URL}/*' /tmp && \
   tar -xzf /tmp/working-copy.tgz && \
   docker load -i /tmp/calico-felix-test.tar && \
   docker load -i /tmp/felixtest-typha.tar && \
