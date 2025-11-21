@@ -3124,9 +3124,9 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 		}
 	}
 
-	ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Egress]
-	if policyDirection == PolDirnIngress {
-		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Ingress]
+	ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Ingress]
+	if ap.Hook == hook.Egress {
+		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Egress]
 	}
 
 	if d.mgr.FlowLogsEnabled() {
@@ -3963,7 +3963,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 		opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
 	}
 	insns, err := m.doUpdatePolicyProgram(
-		polDir,
+		ap,
 		ap.HookName(),
 		progName,
 		ap.PolicyJmp(ipFamily),
@@ -4106,7 +4106,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 }
 
 func (m *bpfEndpointManager) doUpdatePolicyProgram(
-	polDir string,
+	ap attachPoint,
 	hk hook.Hook,
 	progName string,
 	polJumpMapIdx int,
@@ -4118,12 +4118,9 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 		opts = append(opts, polprog.WithPolicyDebugEnabled())
 	}
 
-	staticProgsMap := m.commonMaps.ProgramsMap[hook.Ingress]
-	if polDir == PolDirnEgress.RuleDir().String() {
-		staticProgsMap = m.commonMaps.ProgramsMap[hook.Egress]
-	}
-	if hk == hook.XDP {
-		staticProgsMap = m.commonMaps.XDPProgramsMap
+	staticProgsMap := m.commonMaps.XDPProgramsMap
+	if apTc, ok := ap.(*tc.AttachPoint); ok {
+		staticProgsMap = apTc.ProgramsMap
 	}
 
 	// If we have to break a program up into sub-programs to please the

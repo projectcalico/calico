@@ -150,7 +150,11 @@ func (ap *AttachPoint) AttachProgram() error {
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
 
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
+	fileName := "tc_preamble_ing.o"
+	if ap.Hook == hook.Egress {
+		fileName = "tc_preamble_eg.o"
+	}
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, fileName)
 	if ap.AttachType == apiv3.BPFAttachOptionTCX {
 		err := ap.attachTCXProgram(binaryToLoad)
 		if err != nil {
@@ -161,7 +165,7 @@ func (ap *AttachPoint) AttachProgram() error {
 		if err != nil {
 			log.Errorf("error removing qdisc from %s:%s", ap.Iface, err)
 		}
-		logCxt.Info("Program attached to tcx.")
+		logCxt.Infof("Program attached to tcx. %s %s", fileName, ap.ProgramsMap.GetName())
 		return nil
 	}
 

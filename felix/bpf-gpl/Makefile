@@ -107,7 +107,8 @@ bin/xdp_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
 OBJS:=$(shell ./list-objs)
-OBJS+=bin/tc_preamble.o
+OBJS+=bin/tc_preamble_ing.o
+OBJS+=bin/tc_preamble_eg.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
@@ -147,9 +148,10 @@ ut/%.ll: ut/%.c ut/ut.h
 
 ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 
-tc_preamble.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -c $< -o $@
-
+tc_preamble_ing.ll: tc_preamble.c tc_preamble.d
+	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=3 -c $< -o $@
+tc_preamble_eg.ll: tc_preamble.c tc_preamble.d
+	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=1 -c $< -o $@
 tcx_test.ll: tcx_test.c tcx_test.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -189,7 +191,9 @@ xdp_v6.d: xdp.c
 
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
-bin/tc_preamble.o: tc_preamble.ll | bin
+bin/tc_preamble_ing.o: tc_preamble_ing.ll | bin
+	$(LINK)
+bin/tc_preamble_eg.o: tc_preamble_eg.ll | bin
 	$(LINK)
 bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)

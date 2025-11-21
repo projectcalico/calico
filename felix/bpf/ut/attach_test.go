@@ -595,7 +595,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = oldProgs.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
-		programsCount := 14
+		programsCount := 15
 		oldPoliciesCount := 4
 		if ipv6Enabled {
 			programsCount = 54
@@ -636,9 +636,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programsIng.Count()).To(Equal(14))
+		Expect(programsIng.Count()).To(Equal(15))
 		pm = jumpMapDump(commonMaps.ProgramsMap[hook.Ingress])
-		Expect(pm).To(HaveLen(14))
+		Expect(pm).To(HaveLen(15))
 
 		pm = jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
@@ -812,14 +812,14 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 
 	atIng := programsIng.Programs()
 	atEg := programsEg.Programs()
-	Expect(atEg).To(HaveKey(hook.AttachType{
+	Expect(atIng).To(HaveKey(hook.AttachType{
 		Hook:       hook.Ingress,
 		Family:     4,
 		Type:       tcdefs.EpTypeWorkload,
 		LogLevel:   loglevel,
 		ToHostDrop: false,
 		DSR:        false}))
-	Expect(atIng).To(HaveKey(hook.AttachType{
+	Expect(atEg).To(HaveKey(hook.AttachType{
 		Hook:       hook.Egress,
 		Family:     4,
 		Type:       tcdefs.EpTypeWorkload,

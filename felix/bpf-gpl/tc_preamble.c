@@ -62,9 +62,9 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 		}
 	}
 
-#if EMIT_LOGS
+//#if EMIT_LOGS
 	CALI_LOG("tc_preamble iface %s", globals->data.iface_name);
-#endif
+//#endif
 
 	/* If we have log filter installed, tell the filter where to jump next
 	 * and jump to the filter.

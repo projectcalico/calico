@@ -401,12 +401,17 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		}
 	}
 
+	useIngressProgMap := strings.Contains(obj, "from_")
 	if topts.xdp {
-		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false, false)
+		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	} else {
-		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false, false)
+		fileToLoad := "../../bpf-gpl/bin/tc_preamble_eg.o"
+		if useIngressProgMap {
+			fileToLoad = "../../bpf-gpl/bin/tc_preamble_ing.o"
+		}
+		o, err := objLoad(fileToLoad, bpfFsDir, "preamble", topts, false, false, false, useIngressProgMap)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	}
@@ -417,12 +422,15 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 	hasMaglev := strings.Contains(obj, "from_hep")
 	obj += ".o"
-	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev)
+	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev, useIngressProgMap)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
 
 	if rules != nil {
-		staticProgMap := progMap[hook.Ingress]
+		staticProgMap := progMap[hook.Egress]
+		if useIngressProgMap {
+			staticProgMap = progMap[hook.Ingress]
+		}
 		polMap := policyJumpMap
 		popts := []polprog.Option{}
 		stride := jump.TCMaxEntryPoints
@@ -711,7 +719,7 @@ func ipToU32(ip net.IP) uint32 {
 	return binary.LittleEndian.Uint32([]byte(ip[:]))
 }
 
-func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg, hasMaglev bool) error {
+func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg, hasMaglev, useIngressProgMap bool) error {
 	for _, idx := range progs {
 		switch idx {
 		case
@@ -734,8 +742,13 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 				continue
 			}
 		}
+		pmName := progMap[hook.Egress].GetName()
+		if useIngressProgMap {
+			pmName = progMap[hook.Ingress].GetName()
+		}
+		log.Infof("Sridhar use pm map name %s", pmName)
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
-		err := obj.UpdateJumpMap(progMap[hook.Ingress].GetName(), tcdefs.ProgramNames[idx], idx)
+		err := obj.UpdateJumpMap(pmName, tcdefs.ProgramNames[idx], idx)
 		if err != nil {
 			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
 		}
@@ -744,8 +757,8 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 	return nil
 }
 
-func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg, hasMaglev bool) (*libbpf.Obj, error) {
-	log.WithField("program", fname).Debug("Loading BPF program")
+func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg, hasMaglev, useIngressProgMap bool) (*libbpf.Obj, error) {
+	log.WithField("program", fname).Debug("Sridhar Loading BPF program")
 
 	forXDP := topts.xdp
 
@@ -919,11 +932,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	if !forXDP {
 		log.WithField("ipFamily", ipFamily).Debug("Updating jump map")
-		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg, hasMaglev)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg, hasMaglev, useIngressProgMap)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
 		}
-		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false, hasMaglev)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false, hasMaglev, useIngressProgMap)
 	} else {
 		if err = xdpUpdateJumpMap(obj, xdpJumpMapIndexes[ipFamily]); err != nil {
 			goto out
