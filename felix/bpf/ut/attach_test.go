@@ -144,7 +144,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		programsIngCount := 8
 		programsEgCount := 7
 		if ipv6Enabled {
-			programsIngCount = 28
+			programsIngCount = 15
+			programsEgCount = 13
 		}
 		Expect(programsIng.Count()).To(Equal(programsIngCount))
 		Expect(programsEg.Count()).To(Equal(programsEgCount))
@@ -196,32 +197,33 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(programsIng.Count()).To(Equal(54))
+			Expect(programsIng.Count()).To(Equal(28))
 
-			at := programsIng.Programs()
+			atIng := programsIng.Programs()
+			atEg := programsEg.Programs()
 
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
 				Family:     4,
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
 				DSR:        false}))
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atEg).To(HaveKey(hook.AttachType{
 				Hook:       hook.Egress,
 				Family:     4,
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
 				DSR:        false}))
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
 				Family:     6,
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
 				DSR:        false}))
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atEg).To(HaveKey(hook.AttachType{
 				Hook:       hook.Egress,
 				Family:     6,
 				Type:       tcdefs.EpTypeHost,
@@ -336,7 +338,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		programEgCount := 7
 		jumpMapLen := 2
 		if ipv6Enabled {
-			programIngCount = 54
+			programIngCount = 28
+			programEgCount = 26
 			jumpMapLen = 8
 		}
 		Expect(programsIng.Count()).To(Equal(programIngCount))
@@ -598,7 +601,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		programsCount := 15
 		oldPoliciesCount := 4
 		if ipv6Enabled {
-			programsCount = 54
+			programsCount = 28
 			oldPoliciesCount = 12
 		}
 		Expect(pm).To(HaveLen(programsCount))
@@ -720,10 +723,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	})
 }
 
-func TestAttach1(t *testing.T) {
+func TestAttach(t *testing.T) {
 	RegisterTestingT(t)
 	runAttachTest(t, false)
-	//runAttachTest(t, true)
+	runAttachTest(t, true)
 }
 
 // This test simulates workload updates like changing labels, annotations.
