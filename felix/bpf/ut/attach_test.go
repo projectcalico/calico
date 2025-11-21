@@ -353,7 +353,6 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	defer deleteLink(workload1)
 
 	t.Run("create a workload", func(t *testing.T) {
-		fmt.Println("Poorna ", programsIng.Count(), programsEg.Count())
 		programsIngCount := programsIng.Count()
 		programsEgCount := programsEg.Count()
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
@@ -361,25 +360,25 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsIngCount = programsIngCount + 6
-		programsEgCount = programsEgCount + 7
+		programsIngCount = programsIngCount + 7
+		programsEgCount = programsEgCount + 6
 		if ipv6Enabled {
-			programsIngCount = 54
+			programsIngCount = 28
+			programsEgCount = 26
 		}
-		return
 		Expect(programsIng.Count()).To(Equal(programsIngCount))
 		Expect(programsEg.Count()).To(Equal(programsEgCount))
 
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
-		Expect(atEg).To(HaveKey(hook.AttachType{
+		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
 			Type:       tcdefs.EpTypeWorkload,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false}))
-		Expect(atIng).To(HaveKey(hook.AttachType{
+		Expect(atEg).To(HaveKey(hook.AttachType{
 			Hook:       hook.Egress,
 			Family:     4,
 			Type:       tcdefs.EpTypeWorkload,
