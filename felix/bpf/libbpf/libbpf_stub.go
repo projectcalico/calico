@@ -81,6 +81,7 @@ func (p *Program) NextProgram() (*Program, error) {
 }
 
 func (o *Obj) FirstProgram() (*Program, error) {
+	panic("LIBBPF syscall stub")
 }
 
 func (p *Program) Name() string {
