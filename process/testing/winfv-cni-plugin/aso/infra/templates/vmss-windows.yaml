@@ -1,4 +1,4 @@
-{{- $count := .Env.WINDOWS_NODE_COUNT | strings.ToInt -}}
+{{- $count := conv.ToInt .Env.WINDOWS_NODE_COUNT -}}
 {{- range $i := seq 0 (sub $count 1) -}}
 {{- $nodeNum := add $i 1 -}}
 {{- $nodeName := printf "vm-windows-%d" $nodeNum -}}

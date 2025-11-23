@@ -113,7 +113,7 @@ password-base64: $PASSWORD_BASE64
 EOF
   log_info "Generated Windows credentials: username=winfv, password saved to password.txt"
 
-  rm ${SSH_KEY_FILE} || true
+  rm -f ${SSH_KEY_FILE} ${SSH_KEY_FILE}.pub
   ssh-keygen -m PEM -t rsa -b 2048 -f "${SSH_KEY_FILE}" -N '' -C "" 1>/dev/null
   log_info "Machine SSH key generated in ${SSH_KEY_FILE}"
   export PUBLIC_KEY=$(cat ${SSH_KEY_FILE}.pub)
