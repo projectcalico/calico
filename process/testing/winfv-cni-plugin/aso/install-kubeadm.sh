@@ -147,10 +147,21 @@ EOF
 }
 
 function join_windows_worker_node() {
-  echo "Joining Windows worker node to the cluster..."
+  echo "Joining Windows worker node(s) to the cluster..."
   
-  # Create a PowerShell script for installing kubeadm on Windows using PrepareNode.ps1
-  cat > /tmp/install-kubeadm-windows.ps1 <<'PSEOF'
+  # Loop through all Windows nodes
+  for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+    local node_num=$((i+1))
+    local windows_eip="${WINDOWS_EIPS[$i]}"
+    local windows_pip="${WINDOWS_PIPS[$i]}"
+    local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${windows_eip} powershell"
+    
+    echo "====================================="
+    echo "Joining Windows Node ${node_num} (${windows_eip})"
+    echo "====================================="
+    
+    # Create a PowerShell script for installing kubeadm on Windows using PrepareNode.ps1
+    cat > /tmp/install-kubeadm-windows-${node_num}.ps1 <<'PSEOF'
 # Use PrepareNode.ps1 from sig-windows-tools to set up Kubernetes binaries
 $K8S_VERSION = "v1.33.0"
 $KUBE_BIN_DIR = "C:\k"
@@ -199,18 +210,18 @@ if (Test-Path "$KUBE_BIN_DIR\kubectl.exe") {
 }
 PSEOF
 
-  # Copy script to Windows node
-  echo "Installing kubeadm on Windows node..."
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/install-kubeadm-windows.ps1 winfv@${WINDOWS_EIP}:c:\\k\\
-  
-  # Execute the script on Windows
-  ${WINDOWS_CONNECT_COMMAND} "powershell -ExecutionPolicy Bypass -File c:\\k\\install-kubeadm-windows.ps1"
-  
-  # Create join script with the actual join command
-  # Extract just the token and discovery hash from the join command
-  JOIN_ARGS=$(echo "${KUBEADM_JOIN_COMMAND}" | sed 's/kubeadm join //')
-  
-  cat > /tmp/join-cluster-windows.ps1 <<PSEOF
+    # Copy script to Windows node
+    echo "Installing kubeadm on Windows node ${node_num}..."
+    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/install-kubeadm-windows-${node_num}.ps1 winfv@${windows_eip}:c:\\k\\
+    
+    # Execute the script on Windows
+    ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\install-kubeadm-windows-${node_num}.ps1"
+    
+    # Create join script with the actual join command
+    # Extract just the token and discovery hash from the join command
+    JOIN_ARGS=$(echo "${KUBEADM_JOIN_COMMAND}" | sed 's/kubeadm join //')
+    
+    cat > /tmp/join-cluster-windows-${node_num}.ps1 <<PSEOF
 # Join Windows node to Kubernetes cluster
 \$KUBE_BIN_DIR = "C:\k"
 
@@ -245,7 +256,7 @@ if (\$LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host "=========================================="
     Write-Host "Join failed! Sleeping for 10 minutes for debugging..."
-    Write-Host "You can SSH to this node at: ${WINDOWS_EIP}"
+    Write-Host "You can SSH to this node at: ${windows_eip}"
     Write-Host "=========================================="
     Start-Sleep -Seconds 600
     exit \$LASTEXITCODE
@@ -254,12 +265,16 @@ if (\$LASTEXITCODE -ne 0) {
 Write-Host "Successfully joined the cluster!"
 PSEOF
 
-  # Copy and execute join script
-  echo "Joining Windows node to cluster..."
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/join-cluster-windows.ps1 winfv@${WINDOWS_EIP}:c:\\k\\
-  ${WINDOWS_CONNECT_COMMAND} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster-windows.ps1"
+    # Copy and execute join script
+    echo "Joining Windows node ${node_num} to cluster..."
+    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/join-cluster-windows-${node_num}.ps1 winfv@${windows_eip}:c:\\k\\
+    ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster-windows-${node_num}.ps1"
+    
+    echo "Windows worker node ${node_num} joined successfully!"
+    echo
+  done
   
-  echo "Windows worker node joined successfully!"
+  echo "All Windows worker nodes joined successfully!"
   ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
 }
 
@@ -288,20 +303,40 @@ function prepare_and_copy_windows_dir () {
   ${GOMPLATE} --file ./run-fv-cni-plugin.ps1 --out ./windows/run-fv.ps1
   ${GOMPLATE} --file ./config-kubeadm --out ./windows/config
 
-  echo "Copying windows directory to Windows node..."
-  # Copy local windows directory to Windows node.
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -r ./windows winfv@${WINDOWS_EIP}:c:\\k\\
+  echo "Copying windows directory to all Windows nodes..."
+  # Copy local windows directory to all Windows nodes
+  for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+    local node_num=$((i+1))
+    local windows_eip="${WINDOWS_EIPS[$i]}"
+    echo "Copying to Windows node ${node_num} (${windows_eip})..."
+    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -r ./windows winfv@${windows_eip}:c:\\k\\
+  done
   
-  echo "Windows configuration files copied successfully"
+  echo "Windows configuration files copied successfully to all nodes"
 }
 
 function prepare_windows_node() {
-  ${WINDOWS_CONNECT_COMMAND} c:\\k\\enable-containers-with-reboot.ps1
-  sleep 10
-  retry_command 60 "${WINDOWS_CONNECT_COMMAND} Get-HnsNetwork"
+  echo "Preparing all Windows nodes..."
+  
+  for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+    local node_num=$((i+1))
+    local windows_eip="${WINDOWS_EIPS[$i]}"
+    local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${windows_eip} powershell"
+    
+    echo "Preparing Windows node ${node_num} (${windows_eip})..."
+    ${windows_connect_command} c:\\k\\enable-containers-with-reboot.ps1
+    sleep 10
+    
+    echo "Waiting for Windows node ${node_num} to be ready..."
+    retry_command 60 "${windows_connect_command} Get-HnsNetwork"
 
-  ${WINDOWS_CONNECT_COMMAND} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"
-  echo
+    echo "Installing containerd on Windows node ${node_num}..."
+    ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"
+    echo "Windows node ${node_num} prepared successfully"
+    echo
+  done
+  
+  echo "All Windows nodes prepared successfully"
 }
 
 setup_kubeadm_cluster

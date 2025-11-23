@@ -1,12 +1,22 @@
+{{- $count := .Env.LINUX_NODE_COUNT | strings.ToInt -}}
+{{- range $i := seq 0 (sub $count 1) -}}
+{{- $nodeNum := add $i 1 -}}
+{{- $nodeName := printf "vm-linux-%d" $nodeNum -}}
+{{- $nicName := printf "nic-linux-%d" $nodeNum -}}
+{{- $pipName := printf "pip-linux-%d" $nodeNum -}}
+{{- $extContainerdName := printf "vm-linux-%d-containerd" $nodeNum -}}
+{{- $extDockerName := printf "vm-linux-%d-docker-legacy" $nodeNum -}}
+{{- $computerName := printf "winfv-linux-%d" $nodeNum -}}
+---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine
 metadata:
-  name: vm-linux
+  name: {{$nodeName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: {{.Env.AZURE_RESOURCE_GROUP}}
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
   hardwareProfile:
     vmSize: Standard_D4s_v3
   networkProfile:
@@ -14,9 +24,9 @@ spec:
       - reference:
           group: network.azure.com
           kind: NetworkInterface
-          name: nic-linux
+          name: {{$nicName}}
   osProfile:
-    computerName: winfv-linux
+    computerName: {{$computerName}}
     adminUsername: winfv
     adminPassword:
       key: password
@@ -25,7 +35,7 @@ spec:
       disablePasswordAuthentication: true
       ssh:
         publicKeys:
-          - keyData: {{.Env.PUBLIC_KEY}}
+          - keyData: {{$.Env.PUBLIC_KEY}}
             path: /home/winfv/.ssh/authorized_keys
   storageProfile:
     imageReference:
@@ -41,12 +51,12 @@ spec:
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
-  name: vm-linux-containerd
+  name: {{$extContainerdName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: vm-linux
+    name: {{$nodeName}}
   publisher: Microsoft.Azure.Extensions
   type: CustomScript
   typeHandlerVersion: "2.1"
@@ -94,12 +104,12 @@ spec:
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
-  name: vm-linux-docker-legacy
+  name: {{$extDockerName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: vm-linux
+    name: {{$nodeName}}
   publisher: Microsoft.Azure.Extensions
   type: DockerExtension
   typeHandlerVersion: "1.0"
@@ -108,19 +118,19 @@ spec:
 apiVersion: network.azure.com/v1api20240301
 kind: NetworkInterface
 metadata:
-  name: nic-linux
+  name: {{$nicName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: {{.Env.AZURE_RESOURCE_GROUP}}
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
   networkSecurityGroup:
     reference:
       group: network.azure.com
       kind: NetworkSecurityGroup
       name: winfv-sg
   ipConfigurations:
-    - name: ipconfig-linux
+    - name: ipconfig-linux-{{$nodeNum}}
       subnet:
         reference:
           group: network.azure.com
@@ -130,17 +140,18 @@ spec:
         reference:
           group: network.azure.com
           kind: PublicIPAddress
-          name: pip-linux
+          name: {{$pipName}}
 ---
 apiVersion: network.azure.com/v1api20240301
 kind: PublicIPAddress
 metadata:
-  name: pip-linux
+  name: {{$pipName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: {{.Env.AZURE_RESOURCE_GROUP}}
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
   publicIPAllocationMethod: Static
   sku:
     name: Standard
+{{- end}}
