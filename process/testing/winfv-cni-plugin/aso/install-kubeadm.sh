@@ -23,6 +23,18 @@ set -e
 : ${GOMPLATE:=./bin/gomplate}
 : ${BACKEND:?Error: BACKEND is not set}
 
+# Debug: Print available node information
+echo "========================================"
+echo "Node configuration loaded:"
+echo "  LINUX_NODE_COUNT: ${LINUX_NODE_COUNT}"
+echo "  WINDOWS_NODE_COUNT: ${WINDOWS_NODE_COUNT}"
+echo "  LINUX_EIPS: ${LINUX_EIPS[@]}"
+echo "  LINUX_EIP (first): ${LINUX_EIP}"
+echo "  WINDOWS_EIPS: ${WINDOWS_EIPS[@]}"
+echo "  WINDOWS_EIP (first): ${WINDOWS_EIP}"
+echo "========================================"
+echo
+
 function setup_kubeadm_cluster() {
   echo "Installing kubeadm and Kubernetes 1.33 on Linux VM..."
   
@@ -149,11 +161,27 @@ EOF
 function join_windows_worker_node() {
   echo "Joining Windows worker node(s) to the cluster..."
   
+  # Validate that we have Windows node IPs
+  if [[ ${#WINDOWS_EIPS[@]} -eq 0 ]]; then
+    echo "ERROR: WINDOWS_EIPS array is empty. Cannot join Windows nodes."
+    echo "Debug info:"
+    echo "  WINDOWS_NODE_COUNT: ${WINDOWS_NODE_COUNT}"
+    echo "  WINDOWS_EIP (single): ${WINDOWS_EIP}"
+    echo "  WINDOWS_EIPS array: ${WINDOWS_EIPS[@]}"
+    return 1
+  fi
+  
   # Loop through all Windows nodes
   for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
     local node_num=$((i+1))
     local windows_eip="${WINDOWS_EIPS[$i]}"
     local windows_pip="${WINDOWS_PIPS[$i]}"
+    
+    if [[ -z "$windows_eip" ]]; then
+      echo "ERROR: Windows node ${node_num} EIP is empty!"
+      return 1
+    fi
+    
     local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${windows_eip} powershell"
     
     echo "====================================="
@@ -295,6 +323,17 @@ function copy_files_from_linux() {
 function prepare_and_copy_windows_dir () {
   echo "Preparing Windows configuration files..."
   
+  # Validate that we have Windows node IPs
+  if [[ ${#WINDOWS_EIPS[@]} -eq 0 ]]; then
+    echo "ERROR: WINDOWS_EIPS array is empty. Windows VMs may not have been created or IPs not retrieved."
+    echo "WINDOWS_NODE_COUNT: ${WINDOWS_NODE_COUNT}"
+    echo "Available variables:"
+    echo "  LINUX_EIPS: ${LINUX_EIPS[@]}"
+    echo "  WINDOWS_EIPS: ${WINDOWS_EIPS[@]}"
+    echo "  WINDOWS_EIP (single): ${WINDOWS_EIP}"
+    return 1
+  fi
+  
   # Extract client certificate and key data from the copied kubeconfig
   export CLIENT_CERT_DATA=$(grep 'client-certificate-data' ./windows/kubeadm/config | awk '{print $2}')
   export CLIENT_KEY_DATA=$(grep 'client-key-data' ./windows/kubeadm/config | awk '{print $2}')
@@ -308,6 +347,12 @@ function prepare_and_copy_windows_dir () {
   for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
     local node_num=$((i+1))
     local windows_eip="${WINDOWS_EIPS[$i]}"
+    
+    if [[ -z "$windows_eip" ]]; then
+      echo "ERROR: Windows node ${node_num} EIP is empty!"
+      return 1
+    fi
+    
     echo "Copying to Windows node ${node_num} (${windows_eip})..."
     scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -r ./windows winfv@${windows_eip}:c:\\k\\
   done
@@ -318,14 +363,26 @@ function prepare_and_copy_windows_dir () {
 function prepare_windows_node() {
   echo "Preparing all Windows nodes..."
   
+  # Validate that we have Windows node IPs
+  if [[ ${#WINDOWS_EIPS[@]} -eq 0 ]]; then
+    echo "ERROR: WINDOWS_EIPS array is empty. Cannot prepare Windows nodes."
+    return 1
+  fi
+  
   for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
     local node_num=$((i+1))
     local windows_eip="${WINDOWS_EIPS[$i]}"
+    
+    if [[ -z "$windows_eip" ]]; then
+      echo "ERROR: Windows node ${node_num} EIP is empty!"
+      return 1
+    fi
+    
     local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${windows_eip} powershell"
     
     echo "Preparing Windows node ${node_num} (${windows_eip})..."
     ${windows_connect_command} c:\\k\\enable-containers-with-reboot.ps1
-    sleep 10
+  sleep 10
     
     echo "Waiting for Windows node ${node_num} to be ready..."
     retry_command 60 "${windows_connect_command} Get-HnsNetwork"
