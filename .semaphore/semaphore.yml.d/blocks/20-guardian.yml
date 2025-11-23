@@ -1,4 +1,4 @@
-- name: guardian
+- name: Guardian
   run:
     when: "${CHANGE_IN(guardian)}"
   execution_time_limit:
@@ -10,10 +10,10 @@
       commands:
         - cd guardian
     jobs:
-      - name: make ci
+      - name: "Guardian: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
-      - name: Build binary
+      - name: "Guardian: build multi-arch"
         matrix:
           - env_var: ARCH
             values:
