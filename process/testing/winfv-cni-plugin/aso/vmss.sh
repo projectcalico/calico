@@ -459,7 +459,7 @@ EOF
   echo "Generating helper files"
   
   # Generate ssh-node-linux.sh with node index support
-  cat << 'EOF' > ./ssh-node-linux.sh
+  cat << EOF > ./ssh-node-linux.sh
 #!/bin/bash
 # Usage: ./ssh-node-linux.sh [node_index] [command...]
 # Examples:
@@ -467,30 +467,31 @@ EOF
 #   ./ssh-node-linux.sh 1 "kubectl get nodes" # SSH to second Linux node (index 1)
 #   ./ssh-node-linux.sh "kubectl get nodes"   # SSH to first node (default, backward compatible)
 
-# Source the arrays from vmss.sh
-. ./vmss.sh info > /dev/null 2>&1 || true
+# IP addresses embedded at generation time
+LINUX_EIPS=(${LINUX_EIPS[@]})
+SSH_KEY_FILE="${SSH_KEY_FILE}"
 
 # Check if first arg is a number (node index)
-if [[ "$1" =~ ^[0-9]+$ ]]; then
-  NODE_INDEX=$1
+if [[ "\$1" =~ ^[0-9]+\$ ]]; then
+  NODE_INDEX=\$1
   shift  # Remove the index from arguments
 else
   NODE_INDEX=0  # Default to first node for backward compatibility
 fi
 
 # Validate node index
-if [[ $NODE_INDEX -ge ${#LINUX_EIPS[@]} ]]; then
-  echo "Error: Node index $NODE_INDEX out of range. Available Linux nodes: 0-$((${#LINUX_EIPS[@]}-1))"
+if [[ \$NODE_INDEX -ge \${#LINUX_EIPS[@]} ]]; then
+  echo "Error: Node index \$NODE_INDEX out of range. Available Linux nodes: 0-\$((\${#LINUX_EIPS[@]}-1))"
   exit 1
 fi
 
-LINUX_EIP="${LINUX_EIPS[$NODE_INDEX]}"
-ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${LINUX_EIP} "$@"
+LINUX_EIP="\${LINUX_EIPS[\$NODE_INDEX]}"
+ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@\${LINUX_EIP} "\$@"
 EOF
   chmod +x ./ssh-node-linux.sh
 
   # Generate ssh-node-windows.sh with node index support
-  cat << 'EOF' > ./ssh-node-windows.sh
+  cat << EOF > ./ssh-node-windows.sh
 #!/bin/bash
 # Usage: ./ssh-node-windows.sh [node_index] [command]
 # Examples:
@@ -498,115 +499,118 @@ EOF
 #   ./ssh-node-windows.sh 1 "ipconfig /all"   # SSH to second Windows node (index 1)
 #   ./ssh-node-windows.sh "Get-Process"       # SSH to first node (default, backward compatible)
 
-# Source the arrays from vmss.sh
-. ./vmss.sh info > /dev/null 2>&1 || true
+# IP addresses embedded at generation time
+WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+SSH_KEY_FILE="${SSH_KEY_FILE}"
 
 # Check if first arg is a number (node index)
-if [[ "$1" =~ ^[0-9]+$ ]]; then
-  NODE_INDEX=$1
+if [[ "\$1" =~ ^[0-9]+\$ ]]; then
+  NODE_INDEX=\$1
   shift  # Remove the index from arguments
 else
   NODE_INDEX=0  # Default to first node for backward compatibility
 fi
 
 # Validate node index
-if [[ $NODE_INDEX -ge ${#WINDOWS_EIPS[@]} ]]; then
-  echo "Error: Node index $NODE_INDEX out of range. Available Windows nodes: 0-$((${#WINDOWS_EIPS[@]}-1))"
+if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
+  echo "Error: Node index \$NODE_INDEX out of range. Available Windows nodes: 0-\$((\${#WINDOWS_EIPS[@]}-1))"
   exit 1
 fi
 
-WINDOWS_EIP="${WINDOWS_EIPS[$NODE_INDEX]}"
-ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIP} powershell "$@"
+WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
+ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@\${WINDOWS_EIP} powershell "\$@"
 EOF
   chmod +x ./ssh-node-windows.sh
 
   # Generate scp-to-windows.sh with node index support
-  cat << 'EOF' > ./scp-to-windows.sh
+  cat << EOF > ./scp-to-windows.sh
 #!/bin/bash
 # Usage: ./scp-to-windows.sh [node_index] <local_file> <remote_path>
 # Examples:
-#   ./scp-to-windows.sh 0 kubeconfig c:\\k\\kubeconfig      # Copy to first Windows node (index 0)
-#   ./scp-to-windows.sh 1 test.zip 'c:\\'                   # Copy to second Windows node (index 1)
-#   ./scp-to-windows.sh kubeconfig c:\\k\\kubeconfig        # Copy to first node (default, backward compatible)
+#   ./scp-to-windows.sh 0 kubeconfig c:\\\\k\\\\kubeconfig      # Copy to first Windows node (index 0)
+#   ./scp-to-windows.sh 1 test.zip 'c:\\\\'                   # Copy to second Windows node (index 1)
+#   ./scp-to-windows.sh kubeconfig c:\\\\k\\\\kubeconfig        # Copy to first node (default, backward compatible)
 
-# Source the arrays from vmss.sh
-. ./vmss.sh info > /dev/null 2>&1 || true
+# IP addresses embedded at generation time
+WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+SSH_KEY_FILE="${SSH_KEY_FILE}"
 
 # Check if first arg is a number (node index)
-if [[ "$1" =~ ^[0-9]+$ ]]; then
-  NODE_INDEX=$1
+if [[ "\$1" =~ ^[0-9]+\$ ]]; then
+  NODE_INDEX=\$1
   shift  # Remove the index from arguments
-  LOCAL_FILE=$1
-  REMOTE_PATH=$2
+  LOCAL_FILE=\$1
+  REMOTE_PATH=\$2
 else
   NODE_INDEX=0  # Default to first node for backward compatibility
-  LOCAL_FILE=$1
-  REMOTE_PATH=$2
+  LOCAL_FILE=\$1
+  REMOTE_PATH=\$2
 fi
 
 # Validate arguments
-if [[ -z "$LOCAL_FILE" ]] || [[ -z "$REMOTE_PATH" ]]; then
-  echo "Usage: $0 [node_index] <local_file> <remote_path>"
+if [[ -z "\$LOCAL_FILE" ]] || [[ -z "\$REMOTE_PATH" ]]; then
+  echo "Usage: \$0 [node_index] <local_file> <remote_path>"
   echo "Examples:"
-  echo "  $0 0 kubeconfig c:\\\\k\\\\kubeconfig"
-  echo "  $0 1 images/file.zip 'c:\\\\'"
-  echo "  $0 kubeconfig c:\\\\k\\\\kubeconfig  # defaults to node 0"
+  echo "  \$0 0 kubeconfig c:\\\\\\\\k\\\\\\\\kubeconfig"
+  echo "  \$0 1 images/file.zip 'c:\\\\\\\\'"
+  echo "  \$0 kubeconfig c:\\\\\\\\k\\\\\\\\kubeconfig  # defaults to node 0"
   exit 1
 fi
 
 # Validate node index
-if [[ $NODE_INDEX -ge ${#WINDOWS_EIPS[@]} ]]; then
-  echo "Error: Node index $NODE_INDEX out of range. Available Windows nodes: 0-$((${#WINDOWS_EIPS[@]}-1))"
+if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
+  echo "Error: Node index \$NODE_INDEX out of range. Available Windows nodes: 0-\$((\${#WINDOWS_EIPS[@]}-1))"
   exit 1
 fi
 
-WINDOWS_EIP="${WINDOWS_EIPS[$NODE_INDEX]}"
-scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$LOCAL_FILE" winfv@${WINDOWS_EIP}:"$REMOTE_PATH"
+WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
+scp -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 "\$LOCAL_FILE" winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH"
 EOF
   chmod +x ./scp-to-windows.sh
 
   # Generate scp-from-windows.sh with node index support
-  cat << 'EOF' > ./scp-from-windows.sh
+  cat << EOF > ./scp-from-windows.sh
 #!/bin/bash
 # Usage: ./scp-from-windows.sh [node_index] <remote_path> <local_file>
 # Examples:
-#   ./scp-from-windows.sh 0 c:\\k\\calico.log ./calico.log    # Copy from first Windows node (index 0)
-#   ./scp-from-windows.sh 1 c:\\k\\report .                    # Copy from second Windows node (index 1)
-#   ./scp-from-windows.sh c:\\k\\calico.log ./calico.log      # Copy from first node (default, backward compatible)
+#   ./scp-from-windows.sh 0 c:\\\\k\\\\calico.log ./calico.log    # Copy from first Windows node (index 0)
+#   ./scp-from-windows.sh 1 c:\\\\k\\\\report .                    # Copy from second Windows node (index 1)
+#   ./scp-from-windows.sh c:\\\\k\\\\calico.log ./calico.log      # Copy from first node (default, backward compatible)
 
-# Source the arrays from vmss.sh
-. ./vmss.sh info > /dev/null 2>&1 || true
+# IP addresses embedded at generation time
+WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+SSH_KEY_FILE="${SSH_KEY_FILE}"
 
 # Check if first arg is a number (node index)
-if [[ "$1" =~ ^[0-9]+$ ]]; then
-  NODE_INDEX=$1
+if [[ "\$1" =~ ^[0-9]+\$ ]]; then
+  NODE_INDEX=\$1
   shift  # Remove the index from arguments
-  REMOTE_PATH=$1
-  LOCAL_FILE=$2
+  REMOTE_PATH=\$1
+  LOCAL_FILE=\$2
 else
   NODE_INDEX=0  # Default to first node for backward compatibility
-  REMOTE_PATH=$1
-  LOCAL_FILE=$2
+  REMOTE_PATH=\$1
+  LOCAL_FILE=\$2
 fi
 
 # Validate arguments
-if [[ -z "$REMOTE_PATH" ]] || [[ -z "$LOCAL_FILE" ]]; then
-  echo "Usage: $0 [node_index] <remote_path> <local_file>"
+if [[ -z "\$REMOTE_PATH" ]] || [[ -z "\$LOCAL_FILE" ]]; then
+  echo "Usage: \$0 [node_index] <remote_path> <local_file>"
   echo "Examples:"
-  echo "  $0 0 c:\\\\k\\\\calico.log ./calico.log"
-  echo "  $0 1 c:\\\\k\\\\report ."
-  echo "  $0 c:\\\\k\\\\calico.log ./calico.log  # defaults to node 0"
+  echo "  \$0 0 c:\\\\\\\\k\\\\\\\\calico.log ./calico.log"
+  echo "  \$0 1 c:\\\\\\\\k\\\\\\\\report ."
+  echo "  \$0 c:\\\\\\\\k\\\\\\\\calico.log ./calico.log  # defaults to node 0"
   exit 1
 fi
 
 # Validate node index
-if [[ $NODE_INDEX -ge ${#WINDOWS_EIPS[@]} ]]; then
-  echo "Error: Node index $NODE_INDEX out of range. Available Windows nodes: 0-$((${#WINDOWS_EIPS[@]}-1))"
+if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
+  echo "Error: Node index \$NODE_INDEX out of range. Available Windows nodes: 0-\$((\${#WINDOWS_EIPS[@]}-1))"
   exit 1
 fi
 
-WINDOWS_EIP="${WINDOWS_EIPS[$NODE_INDEX]}"
-scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@${WINDOWS_EIP}:"$REMOTE_PATH" "$LOCAL_FILE"
+WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
+scp -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH" "\$LOCAL_FILE"
 EOF
   chmod +x ./scp-from-windows.sh
 
