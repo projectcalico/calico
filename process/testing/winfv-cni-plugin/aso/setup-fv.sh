@@ -99,6 +99,7 @@ setup_minikube_cluster
 copy_files_from_linux
 prepare_and_copy_windows_dir
 prepare_windows_node
+exit 0
 
 if [[ "$BACKEND" == "overlay" ]]; then
   create_overlay_network
