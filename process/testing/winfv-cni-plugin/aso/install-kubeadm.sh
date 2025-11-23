@@ -23,6 +23,30 @@ set -e
 : ${GOMPLATE:=./bin/gomplate}
 : ${BACKEND:?Error: BACKEND is not set}
 
+# Rebuild arrays from the single variables if arrays are empty
+# This is a workaround for bash array export issues across sourcing
+if [[ ${#LINUX_EIPS[@]} -eq 0 && -n "${LINUX_EIP}" ]]; then
+  echo "WARNING: LINUX_EIPS array is empty, rebuilding from LINUX_EIP"
+  LINUX_EIPS=("${LINUX_EIP}")
+  # For multiple nodes, we would need to query ASO directly
+  # For now, assume single node setup
+fi
+
+if [[ ${#WINDOWS_EIPS[@]} -eq 0 && -n "${WINDOWS_EIP}" ]]; then
+  echo "WARNING: WINDOWS_EIPS array is empty, rebuilding from WINDOWS_EIP"
+  WINDOWS_EIPS=("${WINDOWS_EIP}")
+  # For multiple nodes, we would need to query ASO directly
+  # For now, assume single node setup
+fi
+
+if [[ ${#LINUX_PIPS[@]} -eq 0 && -n "${LINUX_PIP}" ]]; then
+  LINUX_PIPS=("${LINUX_PIP}")
+fi
+
+if [[ ${#WINDOWS_PIPS[@]} -eq 0 && -n "${WINDOWS_PIP}" ]]; then
+  WINDOWS_PIPS=("${WINDOWS_PIP}")
+fi
+
 # Debug: Print available node information
 echo "========================================"
 echo "Node configuration loaded:"
@@ -238,12 +262,12 @@ if (Test-Path "$KUBE_BIN_DIR\kubectl.exe") {
 }
 PSEOF
 
-    # Copy script to Windows node
+    # Copy script to Windows node using helper script
     echo "Installing kubeadm on Windows node ${node_num}..."
-    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/install-kubeadm-windows-${node_num}.ps1 winfv@${windows_eip}:c:\\k\\
+    ./scp-to-windows.sh $i /tmp/install-kubeadm-windows-${node_num}.ps1 c:\\k\\
     
-    # Execute the script on Windows
-    ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\install-kubeadm-windows-${node_num}.ps1"
+    # Execute the script on Windows using helper script
+    ./ssh-node-windows.sh $i "powershell -ExecutionPolicy Bypass -File c:\\k\\install-kubeadm-windows-${node_num}.ps1"
     
     # Create join script with the actual join command
     # Extract just the token and discovery hash from the join command
@@ -293,10 +317,10 @@ if (\$LASTEXITCODE -ne 0) {
 Write-Host "Successfully joined the cluster!"
 PSEOF
 
-    # Copy and execute join script
+    # Copy and execute join script using helper scripts
     echo "Joining Windows node ${node_num} to cluster..."
-    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/join-cluster-windows-${node_num}.ps1 winfv@${windows_eip}:c:\\k\\
-    ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster-windows-${node_num}.ps1"
+    ./scp-to-windows.sh $i /tmp/join-cluster-windows-${node_num}.ps1 c:\\k\\
+    ./ssh-node-windows.sh $i "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster-windows-${node_num}.ps1"
     
     echo "Windows worker node ${node_num} joined successfully!"
     echo
@@ -343,7 +367,7 @@ function prepare_and_copy_windows_dir () {
   ${GOMPLATE} --file ./config-kubeadm --out ./windows/config
 
   echo "Copying windows directory to all Windows nodes..."
-  # Copy local windows directory to all Windows nodes
+  # Copy local windows directory to all Windows nodes using helper script
   for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
     local node_num=$((i+1))
     local windows_eip="${WINDOWS_EIPS[$i]}"
@@ -354,7 +378,8 @@ function prepare_and_copy_windows_dir () {
     fi
     
     echo "Copying to Windows node ${node_num} (${windows_eip})..."
-    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -r ./windows winfv@${windows_eip}:c:\\k\\
+    # Use the helper script for copying
+    ./scp-to-windows.sh $i ./windows c:\\k\\
   done
   
   echo "Windows configuration files copied successfully to all nodes"
@@ -378,17 +403,16 @@ function prepare_windows_node() {
       return 1
     fi
     
-    local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${windows_eip} powershell"
-    
     echo "Preparing Windows node ${node_num} (${windows_eip})..."
-    ${windows_connect_command} c:\\k\\enable-containers-with-reboot.ps1
-  sleep 10
+    # Use helper script for Windows commands
+    ./ssh-node-windows.sh $i "c:\\k\\enable-containers-with-reboot.ps1"
+    sleep 10
     
     echo "Waiting for Windows node ${node_num} to be ready..."
-    retry_command 60 "${windows_connect_command} Get-HnsNetwork"
+    retry_command 60 "./ssh-node-windows.sh $i Get-HnsNetwork"
 
     echo "Installing containerd on Windows node ${node_num}..."
-    ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"
+    ./ssh-node-windows.sh $i "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"
     echo "Windows node ${node_num} prepared successfully"
     echo
   done
