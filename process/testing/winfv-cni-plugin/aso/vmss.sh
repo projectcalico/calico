@@ -625,22 +625,31 @@ function confirm-nodes-ssh() {
   
   log_info "Testing SSH connectivity with retry logic..."
   
-  # Helper function to test SSH connectivity with retries
+  # Helper function to test SSH connectivity with retries using generated helper scripts
   test_ssh_connectivity() {
-    local vm_name="$1"
-    local ssh_host="$2"
+    local vm_type="$1"  # "linux" or "windows"
+    local node_index="$2"
+    local node_num=$((node_index + 1))
     local timeout=900  # 15 minutes (increased from 5 minutes for Windows VM boot time)
     local retry_delay=30  # Increased from 15 seconds for less noise
     local start_time=$(date +%s)
     
-    log_info "Testing $vm_name SSH connectivity..."
-    
-    local ssh_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@${ssh_host}"
+    local vm_name="${vm_type} VM ${node_num}"
+    log_info "Testing ${vm_name} SSH connectivity..."
     
     while true; do
-      # Use timeout to prevent SSH from hanging indefinitely
-      if timeout 30 $ssh_command "echo 'SSH test successful'" >/dev/null 2>&1; then
-        log_info "$vm_name SSH connectivity test passed"
+      # Use the generated helper scripts with timeout
+      local test_result=0
+      if [[ "$vm_type" == "linux" ]]; then
+        timeout 30 ./ssh-node-linux.sh $node_index "echo 'SSH test successful'" >/dev/null 2>&1
+        test_result=$?
+      else
+        timeout 30 ./ssh-node-windows.sh $node_index "Write-Host 'SSH test successful'" >/dev/null 2>&1
+        test_result=$?
+      fi
+      
+      if [[ $test_result -eq 0 ]]; then
+        log_info "${vm_name} SSH connectivity test passed"
         return 0
       fi
       
@@ -648,25 +657,25 @@ function confirm-nodes-ssh() {
       local elapsed=$((current_time - start_time))
       
       if [[ $elapsed -ge $timeout ]]; then
-        log_fail "SSH connectivity test to $vm_name failed after 15 minutes of retries"
+        log_fail "SSH connectivity test to ${vm_name} failed after 15 minutes of retries"
         return 1
       fi
       
-      log_info "$vm_name SSH test failed, retrying in ${retry_delay} seconds... (elapsed: ${elapsed}s)"
+      log_info "${vm_name} SSH test failed, retrying in ${retry_delay} seconds... (elapsed: ${elapsed}s)"
       sleep $retry_delay
     done
   }
   
   # Test all Linux VMs
-  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
-    if ! test_ssh_connectivity "Linux VM ${i}" "${LINUX_EIPS[$((i-1))]}"; then
+  for ((i=0; i<${LINUX_NODE_COUNT}; i++)); do
+    if ! test_ssh_connectivity "linux" $i; then
       exit 1
     fi
   done
   
   # Test all Windows VMs
-  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
-    if ! test_ssh_connectivity "Windows VM ${i}" "${WINDOWS_EIPS[$((i-1))]}"; then
+  for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+    if ! test_ssh_connectivity "windows" $i; then
       exit 1
     fi
   done
