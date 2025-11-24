@@ -14,6 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
+	"github.com/projectcalico/calico/confd/pkg/resource/template"
 )
 
 // NodeName gets the node name from environment
@@ -366,44 +367,54 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID string) error {
 	// Process regular global peers
 	kvPairs, err := c.GetValues([]string{"/calico/bgp/v1/global/peer_v4"})
-	if err == nil {
-		for key, value := range kvPairs {
-			var peerData map[string]interface{}
-			if err := json.Unmarshal([]byte(value), &peerData); err != nil {
-				continue
-			}
+	if err != nil {
+		log.WithError(err).Debug("No global peers found or error retrieving them")
+		return nil
+	}
+	
+	log.Debugf("Found %d global peer entries", len(kvPairs))
+	
+	for key, value := range kvPairs {
+		log.Debugf("Processing global peer key: %s", key)
+		var peerData map[string]interface{}
+		if err := json.Unmarshal([]byte(value), &peerData); err != nil {
+			log.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
+			continue
+		}
 
-			// Skip local BGP peers in this pass
-			if isLocal, _ := peerData["local_bgp_peer"].(bool); isLocal {
-				continue
-			}
+		// Skip local BGP peers in this pass
+		if isLocal, _ := peerData["local_bgp_peer"].(bool); isLocal {
+			log.Debugf("Skipping local BGP peer at %s", key)
+			continue
+		}
 
-			peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID)
-			if peer != nil {
-				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
-				config.Peers = append(config.Peers, *peer)
-			}
+		peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID)
+		if peer != nil {
+			peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
+			config.Peers = append(config.Peers, *peer)
+			log.Debugf("Added global peer: %s", peer.Name)
+		} else {
+			log.Debugf("buildPeerFromData returned nil for key %s", key)
 		}
 	}
 
 	// Process global local BGP peers
-	if err == nil {
-		for key, value := range kvPairs {
-			var peerData map[string]interface{}
-			if err := json.Unmarshal([]byte(value), &peerData); err != nil {
-				continue
-			}
+	for key, value := range kvPairs {
+		var peerData map[string]interface{}
+		if err := json.Unmarshal([]byte(value), &peerData); err != nil {
+			continue
+		}
 
-			// Only process local BGP peers in this pass
-			if isLocal, _ := peerData["local_bgp_peer"].(bool); !isLocal {
-				continue
-			}
+		// Only process local BGP peers in this pass
+		if isLocal, _ := peerData["local_bgp_peer"].(bool); !isLocal {
+			continue
+		}
 
-			peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID)
-			if peer != nil {
-				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
-				config.Peers = append(config.Peers, *peer)
-			}
+		peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID)
+		if peer != nil {
+			peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
+			config.Peers = append(config.Peers, *peer)
+			log.Debugf("Added local workload peer: %s", peer.Name)
 		}
 	}
 
@@ -464,13 +475,17 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, config *types.BirdBGPConfig, nodeClusterID string) *types.BirdBGPPeer {
 	peerIP, ok := raw["ip"].(string)
 	if !ok || peerIP == "" {
+		log.Debugf("buildPeerFromData: no IP found in peer data, ok=%v, peerIP=%s", ok, peerIP)
 		return nil
 	}
 
 	// Skip ourselves
 	if peerIP == config.NodeIP {
+		log.Debugf("buildPeerFromData: skipping ourselves (peerIP=%s, NodeIP=%s)", peerIP, config.NodeIP)
 		return nil
 	}
+
+	log.Debugf("buildPeerFromData: building peer for IP=%s, prefix=%s", peerIP, prefix)
 
 	// Generate peer name
 	peerName := fmt.Sprintf("%s_%s", prefix, strings.ReplaceAll(peerIP, ".", "_"))
@@ -569,6 +584,29 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 	return peer
 }
 
+// truncateBGPFilterName truncates a BGP filter name to fit BIRD's symbol length limit
+// Uses the same truncation logic as template_funcs.go to ensure filter function
+// definitions and calls use identical names.
+// BIRD has a 64 character limit for symbols. The format is 'bgp_<name>_importFilterV4'
+// Prefix 'bgp_' = 4 chars, Suffix '_importFilterV4' or '_exportFilterV4' = 15 chars
+// Total overhead = 4 + 15 = 19 chars, Available for name = 64 - 19 = 45 chars
+func truncateBGPFilterName(name string) string {
+	const maxBIRDSymLen = 64
+	// Calculate max length for the filter name part
+	// Format: 'bgp_<name>_importFilterV4' or 'bgp_<name>_exportFilterV4'
+	prefixAndSuffix := "bgp__importFilterV4" // 19 chars (same for export)
+	maxNameLength := maxBIRDSymLen - len(prefixAndSuffix)
+	
+	// Use the shared truncation function from template package
+	truncated, err := template.TruncateAndHashName(name, maxNameLength)
+	if err != nil {
+		// If truncation fails, return original name (shouldn't happen in practice)
+		log.WithError(err).Warnf("Failed to truncate filter name %s, using original", name)
+		return name
+	}
+	return truncated
+}
+
 // buildImportFilter builds the import filter block
 func (c *client) buildImportFilter(raw map[string]interface{}) string {
 	var filterLines []string
@@ -583,7 +621,8 @@ func (c *client) buildImportFilter(raw map[string]interface{}) string {
 					if json.Unmarshal([]byte(filterValue), &filterSpec) == nil {
 						if spec, ok := filterSpec["spec"].(map[string]interface{}); ok {
 							if importV4, ok := spec["importV4"].([]interface{}); ok && len(importV4) > 0 {
-								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilterV4'();", filterName))
+								truncatedName := truncateBGPFilterName(filterName)
+								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilterV4'();", truncatedName))
 							}
 						}
 					}
@@ -610,7 +649,8 @@ func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS st
 					if json.Unmarshal([]byte(filterValue), &filterSpec) == nil {
 						if spec, ok := filterSpec["spec"].(map[string]interface{}); ok {
 							if exportV4, ok := spec["exportV4"].([]interface{}); ok && len(exportV4) > 0 {
-								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilterV4'();", filterName))
+								truncatedName := truncateBGPFilterName(filterName)
+								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilterV4'();", truncatedName))
 							}
 						}
 					}

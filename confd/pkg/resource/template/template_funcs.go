@@ -202,7 +202,7 @@ func BGPFilterFunctionName(filterName, direction, version string) (string, error
 	}
 	pieces := []string{"bgp_", "", "_", normalizedDirection, "FilterV", version}
 	maxBIRDSymLen := 64
-	resizedName, err := truncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
+	resizedName, err := TruncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
 	if err != nil {
 		return "", err
 	}
@@ -408,10 +408,12 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 	return lines, nil
 }
 
+// TruncateAndHashName truncates a name to maxLen characters, appending a hash suffix if truncation is needed.
 // The maximum length of a k8s resource (253 bytes) is longer than the maximum length of BIRD symbols (64 chars).
 // This function provides a way to map the k8s resource name to a BIRD symbol name that accounts
-// for the length difference in a way that minimizes the chance of collisions
-func truncateAndHashName(name string, maxLen int) (string, error) {
+// for the length difference in a way that minimizes the chance of collisions.
+// Exported so it can be reused by other packages that need consistent name truncation.
+func TruncateAndHashName(name string, maxLen int) (string, error) {
 	if len(name) <= maxLen {
 		return name, nil
 	}
