@@ -166,6 +166,9 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 	pr.policyIDToEndpointIDs.Discard(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Discard(endpointKey, policyKey)
 
+	// Remove any pending policy update we may have queued for this policy.
+	pr.pendingPolicyUpdates.Discard(policyKey)
+
 	// This policy is not active anymore, we no longer need to track it for sorting.
 	if !pr.policyIDToEndpointIDs.ContainsKey(policyKey) {
 		pr.policySorter.UpdatePolicy(policyKey, nil)
