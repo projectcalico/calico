@@ -441,8 +441,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Name:       "cali_progs_eg",
 			Version:    2,
 		}
-		commonMaps.ProgramsMap = append(commonMaps.ProgramsMap, mock.NewMockMap(progsParamsIng))
-		commonMaps.ProgramsMap = append(commonMaps.ProgramsMap, mock.NewMockMap(progsParamsEg))
+		commonMaps.ProgramsMaps = append(commonMaps.ProgramsMaps, mock.NewMockMap(progsParamsIng))
+		commonMaps.ProgramsMaps = append(commonMaps.ProgramsMaps, mock.NewMockMap(progsParamsEg))
 		commonMaps.XDPProgramsMap = mock.NewMockMap(progsParamsIng)
 		jumpMap = mock.NewMockMap(progsParamsIng)
 		commonMaps.JumpMap = jumpMap
