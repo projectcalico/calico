@@ -122,14 +122,14 @@ func newIPIPManagerWithShims(
 
 func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataUpdate:
+	case *proto.HostMetadataV4V6Update:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
 		}
 		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.maybeUpdateRoutes()
-	case *proto.HostMetadataRemove:
+	case *proto.HostMetadataV4V6Remove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr("")
