@@ -436,9 +436,6 @@ function prepare_windows_node() {
       echo "ERROR: Windows node ${node_num} did not come back online after reboot"
       return 1
     fi
-    
-    echo "Waiting for Windows node ${node_num} to be ready..."
-    retry_command 60 "./ssh-node-windows.sh $i Get-HnsNetwork"
 
     echo "Installing containerd on Windows node ${node_num}..."
     ./ssh-node-windows.sh $i "& 'c:\\k\\windows\\install-containerd.ps1' -ContainerDVersion ${CONTAINERD_VERSION}"
