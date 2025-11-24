@@ -52,7 +52,7 @@ run_batch() {
   echo "Starting batch '$batch' on VM '$vm_name'" | tee "$log_file"
   echo "Command: $cmd_quot" | tee -a "$log_file"
   
-  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c \"$cmd_quot; echo \$? > /tmp/test-rc\"" 2>&1 >> "$log_file" < /dev/null
+  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c \"$cmd_quot; echo \$? > /tmp/test-rc\" &" 2>&1 >> "$log_file" < /dev/null
   echo "Started batch '$batch' on VM '$vm_name', monitoring log..." | tee -a "$log_file"
   while true; do
     VM_NAME="$vm_name" ${remote_exec} 'tail -F -n 0 "nohup.out" 2>/dev/null' < /dev/null |& tee -a "$log_file" || true
