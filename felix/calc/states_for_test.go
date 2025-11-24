@@ -296,7 +296,7 @@ var commLocalEp1WithOneTierPolicyAlpha = commercialPolicyOrderState(
 	},
 )
 
-func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]types.PolicyID) State {
+func commercialPolicyOrderState(policyOrders [3]float64, expectedIDs [3]types.PolicyID) State {
 	policies := [3]Policy{}
 	for i := range policies {
 		policies[i] = Policy{
@@ -336,8 +336,8 @@ func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]types.
 		[]mock.TierInfo{
 			{
 				Name:            "tier-1",
-				IngressPolicies: expectedOrder[:],
-				EgressPolicies:  expectedOrder[:],
+				IngressPolicies: expectedIDs[:],
+				EgressPolicies:  expectedIDs[:],
 			},
 		},
 	).withRoutes(
@@ -346,7 +346,7 @@ func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]types.
 		routelocalWlTenDotTwo,
 		routelocalWlV6ColonOne,
 		routelocalWlV6ColonTwo,
-	).withName(fmt.Sprintf("ep1 local, 1 tier, policies %v", expectedOrder[:]))
+	).withName(fmt.Sprintf("ep1 local, 1 tier, policies %v", expectedIDs[:]))
 	return state
 }
 
