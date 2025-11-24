@@ -98,8 +98,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	Expect(err).NotTo(HaveOccurred())
 
 	commonMaps := bpfmaps.CommonMaps
-	programsIng := commonMaps.ProgramsMap[hook.Ingress].(*hook.ProgramsMap)
-	programsEg := commonMaps.ProgramsMap[hook.Egress].(*hook.ProgramsMap)
+	programsIng := commonMaps.ProgramsMaps[hook.Ingress].(*hook.ProgramsMap)
+	programsEg := commonMaps.ProgramsMaps[hook.Egress].(*hook.ProgramsMap)
 	loglevel := "off"
 
 	bpfEpMgr, err := newBPFTestEpMgr(
@@ -627,9 +627,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		// After restat we get new maps which are empty
 		Expect(programsIng.Count()).To(Equal(0))
-		pm = jumpMapDump(commonMaps.ProgramsMap[hook.Ingress])
+		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
 		Expect(pm).To(HaveLen(0))
-		pm = jumpMapDump(commonMaps.ProgramsMap[hook.Egress])
+		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Egress])
 		Expect(pm).To(HaveLen(0))
 		pm = jumpMapDump(commonMaps.JumpMap)
 		Expect(pm).To(HaveLen(0))
@@ -651,7 +651,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(programsIng.Count()).To(Equal(15))
-		pm = jumpMapDump(commonMaps.ProgramsMap[hook.Ingress])
+		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
 		Expect(pm).To(HaveLen(15))
 
 		pm = jumpMapDump(commonMaps.JumpMap)
@@ -750,8 +750,8 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	commonMaps := bpfmaps.CommonMaps
-	programsIng := commonMaps.ProgramsMap[hook.Ingress].(*hook.ProgramsMap)
-	programsEg := commonMaps.ProgramsMap[hook.Egress].(*hook.ProgramsMap)
+	programsIng := commonMaps.ProgramsMaps[hook.Ingress].(*hook.ProgramsMap)
+	programsEg := commonMaps.ProgramsMaps[hook.Egress].(*hook.ProgramsMap)
 	loglevel := "off"
 
 	bpfEpMgr, err := newBPFTestEpMgr(
@@ -992,7 +992,7 @@ func TestCTLBAttachLegacy(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		commonMaps := bpfmaps.CommonMaps
-		err = nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMap)
+		err = nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMaps)
 		Expect(err).NotTo(HaveOccurred())
 
 		checkPinPath := func(pinPath string, mustExist bool) {
@@ -1066,7 +1066,7 @@ func TestCTLBAttach(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		commonMaps := bpfmaps.CommonMaps
-		err = nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMap)
+		err = nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMaps)
 		Expect(err).NotTo(HaveOccurred())
 
 		checkPinPath := func(pinPath string, mustExist bool) {

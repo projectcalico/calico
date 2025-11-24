@@ -79,15 +79,15 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #if CALI_F_HEP
 #if CALI_F_INGRESS
-#define cali_jump_map map_symbol(cali_progs_ing, 2)
+#define cali_jump_map map_symbol(cali_progs_fh, 2)
 #else
-#define cali_jump_map map_symbol(cali_progs_eg, 2)
+#define cali_jump_map map_symbol(cali_progs_th, 2)
 #endif
 #else
 #if CALI_F_INGRESS
-#define cali_jump_map map_symbol(cali_progs_eg, 2)
+#define cali_jump_map map_symbol(cali_progs_th, 2)
 #else
-#define cali_jump_map map_symbol(cali_progs_ing, 2)
+#define cali_jump_map map_symbol(cali_progs_fh, 2)
 #endif
 #endif
 CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
