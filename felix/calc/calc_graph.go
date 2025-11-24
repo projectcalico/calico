@@ -71,10 +71,6 @@ type encapCallbacks interface {
 }
 
 type passthruCallbacks interface {
-	OnHostIPUpdate(hostname string, ip *net.IP)
-	OnHostIPRemove(hostname string)
-	OnHostIPv6Update(hostname string, ip *net.IP)
-	OnHostIPv6Remove(hostname string)
 	OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string)
 	OnHostMetadataRemove(hostname string)
 	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
