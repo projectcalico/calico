@@ -405,40 +405,18 @@ function prepare_windows_node() {
     fi
     
     echo "Preparing Windows node ${node_num} (${windows_eip})..."
-    # Use helper script for Windows commands
-    # The scripts are copied directly to c:\k\ directory (not c:\k\windows\)
-    # Use & to invoke the script and proper path escaping
-    ./ssh-node-windows.sh $i "& 'c:\\k\\enable-containers-with-reboot.ps1'" &
-    
-    # Wait a bit for the script to start
-    sleep 5
-    
-    # Wait for the node to reboot and come back online
-    echo "Waiting for Windows node ${node_num} to reboot..."
-    sleep 120  # Give it 2 minutes to reboot
-    
-    echo "Waiting for Windows node ${node_num} to be ready after reboot..."
-    local max_attempts=60
-    local attempt=0
-    while [[ $attempt -lt $max_attempts ]]; do
-      if ./ssh-node-windows.sh $i "Write-Host 'Node is ready'" >/dev/null 2>&1; then
-        echo "Windows node ${node_num} is back online"
-        break
-      fi
-      attempt=$((attempt + 1))
-      if [[ $((attempt % 10)) -eq 0 ]]; then
-        echo "Still waiting for node to come back... (attempt ${attempt}/${max_attempts})"
-      fi
-  sleep 10
-    done
-    
-    if [[ $attempt -ge $max_attempts ]]; then
-      echo "ERROR: Windows node ${node_num} did not come back online after reboot"
-      return 1
-    fi
+    # Get the connect command for this node
+    local connect_var="WINDOWS_NODE_${i}_CONNECT_PS"
+    local windows_connect_command="${!connect_var}"
 
-    echo "Installing containerd on Windows node ${node_num}..."
-    ./ssh-node-windows.sh $i "& 'c:\\k\\install-containerd.ps1' -ContainerDVersion '${CONTAINERD_VERSION}' -NoRestart"
+    ${windows_connect_command} c:\\k\\enable-containers-with-reboot.ps1
+
+    sleep 10
+    retry_command 60 "${windows_connect_command} powershell"
+
+    ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"
+    echo
+  
     echo "Windows node ${node_num} prepared successfully"
     echo
   done

@@ -418,6 +418,23 @@ function show_connections() {
   MASTER_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${LINUX_EIP}"
   WINDOWS_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIP} powershell"
 
+  # Create individual connect commands for each Linux node
+  for ((i=0; i<${LINUX_NODE_COUNT}; i++)); do
+    local var_name="LINUX_NODE_${i}_CONNECT"
+    local cmd="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${LINUX_EIPS[$i]}"
+    eval "export ${var_name}='${cmd}'"
+  done
+  
+  # Create individual connect commands for each Windows node (both regular and powershell)
+  for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+    local var_name="WINDOWS_NODE_${i}_CONNECT"
+    local var_name_ps="WINDOWS_NODE_${i}_CONNECT_PS"
+    local cmd="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIPS[$i]}"
+    local cmd_ps="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIPS[$i]} powershell"
+    eval "export ${var_name}='${cmd}'"
+    eval "export ${var_name_ps}='${cmd_ps}'"
+  done
+
   WIN_PASSWORD=$(grep "password:" ./password.txt | awk -F':' '{print $2}')
 
   cat << EOF > connect.txt
