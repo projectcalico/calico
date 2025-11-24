@@ -41,17 +41,32 @@ func (c *calicoctlExecClient) Create(ctx context.Context, obj client.Object, opt
 		return c.base.Create(ctx, obj, opts...)
 	}
 
+	// calicoctl requires typemeta to be set for create operations, so set it here.
+	kind, err := c.kindFromObject(obj)
+	if err != nil {
+		return err
+	}
+	obj.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "projectcalico.org",
+		Version: "v3",
+		Kind:    kind,
+	})
+
 	// Create the stdin input for the calicoctl command.
 	serializer := json.NewSerializer(json.DefaultMetaFactory, c.scheme, c.scheme, false)
 
 	w := &strings.Builder{}
-	err := serializer.Encode(obj, w)
+	err = serializer.Encode(obj, w)
 	if err != nil {
 		return err
 	}
 
 	// Create a calicoctl command to create the object.
 	cmd := []string{"exec", "-i", c.name, "--", "calicoctl", "create", "-f", "-"}
+
+	logrus.WithFields(logrus.Fields{
+		"data": w.String(),
+	}).Info("Executing calicoctl create command")
 
 	// Execute the command in the specified pod.
 	_, err = kubectl.RunKubectlInput(c.namespace, w.String(), cmd...)
