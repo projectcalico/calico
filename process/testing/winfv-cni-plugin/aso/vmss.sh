@@ -149,10 +149,45 @@ EOF
   log_info "Creating secrets..."
   ${KUBECTL} apply -f infra/manifests/password.yaml
   
-  # Step 4: Virtual Machines (dependent on network resources)
-  log_info "Creating Virtual Machines..."
+  # Step 4: Network resources (NICs and Public IPs) - must be ready before VMs
+  log_info "Creating NetworkInterfaces and PublicIPAddresses..."
   ${KUBECTL} apply -f infra/manifests/vmss-linux.yaml
   ${KUBECTL} apply -f infra/manifests/vmss-windows.yaml
+  
+  # Wait for all NetworkInterfaces to be ready
+  log_info "Waiting for NetworkInterfaces to be ready..."
+  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+    if ! wait_for_aso_resource "networkinterface" "nic-linux-${i}" "winfv" "300s"; then
+      log_error "NetworkInterface nic-linux-${i} failed to become ready"
+      return 1
+    fi
+  done
+  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+    if ! wait_for_aso_resource "networkinterface" "nic-windows-${i}" "winfv" "300s"; then
+      log_error "NetworkInterface nic-windows-${i} failed to become ready"
+      return 1
+    fi
+  done
+  
+  # Wait for all PublicIPAddresses to be ready
+  log_info "Waiting for PublicIPAddresses to be ready..."
+  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+    if ! wait_for_aso_resource "publicipaddress" "pip-linux-${i}" "winfv" "300s"; then
+      log_error "PublicIPAddress pip-linux-${i} failed to become ready"
+      return 1
+    fi
+  done
+  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+    if ! wait_for_aso_resource "publicipaddress" "pip-windows-${i}" "winfv" "300s"; then
+      log_error "PublicIPAddress pip-windows-${i} failed to become ready"
+      return 1
+    fi
+  done
+  
+  log_info "All network resources are ready, proceeding with VM creation..."
+  
+  # Step 5: Virtual Machines (dependent on network resources being ready)
+  log_info "VMs will be created automatically since network dependencies are satisfied"
   
   # Build list of all VMs to wait for based on node counts
   local vm_resources=()
