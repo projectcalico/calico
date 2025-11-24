@@ -561,7 +561,6 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		tee /dev/stderr | \
 		gotestsum --format dots --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
 	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
