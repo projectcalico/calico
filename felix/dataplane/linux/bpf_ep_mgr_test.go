@@ -607,7 +607,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	genHostMetadataUpdate := func(ip string) func() {
 		return func() {
-			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{
+			bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 				Hostname: "uthost",
 				Ipv4Addr: ip,
 			})
@@ -618,7 +618,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	genHostMetadataV6Update := func(ip string) func() {
 		return func() {
-			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{
+			bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 				Hostname: "uthost",
 				Ipv6Addr: ip,
 			})

@@ -529,6 +529,8 @@ message HostMetadataV4V6Update {
 
 message HostMetadataV4V6Remove {
   string hostname = 1;
+  // ipv4_addr is provided for informational purposes and backwards compatibility
+  // but the hostname field is the primary identifier used for removal.
   string ipv4_addr = 2;
 }
 

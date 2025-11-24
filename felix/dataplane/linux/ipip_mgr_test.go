@@ -73,7 +73,7 @@ var _ = Describe("IPIPManager", func() {
 	})
 
 	It("should configure tunnel properly", func() {
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
@@ -133,11 +133,11 @@ var _ = Describe("IPIPManager", func() {
 	})
 
 	It("successfully adds a route to the noEncap interface", func() {
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node2",
 			Ipv4Addr: "172.0.2.2",
 		})
@@ -215,7 +215,7 @@ var _ = Describe("IPIPManager", func() {
 		go ipipMgr.keepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
 
 		By("Sending another node's route.")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node2",
 			Ipv4Addr: "10.0.0.2",
 		})
@@ -235,7 +235,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
 
 		By("Sending another local node update.")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
@@ -260,11 +260,11 @@ var _ = Describe("IPIPManager", func() {
 
 	It("should program routes for remote endpoints with borrowed IP addresses", func() {
 		By("Sending host updates")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node2",
 			Ipv4Addr: "172.0.2.2",
 		})

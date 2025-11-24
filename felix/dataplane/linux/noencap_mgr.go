@@ -94,9 +94,9 @@ func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 	case *proto.HostMetadataV4V6Update:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
-			if m.ipVersion == 4 {
+			if m.ipVersion == 4 && msg.Ipv4Addr != "" {
 				m.routesNeedUpdate(msg.Ipv4Addr)
-			} else if m.ipVersion == 6 {
+			} else if m.ipVersion == 6 && msg.Ipv6Addr != "" {
 				m.routesNeedUpdate(msg.Ipv6Addr)
 			}
 		}

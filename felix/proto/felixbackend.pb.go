@@ -4269,9 +4269,11 @@ func (x *HostMetadataV4V6Update) GetLabels() map[string]string {
 }
 
 type HostMetadataV4V6Remove struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Ipv4Addr      string                 `protobuf:"bytes,2,opt,name=ipv4_addr,json=ipv4Addr,proto3" json:"ipv4_addr,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Hostname string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	// ipv4_addr is provided for informational purposes and backwards compatibility
+	// but the hostname field is the primary identifier used for removal.
+	Ipv4Addr      string `protobuf:"bytes,2,opt,name=ipv4_addr,json=ipv4Addr,proto3" json:"ipv4_addr,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
