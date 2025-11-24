@@ -60,6 +60,7 @@ run_batch() {
     sleep 1
   done &
   local tail_pid=$!
+  num_fails=0
   while true; do
     local rc
     rc=$(VM_NAME="$vm_name" ${remote_exec} 'while [ ! -f /tmp/test-rc ]; do sleep 1; done; cat /tmp/test-rc' < /dev/null 2>&1 || echo "ssh error $?")
@@ -71,6 +72,14 @@ run_batch() {
       return "$rc"
     else
       echo "Failed to read batch RC got '$rc', continuing to monitor log..." | tee -a "$log_file"
+      sleep 10
+      num_fails=$((num_fails + 1))
+      if [ "$num_fails" -ge 10 ]; then
+        echo "Too many failures reading batch RC, aborting batch '$batch' on VM '$vm_name'" | tee -a "$log_file"
+        kill -9 "$tail_pid" || true
+        wait "$tail_pid" || true
+        return 1
+      fi
     fi
   done
 }

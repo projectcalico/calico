@@ -25,7 +25,7 @@ source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
 vm_name_prefix=$1
 artifacts_dir="$repo_dir/artifacts"
 zone=${ZONE:-europe-west3-c}
-: "${IMAGE:=ubuntu-2204-jammy-v20250312}"
+: "${IMAGE_FAMILY:=ubuntu-minimal-2204-lts}"
 : "${MAX_RUN_DURATION:=4h}"
 disk_size=${VM_DISK_SIZE:-20GB}
 
@@ -45,7 +45,7 @@ gcloud --quiet compute instances bulk create \
        --predefined-names="$names" \
        --zone=${zone} \
        --machine-type=n4-standard-4 \
-       --image=${IMAGE} \
+       --image-family=${IMAGE_FAMILY} \
        --image-project=ubuntu-os-cloud \
        --boot-disk-size=$disk_size \
        --boot-disk-type=hyperdisk-balanced \
