@@ -722,7 +722,8 @@ func (m *bpfEndpointManager) repinJumpMaps() error {
 	mps := []maps.Map{
 		m.commonMaps.ProgramsMap[0],
 		m.commonMaps.ProgramsMap[1],
-		m.commonMaps.JumpMap,
+		m.commonMaps.JumpMap[0],
+		m.commonMaps.JumpMap[1],
 		m.commonMaps.XDPProgramsMap,
 		m.commonMaps.XDPJumpMap,
 	}
