@@ -173,9 +173,9 @@ type Rule struct {
 }
 
 type Policy struct {
-	Name      string
-	Namespace string
 	Kind      string
+	Namespace string
+	Name      string
 	Rules     []Rule
 }
 
