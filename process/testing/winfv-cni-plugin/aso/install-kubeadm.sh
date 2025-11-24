@@ -182,6 +182,75 @@ EOF
   echo "Kubernetes cluster setup completed successfully!"
 }
 
+function join_linux_worker_nodes() {
+  echo "Checking for additional Linux worker nodes to join..."
+  
+  if [[ ${LINUX_NODE_COUNT} -le 1 ]]; then
+    echo "Only one Linux node (control-plane), no additional workers to join"
+    return 0
+  fi
+  
+  echo "Joining ${LINUX_NODE_COUNT} - 1 additional Linux worker node(s) to the cluster..."
+  
+  # Loop through Linux nodes starting from index 1 (node 2)
+  for ((i=1; i<${LINUX_NODE_COUNT}; i++)); do
+    local node_num=$((i+1))
+    local linux_eip="${LINUX_EIPS[$i]}"
+    
+    if [[ -z "$linux_eip" ]]; then
+      echo "ERROR: Linux node ${node_num} EIP is empty!"
+      return 1
+    fi
+    
+    # Get the connect command for this node
+    local connect_var="LINUX_NODE_${i}_CONNECT"
+    local linux_connect_command="${!connect_var}"
+    
+    echo "====================================="
+    echo "Joining Linux Node ${node_num} (${linux_eip}) as worker"
+    echo "====================================="
+    
+    # Ensure prerequisites are installed on the worker node
+    echo "Installing kubeadm, kubelet, and kubectl on Linux worker node ${node_num}..."
+    ${linux_connect_command} bash -s <<'WORKER_EOF'
+set -e
+
+# Install prerequisites
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+
+# Add Kubernetes apt repository
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+# Install kubeadm, kubelet, and kubectl
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+# Enable kubelet
+sudo systemctl enable --now kubelet
+
+echo "Kubernetes components installed successfully"
+WORKER_EOF
+    
+    # Join the node to the cluster
+    echo "Joining Linux worker node ${node_num} to the cluster..."
+    echo "Using join command: ${KUBEADM_JOIN_COMMAND}"
+    
+    if ! ${linux_connect_command} "sudo ${KUBEADM_JOIN_COMMAND}"; then
+      echo "ERROR: Failed to join Linux node ${node_num} to the cluster"
+      return 1
+    fi
+    
+    echo "Linux worker node ${node_num} joined successfully!"
+    echo
+  done
+  
+  echo "All Linux worker nodes joined successfully!"
+  ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
+}
+
 function join_windows_worker_node() {
   echo "Joining Windows worker node(s) to the cluster..."
   
@@ -414,7 +483,12 @@ function prepare_windows_node() {
   sleep 10
     retry_command 60 "${windows_connect_command} Write-Host 'Node is ready'"
 
-    ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"
+    echo "Installing containerd on Windows node ${node_num}..."
+    if ! ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"; then
+      echo "ERROR: Failed to install containerd on Windows node ${node_num}"
+      echo "You can SSH to the node to debug: ${windows_connect_command}"
+      return 1
+    fi
     echo
 
     echo "Windows node ${node_num} prepared successfully"
@@ -425,6 +499,7 @@ function prepare_windows_node() {
 }
 
 setup_kubeadm_cluster
+join_linux_worker_nodes
 copy_files_from_linux
 prepare_and_copy_windows_dir
 prepare_windows_node
