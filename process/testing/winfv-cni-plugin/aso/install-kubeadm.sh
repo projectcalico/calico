@@ -406,9 +406,9 @@ function prepare_windows_node() {
     
     echo "Preparing Windows node ${node_num} (${windows_eip})..."
     # Use helper script for Windows commands
-    # The scripts are in c:\k\windows\ directory after being copied
+    # The scripts are copied directly to c:\k\ directory (not c:\k\windows\)
     # Use & to invoke the script and proper path escaping
-    ./ssh-node-windows.sh $i "& 'c:\\k\\windows\\enable-containers-with-reboot.ps1'" &
+    ./ssh-node-windows.sh $i "& 'c:\\k\\enable-containers-with-reboot.ps1'" &
     
     # Wait a bit for the script to start
     sleep 5
@@ -429,7 +429,7 @@ function prepare_windows_node() {
       if [[ $((attempt % 10)) -eq 0 ]]; then
         echo "Still waiting for node to come back... (attempt ${attempt}/${max_attempts})"
       fi
-      sleep 10
+  sleep 10
     done
     
     if [[ $attempt -ge $max_attempts ]]; then
@@ -438,7 +438,7 @@ function prepare_windows_node() {
     fi
 
     echo "Installing containerd on Windows node ${node_num}..."
-    ./ssh-node-windows.sh $i "& 'c:\\k\\windows\\install-containerd.ps1' -ContainerDVersion '${CONTAINERD_VERSION}' -NoRestart"
+    ./ssh-node-windows.sh $i "& 'c:\\k\\install-containerd.ps1' -ContainerDVersion '${CONTAINERD_VERSION}' -NoRestart"
     echo "Windows node ${node_num} prepared successfully"
     echo
   done
