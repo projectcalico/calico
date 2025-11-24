@@ -367,7 +367,8 @@ function prepare_and_copy_windows_dir () {
   ${GOMPLATE} --file ./config-kubeadm --out ./windows/config
 
   echo "Copying windows directory to all Windows nodes..."
-  # Copy local windows directory to all Windows nodes using helper script
+  # Copy local windows directory to all Windows nodes
+  # Note: Using scp directly with -r flag for recursive directory copy
   for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
     local node_num=$((i+1))
     local windows_eip="${WINDOWS_EIPS[$i]}"
@@ -378,8 +379,8 @@ function prepare_and_copy_windows_dir () {
     fi
     
     echo "Copying to Windows node ${node_num} (${windows_eip})..."
-    # Use the helper script for copying
-    ./scp-to-windows.sh $i ./windows c:\\k\\
+    # Use scp directly with -r for directory
+    scp -r -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows winfv@${windows_eip}:c:\\k\\
   done
   
   echo "Windows configuration files copied successfully to all nodes"
