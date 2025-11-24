@@ -955,10 +955,10 @@ func (m *endpointManager) groupTieredPolicy(tieredPolicies []*proto.TierInfo, fi
 	for _, tierInfo := range tieredPolicies {
 		var inPols, outPols []*rules.PolicyGroup
 		if filter&includeInbound != 0 {
-			inPols = m.groupPolicies(tierInfo.Name, tierInfo.IngressPolicies, rules.PolicyDirectionInbound)
+			inPols = m.groupPolicies(tierInfo.IngressPolicies, rules.PolicyDirectionInbound)
 		}
 		if filter&includeOutbound != 0 {
-			outPols = m.groupPolicies(tierInfo.Name, tierInfo.EgressPolicies, rules.PolicyDirectionOutbound)
+			outPols = m.groupPolicies(tierInfo.EgressPolicies, rules.PolicyDirectionOutbound)
 		}
 		tierPolGroups = append(tierPolGroups, rules.TierPolicyGroups{
 			Name:            tierInfo.Name,
@@ -1578,7 +1578,7 @@ func (m *endpointManager) GetRawHostEndpoints() map[types.HostEndpointID]*proto.
 	return m.rawHostEndpoints
 }
 
-func (m *endpointManager) groupPolicies(tierName string, policies []*proto.PolicyID, direction rules.PolicyDirection) []*rules.PolicyGroup {
+func (m *endpointManager) groupPolicies(policies []*proto.PolicyID, direction rules.PolicyDirection) []*rules.PolicyGroup {
 	if len(policies) == 0 {
 		return nil
 	}

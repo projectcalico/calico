@@ -236,7 +236,7 @@ message ActivePolicyRemove {
 }
 
 message PolicyID {
-  // The "type" field has been deprecated and removed in favor of "types".
+  // The "tier" field has been deprecated and removed.
   reserved 1;
   reserved "tier";
 

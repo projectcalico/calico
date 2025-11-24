@@ -199,10 +199,9 @@ func (pc *PolicyLookupsCache) removePolicyRulesNFLOGPrefixes(key model.PolicyKey
 	}
 	delete(pc.keyToTier, key)
 
-	// If this is the last entry for the tier, remove the default action entries for the tier.
-	// Increment the reference count so that we don't keep adding tiers.
 	count := pc.tierRefs[tier]
 	if count == 1 {
+		// This is the last entry for the tier, remove the default action entries for the tier.
 		delete(pc.tierRefs, tier)
 		pc.deleteNFLogPrefixEntry(
 			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirIngress, tier),
@@ -211,6 +210,7 @@ func (pc *PolicyLookupsCache) removePolicyRulesNFLOGPrefixes(key model.PolicyKey
 			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirEgress, tier),
 		)
 	} else {
+		// Decrement the reference count.
 		pc.tierRefs[tier] = count - 1
 	}
 
@@ -388,15 +388,17 @@ const (
 )
 
 type PolicyID struct {
+	// The kind of policy.
+	Kind string
+
+	// The namespace. This is only non-blank for a NetworkPolicy type. For Tiers, GlobalNetworkPolicies and the
+	// no match rules this will be blank.
+	Namespace string
+
 	// The policy or profile name. This has the tier removed from the name. If this is blank, this represents
 	// a "no match" rule. For k8s policies, this will be the full v3 name (knp.default.<k8s name>) - this avoids
 	// name conflicts with Calico policies.
 	Name string
-	// The namespace. This is only non-blank for a NetworkPolicy type. For Tiers, GlobalNetworkPolicies and the
-	// no match rules this will be blank.
-	Namespace string
-	// The kind of policy.
-	Kind string
 }
 
 // RuleID contains the complete identifiers for a particular rule. This is a breakdown of the

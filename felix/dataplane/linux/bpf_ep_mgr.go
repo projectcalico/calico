@@ -4477,7 +4477,6 @@ func (m *bpfEndpointManager) updatePolicyCache(id types.PolicyID, inboundRules, 
 	m.updateCache(id, name, "Policy", inboundRules, outboundRules)
 }
 
-// TODO: Do we need to consider the owner here for identical names between Profile and Policy?
 func (m *bpfEndpointManager) updateCache(id types.IDMaker, name, owner string, inboundRules, outboundRules []*proto.Rule) {
 	ruleIds := set.New[polprog.RuleMatchID]()
 	if val, ok := m.polNameToMatchIDs[id.ID()]; ok {

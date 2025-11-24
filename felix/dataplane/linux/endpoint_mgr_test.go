@@ -2511,7 +2511,6 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should 'group' a single policy", func() {
 				Expect(epMgr.groupPolicies(
-					"default",
 					[]*proto.PolicyID{{Name: "polA1", Kind: v3.KindGlobalNetworkPolicy}},
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
@@ -2524,7 +2523,6 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 			It("should 'group' a pair of policies same selector", func() {
 				Expect(epMgr.groupPolicies(
-					"default",
 					[]*proto.PolicyID{{Name: "polA1", Kind: v3.KindGlobalNetworkPolicy}, {Name: "polA2", Kind: v3.KindGlobalNetworkPolicy}},
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
@@ -2537,7 +2535,6 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 			It("should 'group' a pair of policies different selector", func() {
 				Expect(epMgr.groupPolicies(
-					"default",
 					[]*proto.PolicyID{{Name: "polA1", Kind: v3.KindGlobalNetworkPolicy}, {Name: "polB1", Kind: v3.KindGlobalNetworkPolicy}},
 					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
@@ -2555,7 +2552,6 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 			It("should 'group' two pairs", func() {
 				Expect(epMgr.groupPolicies(
-					"default",
 					[]*proto.PolicyID{
 						{Name: "polA1", Kind: v3.KindGlobalNetworkPolicy},
 						{Name: "polA2", Kind: v3.KindGlobalNetworkPolicy},
@@ -2578,7 +2574,6 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 			It("should 'group' mixed", func() {
 				Expect(epMgr.groupPolicies(
-					"default",
 					[]*proto.PolicyID{
 						{Name: "polA1", Kind: v3.KindGlobalNetworkPolicy},
 						{Name: "polB1", Kind: v3.KindGlobalNetworkPolicy},
@@ -2607,7 +2602,6 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should 'group' non-default tier", func() {
 				Expect(epMgr.groupPolicies(
-					"tier2",
 					[]*proto.PolicyID{
 						{Name: "tier2.polA1", Kind: v3.KindGlobalNetworkPolicy},
 						{Name: "tier2.polB1", Kind: v3.KindGlobalNetworkPolicy},

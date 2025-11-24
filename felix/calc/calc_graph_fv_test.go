@@ -146,6 +146,12 @@ var baseTests = []StateList{
 		localEpsWithProfile,
 	},
 
+	// Test movement of policy1 from the default tier to a non-default tier and back.
+	{
+		localEp1WithPolicy,
+		localEp1WithPolicyAndTier,
+	},
+
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
 

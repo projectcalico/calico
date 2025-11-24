@@ -42,7 +42,7 @@ type FelixSender interface {
 }
 
 type PolicyMatchListener interface {
-	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey, tier string)
+	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 }
 
@@ -354,14 +354,12 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 	policyWasActive := arc.policyIDToEndpointKeys.ContainsKey(polKey)
 	arc.policyIDToEndpointKeys.Put(selID, labelId)
 
-	// Get the policy to send to the listeners below.
-	policy, known := arc.allPolicies.Get(polKey)
-
 	if !policyWasActive {
 		// Policy wasn't active before, tell the listener.  The policy
 		// must be in allPolicies because we can only match on a policy
 		// that we've seen.
 		log.Debugf("Policy %v now active", polKey)
+		policy, known := arc.allPolicies.Get(polKey)
 		if !known {
 			log.WithField("policy", polKey).Panic("Policy active but missing from allPolicies.")
 		}
@@ -370,7 +368,7 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 
 	if labelId, ok := labelId.(model.EndpointKey); ok {
 		for _, l := range arc.PolicyMatchListeners {
-			l.OnPolicyMatch(polKey, labelId, policy.Tier)
+			l.OnPolicyMatch(polKey, labelId)
 		}
 	}
 }

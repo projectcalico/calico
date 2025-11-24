@@ -252,6 +252,10 @@ func (poc *PolicySorter) tierForPolicy(key model.PolicyKey, meta *policyMetadata
 }
 
 func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMetadata) (dirty bool) {
+	// Find the old tier info if it exists. If it does, and doesn't match the new tier info, we'll need to
+	// remove it from the old tier.
+	_, oldTierInfo := poc.tierForPolicy(key, nil)
+
 	tierName, tierInfo := poc.tierForPolicy(key, newPolicy)
 
 	if tierName == "" {
@@ -262,6 +266,32 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMeta
 		}).Warn("Failed to find tier for policy during policy sorter update.")
 	}
 
+	// If the tier has changed, remove from old tier first.
+	if oldTierInfo != nil && oldTierInfo != tierInfo {
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			logrus.WithFields(logrus.Fields{
+				"policyKey":   key,
+				"oldTierName": oldTierInfo.Name,
+				"newTierName": tierName,
+			}).Debug("Policy tier changed, removing from old tier")
+		}
+
+		oldPolicy := oldTierInfo.Policies[key]
+		oldTiKey := tierInfoKey{
+			Name:  oldTierInfo.Name,
+			Order: oldTierInfo.Order,
+			Valid: oldTierInfo.Valid,
+		}
+		oldTierInfo.SortedPolicies.Delete(PolKV{Key: key, Value: &oldPolicy})
+		delete(oldTierInfo.Policies, key)
+		if len(oldTierInfo.Policies) == 0 && !oldTierInfo.Valid {
+			poc.sortedTiers.Delete(oldTiKey)
+			delete(poc.tiers, oldTierInfo.Name)
+		}
+		dirty = true
+	}
+
+	// Now add to new tier.
 	var tiKey tierInfoKey
 	var oldPolicy *policyMetadata
 	if tierInfo != nil {
@@ -355,16 +385,10 @@ func PolKVLess(i, j PolKV) bool {
 	// We map the default order to +Inf, which compares equal to itself so,
 	// this "just works".
 	if i.Value.Order == j.Value.Order {
-		// Order is equal, use name to break ties.
-		if i.Key.Name == j.Key.Name {
-			// Name is also equal, use Kind to break ties.
-			if i.Key.Kind == j.Key.Kind {
-				// Kind is also equal, use Namespace to break ties.
-				return i.Key.Namespace < j.Key.Namespace
-			}
-			return i.Key.Kind < j.Key.Kind
-		}
-		return i.Key.Name < j.Key.Name
+		// Order is equal, use kind/namespace/name to break ties.
+		iStr := fmt.Sprintf("%s/%s/%s", i.Key.Kind, i.Key.Namespace, i.Key.Name)
+		jStr := fmt.Sprintf("%s/%s/%s", j.Key.Kind, j.Key.Namespace, j.Key.Name)
+		return iStr < jStr
 	}
 	return i.Value.Order < j.Value.Order
 }

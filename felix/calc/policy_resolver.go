@@ -60,6 +60,9 @@ type PolicyResolver struct {
 	Callbacks             []PolicyResolverCallbacks
 	InSync                bool
 	endpointBGPPeerData   map[model.WorkloadEndpointKey]EndpointBGPPeer
+
+	// Track policy updates as they come in - these will be resolved on flush.
+	pendingPolicyUpdates set.Set[model.PolicyKey]
 }
 
 type PolicyResolverCallbacks interface {
@@ -76,6 +79,7 @@ func NewPolicyResolver() *PolicyResolver {
 		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
 		policySorter:          NewPolicySorter(),
 		Callbacks:             []PolicyResolverCallbacks{},
+		pendingPolicyUpdates:  set.New[model.PolicyKey](),
 	}
 }
 
@@ -145,19 +149,12 @@ func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKe
 	})
 }
 
-func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey, tier string) {
+func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey) {
 	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
 	// If it's first time the policy become matched, add it to the tier
 	if !pr.policySorter.HasPolicy(policyKey) {
-		policy, ok := pr.allPolicies[policyKey]
-		if !ok {
-			// It's possible that we receive policy match updates before the policy resolver itself has seen the policy itself (due to ordering of updates).
-			// We can't delay the OnPolicyMatch call, since the rules calculator doesn't know when the policy resolver has seen the policy. Instead,
-			// we create a placeholder policyMetadata here; when the actual policy update arrives later, it will replace this placeholder.
-			policy = policyMetadata{Tier: tier}
-			log.Debugf("PolicyResolver missing policy metadata for %v, creating placeholder in tier %s", policyKey, tier)
-		}
-		pr.policySorter.UpdatePolicy(policyKey, &policy)
+		// Add a pending policy update to be resolved on flush.
+		pr.pendingPolicyUpdates.Add(policyKey)
 	}
 	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
@@ -182,6 +179,19 @@ func (pr *PolicyResolver) Flush() {
 		log.Debugf("Not in sync, skipping flush")
 		return
 	}
+	// Resolve any pending policy updates, and clear the set.
+	pr.pendingPolicyUpdates.Iter(func(polKey model.PolicyKey) error {
+		policy, ok := pr.allPolicies[polKey]
+		if !ok {
+			log.Warnf("PolicyResolver missing policy metadata for %s during flush", polKey)
+			return nil
+		}
+		pr.policySorter.UpdatePolicy(polKey, &policy)
+
+		// Continue iteration, removing item from the dirty set.
+		return set.RemoveItem
+	})
+
 	pr.sortedTierData = pr.policySorter.Sorted()
 	pr.dirtyEndpoints.Iter(pr.sendEndpointUpdate)
 	pr.dirtyEndpoints.Clear()
