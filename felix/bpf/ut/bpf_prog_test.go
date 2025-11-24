@@ -634,8 +634,8 @@ func initMapsOnce() {
 		policyJumpMap = jump.Map()
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
-		ctlbProgsMap = nat.ProgramsMap()
-		progMap = hook.NewProgramsMap()
+		ctlbProgsMap = nat.ProgramsMaps()
+		progMap = hook.NewProgramsMaps()
 		qosMap = qos.Map()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
@@ -762,7 +762,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	forXDP := topts.xdp
 
 	// XXX we do not need to create both sets of maps, but, well, who cares here ;-)
-	progMap = hook.NewProgramsMap()
+	progMap = hook.NewProgramsMaps()
 	policyJumpMap = jump.Map()
 	progMapXDP = hook.NewXDPProgramsMap()
 	policyJumpMapXDP = jump.XDPMap()
@@ -2211,7 +2211,7 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
-	progMap = hook.NewProgramsMap()
+	progMap = hook.NewProgramsMaps()
 	err := progMap[hook.Ingress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	err = progMap[hook.Egress].EnsureExists()

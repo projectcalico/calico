@@ -720,13 +720,12 @@ func (m *bpfEndpointManager) repinJumpMaps() error {
 	}
 
 	mps := []maps.Map{
-		m.commonMaps.ProgramsMap[0],
-		m.commonMaps.ProgramsMap[1],
 		m.commonMaps.JumpMap,
 		m.commonMaps.XDPProgramsMap,
 		m.commonMaps.XDPJumpMap,
 	}
 
+	mps = append(mps, m.commonMaps.ProgramsMaps...)
 	for _, mp := range mps {
 		pin := path.Join(tmp, mp.GetName())
 		if err := libbpf.ObjPin(int(mp.MapFD()), pin); err != nil {
@@ -3124,9 +3123,9 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 		}
 	}
 
-	ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Ingress]
+	ap.ProgramsMap = d.mgr.commonMaps.ProgramsMaps[hook.Ingress]
 	if ap.Hook == hook.Egress {
-		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Egress]
+		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMaps[hook.Egress]
 	}
 
 	if d.mgr.FlowLogsEnabled() {

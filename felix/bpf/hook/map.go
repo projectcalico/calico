@@ -108,7 +108,7 @@ var IngressProgramsMapParameters = bpfmaps.MapParameters{
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: maxPrograms,
-	Name:       "cali_progs_ing",
+	Name:       "cali_progs_fh",
 	Version:    2,
 }
 
@@ -117,11 +117,11 @@ var EgressProgramsMapParameters = bpfmaps.MapParameters{
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: maxPrograms,
-	Name:       "cali_progs_eg",
+	Name:       "cali_progs_th",
 	Version:    2,
 }
 
-func NewProgramsMap() []bpfmaps.Map {
+func NewProgramsMaps() []bpfmaps.Map {
 	return []bpfmaps.Map{
 		NewIngressProgramsMap(),
 		NewEgressProgramsMap(),
