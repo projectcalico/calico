@@ -55,18 +55,18 @@ run_batch() {
   VM_NAME="$vm_name" ${remote_exec} "nohup bash -c \"$cmd_quot; echo \$? > /tmp/test-rc\"" 2>&1 >> "$log_file" < /dev/null
   echo "Started batch '$batch' on VM '$vm_name', monitoring log..." | tee -a "$log_file"
   while true; do
-    VM_NAME="$vm_name" ${remote_exec} 'tail -F -n 0 "nohup.out" 2>/dev/null' >> "$log_file" < /dev/null || true
-    echo "Tail process on VM '$vm_name' ended (rc=${PIPESTATUS[0]}), restarting..." | tee -a "$log_file"
+    VM_NAME="$vm_name" ${remote_exec} 'tail -F -n 0 "nohup.out" 2>/dev/null' < /dev/null |& tee -a "$log_file" || true
+    echo "Tail process on VM '$vm_name' ended, restarting..." | tee -a "$log_file"
     sleep 1
   done &
   local tail_pid=$!
   while true; do
     local rc
-    rc=$(VM_NAME="$vm_name" ${remote_exec} 'while [ ! -f /tmp/test-rc ]; do sleep 1; done; cat /tmp/test-rc' < /dev/null)
+    rc=$(VM_NAME="$vm_name" ${remote_exec} 'while [ ! -f /tmp/test-rc ]; do sleep 1; done; cat /tmp/test-rc' < /dev/null 2>&1 || echo "ssh error $?")
     # Verify that we got a number; if not, probably an ssh error or similar.
     if grep -q '^[0-9]\+$' <<< "$rc"; then
       echo "Batch '$batch' on VM '$vm_name' completed with rc=$rc" | tee -a "$log_file"
-      kill "$tail_pid" || true
+      kill -9 "$tail_pid" || true
       wait "$tail_pid" || true
       return "$rc"
     else
