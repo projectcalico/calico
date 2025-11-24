@@ -771,6 +771,12 @@ var _ = DescribeTable("Config validation",
 	Entry("excessive RouteTableRanges", map[string]string{
 		"RouteTableRanges": "1-100000000",
 	}, false),
+	Entry("excessive RouteTableRanges off-by-one", map[string]string{
+		"RouteTableRanges": "1-65535,99999-99999",
+	}, false),
+	Entry("RouteTableRanges 32-bit wrap-around", map[string]string{
+		"RouteTableRanges": "1-65535,1-2147483647",
+	}, false),
 	Entry("invalid RouteTableRanges", map[string]string{
 		"RouteTableRanges": "abcde",
 	}, false),

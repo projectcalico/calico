@@ -1412,19 +1412,14 @@ func reverseUID(uid uuid.UUID) (uuid.UUID, error) {
 	// v4 UUIDs used by Kubernetes use bits in the 7th byte to indicate the version and
 	// bits in the 9th byte to indicate the variant. Reverse the bits in the surrounding bytes but leave these intact.
 	nuid := make([]byte, len(uid))
-	copy(nuid, uid[:])
 
-	// Reverse the bits in the first 6 bytes.
-	for ii := range uid[:6] {
-		nuid[ii] = byte(bits.Reverse(uint(uid[ii])) >> 56)
+	// Reverse all bytes first.
+	for i := range len(uid) {
+		nuid[i] = bits.Reverse8(uid[i])
 	}
 
-	// Reverse the bits in the 8th byte.
-	nuid[7] = byte(bits.Reverse(uint(uid[7])) >> 56)
+	// Then restore version and variant.
+	nuid[6], nuid[8] = uid[6], uid[8]
 
-	// Reverse the bits in the remaining bytes.
-	for ii := range uid[9:] {
-		nuid[ii+9] = byte(bits.Reverse(uint(uid[ii+9])) >> 56)
-	}
 	return uuid.FromBytes(nuid)
 }
