@@ -75,6 +75,10 @@ func (key BlockKey) valueType() (reflect.Type, error) {
 	return typeBlock, nil
 }
 
+func (key BlockKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[AllocationBlock](key, rawData)
+}
+
 func (key BlockKey) String() string {
 	return fmt.Sprintf("BlockKey(cidr=%s)", key.CIDR.String())
 }
