@@ -84,15 +84,12 @@ message ToDataplane {
     // ConfigUpdate is sent at start of day or when the config changes.
     ConfigUpdate config_update = 13;
 
-    // HostMetadataUpdate is sent when a host IP is added or updated.  I.e. the
-    // IP used for BGP peering/IPIP.
-    HostMetadataUpdate host_metadata_update = 14;
-    // HostIPRemove is sent when a host IP is removed.
-    HostMetadataRemove host_metadata_remove = 18;
+    // Field numbers 14, 18 were previously used by HostMetadataUpdate and HostMetadataRemove,
+    // which are now replaced by HostMetadataV4V6Update and HostMetadataV4V6Remove.
 
     // HostMetadataV4V6Update is sent when a host is added or updated.
     HostMetadataV4V6Update host_metadata_v4v6_update = 37;
-    // HostIPRemove is sent when a host is removed.
+    // HostMetadataV4V6Remove is sent when a host is removed.
     HostMetadataV4V6Remove host_metadata_v4v6_remove = 38;
 
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
@@ -138,10 +135,8 @@ message ToDataplane {
     // WireguardEndpointV6Remove is sent to undo IPv6 wireguard on the host.
     WireguardEndpointV6Remove wireguard_endpoint_v6_remove = 34;
 
-    // HostMetadataV6Update is sent when a host IPv6 address is added or updated.
-    HostMetadataV6Update host_metadata_v6_update = 35;
-    // HostMetadataV6Remove is sent when a host IPv6 address is removed.
-    HostMetadataV6Remove host_metadata_v6_remove = 36;
+    // Field numbers 35, 36 were previously used by HostMetadataV6Update and HostMetadataV6Remove,
+    // which are now replaced by HostMetadataV4V6Update and HostMetadataV4V6Remove.
   }
 }
 
@@ -535,26 +530,6 @@ message HostMetadataV4V6Update {
 message HostMetadataV4V6Remove {
   string hostname = 1;
   string ipv4_addr = 2;
-}
-
-message HostMetadataUpdate {
-  string hostname = 1;
-  string ipv4_addr = 2;
-}
-
-message HostMetadataRemove {
-  string hostname = 1;
-  string ipv4_addr = 2;
-}
-
-message HostMetadataV6Update {
-  string hostname = 1;
-  string ipv6_addr = 2;
-}
-
-message HostMetadataV6Remove {
-  string hostname = 1;
-  string ipv6_addr = 2;
 }
 
 message IPAMPoolUpdate {
