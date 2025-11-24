@@ -407,7 +407,8 @@ function prepare_windows_node() {
     echo "Preparing Windows node ${node_num} (${windows_eip})..."
     # Use helper script for Windows commands
     # The scripts are in c:\k\windows\ directory after being copied
-    ./ssh-node-windows.sh $i "c:\\k\\windows\\enable-containers-with-reboot.ps1" &
+    # Use & to invoke the script and proper path escaping
+    ./ssh-node-windows.sh $i "& 'c:\\k\\windows\\enable-containers-with-reboot.ps1'" &
     
     # Wait a bit for the script to start
     sleep 5
@@ -440,7 +441,7 @@ function prepare_windows_node() {
     retry_command 60 "./ssh-node-windows.sh $i Get-HnsNetwork"
 
     echo "Installing containerd on Windows node ${node_num}..."
-    ./ssh-node-windows.sh $i "c:\\k\\windows\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"
+    ./ssh-node-windows.sh $i "& 'c:\\k\\windows\\install-containerd.ps1' -ContainerDVersion ${CONTAINERD_VERSION}"
     echo "Windows node ${node_num} prepared successfully"
     echo
   done
