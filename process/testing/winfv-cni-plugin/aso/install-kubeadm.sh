@@ -411,14 +411,14 @@ function prepare_windows_node() {
 
     ${windows_connect_command} c:\\k\\enable-containers-with-reboot.ps1
 
-    sleep 10
-    retry_command 60 "${windows_connect_command} powershell"
+  sleep 10
+    retry_command 60 "${windows_connect_command} Write-Host 'Node is ready'"
 
     ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"
     echo
-  
+
     echo "Windows node ${node_num} prepared successfully"
-    echo
+  echo
   done
   
   echo "All Windows nodes prepared successfully"
