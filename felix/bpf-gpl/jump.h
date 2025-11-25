@@ -67,8 +67,6 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
  * WEPs - to_wep   (CALI_F_INGRESS set) - attached at egress of host namespace and uses cali_progs_eg
  *        from_wep (CALI_F_INGRESS not set) - attached at ingress of host namespace and uses cali_progs_ing
  * This makes sure that the jump maps are owned by programs with the same attach_type.
- * Preamble programs are always attached at ingress, egress of host namespace and hence CALI_F_HEP is defined
- * for them.
  *
  * cali_tc_preamble_ingress - attached at ingress of host namespace - uses cali_progs_ing
  * cali_tc_preamble_egress  - attached at egress of host namespace  - uses cali_progs_eg.
@@ -77,7 +75,7 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
  *           cali_tc_preamble_egress has attach type BPF_TCX_EGRESS jumps to to_hep, to_wep program.
  */
 
-#if CALI_F_HEP
+#if CALI_F_HEP || CALI_F_PREAMBLE
 #if CALI_F_INGRESS
 #define cali_jump_map map_symbol(cali_progs_fh, 2)
 #else
