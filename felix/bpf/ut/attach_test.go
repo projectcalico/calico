@@ -271,13 +271,14 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		}
 
-		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(pm).To(HaveKey(hostep1State.IngressPolicyV4()))
-		Expect(pm).To(HaveKey(hostep1State.EgressPolicyV4()))
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
+		Expect(pmFH).To(HaveKey(hostep1State.IngressPolicyV4()))
+		Expect(pmTH).To(HaveKey(hostep1State.EgressPolicyV4()))
 
 		if ipv6Enabled {
-			Expect(pm).To(HaveKey(hostep1State.IngressPolicyV6()))
-			Expect(pm).To(HaveKey(hostep1State.EgressPolicyV6()))
+			Expect(pmFH).To(HaveKey(hostep1State.IngressPolicyV6()))
+			Expect(pmTH).To(HaveKey(hostep1State.EgressPolicyV6()))
 
 		}
 
@@ -336,17 +337,19 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		programIngCount := 8
 		programEgCount := 7
-		jumpMapLen := 2
+		jumpMapLen := 1
 		if ipv6Enabled {
 			programIngCount = 28
 			programEgCount = 26
-			jumpMapLen = 8
+			jumpMapLen = 4
 		}
 		Expect(programsIng.Count()).To(Equal(programIngCount))
 		Expect(programsEg.Count()).To(Equal(programEgCount))
 
-		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(len(pm)).To(Equal(jumpMapLen)) // no policy for hep2
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
+		Expect(len(pmFH)).To(Equal(jumpMapLen)) // no policy for hep2
+		Expect(len(pmTH)).To(Equal(jumpMapLen)) // no policy for hep2
 	})
 
 	workload1 := createVethName("workloadep1")
@@ -408,16 +411,17 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(wl1State.EgressPolicyV4()).NotTo(Equal(-1))
 		Expect(wl1State.XDPPolicyV4()).To(Equal(-1))
 
-		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(pm).To(HaveKey(wl1State.IngressPolicyV4()))
-		Expect(pm).To(HaveKey(wl1State.EgressPolicyV4()))
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
+		Expect(pmFH).To(HaveKey(wl1State.IngressPolicyV4()))
+		Expect(pmTH).To(HaveKey(wl1State.EgressPolicyV4()))
 		if ipv6Enabled {
 			Expect(wl1State.IngressPolicyV6()).NotTo(Equal(-1))
 			Expect(wl1State.EgressPolicyV6()).NotTo(Equal(-1))
 			Expect(wl1State.XDPPolicyV6()).To(Equal(-1))
 
-			Expect(pm).To(HaveKey(wl1State.IngressPolicyV6()))
-			Expect(pm).To(HaveKey(wl1State.EgressPolicyV6()))
+			Expect(pmFH).To(HaveKey(wl1State.IngressPolicyV6()))
+			Expect(pmTH).To(HaveKey(wl1State.EgressPolicyV6()))
 		}
 	})
 
@@ -432,16 +436,18 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		jumpMapLen := 6
+		jumpMapLen := 3
 
 		if ipv6Enabled {
-			jumpMapLen = 16
+			jumpMapLen = 8
 		}
 		Expect(programsIng.Count()).To(Equal(programsIngCount))
 		Expect(programsEg.Count()).To(Equal(programsEgCount))
 
-		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(len(pm)).To(Equal((jumpMapLen)))
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
+		Expect(len(pmFH)).To(Equal((jumpMapLen)))
+		Expect(len(pmTH)).To(Equal((jumpMapLen)))
 	})
 
 	t.Run("bring first host ep down, should clean up its policies", func(t *testing.T) {
@@ -450,14 +456,15 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := jumpMapDump(commonMaps.JumpMap)
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
 		// We remember the state from above
-		Expect(pm).NotTo(HaveKey(hostep1State.IngressPolicyV4()))
-		Expect(pm).NotTo(HaveKey(hostep1State.EgressPolicyV4()))
+		Expect(pmFH).NotTo(HaveKey(hostep1State.IngressPolicyV4()))
+		Expect(pmTH).NotTo(HaveKey(hostep1State.EgressPolicyV4()))
 
 		if ipv6Enabled {
-			Expect(pm).NotTo(HaveKey(hostep1State.IngressPolicyV6()))
-			Expect(pm).NotTo(HaveKey(hostep1State.EgressPolicyV6()))
+			Expect(pmFH).NotTo(HaveKey(hostep1State.IngressPolicyV6()))
+			Expect(pmTH).NotTo(HaveKey(hostep1State.EgressPolicyV6()))
 		}
 		xdppm := jumpMapDump(commonMaps.XDPJumpMap)
 		Expect(xdppm).To(HaveLen(0))
@@ -470,9 +477,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		wl1State = ifstateMap[ifstate.NewKey(uint32(workload1.Attrs().Index))]
 		fmt.Printf("wl1State = %+v\n", wl1State)
 
-		pm := jumpMapDump(commonMaps.JumpMap)
-		wl1IngressPol := pm[wl1State.IngressPolicyV4()]
-		wl1EgressPol := pm[wl1State.EgressPolicyV4()]
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		wl1IngressPol := pmFH[wl1State.IngressPolicyV4()]
+		wl1EgressPol := pmTH[wl1State.EgressPolicyV4()]
 
 		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 			Id: &proto.WorkloadEndpointID{
@@ -502,9 +510,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(wl1State2).To(Equal(wl1State))
 
 		// ... but the policy programs changed
-		pm = jumpMapDump(commonMaps.JumpMap)
-		Expect(wl1IngressPol).NotTo(Equal(pm[wl1State2.IngressPolicyV4()]))
-		Expect(wl1EgressPol).NotTo(Equal(pm[wl1State2.IngressPolicyV4()]))
+		pmFH = jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH = jumpMapDump(commonMaps.JumpMaps[hook.Egress])
+		Expect(wl1IngressPol).NotTo(Equal(pmFH[wl1State2.IngressPolicyV4()]))
+		Expect(wl1EgressPol).NotTo(Equal(pmTH[wl1State2.IngressPolicyV4()]))
 
 		progs, err := bpf.GetAllProgs()
 		Expect(err).NotTo(HaveOccurred())
@@ -519,10 +528,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := jumpMapDump(commonMaps.JumpMap)
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
 		// We remember the state from above
-		Expect(pm).NotTo(HaveKey(wl1State.IngressPolicyV4()))
-		Expect(pm).NotTo(HaveKey(wl1State.EgressPolicyV4()))
+		Expect(pmFH).NotTo(HaveKey(wl1State.IngressPolicyV4()))
+		Expect(pmTH).NotTo(HaveKey(wl1State.EgressPolicyV4()))
 	})
 
 	t.Run("restart", func(t *testing.T) {
@@ -598,14 +608,14 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
 		programsCount := 15
-		oldPoliciesCount := 4
+		oldPoliciesCount := 2
 		if ipv6Enabled {
 			programsCount = 28
-			oldPoliciesCount = 12
+			oldPoliciesCount = 6
 		}
 		Expect(pm).To(HaveLen(programsCount))
 
-		oldPoliciesParams := jump.MapParameters
+		oldPoliciesParams := jump.IngressMapParameters
 		oldPoliciesParams.PinDir = tmp
 		oldPolicies := maps.NewPinnedMap(oldPoliciesParams)
 		err = oldPolicies.Open()
@@ -619,7 +629,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(pm).To(HaveLen(0))
 		pm = jumpMapDump(commonMaps.ProgramsMap[hook.Egress])
 		Expect(pm).To(HaveLen(0))
-		pm = jumpMapDump(commonMaps.JumpMap)
+		pm = jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		Expect(pm).To(HaveLen(0))
+		pm = jumpMapDump(commonMaps.JumpMaps[hook.Egress])
 		Expect(pm).To(HaveLen(0))
 
 		err = bpfEpMgr.CompleteDeferredWork()
@@ -642,11 +654,13 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		pm = jumpMapDump(commonMaps.ProgramsMap[hook.Ingress])
 		Expect(pm).To(HaveLen(15))
 
-		pm = jumpMapDump(commonMaps.JumpMap)
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
 		// We remember the state from above
-		Expect(pm).To(HaveLen(2))
-		Expect(pm).To(HaveKey(wl2State.IngressPolicyV4()))
-		Expect(pm).To(HaveKey(wl2State.EgressPolicyV4()))
+		Expect(pmFH).To(HaveLen(1))
+		Expect(pmTH).To(HaveLen(1))
+		Expect(pmFH).To(HaveKey(wl2State.IngressPolicyV4()))
+		Expect(pmTH).To(HaveKey(wl2State.EgressPolicyV4()))
 
 		_, err = os.Stat(path.Join(bpfdefs.GlobalPinDir, "old_jumps"))
 		Expect(err).To(HaveOccurred())
@@ -703,8 +717,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(pm).To(HaveLen(0))
+		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
+
+		Expect(pmFH).To(HaveLen(0))
+		Expect(pmTH).To(HaveLen(0))
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
@@ -714,11 +731,13 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm = jumpMapDump(commonMaps.JumpMap)
+		pmFH = jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH = jumpMapDump(commonMaps.JumpMaps[hook.Egress])
 		// We remember the state from above
-		Expect(pm).To(HaveLen(2))
-		Expect(pm).To(HaveKey(wl2State.IngressPolicyV4()))
-		Expect(pm).To(HaveKey(wl2State.EgressPolicyV4()))
+		Expect(pmFH).To(HaveLen(1))
+		Expect(pmTH).To(HaveLen(1))
+		Expect(pmFH).To(HaveKey(wl2State.IngressPolicyV4()))
+		Expect(pmTH).To(HaveKey(wl2State.EgressPolicyV4()))
 	})
 }
 

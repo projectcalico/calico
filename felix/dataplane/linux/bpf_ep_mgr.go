@@ -43,7 +43,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
@@ -193,6 +192,7 @@ type hasLoadPolicyProgram interface {
 		rules polprog.Rules,
 		staticProgsMap maps.Map,
 		polProgsMap maps.Map,
+		attachType uint32,
 		opts ...polprog.Option,
 	) ([]fileDescriptor, []asm.Insns, error)
 }
@@ -337,6 +337,7 @@ type bpfEndpointManager struct {
 		rules polprog.Rules,
 		staticProgsMap maps.Map,
 		polProgsMap maps.Map,
+		attachType uint32,
 		opts ...polprog.Option,
 	) ([]fileDescriptor, []asm.Insns, error)
 	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
@@ -1476,7 +1477,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 					v.TcIngressFilter,
 				} {
 					if idx := fn(); idx != -1 {
-						log.Infof("Sridhar ingress jump map delete for idx %d", idx)
 						_ = jumpMapDeleteEntry(m.commonMaps.JumpMaps[hook.Ingress], idx, jump.TCMaxEntryPoints)
 					}
 				}
@@ -4043,8 +4043,15 @@ func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor
 		return nil, 0, err
 	}
 
-	fd, err := bpf.LoadBPFProgramFromInsns(logFilter, "calico_log_filter",
-		"Apache-2.0", uint32(unix.BPF_PROG_TYPE_SCHED_CLS))
+	attachType := uint32(0)
+	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+		attachType = libbpf.AttachTypeTcxIngress
+		if ap.Hook == hook.Egress {
+			attachType = libbpf.AttachTypeTcxEgress
+		}
+	}
+	fd, err := bpf.LoadBPFProgramFromInsnsWithAttachType(logFilter, "calico_log_filter",
+		"Apache-2.0", uint32(unix.BPF_PROG_TYPE_SCHED_CLS), attachType)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to load BPF log filter program: %w", err)
 	}
@@ -4087,6 +4094,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	rules polprog.Rules,
 	staticProgsMap maps.Map,
 	polProgsMap maps.Map,
+	attachType uint32,
 	opts ...polprog.Option,
 ) (
 	fd []fileDescriptor, insns []asm.Insns, err error,
@@ -4145,7 +4153,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 			}
 			subProgName = fmt.Sprintf("%s_%d", subProgName, i)
 		}
-		progFD, err := bpf.LoadBPFProgramFromInsns(p, subProgName, "Apache-2.0", uint32(progType))
+		progFD, err := bpf.LoadBPFProgramFromInsnsWithAttachType(p, subProgName, "Apache-2.0", uint32(progType), attachType)
 		if err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"name":       subProgName,
@@ -4174,9 +4182,16 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 
 	staticProgsMap := m.commonMaps.XDPProgramsMap
 	polProgsMap := m.commonMaps.XDPJumpMap
+	attachType := uint32(0)
 	if apTc, ok := ap.(*tc.AttachPoint); ok {
 		staticProgsMap = apTc.ProgramsMap
 		polProgsMap = m.commonMaps.JumpMaps[apTc.Hook]
+		if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+			attachType = libbpf.AttachTypeTcxIngress
+			if apTc.Hook == hook.Egress {
+				attachType = libbpf.AttachTypeTcxEgress
+			}
+		}
 	}
 
 	// If we have to break a program up into sub-programs to please the
@@ -4207,6 +4222,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 			rules,
 			staticProgsMap,
 			polProgsMap,
+			attachType,
 			options...,
 		)
 		if err != nil {

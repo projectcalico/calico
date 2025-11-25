@@ -327,6 +327,7 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 	rules polprog.Rules,
 	staticProgsMap bpfmaps.Map,
 	polProgsMap bpfmaps.Map,
+	attachType uint32,
 	opts ...polprog.Option,
 ) ([]fileDescriptor, []asm.Insns, error) {
 	if m.jitHarden {
