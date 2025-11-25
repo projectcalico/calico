@@ -142,6 +142,7 @@
             value: "22.04-ipt"
         commands:
           - source felix/.semaphore/fv-prologue
+          - export NUM_FV_BATCHES=16
           - .semaphore/vms/create-test-vms ${VM_PREFIX}
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
     epilogue:
@@ -165,7 +166,7 @@
             value: "22.04-nft"
         commands:
           - source felix/.semaphore/fv-prologue
-          - export NUM_FV_BATCHES=12
+          - export NUM_FV_BATCHES=16
           - .semaphore/vms/create-test-vms ${VM_PREFIX}
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
     epilogue:
@@ -272,7 +273,7 @@
           - source felix/.semaphore/fv-prologue
           # Limit to BPF TCP+conntrack tests to reduce overall runtime.
           - export FV_FOCUS='_BPF_.*tcp.*ct=true'
-          - export NUM_FV_BATCHES=12
+          - export NUM_FV_BATCHES=16
           - .semaphore/vms/create-test-vms ${VM_PREFIX}
           - .semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
