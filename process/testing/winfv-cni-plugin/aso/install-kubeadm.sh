@@ -451,7 +451,8 @@ function prepare_and_copy_windows_dir () {
     
     echo "Copying to Windows node ${node_num} (${windows_eip})..."
     # Use scp directly with -r for directory
-    scp -r -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows winfv@${windows_eip}:c:\\k\\
+    # Copy contents of ./windows/ (note the trailing slash) into c:\k\
+    scp -r -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* winfv@${windows_eip}:c:\\k\\
   done
   
   echo "Windows configuration files copied successfully to all nodes"
