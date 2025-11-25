@@ -341,6 +341,13 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					return TierKey{
 						Name: unescapeName(parts[4]),
 					}
+				case "policy":
+					// This is a legacy policy key of form /calico/v1/policy/tier/<Tier>/policy/<Name>.
+					// We can translate this to a modern PolicyKey by parsing the necessary info from the Name.
+					if len(parts) != 7 {
+						return nil
+					}
+					return buildLegacyPolicyKey(unescapeName(parts[6]))
 				}
 			case "profile":
 				pk := unescapeName(parts[4])
