@@ -13,9 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set +e
+set -e
 
-source $(pwd)/.semaphore/batches.sh
+my_dir="$(dirname $0)"
+repo_dir="$my_dir/../.."
+
+# shellcheck source=../../felix/.semaphore/batches.sh
+source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
 
 log_monitor_regexps=(
   "(?<!Decode)Failure"
@@ -43,10 +47,7 @@ for r in "${log_monitor_regexps[@]}"; do
 done
 monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 
-zone=${ZONE:-europe-west3-c}
-my_dir="$(dirname $0)"
 vm_name_prefix=$1
-repo_dir="$my_dir/../.."
 artifacts_dir="$repo_dir/artifacts"
 
 echo
@@ -73,7 +74,8 @@ for batch in "${batches[@]}"; do
     # forever on reads in semaphore CI
     tail -F $log_file < /dev/null | \
       grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
-      sed 's/.*/'"${prefix}"' &/';
+      sed 's/.*/'"${prefix}"' &/' | \
+      grep --perl --line-buffered -v '^\s+$';
   ) &
   mon_pid=$!
   monitor_pids+=( $mon_pid )
@@ -103,7 +105,8 @@ done
 echo
 echo "===== Shutting down test monitors ====="
 for pid in "${monitor_pids[@]}"; do
-  kill $pid || true
+  # Note: negative PID to kill the entire process group.
+  kill -TERM -$pid || true
 done
 
 echo "===== Results summary ====="
