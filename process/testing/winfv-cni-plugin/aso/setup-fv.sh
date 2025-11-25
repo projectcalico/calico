@@ -23,6 +23,24 @@ set -e
 : ${GOMPLATE:=./bin/gomplate}
 : ${BACKEND:?Error: BACKEND is not set}
 
+# Reconstruct arrays from exported string variables
+# Bash arrays cannot be exported across shells, so we export them as space-separated strings
+if [[ -n "${LINUX_EIPS_STR}" ]]; then
+  read -ra LINUX_EIPS <<< "${LINUX_EIPS_STR}"
+fi
+
+if [[ -n "${LINUX_PIPS_STR}" ]]; then
+  read -ra LINUX_PIPS <<< "${LINUX_PIPS_STR}"
+fi
+
+if [[ -n "${WINDOWS_EIPS_STR}" ]]; then
+  read -ra WINDOWS_EIPS <<< "${WINDOWS_EIPS_STR}"
+fi
+
+if [[ -n "${WINDOWS_PIPS_STR}" ]]; then
+  read -ra WINDOWS_PIPS <<< "${WINDOWS_PIPS_STR}"
+fi
+
 function setup_minikube_cluster() {
   #https://github.com/kubernetes/minikube/issues/14364
 

@@ -23,20 +23,22 @@ set -e
 : ${GOMPLATE:=./bin/gomplate}
 : ${BACKEND:?Error: BACKEND is not set}
 
-# Rebuild arrays from the single variables if arrays are empty
-# This is a workaround for bash array export issues across sourcing
-if [[ ${#LINUX_EIPS[@]} -eq 0 && -n "${LINUX_EIP}" ]]; then
-  echo "WARNING: LINUX_EIPS array is empty, rebuilding from LINUX_EIP"
-  LINUX_EIPS=("${LINUX_EIP}")
-  # For multiple nodes, we would need to query ASO directly
-  # For now, assume single node setup
+# Reconstruct arrays from exported string variables
+# Bash arrays cannot be exported across shells, so we export them as space-separated strings
+if [[ -n "${LINUX_EIPS_STR}" ]]; then
+  read -ra LINUX_EIPS <<< "${LINUX_EIPS_STR}"
 fi
 
-if [[ ${#WINDOWS_EIPS[@]} -eq 0 && -n "${WINDOWS_EIP}" ]]; then
-  echo "WARNING: WINDOWS_EIPS array is empty, rebuilding from WINDOWS_EIP"
-  WINDOWS_EIPS=("${WINDOWS_EIP}")
-  # For multiple nodes, we would need to query ASO directly
-  # For now, assume single node setup
+if [[ -n "${LINUX_PIPS_STR}" ]]; then
+  read -ra LINUX_PIPS <<< "${LINUX_PIPS_STR}"
+fi
+
+if [[ -n "${WINDOWS_EIPS_STR}" ]]; then
+  read -ra WINDOWS_EIPS <<< "${WINDOWS_EIPS_STR}"
+fi
+
+if [[ -n "${WINDOWS_PIPS_STR}" ]]; then
+  read -ra WINDOWS_PIPS <<< "${WINDOWS_PIPS_STR}"
 fi
 
 if [[ ${#LINUX_PIPS[@]} -eq 0 && -n "${LINUX_PIP}" ]]; then
@@ -52,10 +54,10 @@ echo "========================================"
 echo "Node configuration loaded:"
 echo "  LINUX_NODE_COUNT: ${LINUX_NODE_COUNT}"
 echo "  WINDOWS_NODE_COUNT: ${WINDOWS_NODE_COUNT}"
-echo "  LINUX_EIPS: ${LINUX_EIPS[@]}"
-echo "  LINUX_EIP (first): ${LINUX_EIP}"
-echo "  WINDOWS_EIPS: ${WINDOWS_EIPS[@]}"
-echo "  WINDOWS_EIP (first): ${WINDOWS_EIP}"
+echo "  LINUX_EIPS (count: ${#LINUX_EIPS[@]}): ${LINUX_EIPS[@]}"
+echo "  LINUX_PIPS (count: ${#LINUX_PIPS[@]}): ${LINUX_PIPS[@]}"
+echo "  WINDOWS_EIPS (count: ${#WINDOWS_EIPS[@]}): ${WINDOWS_EIPS[@]}"
+echo "  WINDOWS_PIPS (count: ${#WINDOWS_PIPS[@]}): ${WINDOWS_PIPS[@]}"
 echo "========================================"
 echo
 
