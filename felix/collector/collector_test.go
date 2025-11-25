@@ -280,10 +280,10 @@ func toprefix(s string) [64]byte {
 
 // Nflog prefix test parameters
 var (
-	defTierAllowIngressNFLOGPrefix   = toprefix("API0|GlobalNetworkPolicy/policy1")
-	defTierAllowEgressNFLOGPrefix    = toprefix("APE0|GlobalNetworkPolicy/policy1")
-	defTierDenyIngressNFLOGPrefix    = toprefix("DPI0|GlobalNetworkPolicy/policy2")
-	defTierDenyEgressNFLOGPrefix     = toprefix("DPE0|GlobalNetworkPolicy/policy2")
+	defTierAllowIngressNFLOGPrefix   = toprefix("API0|gnp/policy1")
+	defTierAllowEgressNFLOGPrefix    = toprefix("APE0|gnp/policy1")
+	defTierDenyIngressNFLOGPrefix    = toprefix("DPI0|gnp/policy2")
+	defTierDenyEgressNFLOGPrefix     = toprefix("DPE0|gnp/policy2")
 	defTierPolicy1AllowIngressRuleID = &calc.RuleID{
 		PolicyID: calc.PolicyID{
 			Kind:      v3.KindGlobalNetworkPolicy,
