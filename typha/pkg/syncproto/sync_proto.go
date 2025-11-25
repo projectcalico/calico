@@ -258,6 +258,11 @@ type MsgClientHello struct {
 	SupportsDecoderRestart         bool
 	SupportedCompressionAlgorithms []CompressionAlgorithm
 
+	// SupportsNodeResourceUpdates provides to the server whether this client supports modern PolicyKey
+	// syntax, i.e., using Kind/Namespace/Name instead of Tier/Name. If the client does not set this field,
+	// Typha will reject the connection attempt and wait for the client to be upgraded.
+	SupportsModernPolicyKeys bool
+
 	ClientConnID uint64
 }
 

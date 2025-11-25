@@ -127,3 +127,59 @@ func (p Policy) String() string {
 	}
 	return strings.Join(parts, ",")
 }
+
+// buildLegacyPolicyKey builds a legacy policy key from the given name.
+// Legacy policy key names included the namespace and name of the policy, with
+// hints of the kind that can be used to reconstruct the full key.
+//
+// Legacy policy keys will be sent by Typha versions prior to v3.32.0.
+func buildLegacyPolicyKey(name string) Key {
+	// First, split based on "/" to see if we have a namespace.
+	parts := strings.SplitN(name, "/", 2)
+	if len(parts) == 2 {
+		// We have a namespace. This can be one of a few different kinds:
+		// - knp.default.<name>          -> KubernetesNetworkPolicy
+		// - staged:<name>               -> StagedNetworkPolicy
+		// - staged:knp.default.<name>   -> StagedKubernetesNetworkPolicy
+		// - <name>                      -> NetworkPolicy
+		namespace := parts[0]
+		policyName := parts[1]
+
+		// Next, try to infer the kind from the policy name.
+		kind := apiv3.KindNetworkPolicy
+		if strings.HasPrefix(policyName, "knp.default.") {
+			kind = KindKubernetesNetworkPolicy
+			policyName = strings.TrimPrefix(policyName, "knp.default.")
+		} else if strings.HasPrefix(policyName, "staged:knp.default.") {
+			kind = apiv3.KindStagedKubernetesNetworkPolicy
+			policyName = strings.TrimPrefix(policyName, "staged:knp.default.")
+		} else if strings.HasPrefix(policyName, "staged:") {
+			kind = apiv3.KindStagedNetworkPolicy
+			policyName = strings.TrimPrefix(policyName, "staged:")
+		}
+
+		return PolicyKey{
+			Name:      policyName,
+			Namespace: namespace,
+			Kind:      kind,
+		}
+	}
+
+	// No namespace, so this is a global policy. It can be one of:
+	// - <name>                -> GlobalNetworkPolicy
+	// - staged:<name>         -> StagedGlobalNetworkPolicy
+	// - kcnp.<name>           -> KubernetesClusterNetworkPolicy
+	kind := apiv3.KindGlobalNetworkPolicy
+	policyName := name
+	if strings.HasPrefix(policyName, "staged:") {
+		kind = apiv3.KindStagedGlobalNetworkPolicy
+		policyName = strings.TrimPrefix(policyName, "staged:")
+	} else if strings.HasPrefix(policyName, "kcnp.") {
+		kind = KindKubernetesClusterNetworkPolicy
+		policyName = strings.TrimPrefix(policyName, "kcnp.")
+	}
+	return PolicyKey{
+		Name: policyName,
+		Kind: kind,
+	}
+}
