@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
+	"slices"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 )
 
