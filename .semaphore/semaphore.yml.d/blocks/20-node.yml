@@ -60,7 +60,9 @@
     # KinD tests also build and run all the other images.
     when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,non-go:/.semaphore/vms/)}"
   dependencies:
-    - Prerequisites
+    # Felix build job pushes the build cache up to gcloud bucket.
+    # TODO: combine and share node/felix common builds or make node build save off the cache too.
+    - "Felix: Build"
   task:
     prologue:
       commands:
