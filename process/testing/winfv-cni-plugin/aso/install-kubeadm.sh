@@ -62,35 +62,13 @@ echo "========================================"
 echo
 
 function setup_kubeadm_cluster() {
-  echo "Installing kubeadm and Kubernetes 1.33 on Linux VM..."
+  echo "Setting up Kubernetes cluster with kubeadm..."
   
-  # Install prerequisites and kubeadm
+  # Verify prerequisites are installed (by VM extension)
   ${MASTER_CONNECT_COMMAND} bash -s <<'EOF'
 set -e
 
-# Disable swap (required for Kubernetes)
-sudo swapoff -a
-sudo sed -i '/ swap / s/^/#/' /etc/fstab
-
-# Load required kernel modules
-cat <<MODULES | sudo tee /etc/modules-load.d/k8s.conf
-overlay
-br_netfilter
-MODULES
-
-sudo modprobe overlay
-sudo modprobe br_netfilter
-
-# Set sysctl params required by Kubernetes
-cat <<SYSCTL | sudo tee /etc/sysctl.d/k8s.conf
-net.bridge.bridge-nf-call-iptables  = 1
-net.bridge.bridge-nf-call-ip6tables = 1
-net.ipv4.ip_forward                 = 1
-SYSCTL
-
-sudo sysctl --system
-
-# Install containerd if not already installed
+# Verify containerd is installed and running
 if ! command -v containerd &> /dev/null; then
   echo "ERROR: containerd is not installed!"
   echo "Please ensure the VM extension in vmss-linux.yaml has installed containerd."
@@ -99,40 +77,30 @@ fi
 
 echo "Containerd found: $(containerd --version)"
 
-# Verify containerd configuration
-if [ ! -f /etc/containerd/config.toml ]; then
-  echo "ERROR: containerd config file /etc/containerd/config.toml not found!"
-  exit 1
-fi
-
-# Verify systemd cgroup is enabled
-if ! grep -q "SystemdCgroup = true" /etc/containerd/config.toml; then
-  echo "WARNING: SystemdCgroup is not enabled in containerd config"
-  echo "This may cause issues with Kubernetes. Please check vmss-linux.yaml extension."
-fi
-
-# Ensure containerd is running
+# Verify containerd is running
 sudo systemctl status containerd --no-pager || {
   echo "ERROR: containerd service is not running!"
   exit 1
 }
 
-# Install kubeadm, kubelet, and kubectl for Kubernetes 1.33
-echo "Installing kubeadm, kubelet, and kubectl v1.33..."
-sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+# Verify kubeadm is installed
+if ! command -v kubeadm &> /dev/null; then
+  echo "ERROR: kubeadm is not installed!"
+  echo "Please ensure the VM extension in vmss-linux.yaml has installed kubeadm."
+  exit 1
+fi
 
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+echo "Kubeadm found: $(kubeadm version -o short)"
+echo "Kubelet found: $(kubelet --version)"
+echo "Kubectl found: $(kubectl version --client --short 2>/dev/null || kubectl version --client)"
 
-sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
+# Verify swap is disabled
+if [ $(swapon --show | wc -l) -gt 0 ]; then
+  echo "ERROR: Swap is still enabled! The VM extension should have disabled it."
+  exit 1
+fi
 
-# Enable kubelet
-sudo systemctl enable kubelet
-
-echo "Kubeadm installation completed"
+echo "All prerequisites verified successfully"
 EOF
 
   # Initialize kubeadm cluster
@@ -212,28 +180,21 @@ function join_linux_worker_nodes() {
     echo "Joining Linux Node ${node_num} (${linux_eip}) as worker"
     echo "====================================="
     
-    # Ensure prerequisites are installed on the worker node
-    echo "Installing kubeadm, kubelet, and kubectl on Linux worker node ${node_num}..."
+    # Verify prerequisites are installed (by VM extension)
+    echo "Verifying kubeadm installation on Linux worker node ${node_num}..."
     ${linux_connect_command} bash -s <<'WORKER_EOF'
 set -e
 
-# Install prerequisites
-sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+# Verify kubeadm is installed
+if ! command -v kubeadm &> /dev/null; then
+  echo "ERROR: kubeadm is not installed!"
+  echo "Please ensure the VM extension in vmss-linux.yaml has installed kubeadm."
+  exit 1
+fi
 
-# Add Kubernetes apt repository
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-
-# Install kubeadm, kubelet, and kubectl
-sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
-
-# Enable kubelet
-sudo systemctl enable --now kubelet
-
-echo "Kubernetes components installed successfully"
+echo "Kubeadm found: $(kubeadm version -o short)"
+echo "Kubelet found: $(kubelet --version)"
+echo "Prerequisites verified successfully"
 WORKER_EOF
     
     # Join the node to the cluster
