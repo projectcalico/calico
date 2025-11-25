@@ -460,7 +460,9 @@ function prepare_windows_node() {
   fi
   
   echo "Windows node ${display_name} prepared successfully"
+  echo "DEBUG: prepare_windows_node function completing for node ${display_name}"
   echo
+  return 0
 }
 
 setup_kubeadm_cluster
@@ -470,10 +472,17 @@ prepare_windows_configuration
 
 # Prepare each Windows node individually
 echo "Preparing ${WINDOWS_NODE_COUNT} Windows node(s)..."
+echo "DEBUG: WINDOWS_NODE_COUNT=${WINDOWS_NODE_COUNT}"
+echo "DEBUG: WINDOWS_EIPS array: ${WINDOWS_EIPS[@]}"
 for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+  echo "DEBUG: Top of loop - i=${i}"
   node_num=$((i+1))
+  echo "DEBUG: Calling prepare_windows_node for i=${i}, node_num=${node_num}, EIP=${WINDOWS_EIPS[$i]}"
   prepare_windows_node "${WINDOWS_EIPS[$i]}" "${node_num}"
+  echo "DEBUG: Returned from prepare_windows_node for i=${i}, node_num=${node_num}"
+  echo "DEBUG: About to loop increment - current i=${i}"
 done
+echo "DEBUG: Loop finished - final i=${i}"
 echo "All Windows nodes prepared successfully"
 
 # Join each Windows node to the cluster
