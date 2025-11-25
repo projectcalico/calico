@@ -94,13 +94,8 @@ func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		}
 	}
 
-	// List the (Staged)NetworkPolicy and (Staged)GlobalNetworkPolicy resources that are prefixed with this tier name.
-	// Note that a prefix matching may return additional results that are not actually in this tier,
-	// so we also need to check the spec field to be certain.
-	policyListOptions := options.ListOptions{
-		Prefix: true,
-		Name:   name + ".",
-	}
+	// List all policies, and checks none of them reference this tier.
+	policyListOptions := options.ListOptions{}
 
 	// Check NetworkPolicy resources.
 	if npList, err := r.client.NetworkPolicies().List(ctx, policyListOptions); err != nil {
