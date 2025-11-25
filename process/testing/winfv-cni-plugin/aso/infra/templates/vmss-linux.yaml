@@ -6,7 +6,7 @@
 {{- $pipName := printf "pip-linux-%d" $nodeNum -}}
 {{- $extContainerdName := printf "vm-linux-%d-containerd" $nodeNum -}}
 {{- $extDockerName := printf "vm-linux-%d-docker-legacy" $nodeNum -}}
-{{- $computerName := printf "winfv-linux-%d" $nodeNum -}}
+{{- $computerName := printf "winfv-linux-%d" $nodeNum }}
 ---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine

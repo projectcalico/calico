@@ -6,7 +6,7 @@
 {{- $pipName := printf "pip-windows-%d" $nodeNum -}}
 {{- $extOpenSSHName := printf "vm-windows-%d-openssh" $nodeNum -}}
 {{- $extCustomName := printf "vm-windows-%d-customextension" $nodeNum -}}
-{{- $computerName := printf "winfv-win-%d" $nodeNum -}}
+{{- $computerName := printf "winfv-win-%d" $nodeNum }}
 ---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine
