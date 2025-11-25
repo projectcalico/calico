@@ -72,15 +72,15 @@ for batch in "${batches[@]}"; do
   log_files+=( $log_file )
   pids+=( $pid )
 
-  prefix="[batch=${batch} pid=${pid}]"
-  echo "$prefix Started test batch in background; monitoring its log ($log_file)."
+  prefix="[batch=${batch}]"
+  echo "$prefix Started test batch in background with PID=$pid; monitoring its log ($log_file)."
   (
     # Redirect tail's stdin from /dev/null to prevent waiting
     # forever on reads in semaphore CI
     tail -F $log_file < /dev/null | \
       grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
       sed 's/.*/'"${prefix}"' &/' | \
-      grep --perl --line-buffered -v '^\s+$';
+      grep --perl --line-buffered -v '^\[batch=[^\]]+\]\s+$';
   ) &
   mon_pid=$!
   monitor_pids+=( $mon_pid )
