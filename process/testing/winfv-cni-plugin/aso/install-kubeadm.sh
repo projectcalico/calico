@@ -465,6 +465,9 @@ function prepare_and_copy_windows_dir () {
 
 function prepare_windows_node() {
   echo "Preparing all Windows nodes..."
+  echo "DEBUG: WINDOWS_NODE_COUNT=${WINDOWS_NODE_COUNT}"
+  echo "DEBUG: WINDOWS_EIPS array size=${#WINDOWS_EIPS[@]}"
+  echo "DEBUG: WINDOWS_EIPS values=${WINDOWS_EIPS[@]}"
   
   # Validate that we have Windows node IPs
   if [[ ${#WINDOWS_EIPS[@]} -eq 0 ]]; then
@@ -475,6 +478,8 @@ function prepare_windows_node() {
   for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
     local node_num=$((i+1))
     local windows_eip="${WINDOWS_EIPS[$i]}"
+    
+    echo "DEBUG: Loop iteration i=${i}, node_num=${node_num}, windows_eip=${windows_eip}"
     
     if [[ -z "$windows_eip" ]]; then
       echo "ERROR: Windows node ${node_num} EIP is empty!"
@@ -500,9 +505,11 @@ function prepare_windows_node() {
     echo
 
     echo "Windows node ${node_num} prepared successfully"
+    echo "DEBUG: Completed iteration i=${i} for node ${node_num}"
     echo
   done
   
+  echo "DEBUG: Loop completed, processed ${WINDOWS_NODE_COUNT} nodes"
   echo "All Windows nodes prepared successfully"
 }
 
