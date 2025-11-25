@@ -22,10 +22,6 @@ include ../lib.Makefile
 BINDIR?=bin
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
-UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go, \
-                             $(wildcard ./lib/upgrade/migrator/clients/v1/k8s/custom/*.go))
-
-# Create a list of files upon which the generated file depends, skip the generated file itself
 APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
 
 .PHONY: clean
@@ -37,7 +33,6 @@ clean:
 # Building the binary
 ###############################################################################
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
-	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
 	./lib/apis/v3/generated.openapi.go \
 	./lib/apis/v1/generated.openapi.go \
 	./lib/selector/tokenizer/kind_string.go
@@ -70,14 +65,6 @@ gen-crds:
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 	# Patch in manual tweaks to the generated CRDs.
 	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
-
-./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
-	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
-		--v 1 --logtostderr \
-		--go-header-file "./docs/boilerplate.go.txt" \
-		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
-		--output-file zz_generated.deepcopy.go \
-		"$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom"'
 
 ./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
