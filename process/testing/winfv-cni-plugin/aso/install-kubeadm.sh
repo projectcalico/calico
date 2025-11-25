@@ -474,22 +474,22 @@ prepare_windows_configuration
 echo "Preparing ${WINDOWS_NODE_COUNT} Windows node(s)..."
 echo "DEBUG: WINDOWS_NODE_COUNT=${WINDOWS_NODE_COUNT}"
 echo "DEBUG: WINDOWS_EIPS array: ${WINDOWS_EIPS[@]}"
-for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
-  echo "DEBUG: Top of loop - i=${i}"
-  node_num=$((i+1))
-  echo "DEBUG: Calling prepare_windows_node for i=${i}, node_num=${node_num}, EIP=${WINDOWS_EIPS[$i]}"
-  prepare_windows_node "${WINDOWS_EIPS[$i]}" "${node_num}"
-  echo "DEBUG: Returned from prepare_windows_node for i=${i}, node_num=${node_num}"
-  echo "DEBUG: About to loop increment - current i=${i}"
+for ((win_idx=0; win_idx<${WINDOWS_NODE_COUNT}; win_idx++)); do
+  echo "DEBUG: Top of loop - win_idx=${win_idx}"
+  node_num=$((win_idx+1))
+  echo "DEBUG: Calling prepare_windows_node for win_idx=${win_idx}, node_num=${node_num}, EIP=${WINDOWS_EIPS[$win_idx]}"
+  prepare_windows_node "${WINDOWS_EIPS[$win_idx]}" "${node_num}"
+  echo "DEBUG: Returned from prepare_windows_node for win_idx=${win_idx}, node_num=${node_num}"
+  echo "DEBUG: About to loop increment - current win_idx=${win_idx}"
 done
-echo "DEBUG: Loop finished - final i=${i}"
+echo "DEBUG: Loop finished - final win_idx=${win_idx}"
 echo "All Windows nodes prepared successfully"
 
 # Join each Windows node to the cluster
 echo "Joining ${WINDOWS_NODE_COUNT} Windows node(s) to the cluster..."
-for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
-  node_num=$((i+1))
-  join_windows_worker_node "${WINDOWS_EIPS[$i]}" "${WINDOWS_PIPS[$i]}" "${node_num}"
+for ((win_idx=0; win_idx<${WINDOWS_NODE_COUNT}; win_idx++)); do
+  node_num=$((win_idx+1))
+  join_windows_worker_node "${WINDOWS_EIPS[$win_idx]}" "${WINDOWS_PIPS[$win_idx]}" "${node_num}"
 done
 echo "All Windows nodes joined successfully!"
 ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
