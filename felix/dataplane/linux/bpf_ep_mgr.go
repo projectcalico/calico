@@ -1654,7 +1654,9 @@ func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
 			if hk == hook.Ingress {
 				attachType = libbpf.AttachTypeTcxIngress
 			}
-			obj.SetAttachType(p.Name(), attachType)
+			if err := obj.SetAttachType(p.Name(), attachType); err != nil {
+				return fmt.Errorf("error setting attach type for program %s: %w", p.Name(), err)
+			}
 		}
 	}
 
