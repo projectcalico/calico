@@ -78,7 +78,9 @@ run_batch() {
       sleep 1
     done &
     tail_pid=$!
-    trap 'stopped=true; kill $tail_pid || true; wait $tail_pid || true' EXIT
+    # Set a trap to stop the tail when we exit.  Note: negative PID means
+    # "kill the process group", i.e. while loop and its children.
+    trap 'stopped=true; kill -$tail_pid || true; wait $tail_pid || true' EXIT
 
     num_fails=0
     while true; do
