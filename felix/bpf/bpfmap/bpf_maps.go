@@ -57,7 +57,7 @@ type CommonMaps struct {
 	RuleCountersMap maps.Map
 	CountersMap     maps.Map
 	ProgramsMap     []maps.Map
-	JumpMap         []maps.MapWithDeleteIfExists
+	JumpMaps        []maps.MapWithDeleteIfExists
 	XDPProgramsMap  maps.Map
 	XDPJumpMap      maps.MapWithDeleteIfExists
 	ProfilingMap    maps.Map
@@ -97,9 +97,9 @@ func getCommonMaps() *CommonMaps {
 		CTLBProgramsMap: nat.ProgramsMap(),
 		QoSMap:          qos.Map().(maps.MapWithUpdateWithFlags),
 	}
-	jumpMaps := jump.Map()
+	jumpMaps := jump.Maps()
 	for _, jm := range jumpMaps {
-		commonMaps.JumpMap = append(commonMaps.JumpMap, jm.(maps.MapWithDeleteIfExists))
+		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jm.(maps.MapWithDeleteIfExists))
 	}
 	return commonMaps
 }
@@ -185,7 +185,7 @@ func (c *CommonMaps) slice() []maps.Map {
 	}
 	mapslice = append(mapslice, c.ProgramsMap...)
 	mapslice = append(mapslice, c.CTLBProgramsMap...)
-	for _, m := range c.JumpMap {
+	for _, m := range c.JumpMaps {
 		mapslice = append(mapslice, m)
 	}
 	return mapslice

@@ -41,7 +41,7 @@ var IngressMapParameters = maps.MapParameters{
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: TCMaxEntries,
-	Name:       "cali_jump_ing",
+	Name:       "cali_jump_fh",
 	Version:    2,
 }
 
@@ -50,11 +50,11 @@ var EgressMapParameters = maps.MapParameters{
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: TCMaxEntries,
-	Name:       "cali_jump_eg",
+	Name:       "cali_jump_th",
 	Version:    2,
 }
 
-func Map() []maps.Map {
+func Maps() []maps.Map {
 	return []maps.Map{
 		maps.NewPinnedMap(IngressMapParameters),
 		maps.NewPinnedMap(EgressMapParameters),

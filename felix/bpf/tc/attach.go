@@ -77,6 +77,7 @@ type AttachPoint struct {
 	DSCP                        int8
 	MaglevLUTSize               uint32
 	ProgramsMap                 maps.Map
+	JumpMap                     maps.Map
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
