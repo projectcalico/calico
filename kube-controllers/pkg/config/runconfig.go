@@ -218,7 +218,6 @@ MAINLOOP:
 			time.Sleep(datastoreBackoff)
 			continue MAINLOOP
 		}
-		
 		for e := range w.ResultChan() {
 			switch e.Type {
 			case watch.Error:
