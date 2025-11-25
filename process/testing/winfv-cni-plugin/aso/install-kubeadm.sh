@@ -61,17 +61,83 @@ echo "  WINDOWS_PIPS (count: ${#WINDOWS_PIPS[@]}): ${WINDOWS_PIPS[@]}"
 echo "========================================"
 echo
 
+function check_vm_extension_logs() {
+  local vm_ip="$1"
+  local vm_name="$2"
+  
+  echo ""
+  echo "=========================================="
+  echo "Fetching VM extension logs from ${vm_name} (${vm_ip})"
+  echo "=========================================="
+  
+  local ssh_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@${vm_ip}"
+  
+  echo ""
+  echo "--- Custom Script Extension Handler Log ---"
+  ${ssh_command} "sudo cat /var/log/azure/custom-script/handler.log 2>/dev/null || echo 'Handler log not found'"
+  
+  echo ""
+  echo "--- Extension stdout (last 50 lines) ---"
+  ${ssh_command} "sudo tail -50 /var/lib/waagent/custom-script/download/0/stdout 2>/dev/null || echo 'stdout not found'"
+  
+  echo ""
+  echo "--- Extension stderr (last 50 lines) ---"
+  ${ssh_command} "sudo tail -50 /var/lib/waagent/custom-script/download/0/stderr 2>/dev/null || echo 'stderr not found'"
+  
+  echo ""
+  echo "--- Extension files ---"
+  ${ssh_command} "sudo ls -la /var/lib/waagent/custom-script/download/0/ 2>/dev/null || echo 'Extension directory not found'"
+  
+  echo ""
+  echo "--- Walinuxagent service log (last 50 lines) ---"
+  ${ssh_command} "sudo journalctl -u walinuxagent.service -n 50 --no-pager 2>/dev/null || echo 'walinuxagent logs not found'"
+  
+  echo ""
+  echo "--- Checking kubeadm installation ---"
+  ${ssh_command} "which kubeadm 2>/dev/null || echo 'kubeadm not found in PATH'"
+  ${ssh_command} "which kubelet 2>/dev/null || echo 'kubelet not found in PATH'"
+  ${ssh_command} "which kubectl 2>/dev/null || echo 'kubectl not found in PATH'"
+  
+  echo ""
+  echo "=========================================="
+  echo "End of extension logs for ${vm_name}"
+  echo "=========================================="
+}
+
 function setup_kubeadm_cluster() {
   echo "Setting up Kubernetes cluster with kubeadm..."
   
+  # Wait for VM extensions to complete (kubeadm installation)
+  echo "Waiting for VM extensions to complete on control plane node..."
+  local max_wait=600  # 10 minutes
+  local elapsed=0
+  local check_interval=10
+  
+  while [ $elapsed -lt $max_wait ]; do
+    if ${MASTER_CONNECT_COMMAND} "command -v kubeadm &>/dev/null"; then
+      echo "VM extensions completed successfully - kubeadm is installed"
+      break
+    fi
+    echo "Waiting for VM extensions to install kubeadm... (${elapsed}s/${max_wait}s)"
+    sleep $check_interval
+    elapsed=$((elapsed + check_interval))
+  done
+  
+  if [ $elapsed -ge $max_wait ]; then
+    echo "ERROR: VM extensions did not complete within ${max_wait} seconds"
+    echo ""
+    check_vm_extension_logs "${LINUX_EIP}" "vm-linux-1"
+    return 1
+  fi
+  
   # Verify prerequisites are installed (by VM extension)
-  ${MASTER_CONNECT_COMMAND} bash -s <<'EOF'
+  echo "Verifying all prerequisites are installed..."
+  if ! ${MASTER_CONNECT_COMMAND} bash -s <<'EOF'
 set -e
 
 # Verify containerd is installed and running
 if ! command -v containerd &> /dev/null; then
   echo "ERROR: containerd is not installed!"
-  echo "Please ensure the VM extension in vmss-linux.yaml has installed containerd."
   exit 1
 fi
 
@@ -86,7 +152,6 @@ sudo systemctl status containerd --no-pager || {
 # Verify kubeadm is installed
 if ! command -v kubeadm &> /dev/null; then
   echo "ERROR: kubeadm is not installed!"
-  echo "Please ensure the VM extension in vmss-linux.yaml has installed kubeadm."
   exit 1
 fi
 
@@ -96,12 +161,18 @@ echo "Kubectl found: $(kubectl version --client --short 2>/dev/null || kubectl v
 
 # Verify swap is disabled
 if [ $(swapon --show | wc -l) -gt 0 ]; then
-  echo "ERROR: Swap is still enabled! The VM extension should have disabled it."
+  echo "ERROR: Swap is still enabled!"
   exit 1
 fi
 
 echo "All prerequisites verified successfully"
 EOF
+  then
+    echo ""
+    echo "ERROR: Prerequisite verification failed!"
+    check_vm_extension_logs "${LINUX_EIP}" "vm-linux-1"
+    return 1
+  fi
 
   # Initialize kubeadm cluster
   echo "Initializing Kubernetes cluster with kubeadm..."
