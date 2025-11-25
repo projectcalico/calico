@@ -15,6 +15,8 @@
 package rules_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -22,6 +24,14 @@ import (
 
 	. "github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+)
+
+var (
+	// 62 characters with XXX0|gnp/ prefixed.
+	chars62 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	// 63 characters with XXX0|gnp/ prefixed.
+	chars63 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0"
 )
 
 var _ = Describe("NFLOG prefix construction tests", func() {
@@ -40,7 +50,7 @@ var _ = Describe("NFLOG prefix construction tests", func() {
 			"Short NP name - will not hash",
 			RuleActionAllow, RuleOwnerTypePolicy, RuleDirIngress, 0,
 			types.PolicyID{Name: "default.policy", Namespace: "namespace1", Kind: v3.KindNetworkPolicy},
-			"API0|NetworkPolicy/namespace1/default.policy",
+			"API0|np/namespace1/default.policy",
 			false,
 		),
 		Entry(
@@ -52,26 +62,26 @@ var _ = Describe("NFLOG prefix construction tests", func() {
 		Entry(
 			"Policy name makes raw prefix 62 bytes - will not hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 88,
-			types.PolicyID{Name: "012345678901234567890123456789012345", Kind: v3.KindGlobalNetworkPolicy},
-			"DPE88|GlobalNetworkPolicy/012345678901234567890123456789012345", false,
+			types.PolicyID{Name: chars62, Kind: v3.KindGlobalNetworkPolicy},
+			fmt.Sprintf("DPE88|gnp/%s", chars62), false,
 		),
 		Entry(
 			"Policy name makes raw prefix 63 bytes - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirIngress, 88,
-			types.PolicyID{Name: "0123456789012345678901234567890123456", Kind: v3.KindGlobalNetworkPolicy},
-			"DPI88|Glob_TgIrDfSZByUMyW1jdRlqRwUFnz9Ia95pepsiza2bL_7890123456", true,
+			types.PolicyID{Name: chars63, Kind: v3.KindGlobalNetworkPolicy},
+			"DPI88|gnp/_12IXaBPahNM7a7dZhI8zg6PStmHsgneYaax8LVSIq_RSTUVWXYZ0", true,
 		),
 		Entry(
 			"Very long GNP name - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 1,
-			types.PolicyID{Name: "quite-a-long-tier-name-even-though-its-not-required.quite-a-long-policy-name", Kind: v3.KindGlobalNetworkPolicy},
-			"DPE1|Globa_XF5BxrLqWODw91KGGf0D9YjSIxxX_71n98wNC1NxD_olicy-name", true,
+			types.PolicyID{Name: "this-is-still-quite-a-long-tier-name-even-though-its-not-required.quite-a-long-policy-name", Kind: v3.KindGlobalNetworkPolicy},
+			"DPE1|gnp/t_FSGxA9eGa6t_A5Rj2agPvl4aq8-eohq0An6xEW4n7_olicy-name", true,
 		),
 		Entry(
 			"A similar (but different) very long GNP name - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 2,
-			types.PolicyID{Name: "quite-a-long-tier-name-even-though-its-not-required.quite-a-long-policy-name2", Kind: v3.KindGlobalNetworkPolicy},
-			"DPE2|Globa_wBNKd5xXqEk9Q5vhGZ_B5KMFrMmFdtyOIcgrMvA3x_licy-name2", true,
+			types.PolicyID{Name: "this-is-still-quite-a-long-tier-name-even-though-its-not-required.quite-a-long-policy-name2", Kind: v3.KindGlobalNetworkPolicy},
+			"DPE2|gnp/t_G4MaamO0BQNQg8Ibyy-r9qg2HIK8-7EaPOVzsy5Nv_licy-name2", true,
 		),
 	)
 

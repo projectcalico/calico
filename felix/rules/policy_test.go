@@ -29,6 +29,11 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 )
 
+var (
+	cali_pi_default_foo = "cali-pi-gnp/default.foo"
+	cali_po_default_foo = "cali-po-gnp/default.foo"
+)
+
 var ruleTestData = []TableEntry{
 	Entry("Empty rule", 4, &proto.Rule{}, ""),
 
@@ -256,7 +261,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Match: iptables.Match().MarkSingleBitSet(0x80),
 				Action: iptables.NflogAction{
 					Group:  1,
-					Prefix: "API0|GlobalNetworkPolicy/default.foo",
+					Prefix: "API0|gnp/default.foo",
 				},
 			}))
 			Expect(rules[2]).To(Equal(generictables.Rule{
@@ -316,7 +321,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 					Match: iptables.Match().MarkSingleBitSet(0x100),
 					Action: iptables.NflogAction{
 						Group:  1,
-						Prefix: "PPI0|GlobalNetworkPolicy/default.foo",
+						Prefix: "PPI0|gnp/default.foo",
 					},
 				}))
 				Expect(rules[2]).To(Equal(generictables.Rule{
@@ -416,7 +421,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Match: iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.NflogAction{
 					Group:  1,
-					Prefix: "DPI0|GlobalNetworkPolicy/default.foo",
+					Prefix: "DPI0|gnp/default.foo",
 				},
 			}))
 			Expect(rules[2]).To(Equal(generictables.Rule{
@@ -448,8 +453,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-_V_L_-qbyj9pMkjjggbj"))
-			Expect(chains[1].Name).To(Equal("cali-po-_V_L_-qbyj9pMkjjggbj"))
+			Expect(chains[0].Name).To(Equal(cali_pi_default_foo))
+			Expect(chains[1].Name).To(Equal(cali_po_default_foo))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -489,8 +494,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-_V_L_-qbyj9pMkjjggbj"))
-			Expect(chains[1].Name).To(Equal("cali-po-_V_L_-qbyj9pMkjjggbj"))
+			Expect(chains[0].Name).To(Equal(cali_pi_default_foo))
+			Expect(chains[1].Name).To(Equal(cali_po_default_foo))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -505,7 +510,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Match: iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.NflogAction{
 					Group:  1,
-					Prefix: "DPI0|GlobalNetworkPolicy/default.foo",
+					Prefix: "DPI0|gnp/default.foo",
 				},
 			}))
 			Expect(inbound[2]).To(Equal(generictables.Rule{
@@ -537,8 +542,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-_V_L_-qbyj9pMkjjggbj"))
-			Expect(chains[1].Name).To(Equal("cali-po-_V_L_-qbyj9pMkjjggbj"))
+			Expect(chains[0].Name).To(Equal(cali_pi_default_foo))
+			Expect(chains[1].Name).To(Equal(cali_po_default_foo))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -579,8 +584,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			}
 
 			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
-			Expect(chains[0].Name).To(Equal("cali-pi-_V_L_-qbyj9pMkjjggbj"))
-			Expect(chains[1].Name).To(Equal("cali-po-_V_L_-qbyj9pMkjjggbj"))
+			Expect(chains[0].Name).To(Equal(cali_pi_default_foo))
+			Expect(chains[1].Name).To(Equal(cali_po_default_foo))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -596,7 +601,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Match: iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.NflogAction{
 					Group:  2,
-					Prefix: "DPE0|GlobalNetworkPolicy/default.foo",
+					Prefix: "DPE0|gnp/default.foo",
 				},
 			}))
 			Expect(outbound[2]).To(Equal(generictables.Rule{
@@ -783,7 +788,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Match: iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.NflogAction{
 					Group:  1,
-					Prefix: "DPI0|GlobalNetworkPolicy/default.foo",
+					Prefix: "DPI0|gnp/default.foo",
 				},
 			}))
 			Expect(rules[2]).To(Equal(generictables.Rule{
@@ -798,7 +803,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		clearBothMarksRule       = "-A test --jump MARK --set-mark 0x0/0x600"
 		preSetAllBlocksMarkRule  = "-A test --jump MARK --set-mark 0x200/0x600"
 		allowIfAllMarkRule       = "-A test -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
-		nflogAllowRule           = "-A test -m mark --mark 0x80/0x80 --jump NFLOG --nflog-group 1 --nflog-prefix API0|GlobalNetworkPolicy/default.foo --nflog-range 80"
+		nflogAllowRule           = "-A test -m mark --mark 0x80/0x80 --jump NFLOG --nflog-group 1 --nflog-prefix API0|gnp/default.foo --nflog-range 80"
 		allowIfAllMarkAndTCPRule = "-A test -p tcp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
 		allowIfAllMarkAndUDPRule = "-A test -p udp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
 		returnRule               = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
@@ -2259,7 +2264,7 @@ var _ = Describe("rule metadata tests", func() {
 		)
 		Expect(chains).To(ConsistOf(
 			&generictables.Chain{
-				Name: "cali-pi-_bcnvGyipuD4NqeKuy1j",
+				Name: "cali-pi-_PymyFHQQg3808jiz1OJ",
 				Rules: []generictables.Rule{
 					{
 						Match:  iptables.Match(),
@@ -2271,7 +2276,7 @@ var _ = Describe("rule metadata tests", func() {
 				},
 			},
 			&generictables.Chain{
-				Name: "cali-po-_bcnvGyipuD4NqeKuy1j",
+				Name: "cali-po-_PymyFHQQg3808jiz1OJ",
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{
@@ -2299,7 +2304,7 @@ var _ = Describe("rule metadata tests", func() {
 		)
 		Expect(chains).To(ConsistOf(
 			&generictables.Chain{
-				Name: "cali-pi-_bcnvGyipuD4NqeKuy1j",
+				Name: "cali-pi-_PymyFHQQg3808jiz1OJ",
 				Rules: []generictables.Rule{
 					{
 						Match:  iptables.Match(),
@@ -2312,14 +2317,14 @@ var _ = Describe("rule metadata tests", func() {
 						Match: iptables.Match().MarkSingleBitSet(0x80),
 						Action: iptables.NflogAction{
 							Group:  1,
-							Prefix: "API0|GlobalNetworkPolicy/long-policy-name-that-gets-hashed",
+							Prefix: "API0|gnp/long-policy-name-that-gets-hashed",
 						},
 						Comment: nil,
 					},
 				},
 			},
 			&generictables.Chain{
-				Name: "cali-po-_bcnvGyipuD4NqeKuy1j",
+				Name: "cali-po-_PymyFHQQg3808jiz1OJ",
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{
