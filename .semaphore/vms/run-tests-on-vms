@@ -74,7 +74,8 @@ for batch in "${batches[@]}"; do
     # forever on reads in semaphore CI
     tail -F $log_file < /dev/null | \
       grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
-      sed 's/.*/'"${prefix}"' &/';
+      sed 's/.*/'"${prefix}"' &/' | \
+      grep --perl --line-buffered -v '^\s+$';
   ) &
   mon_pid=$!
   monitor_pids+=( $mon_pid )
@@ -104,7 +105,8 @@ done
 echo
 echo "===== Shutting down test monitors ====="
 for pid in "${monitor_pids[@]}"; do
-  kill $pid || true
+  # Note: negative PID to kill the entire process group.
+  kill -TERM -$pid || true
 done
 
 echo "===== Results summary ====="
