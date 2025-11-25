@@ -828,18 +828,6 @@ func (c converter) SplitProfileRevision(rev string) (nsRev string, saRev string,
 	return
 }
 
-func stringsToIPNets(ipStrings []string) ([]*cnet.IPNet, error) {
-	var podIPNets []*cnet.IPNet
-	for _, ip := range ipStrings {
-		_, ipNet, err := cnet.ParseCIDROrIP(ip)
-		if err != nil {
-			return nil, err
-		}
-		podIPNets = append(podIPNets, ipNet)
-	}
-	return podIPNets, nil
-}
-
 // ConvertUID converts a UID to a new UID in a deterministic way. This is useful when we want to generate a new UID
 // for a resource that is derived from another resource, but we don't want to use the same UID in order to
 // ensure that the new resource is treated as unique. This is important, as two objects with the same UID causes
