@@ -16,12 +16,22 @@
 
 set -xeo pipefail
 
-apt-get update -y
-apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common
+retry() {
+  local n=10
+  for i in $(seq 1 $n); do
+    "$@" && return 0
+    echo "Command '$*' failed, retrying ($i/$n)..."
+    sleep 5
+  done
+  return 1
+}
+
+retry apt-get update -y
+retry apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common
 
 # Add Docker's official GPG key:
 install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+retry curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
 
 ubuntu_codename=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
@@ -47,8 +57,8 @@ else
   docker_version=""
 fi
 
-apt-get update -y
-apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin containerd.io make iproute2 wireguard
+retry apt-get update -y
+retry apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin containerd.io make iproute2 wireguard
 usermod -a -G docker ubuntu
 modprobe ipip
 if [ -s /etc/docker/daemon.json ] ; then
