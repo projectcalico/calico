@@ -377,6 +377,10 @@ function show_connections() {
   export LINUX_PIP="${LINUX_PIPS[0]}"
   export LINUX_EIP="${LINUX_EIPS[0]}"
   
+  # Export arrays for use in other scripts
+  export LINUX_PIPS
+  export LINUX_EIPS
+  
   # Wait for and get Windows node IPs
   declare -a WINDOWS_PIPS=()
   declare -a WINDOWS_EIPS=()
@@ -413,6 +417,10 @@ function show_connections() {
   # Export first Windows node
   export WINDOWS_PIP="${WINDOWS_PIPS[0]}"
   export WINDOWS_EIP="${WINDOWS_EIPS[0]}"
+  
+  # Export arrays for use in other scripts
+  export WINDOWS_PIPS
+  export WINDOWS_EIPS
 
   # Setup connection info
   MASTER_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${LINUX_EIP}"
