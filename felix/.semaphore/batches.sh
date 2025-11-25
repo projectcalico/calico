@@ -70,6 +70,9 @@ run_batch() {
 
   # Subshell to limit scope of trap.
   (
+    # Enable job control so that background processes get their own process groups.
+    set -m
+
     # Monitor the log in the background with a retry loop.
     stopped=false
     while ! $stopped; do
