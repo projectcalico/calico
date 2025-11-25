@@ -65,7 +65,7 @@ run_batch() {
   #   a retry loop.
   # - nohup swallows the return code of the process so we use a bash -x wrapper
   #   to capture it in a file.
-  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c \"$cmd_quot > /tmp/test.log; echo \$? > /tmp/test.rc\" < /dev/null >& /dev/null &"
+  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c '$cmd_quot > /tmp/test.log; echo \$? > /tmp/test.rc' < /dev/null >& /dev/null &"
   echo "RUNNER: Started batch '$batch' on VM '$vm_name', monitoring log..." >> "$log_file"
 
   # Subshell to limit scope of trap.

@@ -45,7 +45,7 @@ done
 
 if [[ -z "$vm_pub_key" ]]; then
   echo "Failed to get VM ssh key after multiple attempts, exiting."
-  exit 1
+  exit 22
 fi
 
 vm_ip=$(gcloud compute instances describe "${vm_name}" --zone="${zone}" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
@@ -61,14 +61,14 @@ for ssh_try in $(seq 1 100); do
     startup_success=true
     break
   fi
-  sleep 1
+  sleep $(( $RANDOM % 10 + 1 ))
 done
 
 if [ "$startup_success" = false ]; then
-  echo "VM startup script did not complete successfully"
+  echo "VM startup script did not complete in time, exiting."
   echo "Fetching serial console output for debugging:"
-  gcloud compute --project="$project" instances get-serial-port-output "$vm_name" --zone="$zone" --port=1  | grep startup-script
-  exit 1
+  gcloud compute --project="$project" instances get-serial-port-output "$vm_name" --zone="$zone" --port=1
+  exit 23
 fi
 
 set +x

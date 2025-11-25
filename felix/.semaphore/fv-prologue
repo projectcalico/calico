@@ -26,11 +26,11 @@ fi
 export FV_NO_PREREQ_TARGET
 
 if [[ $FELIX_TEST_GROUP =~ 22.04 ]]; then
-  export IMAGE_FAMILY=ubuntu-minimal-2204-lts
+  export IMAGE_FAMILY=ubuntu-2204-lts
   JOB_TAG+="2204"
   TEST_REPORT_NAME+="Ubuntu-22.04/"
 elif [[ $FELIX_TEST_GROUP =~ 24.04 ]]; then
-  export IMAGE_FAMILY=ubuntu-minimal-2404-lts-amd64
+  export IMAGE_FAMILY=ubuntu-2404-lts-amd64
   JOB_TAG+="2404"
   TEST_REPORT_NAME+="Ubuntu-24.04/"
 elif [[ $FELIX_TEST_GROUP =~ 25.04 ]]; then
