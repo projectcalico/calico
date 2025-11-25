@@ -49,8 +49,8 @@ run_batch() {
     cmd_quot+="$(printf "%q" "$part")"
   done
   
-  echo "Starting batch '$batch' on VM '$vm_name'" | tee "$log_file"
-  echo "Command: $cmd_quot" | tee -a "$log_file"
+  echo "RUNNER: Starting batch '$batch' on VM '$vm_name'" >> "$log_file"
+  echo "RUNNER: Command: $cmd_quot" >> "$log_file"
 
   # We used to have occasional problems with ssh sessions dropping while tests
   # were running.  Avoid by running the tests in the background with nohup, and
@@ -66,7 +66,7 @@ run_batch() {
   # - nohup swallows the return code of the process so we use a bash -x wrapper
   #   to capture it in a file.
   VM_NAME="$vm_name" ${remote_exec} "nohup bash -c \"$cmd_quot > /tmp/test.log; echo \$? > /tmp/test.rc\" < /dev/null >& /dev/null &"
-  echo "Started batch '$batch' on VM '$vm_name', monitoring log..." | tee -a "$log_file"
+  echo "RUNNER: Started batch '$batch' on VM '$vm_name', monitoring log..." >> "$log_file"
 
   # Subshell to limit scope of trap.
   (
@@ -76,8 +76,8 @@ run_batch() {
     # Monitor the log in the background with a retry loop.
     stopped=false
     while ! $stopped; do
-      VM_NAME="$vm_name" ${remote_exec} 'tail -F -n 0 "/tmp/test.log" 2>/dev/null' |& tee -a "$log_file" || true
-      echo "Tail process on VM '$vm_name' ended, restarting..." | tee -a "$log_file"
+      VM_NAME="$vm_name" ${remote_exec} 'tail -F -n 0 "/tmp/test.log" 2>/dev/null' >> "$log_file" || true
+      echo "RUNNER: WARNING: Tail process on VM '$vm_name' ended, restarting..." >> "$log_file"
       sleep 1
     done &
     tail_pid=$!
@@ -90,14 +90,14 @@ run_batch() {
       rc=$(VM_NAME="$vm_name" ${remote_exec} 'while [ ! -f /tmp/test.rc ]; do sleep 1; done; cat /tmp/test.rc' || echo "ssh error $?")
       # Verify that we got a number; if not, probably an ssh error or similar.
       if grep -q '^[0-9]\+$' <<< "$rc"; then
-        echo "Batch '$batch' on VM '$vm_name' completed with rc=$rc" | tee -a "$log_file"
+        echo "RUNNER: Batch '$batch' on VM '$vm_name' completed with rc=$rc" >> "$log_file"
         exit "$rc"
       else
-        echo "Failed to read batch RC got '$rc', continuing to monitor log..." | tee -a "$log_file"
+        echo "RUNNER: Failed to read batch RC got '$rc', continuing to monitor log..." >> "$log_file"
         sleep 10
         num_fails=$((num_fails + 1))
         if [ "$num_fails" -ge 10 ]; then
-          echo "Too many failures reading batch RC, aborting batch '$batch' on VM '$vm_name'" | tee -a "$log_file"
+          echo "RUNNER: Too many failures reading batch RC, aborting batch '$batch' on VM '$vm_name'" >> "$log_file"
           exit 1
         fi
       fi

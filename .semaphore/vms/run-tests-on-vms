@@ -40,6 +40,7 @@ log_monitor_regexps=(
   "^XML:"
   "^\[success\]"
   "^\[error\]"
+  "RUNNER:"
 )
 
 # Combine the regexps; in Perl mode, grep only supports one
@@ -63,6 +64,7 @@ log_files=()
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   log_file="$artifacts_dir/test-$batch.log"
+  touch "$log_file"
 
   (run_batch "$my_dir/on-test-vm" $batch $vm_name $log_file) &
   pid=$!
