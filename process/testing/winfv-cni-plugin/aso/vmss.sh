@@ -113,7 +113,7 @@ password-base64: $PASSWORD_BASE64
 EOF
   log_info "Generated Windows credentials: username=winfv, password saved to password.txt"
 
-  rm ${SSH_KEY_FILE} || true
+  rm -f ${SSH_KEY_FILE} ${SSH_KEY_FILE}.pub
   ssh-keygen -m PEM -t rsa -b 2048 -f "${SSH_KEY_FILE}" -N '' -C "" 1>/dev/null
   log_info "Machine SSH key generated in ${SSH_KEY_FILE}"
   export PUBLIC_KEY=$(cat ${SSH_KEY_FILE}.pub)
@@ -149,13 +149,23 @@ EOF
   log_info "Creating secrets..."
   ${KUBECTL} apply -f infra/manifests/password.yaml
   
-  # Step 4: Virtual Machines (dependent on network resources)
-  log_info "Creating Virtual Machines..."
+  # Step 4: Virtual Machines and Network Resources
+  log_info "Creating Virtual Machines and network resources..."
   ${KUBECTL} apply -f infra/manifests/vmss-linux.yaml
   ${KUBECTL} apply -f infra/manifests/vmss-windows.yaml
   
+  # Build list of all VMs to wait for based on node counts
+  local vm_resources=()
+  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+    vm_resources+=("vm-linux-${i}")
+  done
+  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+    vm_resources+=("vm-windows-${i}")
+  done
+  
+  log_info "Waiting for ${#vm_resources[@]} VirtualMachines: ${vm_resources[*]}"
+  
   # Wait for VMs with extended timeout
-  local vm_resources=("vm-linux" "vm-windows")
   local failed_vms=()
   
   for vm in "${vm_resources[@]}"; do
@@ -330,91 +340,302 @@ function show_connections() {
   # Wait for vm deployments with ASO v2 patterns
   log_info "show_connections started..."
   
-  log_info "Ensuring vm-linux is ready with ASO v2 status check..."
-  if ! wait_for_aso_resource "virtualmachine" "vm-linux" "winfv" "480s"; then
-    log_error "vm-linux did not become ready in time"
-    return 1
-  fi
+  # Wait for and get Linux node IPs
+  declare -a LINUX_PIPS=()
+  declare -a LINUX_EIPS=()
   
-  # Get IP addresses from ASO CRDs
-  log_info "Getting Linux VM IP addresses from ASO resources..."
-  LINUX_PIP=$(${KUBECTL} get networkinterface nic-linux -n winfv -o jsonpath='{.status.ipConfigurations[0].privateIPAddress}' 2>/dev/null || echo "")
-  LINUX_EIP=$(${KUBECTL} get publicipaddress pip-linux -n winfv -o jsonpath='{.status.ipAddress}' 2>/dev/null || echo "")
+  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+    local vm_name="vm-linux-${i}"
+    local nic_name="nic-linux-${i}"
+    local pip_name="pip-linux-${i}"
+    
+    log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
+    if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "winfv" "480s"; then
+      log_error "${vm_name} did not become ready in time"
+      return 1
+    fi
+    
+    # Get IP addresses from ASO CRDs
+    log_info "Getting ${vm_name} IP addresses from ASO resources..."
+    local pip=$(${KUBECTL} get networkinterface ${nic_name} -n winfv -o jsonpath='{.status.ipConfigurations[0].privateIPAddress}' 2>/dev/null || echo "")
+    local eip=$(${KUBECTL} get publicipaddress ${pip_name} -n winfv -o jsonpath='{.status.ipAddress}' 2>/dev/null || echo "")
+    
+    if [[ -z "$eip" || -z "$pip" ]]; then
+      log_error "Failed to retrieve IP addresses for ${vm_name} from ASO resources"
+      log_info "Checking ASO resource status for debugging..."
+      ${KUBECTL} get networkinterface ${nic_name} -n winfv -o yaml | grep -A 10 "status:" || true
+      ${KUBECTL} get publicipaddress ${pip_name} -n winfv -o yaml | grep -A 10 "status:" || true
+      return 1
+    fi
+    
+    LINUX_PIPS+=("$pip")
+    LINUX_EIPS+=("$eip")
+    log_info "${vm_name} is ready. PIP:$pip, EIP:$eip"
+  done
   
-  if [[ -z "$LINUX_EIP" || -z "$LINUX_PIP" ]]; then
-    log_error "Failed to retrieve IP addresses for vm-linux from ASO resources"
-    log_info "Checking ASO resource status for debugging..."
-    ${KUBECTL} get networkinterface nic-linux -n winfv -o yaml | grep -A 10 "status:" || true
-    ${KUBECTL} get publicipaddress pip-linux -n winfv -o yaml | grep -A 10 "status:" || true
-    return 1
-  fi
+  # Export first Linux node as master
+  export LINUX_PIP="${LINUX_PIPS[0]}"
+  export LINUX_EIP="${LINUX_EIPS[0]}"
   
-  log_info "vm-linux is ready. PIP:$LINUX_PIP, EIP:$LINUX_EIP"
-
-  log_info "Ensuring vm-windows is ready with ASO v2 status check..."
-  if ! wait_for_aso_resource "virtualmachine" "vm-windows" "winfv" "480s"; then
-    log_error "vm-windows did not become ready in time"
-    return 1
-  fi
+  # Export arrays for use in other scripts
+  export LINUX_PIPS
+  export LINUX_EIPS
   
-  # Get IP addresses from ASO CRDs for Windows VM
-  log_info "Getting Windows VM IP addresses from ASO resources..."
-  WINDOWS_PIP=$(${KUBECTL} get networkinterface nic-windows -n winfv -o jsonpath='{.status.ipConfigurations[0].privateIPAddress}' 2>/dev/null || echo "")
-  WINDOWS_EIP=$(${KUBECTL} get publicipaddress pip-windows -n winfv -o jsonpath='{.status.ipAddress}' 2>/dev/null || echo "")
+  # Wait for and get Windows node IPs
+  declare -a WINDOWS_PIPS=()
+  declare -a WINDOWS_EIPS=()
   
-  if [[ -z "$WINDOWS_EIP" || -z "$WINDOWS_PIP" ]]; then
-    log_error "Failed to retrieve IP addresses for vm-windows from ASO resources"
-    log_info "Checking ASO resource status for debugging..."
-    ${KUBECTL} get networkinterface nic-windows -n winfv -o yaml | grep -A 10 "status:" || true
-    ${KUBECTL} get publicipaddress pip-windows -n winfv -o yaml | grep -A 10 "status:" || true
-    return 1
-  fi
+  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+    local vm_name="vm-windows-${i}"
+    local nic_name="nic-windows-${i}"
+    local pip_name="pip-windows-${i}"
+    
+    log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
+    if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "winfv" "480s"; then
+      log_error "${vm_name} did not become ready in time"
+      return 1
+    fi
+    
+    # Get IP addresses from ASO CRDs for Windows VM
+    log_info "Getting ${vm_name} IP addresses from ASO resources..."
+    local pip=$(${KUBECTL} get networkinterface ${nic_name} -n winfv -o jsonpath='{.status.ipConfigurations[0].privateIPAddress}' 2>/dev/null || echo "")
+    local eip=$(${KUBECTL} get publicipaddress ${pip_name} -n winfv -o jsonpath='{.status.ipAddress}' 2>/dev/null || echo "")
+    
+    if [[ -z "$eip" || -z "$pip" ]]; then
+      log_error "Failed to retrieve IP addresses for ${vm_name} from ASO resources"
+      log_info "Checking ASO resource status for debugging..."
+      ${KUBECTL} get networkinterface ${nic_name} -n winfv -o yaml | grep -A 10 "status:" || true
+      ${KUBECTL} get publicipaddress ${pip_name} -n winfv -o yaml | grep -A 10 "status:" || true
+      return 1
+    fi
+    
+    WINDOWS_PIPS+=("$pip")
+    WINDOWS_EIPS+=("$eip")
+    log_info "${vm_name} is ready. PIP:$pip, EIP:$eip"
+  done
   
-  log_info "vm-windows is ready. PIP:$WINDOWS_PIP, EIP:$WINDOWS_EIP"
+  # Export first Windows node
+  export WINDOWS_PIP="${WINDOWS_PIPS[0]}"
+  export WINDOWS_EIP="${WINDOWS_EIPS[0]}"
+  
+  # Export arrays for use in other scripts
+  export WINDOWS_PIPS
+  export WINDOWS_EIPS
 
   # Setup connection info
   MASTER_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${LINUX_EIP}"
   WINDOWS_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIP} powershell"
 
+  # Create individual connect commands for each Linux node
+  for ((i=0; i<${LINUX_NODE_COUNT}; i++)); do
+    local var_name="LINUX_NODE_${i}_CONNECT"
+    local cmd="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${LINUX_EIPS[$i]}"
+    eval "export ${var_name}='${cmd}'"
+  done
+  
+  # Create individual connect commands for each Windows node (both regular and powershell)
+  for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+    local var_name="WINDOWS_NODE_${i}_CONNECT"
+    local var_name_ps="WINDOWS_NODE_${i}_CONNECT_PS"
+    local cmd="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIPS[$i]}"
+    local cmd_ps="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIPS[$i]} powershell"
+    eval "export ${var_name}='${cmd}'"
+    eval "export ${var_name_ps}='${cmd_ps}'"
+  done
+
   WIN_PASSWORD=$(grep "password:" ./password.txt | awk -F':' '{print $2}')
 
   cat << EOF > connect.txt
--------------Connect to Linux Master Instances--------
+-------------Connect to Linux Master Instance---------
 ${MASTER_CONNECT_COMMAND}
 
--------------Connect to Windows Instances-------------
-RDP://${WINDOWS_EIP} user: winfv password:$WIN_PASSWORD
-${WINDOWS_CONNECT_COMMAND}
 EOF
+
+  # Add all Linux nodes to connect.txt
+  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+    cat << EOF >> connect.txt
+-------------Connect to Linux Node ${i}----------------
+ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${LINUX_EIPS[$((i-1))]}
+PIP: ${LINUX_PIPS[$((i-1))]}
+EIP: ${LINUX_EIPS[$((i-1))]}
+
+EOF
+  done
+
+  # Add all Windows nodes to connect.txt
+  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+    cat << EOF >> connect.txt
+-------------Connect to Windows Node ${i}-------------
+RDP://${WINDOWS_EIPS[$((i-1))]} user: winfv password:$WIN_PASSWORD
+ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${WINDOWS_EIPS[$((i-1))]} powershell
+PIP: ${WINDOWS_PIPS[$((i-1))]}
+EIP: ${WINDOWS_EIPS[$((i-1))]}
+
+EOF
+  done
+  
   echo
   cat connect.txt
 
-  export LINUX_EIP LINUX_PIP WINDOWS_EIP WINDOWS_PIP MASTER_CONNECT_COMMAND WINDOWS_CONNECT_COMMAND CONTAINERD_VERSION
+  # Export arrays for use in other scripts
+  export LINUX_PIPS LINUX_EIPS WINDOWS_PIPS WINDOWS_EIPS MASTER_CONNECT_COMMAND WINDOWS_CONNECT_COMMAND CONTAINERD_VERSION
 
   echo
   echo "Generating helper files"
-  echo '${MASTER_CONNECT_COMMAND} "$@"' > ./ssh-node-linux.sh
+  
+  # Generate ssh-node-linux.sh with node index support
+  cat << EOF > ./ssh-node-linux.sh
+#!/bin/bash
+# Usage: ./ssh-node-linux.sh [node_index] [command...]
+# Examples:
+#   ./ssh-node-linux.sh 0 "hostname"          # SSH to first Linux node (index 0)
+#   ./ssh-node-linux.sh 1 "kubectl get nodes" # SSH to second Linux node (index 1)
+#   ./ssh-node-linux.sh "kubectl get nodes"   # SSH to first node (default, backward compatible)
+
+# IP addresses embedded at generation time
+LINUX_EIPS=(${LINUX_EIPS[@]})
+SSH_KEY_FILE="${SSH_KEY_FILE}"
+
+# Check if first arg is a number (node index)
+if [[ "\$1" =~ ^[0-9]+\$ ]]; then
+  NODE_INDEX=\$1
+  shift  # Remove the index from arguments
+else
+  NODE_INDEX=0  # Default to first node for backward compatibility
+fi
+
+# Validate node index
+if [[ \$NODE_INDEX -ge \${#LINUX_EIPS[@]} ]]; then
+  echo "Error: Node index \$NODE_INDEX out of range. Available Linux nodes: 0-\$((\${#LINUX_EIPS[@]}-1))"
+  exit 1
+fi
+
+LINUX_EIP="\${LINUX_EIPS[\$NODE_INDEX]}"
+ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@\${LINUX_EIP} "\$@"
+EOF
   chmod +x ./ssh-node-linux.sh
 
-  cat << EOF > ssh-node-windows.sh
-#usage: ./ssh-node-windows.sh "Restart-Computer -force"
-${WINDOWS_CONNECT_COMMAND} \$1
+  # Generate ssh-node-windows.sh with node index support
+  cat << EOF > ./ssh-node-windows.sh
+#!/bin/bash
+# Usage: ./ssh-node-windows.sh [node_index] [command]
+# Examples:
+#   ./ssh-node-windows.sh 0 "Get-Process"     # SSH to first Windows node (index 0)
+#   ./ssh-node-windows.sh 1 "ipconfig /all"   # SSH to second Windows node (index 1)
+#   ./ssh-node-windows.sh "Get-Process"       # SSH to first node (default, backward compatible)
+
+# IP addresses embedded at generation time
+WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+SSH_KEY_FILE="${SSH_KEY_FILE}"
+
+# Check if first arg is a number (node index)
+if [[ "\$1" =~ ^[0-9]+\$ ]]; then
+  NODE_INDEX=\$1
+  shift  # Remove the index from arguments
+else
+  NODE_INDEX=0  # Default to first node for backward compatibility
+fi
+
+# Validate node index
+if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
+  echo "Error: Node index \$NODE_INDEX out of range. Available Windows nodes: 0-\$((\${#WINDOWS_EIPS[@]}-1))"
+  exit 1
+fi
+
+WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
+ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@\${WINDOWS_EIP} powershell "\$@"
 EOF
   chmod +x ./ssh-node-windows.sh
 
-  cat << EOF > scp-to-windows.sh
-#---------Copy files to windows--------
-#usage: ./scp-to-windows.sh kubeconfig c:\\\\k\\\\kubeconfig
-#usage: ./scp-to-windows.sh images/ebpf-for-windows-c-temp.zip 'c:\\'
-scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 \$1 winfv@${WINDOWS_EIP}:\$2
+  # Generate scp-to-windows.sh with node index support
+  cat << EOF > ./scp-to-windows.sh
+#!/bin/bash
+# Usage: ./scp-to-windows.sh [node_index] <local_file> <remote_path>
+# Examples:
+#   ./scp-to-windows.sh 0 kubeconfig c:\\\\k\\\\kubeconfig      # Copy to first Windows node (index 0)
+#   ./scp-to-windows.sh 1 test.zip 'c:\\\\'                   # Copy to second Windows node (index 1)
+#   ./scp-to-windows.sh kubeconfig c:\\\\k\\\\kubeconfig        # Copy to first node (default, backward compatible)
+
+# IP addresses embedded at generation time
+WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+SSH_KEY_FILE="${SSH_KEY_FILE}"
+
+# Check if first arg is a number (node index)
+if [[ "\$1" =~ ^[0-9]+\$ ]]; then
+  NODE_INDEX=\$1
+  shift  # Remove the index from arguments
+  LOCAL_FILE=\$1
+  REMOTE_PATH=\$2
+else
+  NODE_INDEX=0  # Default to first node for backward compatibility
+  LOCAL_FILE=\$1
+  REMOTE_PATH=\$2
+fi
+
+# Validate arguments
+if [[ -z "\$LOCAL_FILE" ]] || [[ -z "\$REMOTE_PATH" ]]; then
+  echo "Usage: \$0 [node_index] <local_file> <remote_path>"
+  echo "Examples:"
+  echo "  \$0 0 kubeconfig c:\\\\\\\\k\\\\\\\\kubeconfig"
+  echo "  \$0 1 images/file.zip 'c:\\\\\\\\'"
+  echo "  \$0 kubeconfig c:\\\\\\\\k\\\\\\\\kubeconfig  # defaults to node 0"
+  exit 1
+fi
+
+# Validate node index
+if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
+  echo "Error: Node index \$NODE_INDEX out of range. Available Windows nodes: 0-\$((\${#WINDOWS_EIPS[@]}-1))"
+  exit 1
+fi
+
+WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
+scp -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 "\$LOCAL_FILE" winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH"
 EOF
   chmod +x ./scp-to-windows.sh
 
+  # Generate scp-from-windows.sh with node index support
+  cat << EOF > ./scp-from-windows.sh
+#!/bin/bash
+# Usage: ./scp-from-windows.sh [node_index] <remote_path> <local_file>
+# Examples:
+#   ./scp-from-windows.sh 0 c:\\\\k\\\\calico.log ./calico.log    # Copy from first Windows node (index 0)
+#   ./scp-from-windows.sh 1 c:\\\\k\\\\report .                    # Copy from second Windows node (index 1)
+#   ./scp-from-windows.sh c:\\\\k\\\\calico.log ./calico.log      # Copy from first node (default, backward compatible)
 
-  cat << EOF > scp-from-windows.sh
-#---------Copy files from windows--------
-#usage: ./scp-from-windows.sh c:\\k\\calico.log ./calico.log
-scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@${WINDOWS_EIP}:\$1 \$2
+# IP addresses embedded at generation time
+WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+SSH_KEY_FILE="${SSH_KEY_FILE}"
+
+# Check if first arg is a number (node index)
+if [[ "\$1" =~ ^[0-9]+\$ ]]; then
+  NODE_INDEX=\$1
+  shift  # Remove the index from arguments
+  REMOTE_PATH=\$1
+  LOCAL_FILE=\$2
+else
+  NODE_INDEX=0  # Default to first node for backward compatibility
+  REMOTE_PATH=\$1
+  LOCAL_FILE=\$2
+fi
+
+# Validate arguments
+if [[ -z "\$REMOTE_PATH" ]] || [[ -z "\$LOCAL_FILE" ]]; then
+  echo "Usage: \$0 [node_index] <remote_path> <local_file>"
+  echo "Examples:"
+  echo "  \$0 0 c:\\\\\\\\k\\\\\\\\calico.log ./calico.log"
+  echo "  \$0 1 c:\\\\\\\\k\\\\\\\\report ."
+  echo "  \$0 c:\\\\\\\\k\\\\\\\\calico.log ./calico.log  # defaults to node 0"
+  exit 1
+fi
+
+# Validate node index
+if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
+  echo "Error: Node index \$NODE_INDEX out of range. Available Windows nodes: 0-\$((\${#WINDOWS_EIPS[@]}-1))"
+  exit 1
+fi
+
+WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
+scp -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH" "\$LOCAL_FILE"
 EOF
   chmod +x ./scp-from-windows.sh
 
@@ -429,20 +650,31 @@ function confirm-nodes-ssh() {
   
   log_info "Testing SSH connectivity with retry logic..."
   
-  # Helper function to test SSH connectivity with retries
+  # Helper function to test SSH connectivity with retries using generated helper scripts
   test_ssh_connectivity() {
-    local vm_name="$1"
-    local ssh_command="$2"
+    local vm_type="$1"  # "linux" or "windows"
+    local node_index="$2"
+    local node_num=$((node_index + 1))
     local timeout=900  # 15 minutes (increased from 5 minutes for Windows VM boot time)
     local retry_delay=30  # Increased from 15 seconds for less noise
     local start_time=$(date +%s)
     
-    log_info "Testing $vm_name SSH connectivity..."
+    local vm_name="${vm_type} VM ${node_num}"
+    log_info "Testing ${vm_name} SSH connectivity..."
     
     while true; do
-      # Use timeout to prevent SSH from hanging indefinitely
-      if timeout 30 $ssh_command "echo 'SSH test successful'" >/dev/null 2>&1; then
-        log_info "$vm_name SSH connectivity test passed"
+      # Use the generated helper scripts with timeout
+      local test_result=0
+      if [[ "$vm_type" == "linux" ]]; then
+        timeout 30 ./ssh-node-linux.sh $node_index "echo 'SSH test successful'" >/dev/null 2>&1
+        test_result=$?
+      else
+        timeout 30 ./ssh-node-windows.sh $node_index "Write-Host 'SSH test successful'" >/dev/null 2>&1
+        test_result=$?
+      fi
+      
+      if [[ $test_result -eq 0 ]]; then
+        log_info "${vm_name} SSH connectivity test passed"
         return 0
       fi
       
@@ -450,37 +682,28 @@ function confirm-nodes-ssh() {
       local elapsed=$((current_time - start_time))
       
       if [[ $elapsed -ge $timeout ]]; then
-        log_fail "SSH connectivity test to $vm_name failed after 15 minutes of retries"
+        log_fail "SSH connectivity test to ${vm_name} failed after 15 minutes of retries"
         return 1
       fi
       
-      log_info "$vm_name SSH test failed, retrying in ${retry_delay} seconds... (elapsed: ${elapsed}s)"
-      
-      # Show VM status every 2 minutes to help with debugging
-      if [[ $((elapsed % 120)) -eq 0 ]] && [[ $elapsed -gt 0 ]]; then
-        log_info "Checking $vm_name status after ${elapsed}s..."
-        if [[ "$vm_name" == "Windows VM" ]]; then
-          ${KUBECTL} get vm vm-windows -n winfv -o jsonpath='{.status.conditions[*].type}:{.status.conditions[*].status} ' 2>/dev/null || true
-          echo ""
-          ${KUBECTL} get virtualmachinesextension vm-windows-openssh -n winfv -o jsonpath='{.status.provisioningState}' 2>/dev/null && echo " (OpenSSH extension)" || true
-        else
-          ${KUBECTL} get vm vm-linux -n winfv -o jsonpath='{.status.conditions[*].type}:{.status.conditions[*].status} ' 2>/dev/null || true
-          echo ""
-        fi
-      fi
-      
+      log_info "${vm_name} SSH test failed, retrying in ${retry_delay} seconds... (elapsed: ${elapsed}s)"
       sleep $retry_delay
     done
   }
   
-  # Test both VMs
-  if ! test_ssh_connectivity "Linux VM" "./ssh-node-linux.sh"; then
-    exit 1
-  fi
+  # Test all Linux VMs
+  for ((i=0; i<${LINUX_NODE_COUNT}; i++)); do
+    if ! test_ssh_connectivity "linux" $i; then
+      exit 1
+    fi
+  done
   
-  if ! test_ssh_connectivity "Windows VM" "./ssh-node-windows.sh"; then
-    exit 1
-  fi
+  # Test all Windows VMs
+  for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+    if ! test_ssh_connectivity "windows" $i; then
+      exit 1
+    fi
+  done
   
   log_info "All SSH connectivity tests completed successfully"
 }
@@ -523,7 +746,15 @@ function diagnose_aso_resources() {
     
     # Show detailed status for VMs
     log_info "Detailed VirtualMachine status:"
-    for vm in vm-linux vm-windows; do
+    for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+      local vm="vm-linux-${i}"
+      if ${KUBECTL} get virtualmachine $vm -n winfv &>/dev/null; then
+        echo "--- VirtualMachine: $vm ---"
+        ${KUBECTL} get virtualmachine $vm -n winfv -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
+      fi
+    done
+    for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+      local vm="vm-windows-${i}"
       if ${KUBECTL} get virtualmachine $vm -n winfv &>/dev/null; then
         echo "--- VirtualMachine: $vm ---"
         ${KUBECTL} get virtualmachine $vm -n winfv -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
