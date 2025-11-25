@@ -585,6 +585,14 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.NameString(),
 			r.ActionString(),
 		)
+	} else if r.Kind == "" {
+		// This is not a profile rule, nor a known policy kind. This makes it an end-of-tier rule.
+		r.fpName = fmt.Sprintf(
+			"%s|%s|%s",
+			r.TierString(),
+			NoMatchNameStr,
+			r.ActionString(),
+		)
 	} else {
 		log.WithField("ruleID", r.String()).Warn("Unknown RuleID kind")
 	}

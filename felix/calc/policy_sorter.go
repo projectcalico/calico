@@ -385,9 +385,11 @@ func PolKVLess(i, j PolKV) bool {
 	// We map the default order to +Inf, which compares equal to itself so,
 	// this "just works".
 	if i.Value.Order == j.Value.Order {
-		// Order is equal, use kind/namespace/name to break ties.
-		iStr := fmt.Sprintf("%s/%s/%s", i.Key.Kind, i.Key.Namespace, i.Key.Name)
-		jStr := fmt.Sprintf("%s/%s/%s", j.Key.Kind, j.Key.Namespace, j.Key.Name)
+		// Order is equal, use namespace/name/kind to break ties.
+		// We start with the most specific (name) to least specific (kind), as
+		// it's more intuitive to have policies sorted that way.
+		iStr := fmt.Sprintf("%s/%s/%s", i.Key.Name, i.Key.Namespace, i.Key.Kind)
+		jStr := fmt.Sprintf("%s/%s/%s", j.Key.Name, j.Key.Namespace, j.Key.Kind)
 		return iStr < jStr
 	}
 	return i.Value.Order < j.Value.Order
