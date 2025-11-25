@@ -149,9 +149,9 @@ ut/%.ll: ut/%.c ut/ut.h
 ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 
 tc_preamble_ingress.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=3 -c $< -o $@
+	$(COMPILE)
 tc_preamble_egress.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=1 -c $< -o $@
+	$(COMPILE)
 tcx_test.ll: tcx_test.c tcx_test.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
