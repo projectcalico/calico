@@ -1,12 +1,23 @@
+{{- $count := conv.ToInt .Env.LINUX_NODE_COUNT -}}
+{{- range $i := seq 0 (sub $count 1) -}}
+{{- $nodeNum := add $i 1 -}}
+{{- $nodeName := printf "vm-linux-%d" $nodeNum -}}
+{{- $nicName := printf "nic-linux-%d" $nodeNum -}}
+{{- $pipName := printf "pip-linux-%d" $nodeNum -}}
+{{- $extContainerdName := printf "vm-linux-%d-containerd" $nodeNum -}}
+{{- $extDockerName := printf "vm-linux-%d-docker-legacy" $nodeNum -}}
+{{- $extKubeadmName := printf "vm-linux-%d-kubeadm" $nodeNum -}}
+{{- $computerName := printf "winfv-linux-%d" $nodeNum }}
+---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine
 metadata:
-  name: vm-linux
+  name: {{$nodeName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: {{.Env.AZURE_RESOURCE_GROUP}}
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
   hardwareProfile:
     vmSize: Standard_D4s_v3
   networkProfile:
@@ -14,9 +25,9 @@ spec:
       - reference:
           group: network.azure.com
           kind: NetworkInterface
-          name: nic-linux
+          name: {{$nicName}}
   osProfile:
-    computerName: winfv-linux
+    computerName: {{$computerName}}
     adminUsername: winfv
     adminPassword:
       key: password
@@ -25,7 +36,7 @@ spec:
       disablePasswordAuthentication: true
       ssh:
         publicKeys:
-          - keyData: {{.Env.PUBLIC_KEY}}
+          - keyData: {{$.Env.PUBLIC_KEY}}
             path: /home/winfv/.ssh/authorized_keys
   storageProfile:
     imageReference:
@@ -41,48 +52,144 @@ spec:
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
-  name: vm-linux-customextension
+  name: {{$extContainerdName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: vm-linux
+    name: {{$nodeName}}
   publisher: Microsoft.Azure.Extensions
   type: CustomScript
-  typeHandlerVersion: "2.0"
+  typeHandlerVersion: "2.1"
+  autoUpgradeMinorVersion: true
   settings:
-    commandToExecute: /bin/bash -c "echo hello winfv"
+    commandToExecute: |
+      /bin/bash -c '
+      set -e
+      echo "Installing containerd and Docker..."
+      
+      # Update package list
+      apt-get update
+      
+      # Install prerequisites
+      apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+      
+      # Install Docker (includes containerd)
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+      apt-get update
+      apt-get install -y docker-ce docker-ce-cli containerd.io
+      
+      # Configure containerd for Kubernetes
+      mkdir -p /etc/containerd
+      containerd config default | tee /etc/containerd/config.toml
+      
+      # Enable systemd cgroup driver (required for Kubernetes)
+      sed -i "s/SystemdCgroup = false/SystemdCgroup = true/g" /etc/containerd/config.toml
+      
+      # Restart containerd
+      systemctl restart containerd
+      systemctl enable containerd
+      
+      # Enable and start Docker
+      systemctl enable docker
+      systemctl start docker
+      
+      # Verify installations
+      containerd --version
+      docker --version
+      
+      echo "Containerd and Docker installation completed successfully"
+      '
 ---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
-  name: vm-linux-docker
+  name: {{$extDockerName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: vm-linux
+    name: {{$nodeName}}
   publisher: Microsoft.Azure.Extensions
   type: DockerExtension
   typeHandlerVersion: "1.0"
   autoUpgradeMinorVersion: true
 ---
+apiVersion: compute.azure.com/v1api20220301
+kind: VirtualMachinesExtension
+metadata:
+  name: {{$extKubeadmName}}
+  namespace: winfv
+spec:
+  location: {{$.Env.AZURE_LOCATION}}
+  owner:
+    name: {{$nodeName}}
+  publisher: Microsoft.Azure.Extensions
+  type: CustomScript
+  typeHandlerVersion: "2.1"
+  autoUpgradeMinorVersion: true
+  settings:
+    commandToExecute: |
+      /bin/bash -c '
+      set -e
+
+      # Disable swap (required for Kubernetes)
+      sudo swapoff -a
+      sudo sed -i "/ swap / s/^/#/" /etc/fstab
+
+      # Load required kernel modules
+      cat <<MODULES | sudo tee /etc/modules-load.d/k8s.conf
+      overlay
+      br_netfilter
+      MODULES
+
+      sudo modprobe overlay
+      sudo modprobe br_netfilter
+
+      # Set sysctl params required by Kubernetes
+      cat <<SYSCTL | sudo tee /etc/sysctl.d/k8s.conf
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+      SYSCTL
+
+      sudo sysctl --system
+
+      # Install kubeadm, kubelet, and kubectl for Kubernetes v{{$.Env.KUBE_VERSION}}
+      echo "Installing kubeadm, kubelet, and kubectl v{{$.Env.KUBE_VERSION}}..."
+      sudo apt-get update
+      sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+
+      curl -fsSL https://pkgs.k8s.io/core:/stable:/v{{$.Env.KUBE_VERSION}}/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{$.Env.KUBE_VERSION}}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+      sudo apt-get update
+      sudo apt-get install -y kubelet kubeadm kubectl
+      sudo apt-mark hold kubelet kubeadm kubectl
+
+      # Enable kubelet
+      sudo systemctl enable kubelet
+
+      echo "Kubeadm installation completed"
+      '
+---
 apiVersion: network.azure.com/v1api20240301
 kind: NetworkInterface
 metadata:
-  name: nic-linux
+  name: {{$nicName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: {{.Env.AZURE_RESOURCE_GROUP}}
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
   networkSecurityGroup:
     reference:
       group: network.azure.com
       kind: NetworkSecurityGroup
       name: winfv-sg
   ipConfigurations:
-    - name: ipconfig-linux
+    - name: ipconfig-linux-{{$nodeNum}}
       subnet:
         reference:
           group: network.azure.com
@@ -92,17 +199,18 @@ spec:
         reference:
           group: network.azure.com
           kind: PublicIPAddress
-          name: pip-linux
+          name: {{$pipName}}
 ---
 apiVersion: network.azure.com/v1api20240301
 kind: PublicIPAddress
 metadata:
-  name: pip-linux
+  name: {{$pipName}}
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: {{$.Env.AZURE_LOCATION}}
   owner:
-    name: {{.Env.AZURE_RESOURCE_GROUP}}
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
   publicIPAllocationMethod: Static
   sku:
     name: Standard
+{{- end}}
