@@ -405,6 +405,87 @@ var _ = DescribeTable(
 	),
 )
 
+// Test parsing of legacy style PolicyKey of form /calico/v1/policy/tier/<Tier>/policy/<Name>
+var _ = DescribeTable(
+	"key parsing (legacy keys)",
+	func(strKey string, expected Key, shouldFail bool) {
+		key := KeyFromDefaultPath(strKey)
+		if shouldFail {
+			Expect(key).To(BeNil())
+		} else {
+			Expect(key).To(Equal(expected))
+		}
+	},
+
+	Entry(
+		"Legacy NetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/ns%2fname",
+		PolicyKey{
+			Kind:      "NetworkPolicy",
+			Namespace: "ns",
+			Name:      "name",
+		},
+		false,
+	),
+	Entry(
+		"Legacy GlobalNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/name",
+		PolicyKey{
+			Kind: "GlobalNetworkPolicy",
+			Name: "name",
+		},
+		false,
+	),
+	Entry(
+		"Legacy StagedNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/ns%2fstaged:name",
+		PolicyKey{
+			Kind:      "StagedNetworkPolicy",
+			Namespace: "ns",
+			Name:      "name",
+		},
+		false,
+	),
+	Entry(
+		"Legacy StagedGlobalNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/staged:name",
+		PolicyKey{
+			Kind: "StagedGlobalNetworkPolicy",
+			Name: "name",
+		},
+		false,
+	),
+	Entry(
+		"Legacy ClusterNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/kcnp.kube-admin.name",
+		PolicyKey{
+			Kind: "KubernetesClusterNetworkPolicy",
+			Name: "kube-admin.name",
+		},
+		false,
+	),
+	Entry(
+		"Legacy KubernetesNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/ns%2fknp.default.name",
+		PolicyKey{
+			Kind:      "KubernetesNetworkPolicy",
+			Namespace: "ns",
+			Name:      "name",
+		},
+		false,
+	),
+	Entry(
+		"Legacy StagedKubernetesNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/ns%2fstaged:knp.default.name",
+		PolicyKey{
+			Kind:      "StagedKubernetesNetworkPolicy",
+			Namespace: "ns",
+			Name:      "name",
+		},
+		false,
+	),
+)
+
 var _ = DescribeTable(
 	"value parsing",
 	func(key Key, rawVal string, expectedVal interface{}) {
