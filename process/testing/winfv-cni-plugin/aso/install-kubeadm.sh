@@ -450,6 +450,11 @@ function prepare_and_copy_windows_dir () {
     fi
     
     echo "Copying to Windows node ${node_num} (${windows_eip})..."
+    
+    # Create c:\k directory on Windows node if it doesn't exist
+    local windows_connect_ssh="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${windows_eip} powershell"
+    ${windows_connect_ssh} "New-Item -ItemType Directory -Path c:\\k -Force | Out-Null"
+    
     # Use scp directly with -r for directory
     # Copy contents of ./windows/ (note the trailing slash) into c:\k\
     scp -r -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* winfv@${windows_eip}:c:\\k\\
