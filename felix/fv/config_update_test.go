@@ -47,9 +47,6 @@ var _ = infrastructure.DatastoreDescribe("Config update tests, after starting fe
 	)
 
 	BeforeEach(func() {
-		if NFTMode() {
-			Skip("TODO: Implement for NFT")
-		}
 		infra = getInfra()
 		tc, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
 		_ = infra
