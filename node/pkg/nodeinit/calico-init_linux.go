@@ -126,7 +126,7 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 	logrus.Infof("Included kubernetes service (%s) and endpoints (%s) in the Nat Maps.", serviceAddr, endpointAddrs)
 
 	// Activate the connect-time load balancer.
-	err = bpfnat.InstallConnectTimeLoadBalancer(hasIPv4, hasIPv6, "", "debug", 60*time.Second, true, bpfMaps.CommonMaps.CTLBProgramsMap)
+	err = bpfnat.InstallConnectTimeLoadBalancer(hasIPv4, hasIPv6, "", "debug", 60*time.Second, true, bpfMaps.CommonMaps.CTLBProgramsMaps)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to attach connect-time load balancer.")
 		return nil, err
