@@ -1623,7 +1623,11 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 }
 
 func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
-	file := path.Join(bpfdefs.ObjectDir, "policy_default.o")
+	fileName := "policy_default_fh.o"
+	if hk == hook.Egress {
+		fileName = "policy_default_th.o"
+	}
+	file := path.Join(bpfdefs.ObjectDir, fileName)
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
 		return fmt.Errorf("file %s: %w", file, err)
@@ -1671,6 +1675,7 @@ func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
 		return fmt.Errorf("failed to load default allow policy program: %w", err)
 	}
 	m.policyTcAllowFDs[hk] = bpf.ProgFD(fd)
+
 	return nil
 }
 
@@ -3857,13 +3862,14 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 			}
 		}
 
+		jmpMap := m.commonMaps.JumpMaps[aptc.Hook]
 		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
-			err = maps.UpdateMapEntry(aptc.JumpMap.MapFD(),
+			err = maps.UpdateMapEntry(jmpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(m.policyTcAllowFDs[aptc.Hook].FD()))
 		case hook.DefPolicyDeny:
-			err = maps.UpdateMapEntry(aptc.JumpMap.MapFD(),
+			err = maps.UpdateMapEntry(jmpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(m.policyTcDenyFDs[aptc.Hook].FD()))
 		}
 
