@@ -17,7 +17,10 @@ package types
 import (
 	"fmt"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/sirupsen/logrus"
 )
 
 type PolicyID struct {
@@ -33,9 +36,33 @@ func (p PolicyID) String() string {
 func (p PolicyID) ID() string {
 	// Include namespace only if it's set.
 	if p.Namespace != "" {
-		return fmt.Sprintf("%s/%s/%s", p.Kind, p.Namespace, p.Name)
+		return fmt.Sprintf("%s/%s/%s", p.KindShortName(), p.Namespace, p.Name)
 	}
-	return fmt.Sprintf("%s/%s", p.Kind, p.Name)
+	return fmt.Sprintf("%s/%s", p.KindShortName(), p.Name)
+}
+
+// KindShortName returns a short string for the kind of policy. This is used where space is at a premium,
+// e.g. in NFLOG prefixes. If the kind is unrecognized, it returns the full kind string.
+func (p PolicyID) KindShortName() string {
+	switch p.Kind {
+	case v3.KindNetworkPolicy:
+		return "np"
+	case v3.KindGlobalNetworkPolicy:
+		return "gnp"
+	case v3.KindStagedNetworkPolicy:
+		return "snp"
+	case v3.KindStagedGlobalNetworkPolicy:
+		return "sgnp"
+	case v3.KindStagedKubernetesNetworkPolicy:
+		return "sknp"
+	case model.KindKubernetesNetworkPolicy:
+		return "knp"
+	case model.KindKubernetesClusterNetworkPolicy:
+		return "kcnp"
+	default:
+		logrus.Warnf("Unrecognized policy kind %q when generating short name", p.Kind)
+		return p.Kind
+	}
 }
 
 func ProtoToPolicyID(p *proto.PolicyID) PolicyID {

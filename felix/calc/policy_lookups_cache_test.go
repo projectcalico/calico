@@ -52,9 +52,9 @@ var (
 			{Action: "deny"},
 		},
 	}
-	prefix_gnp1_t1_i0A = toprefix("API0|GlobalNetworkPolicy/policy-1.2.3")
+	prefix_gnp1_t1_i0A = toprefix("API0|gnp/policy-1.2.3")
 	ruleID_gnp1_t1_i0A = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 0, rules.RuleDirIngress, rules.RuleActionAllow)
-	prefix_gnp1_t1_e0D = toprefix("DPE0|GlobalNetworkPolicy/policy-1.2.3")
+	prefix_gnp1_t1_e0D = toprefix("DPE0|gnp/policy-1.2.3")
 	ruleID_gnp1_t1_e0D = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
 
 	gnp1_t1_4i2e_key = model.PolicyKey{
@@ -72,15 +72,15 @@ var (
 	}
 	// prefix_gnp1_t1_i0A defined above
 	// ruleID_gnp1_t1_i0A defined above
-	prefix_gnp1_t1_i1D = toprefix("DPI1|GlobalNetworkPolicy/policy-1.2.3")
+	prefix_gnp1_t1_i1D = toprefix("DPI1|gnp/policy-1.2.3")
 	ruleID_gnp1_t1_i1D = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 1, rules.RuleDirIngress, rules.RuleActionDeny)
-	prefix_gnp1_t1_i2N = toprefix("PPI2|GlobalNetworkPolicy/policy-1.2.3")
+	prefix_gnp1_t1_i2N = toprefix("PPI2|gnp/policy-1.2.3")
 	ruleID_gnp1_t1_i2N = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 2, rules.RuleDirIngress, rules.RuleActionPass)
-	prefix_gnp1_t1_i3P = toprefix("PPI3|GlobalNetworkPolicy/policy-1.2.3")
+	prefix_gnp1_t1_i3P = toprefix("PPI3|gnp/policy-1.2.3")
 	ruleID_gnp1_t1_i3P = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 3, rules.RuleDirIngress, rules.RuleActionPass)
-	prefix_gnp1_t1_e0A = toprefix("APE0|GlobalNetworkPolicy/policy-1.2.3")
+	prefix_gnp1_t1_e0A = toprefix("APE0|gnp/policy-1.2.3")
 	ruleID_gnp1_t1_e0A = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 0, rules.RuleDirEgress, rules.RuleActionAllow)
-	prefix_gnp1_t1_e1A = toprefix("APE1|GlobalNetworkPolicy/policy-1.2.3")
+	prefix_gnp1_t1_e1A = toprefix("APE1|gnp/policy-1.2.3")
 	ruleID_gnp1_t1_e1A = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 1, rules.RuleDirEgress, rules.RuleActionAllow)
 
 	// NetworkPolicy namespace-1/policy-2
@@ -95,7 +95,7 @@ var (
 			{Action: "allow"},
 		},
 	}
-	prefix_np1_t1_e0A = toprefix("APE0|NetworkPolicy/namespace-1/policy-2")
+	prefix_np1_t1_e0A = toprefix("APE0|np/namespace-1/policy-2")
 	ruleID_np1_t1_e0A = NewRuleID(v3.KindNetworkPolicy, "tier-1", "policy-2", "namespace-1", 0, rules.RuleDirEgress, rules.RuleActionAllow)
 
 	// K8s NetworkPolicy namespace-1/knp.default.policy-1.1
@@ -110,7 +110,7 @@ var (
 			{Action: "deny"},
 		},
 	}
-	prefix_knp1_t1_i0D = toprefix("DPI0|Kuber_5HwCRltkQrn3nPrjux75x7ANb4A_vQNoCNkhOgMmo_cy-1.1.1.1")
+	prefix_knp1_t1_i0D = toprefix("DPI0|knp/namespace-1/knp.default.policy-1.1.1.1")
 	ruleID_knp1_t1_i0D = NewRuleID(model.KindKubernetesNetworkPolicy, "default", "knp.default.policy-1.1.1.1", "namespace-1", 0, rules.RuleDirIngress, rules.RuleActionDeny)
 
 	// K8s AdminNetworkPolicy kanp.adminnetworkpolicy.policy-1.1

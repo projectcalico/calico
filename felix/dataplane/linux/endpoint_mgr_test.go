@@ -2456,14 +2456,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 		Describe("policy grouping tests", func() {
 			var (
 				// Define expected policy IDs for easier reference.
-				polA1      = "_FKj8ETtf3-BcMnS_qo8"
-				polA2      = "_omeUFCH2bVsRWONBpLZ"
-				polB1      = "_QZd81nWIIq0kC7gSngJ"
-				polB2      = "_NFYMXSjYN5YxMZGkDZS"
-				polC1      = "_v9EN8tMXxU3DVtYqK-R"
-				tier2PolA1 = "_phijx67K6PReQIW2j1X"
-				tier2PolA2 = "_hhHLUXdx7-vnBWg14Yt"
-				tier2PolB1 = "_EW0ENnzubkA1Izk0IBF"
+				polA1      = "gnp/polA1"
+				polA2      = "gnp/polA2"
+				polB1      = "gnp/polB1"
+				polB2      = "gnp/polB2"
+				polC1      = "gnp/polC1"
+				tier2PolA1 = "gnp/tier2.polA1"
+				tier2PolA2 = "gnp/tier2.polA2"
+				tier2PolB1 = "gnp/tier2.polB1"
 			)
 
 			JustBeforeEach(func() {

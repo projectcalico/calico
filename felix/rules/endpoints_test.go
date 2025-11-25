@@ -45,22 +45,22 @@ var (
 
 var (
 	// Expected ID suffixes for policies used in tests.
-	gnpAI = "_ZMdvlDxVmjIQZiLZp4U"
-	gnpBI = "_8W91OfQf0rhQJtk1nWi"
-	gnpAE = "_BOgFuOi8tbV0awqZFjg"
-	gnpBE = "_TPOgx2WKFeXH7YpWFda"
+	gnpAI = "gnp/ai"
+	gnpBI = "gnp/bi"
+	gnpAE = "gnp/ae"
+	gnpBE = "gnp/be"
 
 	// These don't exceed the length limit for iptables chain names, so
 	// they do not get hashed.
-	npAI  = "NetworkPolicy/ai"
-	npBI  = "NetworkPolicy/bi"
-	npAE  = "NetworkPolicy/ae"
-	npBE  = "NetworkPolicy/be"
-	npC   = "NetworkPolicy/c"
-	npAFI = "NetworkPolicy/afi"
-	npBFI = "NetworkPolicy/bfi"
-	npAFE = "NetworkPolicy/afe"
-	npBFE = "NetworkPolicy/bfe"
+	npAI  = "np/ai"
+	npBI  = "np/bi"
+	npAE  = "np/ae"
+	npBE  = "np/be"
+	npC   = "np/c"
+	npAFI = "np/afi"
+	npBFI = "np/bfi"
+	npAFE = "np/afe"
+	npBFE = "np/bfe"
 )
 
 func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() {
