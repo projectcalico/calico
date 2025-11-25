@@ -125,7 +125,7 @@ var (
 		},
 	}
 
-	prefix_kcnpAdmin1_t1_i0D = toprefix("DPI0|Kuber_T4Wnfhhih47vxipmZVF6dW7dJPJ-Vc4LCUZXm8gTk_cy-1.1.1.1")
+	prefix_kcnpAdmin1_t1_i0D = toprefix("DPI0|kcnp/kcnp.kube-admin.policy-1.1.1.1")
 	ruleID_kcnpAdmin1_t1_i0D = NewRuleID(
 		model.KindKubernetesClusterNetworkPolicy,
 		"kube-admin",
@@ -148,7 +148,7 @@ var (
 		},
 	}
 
-	prefix_kcnpBaseline1_t1_i0D = toprefix("DPI0|Kuber_azG4LtddQmAilU5WFAvxePXyhib12iVhjxfjkcmof_cy-1.1.1.1")
+	prefix_kcnpBaseline1_t1_i0D = toprefix("DPI0|kcnp/kcnp.kube-baseline.policy-1.1.1.1")
 	ruleID_kcnpBaseline1_t1_i0D = NewRuleID(
 		model.KindKubernetesClusterNetworkPolicy,
 		"kube-baseline",
