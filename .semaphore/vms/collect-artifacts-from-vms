@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2019 Tigera, Inc. All rights reserved.
+# Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,17 +34,14 @@ pids=()
 log_files=()
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
+  vm_ip=$(gcloud compute instances describe ${vm_name} --zone=${zone} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
   log_file="$artifacts_dir/collect-artifacts-$batch.log"
   log_files+=( "$log_file" )
   echo "Collecting artifacts from $vm_name. Logging to $log_file."
   (
     args=()
-    # Only collect binaries once since they're large to copy and should be identical.
-    if [ "$batch" != 1 ]; then
-      args+=("--skip-binaries")
-    fi
     VM_NAME=$vm_name "$my_dir/on-test-vm" COMPONENT=${COMPONENT} "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" "${args[@]}" || echo "Failed to collect artifacts from ${vm_name}."
-    timeout 10m gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" --recurse || echo "Failed to SCP from ${vm_name}"
+    timeout 10m scp -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" || echo "Failed to SCP from ${vm_name}"
   ) >& "$log_file" &
   pid=$!
   pids+=( "$pid" )
