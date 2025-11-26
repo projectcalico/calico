@@ -33,7 +33,7 @@
 
 . ./export-env.sh
 
-. ../../util/utils.sh
+. ../util/utils.sh
 
 : ${KUBECTL:=./bin/kubectl}
 : ${GOMPLATE:=./bin/gomplate}
