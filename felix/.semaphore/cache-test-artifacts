@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This script is run locally to push artifacts to our sub-directory in GCS.
+# The counterpart to this script is load-test-artifacts, which runs on the test
+# VM.  It can assume that the artifacts have been downloaded to /tmp.
+
 set -e
 set -x
 

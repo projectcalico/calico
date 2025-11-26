@@ -14,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script is run on the test VM, to load the component-specific test artifacts.
+# This script is run on the test VM, to load the component-specific test
+# artifacts, which have already been downloaded to /tmp.
 
 set -ex
 
