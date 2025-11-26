@@ -545,18 +545,6 @@ func TestTierList(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	anpTier := makeTier(names.AdminNetworkPolicyTierName, "", v3.AdminNetworkPolicyTierOrder)
-	err = store.Get(ctx, tierPath(names.AdminNetworkPolicyTierName), opts, anpTier)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-
-	banpTier := makeTier(names.BaselineAdminNetworkPolicyTierName, "", v3.BaselineAdminNetworkPolicyTierOrder)
-	err = store.Get(ctx, tierPath(names.BaselineAdminNetworkPolicyTierName), opts, banpTier)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-
 	tests := []struct {
 		prefix      string
 		pred        storage.SelectionPredicate
@@ -576,7 +564,7 @@ func TestTierList(t *testing.T) {
 			},
 		},
 		// Tiers are returned in name order.
-		expectedOut: []*v3.Tier{anpTier, preset[1].storedObj, banpTier, defaultTier, kubeAdminTier, kubeBaselineTier},
+		expectedOut: []*v3.Tier{preset[1].storedObj, defaultTier, kubeAdminTier, kubeBaselineTier},
 	}}
 
 	for i, tt := range tests {

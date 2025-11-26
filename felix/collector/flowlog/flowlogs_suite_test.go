@@ -34,6 +34,6 @@ func init() {
 
 func TestFlowlogs(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/flowlogs_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Flow logs Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/felix_collector_flowlog_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/collector/flowlog", []Reporter{junitReporter})
 }
