@@ -47,8 +47,19 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #else /* CALI_F_XDP */
 
-#define cali_jump_map map_symbol(cali_progs, 3)
-
+#if CALI_F_HEP || CALI_F_DEF_POLICY
+#if CALI_F_INGRESS
+#define cali_jump_map map_symbol(cali_progs_ing, 2)
+#else
+#define cali_jump_map map_symbol(cali_progs_eg, 2)
+#endif
+#else
+#if CALI_F_INGRESS
+#define cali_jump_map map_symbol(cali_progs_eg, 2)
+#else
+#define cali_jump_map map_symbol(cali_progs_ing, 2)
+#endif
+#endif
 CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #define __CALI_JUMP_TO(ctx, index) do {	\
@@ -98,7 +109,19 @@ CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 2400, 0)
 	bpf_tail_call((ctx)->xdp, &cali_jump_prog_map, (ctx)->xdp_globals->jumps[PROG_INDEX_POLICY])
 #else /* CALI_F_XDP */
 
-#define cali_jump_prog_map map_symbol(cali_jump, 3)
+#if CALI_F_HEP
+#if CALI_F_INGRESS
+#define cali_jump_prog_map map_symbol(cali_jump_fh, 2)
+#else
+#define cali_jump_prog_map map_symbol(cali_jump_th, 2)
+#endif
+#else
+#if CALI_F_INGRESS
+#define cali_jump_prog_map map_symbol(cali_jump_th, 2)
+#else
+#define cali_jump_prog_map map_symbol(cali_jump_fh, 2)
+#endif
+#endif
 
 CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 240000, 0)
 
