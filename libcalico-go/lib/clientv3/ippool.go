@@ -310,7 +310,6 @@ func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Int
 func cidrChangeOK(oldCIDR, newCIDR string) bool {
 	// 1. If strings match exactly, allow.
 	if oldCIDR == newCIDR {
-		log.Printf("CIDR strings match exactly: %s", oldCIDR)
 		return true
 	}
 
