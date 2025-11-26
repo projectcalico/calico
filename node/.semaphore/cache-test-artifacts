@@ -27,4 +27,3 @@ tar -czf /tmp/working-copy.tgz \
   --exclude=artifacts \
   ${CALICO_DIR_NAME}
 gcloud storage cp /tmp/working-copy.tgz "${GCS_WORKFLOW_DIR}/node/fv-artifacts/"
-wait
