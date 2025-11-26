@@ -67,7 +67,7 @@ type Key interface {
 
 	// valueType returns the object type associated with this key.
 	valueType() (reflect.Type, error)
-	parseValue(data []byte) (interface{}, error)
+	parseValue(data []byte) (any, error)
 
 	// String returns a unique string representation of this key.  The string
 	// returned by this method must uniquely identify this Key.
@@ -103,7 +103,7 @@ type LabelSelectingListInterface interface {
 //     JSON format).
 type KVPair struct {
 	Key      Key
-	Value    interface{}
+	Value    any
 	Revision string
 	UID      *types.UID
 	TTL      time.Duration // For writes, if non-zero, key has a TTL.
@@ -640,7 +640,7 @@ func parseJSONPointer[V any](key Key, rawData []byte) (*V, error) {
 // our value structs, according to the type of key.  I.e. if passed a
 // PolicyKey as the first parameter, it will try to parse rawData into a
 // Policy struct.
-func ParseValue(key Key, rawData []byte) (interface{}, error) {
+func ParseValue(key Key, rawData []byte) (any, error) {
 	return key.parseValue(rawData)
 }
 

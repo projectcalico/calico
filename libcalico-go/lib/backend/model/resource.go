@@ -171,6 +171,9 @@ func (key ResourceKey) parseValue(rawData []byte) (any, error) {
 		return nil, fmt.Errorf("unknown resource kind: %s", key.Kind)
 	}
 	v, err := ri.ParseValue(key, rawData)
+	if err != nil {
+		return nil, err
+	}
 
 	// Special case handling for network policy names to handle migration of
 	// names based on tier.

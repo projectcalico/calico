@@ -50,7 +50,7 @@ func (key BGPNodeKey) valueType() (reflect.Type, error) {
 	return typeBGPNode, nil
 }
 
-func (key BGPNodeKey) parseValue(data []byte) (interface{}, error) {
+func (key BGPNodeKey) parseValue(data []byte) (any, error) {
 	return parseJSONPointer[BGPNode](key, data)
 }
 
