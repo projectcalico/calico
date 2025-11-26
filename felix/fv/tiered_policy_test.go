@@ -364,6 +364,8 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			// BPF
 			out0 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "ingress")
 			out1 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "egress")
+			fmt.Println("BPF Policy Dump (ingress):", string(out0))
+			fmt.Println("BPF Policy Dump (egress):", string(out1))
 			return strings.Contains(out0, "End of tier tier1: deny") &&
 				strings.Contains(out1, "End of tier tier1: deny")
 		}
@@ -805,6 +807,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			tier.Spec.DefaultAction = &actionPass
 			_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
+			By("Tier default action changed to Pass, check if the rules are updated")
 
 			Eventually(rulesProgrammed, "30s", "200ms").Should(BeFalse())
 			Consistently(rulesProgrammed, "10s", "200ms").Should(BeFalse())
