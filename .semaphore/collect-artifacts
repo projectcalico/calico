@@ -19,14 +19,6 @@ set -x
 
 my_dir="$(dirname "$0")"
 repo_dir="$my_dir/.."
-skip_binaries=false
-
-for arg in "$@"; do
-  if [ "$arg" = "--skip-binaries" ]; then
-    echo "Skipping collecting binaries."
-    skip_binaries=true
-  fi
-done
 
 cd "$repo_dir" || exit 1
 
@@ -47,12 +39,6 @@ if [ "$COMPONENT" = "felix" ]; then
   if [ -s "$races" ]; then
     # Only save the log if it's non-empty.
     xz < "$races" > artifacts/data-races.log.xz
-  fi
-  if ! $skip_binaries; then
-    tar -cJf artifacts/binaries.tar.xz --ignore-failed-read \
-      "felix/bin/"calico-felix*amd64 \
-      "felix/bin/calico-bpf" \
-      "felix/bin/"test-*
   fi
   mkdir -p "artifacts/report"
   cp felix/report/*.xml "artifacts/report" || echo "Failed to copy XML reports (maybe there are none)."
