@@ -20,10 +20,6 @@ set -x
 vm_name=$1
 zone=${ZONE:-europe-west3-c}
 project=${GCP_PROJECT:-unique-caldron-775}
-gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key.json}
-
-gcloud auth activate-service-account --key-file=$gcp_secret_key
-gcloud config set project $project
 
 vm_pub_key=""
 for attempt in $(seq 1 20); do

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Set up access to GCP buckets.
+# Set up access to GCP buckets/gcloud API.
 export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
 gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
 gcloud config set project unique-caldron-775
