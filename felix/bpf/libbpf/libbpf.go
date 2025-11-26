@@ -47,6 +47,11 @@ type Map struct {
 	bpfObj *C.struct_bpf_object
 }
 
+type Program struct {
+	bpfProg *C.struct_bpf_program
+	bpfObj  *C.struct_bpf_object
+}
+
 type QdiskHook string
 
 const (
@@ -172,6 +177,35 @@ func (m *Map) NextMap() (*Map, error) {
 		return nil, nil
 	}
 	return &Map{bpfMap: bpfMap, bpfObj: m.bpfObj}, nil
+}
+
+func (o *Obj) FirstProgram() (*Program, error) {
+	bpfProg, err := C.bpf_object__next_program(o.obj, nil)
+	if bpfProg == nil || err != nil {
+		return nil, fmt.Errorf("error getting first program %w", err)
+	}
+	return &Program{bpfProg: bpfProg, bpfObj: o.obj}, nil
+}
+
+func (p *Program) NextProgram() (*Program, error) {
+	{
+		bpfProg, err := C.bpf_object__next_program(p.bpfObj, p.bpfProg)
+		if err != nil {
+			return nil, fmt.Errorf("error getting next program %w", err)
+		}
+		if bpfProg == nil {
+			return nil, nil
+		}
+		return &Program{bpfProg: bpfProg, bpfObj: p.bpfObj}, nil
+	}
+}
+
+func (p *Program) Name() string {
+	name := C.bpf_program__name(p.bpfProg)
+	if name == nil {
+		return ""
+	}
+	return C.GoString(name)
 }
 
 func (o *Obj) ProgramFD(secname string) (int, error) {
