@@ -234,13 +234,20 @@ function join_windows_worker_node() {
   echo "Installing kubeadm on Windows node ${display_name}..."
   ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\install-kubeadm.ps1 -K8sVersion v1.33.0"
   
-  # Join the cluster
-  # Extract just the token and discovery hash from the join command
-  JOIN_ARGS=$(echo "${KUBEADM_JOIN_COMMAND}" | sed 's/kubeadm join //')
+  # Parse the join command to extract individual components
+  # KUBEADM_JOIN_COMMAND format: "kubeadm join <endpoint> --token <token> --discovery-token-ca-cert-hash <hash>"
+  API_SERVER_ENDPOINT=$(echo "${KUBEADM_JOIN_COMMAND}" | grep -oP 'join \K[^ ]+')
+  TOKEN=$(echo "${KUBEADM_JOIN_COMMAND}" | grep -oP '\--token \K[^ ]+')
+  CA_CERT_HASH=$(echo "${KUBEADM_JOIN_COMMAND}" | grep -oP '\--discovery-token-ca-cert-hash \K[^ ]+')
   
-  # Execute join script
+  echo "Join parameters:"
+  echo "  API Server: ${API_SERVER_ENDPOINT}"
+  echo "  Token: ${TOKEN}"
+  echo "  CA Cert Hash: ${CA_CERT_HASH}"
+  
+  # Execute join script with parsed parameters
   echo "Joining Windows node ${display_name} to cluster..."
-  ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster.ps1 -ApiServerAddress '${LINUX_PIP}:6443' -JoinArgs '${JOIN_ARGS}' -WindowsEip '${windows_eip}'"
+  ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster.ps1 -ApiServerEndpoint '${API_SERVER_ENDPOINT}' -Token '${TOKEN}' -CaCertHash '${CA_CERT_HASH}' -WindowsEip '${windows_eip}'"
   
   echo "Windows worker node ${display_name} joined successfully!"
   echo

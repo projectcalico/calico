@@ -42,9 +42,4 @@ if (Test-Path "$KUBE_BIN_DIR\kubelet.exe") {
     exit 1
 }
 
-if (Test-Path "$KUBE_BIN_DIR\kubectl.exe") {
-    Write-Host "Kubectl version: $(& $KUBE_BIN_DIR\kubectl.exe version)"
-} else {
-    Write-Warning "kubectl.exe not found at $KUBE_BIN_DIR\kubectl.exe"
-}
 
