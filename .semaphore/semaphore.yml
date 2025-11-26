@@ -48,6 +48,8 @@ blocks:
     task:
       secrets:
         - name: banzai-secrets
+        - name: docker-hub
+        - name: private-repo
       prologue:
         commands:
           # Prepare azure configuration.
