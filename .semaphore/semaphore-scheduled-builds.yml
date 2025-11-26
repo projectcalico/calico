@@ -19,6 +19,8 @@ global_job_config:
     - name: docker-hub
   prologue:
     commands:
+      - export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
+      - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
       - checkout
       - export CALICO_DIR="$(pwd)"
       - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
@@ -432,7 +434,6 @@ blocks:
           - cd felix
           - cache restore go-pkg-cache
           - cache restore go-mod-cache
-          - export GCS_TRANSIENT_DIR_URL=gs://calico-transient-build-artifacts-ew3/workflow-${SEMAPHORE_WORKFLOW_ID}
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
       secrets:
@@ -443,7 +444,7 @@ blocks:
             minutes: 60
           commands:
             - make build image fv-prereqs
-            - ./.semaphore/cache-fv-artifacts
+            - ./.semaphore/cache-test-artifacts
             - ../.semaphore/run-and-monitor ut.log make ut
             - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
             - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
@@ -861,17 +862,14 @@ blocks:
       # KinD tests also build and run all the other images.
       when: "true"
     dependencies:
-      # Felix build job pushes the build cache up to gcloud bucket.
-      # TODO: combine and share node/felix common builds or make node build save off the cache too.
-      - "Felix: Build"
+      - "Prerequisites"
     task:
       prologue:
         commands:
           # Set up access to GCP buckets.
-          - export GCS_TRANSIENT_DIR_URL=gs://calico-transient-build-artifacts-ew3/workflow-${SEMAPHORE_WORKFLOW_ID}
-          - gcloud config set project unique-caldron-775
-          - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+          - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+          - gcloud config set project unique-caldron-775
           - cd node
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
           - export ZONE=europe-west3-c
@@ -880,6 +878,7 @@ blocks:
           - export COMPONENT=node
           - export VM_DISK_SIZE=80GB
           - mkdir artifacts
+          - ./.semaphore/cache-test-artifacts
           - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
         - name: "Node: kind-cluster tests"

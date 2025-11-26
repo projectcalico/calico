@@ -22,8 +22,8 @@ zone=${ZONE:-europe-west3-c}
 project=${GCP_PROJECT:-unique-caldron-775}
 gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key.json}
 
-gcloud config set project $project
 gcloud auth activate-service-account --key-file=$gcp_secret_key
+gcloud config set project $project
 
 vm_pub_key=""
 for attempt in $(seq 1 20); do
@@ -75,11 +75,9 @@ set +x
 echo "$DOCKERHUB_PASSWORD" | ssh "ubuntu@${vm_ip}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 scp -r -C "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets"
 set -x
-${ssh_cmd} "gcloud config set project unique-caldron-775 && \
-  gcloud auth activate-service-account --key-file=/home/ubuntu/secrets/secret.google-service-account-key.json && \
-  gcloud storage cp '${GCS_TRANSIENT_DIR_URL}/*' /tmp && \
+${ssh_cmd} "gcloud auth activate-service-account --key-file=/home/ubuntu/secrets/secret.google-service-account-key.json && \
+  gcloud config set project unique-caldron-775 && \
+  gcloud storage cp '${GCS_WORKFLOW_DIR}/${COMPONENT}/fv-artifacts/*' /tmp && \
   tar -xzf /tmp/working-copy.tgz && \
-  docker load -i /tmp/calico-felix-test.tar && \
-  docker load -i /tmp/felixtest-typha.tar && \
-  docker tag calico/felix-test:latest-amd64 felix-test:latest-amd64"
+  ${CALICO_DIR_NAME}/${COMPONENT}/.semaphore/load-test-artifacts"
 

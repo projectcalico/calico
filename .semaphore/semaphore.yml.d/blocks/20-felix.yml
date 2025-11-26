@@ -9,7 +9,6 @@
         - cd felix
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
-        - export GCS_TRANSIENT_DIR_URL=gs://calico-transient-build-artifacts-ew3/workflow-${SEMAPHORE_WORKFLOW_ID}
         - gcloud config set project unique-caldron-775
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
     secrets:
@@ -20,7 +19,7 @@
           minutes: 60
         commands:
           - make build image fv-prereqs
-          - ./.semaphore/cache-fv-artifacts
+          - ./.semaphore/cache-test-artifacts
           - ../.semaphore/run-and-monitor ut.log make ut
           - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
           - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
