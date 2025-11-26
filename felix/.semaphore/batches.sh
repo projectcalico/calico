@@ -63,8 +63,8 @@ run_batch() {
   # - Since the command will return immediately after putting the batch in the
   #   background, we need to monitor the log file separately. We do that with
   #   a retry loop.
-  # - nohup swallows the return code of the process so we use a bash -x wrapper
-  #   to capture it in a file.
+  # - nohup swallows the return code of the process so we use a 'bash -c'
+  #   wrapper to capture it in a file.
   VM_NAME="$vm_name" ${remote_exec} "nohup bash -c '$cmd_quot > /tmp/test.log; echo \$? > /tmp/test.rc' < /dev/null >& /dev/null &"
   echo "RUNNER: Started batch '$batch' on VM '$vm_name', monitoring log..." >> "$log_file"
 

@@ -14,8 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This script is executed as a startup script for our GCP VMs. It runs at
+# instance boot time as root.  Logs go to the VM's serial console.
+
 set -xeo pipefail
 
+# Function to retry a command up to n times with a delay.  When we run more than
+# 30 or so VMs, apt-get failures become common.
 retry() {
   local n=10
   for i in $(seq 1 $n); do
