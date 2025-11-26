@@ -89,6 +89,33 @@ function copy_scripts_to_linux_nodes() {
   echo
 }
 
+function copy_scripts_to_windows_nodes() {
+  echo "Copying Windows setup scripts to all Windows nodes..."
+  
+  # Copy to all Windows nodes
+  for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
+    local node_num=$((i+1))
+    local windows_eip="${WINDOWS_EIPS[$i]}"
+    
+    if [[ -z "$windows_eip" ]]; then
+      echo "ERROR: Windows node ${node_num} EIP is empty!"
+      return 1
+    fi
+    
+    echo "Copying scripts to Windows node ${node_num} (${windows_eip})..."
+    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ./windows/*.ps1 winfv@${windows_eip}:c:\\k\\ || {
+      echo "ERROR: Failed to copy scripts to Windows node ${node_num}"
+      return 1
+    }
+    
+    echo "Scripts copied successfully to Windows node ${node_num}"
+  done
+  
+  echo "All Windows scripts copied successfully!"
+  echo
+}
+
 function setup_kubeadm_cluster() {
   echo "Installing kubeadm and Kubernetes 1.33 on Linux VM..."
   
@@ -203,115 +230,17 @@ function join_windows_worker_node() {
   
   local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${windows_eip} powershell"
   
-  # Create a PowerShell script for installing kubeadm on Windows using PrepareNode.ps1
-  cat > /tmp/install-kubeadm-windows-${display_name}.ps1 <<'PSEOF'
-# Use PrepareNode.ps1 from sig-windows-tools to set up Kubernetes binaries
-$K8S_VERSION = "v1.33.0"
-$KUBE_BIN_DIR = "C:\k"
-
-# Ensure C:\k directory exists
-if (!(Test-Path $KUBE_BIN_DIR)) {
-    New-Item -ItemType Directory -Path $KUBE_BIN_DIR -Force
-}
-
-Write-Host "Downloading PrepareNode.ps1 from sig-windows-tools..."
-curl.exe -L -o PrepareNode.ps1 https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/PrepareNode.ps1
-
-if (!(Test-Path ".\PrepareNode.ps1")) {
-    Write-Error "Failed to download PrepareNode.ps1"
-    exit 1
-}
-
-Write-Host "Running PrepareNode.ps1 to install Kubernetes binaries (version: $K8S_VERSION)..."
-.\PrepareNode.ps1 -KubernetesVersion $K8S_VERSION
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "PrepareNode.ps1 failed with exit code $LASTEXITCODE"
-    exit $LASTEXITCODE
-}
-
-Write-Host "Kubernetes binaries installed successfully"
-Write-Host "Verifying installations..."
-if (Test-Path "$KUBE_BIN_DIR\kubeadm.exe") {
-    Write-Host "Kubeadm version: $(& $KUBE_BIN_DIR\kubeadm.exe version)"
-} else {
-    Write-Error "kubeadm.exe not found at $KUBE_BIN_DIR\kubeadm.exe"
-    exit 1
-}
-
-if (Test-Path "$KUBE_BIN_DIR\kubelet.exe") {
-    Write-Host "Kubelet version: $(& $KUBE_BIN_DIR\kubelet.exe --version)"
-} else {
-    Write-Error "kubelet.exe not found at $KUBE_BIN_DIR\kubelet.exe"
-    exit 1
-}
-
-if (Test-Path "$KUBE_BIN_DIR\kubectl.exe") {
-    Write-Host "Kubectl version: $(& $KUBE_BIN_DIR\kubectl.exe version)"
-} else {
-    Write-Warning "kubectl.exe not found at $KUBE_BIN_DIR\kubectl.exe"
-}
-PSEOF
-
-  # Copy script to Windows node
+  # Install kubeadm on Windows node
   echo "Installing kubeadm on Windows node ${display_name}..."
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/install-kubeadm-windows-${display_name}.ps1 winfv@${windows_eip}:c:\\k\\
+  ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\install-kubeadm.ps1 -K8sVersion v1.33.0"
   
-  # Execute the script on Windows
-  ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\install-kubeadm-windows-${display_name}.ps1"
-  
-  # Create join script with the actual join command
+  # Join the cluster
   # Extract just the token and discovery hash from the join command
   JOIN_ARGS=$(echo "${KUBEADM_JOIN_COMMAND}" | sed 's/kubeadm join //')
   
-  cat > /tmp/join-cluster-windows-${display_name}.ps1 <<PSEOF
-# Join Windows node to Kubernetes cluster
-\$KUBE_BIN_DIR = "C:\k"
-
-# Ensure PATH includes C:\k
-\$env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine")
-
-Write-Host "Joining cluster at ${LINUX_PIP}:6443..."
-Write-Host "Using kubeadm at: \$KUBE_BIN_DIR\kubeadm.exe"
-Write-Host "Kubelet location: \$KUBE_BIN_DIR\kubelet.exe"
-
-# Verify kubelet exists
-if (!(Test-Path "\$KUBE_BIN_DIR\kubelet.exe")) {
-    Write-Error "kubelet.exe not found at \$KUBE_BIN_DIR\kubelet.exe"
-    Start-Sleep -Seconds 600
-    exit 1
-}
-
-# Print the actual join command
-Write-Host ""
-Write-Host "=========================================="
-Write-Host "Executing kubeadm join command:"
-Write-Host "\$KUBE_BIN_DIR\kubeadm.exe join ${JOIN_ARGS} --cri-socket npipe:////./pipe/containerd-containerd"
-Write-Host "=========================================="
-Write-Host ""
-
-# Run kubeadm join with full path
-\$joinResult = & \$KUBE_BIN_DIR\kubeadm.exe join ${JOIN_ARGS} --cri-socket npipe:////./pipe/containerd-containerd
-
-# Check if join failed
-if (\$LASTEXITCODE -ne 0) {
-    Write-Error "Kubeadm join failed with exit code \$LASTEXITCODE"
-    Write-Host ""
-    Write-Host "=========================================="
-    Write-Host "Join failed! Sleeping for 10 minutes for debugging..."
-    Write-Host "You can SSH to this node at: ${windows_eip}"
-    Write-Host "=========================================="
-    Start-Sleep -Seconds 600
-    exit \$LASTEXITCODE
-}
-
-Write-Host "Successfully joined the cluster!"
-PSEOF
-
-  # Copy and execute join script
+  # Execute join script
   echo "Joining Windows node ${display_name} to cluster..."
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/join-cluster-windows-${display_name}.ps1 winfv@${windows_eip}:c:\\k\\
-  ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster-windows-${display_name}.ps1"
+  ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster.ps1 -ApiServerAddress '${LINUX_PIP}:6443' -JoinArgs '${JOIN_ARGS}' -WindowsEip '${windows_eip}'"
   
   echo "Windows worker node ${display_name} joined successfully!"
   echo
@@ -388,12 +317,12 @@ function prepare_windows_node() {
   fi
   
   echo "Windows node ${display_name} prepared successfully"
-  echo "DEBUG: prepare_windows_node function completing for node ${display_name}"
   echo
   return 0
 }
 
 copy_scripts_to_linux_nodes
+copy_scripts_to_windows_nodes
 setup_kubeadm_cluster
 join_linux_worker_nodes
 copy_files_from_linux
@@ -401,17 +330,10 @@ prepare_windows_configuration
 
 # Prepare each Windows node individually
 echo "Preparing ${WINDOWS_NODE_COUNT} Windows node(s)..."
-echo "DEBUG: WINDOWS_NODE_COUNT=${WINDOWS_NODE_COUNT}"
-echo "DEBUG: WINDOWS_EIPS array: ${WINDOWS_EIPS[@]}"
 for ((win_idx=0; win_idx<${WINDOWS_NODE_COUNT}; win_idx++)); do
-  echo "DEBUG: Top of loop - win_idx=${win_idx}"
   node_num=$((win_idx+1))
-  echo "DEBUG: Calling prepare_windows_node for win_idx=${win_idx}, node_num=${node_num}, EIP=${WINDOWS_EIPS[$win_idx]}"
   prepare_windows_node "${WINDOWS_EIPS[$win_idx]}" "${node_num}"
-  echo "DEBUG: Returned from prepare_windows_node for win_idx=${win_idx}, node_num=${node_num}"
-  echo "DEBUG: About to loop increment - current win_idx=${win_idx}"
 done
-echo "DEBUG: Loop finished - final win_idx=${win_idx}"
 echo "All Windows nodes prepared successfully"
 
 # Join each Windows node to the cluster
@@ -427,22 +349,3 @@ echo
 echo "Cluster setup complete! Final node status:"
 ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
 echo
-
-exit 0
-
-if [[ "$BACKEND" == "overlay" ]]; then
-  create_overlay_network
-  run_fv_overlay
-elif [[ "$BACKEND" = "l2bridge" ]]; then
-  create_l2bridge_network
-  run_fv_l2bridge
-else
-  echo "Invalid network backend paramenter $BACKEND provided"
-  exit -1
-fi
-
-# Copy report directory from windows.
-rm -r ./report || true
-scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -r winfv@${WINDOWS_EIP}:c:\\k\\report .
-
-echo "All done."
