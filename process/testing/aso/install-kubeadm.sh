@@ -365,3 +365,11 @@ echo
 echo "Cluster setup complete! Final node status:"
 ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
 echo
+
+# Stop for debug
+echo "Check for pause file..."
+while [ -f $HOME/pause-for-debug ];
+do
+    echo "#"
+    sleep 30
+done
