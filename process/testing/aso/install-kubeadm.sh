@@ -324,8 +324,15 @@ function prepare_windows_node() {
 
 copy_scripts_to_linux_nodes
 copy_scripts_to_windows_nodes
-setup_kubeadm_cluster
-join_linux_worker_nodes
+
+echo "Setting up Kubernetes cluster on Linux control plane..."
+setup_kubeadm_cluster > /dev/null 2>&1
+echo "✓ Kubernetes cluster initialized"
+
+echo "Joining Linux worker nodes..."
+join_linux_worker_nodes > /dev/null 2>&1
+echo "✓ Linux worker nodes joined"
+
 copy_files_from_linux
 prepare_windows_configuration
 
@@ -333,9 +340,11 @@ prepare_windows_configuration
 echo "Preparing ${WINDOWS_NODE_COUNT} Windows node(s)..."
 for ((win_idx=0; win_idx<${WINDOWS_NODE_COUNT}; win_idx++)); do
   node_num=$((win_idx+1))
-  prepare_windows_node "${WINDOWS_EIPS[$win_idx]}" "${node_num}"
+  echo "  Preparing Windows node ${node_num}..."
+  prepare_windows_node "${WINDOWS_EIPS[$win_idx]}" "${node_num}" > /dev/null 2>&1
+  echo "  ✓ Windows node ${node_num} prepared"
 done
-echo "All Windows nodes prepared successfully"
+echo "✓ All Windows nodes prepared successfully"
 
 # Join each Windows node to the cluster
 echo "Joining ${WINDOWS_NODE_COUNT} Windows node(s) to the cluster..."
