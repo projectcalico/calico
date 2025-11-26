@@ -17,7 +17,7 @@ export WINDOWS_NODE_COUNT="${WINDOWS_NODE_COUNT:=2}"
 
 # Get K8S_VERSION variable from metadata.mk, error out if it cannot be found
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
-METADATAMK=${SCRIPT_CURRENT_DIR}/../../../../metadata.mk
+METADATAMK=${SCRIPT_CURRENT_DIR}/../../../metadata.mk
 if [ -f ${METADATAMK} ]; then
     K8S_VERSION_METADATA=$(grep K8S_VERSION ${METADATAMK} | cut -d "=" -f 2)
     if [[ ! ${K8S_VERSION_METADATA} =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
