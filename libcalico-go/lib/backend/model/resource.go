@@ -107,8 +107,6 @@ func init() {
 	registerResourceInfo[apiv3.HostEndpoint](apiv3.KindHostEndpoint, "hostendpoints")
 	registerResourceInfo[apiv3.GlobalNetworkSet](apiv3.KindGlobalNetworkSet, "globalnetworksets")
 	registerResourceInfo[apiv3.GlobalNetworkPolicy](KindKubernetesClusterNetworkPolicy, "kubernetesclusternetworkpolicies")
-	registerResourceInfo[apiv3.GlobalNetworkPolicy](KindKubernetesAdminNetworkPolicy, "kubernetesadminnetworkpolicies")
-	registerResourceInfo[apiv3.GlobalNetworkPolicy](KindKubernetesBaselineAdminNetworkPolicy, "kubernetesbaselineadminnetworkpolicies")
 	registerResourceInfo[apiv3.IPPool](apiv3.KindIPPool, "ippools")
 	registerResourceInfo[apiv3.IPReservation](apiv3.KindIPReservation, "ipreservations")
 	registerResourceInfo[apiv3.NetworkPolicy](apiv3.KindNetworkPolicy, "networkpolicies")
