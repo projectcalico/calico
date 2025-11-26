@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/davecgh/go-spew/spew"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -40,6 +42,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -47,7 +50,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -802,6 +807,40 @@ func (kds *K8sDatastoreInfra) ensureNamespace(name string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (kds *K8sDatastoreInfra) CreateWorkloadsPerHosts(numOfWorkloads int, opts ...workload.Opt) []*workload.Workload {
+	var workloads []*workload.Workload
+	for fi, felix := range kds.felixes {
+		for i := range numOfWorkloads {
+			wName := fmt.Sprintf("w%d-felix%d", i, fi)
+			wIP := fmt.Sprintf("10.65.%d.%d", fi, i)
+			workloads = append(workloads, kds.CreateWorkload(felix, wName, wIP, opts...))
+		}
+	}
+	return workloads
+}
+
+func (kds *K8sDatastoreInfra) CreateWorkload(
+	felix *Felix,
+	name string,
+	addr string,
+	opts ...workload.Opt,
+) *workload.Workload {
+	if felix.TopologyOptions.UseIPPools {
+		// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+		err := kds.calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+			IP:       cnet.MustParseIP(addr),
+			HandleID: &name,
+			Attrs: map[string]string{
+				ipam.AttributeNode: felix.Hostname,
+			},
+			Hostname: felix.Hostname,
+		})
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	}
+	w := workload.New(felix, name, "default", addr, opts...)
+	return w
 }
 
 func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {

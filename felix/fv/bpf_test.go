@@ -1241,7 +1241,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
 				}
 				w := workload.New(tc.Felixes[ii], wName, "default",
-					wIP, strconv.Itoa(port), testOpts.protocol)
+					wIP, workload.WithPort(strconv.Itoa(port)), workload.WithProtocol(testOpts.protocol))
 
 				labels["name"] = w.Name
 				labels["workload"] = "regular"
