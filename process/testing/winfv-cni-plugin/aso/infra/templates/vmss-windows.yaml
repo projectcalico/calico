@@ -108,5 +108,5 @@ spec:
   type: CustomScriptExtension
   typeHandlerVersion: "1.9"
   settings:
-    commandToExecute: powershell -command "echo \"{{$.Env.PUBLIC_KEY}}\" | Add-Content 'C:\ProgramData\ssh\administrators_authorized_keys' -Encoding UTF8;icacls.exe 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F'"
+    commandToExecute: powershell -command "New-Item -ItemType Directory -Path C:\k -Force; echo \"{{$.Env.PUBLIC_KEY}}\" | Add-Content 'C:\ProgramData\ssh\administrators_authorized_keys' -Encoding UTF8;icacls.exe 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F'"
 {{- end}}
