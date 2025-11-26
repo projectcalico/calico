@@ -156,6 +156,12 @@ function setup_kubeadm_cluster() {
   export KUBEADM_JOIN_COMMAND
   echo "Join command saved: ${KUBEADM_JOIN_COMMAND}"
   
+  # Copy kubeconfig to local directory
+  echo "Copying kubeconfig from master node..."
+  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    winfv@${LINUX_EIP}:/home/winfv/.kube/config ./kubeconfig
+  echo "Kubeconfig saved to ./kubeconfig"
+  
   echo "Kubernetes cluster setup completed successfully!"
 }
 

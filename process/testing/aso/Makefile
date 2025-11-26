@@ -58,6 +58,7 @@ delete-vmss: $(BINDIR)/kubectl
 run-fv: $(ASO_INSTALLED_MARKER) $(VMSS_MARKER)
 	@echo "Running FV $(BACKEND) ..."
 	./install-kubeadm.sh
+	./install-calico.sh
 
 ###############################################################################
 # Utilities management
