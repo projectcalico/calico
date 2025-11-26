@@ -61,97 +61,45 @@ echo "  WINDOWS_PIPS (count: ${#WINDOWS_PIPS[@]}): ${WINDOWS_PIPS[@]}"
 echo "========================================"
 echo
 
+
+function copy_scripts_to_linux_nodes() {
+  echo "Copying Linux setup scripts to all Linux nodes..."
+  
+  # Copy to all Linux nodes
+  for ((i=0; i<${LINUX_NODE_COUNT}; i++)); do
+    local node_num=$((i+1))
+    local linux_eip="${LINUX_EIPS[$i]}"
+    
+    if [[ -z "$linux_eip" ]]; then
+      echo "ERROR: Linux node ${node_num} EIP is empty!"
+      return 1
+    fi
+    
+    echo "Copying scripts to Linux node ${node_num} (${linux_eip})..."
+    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ./linux/*.sh winfv@${linux_eip}:~/ || {
+      echo "ERROR: Failed to copy scripts to Linux node ${node_num}"
+      return 1
+    }
+    
+    echo "Scripts copied successfully to Linux node ${node_num}"
+  done
+  
+  echo "All Linux scripts copied successfully!"
+  echo
+}
+
 function setup_kubeadm_cluster() {
   echo "Installing kubeadm and Kubernetes 1.33 on Linux VM..."
   
-  # Install prerequisites and kubeadm
-  ${MASTER_CONNECT_COMMAND} bash -s <<'EOF'
-set -e
-
-# Disable swap (required for Kubernetes)
-sudo swapoff -a
-sudo sed -i '/ swap / s/^/#/' /etc/fstab
-
-# Load required kernel modules
-cat <<MODULES | sudo tee /etc/modules-load.d/k8s.conf
-overlay
-br_netfilter
-MODULES
-
-sudo modprobe overlay
-sudo modprobe br_netfilter
-
-# Set sysctl params required by Kubernetes
-cat <<SYSCTL | sudo tee /etc/sysctl.d/k8s.conf
-net.bridge.bridge-nf-call-iptables  = 1
-net.bridge.bridge-nf-call-ip6tables = 1
-net.ipv4.ip_forward                 = 1
-SYSCTL
-
-sudo sysctl --system
-
-# Install containerd if not already installed
-if ! command -v containerd &> /dev/null; then
-  echo "ERROR: containerd is not installed!"
-  echo "Please ensure the VM extension in vmss-linux.yaml has installed containerd."
-  exit 1
-fi
-
-echo "Containerd found: $(containerd --version)"
-
-# Verify containerd configuration
-if [ ! -f /etc/containerd/config.toml ]; then
-  echo "ERROR: containerd config file /etc/containerd/config.toml not found!"
-  exit 1
-fi
-
-# Verify systemd cgroup is enabled
-if ! grep -q "SystemdCgroup = true" /etc/containerd/config.toml; then
-  echo "WARNING: SystemdCgroup is not enabled in containerd config"
-  echo "This may cause issues with Kubernetes. Please check vmss-linux.yaml extension."
-fi
-
-# Ensure containerd is running
-sudo systemctl status containerd --no-pager || {
-  echo "ERROR: containerd service is not running!"
-  exit 1
-}
-
-# Install kubeadm, kubelet, and kubectl for Kubernetes 1.33
-echo "Installing kubeadm, kubelet, and kubectl v1.33..."
-sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl gpg
-
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-
-sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
-
-# Enable kubelet
-sudo systemctl enable kubelet
-
-echo "Kubeadm installation completed"
-EOF
-
+  # Run prerequisites setup script
+  echo "Setting up prerequisites and installing kubeadm..."
+  ${MASTER_CONNECT_COMMAND} "~/setup-node.sh v1.33"
+  
   # Initialize kubeadm cluster
-  echo "Initializing Kubernetes cluster with kubeadm..."
+  echo "Initializing Kubernetes cluster..."
   LOCAL_IP_ENV=${LINUX_PIP}
-  
-  ${MASTER_CONNECT_COMMAND} "sudo kubeadm init \
-    --apiserver-advertise-address=${LOCAL_IP_ENV} \
-    --apiserver-cert-extra-sans=${LOCAL_IP_ENV} \
-    --pod-network-cidr=10.244.0.0/16 \
-    --service-cidr=10.96.0.0/12 \
-    --skip-phases=addon/kube-proxy"
-  
-  # Set up kubeconfig for winfv user
-  ${MASTER_CONNECT_COMMAND} bash -s <<'EOF'
-mkdir -p $HOME/.kube
-sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-EOF
+  ${MASTER_CONNECT_COMMAND} "~/init-cluster.sh ${LOCAL_IP_ENV} 10.244.0.0/16 10.96.0.0/12"
   
   # Get the API server port (default is 6443 for kubeadm)
   APISERVER_PORT=6443
@@ -212,35 +160,15 @@ function join_linux_worker_nodes() {
     echo "Joining Linux Node ${node_num} (${linux_eip}) as worker"
     echo "====================================="
     
-    # Ensure prerequisites are installed on the worker node
+    # Install prerequisites and kubeadm on worker node
     echo "Installing kubeadm, kubelet, and kubectl on Linux worker node ${node_num}..."
-    ${linux_connect_command} bash -s <<'WORKER_EOF'
-set -e
-
-# Install prerequisites
-sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl gpg
-
-# Add Kubernetes apt repository
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-
-# Install kubeadm, kubelet, and kubectl
-sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
-
-# Enable kubelet
-sudo systemctl enable --now kubelet
-
-echo "Kubernetes components installed successfully"
-WORKER_EOF
+    ${linux_connect_command} "~/setup-node.sh v1.33"
     
     # Join the node to the cluster
     echo "Joining Linux worker node ${node_num} to the cluster..."
     echo "Using join command: ${KUBEADM_JOIN_COMMAND}"
     
-    if ! ${linux_connect_command} "sudo ${KUBEADM_JOIN_COMMAND}"; then
+    if ! ${linux_connect_command} "~/join-worker.sh ${KUBEADM_JOIN_COMMAND}"; then
       echo "ERROR: Failed to join Linux node ${node_num} to the cluster"
       return 1
     fi
@@ -465,6 +393,7 @@ function prepare_windows_node() {
   return 0
 }
 
+copy_scripts_to_linux_nodes
 setup_kubeadm_cluster
 join_linux_worker_nodes
 copy_files_from_linux
