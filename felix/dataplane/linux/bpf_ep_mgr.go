@@ -3184,10 +3184,8 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 	}
 
 	ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Ingress]
-	ap.JumpMap = d.mgr.commonMaps.JumpMaps[hook.Ingress]
 	if ap.Hook == hook.Egress {
 		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMap[hook.Egress]
-		ap.JumpMap = d.mgr.commonMaps.JumpMaps[hook.Egress]
 	}
 
 	if d.mgr.FlowLogsEnabled() {
