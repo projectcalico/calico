@@ -5,7 +5,7 @@ set -x
 
 : ${BACKEND:?Error: BACKEND is not set}
 
-FV_DIR="$HOME/$SEMAPHORE_GIT_DIR/process/testing/winfv-cni-plugin/aso"
+FV_DIR="$HOME/$SEMAPHORE_GIT_DIR/process/testing/aso"
 pushd ${FV_DIR}
 
 # Prepare local files
