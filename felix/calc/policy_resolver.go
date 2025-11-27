@@ -176,7 +176,9 @@ func (pr *PolicyResolver) Flush() {
 		return
 	}
 	pr.sortedTierData = pr.policySorter.Sorted()
-	pr.dirtyEndpoints.Iter(pr.sendEndpointUpdate)
+	for endpointID := range pr.dirtyEndpoints.All() {
+		pr.sendEndpointUpdate(endpointID)
+	}
 	pr.dirtyEndpoints.Clear()
 }
 
