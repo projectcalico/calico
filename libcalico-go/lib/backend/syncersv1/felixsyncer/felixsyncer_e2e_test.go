@@ -424,16 +424,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Key:   model.TierKey{Name: names.KubeBaselineTierName},
 					Value: &model.Tier{Order: &baselineTierOrder, DefaultAction: apiv3.Pass},
 				})
-				anpOrder := apiv3.AdminNetworkPolicyTierOrder
-				syncTester.ExpectData(model.KVPair{
-					Key:   model.TierKey{Name: names.AdminNetworkPolicyTierName},
-					Value: &model.Tier{Order: &anpOrder, DefaultAction: apiv3.Pass},
-				})
-				banpOrder := apiv3.BaselineAdminNetworkPolicyTierOrder
-				syncTester.ExpectData(model.KVPair{
-					Key:   model.TierKey{Name: names.BaselineAdminNetworkPolicyTierName},
-					Value: &model.Tier{Order: &banpOrder, DefaultAction: apiv3.Pass},
-				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
 					Value: "192.168.0.1",
@@ -447,7 +437,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Value: &model.Wireguard{InterfaceIPv4Addr: &wip, PublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="},
 				})
 				// add one for the node resource
-				expectedCacheSize += 10
+				expectedCacheSize += 8
 			}
 
 			// The HostIP will be added for the IPv4 address

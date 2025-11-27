@@ -37,11 +37,9 @@ type Tier struct {
 }
 
 const (
-	AdminNetworkPolicyTierOrder         = float64(1_000)      // 1K
-	KubeAdminTierOrder                  = float64(1_000)      // 1K
-	DefaultTierOrder                    = float64(1_000_000)  // 1Million
-	BaselineAdminNetworkPolicyTierOrder = float64(10_000_000) // 10Million
-	KubeBaselineTierOrder               = float64(10_000_000) // 10Million
+	KubeAdminTierOrder    = float64(1_000)      // 1K
+	DefaultTierOrder      = float64(1_000_000)  // 1Million
+	KubeBaselineTierOrder = float64(10_000_000) // 10Million
 )
 
 // TierSpec contains the specification for a security policy tier resource.
