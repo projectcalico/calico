@@ -453,16 +453,15 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 	var missingHandles []string
 	{
 		fmt.Printf("Scanning for IPs with missing handle...\n")
-		c.inUseHandles.Iter(func(handleID string) error {
+		for handleID := range c.inUseHandles.All() {
 			if _, ok := handles[handleID]; ok {
-				return nil
+				continue
 			}
 			if c.showProblemIPs {
 				fmt.Printf("  %s is in use in a block but doesn't exist.\n", handleID)
 			}
 			missingHandles = append(missingHandles, handleID)
-			return nil
-		})
+		}
 		fmt.Printf("Found %d handles mentioned in blocks with no matching handle resource.\n", len(missingHandles))
 	}
 

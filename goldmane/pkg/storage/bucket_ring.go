@@ -281,10 +281,9 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	// Capture the flows from the bucket before we clear it.
 	flows := set.New[*DiachronicFlow]()
 	if r.buckets[r.headIndex].Flows != nil {
-		r.buckets[r.headIndex].Flows.Iter(func(d *DiachronicFlow) error {
+		for d := range r.buckets[r.headIndex].Flows.All() {
 			flows.Add(d)
-			return nil
-		})
+		}
 	}
 
 	// Clear data from the bucket that is now the head. The start time of the new bucket
@@ -293,7 +292,7 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 
 	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
-	flows.Iter(func(d *DiachronicFlow) error {
+	for d := range flows.All() {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
 		d.Rollover(r.BeginningOfHistory())
 
@@ -308,8 +307,7 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 			}
 			delete(r.diachronics, d.Key)
 		}
-		return nil
-	})
+	}
 
 	// Emit flows to the sink.
 	if sink != nil {
@@ -381,10 +379,9 @@ func (r *BucketRing) FlowSet(startGt, startLt int64) set.Set[*DiachronicFlow] {
 		if (startGt == 0 || b.StartTime >= startGt) &&
 			(startLt == 0 || b.StartTime <= startLt) {
 
-			b.Flows.Iter(func(d *DiachronicFlow) error {
+			for d := range b.Flows.All() {
 				flows.Add(d)
-				return nil
-			})
+			}
 		}
 	}
 	return flows
@@ -565,7 +562,7 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 	})
 
 	// Use the DiachronicFlow data to build the aggregated flows.
-	keys.Iter(func(d *DiachronicFlow) error {
+	for d := range keys.All() {
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
 				"start": startTime,
@@ -575,8 +572,7 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 		if f := d.Aggregate(startTime, endTime); f != nil {
 			flows.Flows = append(flows.Flows, *f)
 		}
-		return nil
-	})
+	}
 
 	// The next bucket that will trigger an emission is the one after the end of the current window.
 	// Log this for debugging purposes.
@@ -781,13 +777,12 @@ func (r *BucketRing) IterFlows(start, end int64, f func(d *DiachronicFlow, s, e 
 		stopBucketIteration := false
 
 		// Iterate through all of the flows in the bucket.
-		b.Flows.Iter(func(d *DiachronicFlow) error {
+		for d := range b.Flows.All() {
 			if err := f(d, b.StartTime, b.EndTime); errors.Is(err, ErrStopBucketIteration) {
 				stopBucketIteration = true
-				return set.StopIteration
+				break
 			}
-			return nil
-		})
+		}
 
 		if stopBucketIteration {
 			// If the inner function indicates to stop iterating, return a StopBucketIteration error

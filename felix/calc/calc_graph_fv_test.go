@@ -818,10 +818,9 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 
 func stringifyRoutes(routes set.Set[types.RouteUpdate]) []string {
 	out := make([]string, 0, routes.Len())
-	routes.Iter(func(item types.RouteUpdate) error {
+	for item := range routes.All() {
 		out = append(out, fmt.Sprintf("%+v", item))
-		return nil
-	})
+	}
 	sort.Strings(out)
 	return out
 }
