@@ -137,7 +137,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 		}
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
-		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -194,7 +194,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		if ipv6Enabled {
 			// IPv6 address update
 			bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1::4"))
-			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
+			bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(programsIng.Count()).To(Equal(28))
@@ -630,7 +630,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(attached2).To(Equal(attached))
 
-		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
@@ -706,7 +706,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(pm).To(HaveLen(0))
 
-		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
@@ -764,7 +764,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	workload1 := createVethName("workloadep1")
 	defer deleteLink(workload1)
 
-	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -942,7 +942,7 @@ func TestRepeatedAttach(t *testing.T) {
 		regexp.MustCompile("^workloadep[123]"),
 	)
 	Expect(err).NotTo(HaveOccurred())
-	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, iface.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1166,7 +1166,7 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 		}
 	}()
 
-	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1257,7 +1257,7 @@ func TestAttachTcx(t *testing.T) {
 	workload0 := createVethName("workloadep0")
 	defer deleteLink(workload0)
 
-	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1375,7 +1375,7 @@ func TestLogFilters(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
-		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1405,7 +1405,7 @@ func TestLogFilters(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
-		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
