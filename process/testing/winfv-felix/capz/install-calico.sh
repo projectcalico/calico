@@ -163,11 +163,3 @@ done;
 echo "Wait for kube-proxy to be ready on Windows nodes..."
 timeout --foreground 1200 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
 echo "kube-proxy is ready on Windows nodes"
-
-# Stop for debug
-echo "Check for pause file..."
-while [ -f /home/semaphore/pause-for-debug ];
-do
-    echo "#"
-    sleep 30
-done
