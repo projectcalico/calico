@@ -15,6 +15,7 @@
 package set
 
 import (
+	"iter"
 	"unsafe"
 )
 
@@ -276,6 +277,37 @@ func (a *Adaptive[T]) Iter(f func(item T) error) {
 			}
 			if err == RemoveItem {
 				a.Discard(v)
+			}
+		}
+	}
+}
+
+// All returns an iterator for use with Go's range-over-func feature.
+// The iterator supports deletion from the set during iteration without panicking.
+func (a *Adaptive[T]) All() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		switch a.size {
+		case 0:
+			return
+		case sizeStoredInMap:
+			// Map-backed: safe to iterate and mutate directly
+			m := a.loadMapFromPointer()
+			for v := range m {
+				if !yield(v) {
+					return
+				}
+			}
+		default:
+			// Array-backed: take a snapshot to allow safe mutation during iteration
+			tSlice := a.loadSliceFromPointer()
+			var tCopy [adaptiveSetArrayLimit]T
+			copy(tCopy[:], tSlice)
+			tSlice = tCopy[:a.size]
+
+			for _, v := range tSlice {
+				if !yield(v) {
+					return
+				}
 			}
 		}
 	}
