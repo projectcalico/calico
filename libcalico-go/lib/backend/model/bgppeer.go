@@ -66,6 +66,10 @@ func (key NodeBGPPeerKey) valueType() (reflect.Type, error) {
 	return typeBGPPeer, nil
 }
 
+func (key NodeBGPPeerKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[BGPPeer](key, rawData)
+}
+
 func (key NodeBGPPeerKey) String() string {
 	return fmt.Sprintf("BGPPeer(node=%s, ip=%s, port=%d)", key.Nodename, key.PeerIP, key.Port)
 }
@@ -146,6 +150,10 @@ func (key GlobalBGPPeerKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key GlobalBGPPeerKey) valueType() (reflect.Type, error) {
 	return typeBGPPeer, nil
+}
+
+func (key GlobalBGPPeerKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[BGPPeer](key, rawData)
 }
 
 func (key GlobalBGPPeerKey) String() string {
