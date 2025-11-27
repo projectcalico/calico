@@ -843,14 +843,13 @@ func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpoint
 		return nil
 	}
 	contrib := map[string][]ipsetmember.IPSetMember{}
-	epData.cachedMatchingIPSetIDs.Iter(func(ipSetID string) error {
+	for ipSetID := range epData.cachedMatchingIPSetIDs.All() {
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		if ipSetData == nil {
 			log.WithField("ipSetID", ipSetID).Panic("Endpoint cachedMatchingIPSetIDs refers to nonexistent IP set.")
 		}
 		contrib[ipSetID] = idx.CalculateEndpointContribution(epData, ipSetData)
-		return nil
-	})
+	}
 	return contrib
 }
 

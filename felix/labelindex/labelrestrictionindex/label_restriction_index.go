@@ -234,26 +234,27 @@ type Labeled interface {
 }
 
 func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(item Labeled, f func(SelID, *selector.Selector)) {
-	emit := func(id SelID) error {
-		f(id, s.selectorsByID[id])
-		return nil
-	}
-
 	for k, v := range item.AllOwnAndParentLabelHandles() {
 		values, ok := s.labelToValueToIDs[k]
 		if !ok {
 			continue
 		}
 		if values.selsMatchingWildcard != nil {
-			values.selsMatchingWildcard.Iter(emit)
+			for id := range values.selsMatchingWildcard.All() {
+				f(id, s.selectorsByID[id])
+			}
 		}
 		if ids := values.selsMatchingSpecificValues[v]; ids != nil {
-			ids.Iter(emit)
+			for id := range ids.All() {
+				f(id, s.selectorsByID[id])
+			}
 		}
 	}
 
 	// Finally, emit the unoptimized selectors.
-	s.unoptimizedIDs.Iter(emit)
+	for id := range s.unoptimizedIDs.All() {
+		f(id, s.selectorsByID[id])
+	}
 }
 
 func (s *LabelRestrictionIndex[SelID]) updateGauges() {

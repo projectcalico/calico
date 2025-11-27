@@ -748,8 +748,7 @@ func (c *listCmd) main() {
 	}
 	writef("Field: foobar\n") // Dummy field, should get ignored.
 	writef("Members:\n")
-	members.Iter(func(member string) error {
+	for member := range members.All() {
 		writef("%s\n", member)
-		return nil
-	})
+	}
 }

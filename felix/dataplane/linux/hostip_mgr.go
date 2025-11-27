@@ -69,10 +69,9 @@ func newHostIPManagerWithShims(wlIfacesPrefixes []string,
 func (m *hostIPManager) getCurrentMembers() []string {
 	members := []string{}
 	for _, addrs := range m.hostIfaceToAddrs {
-		addrs.Iter(func(ip string) error {
+		for ip := range addrs.All() {
 			members = append(members, ip)
-			return nil
-		})
+		}
 	}
 
 	return members

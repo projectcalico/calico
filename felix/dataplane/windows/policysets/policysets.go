@@ -209,12 +209,11 @@ func (s *PolicySets) ProcessIpSetUpdate(ipSetId string) []string {
 // getPoliciesByIpSetId locates any Policy set(s) which reference the provided IP set
 func (s *PolicySets) getPoliciesByIpSetId(ipSetId string) (policies []string) {
 	for policySetId, policySet := range s.policySetIdToPolicySet {
-		policySet.IpSetIds.Iter(func(id string) error {
+		for id := range policySet.IpSetIds.All() {
 			if id == ipSetId {
 				policies = append(policies, policySetId)
 			}
-			return nil
-		})
+		}
 	}
 	return
 }
