@@ -1,3 +1,9 @@
+# Verify required environment variables
+: "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
+: "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
+: "${AZURE_CLIENT_ID:?Environment variable empty or not defined.}"
+: "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
+
 export SUFFIX="${SUFFIX:=${USER}-aso}"
 
 export AZURE_LOCATION="${AZURE_LOCATION:="eastus2"}"
@@ -23,3 +29,7 @@ export SSH_KEY_FILE="$PWD/.sshkey"
 
 export GCR_IO_PULL_SECRET="${GCR_IO_PULL_SECRET:="${HOME}/secrets/docker_cfg.json"}"
 export TSEE_TEST_LICENSE="${TSEE_TEST_LICENSE:="${HOME}/secrets/license.yaml"}"
+
+export PRODUCT="calient"
+export RELEASE_STREAM="master" 
+export HASH_RELEASE="true"

@@ -63,12 +63,6 @@ function ensure_aso_credentials() {
   # Configure namespaced ASO credentials only
   log_info "Configuring namespaced ASO v2 credentials..."
   
-  # Verify required environment variables
-  : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
-  : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
-  : "${AZURE_CLIENT_ID:?Environment variable empty or not defined.}"
-  : "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
-  
   # Create namespace for our resources
   ${KUBECTL} create namespace winfv --dry-run=client -o yaml | ${KUBECTL} apply -f -
   
