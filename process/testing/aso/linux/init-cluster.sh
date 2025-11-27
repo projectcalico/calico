@@ -5,7 +5,7 @@ echo "=== Initializing Kubernetes cluster with kubeadm ==="
 
 # Get the advertise address (should be passed as argument)
 ADVERTISE_ADDRESS=${1}
-POD_NETWORK_CIDR=${2:-"10.244.0.0/16"}
+POD_NETWORK_CIDR=${2:-"192.168.0.0/16"}
 SERVICE_CIDR=${3:-"10.96.0.0/12"}
 EXTERNAL_IP=${4}  # Optional external IP for certificate SANs
 
