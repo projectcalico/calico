@@ -52,17 +52,17 @@ type IPMaps struct {
 }
 
 type CommonMaps struct {
-	StateMap        maps.Map
-	IfStateMap      maps.Map
-	RuleCountersMap maps.Map
-	CountersMap     maps.Map
-	ProgramsMap     maps.Map
-	JumpMap         maps.MapWithDeleteIfExists
-	XDPProgramsMap  maps.Map
-	XDPJumpMap      maps.MapWithDeleteIfExists
-	ProfilingMap    maps.Map
-	CTLBProgramsMap []maps.Map
-	QoSMap          maps.MapWithUpdateWithFlags
+	StateMap         maps.Map
+	IfStateMap       maps.Map
+	RuleCountersMap  maps.Map
+	CountersMap      maps.Map
+	ProgramsMaps     []maps.Map
+	JumpMap          maps.MapWithDeleteIfExists
+	XDPProgramsMap   maps.Map
+	XDPJumpMap       maps.MapWithDeleteIfExists
+	ProfilingMap     maps.Map
+	CTLBProgramsMaps []maps.Map
+	QoSMap           maps.MapWithUpdateWithFlags
 }
 
 type Maps struct {
@@ -86,17 +86,17 @@ func (m *Maps) Destroy() {
 
 func getCommonMaps() *CommonMaps {
 	return &CommonMaps{
-		StateMap:        state.Map(),
-		IfStateMap:      ifstate.Map(),
-		RuleCountersMap: counters.PolicyMap(),
-		CountersMap:     counters.Map(),
-		ProgramsMap:     hook.NewProgramsMap(),
-		JumpMap:         jump.Map().(maps.MapWithDeleteIfExists),
-		XDPProgramsMap:  hook.NewXDPProgramsMap(),
-		XDPJumpMap:      jump.XDPMap().(maps.MapWithDeleteIfExists),
-		ProfilingMap:    profiling.Map(),
-		CTLBProgramsMap: nat.ProgramsMap(),
-		QoSMap:          qos.Map().(maps.MapWithUpdateWithFlags),
+		StateMap:         state.Map(),
+		IfStateMap:       ifstate.Map(),
+		RuleCountersMap:  counters.PolicyMap(),
+		CountersMap:      counters.Map(),
+		ProgramsMaps:     hook.NewProgramsMaps(),
+		JumpMap:          jump.Map().(maps.MapWithDeleteIfExists),
+		XDPProgramsMap:   hook.NewXDPProgramsMap(),
+		XDPJumpMap:       jump.XDPMap().(maps.MapWithDeleteIfExists),
+		ProfilingMap:     profiling.Map(),
+		CTLBProgramsMaps: nat.ProgramsMaps(),
+		QoSMap:           qos.Map().(maps.MapWithUpdateWithFlags),
 	}
 }
 
@@ -169,21 +169,20 @@ func (m *Maps) slice() []maps.Map {
 }
 
 func (c *CommonMaps) slice() []maps.Map {
-	return []maps.Map{
+	mapslice := []maps.Map{
 		c.StateMap,
 		c.IfStateMap,
 		c.RuleCountersMap,
 		c.CountersMap,
-		c.ProgramsMap,
 		c.JumpMap,
 		c.XDPProgramsMap,
 		c.XDPJumpMap,
 		c.ProfilingMap,
-		c.CTLBProgramsMap[0],
-		c.CTLBProgramsMap[1],
-		c.CTLBProgramsMap[2],
 		c.QoSMap,
 	}
+	mapslice = append(mapslice, c.ProgramsMaps...)
+	mapslice = append(mapslice, c.CTLBProgramsMaps...)
+	return mapslice
 }
 
 func (i *IPMaps) slice() []maps.Map {

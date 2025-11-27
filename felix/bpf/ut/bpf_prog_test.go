@@ -401,12 +401,17 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		}
 	}
 
+	useIngressProgMap := strings.Contains(obj, "from_")
 	if topts.xdp {
-		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false, false)
+		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	} else {
-		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false, false)
+		fileToLoad := "../../bpf-gpl/bin/tc_preamble_egress.o"
+		if useIngressProgMap {
+			fileToLoad = "../../bpf-gpl/bin/tc_preamble_ingress.o"
+		}
+		o, err := objLoad(fileToLoad, bpfFsDir, "preamble", topts, false, false, false, useIngressProgMap)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	}
@@ -417,12 +422,15 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 	hasMaglev := strings.Contains(obj, "from_hep")
 	obj += ".o"
-	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev)
+	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev, useIngressProgMap)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
 
 	if rules != nil {
-		staticProgMap := progMap
+		staticProgMap := progMap[hook.Egress]
+		if useIngressProgMap {
+			staticProgMap = progMap[hook.Ingress]
+		}
 		polMap := policyJumpMap
 		popts := []polprog.Option{}
 		stride := jump.TCMaxEntryPoints
@@ -588,11 +596,12 @@ var (
 
 	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap maps.Map
 	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6       maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                  maps.Map
+	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                           maps.Map
 	perfMap                                                                                                                  maps.Map
 	profilingMap, ipfragsMapTmp                                                                                              maps.Map
 	qosMap                                                                                                                   maps.Map
 	ctlbProgsMap                                                                                                             []maps.Map
+	progMap                                                                                                                  []maps.Map
 	allMaps                                                                                                                  []maps.Map
 )
 
@@ -625,7 +634,8 @@ func initMapsOnce() {
 		policyJumpMap = jump.Map()
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
-		ctlbProgsMap = nat.ProgramsMap()
+		ctlbProgsMap = nat.ProgramsMaps()
+		progMap = hook.NewProgramsMaps()
 		qosMap = qos.Map()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
@@ -659,7 +669,7 @@ func cleanUpMaps() {
 	defer log.SetLevel(logLevel)
 
 	for _, m := range allMaps {
-		if m == stateMap || m == testStateMap || m == progMap || m == countersMap || m == ipfragsMapTmp {
+		if m == stateMap || m == testStateMap || m == progMap[hook.Ingress] || m == progMap[hook.Egress] || m == countersMap || m == ipfragsMapTmp {
 			continue // Can't clean up array maps
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
@@ -709,7 +719,7 @@ func ipToU32(ip net.IP) uint32 {
 	return binary.LittleEndian.Uint32([]byte(ip[:]))
 }
 
-func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg, hasMaglev bool) error {
+func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg, hasMaglev, useIngressProgMap bool) error {
 	for _, idx := range progs {
 		switch idx {
 		case
@@ -732,8 +742,12 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 				continue
 			}
 		}
+		pmName := progMap[hook.Egress].GetName()
+		if useIngressProgMap {
+			pmName = progMap[hook.Ingress].GetName()
+		}
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
-		err := obj.UpdateJumpMap(progMap.GetName(), tcdefs.ProgramNames[idx], idx)
+		err := obj.UpdateJumpMap(pmName, tcdefs.ProgramNames[idx], idx)
 		if err != nil {
 			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
 		}
@@ -742,23 +756,26 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 	return nil
 }
 
-func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg, hasMaglev bool) (*libbpf.Obj, error) {
+func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg, hasMaglev, useIngressProgMap bool) (*libbpf.Obj, error) {
 	log.WithField("program", fname).Debug("Loading BPF program")
 
 	forXDP := topts.xdp
 
 	// XXX we do not need to create both sets of maps, but, well, who cares here ;-)
-	progMap = hook.NewProgramsMap()
+	progMap = hook.NewProgramsMaps()
 	policyJumpMap = jump.Map()
 	progMapXDP = hook.NewXDPProgramsMap()
 	policyJumpMapXDP = jump.XDPMap()
 	if ipFamily == "preamble" {
-		_ = unix.Unlink(progMap.Path())
+		_ = unix.Unlink(progMap[hook.Ingress].Path())
+		_ = unix.Unlink(progMap[hook.Egress].Path())
 		_ = unix.Unlink(policyJumpMap.Path())
 		_ = unix.Unlink(progMapXDP.Path())
 		_ = unix.Unlink(policyJumpMapXDP.Path())
 	}
-	err := progMap.EnsureExists()
+	err := progMap[hook.Ingress].EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = progMap[hook.Egress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	err = policyJumpMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
@@ -914,11 +931,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	if !forXDP {
 		log.WithField("ipFamily", ipFamily).Debug("Updating jump map")
-		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg, hasMaglev)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg, hasMaglev, useIngressProgMap)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
 		}
-		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false, hasMaglev)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false, hasMaglev, useIngressProgMap)
 	} else {
 		if err = xdpUpdateJumpMap(obj, xdpJumpMapIndexes[ipFamily]); err != nil {
 			goto out
@@ -2194,11 +2211,13 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
-	progMap = hook.NewProgramsMap()
-	err := progMap.EnsureExists()
+	progMap = hook.NewProgramsMaps()
+	err := progMap[hook.Ingress].EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = progMap[hook.Egress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	jumpMapFD := progMap.MapFD()
+	jumpMapFD := progMap[hook.Ingress].MapFD()
 	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, policyJumpMap.MapFD(),
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	rules := polprog.Rules{}

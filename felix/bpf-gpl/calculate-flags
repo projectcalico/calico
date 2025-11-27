@@ -14,9 +14,6 @@ if [[ "${filename}" =~ .*debug.* ]]; then
   args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG")
 elif [[ "${filename}" =~ .*no_log.* ]]; then
   args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_OFF")
-else
-  echo "No log level in filename"
-  exit 1
 fi
 
 if [[ "${filename}" =~ .*host_drop.* ]]; then
@@ -48,6 +45,7 @@ flags=0
 ((CALI_TC_LO = 1 << 8))
 ((CALI_CT_CLEANUP = 1 << 9))
 ((CALI_TC_VXLAN = 1 << 10))
+((CALI_TC_PREAMBLE = 1 << 11))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
@@ -107,6 +105,12 @@ if [[ "${filename}" =~ _dsr.* ]]; then
   ((flags |= CALI_TC_DSR))
 fi
 
+if [[ "${filename}" =~ _preamble.* ]]; then
+  ((flags |= CALI_TC_PREAMBLE))
+  if [[ "${filename}" =~ _preamble_ingress.* ]]; then
+    ((flags |= CALI_TC_INGRESS))
+  fi
+fi
 args+=("-DCALI_COMPILE_FLAGS=${flags}")
 
 echo "Flags: ${args[*]}" 1>&2
