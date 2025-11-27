@@ -472,16 +472,21 @@ func (s *IPSets) tryResync() (err error) {
 			// Skipping this IP set on this pass.
 			continue
 		}
-
 		if debug {
 			s.logCxt.Debugf("Parsing IP set %v.", name)
 		}
-		_, desired := s.setNameToProgrammedMetadata.Desired().Get(name)
-		err = s.resyncIPSet(name)
-		if desired && err != nil {
-			// Ignore failures of IP sets not in desired stated. Those will be cleaned up later.
-			failedIPSets = append(failedIPSets, name)
-			s.logCxt.WithError(err).WithField("name", name).Error("Failed to parse a desired ipset")
+		if err = s.resyncIPSet(name); err != nil {
+			// Ignore failures of IP sets not in desired state, as those will be cleaned up later.
+			_, desired := s.setNameToProgrammedMetadata.Desired().Get(name)
+			if desired {
+				failedIPSets = append(failedIPSets, name)
+			}
+			if debug {
+				s.logCxt.WithError(err).WithFields(log.Fields{
+					"name":    name,
+					"desired": desired,
+				}).Error("Failed to parse an ipset")
+			}
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
 			s.ipSetsRequiringResync.Discard(name)
@@ -699,10 +704,13 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		return scanner.Err()
 	})
 	if err != nil {
+		// This can occur if we have version skew with the version of IP set
+		// used to create the IP set. Mark the metadata as invalid in order
+		// to trigger the IP set to be recreated.
 		meta.ListFailed = true
 	}
 	if debug {
-		s.logCxt.WithError(err).WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
+		s.logCxt.WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
 	}
 	s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
 	return err
