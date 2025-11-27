@@ -1,7 +1,8 @@
 BINDIR?=bin
 ARCH?=amd64
 KIND_VERSION?=v0.24.0
-KUBE_VERSION?=v1.31.0
+KUBE_VERSION?=v1.33.6
+HELM_VERSION?=v3.16.3
 
 ###############################################################################
 # ASO management
@@ -11,7 +12,7 @@ ASO_INSTALLED_MARKER:=.aso_installed
 .PHONY: install-aso
 install-aso: $(ASO_INSTALLED_MARKER)
 
-$(ASO_INSTALLED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/cmctl $(BINDIR)/asoctl
+$(ASO_INSTALLED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/cmctl $(BINDIR)/asoctl $(BINDIR)/helm
 	@echo "Creating kind cluster and installing aso ..."
 	./install-aso.sh
 	touch $@
@@ -60,9 +61,8 @@ setup-kubeadm: $(ASO_INSTALLED_MARKER) $(VMSS_MARKER)
 # FV management
 ###############################################################################
 .PHONY: run-fv
-run-fv: $(ASO_INSTALLED_MARKER) $(VMSS_MARKER)
+run-fv: setup-kubeadm
 	@echo "Running FV $(BACKEND) ..."
-	./install-kubeadm.sh
 	./install-calico.sh
 
 ###############################################################################
@@ -99,6 +99,14 @@ $(BINDIR)/asoctl:
 $(BINDIR)/gomplate:
 	mkdir -p $(@D)
 	curl -sSf -L --retry 5 https://github.com/hairyhenderson/gomplate/releases/download/v3.11.7/gomplate_linux-amd64 -o $@
+	chmod +x $@
+	touch $@
+
+$(BINDIR)/helm:
+	mkdir -p $(@D)
+	curl -sSf -L --retry 5 https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz -o $(BINDIR)/helm.tar.gz
+	tar -xzf $(BINDIR)/helm.tar.gz -C $(BINDIR) --strip-components=1 linux-$(ARCH)/helm
+	rm $(BINDIR)/helm.tar.gz
 	chmod +x $@
 	touch $@
 

@@ -392,6 +392,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(hostEP.IPAddress.String()).Should(Equal("10.254.112.2"))
 				Expect(strings.EqualFold(hostEP.VirtualNetwork, hnsNetwork.Id)).To(BeTrue())
 				Expect(hostEP.VirtualNetworkName).Should(Equal(hnsNetwork.Name))
+
+				log.Infof("Creating container")
+				containerID, result, contVeth, contAddresses, contRoutes, err := testutils.CreateContainer(netconf, name, testutils.HnsNoneNs, "", nsName)
 				Expect(err).ShouldNot(HaveOccurred())
 				defer func() {
 					log.Infof("Container Delete  call")
