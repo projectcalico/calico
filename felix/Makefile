@@ -201,7 +201,7 @@ $(BPF_GPL_MAP_STUB_C_FILES):
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
-BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
+BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble_ingress.o bpf-gpl/bin/tc_preamble_egress.o \
 		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o \
 		 bpf-gpl/bin/tcx_test.o
 BPF_GPL_O_FILES+=$(BPF_GPL_MAP_STUB_O_FILES)
@@ -388,6 +388,9 @@ fv-no-prereqs:
 
 fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
+
+fv-bpf-no-prereqs:
+	$(MAKE) fv-no-prereqs FELIX_FV_ENABLE_BPF=true
 
 fv-nft:
 	$(MAKE) fv FELIX_FV_NFTABLES=Enabled

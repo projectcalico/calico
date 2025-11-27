@@ -62,6 +62,10 @@ func (key ActiveStatusReportKey) valueType() (reflect.Type, error) {
 	return typeStatusReport, nil
 }
 
+func (key ActiveStatusReportKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[StatusReport](key, rawData)
+}
+
 func (key ActiveStatusReportKey) String() string {
 	return fmt.Sprintf("StatusReport(hostname=%s)", key.Hostname)
 }
@@ -133,6 +137,10 @@ func (key LastStatusReportKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key LastStatusReportKey) valueType() (reflect.Type, error) {
 	return typeStatusReport, nil
+}
+
+func (key LastStatusReportKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[StatusReport](key, rawData)
 }
 
 func (key LastStatusReportKey) String() string {
