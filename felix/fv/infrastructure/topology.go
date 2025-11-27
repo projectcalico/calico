@@ -30,7 +30,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -488,7 +487,7 @@ func StartNNodeTopology(
 		curUnmarshalled := make([]map[string]any, 0)
 		_ = json.Unmarshal([]byte(cur), &curUnmarshalled)
 		if len(curUnmarshalled) == 0 {
-			logrus.Panic("No bpf progs. Issue unmarshalling.")
+			log.Panic("No bpf progs. Issue unmarshalling.")
 		}
 
 		foundPreambleProgs := make([]map[string]any, 0)
@@ -502,7 +501,7 @@ func StartNNodeTopology(
 		for _, prev := range prevFoundPreambleProgs {
 			for _, cur := range foundPreambleProgs {
 				if prev["id"] == cur["id"] {
-					logrus.Panicf("Found leaked BPF preamble prog '%d' in Felix", prev["id"])
+					log.Panicf("Found leaked BPF preamble prog '%d' in Felix", prev["id"])
 				}
 			}
 		}
