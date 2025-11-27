@@ -57,6 +57,10 @@ func (key ProfileKey) valueType() (reflect.Type, error) {
 	return typeProfile, nil
 }
 
+func (key ProfileKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[Profile](key, rawData)
+}
+
 func (key ProfileKey) String() string {
 	return fmt.Sprintf("Profile(name=%s)", key.Name)
 }
@@ -75,6 +79,10 @@ func (key ProfileRulesKey) valueType() (reflect.Type, error) {
 	return reflect.TypeOf(ProfileRules{}), nil
 }
 
+func (key ProfileRulesKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[ProfileRules](key, rawData)
+}
+
 func (key ProfileRulesKey) String() string {
 	return fmt.Sprintf("ProfileRules(name=%s)", key.Name)
 }
@@ -91,6 +99,10 @@ func (key ProfileLabelsKey) defaultPath() (string, error) {
 
 func (key ProfileLabelsKey) valueType() (reflect.Type, error) {
 	return reflect.TypeOf(map[string]string{}), nil
+}
+
+func (key ProfileLabelsKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONValue[map[string]string](key, rawData)
 }
 
 func (key ProfileLabelsKey) String() string {

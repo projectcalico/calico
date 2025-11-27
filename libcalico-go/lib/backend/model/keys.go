@@ -15,14 +15,12 @@
 package model
 
 import (
-	"bytes"
 	"fmt"
 	net2 "net"
 	"reflect"
 	"strings"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -69,6 +67,7 @@ type Key interface {
 
 	// valueType returns the object type associated with this key.
 	valueType() (reflect.Type, error)
+	parseValue(data []byte) (any, error)
 
 	// String returns a unique string representation of this key.  The string
 	// returned by this method must uniquely identify this Key.
@@ -104,7 +103,7 @@ type LabelSelectingListInterface interface {
 //     JSON format).
 type KVPair struct {
 	Key      Key
-	Value    interface{}
+	Value    any
 	Revision string
 	UID      *types.UID
 	TTL      time.Duration // For writes, if non-zero, key has a TTL.
@@ -406,13 +405,13 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					log.Warnf("(BUG) unknown resource type: %v", path)
 					return nil
 				}
-				if namespace.IsNamespaced(ri.kind) {
+				if namespace.IsNamespaced(ri.Kind()) {
 					log.Warnf("(BUG) Path is a global resource, but resource is namespaced: %v", path)
 					return nil
 				}
 				log.Debugf("Path is a global resource: %v", path)
 				return ResourceKey{
-					Kind: ri.kind,
+					Kind: ri.Kind(),
 					Name: unescapeName(parts[5]),
 				}
 			case 7:
@@ -421,13 +420,13 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					log.Warnf("(BUG) unknown resource type: %v", path)
 					return nil
 				}
-				if !namespace.IsNamespaced(ri.kind) {
+				if !namespace.IsNamespaced(ri.Kind()) {
 					log.Warnf("(BUG) Path is a namespaced resource, but resource is global: %v", path)
 					return nil
 				}
 				log.Debugf("Path is a namespaced resource: %v", path)
 				return ResourceKey{
-					Kind:      ri.kind,
+					Kind:      ri.Kind(),
 					Namespace: unescapeName(parts[5]),
 					Name:      unescapeName(parts[6]),
 				}
@@ -500,13 +499,13 @@ func OldKeyFromDefaultPath(path string) Key {
 			log.Warnf("(BUG) unknown resource type: %v", path)
 			return nil
 		}
-		if namespace.IsNamespaced(ri.kind) {
+		if namespace.IsNamespaced(ri.Kind()) {
 			log.Warnf("(BUG) Path is a global resource, but resource is namespaced: %v", path)
 			return nil
 		}
 		log.Debugf("Path is a global resource: %v", path)
 		return ResourceKey{
-			Kind: ri.kind,
+			Kind: ri.Kind(),
 			Name: unescapeName(m[2]),
 		}
 	} else if m := matchNamespacedResource.FindStringSubmatch(path); m != nil {
@@ -515,13 +514,13 @@ func OldKeyFromDefaultPath(path string) Key {
 			log.Warnf("(BUG) unknown resource type: %v", path)
 			return nil
 		}
-		if !namespace.IsNamespaced(ri.kind) {
+		if !namespace.IsNamespaced(ri.Kind()) {
 			log.Warnf("(BUG) Path is a namespaced resource, but resource is global: %v", path)
 			return nil
 		}
 		log.Debugf("Path is a namespaced resource: %v", path)
 		return ResourceKey{
-			Kind:      resourceInfoByPlural[unescapeName(m[1])].kind,
+			Kind:      resourceInfoByPlural[unescapeName(m[1])].Kind(),
 			Namespace: unescapeName(m[2]),
 			Name:      unescapeName(m[3]),
 		}
@@ -594,95 +593,55 @@ func OldKeyFromDefaultPath(path string) Key {
 	return nil
 }
 
+func parseRawString(rawData []byte) string {
+	return string(rawData)
+}
+
+func parseRawBool(rawData []byte) bool {
+	return string(rawData) == "true"
+}
+
+func parseRawIP(rawData []byte) *net.IP {
+	ip := net2.ParseIP(string(rawData))
+	if ip == nil {
+		return nil
+	}
+	return &net.IP{IP: ip}
+}
+
+func parseJSONValue[V any](key Key, rawData []byte) (V, error) {
+	var v V
+
+	err := json.Unmarshal(rawData, &v)
+	if err != nil {
+		log.Warningf("Failed to unmarshal %v %#v into value %#v",
+			key, string(rawData), v)
+		var zero V
+		return zero, err
+	}
+
+	return v, nil
+}
+
+func parseJSONPointer[V any](key Key, rawData []byte) (*V, error) {
+	var v V
+
+	err := json.Unmarshal(rawData, &v)
+	if err != nil {
+		log.Warningf("Failed to unmarshal %v %#v into value %#v",
+			key, string(rawData), v)
+		return nil, err
+	}
+
+	return &v, nil
+}
+
 // ParseValue parses the default JSON representation of our data into one of
 // our value structs, according to the type of key.  I.e. if passed a
 // PolicyKey as the first parameter, it will try to parse rawData into a
 // Policy struct.
-func ParseValue(key Key, rawData []byte) (interface{}, error) {
-	valueType, err := key.valueType()
-	if err != nil {
-		return nil, err
-	}
-	if valueType == rawStringType {
-		return string(rawData), nil
-	}
-	if valueType == rawBoolType {
-		return string(rawData) == "true", nil
-	}
-	if valueType == rawIPType {
-		ip := net2.ParseIP(string(rawData))
-		if ip == nil {
-			return nil, nil
-		}
-		return &net.IP{IP: ip}, nil
-	}
-	value := reflect.New(valueType)
-	elem := value.Elem()
-	if elem.Kind() == reflect.Struct && elem.NumField() > 0 {
-		if elem.Field(0).Type() == reflect.ValueOf(key).Type() {
-			elem.Field(0).Set(reflect.ValueOf(key))
-		}
-	}
-	iface := value.Interface()
-	err = json.Unmarshal(rawData, iface)
-	if err != nil {
-		// This is a special case to address backwards compatibility from the time when we had no state information as block affinity value.
-		// example:
-		// Key: "/calico/ipam/v2/host/myhost.io/ipv4/block/172.29.82.0-26"
-		// Value: ""
-		// In 3.0.7 we added block affinity state as the value, so old "" value is no longer a valid JSON, so for that
-		// particular case we replace the "" with a "{}" so it can be parsed and we don't leak blocks after upgrade to Calico 3.0.7
-		// See: https://github.com/projectcalico/calico/issues/1956
-		if bytes.Equal(rawData, []byte(``)) && valueType == typeBlockAff {
-			rawData = []byte(`{}`)
-			if err = json.Unmarshal(rawData, iface); err != nil {
-				return nil, err
-			}
-		} else {
-			log.Warningf("Failed to unmarshal %#v into value %#v",
-				string(rawData), value)
-			return nil, err
-		}
-	}
-
-	if elem.Kind() != reflect.Struct {
-		// Pointer to a map or slice, unwrap.
-		iface = elem.Interface()
-	}
-
-	if valueType == reflect.TypeOf(apiv3.NetworkPolicy{}) {
-		policy := iface.(*apiv3.NetworkPolicy)
-		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if valueType == reflect.TypeOf(apiv3.GlobalNetworkPolicy{}) {
-		policy := iface.(*apiv3.GlobalNetworkPolicy)
-		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if valueType == reflect.TypeOf(apiv3.StagedNetworkPolicy{}) {
-		policy := iface.(*apiv3.StagedNetworkPolicy)
-		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if valueType == reflect.TypeOf(apiv3.StagedGlobalNetworkPolicy{}) {
-		policy := iface.(*apiv3.StagedGlobalNetworkPolicy)
-		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return iface, nil
+func ParseValue(key Key, rawData []byte) (any, error) {
+	return key.parseValue(rawData)
 }
 
 // SerializeValue serializes a value in the model to a []byte to be stored in the datastore.  This
@@ -714,7 +673,7 @@ func determinePolicyName(name, tier string, annotations map[string]string) (stri
 		meta := &metav1.ObjectMeta{}
 		err := json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
 		if err != nil {
-			return "", nil, err
+			return "", nil, fmt.Errorf("CRD annotation %q contained invalid JSON: %w", metadataAnnotation, err)
 		}
 		delete(annotations, metadataAnnotation)
 		return meta.Name, annotations, nil
