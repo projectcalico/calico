@@ -16,16 +16,30 @@ package set
 
 // IterDifferences iterates through the set of items that are in A but not in B, and the set that are in B but not in A.
 func IterDifferences[T comparable](a, b Set[T], aNotB, bNotA func(item T) error) {
-	a.Iter(func(item T) error {
+	for item := range a.All() {
 		if !b.Contains(item) {
-			return aNotB(item)
+			if err := aNotB(item); err != nil {
+				if err == StopIteration {
+					break
+				} else if err == RemoveItem {
+					a.Discard(item)
+				} else {
+					panic(err)
+				}
+			}
 		}
-		return nil
-	})
-	b.Iter(func(item T) error {
+	}
+	for item := range b.All() {
 		if !a.Contains(item) {
-			return bNotA(item)
+			if err := bNotA(item); err != nil {
+				if err == StopIteration {
+					break
+				} else if err == RemoveItem {
+					b.Discard(item)
+				} else {
+					panic(err)
+				}
+			}
 		}
-		return nil
-	})
+	}
 }

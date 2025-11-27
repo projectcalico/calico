@@ -143,12 +143,11 @@ func FuzzAdaptiveSet(f *testing.F) {
 			if !s1.Equals(s2) || !s2.Equals(s1) {
 				t.Fatal("Sets are not equal")
 			}
-			s1.Iter(func(item string) error {
+			for item := range s1.All() {
 				if !s2.Contains(item) {
 					t.Fatal("Set 2 does not contain item")
 				}
-				return nil
-			})
+			}
 			if !s1.Contains(item) {
 				t.Fatal("Set does not contain item")
 			}

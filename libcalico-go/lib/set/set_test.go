@@ -49,10 +49,9 @@ func describeSetTests(
 	})
 	It("should iterate over no items", func() {
 		called := false
-		s.Iter(func(item int) error {
+		for range s.All() {
 			called = true
-			return nil
-		})
+		}
 		Expect(called).To(BeFalse())
 	})
 	It("should do nothing on clear", func() {
@@ -152,7 +151,7 @@ func describeSetTests(
 		It("should iterate over 1 and 2 in some order", func() {
 			seen1 := false
 			seen2 := false
-			s.Iter(func(item int) error {
+			for item := range s.All() {
 				if item == 1 {
 					Expect(seen1).To(BeFalse())
 					seen1 = true
@@ -162,8 +161,7 @@ func describeSetTests(
 				} else {
 					Fail("Unexpected item")
 				}
-				return nil
-			})
+			}
 			Expect(seen1).To(BeTrue())
 			Expect(seen2).To(BeTrue())
 		})

@@ -57,15 +57,14 @@ func stringify[T any](set Set[T]) string {
 	var buf bytes.Buffer
 	_, _ = buf.WriteString("set.Set{")
 	first := true
-	set.Iter(func(item T) error {
+	for item := range set.All() {
 		if !first {
 			buf.WriteString(",")
 		} else {
 			first = false
 		}
 		_, _ = fmt.Fprint(&buf, item)
-		return nil
-	})
+	}
 	_, _ = buf.WriteString("}")
 	return buf.String()
 }
@@ -86,10 +85,9 @@ func (set Typed[T]) AddAll(itemArray []T) {
 
 // AddSet adds the contents of set "other" into the set.
 func (set Typed[T]) AddSet(other Set[T]) {
-	other.Iter(func(item T) error {
+	for item := range other.All() {
 		set.Add(item)
-		return nil
-	})
+	}
 }
 
 func (set Typed[T]) Discard(item T) {
@@ -166,13 +164,10 @@ func (set Typed[T]) ContainsAll(other Set[T]) bool {
 	if other.Len() > set.Len() {
 		return false
 	}
-	result := true
-	other.Iter(func(item T) error {
+	for item := range other.All() {
 		if !set.Contains(item) {
-			result = false
-			return StopIteration
+			return false
 		}
-		return nil
-	})
-	return result
+	}
+	return true
 }
