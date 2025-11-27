@@ -182,7 +182,7 @@ func (pr *PolicyResolver) Flush() {
 	pr.dirtyEndpoints.Clear()
 }
 
-func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error {
+func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) {
 	log.Debugf("Sending tier update for endpoint %v", endpointID)
 	endpoint, ok := pr.endpoints[endpointID.(model.Key)]
 	if !ok {
@@ -190,7 +190,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 		for _, cb := range pr.Callbacks {
 			cb.OnEndpointTierUpdate(endpointID, nil, nil, []TierInfo{})
 		}
-		return nil
+		return
 	}
 
 	applicableTiers := []TierInfo{}
@@ -233,7 +233,6 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 	for _, cb := range pr.Callbacks {
 		cb.OnEndpointTierUpdate(endpointID, endpoint, peerData, applicableTiers)
 	}
-	return nil
 }
 
 func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpointKey, peerData *EndpointBGPPeer) {
