@@ -90,8 +90,8 @@ var _ = infrastructure.DatastoreDescribe("iptables force-programming tests", []a
 		Eventually(func() map[string][]string {
 			return tc.Felixes[0].IPTablesChains("filter")
 		}, "10s", "100ms").Should(And(
-			HaveKey("cali-pi-_l_CMLPBmpkyZIIwB62k"),
-			HaveKey("cali-po-_l_CMLPBmpkyZIIwB62k"),
+			HaveKey("cali-pi-gnp/policy-1"),
+			HaveKey("cali-po-gnp/policy-1"),
 		))
 	})
 

@@ -229,16 +229,14 @@ const (
 	NumSyncerTypes = iota
 )
 
-var (
-	// AllSyncerTypes contains each of the SyncerType constants. We use an array rather than a slice for a
-	// compile-time length check.
-	AllSyncerTypes = [NumSyncerTypes]SyncerType{
-		SyncerTypeFelix,
-		SyncerTypeBGP,
-		SyncerTypeTunnelIPAllocation,
-		SyncerTypeNodeStatus,
-	}
-)
+// AllSyncerTypes contains each of the SyncerType constants. We use an array rather than a slice for a
+// compile-time length check.
+var AllSyncerTypes = [NumSyncerTypes]SyncerType{
+	SyncerTypeFelix,
+	SyncerTypeBGP,
+	SyncerTypeTunnelIPAllocation,
+	SyncerTypeNodeStatus,
+}
 
 type CompressionAlgorithm string
 
@@ -259,6 +257,11 @@ type MsgClientHello struct {
 
 	SupportsDecoderRestart         bool
 	SupportedCompressionAlgorithms []CompressionAlgorithm
+
+	// SupportsModernPolicyKeys tells the server whether this client supports modern PolicyKey
+	// syntax, i.e., using Kind/Namespace/Name instead of Tier/Name. If the client does not set this field,
+	// Typha will reject the connection attempt and wait for the client to be upgraded.
+	SupportsModernPolicyKeys bool
 
 	ClientConnID uint64
 }
@@ -286,18 +289,21 @@ type MsgDecoderRestart struct {
 
 // MsgACK is a general-purpose ACK message, currently used during the initial handshake to acknowledge the
 // switch to compressed mode.
-type MsgACK struct {
-}
+type MsgACK struct{}
+
 type MsgSyncStatus struct {
 	SyncStatus api.SyncStatus
 }
+
 type MsgPing struct {
 	Timestamp time.Time
 }
+
 type MsgPong struct {
 	PingTimestamp time.Time
 	PongTimestamp time.Time
 }
+
 type MsgKVs struct {
 	KVs []SerializedUpdate
 }

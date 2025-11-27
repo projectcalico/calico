@@ -905,9 +905,8 @@ func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
 	policy := api.NewNetworkPolicy()
 	policy.Name = "deny-all"
 	policy.Namespace = "default"
-	policy.Spec.Ingress = []api.Rule{{Action: api.Deny}}
-	policy.Spec.Egress = []api.Rule{{Action: api.Deny}}
 	policy.Spec.Selector = "all()"
+	policy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
 	_, err := kds.calicoClient.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 	return err
 }

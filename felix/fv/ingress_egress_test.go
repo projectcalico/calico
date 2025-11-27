@@ -249,7 +249,7 @@ var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ (iptables-only) with 
 			Eventually(func() string {
 				out, _ := tc.Felixes[0].ExecOutput(listCmd...)
 				return out
-			}).Should(ContainSubstring("Policy fv/default.policy-1 ingress"))
+			}).Should(ContainSubstring("NetworkPolicy fv/policy-1 ingress"))
 		})
 	})
 
@@ -274,7 +274,7 @@ var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ (iptables-only) with 
 			Eventually(func() string {
 				out, _ := tc.Felixes[0].ExecOutput(listCmd...)
 				return out
-			}).Should(ContainSubstring("Policy fv/default.policy-1 egress"))
+			}).Should(ContainSubstring("NetworkPolicy fv/policy-1 egress"))
 		})
 	})
 })

@@ -266,7 +266,8 @@ var _ = Describe("With an in-process Server", func() {
 						Revision: "1234",
 					},
 					UpdateType: api.UpdateTypeKVNew,
-				}})
+				},
+			})
 		})
 
 		It("should pass through a KV and status", func() {
@@ -744,10 +745,11 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			BeforeEach(func() {
 				err := w.Encode(syncproto.Envelope{
 					Message: syncproto.MsgClientHello{
-						Hostname:   "me",
-						Version:    "test",
-						Info:       "test info",
-						SyncerType: syncproto.SyncerType("garbage"),
+						Hostname:                 "me",
+						Version:                  "test",
+						Info:                     "test info",
+						SyncerType:               syncproto.SyncerType("garbage"),
+						SupportsModernPolicyKeys: true,
 					},
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -779,9 +781,10 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			BeforeEach(func() {
 				err := w.Encode(syncproto.Envelope{
 					Message: syncproto.MsgClientHello{
-						Hostname: "me",
-						Version:  "test",
-						Info:     "test info",
+						Hostname:                 "me",
+						Version:                  "test",
+						Info:                     "test info",
+						SupportsModernPolicyKeys: true,
 					},
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -925,9 +928,7 @@ var _ = Describe("With an in-process Server with long ping interval", func() {
 })
 
 var _ = Describe("With an in-process Server with short grace period", func() {
-	var (
-		h *ServerHarness
-	)
+	var h *ServerHarness
 
 	BeforeEach(func() {
 		h = NewHarness()
@@ -1137,9 +1138,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 })
 
 var _ = Describe("With an in-process Server with short write timeout", func() {
-	var (
-		h *ServerHarness
-	)
+	var h *ServerHarness
 
 	BeforeEach(func() {
 		// Default to debug but some more aggressive tests override this below.
@@ -1388,7 +1387,7 @@ var _ = Describe("with server requiring TLS", func() {
 		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
 	})
 
-	var _ = AfterSuite(func() {
+	_ = AfterSuite(func() {
 		// Remove TLS keys and certificates.
 		if certDir != "" {
 			_ = os.RemoveAll(certDir)
@@ -1497,7 +1496,6 @@ var _ = Describe("with server requiring TLS", func() {
 	})
 
 	testConnection := func(clientCertName string, expectConnection bool) {
-
 		var options *syncclient.Options = nil
 		if clientCertName != "" {
 			options = &syncclient.Options{
@@ -1682,7 +1680,7 @@ var _ = Describe("with server requiring TLS", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Client sends a few valid bytes of a Client hello but then stops...
-			_, err = tcpConn.Write([]byte{16, 3, 01})
+			_, err = tcpConn.Write([]byte{16, 3, 0o1})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start a read that we don't expect to complete.
@@ -1709,7 +1707,7 @@ var _ = Describe("with server requiring TLS", func() {
 				_ = tcpConn.Close()
 			}()
 			log.Info("Blocking connection source:", tcpConn.LocalAddr())
-			_, err = tcpConn.Write([]byte{16, 3, 01})
+			_, err = tcpConn.Write([]byte{16, 3, 0o1})
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(server.NumActiveConnections).Should(Equal(1))
 
@@ -1728,5 +1726,4 @@ var _ = Describe("with server requiring TLS", func() {
 			Eventually(server.NumActiveConnections).Should(Equal(0))
 		})
 	})
-
 })

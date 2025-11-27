@@ -28,6 +28,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -296,9 +297,9 @@ func (m *mockDataplane) delRoute(cidr ip.CIDR) {
 	delete(m.routes, cidr)
 }
 
-func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, name string) polprog.RuleMatchID {
+func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, id types.IDMaker) polprog.RuleMatchID {
 	h := fnv.New64a()
-	h.Write([]byte(action + owner.String() + dir.String() + strconv.Itoa(idx+1) + name))
+	h.Write([]byte(action + owner.String() + dir.String() + strconv.Itoa(idx+1) + id.ID()))
 	return h.Sum64()
 }
 
@@ -548,8 +549,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	genPolicy := func(tier, policy string) func() {
 		return func() {
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id:     &proto.PolicyID{Tier: tier, Name: policy},
-				Policy: &proto.Policy{},
+				Id:     &proto.PolicyID{Name: policy, Kind: v3.KindNetworkPolicy},
+				Policy: &proto.Policy{Tier: tier},
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -559,7 +560,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	genUntracked := func(tier, policy string) func() {
 		return func() {
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id:     &proto.PolicyID{Tier: tier, Name: policy},
+				Id:     &proto.PolicyID{Name: policy, Kind: v3.KindNetworkPolicy},
 				Policy: &proto.Policy{Untracked: true},
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
@@ -567,7 +568,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
-	genWLUpdate := func(name string, policies ...string) func() {
+	genWLUpdate := func(name string, policies ...*proto.PolicyID) func() {
 		return func() {
 			update := &proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
@@ -632,7 +633,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		PreDnatTiers: []*proto.TierInfo{
 			{
 				Name:            "default",
-				IngressPolicies: []string{"default.mypolicy"},
+				IngressPolicies: []*proto.PolicyID{{Name: "default.mypolicy", Kind: v3.KindNetworkPolicy}},
 			},
 		},
 	}
@@ -642,8 +643,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "default",
-				IngressPolicies: []string{"default.mypolicy"},
-				EgressPolicies:  []string{"default.mypolicy"},
+				IngressPolicies: []*proto.PolicyID{{Name: "default.mypolicy", Kind: v3.KindNetworkPolicy}},
+				EgressPolicies:  []*proto.PolicyID{{Name: "default.mypolicy", Kind: v3.KindNetworkPolicy}},
 			},
 		},
 	}
@@ -735,7 +736,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 			newHEP.UntrackedTiers = []*proto.TierInfo{{
 				Name:            "default",
-				IngressPolicies: []string{"untracked1"},
+				IngressPolicies: []*proto.PolicyID{{Name: "untracked1", Kind: v3.KindGlobalNetworkPolicy}},
 			}}
 			err := dp.createIface("bond0", 10, "bond")
 			Expect(err).NotTo(HaveOccurred())
@@ -799,7 +800,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.programAttached("eth20:ingress")).To(BeTrue())
 			Expect(dp.programAttached("eth20:egress")).To(BeTrue())
 			Expect(dp.programAttached("eth20:xdp")).To(BeFalse())
-
 		})
 
 		It("should add host ifaces to iface tree", func() {
@@ -1243,7 +1243,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
-					IngressPolicies: []string{"untracked1"},
+					IngressPolicies: []*proto.PolicyID{{Name: "untracked1", Kind: v3.KindGlobalNetworkPolicy}},
 				}}
 				genHEPUpdate("bond1", newHEP)()
 				err = bpfEpMgr.CompleteDeferredWork()
@@ -1300,7 +1300,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
-					IngressPolicies: []string{"untracked1"},
+					IngressPolicies: []*proto.PolicyID{{Name: "untracked1", Kind: v3.KindGlobalNetworkPolicy}},
 				}}
 				genHEPUpdate("bond0", newHEP)()
 				err := bpfEpMgr.CompleteDeferredWork()
@@ -1410,8 +1410,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
-					Tier: "default",
 					Name: "default.mypolicy",
+					Kind: v3.KindNetworkPolicy,
 				}]).To(HaveKey("eth0"))
 
 				var eth0I, eth0E, eth0X *polprog.Rules
@@ -1435,7 +1435,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
-					IngressPolicies: []string{"untracked1"},
+					IngressPolicies: []*proto.PolicyID{{Name: "untracked1", Kind: v3.KindGlobalNetworkPolicy}},
 				}}
 				genHEPUpdate("eth0", newHEP)()
 
@@ -1460,8 +1460,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
-					Tier: "default",
 					Name: "default.mypolicy",
+					Kind: v3.KindNetworkPolicy,
 				}]).To(HaveKey("eth0"))
 			})
 		})
@@ -1479,8 +1479,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
-					Tier: "default",
 					Name: "default.mypolicy",
+					Kind: v3.KindNetworkPolicy,
 				}]).To(HaveKey("eth0"))
 			})
 		})
@@ -1498,8 +1498,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
-					Tier: "default",
 					Name: "default.mypolicy",
+					Kind: v3.KindNetworkPolicy,
 				}]).To(HaveKey("eth0"))
 			})
 
@@ -1509,8 +1509,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
 					Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
-						Tier: "default",
 						Name: "default.mypolicy",
+						Kind: v3.KindNetworkPolicy,
 					}]).NotTo(HaveKey("eth0"))
 				})
 			})
@@ -1520,8 +1520,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
 					Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
-						Tier: "default",
 						Name: "default.mypolicy",
+						Kind: v3.KindNetworkPolicy,
 					}]).NotTo(HaveKey("eth0"))
 				})
 			})
@@ -1529,22 +1529,26 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Describe("polCounters", func() {
+		allowPolID := types.PolicyID{Name: "allowPol", Kind: v3.KindNetworkPolicy}
+
 		It("should update the maps with ruleIds", func() {
 			ingRule := &proto.Rule{Action: "Allow", RuleId: "INGRESSALLOW1234"}
 			egrRule := &proto.Rule{Action: "Allow", RuleId: "EGRESSALLOW12345"}
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
+			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, allowPolID)
+			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, allowPolID)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.commonMaps.RuleCountersMap
 
 			// create a new policy
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
+				Id:     &proto.PolicyID{Name: "allowPol", Kind: v3.KindNetworkPolicy},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingRule}, OutboundRules: []*proto.Rule{egrRule}},
 			})
 			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(1))
-			val := bpfEpMgr.polNameToMatchIDs["allowPol"]
+			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveKey(allowPolID.ID()))
+			val := bpfEpMgr.polNameToMatchIDs[allowPolID.ID()]
+			Expect(val).NotTo(BeNil())
 			Expect(val.Contains(ingRuleMatchId)).To(BeTrue())
 			Expect(val.Contains(egrRuleMatchId)).To(BeTrue())
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
@@ -1557,13 +1561,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			// update the ingress rule of the policy
 			ingDenyRule := &proto.Rule{Action: "Deny", RuleId: "INGRESSDENY12345"}
-			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Deny", rules.RuleOwnerTypePolicy, 0, "allowPol")
+			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Deny", rules.RuleOwnerTypePolicy, 0, allowPolID)
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
+				Id:     &proto.PolicyID{Name: "allowPol", Kind: v3.KindNetworkPolicy},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingDenyRule}, OutboundRules: []*proto.Rule{egrRule}},
 			})
 			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(1))
-			val = bpfEpMgr.polNameToMatchIDs["allowPol"]
+			val = bpfEpMgr.polNameToMatchIDs[allowPolID.ID()]
+			Expect(val).NotTo(BeNil())
 			Expect(val.Contains(ingDenyRuleMatchId)).To(BeTrue())
 			Expect(val.Contains(egrRuleMatchId)).To(BeTrue())
 			Expect(bpfEpMgr.dirtyRules.Contains(ingRuleMatchId)).To(BeTrue())
@@ -1579,7 +1584,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(binary.LittleEndian.Uint64(v)).To(Equal(uint64(10)))
 
 			// delete the policy
-			bpfEpMgr.OnUpdate(&proto.ActivePolicyRemove{Id: &proto.PolicyID{Tier: "default", Name: "allowPol"}})
+			bpfEpMgr.OnUpdate(&proto.ActivePolicyRemove{Id: &proto.PolicyID{Name: "allowPol", Kind: v3.KindNetworkPolicy}})
 			Expect(bpfEpMgr.dirtyRules.Contains(egrRuleMatchId)).To(BeTrue())
 			Expect(bpfEpMgr.dirtyRules.Contains(ingDenyRuleMatchId)).To(BeTrue())
 			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(0))
@@ -1597,8 +1602,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should cleanup the bpf map after restart", func() {
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
+			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, allowPolID)
+			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, allowPolID)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.commonMaps.RuleCountersMap
@@ -1849,7 +1854,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				}
 				return nil, errors.New("no such network interface")
 			}
-			genWLUpdate("cali12345", "pol-a")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "pol-a", Kind: v3.KindNetworkPolicy})()
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -1900,7 +1905,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				}
 				return nil, errors.New("no such network interface")
 			}
-			genWLUpdate("cali12345", "pol-a")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "pol-a", Kind: v3.KindNetworkPolicy})()
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -1955,8 +1960,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				}
 				return nil, errors.New("no such network interface")
 			}
-			genWLUpdate("cali12345", "pol-a")()
-			genWLUpdate("cali56789", "pol-b")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "pol-a", Kind: v3.KindNetworkPolicy})()
+			genWLUpdate("cali56789", &proto.PolicyID{Name: "pol-b", Kind: v3.KindNetworkPolicy})()
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -2314,7 +2319,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				}
 				return nil, errors.New("no such network interface")
 			}
-			genWLUpdate("cali12345", "pol-a")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "pol-a", Kind: v3.KindNetworkPolicy})()
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -2362,7 +2367,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				}
 				return nil, errors.New("no such network interface")
 			}
-			genWLUpdate("cali12345", "pol-a")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "pol-a", Kind: v3.KindNetworkPolicy})()
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -2417,8 +2422,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				}
 				return nil, errors.New("no such network interface")
 			}
-			genWLUpdate("cali12345", "pol-a")()
-			genWLUpdate("cali56789", "pol-b")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "pol-a", Kind: v3.KindNetworkPolicy})()
+			genWLUpdate("cali56789", &proto.PolicyID{Name: "pol-b", Kind: v3.KindNetworkPolicy})()
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -2668,7 +2673,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should clean up WL policies and log filters when iface down", func() {
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 			genPolicy("default", "mypolicy")()
-			genWLUpdate("cali12345", "mypolicy")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "mypolicy", Kind: v3.KindNetworkPolicy})()
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -2692,7 +2697,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			hostEp := googleproto.Clone(hostEpNorm).(*proto.HostEndpoint)
 			hostEp.UntrackedTiers = []*proto.TierInfo{{
 				Name:            "default",
-				IngressPolicies: []string{"untracked1"},
+				IngressPolicies: []*proto.PolicyID{{Name: "untracked1", Kind: v3.KindNetworkPolicy}},
 			}}
 			genHEPUpdate("eth0", hostEp)()
 
@@ -2720,7 +2725,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 			genPolicy("default", "mypolicy")()
-			genWLUpdate("cali12345", "mypolicy")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "mypolicy", Kind: v3.KindNetworkPolicy})()
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -2734,7 +2739,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 
 			genPolicy("default", "anotherpolicy")()
-			genWLUpdate("cali12345", "anotherpolicy")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "anotherpolicy", Kind: v3.KindNetworkPolicy})()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -2779,7 +2784,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				return nil, errors.New("no such network interface")
 			}
 			genPolicy("default", "anotherpolicy")()
-			genWLUpdate("cali12345", "anotherpolicy")()
+			genWLUpdate("cali12345", &proto.PolicyID{Name: "anotherpolicy", Kind: v3.KindNetworkPolicy})()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())

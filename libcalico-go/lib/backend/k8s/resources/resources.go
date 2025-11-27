@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 const (
@@ -188,27 +187,6 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	meta.Name = rom.GetName()
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
-
-	switch resKind {
-	// For NetworkPolicy and GlobalNetworkPolicy, we need to prefix the name with the tier name.
-	// This ensures two policies with the same name, but in different tiers, do not resolve to the same backing object.
-	case apiv3.KindGlobalNetworkPolicy:
-		policy := resIn.(*apiv3.GlobalNetworkPolicy)
-		backendName := names.TieredPolicyName(policy.Name)
-		meta.Name = backendName
-	case apiv3.KindNetworkPolicy:
-		policy := resIn.(*apiv3.NetworkPolicy)
-		backendName := names.TieredPolicyName(policy.Name)
-		meta.Name = backendName
-	case apiv3.KindStagedGlobalNetworkPolicy:
-		policy := resIn.(*apiv3.StagedGlobalNetworkPolicy)
-		backendName := names.TieredPolicyName(policy.Name)
-		meta.Name = backendName
-	case apiv3.KindStagedNetworkPolicy:
-		policy := resIn.(*apiv3.StagedNetworkPolicy)
-		backendName := names.TieredPolicyName(policy.Name)
-		meta.Name = backendName
-	}
 
 	// Explicitly nil out the labels on the underlying object so that they are not duplicated.
 	// We make an exception for projectcalico.org/ labels, which we own and may use on the v1 API.

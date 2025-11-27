@@ -146,6 +146,7 @@ DATE:=$(shell date -u +'%FT%T%z')
 SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ./cmd -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
+	  $(shell find ../app-policy -name '*.go') \
 	  $(shell find ../typha -name '*.go') \
 	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \

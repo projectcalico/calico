@@ -43,8 +43,6 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
-	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
-	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
 	"github.com/projectcalico/calico/node/pkg/health"
@@ -123,13 +121,6 @@ func Run(opts ...RunOpt) {
 		log.Info("Datastore is ready")
 	} else {
 		log.Info("Skipping datastore connection test")
-	}
-
-	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
-		if err := ensureKDDMigrated(cfg, cli); err != nil {
-			log.WithError(err).Errorf("Unable to ensure datastore is migrated.")
-			utils.Terminate()
-		}
 	}
 
 	// Make sure that this host's BlockAffinity resources are upgraded to add
@@ -1354,29 +1345,6 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 				log.WithField("DefaultEndpointToHostAction", felixNodeCfg.Spec.DefaultEndpointToHostAction).Debug("Host Felix value already assigned")
 			}
 		}
-	}
-
-	return nil
-}
-
-// ensureKDDMigrated ensures any data migration needed is done.
-func ensureKDDMigrated(cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) error {
-	cv1, err := clients.LoadKDDClientV1FromAPIConfigV3(cfg)
-	if err != nil {
-		return err
-	}
-	m := migrator.New(cv3, cv1, nil)
-	yes, err := m.ShouldMigrate()
-	if err != nil {
-		return err
-	} else if yes {
-		log.Infof("Running migration")
-		if _, err = m.Migrate(); err != nil {
-			return fmt.Errorf("migration failed: %v", err)
-		}
-		log.Infof("Migration successful")
-	} else {
-		log.Debugf("Migration is not needed")
 	}
 
 	return nil

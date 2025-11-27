@@ -43,7 +43,6 @@ func main() {
                  name.
     label        Add or update labels of resources.
     validate     Validate a resource by file, directory or stdin without applying it.
-    convert      Convert config files between different API versions.
     ipam         IP address management.
     node         Calico node management.
     version      Display the version of this binary.
@@ -68,7 +67,7 @@ Description:
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
-	var parser = &docopt.Parser{
+	parser := &docopt.Parser{
 		HelpHandler:   docopt.PrintHelpOnly,
 		OptionsFirst:  true,
 		SkipHelpFlags: false,
@@ -126,8 +125,6 @@ Description:
 			err = commands.Label(args)
 		case "validate":
 			err = commands.Validate(args)
-		case "convert":
-			err = commands.Convert(args)
 		case "version":
 			err = commands.Version(args)
 		case "node":

@@ -24,12 +24,10 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -116,7 +114,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace1, name1, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace1, name1) + ") with error:"))
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				By("Creating the StagedNetworkPolicy in a non-existing namespace")
@@ -125,7 +123,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 					Spec:       spec1,
 				}, options.SetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName("non-existing", name1, tier) + ") with error: namespaces \"non-existing\" not found"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName("non-existing", name1) + ") with error: namespaces \"non-existing\" not found"))
 			}
 
 			By("Attempting to creating a new StagedNetworkPolicy with name1/spec1 and a non-empty ResourceVersion")
@@ -153,24 +151,24 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource already exists: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace1, name1, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: StagedNetworkPolicy(" + namespacedName(namespace1, name1) + ") with error:"))
 
 			By("Getting StagedNetworkPolicy (name1) and comparing the output against spec1")
 			res, outError := c.StagedNetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec1))
+			Expect(res).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting StagedNetworkPolicy (name2) before it is created")
 			_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace2, name2, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 
 			By("Listing all the NetworkPolicies in namespace1, expecting a single result with name1/spec1")
 			outList, outError := c.StagedNetworkPolicies().List(ctx, options.ListOptions{Namespace: namespace1})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec1),
+				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec1),
 			))
 
 			By("Creating a new StagedNetworkPolicy with name2/spec2")
@@ -180,34 +178,34 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace2, tieredPolicyName(name2, tier), spec2))
+			Expect(res2).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace2, name2, spec2))
 
 			By("Getting StagedNetworkPolicy (name2) and comparing the output against spec2")
 			res, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace2, tieredPolicyName(name2, tier), spec2))
+			Expect(res).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace2, name2, spec2))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the NetworkPolicies using an empty namespace (all-namespaces), expecting a two results with name1/spec1 and name2/spec2")
 			outList, outError = c.StagedNetworkPolicies().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec1),
-				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace2, tieredPolicyName(name2, tier), spec2),
+				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec1),
+				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace2, name2, spec2),
 			))
 
 			By("Listing all the NetworkPolicies in namespace2, expecting a one results with name2/spec2")
 			outList, outError = c.StagedNetworkPolicies().List(ctx, options.ListOptions{Namespace: namespace2})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace2, tieredPolicyName(name2, tier), spec2),
+				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace2, name2, spec2),
 			))
 
 			By("Updating StagedNetworkPolicy name1 with spec2")
 			res1.Spec = spec2
 			res1, outError = c.StagedNetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec2))
+			Expect(res1).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec2))
 
 			By("Attempting to update the StagedNetworkPolicy without a Creation Timestamp")
 			res, outError = c.StagedNetworkPolicies().Update(ctx, &apiv3.StagedNetworkPolicy{
@@ -242,20 +240,20 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 			res1.ResourceVersion = rv1_1
 			_, outError = c.StagedNetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("update conflict: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace1, name1, tier) + ")"))
+			Expect(outError.Error()).To(Equal("update conflict: StagedNetworkPolicy(" + namespacedName(namespace1, name1) + ")"))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Getting StagedNetworkPolicy (name1) with the original resource version and comparing the output against spec1")
 				res, outError = c.StagedNetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
-				Expect(res).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec1))
+				Expect(res).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec1))
 				Expect(res.ResourceVersion).To(Equal(rv1_1))
 			}
 
 			By("Getting StagedNetworkPolicy (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.StagedNetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec2))
+			Expect(res).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec2))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
@@ -263,7 +261,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				outList, outError = c.StagedNetworkPolicies().List(ctx, options.ListOptions{Namespace: namespace1, ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
 				Expect(outList.Items).To(ConsistOf(
-					testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec1),
+					testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec1),
 				))
 			}
 
@@ -271,21 +269,21 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 			outList, outError = c.StagedNetworkPolicies().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec2),
-				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace2, tieredPolicyName(name2, tier), spec2),
+				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec2),
+				testutils.Resource(apiv3.KindStagedNetworkPolicy, namespace2, name2, spec2),
 			))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Deleting StagedNetworkPolicy (name1) with the old resource version")
 				_, outError = c.StagedNetworkPolicies().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_1})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("update conflict: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace1, name1, tier) + ")"))
+				Expect(outError.Error()).To(Equal("update conflict: StagedNetworkPolicy(" + namespacedName(namespace1, name1) + ")"))
 			}
 
 			By("Deleting StagedNetworkPolicy (name1) with the new resource version")
 			dres, outError := c.StagedNetworkPolicies().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(dres).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec2))
+			Expect(dres).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace1, name1, spec2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Updating StagedNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
@@ -297,7 +295,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				time.Sleep(2 * time.Second)
 				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace2, name2, tier) + ") with error:"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 
 				By("Creating StagedNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedNetworkPolicies().Create(ctx, &apiv3.StagedNetworkPolicy{
@@ -311,20 +309,20 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				time.Sleep(2 * time.Second)
 				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace2, name2, tier) + ") with error:"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				By("Attempting to deleting StagedNetworkPolicy (name2) again")
 				dres, outError = c.StagedNetworkPolicies().Delete(ctx, namespace2, name2, options.DeleteOptions{})
 				Expect(outError).NotTo(HaveOccurred())
-				Expect(dres).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace2, tieredPolicyName(name2, tier), spec2))
+				Expect(dres).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace2, name2, spec2))
 			}
 
 			By("Attempting to delete StagedNetworkPolicy (name2) again")
 			_, outError = c.StagedNetworkPolicies().Delete(ctx, namespace2, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace2, name2, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 
 			By("Listing all NetworkPolicies and expecting no items")
 			outList, outError = c.StagedNetworkPolicies().List(ctx, options.ListOptions{})
@@ -334,7 +332,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 			By("Getting StagedNetworkPolicy (name2) and expecting an error")
 			_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace2, name2, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 		},
 
 		// Pass two fully populated PolicySpecs and expect the series of operations to succeed.
@@ -372,7 +370,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 	)
 
 	DescribeTable("StagedNetworkPolicy default tier name test",
-		func(policyName string, incorrectPrefixPolicyName string) {
+		func(policyName string, prefixedPolicyName string) {
 			namespace := "default"
 			By("Getting the policy before it was created")
 			_, err := c.StagedNetworkPolicies().Get(ctx, namespace, policyName, options.GetOptions{})
@@ -395,12 +393,12 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			By("Creating the policy with incorrect prefix name")
+			By("Creating another policy with prefixed name")
 			_, err = c.StagedNetworkPolicies().Create(ctx,
 				&apiv3.StagedNetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: prefixedPolicyName, Namespace: namespace},
 				}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting the policy")
 			returnedPolicy, err = c.StagedNetworkPolicies().Get(ctx, namespace, policyName, options.GetOptions{})
@@ -412,55 +410,20 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			By("Getting the policy with incorrect prefix")
-			_, err = c.StagedNetworkPolicies().Get(ctx, namespace, incorrectPrefixPolicyName, options.GetOptions{})
-			Expect(err).To(HaveOccurred())
-
-			By("Updating the policy with incorrect prefix")
-			_, err = c.StagedNetworkPolicies().Update(ctx, &apiv3.StagedNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
-				Spec:       spec1,
-			}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
+			By("Getting the policy with prefix")
+			_, err = c.StagedNetworkPolicies().Get(ctx, namespace, prefixedPolicyName, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Deleting policy")
 			returnedPolicy, err = c.StagedNetworkPolicies().Delete(ctx, namespace, policyName, options.DeleteOptions{})
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 			Expect(err).ToNot(HaveOccurred())
+			_, err = c.StagedNetworkPolicies().Delete(ctx, namespace, prefixedPolicyName, options.DeleteOptions{})
+			Expect(err).ToNot(HaveOccurred())
 		},
 		Entry("StagedNetworkPolicy without default tier prefix", "netpol", "default.netpol"),
 		Entry("StagedNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
-
-	Describe("StagedNetworkPolicy without name on the projectcalico.org annotation", func() {
-		It("Should return the name without default prefix", func() {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
-				Expect(err).NotTo(HaveOccurred())
-				config.ContentType = "application/json"
-				cli, err := ctrlclient.New(config, ctrlclient.Options{})
-				Expect(err).NotTo(HaveOccurred())
-
-				// Create v1 crd with empty metadata annotation name
-				annotations := map[string]string{}
-				annotations["projectcalico.org/metadata"] = "{}"
-				policy := &apiv3.StagedNetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						Annotations: annotations,
-						Name:        "default.prefix-test-policy",
-						Namespace:   "default",
-					},
-					Spec: apiv3.StagedNetworkPolicySpec{},
-				}
-				err = cli.Create(context.Background(), policy)
-				Expect(err).NotTo(HaveOccurred())
-
-				// We should be able to get it without the default. prefix
-				_, err = c.StagedNetworkPolicies().Get(ctx, "default", "prefix-test-policy", options.GetOptions{})
-				Expect(err).ToNot(HaveOccurred())
-			}
-		})
-	})
 
 	DescribeTable("StagedNetworkPolicy name validation tests",
 		func(policyName string, tier string, expectError bool) {
@@ -481,7 +444,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				&apiv3.StagedNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      policyName,
-						Namespace: namespace},
+						Namespace: namespace,
+					},
 					Spec: apiv3.StagedNetworkPolicySpec{
 						Tier: tier,
 					},
@@ -492,12 +456,20 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 			} else {
 				Expect(err).ToNot(HaveOccurred())
 			}
+
+			// Should be gettable if created successfully.
+			if !expectError {
+				_, err = c.StagedNetworkPolicies().Get(ctx, namespace, policyName, options.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+			}
 		},
+
+		// These should all pass, since we don't restrict name structure.
 		Entry("StagedNetworkPolicy in default tier without prefix", "netpol", "default", false),
 		Entry("StagedNetworkPolicy in default tier with prefix", "default.netpol", "default", false),
-		Entry("StagedNetworkPolicy in custom tier with correct prefix", "tier1.netpol", "tier1", false),
-		Entry("StagedNetworkPolicy in custom tier without prefix", "netpol", "tier1", true),
-		Entry("StagedNetworkPolicy in custom tier with incorrect prefix", "tier1.netpol", "tier2", true),
+		Entry("StagedNetworkPolicy in custom tier with matching tier prefix", "tier1.netpol", "tier1", false),
+		Entry("StagedNetworkPolicy in custom tier without prefix", "netpol", "tier1", false),
+		Entry("StagedNetworkPolicy in custom tier with other tier prefix", "tier1.netpol", "tier2", false),
 	)
 
 	Describe("StagedNetworkPolicy watch functionality", func() {

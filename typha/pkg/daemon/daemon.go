@@ -40,8 +40,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
-	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
-	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/calc"
 	"github.com/projectcalico/calico/typha/pkg/config"
@@ -246,56 +244,6 @@ configRetry:
 	// again.
 	t.BuildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
-
-	if datastoreConfig.Spec.DatastoreType == apiconfig.Kubernetes {
-		// Special case: for KDD v1 datamodel to v3 datamodel upgrade, we need to ensure that the datastore migration
-		// has completed before we start serving requests.  Otherwise, we might serve partially-migrated data to
-		// Felix.
-
-		// Get a v1 client, so we can check if there's any data there to migrate.
-		log.Info("Using Kubernetes API datastore, checking if we need to migrate v1 -> v3")
-		var civ1 clients.V1ClientInterface
-		var err error
-		for {
-			if err := ctx.Err(); err != nil {
-				log.WithError(err).Warn("Context canceled.")
-				return err
-			}
-			civ1, err = clients.LoadKDDClientV1FromAPIConfigV3(&datastoreConfig)
-			if err != nil {
-				log.WithError(err).Error("Failed to connect to Kubernetes datastore (Calico v1 API)")
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			break
-		}
-
-		// Use the migration helper to determine if need to perform a migration, and if so
-		// perform the migration.
-		mh := migrator.New(t.DatastoreClient, civ1, nil)
-		for {
-			if err := ctx.Err(); err != nil {
-				log.WithError(err).Warn("Context canceled.")
-				return err
-			}
-			if migrate, err := mh.ShouldMigrate(); err != nil {
-				log.WithError(err).Error("Failed to determine migration requirements")
-				time.Sleep(1 * time.Second)
-				continue
-			} else if migrate {
-				log.Info("Need to migrate Kubernetes v1 configuration to v3")
-				if _, err := mh.Migrate(); err != nil {
-					log.WithError(err).Error("Failed to migrate Kubernetes v1 configuration to v3")
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				log.Info("Successfully migrated Kubernetes v1 configuration to v3")
-				break
-			}
-			log.Info("Migration not required.")
-			break
-		}
-	}
 
 	// Ensure that, as soon as we are able to connect to the datastore at all, it is initialized.
 	// Note: we block further start-up while we do this, which means, if we're stuck here for long enough,

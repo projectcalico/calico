@@ -16,12 +16,9 @@ package resources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // customK8sResourceClient implements the K8sResourceClient interface and provides a generic
@@ -169,7 +165,6 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 
 	// Send the update request using the name.
 	name := resIn.GetObjectMeta().GetName()
-	name = c.defaultPolicyName(name)
 	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource by name")
@@ -220,7 +215,6 @@ func (c *customK8sResourceClient) UpdateStatus(ctx context.Context, kvp *model.K
 
 	// Send the update request using the name.
 	name := resIn.GetObjectMeta().GetName()
-	name = c.defaultPolicyName(name)
 	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource status by name")
@@ -267,7 +261,6 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 		logContext.WithError(err).Debug("Error deleting resource")
 		return nil, err
 	}
-	name = c.defaultPolicyName(name)
 
 	existing, err := c.Get(ctx, k, revision)
 	if err != nil {
@@ -317,7 +310,6 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 		logContext.WithError(err).Debug("Error getting resource")
 		return nil, err
 	}
-	name = c.defaultPolicyName(name)
 	namespace := key.(model.ResourceKey).Namespace
 
 	// Add the name and namespace to the log context now that we know it, and query Kubernetes.
@@ -373,25 +365,6 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 			NamespaceIfScoped(namespace, c.namespaced).
 			Resource(c.resource).
 			VersionedParams(&opts, scheme.ParameterCodec)
-
-		// If the prefix is specified, look for the resources with the label
-		// of prefix.
-		if resList.Prefix {
-			// The prefix has a trailing "." character, remove it, since it is not valid for k8s labels
-			if !strings.HasSuffix(resList.Name, ".") {
-				return nil, errors.New("internal error: custom resource list invoked for a prefix not in the form '<tier>.'")
-			}
-			name := resList.Name[:len(resList.Name)-1]
-			if name == "default" {
-				req = req.VersionedParams(&metav1.ListOptions{
-					LabelSelector: "!" + apiv3.LabelTier,
-				}, scheme.ParameterCodec)
-			} else {
-				req = req.VersionedParams(&metav1.ListOptions{
-					LabelSelector: apiv3.LabelTier + "=" + name,
-				}, scheme.ParameterCodec)
-			}
-		}
 
 		// Perform the request.
 		err := req.Do(ctx).Into(out)
@@ -519,16 +492,4 @@ func (c *customK8sResourceClient) convertKVPairToResource(kvp *model.KVPair) (Re
 	}
 
 	return resOut, nil
-}
-
-func (c *customK8sResourceClient) defaultPolicyName(name string) string {
-	if c.resourceKind == apiv3.KindGlobalNetworkPolicy ||
-		c.resourceKind == apiv3.KindNetworkPolicy ||
-		c.resourceKind == apiv3.KindStagedGlobalNetworkPolicy ||
-		c.resourceKind == apiv3.KindStagedNetworkPolicy {
-		// Policies in default tier are stored in the backend with the default prefix, if the prefix is not present we prefix it now
-		name = names.TieredPolicyName(name)
-	}
-
-	return name
 }

@@ -56,9 +56,9 @@ var initialisedStore = empty.withKVUpdates(
 
 // withPolicy adds a tier and policy containing selectors for all and b=="b"
 var (
-	pol1KVPair         = KVPair{Key: PolicyKey{Name: "pol-1", Tier: "default"}, Value: &policy1_order20}
-	pol1KVPairAlways   = KVPair{Key: PolicyKey{Name: "pol-1", Tier: "default"}, Value: &policy1_order20_always}
-	pol1KVPairOnDemand = KVPair{Key: PolicyKey{Name: "pol-1", Tier: "default"}, Value: &policy1_order20_ondemand}
+	pol1KVPair         = KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20}
+	pol1KVPairAlways   = KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_always}
+	pol1KVPairOnDemand = KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_ondemand}
 )
 
 var withPolicy = initialisedStore.withKVUpdates(
@@ -69,40 +69,40 @@ var withPolicy = initialisedStore.withKVUpdates(
 var withPolicyAlways = initialisedStore.withKVUpdates(
 	pol1KVPairAlways,
 ).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withIPSet(allSelectorId, []string{}).withIPSet(bEqBSelectorId, []string{}).withName("with always-programmed policy")
 
 // withPolicyIngressOnly adds a tier and ingress policy containing selectors for all
 var withPolicyIngressOnly = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1", Tier: "default"}, Value: &policy1_order20_ingress_only},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_ingress_only},
 ).withName("with ingress-only policy")
 
 // withPolicyEgressOnly adds a tier and egress policy containing selectors for b=="b"
 var withPolicyEgressOnly = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1", Tier: "default"}, Value: &policy1_order20_egress_only},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_egress_only},
 ).withName("with egress-only policy")
 
 // withUntrackedPolicy adds a tier and policy containing selectors for all and b=="b"
 var withUntrackedPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1", Tier: "default"}, Value: &policy1_order20_untracked},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_untracked},
 ).withName("with untracked policy")
 
 // withPreDNATPolicy adds a tier and policy containing selectors for all and a=="a"
 var withPreDNATPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pre-dnat-pol-1", Tier: "default"}, Value: &policy1_order20_pre_dnat},
+	KVPair{Key: PolicyKey{Name: "pre-dnat-pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_pre_dnat},
 ).withName("with pre-DNAT policy")
 
 // withHttpMethodPolicy adds a policy containing http method selector.
 var withHttpMethodPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_http_match},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_http_match},
 ).withTotalALPPolicies(
 	1,
 ).withName("with http-method policy")
 
 // withServiceAccountPolicy adds two policies containing service account selector.
 var withServiceAccountPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_src_service_account},
-	KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policy1_order20_dst_service_account},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_src_service_account},
+	KVPair{Key: PolicyKey{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_dst_service_account},
 ).withTotalALPPolicies(
 	2,
 ).withName("with service-account policy")
@@ -170,7 +170,7 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -178,7 +178,11 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 ).withRoutes(
 	// Routes for the local WEPs.
@@ -191,7 +195,7 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 // withPolicyAndTier adds a tier and policy containing selectors for all and b=="b"
 var withPolicyAndTier = initialisedStore.withKVUpdates(
 	KVPair{Key: TierKey{Name: "tier-1"}, Value: &tier1_order20},
-	KVPair{Key: PolicyKey{Tier: "tier-1", Name: "pol-1"}, Value: &policy1_order20},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_tier1_order20},
 ).withName("with policy")
 
 // localEp1WithPolicyAndTier adds a local endpoint to the mix.  It matches all and b=="b".
@@ -208,7 +212,7 @@ var localEp1WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "tier-1", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -217,9 +221,9 @@ var localEp1WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	localWlEp1Id,
 	[]mock.TierInfo{
 		{
-			Name:               "tier-1",
-			IngressPolicyNames: []string{"pol-1"},
-			EgressPolicyNames:  []string{"pol-1"},
+			Name:            "tier-1",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
 		},
 	},
 ).withRoutes(
@@ -242,7 +246,7 @@ var localEp2WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 }).withIPSet(
 	bEqBSelectorId, []string{},
 ).withActivePolicies(
-	types.PolicyID{Tier: "tier-1", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-2"},
 	types.ProfileID{Name: "prof-3"},
@@ -250,9 +254,9 @@ var localEp2WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	localWlEp2Id,
 	[]mock.TierInfo{
 		{
-			Name:               "tier-1",
-			IngressPolicyNames: []string{"pol-1"},
-			EgressPolicyNames:  []string{"pol-1"},
+			Name:            "tier-1",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
 		},
 	},
 ).withRoutes(
@@ -267,23 +271,36 @@ var localEp2WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 // change their orders to check that order trumps name.
 var commLocalEp1WithOneTierPolicy123 = commercialPolicyOrderState(
 	[3]float64{order10, order20, order30},
-	[3]string{"pol-1", "pol-2", "pol-3"},
+	[3]types.PolicyID{
+		{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy},
+	},
 )
 
 var commLocalEp1WithOneTierPolicy321 = commercialPolicyOrderState(
 	[3]float64{order30, order20, order10},
-	[3]string{"pol-3", "pol-2", "pol-1"},
+	[3]types.PolicyID{
+		{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+	},
 )
 
 var commLocalEp1WithOneTierPolicyAlpha = commercialPolicyOrderState(
 	[3]float64{order10, order10, order10},
-	[3]string{"pol-1", "pol-2", "pol-3"},
+	[3]types.PolicyID{
+		{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy},
+	},
 )
 
-func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
+func commercialPolicyOrderState(policyOrders [3]float64, expectedIDs [3]types.PolicyID) State {
 	policies := [3]Policy{}
 	for i := range policies {
 		policies[i] = Policy{
+			Tier:          "tier-1",
 			Order:         &policyOrders[i],
 			Selector:      "a == 'a'",
 			InboundRules:  []Rule{{SrcSelector: allSelector}},
@@ -293,9 +310,9 @@ func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]string
 	state := initialisedStore.withKVUpdates(
 		KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 		KVPair{Key: TierKey{Name: "tier-1"}, Value: &tier1_order20},
-		KVPair{Key: PolicyKey{Tier: "tier-1", Name: "pol-1"}, Value: &policies[0]},
-		KVPair{Key: PolicyKey{Tier: "tier-1", Name: "pol-2"}, Value: &policies[1]},
-		KVPair{Key: PolicyKey{Tier: "tier-1", Name: "pol-3"}, Value: &policies[2]},
+		KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[0]},
+		KVPair{Key: PolicyKey{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[1]},
+		KVPair{Key: PolicyKey{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[2]},
 	).withIPSet(allSelectorId, []string{
 		"10.0.0.1/32", // ep1
 		"fc00:fe11::1/128",
@@ -307,9 +324,9 @@ func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]string
 		"10.0.0.2/32",
 		"fc00:fe11::2/128",
 	}).withActivePolicies(
-		types.PolicyID{Tier: "tier-1", Name: "pol-1"},
-		types.PolicyID{Tier: "tier-1", Name: "pol-2"},
-		types.PolicyID{Tier: "tier-1", Name: "pol-3"},
+		types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+		types.PolicyID{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
+		types.PolicyID{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy},
 	).withActiveProfiles(
 		types.ProfileID{Name: "prof-1"},
 		types.ProfileID{Name: "prof-2"},
@@ -318,9 +335,9 @@ func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]string
 		localWlEp1Id,
 		[]mock.TierInfo{
 			{
-				Name:               "tier-1",
-				IngressPolicyNames: expectedOrder[:],
-				EgressPolicyNames:  expectedOrder[:],
+				Name:            "tier-1",
+				IngressPolicies: expectedIDs[:],
+				EgressPolicies:  expectedIDs[:],
 			},
 		},
 	).withRoutes(
@@ -329,7 +346,7 @@ func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]string
 		routelocalWlTenDotTwo,
 		routelocalWlV6ColonOne,
 		routelocalWlV6ColonTwo,
-	).withName(fmt.Sprintf("ep1 local, 1 tier, policies %v", expectedOrder[:]))
+	).withName(fmt.Sprintf("ep1 local, 1 tier, policies %v", expectedIDs[:]))
 	return state
 }
 
@@ -369,22 +386,31 @@ func tierOrderState(tierOrders [3]float64, expectedOrder [3]string) State {
 			Order: &tierOrders[i],
 		}
 	}
+
+	// initialize three policies with the same order but different tier names
+	pol1Tier1 := policy1_order20
+	pol1Tier1.Tier = "tier-1"
+	pol1Tier2 := policy1_order20
+	pol1Tier2.Tier = "tier-2"
+	pol1Tier3 := policy1_order20
+	pol1Tier3.Tier = "tier-3"
+
 	state := initialisedStore.withKVUpdates(
 		KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 		KVPair{Key: TierKey{Name: "tier-1"}, Value: &tiers[0]},
-		KVPair{Key: PolicyKey{Tier: "tier-1", Name: "tier-1-pol"}, Value: &policy1_order20},
+		KVPair{Key: PolicyKey{Name: "tier-1-pol", Kind: v3.KindGlobalNetworkPolicy}, Value: &pol1Tier1},
 		KVPair{Key: TierKey{Name: "tier-2"}, Value: &tiers[1]},
-		KVPair{Key: PolicyKey{Tier: "tier-2", Name: "tier-2-pol"}, Value: &policy1_order20},
+		KVPair{Key: PolicyKey{Name: "tier-2-pol", Kind: v3.KindGlobalNetworkPolicy}, Value: &pol1Tier2},
 		KVPair{Key: TierKey{Name: "tier-3"}, Value: &tiers[2]},
-		KVPair{Key: PolicyKey{Tier: "tier-3", Name: "tier-3-pol"}, Value: &policy1_order20},
+		KVPair{Key: PolicyKey{Name: "tier-3-pol", Kind: v3.KindGlobalNetworkPolicy}, Value: &pol1Tier3},
 	).withIPSet(
 		allSelectorId, ep1IPs,
 	).withIPSet(
 		bEqBSelectorId, ep1IPs,
 	).withActivePolicies(
-		types.PolicyID{Tier: "tier-1", Name: "tier-1-pol"},
-		types.PolicyID{Tier: "tier-2", Name: "tier-2-pol"},
-		types.PolicyID{Tier: "tier-3", Name: "tier-3-pol"},
+		types.PolicyID{Name: "tier-1-pol", Kind: v3.KindGlobalNetworkPolicy},
+		types.PolicyID{Name: "tier-2-pol", Kind: v3.KindGlobalNetworkPolicy},
+		types.PolicyID{Name: "tier-3-pol", Kind: v3.KindGlobalNetworkPolicy},
 	).withActiveProfiles(
 		types.ProfileID{Name: "prof-1"},
 		types.ProfileID{Name: "prof-2"},
@@ -393,19 +419,19 @@ func tierOrderState(tierOrders [3]float64, expectedOrder [3]string) State {
 		localWlEp1Id,
 		[]mock.TierInfo{
 			{
-				Name:               expectedOrder[0],
-				IngressPolicyNames: []string{expectedOrder[0] + "-pol"},
-				EgressPolicyNames:  []string{expectedOrder[0] + "-pol"},
+				Name:            expectedOrder[0],
+				IngressPolicies: []types.PolicyID{{Name: expectedOrder[0] + "-pol", Kind: v3.KindGlobalNetworkPolicy}},
+				EgressPolicies:  []types.PolicyID{{Name: expectedOrder[0] + "-pol", Kind: v3.KindGlobalNetworkPolicy}},
 			},
 			{
-				Name:               expectedOrder[1],
-				IngressPolicyNames: []string{expectedOrder[1] + "-pol"},
-				EgressPolicyNames:  []string{expectedOrder[1] + "-pol"},
+				Name:            expectedOrder[1],
+				IngressPolicies: []types.PolicyID{{Name: expectedOrder[1] + "-pol", Kind: v3.KindGlobalNetworkPolicy}},
+				EgressPolicies:  []types.PolicyID{{Name: expectedOrder[1] + "-pol", Kind: v3.KindGlobalNetworkPolicy}},
 			},
 			{
-				Name:               expectedOrder[2],
-				IngressPolicyNames: []string{expectedOrder[2] + "-pol"},
-				EgressPolicyNames:  []string{expectedOrder[2] + "-pol"},
+				Name:            expectedOrder[2],
+				IngressPolicies: []types.PolicyID{{Name: expectedOrder[2] + "-pol", Kind: v3.KindGlobalNetworkPolicy}},
+				EgressPolicies:  []types.PolicyID{{Name: expectedOrder[2] + "-pol", Kind: v3.KindGlobalNetworkPolicy}},
 			},
 		},
 	).withRoutes(
@@ -438,7 +464,7 @@ var localEpsWithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "tier-1", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -448,18 +474,18 @@ var localEpsWithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	localWlEp1Id,
 	[]mock.TierInfo{
 		{
-			Name:               "tier-1",
-			IngressPolicyNames: []string{"pol-1"},
-			EgressPolicyNames:  []string{"pol-1"},
+			Name:            "tier-1",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
 		},
 	},
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{
 		{
-			Name:               "tier-1",
-			IngressPolicyNames: []string{"pol-1"},
-			EgressPolicyNames:  []string{"pol-1"},
+			Name:            "tier-1",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
 		},
 	},
 ).withRoutes(
@@ -482,7 +508,7 @@ var localEp1WithPolicyOnDemand = localEp1WithPolicy.withKVUpdates(
 
 // localEp1WithNamedPortPolicy as above but with named port in the policy.
 var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Tier: "default", Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(namedPortAllTCPID, []string{
 	"10.0.0.1,tcp:8080",
 	"10.0.0.2,tcp:8080",
@@ -493,7 +519,7 @@ var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
 // localEp1WithNamedPortPolicy as above but with negated named port in the policy.
 var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
-	KVPair{Key: PolicyKey{Name: "pol-1", Tier: "default"}, Value: &policy1_order20_with_selector_and_negated_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_negated_named_port_tcpport},
 ).withIPSet(namedPortAllLessFoobarTCPID, []string{
 	"10.0.0.1,tcp:8080",
 	"10.0.0.2,tcp:8080",
@@ -506,7 +532,7 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 	"fc00:fe11::1/128",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -515,8 +541,8 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 	localWlEp1Id,
 	[]mock.TierInfo{
 		{
-			Name:               "default",
-			IngressPolicyNames: []string{"pol-1"},
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
 		},
 	},
 ).withRoutes(
@@ -530,7 +556,7 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 // As above but using the destination fields in the policy instead of source.
 var localEp1WithNegatedNamedPortPolicyDest = localEp1WithNegatedNamedPortPolicy.withKVUpdates(
 	KVPair{
-		Key:   PolicyKey{Name: "pol-1", Tier: "default"},
+		Key:   PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 		Value: &policy1_order20_with_selector_and_negated_named_port_tcpport_dest,
 	},
 ).withName("ep1 local, negated named port policy in destination fields")
@@ -538,7 +564,7 @@ var localEp1WithNegatedNamedPortPolicyDest = localEp1WithNegatedNamedPortPolicy.
 // A host endpoint with a named port
 var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithNamedPorts},
-	KVPair{Key: PolicyKey{Tier: "default", Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(namedPortAllTCPID, []string{
 	"10.0.0.1,tcp:8080",
 	"10.0.0.2,tcp:8080",
@@ -550,24 +576,28 @@ var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 ).withEndpoint(
 	"named",
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 ).withName("Host endpoint, named port policy")
 
 // As above but with no selector in the rules.
 var localEp1WithNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Tier: "default", Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_named_port_tcpport},
 ).withName("ep1 local, named port only")
 
 // As above but with negated named port.
 var localEp1WithNegatedNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Tier: "default", Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport_negated},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_named_port_tcpport_negated},
 ).withName("ep1 local, negated named port only")
 
 // localEp1WithIngressPolicy is as above except ingress policy only.
@@ -579,7 +609,7 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	"10.0.0.2/32", // ep1 and ep2
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -587,7 +617,11 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: nil},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  nil,
+		},
 	},
 ).withRoutes(
 	// Routes for the local WEPs.
@@ -599,7 +633,7 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 
 // localEp1WithNamedPortPolicy as above but with UDP named port in the policy.
 var localEp1WithNamedPortPolicyUDP = localEp1WithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Tier: "default", Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_udpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_udpport},
 ).withIPSet(namedPortAllUDPID, []string{
 	"10.0.0.1,udp:9091",
 	"10.0.0.2,udp:9091",
@@ -620,7 +654,7 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -628,7 +662,11 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 ).withEndpoint(
 	hostEpWithNameId,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 ).withName("host ep1, policy")
 
@@ -640,7 +678,7 @@ var hostEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	"10.0.0.2/32", // ep1 and ep2
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -648,7 +686,11 @@ var hostEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 ).withEndpoint(
 	hostEpWithNameId,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: nil},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  nil,
+		},
 	},
 ).withName("host ep1, ingress-only policy")
 
@@ -660,7 +702,7 @@ var hostEp1WithEgressPolicy = withPolicyEgressOnly.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -668,7 +710,11 @@ var hostEp1WithEgressPolicy = withPolicyEgressOnly.withKVUpdates(
 ).withEndpoint(
 	hostEpWithNameId,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: nil, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: nil,
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 ).withName("host ep1, egress-only policy")
 
@@ -685,9 +731,9 @@ var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withUntrackedPolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -696,7 +742,11 @@ var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	hostEpWithNameId,
 	[]mock.TierInfo{},
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 	[]mock.TierInfo{},
 ).withName("host ep1, untracked policy")
@@ -709,9 +759,9 @@ var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
 	"10.0.0.2/32", // ep1 and ep2
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pre-dnat-pol-1"},
+	types.PolicyID{Name: "pre-dnat-pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withPreDNATPolicies(
-	types.PolicyID{Tier: "default", Name: "pre-dnat-pol-1"},
+	types.PolicyID{Name: "pre-dnat-pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -721,22 +771,34 @@ var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
 	[]mock.TierInfo{},
 	[]mock.TierInfo{},
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pre-dnat-pol-1"}, EgressPolicyNames: nil},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pre-dnat-pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  nil,
+		},
 	},
 ).withName("host ep1, pre-DNAT policy")
 
 var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-2", Tier: "default"}, Value: &policy1_order20},
+	KVPair{Key: PolicyKey{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20},
 ).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
-	types.PolicyID{Tier: "default", Name: "pol-2"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+	types.PolicyID{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
 ).withEndpointUntracked(
 	hostEpWithNameId,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-2"}, EgressPolicyNames: []string{"pol-2"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 	[]mock.TierInfo{},
 ).withName("host ep1, tracked+untracked policy")
@@ -749,14 +811,18 @@ var hostEp2WithPolicy = withPolicy.withKVUpdates(
 	"10.0.0.3/32", // ep2
 	"fc00:fe11::3/128",
 }).withIPSet(bEqBSelectorId, []string{}).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-2"},
 	types.ProfileID{Name: "prof-3"},
 ).withEndpoint(
 	hostEpNoNameId,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 ).withName("host ep2, policy")
 
@@ -764,23 +830,36 @@ var hostEp2WithPolicy = withPolicy.withKVUpdates(
 // change their orders to check that order trumps name.
 var localEp1WithOneTierPolicy123 = policyOrderState(
 	[3]float64{order10, order20, order30},
-	[3]string{"pol-1", "pol-2", "pol-3"},
+	[3]types.PolicyID{
+		{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy},
+	},
 )
 
 var localEp1WithOneTierPolicy321 = policyOrderState(
 	[3]float64{order30, order20, order10},
-	[3]string{"pol-3", "pol-2", "pol-1"},
+	[3]types.PolicyID{
+		{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+	},
 )
 
 var localEp1WithOneTierPolicyAlpha = policyOrderState(
 	[3]float64{order10, order10, order10},
-	[3]string{"pol-1", "pol-2", "pol-3"},
+	[3]types.PolicyID{
+		{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
+		{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy},
+	},
 )
 
-func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
+func policyOrderState(policyOrders [3]float64, expectedOrder [3]types.PolicyID) State {
 	policies := [3]Policy{}
 	for i := range policies {
 		policies[i] = Policy{
+			Tier:          "default",
 			Order:         &policyOrders[i],
 			Selector:      "a == 'a'",
 			InboundRules:  []Rule{{SrcSelector: allSelector}},
@@ -789,9 +868,9 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
 	}
 	state := initialisedStore.withKVUpdates(
 		KVPair{Key: localWlEpKey1, Value: &localWlEp1},
-		KVPair{Key: PolicyKey{Name: "pol-1", Tier: "default"}, Value: &policies[0]},
-		KVPair{Key: PolicyKey{Name: "pol-2", Tier: "default"}, Value: &policies[1]},
-		KVPair{Key: PolicyKey{Name: "pol-3", Tier: "default"}, Value: &policies[2]},
+		KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[0]},
+		KVPair{Key: PolicyKey{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[1]},
+		KVPair{Key: PolicyKey{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy}, Value: &policies[2]},
 	).withIPSet(allSelectorId, []string{
 		"10.0.0.1/32", // ep1
 		"fc00:fe11::1/128",
@@ -803,9 +882,9 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
 		"10.0.0.2/32",
 		"fc00:fe11::2/128",
 	}).withActivePolicies(
-		types.PolicyID{Tier: "default", Name: "pol-1"},
-		types.PolicyID{Tier: "default", Name: "pol-2"},
-		types.PolicyID{Tier: "default", Name: "pol-3"},
+		types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+		types.PolicyID{Name: "pol-2", Kind: v3.KindGlobalNetworkPolicy},
+		types.PolicyID{Name: "pol-3", Kind: v3.KindGlobalNetworkPolicy},
 	).withActiveProfiles(
 		types.ProfileID{Name: "prof-1"},
 		types.ProfileID{Name: "prof-2"},
@@ -813,7 +892,7 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
 	).withEndpoint(
 		localWlEp1Id,
 		[]mock.TierInfo{
-			{Name: "default", IngressPolicyNames: expectedOrder[:], EgressPolicyNames: expectedOrder[:]},
+			{Name: "default", IngressPolicies: expectedOrder[:], EgressPolicies: expectedOrder[:]},
 		},
 	).withRoutes(
 		// Routes for the local WEPs.
@@ -837,14 +916,18 @@ var localEp2WithPolicy = withPolicy.withKVUpdates(
 }).withIPSet(
 	bEqBSelectorId, []string{},
 ).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-2"},
 	types.ProfileID{Name: "prof-3"},
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 ).withRoutes(
 	// Routes for the local WEPs.
@@ -874,7 +957,7 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "pol-1"},
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
 ).withActiveProfiles(
 	types.ProfileID{Name: "prof-1"},
 	types.ProfileID{Name: "prof-2"},
@@ -883,12 +966,20 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 ).withRoutes(
 	// Routes for the local WEPs.
@@ -901,7 +992,7 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 ).withName("2 local, overlapping IPs & a policy")
 
 var localEpsWithNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Tier: "default", Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(
 	allSelectorId, nil,
 ).withIPSet(namedPortAllTCPID, []string{
@@ -914,7 +1005,7 @@ var localEpsWithNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
 }).withName("2 local, overlapping IPs & a named port policy")
 
 var localEpsWithNamedPortsPolicyTCPPort2 = localEpsWithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Tier: "default", Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport2},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_selector_and_named_port_tcpport2},
 ).withIPSet(
 	allSelectorId, nil,
 ).withIPSet(namedPortAllTCP2ID, []string{
@@ -933,7 +1024,7 @@ var localEpsWithNamedPortsPolicyTCPPort2 = localEpsWithPolicy.withKVUpdates(
 // localEpsWithMismatchedNamedPortsPolicy contains a policy that has named port matches where the
 // rule has a protocol that doesn't match that in the named port definitions in the endpoint.
 var localEpsWithMismatchedNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Tier: "default", Name: "pol-1"}, Value: &policy1_order20_with_named_port_mismatched_protocol},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_order20_with_named_port_mismatched_protocol},
 ).withIPSet(
 	allSelectorId, nil,
 ).withIPSet(
@@ -975,22 +1066,22 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 // Building on the above, we add a policy to match on the inherited label, which should produce
 // a named port.
 var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlappingIPsAndInheritedLabels.withKVUpdates(
-	KVPair{Key: PolicyKey{Tier: "default", Name: "inherit-pol"}, Value: &policy_with_named_port_inherit},
+	KVPair{Key: PolicyKey{Name: "inherit-pol", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy_with_named_port_inherit},
 ).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "inherit-pol"},
+	types.PolicyID{Name: "inherit-pol", Kind: v3.KindGlobalNetworkPolicy},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{{
-		Name:               "default",
-		IngressPolicyNames: []string{"inherit-pol"},
-		EgressPolicyNames:  []string{"inherit-pol"},
+		Name:            "default",
+		IngressPolicies: []types.PolicyID{{Name: "inherit-pol", Kind: v3.KindGlobalNetworkPolicy}},
+		EgressPolicies:  []types.PolicyID{{Name: "inherit-pol", Kind: v3.KindGlobalNetworkPolicy}},
 	}},
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{{
-		Name:               "default",
-		IngressPolicyNames: []string{"inherit-pol"},
-		EgressPolicyNames:  []string{"inherit-pol"},
+		Name:            "default",
+		IngressPolicies: []types.PolicyID{{Name: "inherit-pol", Kind: v3.KindGlobalNetworkPolicy}},
+		EgressPolicies:  []types.PolicyID{{Name: "inherit-pol", Kind: v3.KindGlobalNetworkPolicy}},
 	}},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	"10.0.0.1,tcp:8080", // ep1
@@ -2803,11 +2894,14 @@ var endpointSliceActive = endpointSliceAndLocalWorkload.withKVUpdates(
 ).withName("EndpointSliceActive").withIPSet("svc:Jhwii46PCMT5NlhWsUqZmv7al8TeHFbNQMhoVg", []string{
 	"10.0.0.1,tcp:80",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "svc-policy"},
+	types.PolicyID{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
-		{Name: "default", EgressPolicyNames: []string{"svc-policy"}},
+		{
+			Name:           "default",
+			EgressPolicies: []types.PolicyID{{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 )
 
@@ -2853,11 +2947,14 @@ var endpointSliceActiveSpecNoPorts = endpointSliceAndLocalWorkload.withKVUpdates
 ).withName("EndpointSliceActiveNoPorts").withIPSet("svcnoport:T03S_6hogdrGKrNFBcbKTFsH_uKwDHEo8JddOg", []string{
 	"10.0.0.1/32",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "svc-policy"},
+	types.PolicyID{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
-		{Name: "default", IngressPolicyNames: []string{"svc-policy"}},
+		{
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy}},
+		},
 	},
 )
 
@@ -2869,15 +2966,15 @@ var endpointSliceActiveSpecPortsAndNoPorts = endpointSliceActiveSpecNoPorts.with
 ).withIPSet("svc:Jhwii46PCMT5NlhWsUqZmv7al8TeHFbNQMhoVg", []string{
 	"10.0.0.1,tcp:80",
 }).withActivePolicies(
-	types.PolicyID{Tier: "default", Name: "svc-policy"},
-	types.PolicyID{Tier: "default", Name: "svc-policy2"},
+	types.PolicyID{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy},
+	types.PolicyID{Name: "svc-policy2", Kind: v3.KindGlobalNetworkPolicy},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
 		{
-			Name:               "default",
-			IngressPolicyNames: []string{"svc-policy"},
-			EgressPolicyNames:  []string{"svc-policy2"},
+			Name:            "default",
+			IngressPolicies: []types.PolicyID{{Name: "svc-policy", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "svc-policy2", Kind: v3.KindGlobalNetworkPolicy}},
 		},
 	},
 )

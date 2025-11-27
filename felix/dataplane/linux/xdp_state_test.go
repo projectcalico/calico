@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -141,22 +142,22 @@ type testCBEvent interface {
 }
 
 type updatePolicyType struct {
-	policyID string
-	inRules  []*proto.Rule
+	policyName string
+	inRules    []*proto.Rule
 }
 
 func (up *updatePolicyType) Do(ipState *xdpIPState) {
-	policyID := types.PolicyID{Tier: "default", Name: up.policyID}
-	policy := &proto.Policy{InboundRules: up.inRules}
+	policyID := types.PolicyID{Name: up.policyName, Kind: v3.KindGlobalNetworkPolicy}
+	policy := &proto.Policy{Tier: "default", InboundRules: up.inRules}
 	ipState.updatePolicy(policyID, policy)
 }
 
 type removePolicyType struct {
-	policyID string
+	policyName string
 }
 
 func (rp *removePolicyType) Do(ipState *xdpIPState) {
-	policyID := types.PolicyID{Tier: "default", Name: rp.policyID}
+	policyID := types.PolicyID{Name: rp.policyName, Kind: v3.KindGlobalNetworkPolicy}
 	ipState.removePolicy(policyID)
 }
 
@@ -276,18 +277,18 @@ func stringPtr(str string) *string {
 	return &str
 }
 
-func updatePolicy(policyID string, rules ...*proto.Rule) testCBEvent {
+func updatePolicy(policyName string, rules ...*proto.Rule) testCBEvent {
 	return &updatePolicyType{
-		policyID: policyID,
-		inRules:  rules,
+		policyName: policyName,
+		inRules:    rules,
 	}
 }
 
 var _ testCBEvent = &removePolicyType{}
 
-func removePolicy(policyID string) testCBEvent {
+func removePolicy(policyName string) testCBEvent {
 	return &removePolicyType{
-		policyID: policyID,
+		policyName: policyName,
 	}
 }
 
@@ -376,8 +377,8 @@ type testIfaceData struct {
 func testStateToRealState(testIfaces map[string]testIfaceData, testEligiblePolicies map[string][][]string, realState *xdpSystemState) {
 	for ifaceName, ifaceData := range testIfaces {
 		policiesToSetIDs := make(map[types.PolicyID]set.Set[string], len(ifaceData.policiesToSets))
-		for policyID, setIDs := range ifaceData.policiesToSets {
-			protoID := types.PolicyID{Tier: "default", Name: policyID}
+		for policyName, setIDs := range ifaceData.policiesToSets {
+			protoID := types.PolicyID{Name: policyName, Kind: v3.KindGlobalNetworkPolicy}
 			setIDsSet := set.FromArray(setIDs)
 			policiesToSetIDs[protoID] = setIDsSet
 		}
@@ -387,7 +388,7 @@ func testStateToRealState(testIfaces map[string]testIfaceData, testEligiblePolic
 		}
 	}
 	for policyID, testRules := range testEligiblePolicies {
-		protoID := types.PolicyID{Tier: "default", Name: policyID}
+		protoID := types.PolicyID{Name: policyID, Kind: v3.KindGlobalNetworkPolicy}
 		rules := make([]xdpRule, 0, len(testRules))
 		for _, setIDs := range testRules {
 			rules = append(rules, xdpRule{
@@ -437,7 +438,7 @@ var _ = Describe("XDP state", func() {
 			type testStruct struct {
 				currentState        map[string]testIfaceData
 				eligiblePolicies    map[string][][]string
-				endpoints           map[string][]string
+				endpoints           map[string][]*proto.PolicyID
 				events              []testCBEvent
 				actions             *bpfActions
 				newCurrentState     map[string]testIfaceData
@@ -509,8 +510,8 @@ var _ = Describe("XDP state", func() {
 				Entry("XDP program gets installed on an interface", testStruct{
 					// nothing in current state
 					// no eligible policies
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule("ipset")),
@@ -538,8 +539,8 @@ var _ = Describe("XDP state", func() {
 				Entry("nothing gets installed on an interface if policy is not optimizable", testStruct{
 					// nothing in current state
 					// no eligible policies
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", allowRule("ipset")),
@@ -566,8 +567,8 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule()),
@@ -596,7 +597,7 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
+					endpoints: map[string][]*proto.PolicyID{
 						"ep": {},
 					},
 					events: []testCBEvent{
@@ -627,7 +628,7 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
+					endpoints: map[string][]*proto.PolicyID{
 						"ep": {},
 					},
 					events: []testCBEvent{
@@ -650,8 +651,8 @@ var _ = Describe("XDP state", func() {
 						},
 					},
 					// no eligible policies
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule("ipset")),
@@ -683,9 +684,9 @@ var _ = Describe("XDP state", func() {
 						},
 					},
 					// no eligible policies
-					endpoints: map[string][]string{
-						"ep":  {"policy"},
-						"ep2": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy2", denyRule("ipset2")),
@@ -722,9 +723,9 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy2": {{"ipset2"}},
 					},
-					endpoints: map[string][]string{
-						"ep":  {"policy"},
-						"ep2": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy2", denyRule("ipset2")),
@@ -757,9 +758,9 @@ var _ = Describe("XDP state", func() {
 						"policy":  {{"ipset"}},
 						"policy2": {{"ipset2"}},
 					},
-					endpoints: map[string][]string{
-						"ep":  {"policy"},
-						"ep2": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updateInterface("iface", "ep2"),
@@ -798,8 +799,8 @@ var _ = Describe("XDP state", func() {
 						"policy":  {{"ipset"}},
 						"policy2": {{"ipset2"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
@@ -837,8 +838,8 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule("ipset2")),
@@ -885,9 +886,9 @@ var _ = Describe("XDP state", func() {
 						"policy":  {{"ipset"}},
 						"policy2": {{"ipset2"}},
 					},
-					endpoints: map[string][]string{
-						"ep":  {"policy"},
-						"ep2": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updateInterface("iface", "ep2"),
@@ -933,8 +934,8 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy2", denyRule("ipset2")),
@@ -982,9 +983,9 @@ var _ = Describe("XDP state", func() {
 						"policy2": {{"ipset2"}},
 						"policy3": {{"ipset3"}},
 					},
-					endpoints: map[string][]string{
-						"ep":  {"policy3"},
-						"ep2": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy3", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
@@ -1043,9 +1044,9 @@ var _ = Describe("XDP state", func() {
 						"policy2": {{"ipset2"}},
 						"policy3": {{"ipset3"}},
 					},
-					endpoints: map[string][]string{
-						"ep":  {"policy3"},
-						"ep2": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy3", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
@@ -1098,8 +1099,8 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule("ipset")),
@@ -1129,8 +1130,8 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
@@ -1160,8 +1161,8 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updateInterface("iface", "ep"),
@@ -1191,8 +1192,8 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy2", allowRule("ipset2")),
@@ -1222,9 +1223,9 @@ var _ = Describe("XDP state", func() {
 					eligiblePolicies: map[string][][]string{
 						"policy": {{"ipset"}},
 					},
-					endpoints: map[string][]string{
-						"ep":  {"policy"},
-						"ep2": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep2"),
@@ -1261,9 +1262,9 @@ var _ = Describe("XDP state", func() {
 						"policy":  {{"ipset"}},
 						"policy2": {{"ipset2"}},
 					},
-					endpoints: map[string][]string{
-						"ep":  {"policy"},
-						"ep2": {"policy2"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						addMembersIPSet("ipset", "member1"),
@@ -1315,8 +1316,8 @@ var _ = Describe("XDP state", func() {
 						"policy":  {{"ipset"}},
 						"policy2": {{"ipset2"}},
 					},
-					endpoints: map[string][]string{
-						"ep": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						removeHostEndpoint("ep"),
@@ -1371,9 +1372,9 @@ var _ = Describe("XDP state", func() {
 						"policy":  {{"ipset"}},
 						"policy2": {{"ipset2"}},
 					},
-					endpoints: map[string][]string{
-						"ep":  {"policy"},
-						"ep2": {"policy"},
+					endpoints: map[string][]*proto.PolicyID{
+						"ep":  {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
+						"ep2": {{Name: "policy", Kind: v3.KindGlobalNetworkPolicy}},
 					},
 					events: []testCBEvent{
 						removePolicy("policy"),
@@ -1425,7 +1426,7 @@ var _ = Describe("XDP state", func() {
 				//		"policy":  [][]string{[]string{"ipset"}},
 				//		"policy2": [][]string{[]string{"ipset2"}},
 				//	},
-				//	endpoints: map[string][]string{
+				//	endpoints: map[string][]*proto.PolicyID{
 				//		"ep": []string{"policy", "policy2"},
 				//	},
 				//	events: []testCBEvent{
@@ -1461,7 +1462,7 @@ var _ = Describe("XDP state", func() {
 				//	eligiblePolicies: map[string][][]string{
 				//		"policy": [][]string{[]string{"ipset"}},
 				//	},
-				//	endpoints: map[string][]string{
+				//	endpoints: map[string][]*proto.PolicyID{
 				//		"ep": []string{"policy", "policy2"},
 				//	},
 				//	events: []testCBEvent{
@@ -1640,7 +1641,7 @@ var _ = Describe("XDP state", func() {
 					}
 					ts := testStruct{
 						currentState: make(map[string]testIfaceData, len(policyInfos)),
-						endpoints:    make(map[string][]string, len(policyInfos)),
+						endpoints:    make(map[string][]*proto.PolicyID, len(policyInfos)),
 						events:       make([]testCBEvent, 0, len(policyInfos)),
 						// no actions expected
 						newCurrentState: make(map[string]testIfaceData, len(policyInfos)),
@@ -1652,7 +1653,7 @@ var _ = Describe("XDP state", func() {
 							epID: ep,
 						}
 						ts.currentState[iface] = ifaceData
-						ts.endpoints[ep] = []string{info.name}
+						ts.endpoints[ep] = []*proto.PolicyID{{Name: info.name, Kind: v3.KindGlobalNetworkPolicy}}
 						ts.events = append(ts.events, updatePolicy(info.name, info.rule))
 						ts.newCurrentState[iface] = ifaceData
 					}
@@ -2070,26 +2071,26 @@ var _ = Describe("XDP state", func() {
 							hasXDP:    true,
 							mapExists: true,
 							mapContents: map[bpf.IPv4Mask]uint32{
-								bpf.IPv4Mask{Ip: [4]byte{1, 2, 3, 4}, Mask: 32}: 1,
-								bpf.IPv4Mask{Ip: [4]byte{2, 3, 4, 5}, Mask: 32}: 1,
-								bpf.IPv4Mask{Ip: [4]byte{3, 4, 5, 6}, Mask: 32}: 1,
+								{Ip: [4]byte{1, 2, 3, 4}, Mask: 32}: 1,
+								{Ip: [4]byte{2, 3, 4, 5}, Mask: 32}: 1,
+								{Ip: [4]byte{3, 4, 5, 6}, Mask: 32}: 1,
 							},
 						},
 						"ifBadMap1": {
 							hasXDP:    true,
 							mapExists: true,
 							mapContents: map[bpf.IPv4Mask]uint32{
-								bpf.IPv4Mask{Ip: [4]byte{42, 42, 42, 42}, Mask: 32}: 3,
-								bpf.IPv4Mask{Ip: [4]byte{1, 2, 3, 4}, Mask: 16}:     1,
+								{Ip: [4]byte{42, 42, 42, 42}, Mask: 32}: 3,
+								{Ip: [4]byte{1, 2, 3, 4}, Mask: 16}:     1,
 							},
 						},
 						"ifBadMap2": {
 							hasXDP:    true,
 							mapExists: true,
 							mapContents: map[bpf.IPv4Mask]uint32{
-								bpf.IPv4Mask{Ip: [4]byte{1, 2, 3, 4}, Mask: 32}: 3,
-								bpf.IPv4Mask{Ip: [4]byte{2, 3, 4, 5}, Mask: 32}: 6,
-								bpf.IPv4Mask{Ip: [4]byte{3, 4, 5, 6}, Mask: 32}: 1,
+								{Ip: [4]byte{1, 2, 3, 4}, Mask: 32}: 3,
+								{Ip: [4]byte{2, 3, 4, 5}, Mask: 32}: 6,
+								{Ip: [4]byte{3, 4, 5, 6}, Mask: 32}: 1,
 							},
 						},
 					},
@@ -2728,7 +2729,7 @@ var _ = Describe("XDP state", func() {
 					for iface, needsXDP := range s.newState {
 						data := xdpIfaceData{}
 						if needsXDP {
-							policyID := types.PolicyID{Tier: "default", Name: "bar"}
+							policyID := types.PolicyID{Name: "bar", Kind: v3.KindGlobalNetworkPolicy}
 							endpointID := types.HostEndpointID{EndpointId: "foo"}
 							data.EpID = endpointID
 							data.PoliciesToSetIDs = map[types.PolicyID]set.Set[string]{

@@ -34,8 +34,9 @@ var _ = Describe("Test the StagedKubernetesNetworkPolicy update processor", func
 	}
 
 	v1StagedKubernetesNetworkPolicyKey1 := model.PolicyKey{
-		Name: ns1 + "/" + model.PolicyNamePrefixStaged + "knp.default." + name1,
-		Tier: "default",
+		Name:      "knp.default." + name1,
+		Namespace: ns1,
+		Kind:      apiv3.KindStagedKubernetesNetworkPolicy,
 	}
 
 	It("should handle conversion of valid StagedKubernetesNetworkPolicy", func() {
@@ -58,6 +59,7 @@ var _ = Describe("Test the StagedKubernetesNetworkPolicy update processor", func
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1StagedKubernetesNetworkPolicyKey1,
 			Value: &model.Policy{
+				Tier:           "default",
 				Namespace:      ns1,
 				Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'namespace1'",
 				ApplyOnForward: false,
@@ -68,5 +70,4 @@ var _ = Describe("Test the StagedKubernetesNetworkPolicy update processor", func
 			Revision: "abcde",
 		}))
 	})
-
 })

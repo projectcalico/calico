@@ -664,7 +664,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
 			Expect(be.Clean()).NotTo(HaveOccurred())
-			testWatcher4.ExpectEvents(apiv3.KindTier, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(apiv3.KindTier, []watch.Event{
 				{
 					Type:     watch.Deleted,
 					Previous: outRes1,

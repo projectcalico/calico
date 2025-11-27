@@ -939,6 +939,13 @@ func (h *connection) doHandshake() error {
 		h.chosenCompression = ""
 	}
 
+	if !hello.SupportsModernPolicyKeys {
+		// The client is too old and we cannot support it. Reject the connection and wait for the
+		// client to be upgraded.
+		h.logCxt.Info("Client does not support modern policy keys, disconnecting.")
+		return ErrUnsupportedClientFeature
+	}
+
 	// Respond to client's hello.
 	err = h.sendMsg(syncproto.MsgServerHello{
 		Version: buildinfo.Version,

@@ -519,12 +519,9 @@ wepLoop:
 			continue // Already have an update, skip the scan.
 		}
 		for _, t := range wep.Tiers {
-			for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
+			for _, pols := range [][]*proto.PolicyID{t.IngressPolicies, t.EgressPolicies} {
 				for _, p := range pols {
-					polID := types.PolicyID{
-						Tier: t.Name,
-						Name: p,
-					}
+					polID := types.ProtoToPolicyID(p)
 					if m.dirtyPolicyIDs.Contains(polID) {
 						m.pendingWlEpUpdates[wepID] = wep
 						continue wepLoop
@@ -556,12 +553,9 @@ wepLoop:
 
 func (m *endpointManager) tiersUseDirtyPolicy(tiers []*proto.TierInfo) bool {
 	for _, t := range tiers {
-		for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
+		for _, pols := range [][]*proto.PolicyID{t.IngressPolicies, t.EgressPolicies} {
 			for _, p := range pols {
-				polID := types.PolicyID{
-					Tier: t.Name,
-					Name: p,
-				}
+				polID := types.ProtoToPolicyID(p)
 				if m.dirtyPolicyIDs.Contains(polID) {
 					return true
 				}
@@ -961,10 +955,10 @@ func (m *endpointManager) groupTieredPolicy(tieredPolicies []*proto.TierInfo, fi
 	for _, tierInfo := range tieredPolicies {
 		var inPols, outPols []*rules.PolicyGroup
 		if filter&includeInbound != 0 {
-			inPols = m.groupPolicies(tierInfo.Name, tierInfo.IngressPolicies, rules.PolicyDirectionInbound)
+			inPols = m.groupPolicies(tierInfo.IngressPolicies, rules.PolicyDirectionInbound)
 		}
 		if filter&includeOutbound != 0 {
-			outPols = m.groupPolicies(tierInfo.Name, tierInfo.EgressPolicies, rules.PolicyDirectionOutbound)
+			outPols = m.groupPolicies(tierInfo.EgressPolicies, rules.PolicyDirectionOutbound)
 		}
 		tierPolGroups = append(tierPolGroups, rules.TierPolicyGroups{
 			Name:            tierInfo.Name,
@@ -1584,34 +1578,28 @@ func (m *endpointManager) GetRawHostEndpoints() map[types.HostEndpointID]*proto.
 	return m.rawHostEndpoints
 }
 
-func (m *endpointManager) groupPolicies(tierName string, names []string, direction rules.PolicyDirection) []*rules.PolicyGroup {
-	if len(names) == 0 {
+func (m *endpointManager) groupPolicies(policies []*proto.PolicyID, direction rules.PolicyDirection) []*rules.PolicyGroup {
+	if len(policies) == 0 {
 		return nil
 	}
+	p0 := types.ProtoToPolicyID(policies[0])
 	group := &rules.PolicyGroup{
-		Tier:        tierName,
-		Direction:   direction,
-		PolicyNames: []string{names[0]},
-		Selector: m.activePolicySelectors[types.PolicyID{
-			Tier: tierName,
-			Name: names[0],
-		}],
+		Direction: direction,
+		Policies:  []*types.PolicyID{&p0},
+		Selector:  m.activePolicySelectors[p0],
 	}
 	groups := []*rules.PolicyGroup{group}
-	for _, name := range names[1:] {
-		sel := m.activePolicySelectors[types.PolicyID{
-			Tier: tierName,
-			Name: name,
-		}]
+	for _, pol := range policies[1:] {
+		pId := types.ProtoToPolicyID(pol)
+		sel := m.activePolicySelectors[pId]
 		if sel != group.Selector {
 			group = &rules.PolicyGroup{
-				Tier:      tierName,
 				Direction: direction,
 				Selector:  sel,
 			}
 			groups = append(groups, group)
 		}
-		group.PolicyNames = append(group.PolicyNames, name)
+		group.Policies = append(group.Policies, &pId)
 	}
 	return groups
 }

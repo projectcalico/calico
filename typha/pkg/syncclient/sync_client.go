@@ -75,6 +75,7 @@ type Options struct {
 	// DebugLogReads tells the client to wrap each connection with a Reader that
 	// logs every read.  Intended only for use in tests!
 	DebugLogReads bool
+
 	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
 	// Useful for load testing Typha without having to run a "full" client.
 	DebugDiscardKVUpdates bool
@@ -463,6 +464,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 			Info:                           s.myInfo,
 			SyncerType:                     ourSyncerType,
 			SupportsDecoderRestart:         !s.options.DisableDecoderRestart,
+			SupportsModernPolicyKeys:       true,
 			SupportedCompressionAlgorithms: compAlgs,
 			ClientConnID:                   s.connID,
 		},

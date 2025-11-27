@@ -97,7 +97,7 @@ var _ = describe.CalicoDescribe(
 			nsA := f.Namespace
 
 			By("Creating a second namespace B")
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 			nsB, err := f.CreateNamespace(ctx, f.BaseName+"-b", nil)
 			Expect(err).NotTo(HaveOccurred())

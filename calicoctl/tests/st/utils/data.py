@@ -506,51 +506,6 @@ networkpolicy_tiered_name2_rev1 = {
     }
 }
 
-networkpolicy_os_name1_rev1 = {
-    'apiVersion': API_VERSION,
-    'kind': 'NetworkPolicy',
-    'metadata': {
-        'name': 'os-policy-mypolicy1',
-        'namespace': 'default'
-    },
-    'spec': {
-        'order': 100,
-        'selector': "type=='database'",
-        'types': ['Ingress', 'Egress'],
-        'egress': [
-            {
-                'action': 'Allow',
-                'source': {
-                    'selector': "type=='application'"},
-            },
-        ],
-        'ingress': [
-            {
-                'ipVersion': 4,
-                'action': 'Deny',
-                'destination': {
-                    'notNets': ['10.3.0.0/16'],
-                    'notPorts': ['110:1050'],
-                    'notSelector': "type=='apples'",
-                    'nets': ['10.2.0.0/16'],
-                    'ports': ['100:200'],
-                    'selector': "type=='application'",
-                },
-                'protocol': 'TCP',
-                'source': {
-                    'notNets': ['10.1.0.0/16'],
-                    'notPorts': [1050],
-                    'notSelector': "type=='database'",
-                    'nets': ['10.0.0.0/16'],
-                    'ports': [1234, '10:1024'],
-                    'selector': "type=='application'",
-                    'namespaceSelector': 'has(role)',
-                }
-            }
-        ],
-    }
-}
-
 #
 # Staged Network Policy
 #
@@ -699,52 +654,6 @@ stagednetworkpolicy_tiered_name2_rev1 = {
                 'action': 'Allow',
                 'protocol': 'UDP',
             },
-        ],
-    }
-}
-
-stagednetworkpolicy_os_name1_rev1 = {
-    'apiVersion': API_VERSION,
-    'kind': 'StagedNetworkPolicy',
-    'metadata': {
-        'name': 'os-policy-mypolicy1',
-        'namespace': 'default'
-    },
-    'spec': {
-        'stagedAction': 'Set',
-        'order': 100,
-        'selector': "type=='database'",
-        'types': ['Ingress', 'Egress'],
-        'egress': [
-            {
-                'action': 'Allow',
-                'source': {
-                    'selector': "type=='application'"},
-            },
-        ],
-        'ingress': [
-            {
-                'ipVersion': 4,
-                'action': 'Deny',
-                'destination': {
-                    'notNets': ['10.3.0.0/16'],
-                    'notPorts': ['110:1050'],
-                    'notSelector': "type=='apples'",
-                    'nets': ['10.2.0.0/16'],
-                    'ports': ['100:200'],
-                    'selector': "type=='application'",
-                },
-                'protocol': 'TCP',
-                'source': {
-                    'notNets': ['10.1.0.0/16'],
-                    'notPorts': [1050],
-                    'notSelector': "type=='database'",
-                    'nets': ['10.0.0.0/16'],
-                    'ports': [1234, '10:1024'],
-                    'selector': "type=='application'",
-                    'namespaceSelector': 'has(role)',
-                }
-            }
         ],
     }
 }
@@ -923,50 +832,6 @@ globalnetworkpolicy_tiered_name2_rev1 = {
     }
 }
 
-globalnetworkpolicy_os_name1_rev1 = {
-    'apiVersion': API_VERSION,
-    'kind': 'GlobalNetworkPolicy',
-    'metadata': {
-        'name': 'os-policy-mypolicy1',
-    },
-    'spec': {
-        'order': 100,
-        'selector': "type=='database'",
-        'types': ['Ingress', 'Egress'],
-        'egress': [
-            {
-                'action': 'Allow',
-                'source': {
-                    'selector': "type=='application'"},
-            },
-        ],
-        'ingress': [
-            {
-                'ipVersion': 4,
-                'action': 'Deny',
-                'destination': {
-                    'notNets': ['10.3.0.0/16'],
-                    'notPorts': ['110:1050'],
-                    'notSelector': "type=='apples'",
-                    'nets': ['10.2.0.0/16'],
-                    'ports': ['100:200'],
-                    'selector': "type=='application'",
-                },
-                'protocol': 'TCP',
-                'source': {
-                    'notNets': ['10.1.0.0/16'],
-                    'notPorts': [1050],
-                    'notSelector': "type=='database'",
-                    'nets': ['10.0.0.0/16'],
-                    'ports': [1234, '10:1024'],
-                    'selector': "type=='application'",
-                    'namespaceSelector': 'has(role)',
-                }
-            }
-        ],
-    }
-}
-
 networkpolicy_name3_rev1 = {
     'apiVersion': API_VERSION,
     'kind': 'NetworkPolicy',
@@ -1117,51 +982,6 @@ stagedglobalnetworkpolicy_tiered_name2_rev1 = {
                 'action': 'Allow',
                 'protocol': 'UDP',
             },
-        ],
-    }
-}
-
-stagedglobalnetworkpolicy_os_name1_rev1 = {
-    'apiVersion': API_VERSION,
-    'kind': 'StagedGlobalNetworkPolicy',
-    'metadata': {
-        'name': 'os-policy-mystagedpolicy1',
-    },
-    'spec': {
-        'stagedAction': "Set",
-        'order': 100,
-        'selector': "type=='database'",
-        'types': ['Ingress', 'Egress'],
-        'egress': [
-            {
-                'action': 'Allow',
-                'source': {
-                    'selector': "type=='application'"},
-            },
-        ],
-        'ingress': [
-            {
-                'ipVersion': 4,
-                'action': 'Deny',
-                'destination': {
-                    'notNets': ['10.3.0.0/16'],
-                    'notPorts': ['110:1050'],
-                    'notSelector': "type=='apples'",
-                    'nets': ['10.2.0.0/16'],
-                    'ports': ['100:200'],
-                    'selector': "type=='application'",
-                },
-                'protocol': 'TCP',
-                'source': {
-                    'notNets': ['10.1.0.0/16'],
-                    'notPorts': [1050],
-                    'notSelector': "type=='database'",
-                    'nets': ['10.0.0.0/16'],
-                    'ports': [1234, '10:1024'],
-                    'selector': "type=='application'",
-                    'namespaceSelector': 'has(role)',
-                }
-            }
         ],
     }
 }

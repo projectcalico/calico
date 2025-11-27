@@ -32,9 +32,9 @@ type update struct {
 
 var _ = Describe("Keys", func() {
 	It("should work as a map key", func() {
-		key1 := model.KeyFromDefaultPath("/calico/v1/policy/tier/tier1/policy/policy1")
-		key2 := model.KeyFromDefaultPath("calico/v1/policy/tier/tier1/policy/policy1")
-		key3 := model.KeyFromDefaultPath("/calico/v1/policy/tier/tier1/policy/policy2")
+		key1 := model.KeyFromDefaultPath("/calico/v1/policy/NetworkPolicy/kube-system/policy1")
+		key2 := model.KeyFromDefaultPath("calico/v1/policy/NetworkPolicy/kube-system/policy1")
+		key3 := model.KeyFromDefaultPath("/calico/v1/policy/NetworkPolicy/kube-system/policy2")
 		m := make(map[interface{}]bool)
 		m[key1] = true
 		Expect(m[key2]).To(BeTrue())
@@ -54,15 +54,19 @@ var _ = Describe("Index", func() {
 
 	onMatchStart := func(selId, labelId interface{}) {
 		updates = append(updates,
-			update{op: "start",
+			update{
+				op:      "start",
 				labelId: labelId,
-				selId:   selId})
+				selId:   selId,
+			})
 	}
 	onMatchStop := func(selId, labelId interface{}) {
 		updates = append(updates,
-			update{op: "stop",
+			update{
+				op:      "stop",
 				labelId: labelId,
-				selId:   selId})
+				selId:   selId,
+			})
 	}
 
 	BeforeEach(func() {
