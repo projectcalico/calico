@@ -164,7 +164,7 @@ blocks:
       jobs:
         - name: Pre-flight checks
           commands:
-            - true || make ci-preflight-checks
+            - make ci-preflight-checks
   - name: API
     run:
       when: "false or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -445,9 +445,9 @@ blocks:
           commands:
             - make build image fv-prereqs
             - ./.semaphore/cache-test-artifacts
-            #- ../.semaphore/run-and-monitor ut.log make ut
-            #- ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-            #- ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+            - ../.semaphore/run-and-monitor ut.log make ut
+            - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+            - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
         - name: "Felix: Static checks"
           execution_time_limit:
             minutes: 60
@@ -635,7 +635,7 @@ blocks:
             minutes: 180
           env_vars:
             - name: FELIX_TEST_GROUP
-              value: "bpf-22.04-ipt-with-ut"
+              value: "bpf-22.04-nft-with-ut"
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
           commands:
@@ -663,7 +663,7 @@ blocks:
             minutes: 60
           env_vars:
             - name: FELIX_TEST_GROUP
-              value: "bpf-25.04-ipt-no-fv-with-ut"
+              value: "bpf-25.04-nft-no-fv-with-ut"
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
           commands:
@@ -690,7 +690,7 @@ blocks:
             minutes: 180
           env_vars:
             - name: FELIX_TEST_GROUP
-              value: "bpf-25.04-ipt-with-ut-jitharden"
+              value: "bpf-25.04-nft-with-ut-jitharden"
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
           commands:

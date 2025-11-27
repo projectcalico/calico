@@ -40,7 +40,7 @@ else
   echo "Unknown OS version in FELIX_TEST_GROUP: $FELIX_TEST_GROUP"
   exit 1
 fi
-echo "Calculated: IMAGE=${IMAGE}"
+echo "Calculated: IMAGE_FAMILY=${IMAGE_FAMILY}"
 
 if [[ $FELIX_TEST_GROUP =~ ipt ]]; then
   JOB_TAG+="ipt"

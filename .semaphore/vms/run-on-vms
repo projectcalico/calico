@@ -15,14 +15,13 @@
 
 set -e
 
-my_dir="$(dirname $0)"
+my_dir="$(dirname "$0")"
 repo_dir="$my_dir/../.."
 
 # COMPONENT might be node or felix; give shellcheck something to work with.
 # shellcheck source=../../felix/.semaphore/batches.sh
 source "${repo_dir}/${COMPONENT}/.semaphore/batches.sh"
 
-my_dir="$(dirname $0)"
 vm_name_prefix=$1
 shift 1
 

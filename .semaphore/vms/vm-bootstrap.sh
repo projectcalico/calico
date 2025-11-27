@@ -76,7 +76,7 @@ cat >> /tmp/daemon.json << EOF
   "fixed-cidr-v6": "2001:db8:1::/64"
 }
 EOF
- 
+
 mv /tmp/daemon.json /etc/docker/daemon.json
 systemctl restart docker
 touch /var/run/startup-script-complete

@@ -48,7 +48,7 @@ run_batch() {
     fi
     cmd_quot+="$(printf "%q" "$part")"
   done
-  
+
   echo "RUNNER: Starting batch '$batch' on VM '$vm_name'" >> "$log_file"
   echo "RUNNER: Command: $cmd_quot" >> "$log_file"
 

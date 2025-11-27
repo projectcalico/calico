@@ -41,4 +41,4 @@ while true; do
   echo "Instances to delete: $instances"
   gcloud --quiet beta compute instances delete ${instances} --zone=${ZONE} --no-graceful-shutdown
   sleep 1
-done 
+done
