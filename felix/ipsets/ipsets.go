@@ -386,9 +386,6 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		// that ApplyDeletions doesn't get called if there's another failure
 		// and deleting some temp sets might free up some room.
 		s.tryTempIPSetDeletions()
-		if resyncErr != nil {
-			_ = s.ApplyDeletions()
-		}
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
 		if updateErr = s.tryUpdates(dirtyIPSets, listener); updateErr != nil {
@@ -458,11 +455,11 @@ func (s *IPSets) tryResync() (err error) {
 	// are known to exist.
 	ipSets, err := s.CalicoIPSets()
 	if err != nil {
-		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
+		s.logCxt.WithError(err).Error("Failed to get the list of Calico ipsets")
 		return
 	}
 	if debug {
-		s.logCxt.Debugf("List of ipsets: %v", ipSets)
+		s.logCxt.Debugf("List of calico ipsets: %v", ipSets)
 	}
 
 	ipSetPartOfSync := func(name string) bool {
@@ -475,12 +472,16 @@ func (s *IPSets) tryResync() (err error) {
 			// Skipping this IP set on this pass.
 			continue
 		}
+
 		if debug {
 			s.logCxt.Debugf("Parsing IP set %v.", name)
 		}
-		if err = s.resyncIPSet(name); err != nil {
-			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
+		_, desired := s.setNameToProgrammedMetadata.Desired().Get(name)
+		err = s.resyncIPSet(name)
+		if desired && err != nil {
+			// Ignore failures of IP sets not in desired stated. Those will be cleaned up later.
 			failedIPSets = append(failedIPSets, name)
+			s.logCxt.WithError(err).WithField("name", name).Error("Failed to parse a desired ipset")
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
 			s.ipSetsRequiringResync.Discard(name)
@@ -701,7 +702,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		meta.ListFailed = true
 	}
 	if debug {
-		s.logCxt.WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
+		s.logCxt.WithError(err).WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
 	}
 	s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
 	return err
