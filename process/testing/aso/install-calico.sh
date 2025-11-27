@@ -13,27 +13,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -o errexit
+# set -o errexit
 set -o nounset
 set -o pipefail
 
-. ./utils.sh
+. ../util/utils.sh
+. ./export-env.sh
 
-# Use KUBECTL to access the local kind management cluster. Use KCAPZ to
-# access the CAPZ cluster.
+# Use kubectl with kubeconfig from install-kubeadm.sh
 : ${KUBECTL:=./bin/kubectl}
-: ${KCAPZ:="${KUBECTL} --kubeconfig=./kubeconfig"}
 
-: ${PRODUCT:=calico}
+# Use the kubeconfig that was copied from master node
+KUBECONFIG_FILE="./kubeconfig"
+if [ ! -f "${KUBECONFIG_FILE}" ]; then
+  echo "ERROR: kubeconfig file not found at ${KUBECONFIG_FILE}"
+  echo "Please run install-kubeadm.sh first to set up the cluster and copy kubeconfig"
+  exit 1
+fi
+
+export KUBECONFIG="${KUBECONFIG_FILE}"
+echo "Using kubeconfig from: ${KUBECONFIG_FILE}"
+
+: ${PRODUCT:=calient}
 : ${RELEASE_STREAM:="master"} # Default to master
-: ${HASH_RELEASE:="false"} # Set to true to use hash release
+: ${HASH_RELEASE:="true"} # Set to true to use hash release
 
-: "${AZ_KUBE_VERSION:?Environment variable empty or not defined.}"
+: "${KUBE_VERSION:?Environment variable empty or not defined.}"
 
 echo Settings:
 echo '  PRODUCT='${PRODUCT}
 echo '  RELEASE_STREAM='${RELEASE_STREAM}
 echo '  HASH_RELEASE='${HASH_RELEASE}
+echo '  KUBE_VERSION='${KUBE_VERSION}
 
 if [ ${PRODUCT} == 'calient' ]; then
     # Verify if the required variables are set for Calico EE
@@ -42,7 +53,7 @@ if [ ${PRODUCT} == 'calient' ]; then
 fi
 
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
-LOCAL_MANIFESTS_DIR="${SCRIPT_CURRENT_DIR}/../../../../manifests"
+LOCAL_MANIFESTS_DIR="${SCRIPT_CURRENT_DIR}/../../../manifests"
 
 if [ ${PRODUCT} == 'calient' ]; then
     RELEASE_BASE_URL="https://downloads.tigera.io/ee/${RELEASE_STREAM}"
@@ -64,79 +75,77 @@ if [ ${HASH_RELEASE} == 'true' ]; then
 fi
 
 if [[ ${RELEASE_STREAM} != 'local' ]]; then
-    # Check release url and installation scripts
+    # Check release url
     echo "Set release base url ${RELEASE_BASE_URL}"
-    sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
 fi
 
 # Create a storage class and persistent volume for Calico Enterprise.
 if [ ${PRODUCT} == 'calient' ]; then
-    ${KCAPZ} create -f ./EE/storage-class-azure-file.yaml
-    ${KCAPZ} create -f ./EE/persistent-volume.yaml
+    ${KUBECTL} create -f ./EE/storage-class-azure-file.yaml
+    ${KUBECTL} create -f ./EE/persistent-volume.yaml
 fi
 
 # Install Calico on Linux nodes
 if [[ ${RELEASE_STREAM} == 'local' ]]; then
     # Use local manifests
-    ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/operator-crds.yaml
-    ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/tigera-operator.yaml
+    ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/operator-crds.yaml
+    ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/tigera-operator.yaml
 else
-    # Use release url
-    echo "Set release base url ${RELEASE_BASE_URL}"
-    sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
+    # Download and install from release
+    echo "Downloading Calico manifests from ${RELEASE_BASE_URL}"
     curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/operator-crds.yaml -o operator-crds.yaml
     curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-operator.yaml -o tigera-operator.yaml
-    ${KCAPZ} create -f ./operator-crds.yaml
-    ${KCAPZ} create -f ./tigera-operator.yaml
+    ${KUBECTL} create -f ./operator-crds.yaml
+    ${KUBECTL} create -f ./tigera-operator.yaml
 fi
 
 if [[ ${PRODUCT} == 'calient' ]]; then
     # Install prometheus operator
     if [[ ${RELEASE_STREAM} == 'local' ]]; then
-        ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/tigera-prometheus-operator.yaml
+        ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/tigera-prometheus-operator.yaml
     else
         curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-prometheus-operator.yaml -o tigera-prometheus-operator.yaml
-        ${KCAPZ} create -f ./tigera-prometheus-operator.yaml
+        ${KUBECTL} create -f ./tigera-prometheus-operator.yaml
     fi
 
     # Install pull secret.
-    ${KCAPZ} create secret generic tigera-pull-secret \
+    ${KUBECTL} create secret generic tigera-pull-secret \
       --type=kubernetes.io/dockerconfigjson -n tigera-operator \
       --from-file=.dockerconfigjson=${GCR_IO_PULL_SECRET}
 
     # When using an EE hash release, the operator has to have tigera-pull-secret in its imagePullSecrets.
     if [[ ${HASH_RELEASE} == 'true' ]]; then
-        ${KCAPZ} patch deployment tigera-operator -n tigera-operator --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"tigera-pull-secret"}]}}}}'
+        ${KUBECTL} patch deployment tigera-operator -n tigera-operator --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"tigera-pull-secret"}]}}}}'
     fi
 
     # Create custom resources
-    ${KCAPZ} create -f ./EE/custom-resources.yaml
+    ${KUBECTL} create -f ./EE/custom-resources.yaml
 
     # Install Calico EE license (after the Tigera apiserver comes up)
     echo "Wait for the Tigera apiserver to be ready..."
-    timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=30s; do sleep 5; done"
+    timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=30s; do sleep 5; done"
     echo "Tigera apiserver is ready, installing Calico EE license"
 
-    retry_command 60 "${KCAPZ} create -f ${TSEE_TEST_LICENSE}"
+    retry_command 60 "${KUBECTL} create -f ${TSEE_TEST_LICENSE}"
 else
     # Create custom resources
-    ${KCAPZ} create -f ./OSS/custom-resources.yaml
+    ${KUBECTL} create -f ./OSS/custom-resources.yaml
 fi
 
 echo "Wait for Calico to be ready on Linux nodes..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Linux nodes"
 
 # Install Calico on Windows nodes
 
 # Turn strict affinity on in the default IPAMConfig (required for Windows)
-${KCAPZ} patch ipamconfig default --type merge --patch='{"spec": {"strictAffinity": true}}'
+${KUBECTL} patch ipamconfig default --type merge --patch='{"spec": {"strictAffinity": true}}'
 
 # Find out apiserver address and port and fill in 'kubernetes-services-endpoint' configmap (required for Windows)
-APISERVER=$(${KCAPZ} get configmap -n kube-system kube-proxy -o yaml | awk -F'://' '/server: https:\/\// { print $2 }')
+APISERVER=$(${KUBECTL} get configmap -n kube-system kube-proxy -o yaml | awk -F'://' '/server: https:\/\// { print $2 }')
 APISERVER_ADDR=$(echo ${APISERVER} | awk -F':' '{ print $1 }')
 APISERVER_PORT=$(echo ${APISERVER} | awk -F':' '{ print $2 }')
-${KCAPZ} apply -f - << EOF
+${KUBECTL} apply -f - << EOF
 kind: ConfigMap
 apiVersion: v1
 metadata:
@@ -148,25 +157,34 @@ data:
 EOF
 
 # Patch installation to include required serviceCIDRs information and enable the Windows daemonset
-${KCAPZ} patch installation default --type merge --patch='{"spec": {"serviceCIDRs": ["10.96.0.0/12"], "calicoNetwork": {"windowsDataplane": "HNS"}}}'
+${KUBECTL} patch installation default --type merge --patch='{"spec": {"serviceCIDRs": ["10.96.0.0/12"], "calicoNetwork": {"windowsDataplane": "HNS"}}}'
 
 echo "Wait for Calico to be ready on Windows nodes..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Windows nodes"
 
 # Create the kube-proxy-windows daemonset
-echo "Install kube-proxy-windows ${AZ_KUBE_VERSION} from sig-windows-tools"
+echo "Install kube-proxy-windows ${KUBE_VERSION} from sig-windows-tools"
 for iter in {1..5};do
-    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${AZ_KUBE_VERSION}/g" | ${KCAPZ} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
+    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_VERSION}/g" | ${KUBECTL} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
 done;
 
 echo "Wait for kube-proxy to be ready on Windows nodes..."
-timeout --foreground 1200 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
+timeout --foreground 1200 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
 echo "kube-proxy is ready on Windows nodes"
+
+echo ""
+echo "=========================================="
+echo "Calico installation completed successfully!"
+echo "=========================================="
+${KUBECTL} get nodes -o wide
+echo ""
+echo "Calico pods:"
+${KUBECTL} get pods -n calico-system -o wide
 
 # Stop for debug
 echo "Check for pause file..."
-while [ -f /home/semaphore/pause-for-debug ];
+while [ -f $HOME/pause-for-debug ];
 do
     echo "#"
     sleep 30
