@@ -601,7 +601,7 @@ func SafeParseLogLevel(logLevel string) log.Level {
 // for logrus.  typically, it should be used via the ConfigureLoggingForTestingT
 // helper.
 type TestingTWriter struct {
-	T *testing.T
+	T testing.TB
 }
 
 func (l TestingTWriter) Write(p []byte) (n int, err error) {
@@ -612,7 +612,7 @@ func (l TestingTWriter) Write(p []byte) (n int, err error) {
 
 // RedirectLogrusToTestingT redirects logrus output to the given testing.T.  It
 // returns a func() that can be called to restore the original log output.
-func RedirectLogrusToTestingT(t *testing.T) (cancel func()) {
+func RedirectLogrusToTestingT(t testing.TB) (cancel func()) {
 	oldOut := log.StandardLogger().Out
 	cancel = func() {
 		log.SetOutput(oldOut)
@@ -627,7 +627,7 @@ var confForTestingOnce sync.Once
 // given testing.T.  It should be called at the start of each "go test" that
 // wants to capture log output.  It registers a cleanup with the testing.T to
 // remove the log redirection at the end of the test.
-func ConfigureLoggingForTestingT(t *testing.T) {
+func ConfigureLoggingForTestingT(t testing.TB) {
 	confForTestingOnce.Do(func() {
 		log.SetFormatter(&Formatter{Component: "test"})
 	})
