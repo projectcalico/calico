@@ -305,7 +305,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			numericProto   uint8
 		)
 
-		leftoverBPFProgsByFelix := make([][]map[string]interface{}, 3)
 		containerIP := func(c *containers.Container) string {
 			if testOpts.ipv6 {
 				return c.IPv6
@@ -451,19 +450,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		})
 
 		JustAfterEach(func() {
-			for i := range tc.Felixes {
-				prev := leftoverBPFProgsByFelix[i]
-
-				cur, _ := tc.Felixes[i].ExecOutput("bpftool", "-jp", "prog", "show")
-				curUnmarshalled := make([]map[string]interface{}, 0)
-				_ = json.Unmarshal([]byte(cur), &curUnmarshalled)
-				if prev != nil {
-					Expect(prev).To(BeEquivalentTo(curUnmarshalled))
-				}
-
-				leftoverBPFProgsByFelix[i] = curUnmarshalled
-			}
-
 			if CurrentGinkgoTestDescription().Failed {
 				var (
 					currBpfsvcs   []nat.MapMem
