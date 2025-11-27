@@ -17,6 +17,7 @@ package set
 import (
 	"bytes"
 	"fmt"
+	"iter"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -117,6 +118,19 @@ loop:
 			break
 		default:
 			log.WithError(err).Panic("Unexpected iteration error")
+		}
+	}
+}
+
+// All returns an iterator for use with Go's range-over-func feature.
+// The iterator supports deletion from the set during iteration without panicking,
+// since the underlying map allows safe mutation during iteration.
+func (set Typed[T]) All() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for item := range set {
+			if !yield(item) {
+				return
+			}
 		}
 	}
 }
