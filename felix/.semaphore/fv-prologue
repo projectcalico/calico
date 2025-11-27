@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# Set up access to GCP buckets/gcloud API.
+export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+gcloud config set project unique-caldron-775
+
+export COMPONENT=felix
+export ZONE=europe-west3-c
+
+export NUM_FV_BATCHES=8
+
+JOB_TAG=""
+TEST_REPORT_NAME=""
+
+# In BPF runs, only run BPF-SAFE tagged tests
+if [[ $FELIX_TEST_GROUP =~ bpf ]]; then
+  export FV_FOCUS=BPF-SAFE
+  JOB_TAG+="bpf"
+  TEST_REPORT_NAME+="BPF/"
+  FV_NO_PREREQ_TARGET=fv-bpf-no-prereqs
+else
+  FV_NO_PREREQ_TARGET=fv-no-prereqs
+fi
+export FV_NO_PREREQ_TARGET
+
+if [[ $FELIX_TEST_GROUP =~ 22.04 ]]; then
+  export IMAGE_FAMILY=ubuntu-2204-lts
+  JOB_TAG+="2204"
+  TEST_REPORT_NAME+="Ubuntu-22.04/"
+elif [[ $FELIX_TEST_GROUP =~ 24.04 ]]; then
+  export IMAGE_FAMILY=ubuntu-2404-lts-amd64
+  JOB_TAG+="2404"
+  TEST_REPORT_NAME+="Ubuntu-24.04/"
+elif [[ $FELIX_TEST_GROUP =~ 25.04 ]]; then
+  export IMAGE_FAMILY=ubuntu-2504-amd64
+  JOB_TAG+="2504"
+  TEST_REPORT_NAME+="Ubuntu-25.04/"
+else
+  echo "Unknown OS version in FELIX_TEST_GROUP: $FELIX_TEST_GROUP"
+  exit 1
+fi
+echo "Calculated: IMAGE_FAMILY=${IMAGE_FAMILY}"
+
+if [[ $FELIX_TEST_GROUP =~ ipt ]]; then
+  JOB_TAG+="ipt"
+  TEST_REPORT_NAME+="iptables"
+elif [[ $FELIX_TEST_GROUP =~ nft ]]; then
+  JOB_TAG+="nft"
+  TEST_REPORT_NAME+="nftables"
+  export FELIX_FV_NFTABLES=Enabled
+fi
+
+if [[ $FELIX_TEST_GROUP =~ with-ut ]]; then
+  echo "Test group includes UTs, setting RUN_UT=true"
+  export RUN_UT=true
+else
+  export RUN_UT=false
+fi
+
+if [[ $FELIX_TEST_GROUP =~ no-fv ]]; then
+  echo "UT-only run, setting NUM_FV_BATCHES=0"
+  export NUM_FV_BATCHES=0
+fi
+
+if [[ $FELIX_TEST_GROUP =~ jitharden ]]; then
+  JOB_TAG+="jit"
+  TEST_REPORT_NAME+="/jitharden=2"
+fi
+export JOB_TAG
+export TEST_REPORT_NAME
+
+# Calculate short IDs for use in VM names (which are limited to 63 chars).
+SHORT_WORKFLOW_ID=$(echo "${SEMAPHORE_WORKFLOW_ID}" | sha256sum | cut -c -8)
+export SHORT_WORKFLOW_ID
+export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
+mkdir artifacts
+
+echo "Calculated: JOB_TAG=${JOB_TAG}; TEST_REPORT_NAME=${TEST_REPORT_NAME}; RUN_UT=${RUN_UT}; VM_PREFIX=${VM_PREFIX}"
