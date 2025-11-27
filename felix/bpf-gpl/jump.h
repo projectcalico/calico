@@ -47,8 +47,30 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #else /* CALI_F_XDP */
 
-#define cali_jump_map map_symbol(cali_progs, 3)
+/*
+ * BPF programs have a type, which depends on where they are attached. 
+ * As of kernel 6.12, jump maps are limited to a single program type and 
+ * it is forbidden to jump from one type of program to a different type of map.
+ * TCX ingress and egress programs have different types, so this means that we need to split the jump maps for the two directions.
+ * Note: in our code, we generally use "ingress" and "egress" to refer to the policy direction, 
+ * relative to the endpoint that is being secured, which means that, for workload endpoints, 
+ * "ingress" policy is implemented in the kernel's "egress" tc(x) program(!). 
+ * To avoid (further) confusion, we call the kernel's directions "to host" (ingress) and "from host" (egress).
+*/
 
+#if CALI_F_HEP || CALI_F_PREAMBLE
+#if CALI_F_INGRESS
+#define cali_jump_map map_symbol(cali_progs_fh, 2)
+#else
+#define cali_jump_map map_symbol(cali_progs_th, 2)
+#endif
+#else
+#if CALI_F_INGRESS
+#define cali_jump_map map_symbol(cali_progs_th, 2)
+#else
+#define cali_jump_map map_symbol(cali_progs_fh, 2)
+#endif
+#endif
 CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #define __CALI_JUMP_TO(ctx, index) do {	\
