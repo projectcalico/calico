@@ -16,10 +16,12 @@ package infrastructure
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -188,6 +190,8 @@ func StartSingleNodeTopology(
 	tc, calicoClient = StartNNodeTopology(1, options, infra)
 	return
 }
+
+var leftoverPreambleProgs [][]map[string]any
 
 // StartNNodeTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
 // up IPIP, otherwise this is skipped.
@@ -470,6 +474,41 @@ func StartNNodeTopology(
 		ginkgo.Fail("StartNNodeTopology: failure on background goroutine.")
 	}
 	success = true
+
+	if leftoverPreambleProgs == nil {
+		leftoverPreambleProgs = make([][]map[string]any, len(tc.Felixes))
+	}
+
+	for i := range tc.Felixes {
+		if tc.Felixes[i] == nil {
+			panic("Felix is nil?")
+		}
+		cur, _ := tc.Felixes[i].ExecOutput("bpftool", "-jp", "prog", "show")
+		curUnmarshalled := make([]map[string]any, 0)
+		_ = json.Unmarshal([]byte(cur), &curUnmarshalled)
+		if len(curUnmarshalled) == 0 {
+			log.Panic("No bpf progs. Issue unmarshalling.")
+		}
+
+		foundPreambleProgs := make([]map[string]any, 0)
+		for _, ob := range curUnmarshalled {
+			if ob["name"] != nil && strings.Contains(ob["name"].(string), "preamble") {
+				foundPreambleProgs = append(foundPreambleProgs, ob)
+			}
+		}
+
+		prevFoundPreambleProgs := leftoverPreambleProgs[i]
+		for _, prev := range prevFoundPreambleProgs {
+			for _, cur := range foundPreambleProgs {
+				if prev["id"] == cur["id"] {
+					log.Panicf("Found leaked BPF preamble prog '%d' in Felix", prev["id"])
+				}
+			}
+		}
+
+		leftoverPreambleProgs[i] = append(prevFoundPreambleProgs, foundPreambleProgs...)
+	}
+
 	return
 }
 
