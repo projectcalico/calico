@@ -46,6 +46,7 @@ flags=0
 ((CALI_CT_CLEANUP = 1 << 9))
 ((CALI_TC_VXLAN = 1 << 10))
 ((CALI_TC_PREAMBLE = 1 << 11))
+((CALI_TC_DEF_POLICY = 1 << 12))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
@@ -103,6 +104,13 @@ fi
 
 if [[ "${filename}" =~ _dsr.* ]]; then
   ((flags |= CALI_TC_DSR))
+fi
+
+if [[ "${filename}" =~ policy_default.* ]]; then
+	((flags = CALI_TC_DEF_POLICY))
+	if [[ "${filename}" =~ .*_ingress.* ]]; then
+		((flags |= CALI_TC_INGRESS))
+	fi
 fi
 
 if [[ "${filename}" =~ _preamble.* ]]; then
