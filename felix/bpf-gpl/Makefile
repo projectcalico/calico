@@ -65,7 +65,7 @@ IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_typ
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
 
-MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
+MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o common_map_stub_fh.o)
 
 # Map stub ojbs cannot have '-emit-llvm' in flags
 MAP_CFLAGS := $(subst -emit-llvm,,$(CFLAGS))
@@ -96,6 +96,9 @@ xdp_map_stub.c: $(XDP_MAP_HEADERS)
 bin/common_map_stub.o bin/ipv4_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -c $< -o $@
 
+bin/common_map_stub_fh.o: bin/%.o: common_map_stub.c common_map_stub.d | bin
+	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=2 -c $< -o $@
+
 bin/ipv6_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DIPVER6 -c $< -o $@
 
@@ -104,7 +107,8 @@ bin/xdp_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
 OBJS:=$(shell ./list-objs)
-OBJS+=bin/tc_preamble.o
+OBJS+=bin/tc_preamble_ingress.o
+OBJS+=bin/tc_preamble_egress.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
@@ -144,9 +148,10 @@ ut/%.ll: ut/%.c ut/ut.h
 
 ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 
-tc_preamble.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -c $< -o $@
-
+tc_preamble_ingress.ll: tc_preamble.c tc_preamble.d
+	$(COMPILE)
+tc_preamble_egress.ll: tc_preamble.c tc_preamble.d
+	$(COMPILE)
 tcx_test.ll: tcx_test.c tcx_test.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -186,7 +191,9 @@ xdp_v6.d: xdp.c
 
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
-bin/tc_preamble.o: tc_preamble.ll | bin
+bin/tc_preamble_ingress.o: tc_preamble_ingress.ll | bin
+	$(LINK)
+bin/tc_preamble_egress.o: tc_preamble_egress.ll | bin
 	$(LINK)
 bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)
