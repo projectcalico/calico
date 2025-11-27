@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -331,7 +332,23 @@ var _ = describe.CalicoDescribe(
 
 func buildURL(sourceNamespace, destinationNamespace, startTime string) string {
 	baseURL := "http://localhost:3002/flows"
-	return fmt.Sprintf("%s?filters={\"source_namespaces\":[{\"type\":\"Exact\",\"value\":\"%s\"}],\"dest_namespaces\":[{\"type\":\"Exact\",\"value\":\"%s\"}]}&startTimeGte=%s", baseURL, sourceNamespace, destinationNamespace, startTime)
+
+	f := whiskerv1.Filters{
+		SourceNamespaces: whiskerv1.FilterMatches[string]{
+			{Type: whiskerv1.MatchTypeExact, V: sourceNamespace},
+		},
+		DestNamespaces: whiskerv1.FilterMatches[string]{
+			{Type: whiskerv1.MatchTypeExact, V: destinationNamespace},
+		},
+	}
+	filtersJSON, err := json.Marshal(f)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	// Build query parameters for the URL.
+	params := url.Values{}
+	params.Add("filters", string(filtersJSON))
+	params.Add("startTimeGte", startTime)
+	return fmt.Sprintf("%s?%s", baseURL, params.Encode())
 }
 
 func verifyPortForward(url string) {
