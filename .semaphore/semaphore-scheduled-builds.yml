@@ -19,6 +19,8 @@ global_job_config:
     - name: docker-hub
   prologue:
     commands:
+      - export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
+      - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
       - checkout
       - export CALICO_DIR="$(pwd)"
       - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
@@ -432,20 +434,17 @@ blocks:
           - cd felix
           - cache restore go-pkg-cache
           - cache restore go-mod-cache
+          - gcloud config set project unique-caldron-775
+          - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
+      secrets:
+        - name: google-service-account-for-gce
       jobs:
         - name: "Felix: Build and run UT, k8sfv"
           execution_time_limit:
             minutes: 60
           commands:
             - make build image fv-prereqs
-            - "cache store bin-${SEMAPHORE_GIT_SHA} bin"
-            - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
-            - cache store go-pkg-cache .go-pkg-cache
-            - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache"
-            - docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
-            - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
-            - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
-            - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
+            - ./.semaphore/cache-test-artifacts
             - ../.semaphore/run-and-monitor ut.log make ut
             - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
             - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
@@ -552,239 +551,160 @@ blocks:
         - name: "Felix: Windows FV - CAPZ"
           commands:
             - ./.semaphore/run-win-fv
-  - name: "Felix: FV Tests"
+  - name: "Felix: iptables tests on Ubuntu 22.04"
     run:
       when: "true"
     dependencies:
       - "Felix: Build"
     task:
-      agent:
-        machine:
-          type: f1-standard-4
-          os_image: ubuntu2204
-      prologue:
-        commands:
-          - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
-          - "cache restore bin-${SEMAPHORE_GIT_SHA}"
-          - "cache restore fv.test-${SEMAPHORE_GIT_SHA}"
-          - "cache restore felix-image-${SEMAPHORE_GIT_SHA}"
-          - "cache restore felixtest-typha-image-${SEMAPHORE_GIT_SHA}"
-          - |-
-            if [ -s /etc/docker/daemon.json  ]; then
-            sudo sed -i '$d' /etc/docker/daemon.json && sudo sed -i '$s/$/,/' /etc/docker/daemon.json && sudo bash -c ' cat >> /etc/docker/daemon.json << EOF
-              "ipv6": true,
-              "fixed-cidr-v6": "2001:db8:1::/64"
-            }
-            EOF
-            ' ; else sudo bash -c ' cat > /etc/docker/daemon.json << EOF
-            {
-              "ipv6": true,
-              "fixed-cidr-v6": "2001:db8:1::/64"
-            }
-            EOF
-            ' ; fi
-          - sudo systemctl restart docker
-          # Load in the docker images pre-built by the build job.
-          - docker load -i /tmp/calico-felix-test.tar
-          - docker tag calico/felix-test:latest-amd64 felix-test:latest-amd64
-          - rm /tmp/calico-felix-test.tar
-          - docker load -i /tmp/felixtest-typha.tar
-          - docker tag felix-test/typha:latest-amd64 typha:latest-amd64
-          - rm /tmp/felixtest-typha.tar
-          # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
-          # routing in that first felix container chooses different source IPs than the tests are expecting.
-          - sudo modprobe ipip
       jobs:
-        - name: "Felix: FV Tests (iptables)"
+        - name: "Felix: iptables tests on Ubuntu 22.04"
           execution_time_limit:
-            minutes: 120
-          commands:
-            - make check-wireguard
-            - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
-          parallelism: 3
-        - name: "Felix: FV Tests (nftables)"
-          execution_time_limit:
-            minutes: 120
+            minutes: 180
           env_vars:
-            - name: FELIX_FV_NFTABLES
-              value: "Enabled"
+            - name: FELIX_TEST_GROUP
+              value: "22.04-ipt"
           commands:
-            - make check-wireguard
-            - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
-          parallelism: 3
+            - source felix/.semaphore/fv-prologue
+            - export NUM_FV_BATCHES=16
+            - .semaphore/vms/create-test-vms ${VM_PREFIX}
+            - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
           commands:
-            # We're still in the felix directory here.
-            - 'test-results publish report/*.xml --name "Felix: FV" || true'
-            - ../.semaphore/collect-artifacts
-  - name: "Felix: BPF tests on Ubuntu 24.04"
+            - source felix/.semaphore/fv-epilogue
+      secrets:
+        - name: google-service-account-for-gce
+  - name: "Felix: nftables tests on Ubuntu 22.04"
     run:
       when: "true"
     dependencies:
-      - Prerequisites
+      - "Felix: Build"
     task:
-      prologue:
-        commands:
-          - cd felix
-          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
-          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export ZONE=europe-west3-c
-          - export JOB_TAG=felix-ipt
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
-          - echo VM_PREFIX=${VM_PREFIX}
-          - export COMPONENT=felix
-          - export NUM_FV_BATCHES=8
-          - export RUN_UT=true
-          - export FV_FOCUS=BPF-SAFE
-          - export IMAGE=ubuntu-2404-noble-amd64-v20250502a
-          - export UBUNTU_VERSION=noble
-          - export DOCKER_VERSION=5:27.5.1-1~ubuntu.24.04~noble
-          - mkdir artifacts
-          - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
+      jobs:
+        - name: "Felix: nftables tests on Ubuntu 22.04"
+          execution_time_limit:
+            minutes: 180
+          env_vars:
+            - name: FELIX_TEST_GROUP
+              value: "22.04-nft"
+          commands:
+            - source felix/.semaphore/fv-prologue
+            - export NUM_FV_BATCHES=16
+            - .semaphore/vms/create-test-vms ${VM_PREFIX}
+            - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+      epilogue:
+        always:
+          commands:
+            - source felix/.semaphore/fv-epilogue
+      secrets:
+        - name: google-service-account-for-gce
+  - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
+    run:
+      when: "true"
+    dependencies:
+      - "Felix: Build"
+    task:
       jobs:
         - name: "Felix: BPF tests on Ubuntu 24.04"
           execution_time_limit:
             minutes: 180
+          env_vars:
+            - name: FELIX_TEST_GROUP
+              value: "bpf-24.04-ipt-with-ut"
           commands:
-            - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-prologue
+            - export NUM_FV_BATCHES=60
+            - .semaphore/vms/create-test-vms ${VM_PREFIX}
+            - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
           commands:
-            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-24.04/nftables"'
-            - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
   - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
     run:
       when: "true"
     dependencies:
-      - Prerequisites
+      - "Felix: Build"
     task:
-      prologue:
-        commands:
-          - cd felix
-          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
-          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export ZONE=europe-west3-c
-          - export JOB_TAG=felix-nft
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
-          - echo VM_PREFIX=${VM_PREFIX}
-          - export COMPONENT=felix
-          - export NUM_FV_BATCHES=4
-          - export RUN_UT=true
-          - export FV_FOCUS='_BPF_.*ct=true'
-          - mkdir artifacts
-          - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
         - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
-          env_vars:
-            - name: FELIX_FV_NFTABLES
-              value: "Enabled"
-            - name: FELIX_FV_BPFATTACHTYPE
-              value: "tc"
           execution_time_limit:
             minutes: 180
+          env_vars:
+            - name: FELIX_TEST_GROUP
+              value: "bpf-22.04-nft-with-ut"
+            - name: FELIX_FV_BPFATTACHTYPE
+              value: "tc"
           commands:
-            - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-prologue
+            # Limit to BPF conntrack tests to reduce overall runtime.
+            - export FV_FOCUS='_BPF_.*ct=true'
+            - export NUM_FV_BATCHES=10
+            - .semaphore/vms/create-test-vms ${VM_PREFIX}
+            - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
           commands:
-            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-22.04/nftables"'
-            - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF tests on Ubuntu 25.04"
+  - name: "Felix: BPF program-loading check on 25.04 (nftables)"
     run:
       when: "true"
     dependencies:
-      - Prerequisites
+      - "Felix: Build"
     task:
-      prologue:
-        commands:
-          - cd felix
-          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
-          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export ZONE=europe-west3-c
-          - export JOB_TAG=felix-2504
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
-          - echo VM_PREFIX=${VM_PREFIX}
-          - export COMPONENT=felix
-          - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
-          - export UBUNTU_VERSION=plucky
-          - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
-          - export NUM_FV_BATCHES=0
-          - export RUN_UT=true
-          - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
-          - mkdir artifacts
-          - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
-        - name: "Felix: BPF tests on Ubuntu 25.04, load/verify programs"
-          env_vars:
-            - name: FELIX_FV_NFTABLES
-              value: "Enabled"
-            - name: FELIX_FV_BPFATTACHTYPE
-              value: "tc"
+        - name: "Felix: BPF program-loading check on 25.04"
           execution_time_limit:
             minutes: 60
+          env_vars:
+            - name: FELIX_TEST_GROUP
+              value: "bpf-25.04-nft-no-fv-with-ut"
+            - name: FELIX_FV_BPFATTACHTYPE
+              value: "tc"
           commands:
-            - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-prologue
+            # Only run the UT that checks that the precompiled BPF binaries are loadable.
+            - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
+            - .semaphore/vms/create-test-vms ${VM_PREFIX}
+            - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
           commands:
-            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-25.04/nftables"'
-            - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF tests with bpf_jit_harden=2"
+  - name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2 (nftables)"
     run:
       when: "true"
     dependencies:
-      - Prerequisites
+      - "Felix: Build"
     task:
-      prologue:
-        commands:
-          - mkdir -p artifacts
-          - cd felix
-          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
-          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export ZONE=europe-west3-c
-          - export JOB_TAG=felix-jithard
-          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
-          - echo VM_PREFIX=${VM_PREFIX}
-          - export COMPONENT=felix
-          - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
-          - export UBUNTU_VERSION=plucky
-          - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
-          - export NUM_FV_BATCHES=2
-          - export RUN_UT=true
-          - export FV_FOCUS='_BPF_.*tcp.*ct=true'
-          - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
-          - ../.semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
       jobs:
-        - name: "Felix: BPF tests with bpf_jit_harden=2"
-          env_vars:
-            - name: FELIX_FV_NFTABLES
-              value: "Enabled"
-            - name: FELIX_FV_BPFATTACHTYPE
-              value: "tc"
-            - name: FV_EXTRA_REPORT_SUFFIX
-              value: "bpf_jit_harden=2"
+        - name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2"
           execution_time_limit:
             minutes: 180
+          env_vars:
+            - name: FELIX_TEST_GROUP
+              value: "bpf-25.04-nft-with-ut-jitharden"
+            - name: FELIX_FV_BPFATTACHTYPE
+              value: "tc"
           commands:
-            - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-prologue
+            # Limit to BPF TCP+conntrack tests to reduce overall runtime.
+            - export FV_FOCUS='_BPF_.*tcp.*ct=true'
+            - export NUM_FV_BATCHES=16
+            - .semaphore/vms/create-test-vms ${VM_PREFIX}
+            - .semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
+            - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
           commands:
-            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
-            - '../.semaphore/vms/publish-reports "BPF/Ubuntu-25.04/nftables/bpf_jit_harden=2"'
-            - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
+            - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
   - name: Goldmane
@@ -942,12 +862,15 @@ blocks:
       # KinD tests also build and run all the other images.
       when: "true"
     dependencies:
-      - Prerequisites
+      - "Prerequisites"
     task:
       prologue:
         commands:
-          - cd node
+          # Set up access to GCP buckets.
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+          - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+          - gcloud config set project unique-caldron-775
+          - cd node
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
           - export ZONE=europe-west3-c
           - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
@@ -955,6 +878,7 @@ blocks:
           - export COMPONENT=node
           - export VM_DISK_SIZE=80GB
           - mkdir artifacts
+          - ./.semaphore/cache-test-artifacts
           - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
         - name: "Node: kind-cluster tests"
