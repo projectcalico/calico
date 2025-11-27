@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,25 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+# This script is run on the test VM, to load the component-specific test
+# artifacts, which have already been downloaded to /tmp.
 
-my_dir="$(dirname "$0")"
-repo_dir="$my_dir/../.."
+set -ex
 
-# COMPONENT might be node or felix; give shellcheck something to work with.
-# shellcheck source=../../felix/.semaphore/batches.sh
-source "${repo_dir}/${COMPONENT}/.semaphore/batches.sh"
-
-vm_name_prefix=$1
-shift 1
-
-echo
-echo "===== Starting tests ====="
-echo
-
-for batch in "${batches[@]}"; do
-  vm_name="$vm_name_prefix$batch"
-  VM_NAME="$vm_name" "$my_dir/on-test-vm" "$@"
-done
-
-echo "===== Done ====="
+docker load -i /tmp/calico-felix-test.tar
+docker load -i /tmp/felixtest-typha.tar
+docker tag calico/felix-test:latest-amd64 felix-test:latest-amd64

@@ -17,6 +17,11 @@ set -e
 set -x
 
 vm_prefix=$1
+if [ -z "$vm_prefix" ]; then
+  echo "Usage: $0 <vm-name-prefix>"
+  exit 1
+fi
+
 project=${GCP_PROJECT:-unique-caldron-775}
 gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key.json}
 
@@ -34,6 +39,6 @@ while true; do
     break
   fi
   echo "Instances to delete: $instances"
-  gcloud --quiet compute instances delete ${instances} --zone=${ZONE}
+  gcloud --quiet beta compute instances delete ${instances} --zone=${ZONE} --no-graceful-shutdown
   sleep 1
-done 
+done
