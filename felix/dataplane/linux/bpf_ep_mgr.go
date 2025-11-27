@@ -1741,10 +1741,9 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 		m.reportHealth(true, "")
 	} else {
-		m.dirtyIfaceNames.Iter(func(iface string) error {
+		for iface := range m.dirtyIfaceNames.All() {
 			m.updateRateLimitedLog.WithField("name", iface).Info("Interface remains dirty.")
-			return nil
-		})
+		}
 		m.reportHealth(false, "Failed to configure some interfaces.")
 	}
 
@@ -1913,16 +1912,16 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 	var mutex sync.Mutex
 	errs := map[string]error{}
 	var wg sync.WaitGroup
-	m.dirtyIfaceNames.Iter(func(iface string) error {
+	for iface := range m.dirtyIfaceNames.All() {
 		if !m.isDataIface(iface) && !m.isL3Iface(iface) {
 			logrus.WithField("iface", iface).Debug(
 				"Ignoring interface that doesn't match the host data/l3 interface regex")
 			if !m.isWorkloadIface(iface) {
 				logrus.WithField("iface", iface).Debug(
 					"Removing interface that doesn't match the host data/l3 interface and is not workload interface")
-				return set.RemoveItem
+				m.dirtyIfaceNames.Discard(iface)
 			}
-			return nil
+			continue
 		}
 		xdpMode := XDPModeAll
 		attachTc := true
@@ -2020,8 +2019,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			errs[iface] = err
 			mutex.Unlock()
 		}(iface)
-		return nil
-	})
+	}
 	wg.Wait()
 
 	// We can hold the lock for the whole iteration below because nothing else
@@ -2060,9 +2058,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	maxWorkers := runtime.GOMAXPROCS(0)
 	sem := semaphore.NewWeighted(int64(maxWorkers))
 
-	m.dirtyIfaceNames.Iter(func(ifaceName string) error {
+	for ifaceName := range m.dirtyIfaceNames.All() {
 		if !m.isWorkloadIface(ifaceName) {
-			return nil
+			continue
 		}
 
 		m.opReporter.RecordOperation("update-workload-iface")
@@ -2087,8 +2085,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			errs[ifaceName] = err
 			mutex.Unlock()
 		}(ifaceName)
-		return nil
-	})
+	}
 	wg.Wait()
 
 	for ifaceName, err := range errs {
