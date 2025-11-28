@@ -284,22 +284,22 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 
 		// Now scan the old routes, looking for any that are no-longer associated with the block.
 		// Remove no longer active routes from the cache and queue up deletions.
-		cachedRoutes.Iter(func(r nodenameRoute) error {
+		for r := range cachedRoutes.All() {
 			c.maybeReportLive()
 			// For each existing route which is no longer present, we need to delete it.
 			// Note: since r.Key() only contains the destination, we need to check equality too in case
 			// the gateway has changed.
 			if newRoute, ok := newRoutes[r.Key()]; ok && newRoute == r {
 				// Exists, and we want it to - nothing to do.
-				return nil
+				continue
 			}
 
 			// Current route is not in new set - we need to withdraw the route, and also
 			// remove it from internal state.
 			deletes.Add(r)
 			logrus.WithField("route", r).Debug("Found stale route")
-			return set.RemoveItem
-		})
+			cachedRoutes.Discard(r)
+		}
 
 		// Now scan the new routes, looking for additions.  Cache them and queue up adds.
 		for _, r := range newRoutes {
@@ -317,25 +317,22 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 
 		// At this point we've determined the correct diff to perform based on the block update. Queue up
 		// updates.
-		deletes.Iter(func(nr nodenameRoute) error {
+		for nr := range deletes.All() {
 			c.trie.RemoveBlockRoute(nr.dst)
 			c.nodeRoutes.Remove(nr)
-			return nil
-		})
-		adds.Iter(func(nr nodenameRoute) error {
+		}
+		for nr := range adds.All() {
 			c.trie.UpdateBlockRoute(nr.dst, nr.nodeName)
 			c.nodeRoutes.Add(nr)
-			return nil
-		})
+		}
 	} else {
 		// Block has been deleted. Clean up routes that were contributed by this block.
 		logrus.WithField("update", update).Debug("IPAM block deleted")
 		routes := c.blockToRoutes[key]
 		if routes != nil {
-			routes.Iter(func(nr nodenameRoute) error {
+			for nr := range routes.All() {
 				c.trie.RemoveBlockRoute(nr.dst)
-				return nil
-			})
+			}
 		}
 		delete(c.blockToRoutes, key)
 	}
@@ -712,7 +709,7 @@ func (c *L3RouteResolver) routesFromBlock(update api.Update) map[string]nodename
 // that it finds.
 func (c *L3RouteResolver) flush() {
 	var buf []ip.CIDRTrieEntry
-	c.trie.dirtyCIDRs.Iter(func(cidr ip.CIDR) error {
+	for cidr := range c.trie.dirtyCIDRs.All() {
 		logCxt := logrus.WithField("cidr", cidr)
 		logCxt.Debug("Flushing dirty route")
 		trie := c.trie.trieForCIDR(cidr)
@@ -729,7 +726,8 @@ func (c *L3RouteResolver) flush() {
 		if len(buf) == 0 {
 			// CIDR is not in the trie.  Nothing to do.  Route removed before it had even been sent?
 			logCxt.Debug("CIDR not in trie, ignoring.")
-			return set.RemoveItem
+			c.trie.dirtyCIDRs.Discard(cidr)
+			continue
 		}
 
 		// Otherwise, check if the route is removed.
@@ -738,7 +736,8 @@ func (c *L3RouteResolver) flush() {
 			logCxt.Debug("CIDR was sent before but now needs to be removed.")
 			c.callbacks.OnRouteRemove(cidr.String())
 			c.trie.SetRouteSent(cidr, false)
-			return set.RemoveItem
+			c.trie.dirtyCIDRs.Discard(cidr)
+			continue
 		}
 
 		rt := &proto.RouteUpdate{
@@ -872,8 +871,8 @@ func (c *L3RouteResolver) flush() {
 			c.trie.SetRouteSent(cidr, true)
 		}
 
-		return set.RemoveItem
-	})
+		c.trie.dirtyCIDRs.Discard(cidr)
+	}
 }
 
 // nodeInOurSubnet returns true if the IP of the given node is known and it's in our subnet.

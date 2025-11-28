@@ -251,7 +251,7 @@ func (rs *RuleScanner) updateRules(
 	})
 
 	// Add the new into the index, triggering events as we discover newly-active IP sets.
-	addedUids.Iter(func(uid string) error {
+	for uid := range addedUids.All() {
 		rs.rulesIDToUIDs.Put(key, uid)
 		if !rs.uidsToRulesIDs.ContainsKey(uid) {
 			ipSet := currentUIDToIPSet[uid]
@@ -261,11 +261,10 @@ func (rs *RuleScanner) updateRules(
 			rs.OnIPSetActive(ipSet)
 		}
 		rs.uidsToRulesIDs.Put(uid, key)
-		return nil
-	})
+	}
 
 	// And remove the old, triggering events as we clean up unused IP sets.
-	removedUids.Iter(func(uid string) error {
+	for uid := range removedUids.All() {
 		rs.rulesIDToUIDs.Discard(key, uid)
 		rs.uidsToRulesIDs.Discard(uid, key)
 		if !rs.uidsToRulesIDs.ContainsKey(uid) {
@@ -275,8 +274,7 @@ func (rs *RuleScanner) updateRules(
 			log.Debugf("IP set became inactive: %v -> %v", uid, ipSetData)
 			rs.OnIPSetInactive(ipSetData)
 		}
-		return nil
-	})
+	}
 	return
 }
 
