@@ -478,13 +478,11 @@ func (s *IPSets) tryResync() (err error) {
 				failedIPSets = append(failedIPSets, name)
 			}
 			if desired {
-				s.logCxt.WithError(err).WithFields(log.Fields{
-					"name":    name,
-				}).Warn("Failed to parse required Calico-owned ipset that is needed, will try recreating it.")
+				s.logCxt.WithError(err).WithField("name", name).
+					Warn("Failed to parse required Calico-owned ipset that is needed, will try recreating it.")
 			} else {
-				s.logCxt.WithError(err).WithFields(log.Fields{
-					"name":    name,
-				}).Warn("Failed to parse Calico-owned ipset that is no longer needed, will queue it for deletion.")
+				s.logCxt.WithError(err).WithField("name", name).
+					Warn("Failed to parse Calico-owned ipset that is no longer needed, will queue it for deletion.")
 			}
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
