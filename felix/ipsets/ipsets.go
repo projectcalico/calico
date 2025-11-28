@@ -374,7 +374,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 				// This could be due to different failures, like userspace and kernel incompatibility.
 				// The incompatibility failure can be fixed by swapping the one Felix understand (created from
 				// desired state) and the one (with higher revision) in dataplane. As such, we should stop re-trying
-				// and instead fall through to the next steps.
+				// and instead fall through to tryUpdates() below, which will do the swap.
 				if treatFailureAsTransient {
 					backOff()
 					continue
@@ -481,11 +481,14 @@ func (s *IPSets) tryResync() (err error) {
 			if desired {
 				failedIPSets = append(failedIPSets, name)
 			}
-			if debug {
+			if desired {
 				s.logCxt.WithError(err).WithFields(log.Fields{
 					"name":    name,
-					"desired": desired,
-				}).Error("Failed to parse an ipset")
+				}).Warn("Failed to parse required Calico-owned ipset that is needed, will try recreating it.")
+			} else {
+				s.logCxt.WithError(err).WithFields(log.Fields{
+					"name":    name,
+				}).Warn("Failed to parse Calico-owned ipset that is no longer needed, will queue it for deletion.")
 			}
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
