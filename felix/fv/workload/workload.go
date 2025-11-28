@@ -184,7 +184,19 @@ func WithHostNetworked() Opt {
 	}
 }
 
-func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) *Workload {
+func WithPort(ports string) Opt {
+	return func(w *Workload) {
+		w.Ports = ports
+	}
+}
+
+func WithProtocol(proto string) Opt {
+	return func(w *Workload) {
+		w.Protocol = proto
+	}
+}
+
+func New(c *infrastructure.Felix, name, profile, ip string, opts ...Opt) *Workload {
 	workloadIdx++
 	n := fmt.Sprintf("%s-idx%v", name, workloadIdx)
 	interfaceName := conversion.NewConverter().VethNameForWorkload(profile, n)
@@ -218,8 +230,8 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 		SpoofName:          spoofN,
 		InterfaceName:      interfaceName,
 		SpoofInterfaceName: spoofIfaceName,
-		Ports:              ports,
-		Protocol:           protocol,
+		Ports:              "8055",
+		Protocol:           "tcp",
 		WorkloadEndpoint:   wep,
 		MTU:                defaultMTU,
 	}
