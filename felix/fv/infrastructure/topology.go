@@ -476,7 +476,7 @@ func StartNNodeTopology(
 	success = true
 
 	if leftoverPreambleProgs == nil {
-		leftoverPreambleProgs = make([][]map[string]any, len(tc.Felixes))
+		leftoverPreambleProgs = make([][]map[string]any, 3)
 	}
 
 	for i := range tc.Felixes {
