@@ -50,6 +50,7 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.failFast \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
                -ginkgo.focus="${GINKGO_FOCUS}" \
+               -ginkgo.failFast \
                ${GINKGO_ARGS}
      status=$?
      echo "Test batch $batch completed with status $status"
