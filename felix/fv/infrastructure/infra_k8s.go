@@ -457,7 +457,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	for {
 		// Make sure any retry is clean.
 		_ = os.Remove(kds.CertFileName)
-		
+
 		cmd := utils.Command("docker", "cp",
 			kds.k8sApiContainer.Name+":/home/user/certs/kubernetes.pem",
 			kds.CertFileName,
@@ -667,7 +667,7 @@ func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
 		"-e", "K8S_API_ENDPOINT=" + kds.Endpoint,
 		"-e", "KUBERNETES_MASTER=" + kds.Endpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", kds.CertFileName, "/tmp/apiserver.crt"),
 	}
 }
 
@@ -678,7 +678,7 @@ func (kds *K8sDatastoreInfra) GetBadEndpointDockerArgs() []string {
 		"-e", "TYPHA_DATASTORETYPE=kubernetes",
 		"-e", "K8S_API_ENDPOINT=" + kds.BadEndpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", kds.CertFileName, "/tmp/apiserver.crt"),
 	}
 }
 
