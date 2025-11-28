@@ -50,6 +50,8 @@ if [ ${PRODUCT} == 'calient' ]; then
     # Verify if the required variables are set for Calico EE
     : "${GCR_IO_PULL_SECRET:?Environment variable empty or not defined.}"
     : "${TSEE_TEST_LICENSE:?Environment variable empty or not defined.}"
+    echo '  GCR_IO_PULL_SECRET='${GCR_IO_PULL_SECRET}
+    echo '  TSEE_TEST_LICENSE='${TSEE_TEST_LICENSE}
 fi
 
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
@@ -76,7 +78,7 @@ fi
 
 if [[ ${RELEASE_STREAM} != 'local' ]]; then
     # Check release url
-    echo "Set release base url ${RELEASE_BASE_URL}"
+    echo '  RELEASE_BASE_URL='${RELEASE_BASE_URL}
 fi
 
 # Create a storage class and persistent volume for Calico Enterprise.
@@ -121,10 +123,10 @@ if [[ ${PRODUCT} == 'calient' ]]; then
     # Create custom resources
     ${KUBECTL} create -f ./EE/custom-resources.yaml
 
-    # Install Calico EE license (after the Tigera apiserver comes up)
-    echo "Wait for the Tigera apiserver to be ready..."
-    timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=30s; do sleep 5; done"
-    echo "Tigera apiserver is ready, installing Calico EE license"
+    # Install Calico EE license (after the Calico apiserver comes up)
+    echo "Wait for the Calico apiserver to be ready..."
+    timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-apiserver --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+    echo "Calico apiserver is ready, installing Calico EE license"
 
     retry_command 60 "${KUBECTL} create -f ${TSEE_TEST_LICENSE}"
 else
@@ -182,10 +184,4 @@ echo ""
 echo "Calico pods:"
 ${KUBECTL} get pods -n calico-system -o wide
 
-# Stop for debug
-echo "Check for pause file..."
-while [ -f $HOME/pause-for-debug ];
-do
-    echo "#"
-    sleep 30
-done
+pause-for-debug
