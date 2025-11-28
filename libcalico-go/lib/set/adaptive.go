@@ -15,6 +15,7 @@
 package set
 
 import (
+	"iter"
 	"unsafe"
 )
 
@@ -138,10 +139,9 @@ func (a *Adaptive[T]) AddAll(itemArray []T) {
 }
 
 func (a *Adaptive[T]) AddSet(other Set[T]) {
-	other.Iter(func(item T) error {
+	for item := range other.All() {
 		a.Add(item)
-		return nil
-	})
+	}
 }
 
 func (a *Adaptive[T]) Discard(item T) {
@@ -281,6 +281,37 @@ func (a *Adaptive[T]) Iter(f func(item T) error) {
 	}
 }
 
+// All returns an iterator for use with Go's range-over-func feature.
+// The iterator supports discarding from the set during iteration without panicking.
+func (a *Adaptive[T]) All() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		switch a.size {
+		case 0:
+			return
+		case sizeStoredInMap:
+			// Map-backed: safe to iterate and mutate directly
+			m := a.loadMapFromPointer()
+			for v := range m {
+				if !yield(v) {
+					return
+				}
+			}
+		default:
+			// Array-backed: take a snapshot to allow safe mutation during iteration
+			tSlice := a.loadSliceFromPointer()
+			var tCopy [adaptiveSetArrayLimit]T
+			copy(tCopy[:], tSlice)
+			tSlice = tCopy[:a.size]
+
+			for _, v := range tSlice {
+				if !yield(v) {
+					return
+				}
+			}
+		}
+	}
+}
+
 // loadSliceFromPointer loads the array stored in our unsafe pointer, returning
 // it as a slice with len == a.size and cap == arrCapForSize[a.size].
 func (a *Adaptive[T]) loadSliceFromPointer() []T {
@@ -304,10 +335,9 @@ func (a *Adaptive[T]) loadMapFromPointer() map[T]v {
 
 func (a *Adaptive[T]) Copy() Set[T] {
 	other := NewAdaptive[T]()
-	a.Iter(func(item T) error {
+	for item := range a.All() {
 		other.Add(item)
-		return nil
-	})
+	}
 	return other
 }
 
@@ -316,13 +346,12 @@ func (a *Adaptive[T]) Equals(s Set[T]) bool {
 		return false
 	}
 	equal := true
-	a.Iter(func(item T) error {
+	for item := range a.All() {
 		if !s.Contains(item) {
 			equal = false
-			return StopIteration
+			break
 		}
-		return nil
-	})
+	}
 	return equal
 }
 
@@ -331,22 +360,20 @@ func (a *Adaptive[T]) ContainsAll(s Set[T]) bool {
 		return false
 	}
 	seenAll := true
-	s.Iter(func(item T) error {
+	for item := range s.All() {
 		if !a.Contains(item) {
 			seenAll = false
-			return StopIteration
+			break
 		}
-		return nil
-	})
+	}
 	return seenAll
 }
 
 func (a *Adaptive[T]) Slice() []T {
 	s := make([]T, 0, a.Len())
-	a.Iter(func(item T) error {
+	for item := range a.All() {
 		s = append(s, item)
-		return nil
-	})
+	}
 	return s
 }
 

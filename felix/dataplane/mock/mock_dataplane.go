@@ -470,20 +470,18 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		Expect(d.namespaces).To(HaveKey(id))
 		delete(d.namespaces, id)
 	case *proto.RouteUpdate:
-		d.activeRoutes.Iter(func(r types.RouteUpdate) error {
+		for r := range d.activeRoutes.All() {
 			if event.Dst == r.Dst {
-				return set.RemoveItem
+				d.activeRoutes.Discard(r)
 			}
-			return nil
-		})
+		}
 		d.activeRoutes.Add(types.ProtoToRouteUpdate(event))
 	case *proto.RouteRemove:
-		d.activeRoutes.Iter(func(r types.RouteUpdate) error {
+		for r := range d.activeRoutes.All() {
 			if event.Dst == r.Dst {
-				return set.RemoveItem
+				d.activeRoutes.Discard(r)
 			}
-			return nil
-		})
+		}
 	case *proto.VXLANTunnelEndpointUpdate:
 		d.activeVTEPs[event.Node] = types.ProtoToVXLANTunnelEndpointUpdate(event)
 	case *proto.VXLANTunnelEndpointRemove:

@@ -193,11 +193,10 @@ func (idx *InheritIndex) DeleteSelector(id interface{}) {
 	log.Infof("Deleting selector %v", id)
 	matchSet := idx.labelIdsBySelId[id]
 	if matchSet != nil {
-		matchSet.Iter(func(labelId interface{}) error {
+		for labelId := range matchSet.All() {
 			// This modifies the set we're iterating over, but that's safe in Go.
 			idx.deleteMatch(id, labelId)
-			return nil
-		})
+		}
 	}
 	delete(idx.selectorsById, id)
 }
@@ -324,17 +323,16 @@ func (idx *InheritIndex) DeleteParentLabels(parentID string) {
 func (idx *InheritIndex) flushChildren(parentID string) {
 	parentData := idx.parentDataByParentID[parentID]
 	if parentData != nil && parentData.itemIDs != nil {
-		parentData.itemIDs.Iter(func(itemID interface{}) error {
+		for itemID := range parentData.itemIDs.All() {
 			log.Debug("Marking child ", itemID, " dirty")
 			idx.dirtyItemIDs.Add(itemID)
-			return nil
-		})
+		}
 	}
 	idx.flushUpdates()
 }
 
 func (idx *InheritIndex) flushUpdates() {
-	idx.dirtyItemIDs.Iter(func(itemID interface{}) error {
+	for itemID := range idx.dirtyItemIDs.All() {
 		log.Debugf("Flushing %#v", itemID)
 		_, ok := idx.itemDataByID[itemID]
 		if !ok {
@@ -342,19 +340,18 @@ func (idx *InheritIndex) flushUpdates() {
 			log.Debugf("Flushing delete of item %v", itemID)
 			matchSet := idx.selIdsByLabelId[itemID]
 			if matchSet != nil {
-				matchSet.Iter(func(selId interface{}) error {
+				for selId := range matchSet.All() {
 					// This modifies the set we're iterating over, but that's safe in Go.
 					idx.deleteMatch(selId, itemID)
-					return nil
-				})
+				}
 			}
 		} else {
 			// Item updated/created, re-evaluate labels.
 			log.Debugf("Flushing update of item %v", itemID)
 			idx.scanAllSelectors(itemID)
 		}
-		return set.RemoveItem
-	})
+		idx.dirtyItemIDs.Discard(itemID)
+	}
 }
 
 func (idx *InheritIndex) scanAllLabels(selId interface{}, sel *selector.Selector) {
