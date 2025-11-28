@@ -282,7 +282,7 @@ func (a *Adaptive[T]) Iter(f func(item T) error) {
 }
 
 // All returns an iterator for use with Go's range-over-func feature.
-// The iterator supports deletion from the set during iteration without panicking.
+// The iterator supports discarding from the set during iteration without panicking.
 func (a *Adaptive[T]) All() iter.Seq[T] {
 	return func(yield func(T) bool) {
 		switch a.size {

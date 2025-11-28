@@ -44,19 +44,15 @@ func IterUnion[T comparable](sets []Set[T], f func(item T) bool) {
 			return sets[j].Len() < sets[i].Len()
 		})
 		stop := false
+	setsLoop:
 		for i, s1 := range sets {
 			for item := range s1.All() {
 				// To check if we've seen this item before, look for it in
 				// the sets we've already scanned.
-				found := false
 				for j := 0; j < i; j++ {
 					if sets[j].Contains(item) {
-						found = true
-						break
+						continue setsLoop
 					}
-				}
-				if found {
-					continue
 				}
 				if !f(item) {
 					stop = true

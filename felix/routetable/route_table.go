@@ -645,7 +645,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		// In case of conflicts (more than one route with the same CIDR), pick
 		// one deterministically so that we don't churn the dataplane.
 
-	outerLoop:
+	ifacesLoop:
 		for ifaceName := range ifaces.All() {
 			candidates = append(candidates, ifaceName)
 			ifIndex, ok := r.ifaceIndexForName(ifaceName)
@@ -666,7 +666,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 			for _, nh := range target.MultiPath {
 				if ifIndex, ok := r.ifaceIndexForName(nh.IfaceName); !ok {
 					r.logCxt.WithField("ifaceName", nh.IfaceName).Debug("Skipping multi-path route for missing interface.")
-					continue outerLoop
+					continue ifacesLoop
 				} else {
 					if r.ifaceIndexToState[ifIndex] == ifacemonitor.StateUp {
 						someUp = true

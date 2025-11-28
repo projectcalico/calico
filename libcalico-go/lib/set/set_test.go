@@ -338,7 +338,7 @@ var _ = Describe("Set.All() iterator", func() {
 		Expect(s.Len()).To(Equal(5)) // Set should be unchanged
 	})
 
-	It("should allow deletion during iteration", func() {
+	It("should allow discarding during iteration", func() {
 		s := set.From(1, 2, 3, 4, 5)
 		for item := range s.All() {
 			if item%2 == 0 {
@@ -353,7 +353,7 @@ var _ = Describe("Set.All() iterator", func() {
 		Expect(s.Contains(5)).To(BeTrue())
 	})
 
-	It("should allow deletion of all items during iteration", func() {
+	It("should allow discarding of all items during iteration", func() {
 		s := set.From(1, 2, 3, 4, 5)
 		count := 0
 		for item := range s.All() {

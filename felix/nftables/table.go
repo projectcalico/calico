@@ -1073,6 +1073,7 @@ func (t *NftablesTable) applyUpdates() error {
 
 		newHashes[chainName] = newChainHashes
 		newChainToFullRules[chainName] = newRules
+		// We don't delete the items from the set until after programming succeeds.
 	}
 
 	// Now that chains + rules are added, we can add map elements. We do this afterwards in case

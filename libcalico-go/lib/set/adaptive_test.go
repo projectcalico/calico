@@ -60,7 +60,7 @@ var _ = Describe("Adaptive set", func() {
 			}
 		})
 
-		It("should allow deletion during iteration of array-backed set", func() {
+		It("should allow discarding during iteration of array-backed set", func() {
 			s := set.AdaptiveFrom(1, 2, 3, 4, 5)
 			for item := range s.All() {
 				if item%2 == 0 {
@@ -91,7 +91,7 @@ var _ = Describe("Adaptive set", func() {
 			}
 		})
 
-		It("should allow deletion during iteration of map-backed set", func() {
+		It("should allow discarding during iteration of map-backed set", func() {
 			// Create a set large enough to trigger map backing (>16 items)
 			items := make([]int, 20)
 			for i := range items {

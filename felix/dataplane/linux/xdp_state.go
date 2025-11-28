@@ -1114,12 +1114,6 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 		}
 	}
 
-	// Host Endpoints that were removed
-	for hepID := range pds.RemovedHostEndpoints.All() {
-		// XXX do nothing
-		_ = hepID
-	}
-
 	// CHANGES IN POLICIES
 
 	// Policies that should be removed

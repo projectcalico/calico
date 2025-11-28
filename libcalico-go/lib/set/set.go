@@ -121,7 +121,7 @@ loop:
 }
 
 // All returns an iterator for use with Go's range-over-func feature.
-// The iterator supports deletion from the set during iteration without panicking,
+// The iterator supports discarding from the set during iteration without panicking,
 // since the underlying map allows safe mutation during iteration.
 func (set Typed[T]) All() iter.Seq[T] {
 	return func(yield func(T) bool) {
