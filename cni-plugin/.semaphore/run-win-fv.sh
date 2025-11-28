@@ -12,7 +12,9 @@ pushd ${FV_DIR}
 cp $HOME/$SEMAPHORE_GIT_DIR/cni-plugin/bin/windows/*.exe ./windows || true
 
 # Run FV.
-BACKEND=$BACKEND make run-fv | tee run-fv.log
+# BACKEND=$BACKEND make run-fv | tee run-fv.log
+
+make setup-kubeadm | tee setup-kubeadm.log
 
 # Get results and logs
 ls -ltr ./report

@@ -20,6 +20,8 @@ export AZURE_WINDOWS_IMAGE_VERSION="${AZURE_WINDOWS_IMAGE_VERSION:="20348.4405.2
 export LINUX_NODE_COUNT="${LINUX_NODE_COUNT:=3}"
 export WINDOWS_NODE_COUNT="${WINDOWS_NODE_COUNT:=2}"
 
+# Verbose mode - set to "true" to see all command output, "false" to suppress output
+export VERBOSE="${VERBOSE:="false"}"
 
 export KUBE_VERSION="${KUBE_VERSION:="v1.33.6"}"
 

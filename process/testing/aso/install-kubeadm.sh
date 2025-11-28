@@ -24,29 +24,10 @@ set -e
 
 # Reconstruct arrays from exported string variables
 # Bash arrays cannot be exported across shells, so we export them as space-separated strings
-if [[ -n "${LINUX_EIPS_STR}" ]]; then
-  read -ra LINUX_EIPS <<< "${LINUX_EIPS_STR}"
-fi
-
-if [[ -n "${LINUX_PIPS_STR}" ]]; then
-  read -ra LINUX_PIPS <<< "${LINUX_PIPS_STR}"
-fi
-
-if [[ -n "${WINDOWS_EIPS_STR}" ]]; then
-  read -ra WINDOWS_EIPS <<< "${WINDOWS_EIPS_STR}"
-fi
-
-if [[ -n "${WINDOWS_PIPS_STR}" ]]; then
-  read -ra WINDOWS_PIPS <<< "${WINDOWS_PIPS_STR}"
-fi
-
-if [[ ${#LINUX_PIPS[@]} -eq 0 && -n "${LINUX_PIP}" ]]; then
-  LINUX_PIPS=("${LINUX_PIP}")
-fi
-
-if [[ ${#WINDOWS_PIPS[@]} -eq 0 && -n "${WINDOWS_PIP}" ]]; then
-  WINDOWS_PIPS=("${WINDOWS_PIP}")
-fi
+read -ra LINUX_EIPS <<< "${LINUX_EIPS_STR}"
+read -ra LINUX_PIPS <<< "${LINUX_PIPS_STR}"
+read -ra WINDOWS_EIPS <<< "${WINDOWS_EIPS_STR}"
+read -ra WINDOWS_PIPS <<< "${WINDOWS_PIPS_STR}"
 
 # Debug: Print available node information
 echo "========================================"
@@ -352,11 +333,11 @@ copy_scripts_to_linux_nodes
 copy_scripts_to_windows_nodes
 
 echo "Setting up Kubernetes cluster on Linux control plane..."
-setup_kubeadm_cluster > /dev/null 2>&1
+redirect_output setup_kubeadm_cluster
 echo "✓ Kubernetes cluster initialized"
 
 echo "Joining Linux worker nodes..."
-join_linux_worker_nodes > /dev/null 2>&1
+redirect_output join_linux_worker_nodes
 echo "✓ Linux worker nodes joined"
 
 copy_files_from_linux
@@ -367,7 +348,7 @@ echo "Preparing ${WINDOWS_NODE_COUNT} Windows node(s)..."
 for ((win_idx=0; win_idx<${WINDOWS_NODE_COUNT}; win_idx++)); do
   node_num=$((win_idx+1))
   echo "  Preparing Windows node ${node_num}..."
-  prepare_windows_node "${WINDOWS_EIPS[$win_idx]}" "${node_num}" > /dev/null 2>&1
+  redirect_output prepare_windows_node "${WINDOWS_EIPS[$win_idx]}" "${node_num}"
   echo "  ✓ Windows node ${node_num} prepared"
 done
 echo "✓ All Windows nodes prepared successfully"
@@ -376,7 +357,7 @@ echo "✓ All Windows nodes prepared successfully"
 echo "Joining ${WINDOWS_NODE_COUNT} Windows node(s) to the cluster..."
 for ((win_idx=0; win_idx<${WINDOWS_NODE_COUNT}; win_idx++)); do
   node_num=$((win_idx+1))
-  join_windows_worker_node "${WINDOWS_EIPS[$win_idx]}" "${WINDOWS_PIPS[$win_idx]}" "${node_num}"
+  redirect_output join_windows_worker_node "${WINDOWS_EIPS[$win_idx]}" "${WINDOWS_PIPS[$win_idx]}" "${node_num}"
 done
 echo "All Windows nodes joined successfully!"
 ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
