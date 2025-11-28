@@ -220,6 +220,43 @@ function join_linux_worker_nodes() {
   ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
 }
 
+function configure_windows_node_ip() {
+  local windows_eip="$1"
+  local windows_pip="$2"
+  
+  if [[ -z "$windows_eip" ]] || [[ -z "$windows_pip" ]]; then
+    echo "ERROR: Windows EIP or PIP not provided to configure_windows_node_ip"
+    return 1
+  fi
+  
+  local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${windows_eip} powershell"
+  
+  echo "  Checking current kubelet config..."
+  ${windows_connect_command} "Get-Content -Path 'C:\var\lib\kubelet\kubeadm-flags.env'"
+  
+  echo "  Adding --node-ip=${windows_pip} to kubelet arguments..."
+  # Read the file, find KUBELET_KUBEADM_ARGS line, and add --node-ip argument
+  ${windows_connect_command} @"
+\$filePath = 'C:\var\lib\kubelet\kubeadm-flags.env'
+\$content = Get-Content -Path \$filePath
+\$newContent = \$content -replace '(KUBELET_KUBEADM_ARGS=\".*)\"', '\$1 --node-ip=${windows_pip}\"'
+Set-Content -Path \$filePath -Value \$newContent
+Write-Host 'Updated kubelet config:'
+Get-Content -Path \$filePath
+"@
+  
+  echo "  Restarting kubelet service..."
+  ${windows_connect_command} "Restart-Service kubelet"
+  
+  echo "  Waiting for kubelet to restart..."
+  sleep 5
+  
+  echo "  Verifying kubelet service status..."
+  ${windows_connect_command} "Get-Service kubelet | Select-Object Status, Name"
+  
+  echo "  Node IP configuration complete for ${windows_pip}"
+}
+
 function join_windows_worker_node() {
   local windows_eip="$1"
   local windows_pip="$2"
@@ -254,6 +291,10 @@ function join_windows_worker_node() {
   # Execute join script with join arguments
   echo "Joining Windows node ${display_name} to cluster..."
   ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster.ps1 -JoinArgs '${JOIN_ARGS}' -WindowsEip '${windows_eip}'"
+  
+  # Set up node IP in kubelet config for Windows node
+  echo "Setting up node IP in kubelet config for Windows node ${display_name}..."
+  configure_windows_node_ip "${windows_eip}" "${windows_pip}"
   
   echo "Windows worker node ${display_name} joined successfully!"
   echo
