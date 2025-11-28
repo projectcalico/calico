@@ -3630,8 +3630,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
-					Expect(e.Error).NotTo(HaveOccurred())
-					Expect(e.Type).To(Equal(api.WatchAdded))
+					Expect(e.Error).NotTo(HaveOccurred(), fmt.Sprintf("Got: %s", e))
+					// Nodes get updated out-of-band by k8s, so we may see created or modified here.
+					Expect(e.Type).To(Or(Equal(api.WatchAdded), Equal(api.WatchModified)), fmt.Sprintf("Got: %s", e))
 					receivedEvent = true
 					break
 				default:
@@ -3653,7 +3654,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
 					Expect(e.Error).NotTo(HaveOccurred())
-					Expect(e.Type).To(Equal(api.WatchAdded))
+					Expect(e.Type).To(Or(Equal(api.WatchAdded), Equal(api.WatchModified)))
 					receivedEvent = true
 					break
 				default:
