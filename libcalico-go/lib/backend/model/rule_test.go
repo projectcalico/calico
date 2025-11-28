@@ -124,3 +124,21 @@ var _ = Describe("Rule", func() {
 		})
 	}
 })
+
+var _ = Describe("joinNets", func() {
+	mustCIDR := func(s string) *net.IPNet {
+		_, ipnet, err := net.ParseCIDR(s)
+		Expect(err).NotTo(HaveOccurred(), "bad CIDR in test: %s", s)
+		return ipnet
+	}
+	nets := []*net.IPNet{
+		mustCIDR("10.0.0.0/8"),
+		mustCIDR("192.168.0.0/24"),
+		nil,
+	}
+
+	It("Should return only valid CIDR", func() {
+		out := model.JoinNetsForTest(nets)
+		Expect(out).To(Equal("10.0.0.0/8,192.168.0.0/24,"))
+	})
+})
