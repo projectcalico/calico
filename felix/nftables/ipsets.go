@@ -184,10 +184,9 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 			desiredMembers.Delete(k)
 		}
 	})
-	canonMembers.Iter(func(m SetMember) error {
+	for m := range canonMembers.All() {
 		desiredMembers.Add(m)
-		return nil
-	})
+	}
 	s.updateDirtiness(mainIPSetName)
 }
 
@@ -244,10 +243,9 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 		return
 	}
 	membersTracker := s.mainSetNameToMembers[setName]
-	canonMembers.Iter(func(member SetMember) error {
+	for member := range canonMembers.All() {
 		membersTracker.Desired().Add(member)
-		return nil
-	})
+	}
 	s.updateDirtiness(setName)
 }
 
@@ -265,10 +263,9 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 		return
 	}
 	membersTracker := s.mainSetNameToMembers[setName]
-	canonMembers.Iter(func(member SetMember) error {
+	for member := range canonMembers.All() {
 		membersTracker.Desired().Delete(member)
-		return nil
-	})
+	}
 	s.updateDirtiness(setName)
 }
 
@@ -496,10 +493,9 @@ func (s *IPSets) tryResync() error {
 		memberTracker := s.getOrCreateMemberTracker(setName)
 		numExtrasExpected := memberTracker.PendingDeletions().Len()
 		err = memberTracker.Dataplane().ReplaceFromIter(func(f func(k SetMember)) error {
-			elemsSet.Iter(func(item SetMember) error {
+			for item := range elemsSet.All() {
 				f(item)
-				return nil
-			})
+			}
 			return nil
 		})
 		if err != nil {
@@ -586,14 +582,13 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 func (s *IPSets) tryUpdates(listener ipsets.UpdateListener) error {
 	var dirtyIPSets []string
 
-	s.ipSetsWithDirtyMembers.Iter(func(setName string) error {
+	for setName := range s.ipSetsWithDirtyMembers.All() {
 		if _, ok := s.setNameToProgrammedMetadata.Desired().Get(setName); !ok {
 			// Skip deletions and IP sets that aren't needed due to the filter.
-			return nil
+			continue
 		}
 		dirtyIPSets = append(dirtyIPSets, setName)
-		return nil
-	})
+	}
 
 	s.setNameToProgrammedMetadata.PendingUpdates().Iter(func(setName string, v ipsets.IPSetMetadata) deltatracker.IterAction {
 		if !s.ipSetsWithDirtyMembers.Contains(setName) {

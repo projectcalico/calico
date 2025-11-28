@@ -375,10 +375,9 @@ func (d *MockNetlinkDataplane) GetDeletedConntrackEntries() []net.IP {
 	defer ginkgo.GinkgoRecover()
 
 	cpy := make([]net.IP, 0, d.deletedConntrackEntries.Len())
-	d.deletedConntrackEntries.Iter(func(addr ip.Addr) error {
+	for addr := range d.deletedConntrackEntries.All() {
 		cpy = append(cpy, addr.AsNetIP())
-		return nil
-	})
+	}
 	return cpy
 }
 

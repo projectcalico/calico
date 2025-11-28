@@ -308,13 +308,13 @@ func (arc *ActiveRulesCalculator) OnStatusUpdate(status api.SyncStatus) {
 		if arc.missingProfiles.Len() > 0 {
 			// Log out any profiles that were missing during the resync.  We defer
 			// this until now because we may hear about profiles or endpoints first.
-			arc.missingProfiles.Iter(func(profileID string) error {
+			for profileID := range arc.missingProfiles.All() {
 				log.WithField("profileID", profileID).Warning(
 					"End of resync: local endpoints refer to missing " +
 						"or invalid profile, profile's rules replaced " +
 						"with drop rules.")
-				return set.RemoveItem
-			})
+				arc.missingProfiles.Discard(profileID)
+			}
 		}
 	}
 }

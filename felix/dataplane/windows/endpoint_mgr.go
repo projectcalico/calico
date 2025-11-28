@@ -311,10 +311,10 @@ func (m *endpointManager) ProcessPolicyProfileUpdate(policySetId string) {
 // have already been processed by the various managers and we should now have a complete picture
 // of the policy/rules to be applied for each pending endpoint.
 func (m *endpointManager) CompleteDeferredWork() error {
-	m.pendingIPSetUpdate.Iter(func(id string) error {
+	for id := range m.pendingIPSetUpdate.All() {
 		m.ProcessIpSetUpdate(id)
-		return set.RemoveItem
-	})
+		m.pendingIPSetUpdate.Discard(id)
+	}
 
 	if m.pendingHostAddrs != nil {
 		log.WithField("update", m.pendingHostAddrs).Debug("Pending host addrs update")

@@ -197,10 +197,9 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 			desiredMembers.Delete(k)
 		}
 	})
-	canonMembers.Iter(func(m IPSetMember) error {
+	for m := range canonMembers.All() {
 		desiredMembers.Add(m)
-		return nil
-	})
+	}
 	s.updateDirtiness(mainIPSetName)
 }
 
@@ -254,10 +253,9 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 		return
 	}
 	membersTracker := s.mainSetNameToMembers[setName]
-	canonMembers.Iter(func(member IPSetMember) error {
+	for member := range canonMembers.All() {
 		membersTracker.Desired().Add(member)
-		return nil
-	})
+	}
 	s.updateDirtiness(setName)
 }
 
@@ -275,10 +273,9 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 		return
 	}
 	membersTracker := s.mainSetNameToMembers[setName]
-	canonMembers.Iter(func(member IPSetMember) error {
+	for member := range canonMembers.All() {
 		membersTracker.Desired().Delete(member)
-		return nil
-	})
+	}
 	s.updateDirtiness(setName)
 }
 
@@ -444,10 +441,9 @@ func (s *IPSets) tryResync() (err error) {
 	if s.fullResyncRequired {
 		s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
 	} else {
-		s.ipSetsRequiringResync.Iter(func(name string) error {
+		for name := range s.ipSetsRequiringResync.All() {
 			s.setNameToProgrammedMetadata.Dataplane().Delete(name)
-			return nil
-		})
+		}
 	}
 
 	// Even if we're doing a partial resync, we still list all IP set names.
@@ -887,14 +883,13 @@ func (s *IPSets) tryUpdates(dirtyIPSets []string, listener UpdateListener) (err 
 
 func (s *IPSets) dirtyIPSetsForUpdate() []string {
 	var dirtyIPSets []string
-	s.ipSetsWithDirtyMembers.Iter(func(setName string) error {
+	for setName := range s.ipSetsWithDirtyMembers.All() {
 		if _, ok := s.setNameToProgrammedMetadata.Desired().Get(setName); !ok {
 			// Skip deletions and IP sets that aren't needed due to the filter.
-			return nil
+			continue
 		}
 		dirtyIPSets = append(dirtyIPSets, setName)
-		return nil
-	})
+	}
 	s.setNameToProgrammedMetadata.PendingUpdates().Iter(func(
 		setName string,
 		v dataplaneMetadata,

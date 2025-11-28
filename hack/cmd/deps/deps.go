@@ -168,10 +168,9 @@ var extraPrereqRegexps = map[string]*regexp.Regexp{
 // dependencies, for which we include non-test files only.
 func calculateDeps(packages set.Set[string]) map[string]*Deps {
 	deps := map[string]*Deps{}
-	packages.Iter(func(pkg string) error {
+	for pkg := range packages.All() {
 		deps[pkg] = nil
-		return nil
-	})
+	}
 
 	var lock sync.Mutex
 	var eg errgroup.Group
@@ -290,14 +289,13 @@ func filterInclusions(primaryPkg string, inclusions set.Set[string]) set.Typed[s
 	out := set.New[string]()
 
 	conditionalIncludes := map[string]*regexp.Regexp{}
-	inclusions.Iter(func(item string) error {
+	for item := range inclusions.All() {
 		if r := extraPrereqRegexps[item]; r != nil {
 			conditionalIncludes[item] = r
 		} else {
 			out.Add(item)
 		}
-		return nil
-	})
+	}
 
 	if len(conditionalIncludes) == 0 {
 		return out

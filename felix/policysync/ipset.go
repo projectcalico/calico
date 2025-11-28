@@ -67,10 +67,9 @@ func (s *ipSetInfo) deltaUpdate(update *proto.IPSetDeltaUpdate) {
 
 func (s *ipSetInfo) getIPSetUpdate() *proto.IPSetUpdate {
 	u := &proto.IPSetUpdate{Id: s.SetID, Type: s.getProtoType()}
-	s.members.Iter(func(item ipsets.IPSetMember) error {
+	for item := range s.members.All() {
 		u.Members = append(u.Members, item.String())
-		return nil
-	})
+	}
 	return u
 }
 
