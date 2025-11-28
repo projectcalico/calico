@@ -1,69 +1,38 @@
 import { render, screen } from '@/test-utils/helper';
 import FlowLogsContainer from '..';
-import { useOutletContext } from 'react-router-dom';
-import { useFlowLogs } from '../../../api';
-import FlowLogsList from '../../FlowLogsList';
-
-jest.mock('react-router-dom', () => ({
-    useOutletContext: jest.fn(),
-}));
 
 jest.mock('../../../api', () => ({
     useFlowLogs: jest.fn().mockReturnValue({}),
 }));
 
-jest.mock('../../FlowLogsList', () => jest.fn());
+jest.mock('../../FlowLogsList', () => () => 'Mock FlowLogsList');
 
 jest.mock('../../../hooks', () => ({
     useFlowLogsHeightOffset: jest.fn().mockReturnValue(1),
 }));
 
+const defaultProps = {
+    flowLogs: [],
+    error: null,
+    onRowClicked: jest.fn(),
+    onSortClicked: jest.fn(),
+    isFetching: false,
+    maxStartTime: 0,
+    totalItems: 0,
+};
+
 describe('FlowLogsContainer', () => {
-    it.skip('should call useFlowLogs with denied query params', () => {
-        jest.mocked(useOutletContext).mockReturnValue({ view: 'denied' });
-
-        render(<FlowLogsContainer />);
-
-        expect(useFlowLogs).toHaveBeenCalledWith({ action: 'deny' });
-    });
-
-    it.skip('should call useFlowLogs with no query params', () => {
-        jest.mocked(useOutletContext).mockReturnValue({ view: 'all' });
-
-        render(<FlowLogsContainer />);
-
-        expect(useFlowLogs).toHaveBeenCalledWith(undefined);
-    });
-
-    it('should call useFlowLogs with denied query params', () => {
-        jest.mocked(useOutletContext).mockReturnValue({
-            view: 'denied',
-            flowLogs: [],
-            isLoading: false,
-        });
-
-        render(<FlowLogsContainer />);
-
-        expect(FlowLogsList).toHaveBeenCalledWith(
-            expect.objectContaining({
-                error: undefined,
-                flowLogs: [],
-                isLoading: false,
-                heightOffset: 1,
-            }),
-            undefined,
-        );
-    });
-
     it('should render a loading skeleton', () => {
-        jest.mocked(useOutletContext).mockReturnValue({
-            isFetching: true,
-        });
-
-        render(<FlowLogsContainer />);
+        render(<FlowLogsContainer {...defaultProps} isFetching={true} />);
 
         expect(
             screen.getByTestId('flow-logs-loading-skeleton'),
         ).toBeInTheDocument();
+    });
+
+    it('should render the flow logs list', () => {
+        render(<FlowLogsContainer {...defaultProps} />);
+
+        expect(screen.getByText('Mock FlowLogsList')).toBeInTheDocument();
     });
 });

@@ -1,15 +1,18 @@
-import { FlowLogsContext } from '@/features/flowLogs/components/FlowLogsContainer';
+import { useFlowLogsStream } from '@/features/flowLogs/api';
+import FlowLogsContainer from '@/features/flowLogs/components/FlowLogsContainer';
 import OmniFilters from '@/features/flowLogs/components/OmniFilters';
+import { useMaxStartTime } from '@/features/flowLogs/hooks';
 import { useSelectedListOmniFilters } from '@/hooks';
 import { useOmniFilterData } from '@/hooks/omniFilters';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
-import { Link, TabTitle } from '@/libs/tigera/ui-components/components/common';
 import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
 import {
     OmniFilterChangeEvent,
     useOmniFilterUrlState,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
+import { FilterHintValues } from '@/types/render';
+import { parseStartTime } from '@/utils';
 import {
     FilterKey,
     OmniFilterKeys,
@@ -22,18 +25,12 @@ import {
     Button,
     Flex,
     SkeletonCircle,
-    Tab,
-    TabList,
-    Tabs,
     Text,
     ToastPosition,
     useToast,
 } from '@chakra-ui/react';
 import React from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { streamButtonStyles, tabStyles } from './styles';
-import { useFlowLogsStream } from '@/features/flowLogs/api';
-import { useMaxStartTime } from '@/features/flowLogs/hooks';
+import { streamButtonStyles } from './styles';
 
 const toastProps = {
     duration: 7500,
@@ -43,23 +40,11 @@ const toastProps = {
 };
 
 const FlowLogsPage: React.FC = () => {
-    const location = useLocation();
-    const isDeniedSelected = location.pathname.includes('/denied-flows');
-    const defaultTabIndex = isDeniedSelected ? 1 : 0;
-
-    const [
-        urlFilterParams,
-        ,
-        setFilterParam,
-        clearFilterParams,
-        getAllUrlParamsAsString,
-        ,
-        ,
-        setUrlParams,
-    ] = useOmniFilterUrlState<typeof OmniFilterKeys>(
-        OmniFilterKeys,
-        OmniFilterProperties,
-    );
+    const [urlFilterParams, , setFilterParam, clearFilterParams, , ,] =
+        useOmniFilterUrlState<typeof OmniFilterKeys>(
+            OmniFilterKeys,
+            OmniFilterProperties,
+        );
 
     const onChange = (event: OmniFilterChangeEvent) => {
         setFilterParam(
@@ -81,12 +66,11 @@ const FlowLogsPage: React.FC = () => {
         selectedOmniFilterData,
     );
 
-    const filters = {
+    const startTime = parseStartTime(urlFilterParams.start_time?.[0]);
+    const filterHintValues = {
         ...urlFilterParams,
-        ...(isDeniedSelected && {
-            action: ['Deny'],
-        }),
-    };
+        start_time: undefined,
+    } as Partial<FilterHintValues>;
 
     const {
         stopStream,
@@ -98,7 +82,7 @@ const FlowLogsPage: React.FC = () => {
         hasStoppedStreaming,
         isFetching,
         totalItems,
-    } = useFlowLogsStream(filters);
+    } = useFlowLogsStream(startTime, filterHintValues);
 
     const toast = useToast();
     const selectedRowIdRef = React.useRef<string | null>(null);
@@ -153,6 +137,14 @@ const FlowLogsPage: React.FC = () => {
         selectedRowRef.current = null;
     }, [data.length]);
 
+    const handleMultiChange = (
+        values: Partial<Record<FilterKey, string[]>>,
+    ) => {
+        Object.entries(values).forEach(([key, value]) => {
+            setFilterParam(key, value, undefined);
+        });
+    };
+
     return (
         <Box pt={1}>
             <Flex justifyContent='space-between' alignItems='center' p={2}>
@@ -166,12 +158,7 @@ const FlowLogsPage: React.FC = () => {
                             fetchFilter(
                                 filterParam,
                                 transformToFlowsFilterQuery(
-                                    {
-                                        ...urlFilterParams,
-                                        ...(isDeniedSelected && {
-                                            action: ['Deny'],
-                                        }),
-                                    } as Record<FilterKey, string[]>,
+                                    filterHintValues as FilterHintValues,
                                     filterParam,
                                     searchOption,
                                 ),
@@ -180,8 +167,9 @@ const FlowLogsPage: React.FC = () => {
                         onRequestNextPage={(filterParam) =>
                             fetchFilter(filterParam, null)
                         }
-                        onMultiChange={setUrlParams}
-                        selectedValues={urlFilterParams}
+                        onMultiChange={handleMultiChange}
+                        selectedValues={filterHintValues}
+                        startTime={startTime}
                     />
                 </Flex>
                 <Flex>
@@ -227,54 +215,15 @@ const FlowLogsPage: React.FC = () => {
                 </Flex>
             </Flex>
 
-            <Tabs defaultIndex={defaultTabIndex}>
-                <TabList>
-                    <Link
-                        to={{
-                            pathname: '/flow-logs',
-                            search: getAllUrlParamsAsString(),
-                        }}
-                    >
-                        <Tab data-testid='all-flows-tab'>
-                            <TabTitle
-                                title='All Flows'
-                                hasNoData={false}
-                                sx={tabStyles}
-                            />
-                        </Tab>
-                    </Link>
-
-                    <Link
-                        to={{
-                            pathname: 'denied-flows',
-                            search: getAllUrlParamsAsString(),
-                        }}
-                    >
-                        <Tab data-testid='denied-flows-tab'>
-                            <TabTitle
-                                title='Denied Flows'
-                                hasNoData={false}
-                                sx={tabStyles}
-                            />
-                        </Tab>
-                    </Link>
-                </TabList>
-
-                <Outlet
-                    context={
-                        {
-                            view: isDeniedSelected ? 'denied' : 'all',
-                            flowLogs: data,
-                            error,
-                            onRowClicked,
-                            onSortClicked,
-                            isFetching,
-                            maxStartTime: maxStartTime.current,
-                            totalItems,
-                        } satisfies FlowLogsContext
-                    }
-                />
-            </Tabs>
+            <FlowLogsContainer
+                flowLogs={data}
+                error={error}
+                onRowClicked={onRowClicked}
+                onSortClicked={onSortClicked}
+                isFetching={isFetching}
+                maxStartTime={maxStartTime.current}
+                totalItems={totalItems}
+            />
         </Box>
     );
 };

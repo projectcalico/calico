@@ -1,12 +1,13 @@
 export const listItemStyles = {
     borderLeftWidth: 2,
     borderLeftColor: 'transparent',
+    transition: 'all 0.1s ease-in-out',
     _hover: {
         backgroundColor: 'tigeraGrey.100',
         borderLeftColor: 'tigera-color-primary',
         _dark: {
             backgroundColor: 'tigeraGrey.800',
-            borderLeftColor: 'tigeraBlueMedium40',
+            borderLeftColor: 'tigeraGoldMedium',
         },
     },
     boxSizing: 'border-box',
