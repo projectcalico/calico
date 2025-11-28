@@ -83,10 +83,9 @@ func newNodeData() *nodeData {
 
 func (n *nodeData) allowedCidrsForWireguard() []net.IPNet {
 	cidrs := make([]net.IPNet, 0, n.cidrs.Len())
-	n.cidrs.Iter(func(item ip.CIDR) error {
+	for item := range n.cidrs.All() {
 		cidrs = append(cidrs, item.ToIPNet())
-		return nil
-	})
+	}
 	return cidrs
 }
 
@@ -465,14 +464,13 @@ func (w *Wireguard) localWorkloadCIDRAdd(cidr ip.CIDR) {
 	if !w.localCIDRsUpdated {
 		contained := false
 		if node, ok := w.nodes[w.hostname]; ok {
-			node.cidrs.Iter(func(filtered ip.CIDR) error {
+			for filtered := range node.cidrs.All() {
 				filteredIPNet := filtered.ToIPNet()
 				if filteredIPNet.Contains(cidr.ToIPNet().IP) && filtered.Prefix() >= cidr.Prefix() {
 					contained = true
-					return set.StopIteration
+					break
 				}
-				return nil
-			})
+			}
 		}
 		if !contained {
 			w.localCIDRsUpdated = true
@@ -920,25 +918,23 @@ func (w *Wireguard) getLocalNodeCIDRUpdates() *nodeUpdateData {
 
 	// Include all local CIDRs, update the cidrsAdded with any missing.
 	oldFiltered := node.cidrs.Copy()
-	w.localCIDRs.Iter(func(cidr ip.CIDR) error {
+	for cidr := range w.localCIDRs.All() {
 		if oldFiltered.Contains(cidr) {
 			oldFiltered.Discard(cidr)
 		} else {
 			nodeUpdate.cidrsAdded.Add(cidr)
 		}
-		return nil
-	})
+	}
 	// Include all local IPs that are not covered by the local CIDRs, update the cidrsAdded with any missing.
-	w.localIPs.Iter(func(addr ip.Addr) error {
+	for addr := range w.localIPs.All() {
 		overlaps := false
-		w.localCIDRs.Iter(func(itemCIDR ip.CIDR) error {
+		for itemCIDR := range w.localCIDRs.All() {
 			cidr := itemCIDR.ToIPNet()
 			if cidr.Contains(addr.AsNetIP()) {
 				overlaps = true
-				return set.StopIteration
+				break
 			}
-			return nil
-		})
+		}
 		if !overlaps {
 			ipAsCidr := addr.AsCIDR()
 			if oldFiltered.Contains(ipAsCidr) {
@@ -947,13 +943,11 @@ func (w *Wireguard) getLocalNodeCIDRUpdates() *nodeUpdateData {
 				nodeUpdate.cidrsAdded.Add(ipAsCidr)
 			}
 		}
-		return nil
-	})
+	}
 	// Remove any existing entry that is now no longer required.
-	oldFiltered.Iter(func(cidr ip.CIDR) error {
+	for cidr := range oldFiltered.All() {
 		nodeUpdate.cidrsDeleted.Add(cidr)
-		return nil
-	})
+	}
 
 	// Return the node update
 	return nodeUpdate
@@ -1069,18 +1063,16 @@ func (w *Wireguard) updateCacheFromNodeUpdates() (conflictingKeys set.Set[wgtype
 			updated = true
 		}
 
-		update.cidrsDeleted.Iter(func(cidr ip.CIDR) error {
+		for cidr := range update.cidrsDeleted.All() {
 			logCtx.WithField("cidr", cidr).Debug("Discarding CIDR")
 			node.cidrs.Discard(cidr)
 			updated = true
-			return nil
-		})
-		update.cidrsAdded.Iter(func(cidr ip.CIDR) error {
+		}
+		for cidr := range update.cidrsAdded.All() {
 			logCtx.WithField("cidr", cidr).Debug("Adding CIDR")
 			node.cidrs.Add(cidr)
 			updated = true
-			return nil
-		})
+		}
 
 		if updated {
 			// Node configuration updated. Store node data.
@@ -1106,12 +1098,11 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 		// is somewhat defensive as we have the information to decide which route we need to remove - however we have
 		// also had bugs related to state tracking so deleting both is reasonable - routetable ignores the one that is
 		// not programmed.
-		update.cidrsDeleted.Iter(func(cidr ip.CIDR) error {
+		for cidr := range update.cidrsDeleted.All() {
 			w.logCtx.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
 			w.routetable.RouteRemove(w.interfaceName, cidr)
 			w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
-			return nil
-		})
+		}
 	}
 
 	// Now do the adds or updates. The routetable component will take care of routes that don't actually change and
@@ -1148,7 +1139,7 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 			ifaceName = w.interfaceName
 		}
 
-		updateSet.Iter(func(cidr ip.CIDR) error {
+		for cidr := range updateSet.All() {
 			updateLogCtx := logCtx.WithField("cidr", cidr)
 			updateLogCtx.Debug("Updating route for CIDR")
 			if node.routingToWireguard != shouldRouteToWireguard {
@@ -1167,8 +1158,7 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 				Type: targetType,
 				CIDR: cidr,
 			})
-			return nil
-		})
+		}
 		node.routingToWireguard = shouldRouteToWireguard
 	}
 }
@@ -1207,10 +1197,9 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 				} else if update.cidrsAdded.Len() > 0 {
 					logCtx.Debug("Peer programmed, no CIDRs deleted and CIDRs added")
 					wgpeer.AllowedIPs = make([]net.IPNet, 0, update.cidrsAdded.Len())
-					update.cidrsAdded.Iter(func(cidr ip.CIDR) error {
+					for cidr := range update.cidrsAdded.All() {
 						wgpeer.AllowedIPs = append(wgpeer.AllowedIPs, cidr.ToIPNet())
-						return nil
-					})
+					}
 					updatePeer = true
 				}
 
@@ -1235,21 +1224,21 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 		}
 
 		// Finally loop through any conflicting public keys and check each of the nodes is now handled correctly.
-		conflictingKeys.Iter(func(key wgtypes.Key) error {
+		for key := range conflictingKeys.All() {
 			logCtx := w.logCtx.WithField("publicKey", key)
 			logCtx.Debug("Processing public key with conflicting nodes")
 			nodenames := w.publicKeyToNodeNames[key]
 			if nodenames == nil {
-				return nil
+				continue
 			}
-			nodenames.Iter(func(nodename string) error {
+			for nodename := range nodenames.All() {
 				nodeLogCtx := logCtx.WithField("node", nodename)
 				nodeLogCtx.Debug("Processing peer")
 				peer := w.nodes[nodename]
 				if peer == nil || peer.programmedInWireguard == w.shouldProgramWireguardPeer(nodename, peer) {
 					// The peer programming matches the expected value, so nothing to do.
 					nodeLogCtx.Debug("Programming state has not changed")
-					return nil
+					continue
 				} else if peer.programmedInWireguard {
 					// The peer is programmed and shouldn't be. Add a delta delete.
 					nodeLogCtx.Debug("Programmed in wireguard, need to delete")
@@ -1267,10 +1256,8 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 						PersistentKeepaliveInterval: &w.config.PersistentKeepAlive,
 					})
 				}
-				return nil
-			})
-			return nil
-		})
+			}
+		}
 	}
 
 	// Delta updates only include updates to peer config, so if no peer updates, just return nil.
@@ -1865,10 +1852,10 @@ func getOnlyItemInSet[T comparable](s set.Set[T]) *T {
 		return nil
 	}
 	var i *T
-	s.Iter(func(item T) error {
+	for item := range s.All() {
 		i = &item
-		return set.StopIteration
-	})
+		break
+	}
 	return i
 }
 

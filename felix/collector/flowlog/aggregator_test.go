@@ -199,14 +199,13 @@ func checkProcessArgs(actual, expected []string, numArgs int) bool {
 	if actualArgSet.Len() != numArgs {
 		return false
 	}
-	actualArgSet.Iter(func(arg string) error {
+	for arg := range actualArgSet.All() {
 		for _, e := range expected {
 			if arg == e {
 				count = count + 1
 			}
 		}
-		return nil
-	})
+	}
 	return count == numArgs
 }
 
