@@ -23,7 +23,7 @@
     jobs:
       - name: Build and save build cache
         commands:
-          - make -C felix build
+          - make -C felix build fv-prereqs
           - make -C cni-plugin build
           - make -C typha build
           - make -C apiserver build
