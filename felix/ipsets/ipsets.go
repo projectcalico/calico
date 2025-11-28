@@ -385,6 +385,7 @@ func (s *IPSets) ApplyUpdates() {
 			continue
 		}
 
+		s.resyncRequired = false
 		success = true
 		break
 	}
