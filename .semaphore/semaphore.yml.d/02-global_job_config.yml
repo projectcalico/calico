@@ -1,18 +1,14 @@
 global_job_config:
   secrets:
     - name: docker-hub
+    - name: google-service-account-for-gce
+  env_vars:
+    - name: GOOGLE_PROJECT
+      value: unique-caldron-775
+    - name: GCS_BUILD_CACHE_BUCKET
+      value: calico-transient-build-artifacts-europe-west3
   prologue:
-    commands:
-      - export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
-      - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
-      - checkout
-      - export CALICO_DIR="$(pwd)"
-      - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
-      - mkdir artifacts
-      # Semaphore is doing shallow clone on a commit without tags.
-      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - if [[ "${SEMAPHORE_BLOCK_NAME}" != "Prerequisites" ]]; then retry git fetch --unshallow; fi
-      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+    commands_file: global-job-prologue
   epilogue:
     commands:
       - cd "$CALICO_DIR"
