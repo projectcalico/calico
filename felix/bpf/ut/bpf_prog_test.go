@@ -770,8 +770,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	Expect(err).NotTo(HaveOccurred())
 	err = progMap[hook.Egress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
-	err = progMap[hook.Egress].EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
 	err = policyJumpMap[hook.Ingress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	err = policyJumpMap[hook.Egress].EnsureExists()

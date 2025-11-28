@@ -490,7 +490,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		fmt.Printf("wl1State = %+v\n", wl1State)
 
 		pmFH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
-		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
+		pmTH := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
 		wl1IngressPol := pmFH[wl1State.IngressPolicyV4()]
 		wl1EgressPol := pmTH[wl1State.EgressPolicyV4()]
 
@@ -525,7 +525,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		pmFH = jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmTH = jumpMapDump(commonMaps.JumpMaps[hook.Egress])
 		Expect(wl1IngressPol).NotTo(Equal(pmFH[wl1State2.IngressPolicyV4()]))
-		Expect(wl1EgressPol).NotTo(Equal(pmTH[wl1State2.IngressPolicyV4()]))
+		Expect(wl1EgressPol).NotTo(Equal(pmTH[wl1State2.EgressPolicyV4()]))
 
 		progs, err := bpf.GetAllProgs()
 		Expect(err).NotTo(HaveOccurred())
@@ -638,8 +638,6 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		// After restat we get new maps which are empty
 		Expect(programsIng.Count()).To(Equal(0))
 		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
-		Expect(pm).To(HaveLen(0))
-		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Egress])
 		Expect(pm).To(HaveLen(0))
 		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Egress])
 		Expect(pm).To(HaveLen(0))
