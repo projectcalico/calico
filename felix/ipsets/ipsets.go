@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import (
 
 const (
 	MaxIPSetDeletionsPerIteration = 1
+	MaxRetryAttempt               = 10
 )
 
 type dataplaneMetadata struct {
@@ -44,6 +45,7 @@ type dataplaneMetadata struct {
 	RangeMin     int
 	RangeMax     int
 	DeleteFailed bool
+	ListFailed   bool
 }
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -350,22 +352,31 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		retryDelay *= 2
 	}
 
-	for attempt := 0; attempt < 10; attempt++ {
+	var resyncErr, updateErr error
+	for attempt := 0; attempt < MaxRetryAttempt; attempt++ {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
 		}
+		treatFailureAsTransient := attempt < MaxRetryAttempt/2
 		if s.fullResyncRequired || s.ipSetsRequiringResync.Len() > 0 {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
 			s.logCxt.Debug("Resyncing ipsets with dataplane.")
 			s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
 
-			if err := s.tryResync(); err != nil {
-				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
-				backOff()
-				continue
+			if resyncErr = s.tryResync(); resyncErr != nil {
+				s.logCxt.WithError(resyncErr).Warning("Failed to resync with dataplane")
+
+				// After a few attempts, most likely, we are dealing with a persistent failure.
+				// This could be due to different failures, like userspace and kernel incompatibility.
+				// The incompatibility failure can be fixed by swapping the one Felix understand (created from
+				// desired state) and the one (with higher revision) in dataplane. As such, we should stop re-trying
+				// and instead fall through to tryUpdates() below, which will do the swap.
+				if treatFailureAsTransient {
+					backOff()
+					continue
+				}
 			}
-			s.fullResyncRequired = false
 		}
 
 		// Opportunistically delete some temporary IP sets.  It's possible
@@ -374,22 +385,26 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		s.tryTempIPSetDeletions()
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
-		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
-			if attempt >= 5 {
+		if updateErr = s.tryUpdates(dirtyIPSets, listener); updateErr != nil {
+			if treatFailureAsTransient {
+				// Transient failure, resync the IP sets that we failed to update.
+				s.logCxt.WithError(updateErr).WithField("attempt", attempt).Warning(
+					"Failed to update IP sets. Will do partial resync.")
+			} else {
 				// Persistent failures, try a full resync.
-				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
+				s.logCxt.WithError(updateErr).WithField("attempt", attempt).Warning(
 					"Persistently failed to update IP sets. Will do full resync.")
 				s.QueueResync()
-			} else {
-				// More than one failure, resync the IP sets that we failed to update.
-				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
-					"Failed to update IP sets. Will do partial resync.")
 			}
 			countNumIPSetErrors.Inc()
+		}
+
+		if resyncErr != nil || updateErr != nil {
 			backOff()
 			continue
 		}
 
+		s.fullResyncRequired = false
 		success = true
 		break
 	}
@@ -436,20 +451,18 @@ func (s *IPSets) tryResync() (err error) {
 	// are known to exist.
 	ipSets, err := s.CalicoIPSets()
 	if err != nil {
-		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
+		s.logCxt.WithError(err).Error("Failed to get the list of Calico ipsets")
 		return
 	}
 	if debug {
-		s.logCxt.Debugf("List of ipsets: %v", ipSets)
+		s.logCxt.Debugf("List of calico ipsets: %v", ipSets)
 	}
 
 	ipSetPartOfSync := func(name string) bool {
-		if s.fullResyncRequired {
-			return true
-		}
-		return s.ipSetsRequiringResync.Contains(name)
+		return s.fullResyncRequired || s.ipSetsRequiringResync.Contains(name)
 	}
 
+	var failedIPSets []string
 	for _, name := range ipSets {
 		if !ipSetPartOfSync(name) {
 			// Skipping this IP set on this pass.
@@ -458,14 +471,29 @@ func (s *IPSets) tryResync() (err error) {
 		if debug {
 			s.logCxt.Debugf("Parsing IP set %v.", name)
 		}
-		err = s.resyncIPSet(name)
-		if err != nil {
-			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
-			return
+		if err = s.resyncIPSet(name); err != nil {
+			// Ignore failures of IP sets not in desired state, as those will be cleaned up later.
+			_, desired := s.setNameToProgrammedMetadata.Desired().Get(name)
+			if desired {
+				failedIPSets = append(failedIPSets, name)
+			}
+			if desired {
+				s.logCxt.WithError(err).WithFields(log.Fields{
+					"name":    name,
+				}).Warn("Failed to parse required Calico-owned ipset that is needed, will try recreating it.")
+			} else {
+				s.logCxt.WithError(err).WithFields(log.Fields{
+					"name":    name,
+				}).Warn("Failed to parse Calico-owned ipset that is no longer needed, will queue it for deletion.")
+			}
 		} else {
 			// Successful resync of this IP set, clear any pending partial resync.
 			s.ipSetsRequiringResync.Discard(name)
 		}
+	}
+
+	if len(failedIPSets) > 0 {
+		return fmt.Errorf("failed to parse IPSets %v", strings.Join(failedIPSets, ","))
 	}
 
 	// Mark any IP sets that we didn't see as empty.
@@ -547,8 +575,9 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 	//
 	// As we stream through the data, we extract the name of the IP set and its members. We
 	// use the IP set's metadata to convert each member to its canonical form for comparison.
+	meta := dataplaneMetadata{}
+	debug := log.GetLevel() >= log.DebugLevel
 	err := s.runIPSetList(ipSetName, func(scanner *bufio.Scanner) error {
-		debug := log.GetLevel() >= log.DebugLevel
 		ipSetName := ""
 		var ipSetType IPSetType
 		for scanner.Scan() {
@@ -572,9 +601,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 				// When we hit the Header line we should know the name, and type of the IP set, which lets
 				// us update the tracker.
 				parts := strings.Split(line, " ")
-				meta := dataplaneMetadata{
-					Type: ipSetType,
-				}
+				meta.Type = ipSetType
 				for idx, p := range parts {
 					if p == "maxelem" {
 						if idx+1 >= len(parts) {
@@ -605,7 +632,6 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 						break
 					}
 				}
-				s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
 			}
 			if strings.HasPrefix(line, "Members:") {
 				// Start of a Members entry, following this, there'll be one member per
@@ -677,9 +703,16 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		return scanner.Err()
 	})
 	if err != nil {
-		return err
+		// This can occur if we have version skew with the version of IP set
+		// used to create the IP set. Mark the metadata as invalid in order
+		// to trigger the IP set to be recreated.
+		meta.ListFailed = true
 	}
-	return nil
+	if debug {
+		s.logCxt.WithField("setName", ipSetName).Debugf("Parsed metadata from dataplane %+v", meta)
+	}
+	s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
+	return err
 }
 
 func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) error) error {
@@ -1009,7 +1042,8 @@ func (s *IPSets) ApplyDeletions() bool {
 		if numDeletions >= MaxIPSetDeletionsPerIteration {
 			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
 			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
-			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.", MaxIPSetDeletionsPerIteration)
+			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.",
+				MaxIPSetDeletionsPerIteration)
 			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
 			return deltatracker.IterActionNoOpStopIteration
 		}
@@ -1065,7 +1099,8 @@ func (s *IPSets) tryTempIPSetDeletions() {
 		if numDeletions >= MaxIPSetDeletionsPerIteration {
 			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
 			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
-			log.Debugf("Deleted batch of 20 temp IP sets, rate limiting further IP set deletions.")
+			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.",
+				MaxIPSetDeletionsPerIteration)
 			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
 			return deltatracker.IterActionNoOpStopIteration
 		}
