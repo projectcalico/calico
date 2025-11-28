@@ -236,14 +236,7 @@ function configure_windows_node_ip() {
   
   echo "  Adding --node-ip=${windows_pip} to kubelet arguments..."
   # Read the file, find KUBELET_KUBEADM_ARGS line, and add --node-ip argument
-  ${windows_connect_command} @"
-\$filePath = 'C:\var\lib\kubelet\kubeadm-flags.env'
-\$content = Get-Content -Path \$filePath
-\$newContent = \$content -replace '(KUBELET_KUBEADM_ARGS=\".*)\"', '\$1 --node-ip=${windows_pip}\"'
-Set-Content -Path \$filePath -Value \$newContent
-Write-Host 'Updated kubelet config:'
-Get-Content -Path \$filePath
-"@
+  ${windows_connect_command} "\$filePath = 'C:\var\lib\kubelet\kubeadm-flags.env'; \$content = Get-Content -Path \$filePath; Write-Host 'Current content:'; Write-Host \$content; if (\$content -match '--node-ip=') { Write-Host 'WARNING: --node-ip already exists, replacing...'; \$newContent = \$content -replace '--node-ip=[0-9.]+', '--node-ip=${windows_pip}' } else { Write-Host 'Adding --node-ip=${windows_pip}...'; \$newContent = \$content -replace '(KUBELET_KUBEADM_ARGS=\\\".*)\\\"\$', '\\\$1 --node-ip=${windows_pip}\\\"' }; Set-Content -Path \$filePath -Value \$newContent; Write-Host 'Updated content:'; Get-Content -Path \$filePath"
   
   echo "  Restarting kubelet service..."
   ${windows_connect_command} "Restart-Service kubelet"
