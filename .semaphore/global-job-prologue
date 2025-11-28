@@ -1,0 +1,39 @@
+#!/bin/bash
+
+export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
+export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache
+export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
+
+export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+gcloud config set project ${GOOGLE_PROJECT}
+
+export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
+
+if [[ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
+  echo "Running in the context of a PR: ${SEMAPHORE_GIT_PR_NUMBER}"
+  # Look for a build cache from the target branch of the PR.
+  gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}/"
+  if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.gz" /tmp/working-copy.tar.pz; then
+    echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
+    tar -xzf /tmp/working-copy.tar.pz
+    cd "${CALICO_DIR_NAME}" || exit 1
+    git fetch origin ${SEMAPHORE_GIT_SHA}
+    git checkout ${SEMAPHORE_GIT_SHA} -B ${SEMAPHORE_GIT_PR_BRANCH}
+  else
+    echo "No cache found for branch ${SEMAPHORE_GIT_BRANCH}"
+    git clone --filter=blob:none --revision=$SEMAPHORE_GIT_SHA $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
+    cd "${CALICO_DIR_NAME}" || exit 1
+  fi
+else
+  echo "Not running in the context of a PR, doing a clean checkout."
+  git clone --filter=blob:none -b $SEMAPHORE_GIT_BRANCH $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
+  cd "${CALICO_DIR_NAME}" || exit 1
+fi
+
+CALICO_DIR="$(pwd)"
+export CALICO_DIR
+
+mkdir -p artifacts
+
+echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
