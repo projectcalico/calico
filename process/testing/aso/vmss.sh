@@ -223,116 +223,9 @@ function wait_for_aso_resource() {
   fi
 }
 
-function delete_azure_crds() {
-  log_info "Starting ASO v2 resource cleanup"
-  
-  # Check if namespace exists before attempting deletion
-  if ! ${KUBECTL} get namespace winfv &>/dev/null; then
-    log_info "Namespace winfv does not exist, nothing to clean up"
-    return 0
-  fi
-  
-  log_info "Deleting ASO resources in reverse dependency order..."
-  
-  # Step 1: Delete VirtualMachines first (highest level resources)
-  log_info "Deleting VirtualMachines..."
-  if ${KUBECTL} get virtualmachines -n winfv &>/dev/null; then
-    ${KUBECTL} delete virtualmachines --all -n winfv --timeout=300s
-    
-    # Wait for VirtualMachines to be completely gone
-    log_info "Waiting for VirtualMachines to be deleted..."
-    local timeout=500
-    local count=0
-    while ${KUBECTL} get virtualmachines -n winfv &>/dev/null && [[ $count -lt $timeout ]]; do
-      sleep 5
-      count=$((count + 5))
-      if (( count % 30 == 0 )); then
-        log_info "Still waiting for VirtualMachines to be deleted... (${count}s elapsed)"
-      fi
-    done
-    
-    if ${KUBECTL} get virtualmachines -n winfv &>/dev/null; then
-      log_warn "VirtualMachines still exist after timeout, but continuing..."
-    else
-      log_info "VirtualMachines deleted successfully"
-    fi
-  fi
-  
-  # Step 2: Delete NetworkInterfaces and PublicIPAddresses  
-  log_info "Deleting NetworkInterfaces and PublicIPAddresses..."
-  if ${KUBECTL} get networkinterfaces -n winfv &>/dev/null; then
-    ${KUBECTL} delete networkinterfaces --all -n winfv --timeout=180s
-  fi
-  if ${KUBECTL} get publicipaddresses -n winfv &>/dev/null; then
-    ${KUBECTL} delete publicipaddresses --all -n winfv --timeout=180s
-  fi
-  
-  # Step 3: Delete NetworkSecurityGroups
-  log_info "Deleting NetworkSecurityGroups..."
-  if ${KUBECTL} get networksecuritygroups -n winfv &>/dev/null; then
-    ${KUBECTL} delete networksecuritygroups --all -n winfv --timeout=180s
-  fi
-  
-  # Step 4: Delete VirtualNetworks
-  log_info "Deleting VirtualNetworks..."
-  if ${KUBECTL} get virtualnetworks -n winfv &>/dev/null; then
-    ${KUBECTL} delete virtualnetworks --all -n winfv --timeout=180s
-  fi
-  
-  # Step 5: Delete ResourceGroup (foundational resource, last)
-  log_info "Deleting ResourceGroup..."
-  if ${KUBECTL} get resourcegroups -n winfv &>/dev/null; then
-    ${KUBECTL} delete resourcegroups --all -n winfv --timeout=300s
-  fi
-  
-  # Step 6: Wait for all ASO resources to be completely gone
-  log_info "Waiting for all ASO resources to be cleaned up..."
-  local timeout=600  # 10 minutes total timeout
-  local count=0
-  local check_interval=10
-  
-  while [[ $count -lt $timeout ]]; do
-    local remaining_resources=$(${KUBECTL} get virtualmachines,publicipaddresses,networkinterfaces,networksecuritygroups,virtualnetworks,resourcegroups -n winfv --no-headers 2>/dev/null | wc -l)
-    
-    if [[ $remaining_resources -eq 0 ]]; then
-      log_info "All ASO resources have been cleaned up successfully"
-      break
-    fi
-    
-    sleep $check_interval
-    count=$((count + check_interval))
-    
-    if (( count % 60 == 0 )); then
-      log_info "Still waiting for ASO cleanup... (${count}s elapsed, $remaining_resources resources remaining)"
-      ${KUBECTL} get virtualmachines,publicipaddresses,networkinterfaces,networksecuritygroups,virtualnetworks,resourcegroups -n winfv --no-headers 2>/dev/null || true
-    fi
-  done
-  
-  # Step 7: Check if any resources are still stuck
-  local final_resources=$(${KUBECTL} get virtualmachines,publicipaddresses,networkinterfaces,networksecuritygroups,virtualnetworks,resourcegroups -n winfv --no-headers 2>/dev/null | wc -l)
-  
-  if [[ $final_resources -gt 0 ]]; then
-    log_warn "Some ASO resources are still present after cleanup timeout:"
-    ${KUBECTL} get virtualmachines,publicipaddresses,networkinterfaces,networksecuritygroups,virtualnetworks,resourcegroups -n winfv 2>/dev/null || true
-    log_warn "You may need to manually delete stuck resources or check Azure portal for remaining resources"
-    return 1
-  fi
-  
-  # Step 8: Now safe to delete the namespace
-  log_info "All ASO resources cleaned up, deleting namespace..."
-  ${KUBECTL} delete namespace winfv --timeout=60s
-  
-  if [[ $? -eq 0 ]]; then
-    log_info "ASO v2 resource cleanup completed successfully"
-  else
-    log_error "Failed to delete namespace winfv"
-    return 1
-  fi
-}
-
-function show_connections() {
+function get_and_export_node_ips() {
   # Wait for vm deployments with ASO v2 patterns
-  log_info "show_connections started..."
+  log_info "Getting and exporting node IPs..."
   
   # Wait for and get Linux node IPs
   declare -a LINUX_PIPS=()
@@ -439,6 +332,15 @@ function show_connections() {
     eval "export ${var_name_ps}='${cmd_ps}'"
   done
 
+  # Export arrays for use in other scripts
+  export LINUX_PIPS LINUX_EIPS WINDOWS_PIPS WINDOWS_EIPS MASTER_CONNECT_COMMAND WINDOWS_CONNECT_COMMAND CONTAINERD_VERSION
+
+  log_info "Node IPs retrieved and exported successfully"
+}
+
+function generate_and_show_connect_file() {
+  log_info "Generating connect.txt..."
+  
   WIN_PASSWORD=$(grep "password:" ./password.txt | awk -F':' '{print $2}')
 
   cat << EOF > connect.txt
@@ -472,12 +374,12 @@ EOF
   
   echo
   cat connect.txt
+  
+  log_info "connect.txt generated successfully"
+}
 
-  # Export arrays for use in other scripts
-  export LINUX_PIPS LINUX_EIPS WINDOWS_PIPS WINDOWS_EIPS MASTER_CONNECT_COMMAND WINDOWS_CONNECT_COMMAND CONTAINERD_VERSION
-
-  echo
-  echo "Generating helper files"
+function generate_helper_files() {
+  log_info "Generating helper files..."
   
   # Generate ssh-node-linux.sh with node index support
   cat << EOF > ./ssh-node-linux.sh
@@ -635,14 +537,17 @@ scp -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking
 EOF
   chmod +x ./scp-from-windows.sh
 
-  echo "show_connections done."; echo
+  log_info "Helper files generated successfully"
 }
 
 # With static IP allocation, VMs should have stable IP addresses once ready.
 # This function attempts to SSH into the VM.
 function confirm-nodes-ssh() {
   log_info "Starting SSH connectivity confirmation for VMs..."
-  show_connections
+
+  get_and_export_node_ips
+  generate_and_show_connect_file
+  generate_helper_files
   
   log_info "Testing SSH connectivity with retry logic..."
   
@@ -817,8 +722,13 @@ case $1 in
   create)
     apply_azure_crds
     ;;
+  node-ips)
+    get_and_export_node_ips
+    ;;
   info)
-    show_connections
+    get_and_export_node_ips
+    generate_and_show_connect_file
+    generate_helper_files
     ;;
   confirm-ssh)
     confirm-nodes-ssh
@@ -834,6 +744,7 @@ case $1 in
     echo ""
     echo "Commands:"
     echo "  create       - Create Azure VirtualMachine resources using ASO v2"
+    echo "  node-ips     - Get and export node IPs"
     echo "  info         - Show VM connection information"
     echo "  confirm-ssh  - Verify SSH connectivity to VMs"
     echo "  diagnose     - Diagnose ASO v2 resource status and finalizers"

@@ -17,7 +17,7 @@ set -e
 
 . ../util/utils.sh
 
-. ./vmss.sh info
+. ./vmss.sh node-ips
 
 : ${KUBECTL:=./bin/kubectl}
 : ${GOMPLATE:=./bin/gomplate}
