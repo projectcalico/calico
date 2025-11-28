@@ -19,14 +19,19 @@ global_job_config:
 
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
 
+      # For PRs, try to restore a build cache from the target branch of the PR.
+      # This includes a working copy and associated build cache with consistent
+      # file mtimes.  We then check out the PR commit on top of that working
+      # copy, which will invalidate build cache entries only for files changed
+      # in the PR.
       - >-
         if [[ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
           echo "Running in the context of a PR: ${SEMAPHORE_GIT_PR_NUMBER}"
           # Look for a build cache from the target branch of the PR.
-          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}/"
-          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.gz" /tmp/working-copy.tar.pz; then
+          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.gz" /tmp/working-copy.tar.gz; then
             echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
-            tar -xzf /tmp/working-copy.tar.pz
+            tar -xzf /tmp/working-copy.tar.gz
             cd "${CALICO_DIR_NAME}" || exit 1
             git fetch origin ${SEMAPHORE_GIT_SHA}
             git checkout ${SEMAPHORE_GIT_SHA} -B ${SEMAPHORE_GIT_PR_BRANCH}
