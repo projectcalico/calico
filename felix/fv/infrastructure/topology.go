@@ -501,12 +501,15 @@ func StartNNodeTopology(
 		for _, prev := range prevFoundPreambleProgs {
 			for _, cur := range foundPreambleProgs {
 				if prev["id"] == cur["id"] {
-					log.Panicf("Found leaked BPF preamble prog '%d' in Felix", prev["id"])
+					log.WithFields(log.Fields{
+						"prev": prev,
+						"cur":  cur,
+					}).Panicf("Found leaked BPF preamble prog '%d' in Felix", prev["id"])
 				}
 			}
 		}
 
-		leftoverPreambleProgs[i] = append(prevFoundPreambleProgs, foundPreambleProgs...)
+		leftoverPreambleProgs[i] = foundPreambleProgs
 	}
 
 	return
