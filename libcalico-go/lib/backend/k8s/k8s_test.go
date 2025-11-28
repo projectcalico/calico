@@ -3653,7 +3653,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
-					Expect(e.Error).NotTo(HaveOccurred())
+					Expect(e.Error).NotTo(HaveOccurred(), fmt.Sprintf("Got: %s", e))
 					Expect(e.Type).To(Or(Equal(api.WatchAdded), Equal(api.WatchModified)))
 					receivedEvent = true
 					break
