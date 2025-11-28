@@ -1,6 +1,6 @@
 - name: "Felix: Build"
   run:
-    when: "${CHANGE_IN(felix,typha)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - Prerequisites
   task:
