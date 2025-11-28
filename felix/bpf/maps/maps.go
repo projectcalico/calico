@@ -729,7 +729,7 @@ func (b *PinnedMap) EnsureExists() error {
 	case strings.HasPrefix(b.Name, "cali_"):
 		objName = "common_map_stub.o"
 	case strings.HasPrefix(b.Name, "cali_progs_map_fh"):
-		objName = "common_map_stub_ing.o"
+		objName = "common_map_stub_fh.o"
 	}
 
 	loadedFromObj := false

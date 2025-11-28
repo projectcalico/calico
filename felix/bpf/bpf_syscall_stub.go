@@ -30,6 +30,10 @@ func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uin
 	panic("BPF syscall stub")
 }
 
+func LoadBPFProgramFromInsnsWithAttachType(insns asm.Insns, name, license string, progType, attachType uint32) (fd ProgFD, err error) {
+	panic("BPF syscall stub")
+}
+
 func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err error) {
 	panic("BPF syscall stub")
 }

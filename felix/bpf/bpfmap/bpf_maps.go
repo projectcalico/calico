@@ -57,7 +57,7 @@ type CommonMaps struct {
 	RuleCountersMap  maps.Map
 	CountersMap      maps.Map
 	ProgramsMaps     []maps.Map
-	JumpMap          maps.MapWithDeleteIfExists
+	JumpMaps         []maps.MapWithDeleteIfExists
 	XDPProgramsMap   maps.Map
 	XDPJumpMap       maps.MapWithDeleteIfExists
 	ProfilingMap     maps.Map
@@ -85,19 +85,23 @@ func (m *Maps) Destroy() {
 }
 
 func getCommonMaps() *CommonMaps {
-	return &CommonMaps{
+	commonMaps := &CommonMaps{
 		StateMap:         state.Map(),
 		IfStateMap:       ifstate.Map(),
 		RuleCountersMap:  counters.PolicyMap(),
 		CountersMap:      counters.Map(),
 		ProgramsMaps:     hook.NewProgramsMaps(),
-		JumpMap:          jump.Map().(maps.MapWithDeleteIfExists),
 		XDPProgramsMap:   hook.NewXDPProgramsMap(),
 		XDPJumpMap:       jump.XDPMap().(maps.MapWithDeleteIfExists),
 		ProfilingMap:     profiling.Map(),
 		CTLBProgramsMaps: nat.ProgramsMaps(),
 		QoSMap:           qos.Map().(maps.MapWithUpdateWithFlags),
 	}
+	jumpMaps := jump.Maps()
+	for _, jm := range jumpMaps {
+		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jm.(maps.MapWithDeleteIfExists))
+	}
+	return commonMaps
 }
 
 func getIPMaps(ipFamily int) *IPMaps {
@@ -174,7 +178,6 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.IfStateMap,
 		c.RuleCountersMap,
 		c.CountersMap,
-		c.JumpMap,
 		c.XDPProgramsMap,
 		c.XDPJumpMap,
 		c.ProfilingMap,
@@ -182,6 +185,9 @@ func (c *CommonMaps) slice() []maps.Map {
 	}
 	mapslice = append(mapslice, c.ProgramsMaps...)
 	mapslice = append(mapslice, c.CTLBProgramsMaps...)
+	for _, m := range c.JumpMaps {
+		mapslice = append(mapslice, m)
+	}
 	return mapslice
 }
 
