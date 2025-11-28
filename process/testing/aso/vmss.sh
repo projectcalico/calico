@@ -390,8 +390,8 @@ function generate_helper_files() {
 #   ./ssh-node-linux.sh 1 "kubectl get nodes" # SSH to second Linux node (index 1)
 #   ./ssh-node-linux.sh "kubectl get nodes"   # SSH to first node (default, backward compatible)
 
-# IP addresses embedded at generation time
-LINUX_EIPS=(${LINUX_EIPS[@]})
+# IP addresses embedded at generation time from exported string
+LINUX_EIPS=(${LINUX_EIPS_STR})
 SSH_KEY_FILE="${SSH_KEY_FILE}"
 
 # Check if first arg is a number (node index)
@@ -422,8 +422,8 @@ EOF
 #   ./ssh-node-windows.sh 1 "ipconfig /all"   # SSH to second Windows node (index 1)
 #   ./ssh-node-windows.sh "Get-Process"       # SSH to first node (default, backward compatible)
 
-# IP addresses embedded at generation time
-WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+# IP addresses embedded at generation time from exported string
+WINDOWS_EIPS=(${WINDOWS_EIPS_STR})
 SSH_KEY_FILE="${SSH_KEY_FILE}"
 
 # Check if first arg is a number (node index)
@@ -454,8 +454,8 @@ EOF
 #   ./scp-to-windows.sh 1 test.zip 'c:\\\\'                   # Copy to second Windows node (index 1)
 #   ./scp-to-windows.sh kubeconfig c:\\\\k\\\\kubeconfig        # Copy to first node (default, backward compatible)
 
-# IP addresses embedded at generation time
-WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+# IP addresses embedded at generation time from exported string
+WINDOWS_EIPS=(${WINDOWS_EIPS_STR})
 SSH_KEY_FILE="${SSH_KEY_FILE}"
 
 # Check if first arg is a number (node index)
@@ -500,8 +500,8 @@ EOF
 #   ./scp-from-windows.sh 1 c:\\\\k\\\\report .                    # Copy from second Windows node (index 1)
 #   ./scp-from-windows.sh c:\\\\k\\\\calico.log ./calico.log      # Copy from first node (default, backward compatible)
 
-# IP addresses embedded at generation time
-WINDOWS_EIPS=(${WINDOWS_EIPS[@]})
+# IP addresses embedded at generation time from exported string
+WINDOWS_EIPS=(${WINDOWS_EIPS_STR})
 SSH_KEY_FILE="${SSH_KEY_FILE}"
 
 # Check if first arg is a number (node index)
