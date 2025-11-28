@@ -610,7 +610,7 @@ func (l TestingTWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// RedirectLogrusToTestingT redirects logrus output to the given testing.T.  It
+// RedirectLogrusToTestingT redirects logrus output to the given testing.TB (e.g., *testing.T or *testing.B). It
 // returns a func() that can be called to restore the original log output.
 func RedirectLogrusToTestingT(t testing.TB) (cancel func()) {
 	oldOut := log.StandardLogger().Out
@@ -624,8 +624,8 @@ func RedirectLogrusToTestingT(t testing.TB) (cancel func()) {
 var confForTestingOnce sync.Once
 
 // ConfigureLoggingForTestingT configures logrus to write to the logger of the
-// given testing.T.  It should be called at the start of each "go test" that
-// wants to capture log output.  It registers a cleanup with the testing.T to
+// given testing.TB (e.g., *testing.T or *testing.B). It should be called at the start of each "go test" that
+// wants to capture log output. It registers a cleanup with the testing.TB to
 // remove the log redirection at the end of the test.
 func ConfigureLoggingForTestingT(t testing.TB) {
 	confForTestingOnce.Do(func() {
