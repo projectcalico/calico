@@ -78,7 +78,7 @@ blocks:
         - name: KUBE_VERSION
           value: v1.29.7
       jobs:
-        - name: "CNI Plugin: Windows Containerd FV - l2bridge"
+        - name: "Windows ASO FV"
           execution_time_limit:
             minutes: 60
           commands:
