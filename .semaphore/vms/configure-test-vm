@@ -67,13 +67,4 @@ if [ "$startup_success" = false ]; then
   exit 23
 fi
 
-set +x
-echo "$DOCKERHUB_PASSWORD" | ssh "ubuntu@${vm_ip}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-scp -r -C "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets"
-set -x
-${ssh_cmd} "gcloud auth activate-service-account --key-file=/home/ubuntu/secrets/secret.google-service-account-key.json && \
-  gcloud config set project unique-caldron-775 && \
-  gcloud storage cp '${GCS_WORKFLOW_DIR}/${COMPONENT}/fv-artifacts/*' /tmp && \
-  tar -xzf /tmp/working-copy.tgz && \
-  ${CALICO_DIR_NAME}/${COMPONENT}/.semaphore/load-test-artifacts"
-
+echo "VM $vm_name configured successfully."
