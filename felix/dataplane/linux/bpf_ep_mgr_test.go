@@ -2482,6 +2482,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				Expect(v.EgressPolicyV4()).NotTo(Equal(-1), "WEPs should have egress pol")
 				Expect(tcIDsSeenTH.Contains(v.EgressPolicyV4())).To(BeFalse(), "Saw same jump map ID more than once")
+				tcIDsSeenTH.Add(v.EgressPolicyV4())
 
 				Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
 				Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")

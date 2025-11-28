@@ -36,7 +36,7 @@ const (
 	XDPMaxEntries     = XDPMaxEntryPoints * MaxSubPrograms
 )
 
-var IngressMapParameters = maps.MapParameters{
+var FromHostMapParameters = maps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
@@ -45,7 +45,7 @@ var IngressMapParameters = maps.MapParameters{
 	Version:    2,
 }
 
-var EgressMapParameters = maps.MapParameters{
+var ToHostMapParameters = maps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
@@ -56,8 +56,8 @@ var EgressMapParameters = maps.MapParameters{
 
 func Maps() []maps.Map {
 	return []maps.Map{
-		maps.NewPinnedMap(IngressMapParameters),
-		maps.NewPinnedMap(EgressMapParameters),
+		maps.NewPinnedMap(FromHostMapParameters),
+		maps.NewPinnedMap(ToHostMapParameters),
 	}
 }
 
