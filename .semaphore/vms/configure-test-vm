@@ -57,7 +57,14 @@ for ssh_try in $(seq 1 100); do
     startup_success=true
     break
   fi
-  sleep $(( $RANDOM % 10 + 1 ))
+  sleep $(( 1 + (RANDOM % 10) ))
+
+  # The ssh key occasionally gets clobbered by ssh rewriting the file. Check
+  # and re-add if necessary.
+  if ! grep -F -q "$vm_ip ssh-ed25519 $vm_pub_key" ~/.ssh/known_hosts; then
+    echo "Server's ssh key went missing; re-adding it to known_hosts"
+    echo "$vm_ip ssh-ed25519 $vm_pub_key" >> ~/.ssh/known_hosts
+  fi
 done
 
 if [ "$startup_success" = false ]; then
