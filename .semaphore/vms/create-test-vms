@@ -40,6 +40,12 @@ for batch in "${batches[@]}"; do
   fi
 done
 
+cat $my_dir/vm-bootstrap.sh |
+  sed "s|__GCS_WORKFLOW_DIR__|${GCS_WORKFLOW_DIR}|g" |
+  sed "s|__DOCKERHUB_USERNAME__|${DOCKERHUB_USERNAME}|g" |
+  sed "s|__CALICO_DIR_NAME__|${CALICO_DIR_NAME}|g"
+  sed "s|__COMPONENT__|${COMPONENT}|g" > "/tmp/vm-bootstrap.sh"
+
 # Do a bulk create; this is faster and it saves API quota.
 gcloud --quiet compute instances bulk create \
        --predefined-names="$names" \
@@ -51,7 +57,8 @@ gcloud --quiet compute instances bulk create \
        --boot-disk-type=hyperdisk-balanced \
        --max-run-duration="${MAX_RUN_DURATION}" \
        --instance-termination-action=DELETE \
-       --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
+       --metadata-from-file startup-script="/tmp/vm-bootstrap.sh" \
+       --service-account=ci-test-vm@unique-caldron-775.iam.gserviceaccount.com \
        --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
 
 for batch in "${batches[@]}"; do
