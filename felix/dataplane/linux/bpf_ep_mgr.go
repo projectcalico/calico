@@ -1621,9 +1621,9 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 }
 
 func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
-	fileName := "policy_default_ingress.o"
+	fileName := "policy_default_fh.o"
 	if hk == hook.Egress {
-		fileName = "policy_default_egress.o"
+		fileName = "policy_default_th.o"
 	}
 	file := path.Join(bpfdefs.ObjectDir, fileName)
 	obj, err := libbpf.OpenObject(file)
