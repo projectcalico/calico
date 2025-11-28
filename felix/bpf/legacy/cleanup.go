@@ -132,12 +132,11 @@ func CleanUpMaps() {
 		log.WithError(err).Error("Error while looking for maps.")
 	}
 
-	emptyAutoDirs.Iter(func(p string) error {
+	for p := range emptyAutoDirs.All() {
 		log.WithField("path", p).Debug("Removing empty dir.")
 		err := os.Remove(p)
 		if err != nil {
 			log.WithError(err).Error("Error while removing empty dir.")
 		}
-		return nil
-	})
+	}
 }

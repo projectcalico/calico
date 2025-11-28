@@ -27,12 +27,11 @@ func IterUnion[T comparable](sets []Set[T], f func(item T) bool) {
 	}
 
 	if len(sets) == 1 {
-		sets[0].Iter(func(item T) error {
+		for item := range sets[0].All() {
 			if !f(item) {
-				return StopIteration
+				break
 			}
-			return nil
-		})
+		}
 		return
 	}
 
@@ -45,21 +44,21 @@ func IterUnion[T comparable](sets []Set[T], f func(item T) bool) {
 			return sets[j].Len() < sets[i].Len()
 		})
 		stop := false
+	setsLoop:
 		for i, s1 := range sets {
-			s1.Iter(func(item T) error {
+			for item := range s1.All() {
 				// To check if we've seen this item before, look for it in
 				// the sets we've already scanned.
 				for j := 0; j < i; j++ {
 					if sets[j].Contains(item) {
-						return nil
+						continue setsLoop
 					}
 				}
 				if !f(item) {
 					stop = true
-					return StopIteration
+					break
 				}
-				return nil
-			})
+			}
 			if stop {
 				return
 			}
@@ -71,19 +70,18 @@ func IterUnion[T comparable](sets []Set[T], f func(item T) bool) {
 	seen := New[T]()
 	stop := false
 	for i, s := range sets {
-		s.Iter(func(item T) error {
+		for item := range s.All() {
 			if i != 0 && seen.Contains(item) {
-				return nil
+				continue
 			}
 			if !f(item) {
 				stop = true
-				return StopIteration
+				break
 			}
 			if i < len(sets)-1 {
 				seen.Add(item)
 			}
-			return nil
-		})
+		}
 		if stop {
 			return
 		}

@@ -926,7 +926,7 @@ func (d *bpfEndpointManagerDataplane) updateIfaceIP(update *ifaceAddrsUpdate) bo
 	isDirty := false
 	if update.Addrs != nil && update.Addrs.Len() > 0 {
 		logrus.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
-		update.Addrs.Iter(func(item string) error {
+		for item := range update.Addrs.All() {
 			ip := net.ParseIP(item)
 			if d.ipFamily == proto.IPVersion_IPV6 {
 				if ip.To4() == nil && !ip.IsLinkLocalUnicast() {
@@ -935,8 +935,7 @@ func (d *bpfEndpointManagerDataplane) updateIfaceIP(update *ifaceAddrsUpdate) bo
 			} else if ip.To4() != nil {
 				ipAddrs = append(ipAddrs, ip)
 			}
-			return nil
-		})
+		}
 		sort.Slice(ipAddrs, func(i, j int) bool {
 			return bytes.Compare(ipAddrs[i], ipAddrs[j]) < 0
 		})
@@ -1358,7 +1357,7 @@ func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
 
 func (m *bpfEndpointManager) removeDirtyPolicies() {
 	b := make([]byte, 8)
-	m.dirtyRules.Iter(func(item polprog.RuleMatchID) error {
+	for item := range m.dirtyRules.All() {
 		binary.LittleEndian.PutUint64(b, item)
 		logrus.WithField("ruleId", item).Debug("deleting entry")
 		err := m.commonMaps.RuleCountersMap.Delete(b)
@@ -1366,8 +1365,8 @@ func (m *bpfEndpointManager) removeDirtyPolicies() {
 			logrus.WithField("ruleId", item).Info("error deleting entry")
 		}
 
-		return set.RemoveItem
-	})
+		m.dirtyRules.Discard(item)
+	}
 }
 
 func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
@@ -1375,7 +1374,7 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
 		// Hear about the policy/profile before the endpoint.
 		return
 	}
-	ids.Iter(func(item any) error {
+	for item := range ids.All() {
 		switch id := item.(type) {
 		case types.WorkloadEndpointID:
 			m.markExistingWEPDirty(id, kind)
@@ -1393,8 +1392,7 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
 				m.dirtyIfaceNames.AddAll(m.hostIfaceTrees.getPhyDevices(id))
 			}
 		}
-		return nil
-	})
+	}
 }
 
 func (m *bpfEndpointManager) markExistingWEPDirty(wlID types.WorkloadEndpointID, mapping string) {
@@ -1648,17 +1646,16 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 			logrus.WithError(err).Fatal("Cannot load interface state map - essential for consistent operation.")
 		}
 
-		m.initUnknownIfaces.Iter(func(iface string) error {
+		for iface := range m.initUnknownIfaces.All() {
 			if ai, ok := m.initAttaches[iface]; ok {
 				if err := m.cleanupOldAttach(iface, ai); err != nil {
 					logrus.WithError(err).Warnf("Failed to detach old programs from now unused device '%s'", iface)
 				} else {
 					delete(m.initAttaches, iface)
-					return set.RemoveItem
+					m.initUnknownIfaces.Discard(iface)
 				}
 			}
-			return nil
-		})
+		}
 
 		// Makes sure that we delete entries for non-existing devices and preserve entries
 		// for those that exists until we can make sure that they did (not) change.
@@ -1689,12 +1686,12 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
 		// Update all existing IPs of dirty services
-		m.dirtyServices.Iter(func(svc serviceKey) error {
+		for svc := range m.dirtyServices.All() {
 			for _, ip := range m.services[svc] {
 				m.dp.setRoute(ip)
 			}
-			return set.RemoveItem
-		})
+			m.dirtyServices.Discard(svc)
+		}
 	}
 
 	if err := m.ifStateMap.ApplyAllChanges(); err != nil {
@@ -1744,10 +1741,9 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 		m.reportHealth(true, "")
 	} else {
-		m.dirtyIfaceNames.Iter(func(iface string) error {
+		for iface := range m.dirtyIfaceNames.All() {
 			m.updateRateLimitedLog.WithField("name", iface).Info("Interface remains dirty.")
-			return nil
-		})
+		}
 		m.reportHealth(false, "Failed to configure some interfaces.")
 	}
 
@@ -1916,16 +1912,16 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 	var mutex sync.Mutex
 	errs := map[string]error{}
 	var wg sync.WaitGroup
-	m.dirtyIfaceNames.Iter(func(iface string) error {
+	for iface := range m.dirtyIfaceNames.All() {
 		if !m.isDataIface(iface) && !m.isL3Iface(iface) {
 			logrus.WithField("iface", iface).Debug(
 				"Ignoring interface that doesn't match the host data/l3 interface regex")
 			if !m.isWorkloadIface(iface) {
 				logrus.WithField("iface", iface).Debug(
 					"Removing interface that doesn't match the host data/l3 interface and is not workload interface")
-				return set.RemoveItem
+				m.dirtyIfaceNames.Discard(iface)
 			}
-			return nil
+			continue
 		}
 		xdpMode := XDPModeAll
 		attachTc := true
@@ -2023,8 +2019,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			errs[iface] = err
 			mutex.Unlock()
 		}(iface)
-		return nil
-	})
+	}
 	wg.Wait()
 
 	// We can hold the lock for the whole iteration below because nothing else
@@ -2063,9 +2058,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	maxWorkers := runtime.GOMAXPROCS(0)
 	sem := semaphore.NewWeighted(int64(maxWorkers))
 
-	m.dirtyIfaceNames.Iter(func(ifaceName string) error {
+	for ifaceName := range m.dirtyIfaceNames.All() {
 		if !m.isWorkloadIface(ifaceName) {
-			return nil
+			continue
 		}
 
 		m.opReporter.RecordOperation("update-workload-iface")
@@ -2090,8 +2085,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			errs[ifaceName] = err
 			mutex.Unlock()
 		}(ifaceName)
-		return nil
-	})
+	}
 	wg.Wait()
 
 	for ifaceName, err := range errs {

@@ -233,27 +233,40 @@ type Labeled interface {
 	AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle]
 }
 
-func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(item Labeled, f func(SelID, *selector.Selector)) {
-	emit := func(id SelID) error {
-		f(id, s.selectorsByID[id])
-		return nil
-	}
+func (s *LabelRestrictionIndex[SelID]) AllPotentialMatches(item Labeled) iter.Seq2[SelID, *selector.Selector] {
+	return func(yield func(SelID, *selector.Selector) bool) {
+		emit := func(id SelID) bool {
+			return yield(id, s.selectorsByID[id])
+		}
 
-	for k, v := range item.AllOwnAndParentLabelHandles() {
-		values, ok := s.labelToValueToIDs[k]
-		if !ok {
-			continue
+		for k, v := range item.AllOwnAndParentLabelHandles() {
+			values, ok := s.labelToValueToIDs[k]
+			if !ok {
+				continue
+			}
+			if values.selsMatchingWildcard != nil {
+				for id := range values.selsMatchingWildcard.All() {
+					if !emit(id) {
+						return
+					}
+				}
+			}
+			if ids := values.selsMatchingSpecificValues[v]; ids != nil {
+				for id := range ids.All() {
+					if !emit(id) {
+						return
+					}
+				}
+			}
 		}
-		if values.selsMatchingWildcard != nil {
-			values.selsMatchingWildcard.Iter(emit)
-		}
-		if ids := values.selsMatchingSpecificValues[v]; ids != nil {
-			ids.Iter(emit)
+
+		// Finally, emit the unoptimized selectors.
+		for id := range s.unoptimizedIDs.All() {
+			if !emit(id) {
+				return
+			}
 		}
 	}
-
-	// Finally, emit the unoptimized selectors.
-	s.unoptimizedIDs.Iter(emit)
 }
 
 func (s *LabelRestrictionIndex[SelID]) updateGauges() {
