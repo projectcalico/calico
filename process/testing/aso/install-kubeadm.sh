@@ -231,12 +231,12 @@ function configure_windows_node_ip() {
   
   local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${windows_eip} powershell"
   
-  echo "  Checking current kubelet config..."
-  ${windows_connect_command} "Get-Content -Path 'C:\var\lib\kubelet\kubeadm-flags.env'"
+  echo "  Checking current StartKubelet.ps1..."
+  ${windows_connect_command} "Get-Content -Path 'C:\k\StartKubelet.ps1'"
   
-  echo "  Adding --node-ip=${windows_pip} to kubelet arguments..."
-  # Read the file, find KUBELET_KUBEADM_ARGS line, and add --node-ip argument
-  ${windows_connect_command} "\$filePath = 'C:\var\lib\kubelet\kubeadm-flags.env'; \$content = Get-Content -Path \$filePath; Write-Host 'Current content:'; Write-Host \$content; if (\$content -match '--node-ip=') { Write-Host 'WARNING: --node-ip already exists, replacing...'; \$newContent = \$content -replace '--node-ip=[0-9.]+', '--node-ip=${windows_pip}' } else { Write-Host 'Adding --node-ip=${windows_pip}...'; \$newContent = \$content -replace '(KUBELET_KUBEADM_ARGS=\\\".*)\\\"\$', '\\\$1 --node-ip=${windows_pip}\\\"' }; Set-Content -Path \$filePath -Value \$newContent; Write-Host 'Updated content:'; Get-Content -Path \$filePath"
+  echo "  Adding --node-ip=${windows_pip} to StartKubelet.ps1..."
+  # Update StartKubelet.ps1 to add --node-ip argument to the kubelet command
+  ${windows_connect_command} "\$filePath = 'C:\k\StartKubelet.ps1'; \$content = Get-Content -Path \$filePath -Raw; Write-Host 'Checking for existing --node-ip...'; if (\$content -match '--node-ip=') { Write-Host 'Replacing existing --node-ip...'; \$content = \$content -replace '--node-ip=[0-9.]+\s*', '' }; Write-Host 'Adding --node-ip=${windows_pip}...'; \$content = \$content -replace '(\\\$cmd = .*--resolv-conf=\`\"\`\"\s+)', '\\\$1--node-ip=${windows_pip}  '; \$content | Out-File -FilePath \$filePath -Encoding ascii; Write-Host 'Updated StartKubelet.ps1'; Get-Content -Path \$filePath"
   
   echo "  Restarting kubelet service..."
   ${windows_connect_command} "Restart-Service kubelet"
