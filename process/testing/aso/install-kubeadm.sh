@@ -281,7 +281,6 @@ function prepare_windows_configuration() {
   export CLIENT_KEY_DATA=$(grep 'client-key-data' ./windows/kubeadm/config | awk '{print $2}')
   
   # Generate Windows-specific scripts with templates
-  ${GOMPLATE} --file ./run-fv-cni-plugin.ps1 --out ./windows/run-fv.ps1
   ${GOMPLATE} --file ./config-kubeadm --out ./windows/config
 
   echo "Windows configuration files prepared"
