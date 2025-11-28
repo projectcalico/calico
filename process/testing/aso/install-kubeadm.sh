@@ -286,8 +286,8 @@ function join_windows_worker_node() {
   ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster.ps1 -JoinArgs '${JOIN_ARGS}' -WindowsEip '${windows_eip}'"
   
   # Set up node IP in kubelet config for Windows node
-  echo "Setting up node IP in kubelet config for Windows node ${display_name}..."
-  configure_windows_node_ip "${windows_eip}" "${windows_pip}"
+  # echo "Setting up node IP in kubelet config for Windows node ${display_name}..."
+  # configure_windows_node_ip "${windows_eip}" "${windows_pip}"
   
   echo "Windows worker node ${display_name} joined successfully!"
   echo
@@ -361,6 +361,10 @@ function prepare_windows_node() {
     echo "You can SSH to the node to debug: ${windows_connect_command}"
     return 1
   fi
+  
+  # Install vim for easier debugging
+  echo "Installing vim..."
+  ${windows_connect_command} "if (-not (Get-Command vim -ErrorAction SilentlyContinue)) { Write-Host 'Installing vim via winget...'; winget install --id vim.vim --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null; \$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); Write-Host 'vim installed' } else { Write-Host 'vim already installed' }"
   
   echo "Windows node ${display_name} prepared successfully"
   echo
