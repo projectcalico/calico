@@ -70,6 +70,7 @@ func Matches(filter *proto.Filter, key *FlowKey) bool {
 		&stringComparison{filter: filter.DestNamespaces, genVals: namespaces(key.DestNamespace)},
 		&stringComparison{filter: filter.Protocols, genVals: func() []string { return []string{key.Proto()} }},
 		&actionMatch{filter: filter.Actions, key: key},
+		&reporterMatch{filter: filter.Reporters, key: key},
 		&portComparison{filter: filter.DestPorts, key: key},
 		&policyComparison{filter: filter.Policies, key: key},
 	}
@@ -98,6 +99,19 @@ func (a *actionMatch) matches() bool {
 		return true
 	}
 	return slices.Contains(a.filter, a.key.Action())
+}
+
+type reporterMatch struct {
+	filter []proto.Reporter
+	key    *FlowKey
+}
+
+func (r *reporterMatch) matches() bool {
+	if len(r.filter) == 0 {
+		// No filter value specified, so this comparison matches.
+		return true
+	}
+	return slices.Contains(r.filter, r.key.Reporter())
 }
 
 type portComparison struct {

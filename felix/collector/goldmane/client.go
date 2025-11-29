@@ -158,6 +158,8 @@ func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 
 		SourceLabels: ensureLabels(fl.SrcLabels),
 		DestLabels:   ensureLabels(fl.DstLabels),
+		
+		StagedAction: convertAction(fl.StagedAction),
 	}
 }
 
