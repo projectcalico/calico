@@ -220,36 +220,6 @@ function join_linux_worker_nodes() {
   ${MASTER_CONNECT_COMMAND} kubectl get nodes -o wide
 }
 
-function configure_windows_node_ip() {
-  local windows_eip="$1"
-  local windows_pip="$2"
-  
-  if [[ -z "$windows_eip" ]] || [[ -z "$windows_pip" ]]; then
-    echo "ERROR: Windows EIP or PIP not provided to configure_windows_node_ip"
-    return 1
-  fi
-  
-  local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${windows_eip} powershell"
-  
-  echo "  Checking current StartKubelet.ps1..."
-  ${windows_connect_command} "Get-Content -Path 'C:\k\StartKubelet.ps1'"
-  
-  echo "  Adding --node-ip=${windows_pip} to StartKubelet.ps1..."
-  # Update StartKubelet.ps1 to add --node-ip argument to the kubelet command
-  ${windows_connect_command} "\$filePath = 'C:\k\StartKubelet.ps1'; \$content = Get-Content -Path \$filePath -Raw; Write-Host 'Checking for existing --node-ip...'; if (\$content -match '--node-ip=') { Write-Host 'Replacing existing --node-ip...'; \$content = \$content -replace '--node-ip=[0-9.]+\s*', '' }; Write-Host 'Adding --node-ip=${windows_pip}...'; \$content = \$content -replace '(\\\$cmd = .*--resolv-conf=\`\"\`\"\s+)', '\\\$1--node-ip=${windows_pip}  '; \$content | Out-File -FilePath \$filePath -Encoding ascii; Write-Host 'Updated StartKubelet.ps1'; Get-Content -Path \$filePath"
-  
-  echo "  Restarting kubelet service..."
-  ${windows_connect_command} "Restart-Service kubelet"
-  
-  echo "  Waiting for kubelet to restart..."
-  sleep 5
-  
-  echo "  Verifying kubelet service status..."
-  ${windows_connect_command} "Get-Service kubelet | Select-Object Status, Name"
-  
-  echo "  Node IP configuration complete for ${windows_pip}"
-}
-
 function join_windows_worker_node() {
   local windows_eip="$1"
   local windows_pip="$2"
@@ -284,10 +254,6 @@ function join_windows_worker_node() {
   # Execute join script with join arguments
   echo "Joining Windows node ${display_name} to cluster..."
   ${windows_connect_command} "powershell -ExecutionPolicy Bypass -File c:\\k\\join-cluster.ps1 -JoinArgs '${JOIN_ARGS}' -WindowsEip '${windows_eip}'"
-  
-  # Set up node IP in kubelet config for Windows node
-  # echo "Setting up node IP in kubelet config for Windows node ${display_name}..."
-  # configure_windows_node_ip "${windows_eip}" "${windows_pip}"
   
   echo "Windows worker node ${display_name} joined successfully!"
   echo
@@ -361,10 +327,6 @@ function prepare_windows_node() {
     echo "You can SSH to the node to debug: ${windows_connect_command}"
     return 1
   fi
-  
-  # Install vim for easier debugging
-  echo "Installing vim..."
-  ${windows_connect_command} "if (-not (Get-Command vim -ErrorAction SilentlyContinue)) { Write-Host 'Installing vim via winget...'; winget install --id vim.vim --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null; \$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); Write-Host 'vim installed' } else { Write-Host 'vim already installed' }"
   
   echo "Windows node ${display_name} prepared successfully"
   echo
