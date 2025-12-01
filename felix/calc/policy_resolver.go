@@ -109,6 +109,7 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 		log.Debugf("Policy update: %v", key)
 		if update.Value == nil {
 			delete(pr.allPolicies, key)
+			pr.pendingPolicyUpdates.Discard(key)
 		} else {
 			policy := update.Value.(*model.Policy)
 			pr.allPolicies[key] = ExtractPolicyMetadata(policy)
