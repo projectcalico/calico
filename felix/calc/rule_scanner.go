@@ -159,12 +159,12 @@ func NewRuleScanner() *RuleScanner {
 }
 
 func (rs *RuleScanner) OnProfileActive(key model.ProfileRulesKey, profile *model.ProfileRules) {
-	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false, "", "", nil)
+	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false, "", "", "", nil)
 	rs.RulesUpdateCallbacks.OnProfileActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
-	rs.updateRules(key, nil, nil, false, false, "", "", nil)
+	rs.updateRules(key, nil, nil, false, false, "", "", "", nil)
 	rs.RulesUpdateCallbacks.OnProfileInactive(key)
 }
 
@@ -177,13 +177,14 @@ func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy)
 		policy.PreDNAT,
 		policy.Namespace,
 		selector.Normalise(policy.Selector),
+		policy.Tier,
 		policy.PerformanceHints,
 	)
 	rs.RulesUpdateCallbacks.OnPolicyActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
-	rs.updateRules(key, nil, nil, false, false, "", "", nil)
+	rs.updateRules(key, nil, nil, false, false, "", "", "", nil)
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
 }
 
@@ -193,10 +194,11 @@ func (rs *RuleScanner) updateRules(
 	untracked, preDNAT bool,
 	origNamespace string,
 	origSelector string,
+	tier string,
 	perfHints []apiv3.PolicyPerformanceHint,
 ) (parsedRules *ParsedRules) {
-	log.Debugf("Scanning rules (%v in, %v out) for key %v",
-		len(inbound), len(outbound), key)
+	log.Debugf("Scanning rules (%v in, %v out) for key %v", len(inbound), len(outbound), key)
+
 	// Extract all the new selectors/named ports.
 	currentUIDToIPSet := make(map[string]*IPSetData)
 	parsedInbound := make([]*ParsedRule, len(inbound))
@@ -223,6 +225,7 @@ func (rs *RuleScanner) updateRules(
 	}
 	parsedRules = &ParsedRules{
 		Namespace:        origNamespace,
+		Tier:             tier,
 		InboundRules:     parsedInbound,
 		OutboundRules:    parsedOutbound,
 		Untracked:        untracked,
@@ -297,6 +300,8 @@ type ParsedRules struct {
 
 	// PreDNAT is true if these rules should be applied before any DNAT.
 	PreDNAT bool
+
+	Tier string
 
 	OriginalSelector string
 

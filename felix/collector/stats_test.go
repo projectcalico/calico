@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
@@ -33,8 +34,9 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T1",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T1",
 		Direction: rules.RuleDirIngress,
 	}
 	denyIngressRid0 = &calc.RuleID{
@@ -43,8 +45,9 @@ var (
 		IndexStr: "2",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
-			Tier: "T2",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T2",
 		Direction: rules.RuleDirIngress,
 	}
 	allowIngressRid1 = &calc.RuleID{
@@ -53,8 +56,9 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T3",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T3",
 		Direction: rules.RuleDirIngress,
 	}
 	denyIngressRid1 = &calc.RuleID{
@@ -63,8 +67,9 @@ var (
 		IndexStr: "2",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
-			Tier: "T4",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T4",
 		Direction: rules.RuleDirIngress,
 	}
 	allowIngressRid2 = &calc.RuleID{
@@ -73,8 +78,9 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
-			Tier: "T5",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T5",
 		Direction: rules.RuleDirIngress,
 	}
 	nextTierIngressRid0 = &calc.RuleID{
@@ -83,8 +89,9 @@ var (
 		IndexStr: "3",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T6",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T6",
 		Direction: rules.RuleDirIngress,
 	}
 	nextTierIngressRid1 = &calc.RuleID{
@@ -93,8 +100,9 @@ var (
 		IndexStr: "4",
 		PolicyID: calc.PolicyID{
 			Name: "P2",
-			Tier: "T7",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T7",
 		Direction: rules.RuleDirIngress,
 	}
 	allowIngressRid11 = &calc.RuleID{
@@ -103,8 +111,9 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T8",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T8",
 		Direction: rules.RuleDirIngress,
 	}
 	denyIngressRid21 = &calc.RuleID{
@@ -113,8 +122,9 @@ var (
 		IndexStr: "1",
 		PolicyID: calc.PolicyID{
 			Name: "P1",
-			Tier: "T9",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T9",
 		Direction: rules.RuleDirIngress,
 	}
 
@@ -124,8 +134,8 @@ var (
 		IndexStr: "2",
 		PolicyID: calc.PolicyID{
 			Name: "P4",
-			Tier: "T10",
 		},
+		Tier:      "T10",
 		Direction: rules.RuleDirEgress,
 	}
 	allowEgressRid2 = &calc.RuleID{
@@ -134,8 +144,9 @@ var (
 		IndexStr: "3",
 		PolicyID: calc.PolicyID{
 			Name: "P3",
-			Tier: "T11",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
+		Tier:      "T11",
 		Direction: rules.RuleDirEgress,
 	}
 )
@@ -295,7 +306,6 @@ var _ = Describe("Rule Trace", func() {
 			It("should have not have action set", func() {
 				Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionAllow))
 				Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionDeny))
-				//Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionPass))
 			})
 		})
 		Context("Replacing a rule tracepoint that was conflicting", func() {
@@ -363,5 +373,4 @@ var _ = Describe("Rule Trace", func() {
 			})
 		})
 	})
-
 })

@@ -17,7 +17,6 @@ package etcdv3
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -37,7 +36,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
@@ -159,11 +157,6 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
 
-	err := defaultPolicyName(d)
-	if err != nil {
-		return nil, err
-	}
-
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -222,11 +215,6 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
 
-	err := defaultPolicyName(d)
-	if err != nil {
-		return nil, err
-	}
-
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -253,7 +241,6 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	).Else(
 		clientv3.OpGet(key),
 	).Commit()
-
 	if err != nil {
 		logCxt.WithError(err).Warning("Update failed")
 		return nil, cerrors.ErrorDatastoreError{Err: err}
@@ -291,11 +278,6 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Apply request")
 
-	err := defaultPolicyName(d)
-	if err != nil {
-		return nil, err
-	}
-
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -331,8 +313,6 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
-
-	k = defaultPolicyKey(k)
 
 	key, err := model.KeyToDefaultDeletePath(k)
 	if err != nil {
@@ -399,8 +379,6 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
-
-	k = defaultPolicyKey(k)
 
 	key, err := model.KeyToDefaultPath(k)
 	if err != nil {
@@ -537,7 +515,7 @@ func calculateListKeyAndOptions(logCxt *log.Entry, l model.ListInterface) (strin
 // EnsureInitialized makes sure that the etcd data is initialized for use by
 // Calico.
 func (c *etcdV3Client) EnsureInitialized() error {
-	//TODO - still need to worry about ready flag.
+	// TODO - still need to worry about ready flag.
 	return nil
 }
 
@@ -547,7 +525,6 @@ func (c *etcdV3Client) Clean() error {
 	_, err := c.etcdClient.Txn(context.Background()).If().Then(
 		clientv3.OpDelete("/calico/", clientv3.WithPrefix()),
 	).Commit()
-
 	if err != nil {
 		return cerrors.ErrorDatastoreError{Err: err}
 	}
@@ -632,116 +609,4 @@ func parseRevision(revs string) (int64, error) {
 		}
 	}
 	return rev, nil
-}
-
-func storePolicyName(name string, annotations map[string]string) (map[string]string, error) {
-	metadata := map[string]string{}
-	metadata["name"] = name
-
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		return nil, err
-	}
-
-	if annotations == nil {
-		annotations = map[string]string{}
-	}
-	annotations[metadataAnnotation] = string(metadataBytes)
-
-	return annotations, nil
-}
-
-func defaultPolicyName(d *model.KVPair) error {
-	if _, ok := d.Value.(*apiv3.NetworkPolicy); ok {
-		value := d.Value.(*apiv3.NetworkPolicy)
-
-		// First, capture the policy name that was used on the v3 API and store it as an annotation.
-		// This allows us to recreate the original object in List() and Watch() calls correctly, returning the object as expected by the client.
-		annotations, err := storePolicyName(value.Name, value.Annotations)
-		if err != nil {
-			return err
-		}
-
-		value.Annotations = annotations
-
-		// Now that we've captured the original name, canonicalize the name for storage,
-		// adding the tier prefix to ensure policies with the same name in different tiers do not conflict.
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
-	}
-
-	if _, ok := d.Value.(*apiv3.GlobalNetworkPolicy); ok {
-		value := d.Value.(*apiv3.GlobalNetworkPolicy)
-
-		annotations, err := storePolicyName(value.Name, value.Annotations)
-		if err != nil {
-			return err
-		}
-
-		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
-	}
-
-	if _, ok := d.Value.(*apiv3.StagedNetworkPolicy); ok {
-		value := d.Value.(*apiv3.StagedNetworkPolicy)
-
-		annotations, err := storePolicyName(value.Name, value.Annotations)
-		if err != nil {
-			return err
-		}
-
-		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
-	}
-
-	if _, ok := d.Value.(*apiv3.StagedGlobalNetworkPolicy); ok {
-		value := d.Value.(*apiv3.StagedGlobalNetworkPolicy)
-
-		annotations, err := storePolicyName(value.Name, value.Annotations)
-		if err != nil {
-			return err
-		}
-
-		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
-	}
-
-	d.Key = defaultPolicyKey(d.Key)
-
-	return nil
-}
-
-func defaultPolicyKey(k model.Key) model.Key {
-	if _, ok := k.(model.ResourceKey); ok {
-		resourceKey := k.(model.ResourceKey)
-		if resourceKey.Kind == apiv3.KindNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindStagedNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindGlobalNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindStagedGlobalNetworkPolicy {
-			// To avoid conflicts all policies need to have the tier prefix added to the name to ensure they are unique
-			polName := names.TieredPolicyName(resourceKey.Name)
-			resourceKey.Name = polName
-
-			return resourceKey
-		}
-	}
-	return k
 }
