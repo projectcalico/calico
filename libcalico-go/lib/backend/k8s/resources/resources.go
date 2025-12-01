@@ -136,6 +136,8 @@ func SetCalicoMetadataFromK8sAnnotations(calicoRes Resource, k8sRes Resource) {
 func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	rom := resIn.GetObjectMeta()
 
+	resKind := resIn.GetObjectKind().GroupVersionKind().Kind
+
 	// Make sure to remove data that is passed to Kubernetes so it is not duplicated in
 	// the metadata annotation.
 	romCopy := &metav1.ObjectMeta{}
@@ -143,7 +145,13 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.Namespace = ""
 	romCopy.ResourceVersion = ""
 	romCopy.UID = ""
-	romCopy.Name = ""
+	if resKind != apiv3.KindGlobalNetworkPolicy &&
+		resKind != apiv3.KindNetworkPolicy &&
+		resKind != apiv3.KindStagedNetworkPolicy &&
+		resKind != apiv3.KindStagedGlobalNetworkPolicy {
+		// We only want to store the name for network policies, all other resources should not have the name stored in metadata annotations
+		romCopy.Name = ""
+	}
 
 	// Any projectcalico.org/v3 owners need to be translated to their equivalent crd.projectcalico.org/v1 representations.
 	// They will be converted back on read.

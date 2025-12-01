@@ -17,6 +17,7 @@ package etcdv3
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -157,6 +158,11 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
 
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -214,6 +220,11 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
+
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -277,6 +288,11 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Apply request")
+
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -609,4 +625,71 @@ func parseRevision(revs string) (int64, error) {
 		}
 	}
 	return rev, nil
+}
+
+func storePolicyName(name string, annotations map[string]string) (map[string]string, error) {
+	metadata := map[string]string{}
+	metadata["name"] = name
+
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[metadataAnnotation] = string(metadataBytes)
+
+	return annotations, nil
+}
+
+func defaultPolicyName(d *model.KVPair) error {
+	if _, ok := d.Value.(*apiv3.NetworkPolicy); ok {
+		value := d.Value.(*apiv3.NetworkPolicy)
+
+		// First, capture the policy name that was used on the v3 API and store it as an annotation.
+		// This allows us to recreate the original object in List() and Watch() calls correctly, returning the object as expected by the client.
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+	}
+
+	if _, ok := d.Value.(*apiv3.GlobalNetworkPolicy); ok {
+		value := d.Value.(*apiv3.GlobalNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+	}
+
+	if _, ok := d.Value.(*apiv3.StagedNetworkPolicy); ok {
+		value := d.Value.(*apiv3.StagedNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+	}
+
+	if _, ok := d.Value.(*apiv3.StagedGlobalNetworkPolicy); ok {
+		value := d.Value.(*apiv3.StagedGlobalNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+	}
+
+	return nil
 }
