@@ -215,18 +215,10 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		return nil, err
 	}
 
-	if progAttachType == "TCX" {
-		for prog, err := obj.FirstProgram(); prog != nil && err == nil; prog, err = prog.NextProgram() {
-			attachType := libbpf.AttachTypeTcxEgress
-			if pm.expectedAttachType == "ingress" {
-				attachType = libbpf.AttachTypeTcxIngress
-			}
-			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
-				return nil, fmt.Errorf("error setting attach type for program %s: %w", prog.Name(), err)
-			}
-		}
+	if !at.hasIPDefrag() {
+		// Disable autoload for the IP defrag program
+		obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
 	}
-
 	skipIPDefrag := false
 	if err := obj.Load(); err != nil {
 		// If load fails and this attach type has IP defrag, try loading without the IP defrag program
