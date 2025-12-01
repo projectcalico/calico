@@ -1336,12 +1336,8 @@ func getPolicyIDs(hep *proto.HostEndpoint) []types.PolicyID {
 	var policyIDs []types.PolicyID
 	// we handle Untracked policy only
 	for _, tier := range hep.GetUntrackedTiers() {
-		for _, policyName := range tier.IngressPolicies {
-			policyID := types.PolicyID{
-				Tier: tier.Name,
-				Name: policyName,
-			}
-
+		for _, policy := range tier.IngressPolicies {
+			policyID := types.ProtoToPolicyID(policy)
 			policyIDs = append(policyIDs, policyID)
 			// TODO: For now we only support XDP
 			// optimization of only the first untracked

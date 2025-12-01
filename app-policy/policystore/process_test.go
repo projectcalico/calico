@@ -23,9 +23,11 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 )
 
-const addr1Ip = "3.4.6.8"
-const addr2Ip = "23.8.58.1"
-const addr3Ip = "2.2.2.2"
+const (
+	addr1Ip = "3.4.6.8"
+	addr2Ip = "23.8.58.1"
+	addr3Ip = "2.2.2.2"
+)
 
 var profile1 = &proto.Profile{
 	InboundRules: []*proto.Rule{
@@ -35,6 +37,7 @@ var profile1 = &proto.Profile{
 		},
 	},
 }
+
 var profile2 = &proto.Profile{
 	OutboundRules: []*proto.Rule{
 		{
@@ -43,7 +46,9 @@ var profile2 = &proto.Profile{
 		},
 	},
 }
+
 var policy1 = &proto.Policy{
+	Tier: "test_tier",
 	InboundRules: []*proto.Rule{
 		{
 			Action:      "allow",
@@ -51,7 +56,9 @@ var policy1 = &proto.Policy{
 		},
 	},
 }
+
 var policy2 = &proto.Policy{
+	Tier: "test_tier",
 	OutboundRules: []*proto.Rule{
 		{
 			Action:      "allow",
@@ -59,14 +66,17 @@ var policy2 = &proto.Policy{
 		},
 	},
 }
+
 var endpoint1 = &proto.WorkloadEndpoint{
 	Name:       "wep",
 	ProfileIds: []string{"profile1", "profile2"},
 }
+
 var serviceAccount1 = &proto.ServiceAccountUpdate{
 	Id:     &proto.ServiceAccountID{Name: "serviceAccount1", Namespace: "test"},
 	Labels: map[string]string{"k1": "v1", "k2": "v2"},
 }
+
 var namespace1 = &proto.NamespaceUpdate{
 	Id:     &proto.NamespaceID{Name: "namespace1"},
 	Labels: map[string]string{"k1": "v1", "k2": "v2"},
@@ -123,7 +133,6 @@ func TestIPSetUpdateDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	id := "test_id"
 	store := NewPolicyStore()
-	//inSync := make(chan struct{})
 	update := &proto.ToDataplane{
 		Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: &proto.IPSetUpdate{
 			Id:   id,
@@ -131,7 +140,9 @@ func TestIPSetUpdateDispatch(t *testing.T) {
 			Members: []string{
 				addr1Ip,
 				addr2Ip,
-			}}}}
+			},
+		}},
+	}
 	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
 }
 
@@ -293,7 +304,7 @@ func TestActiveProfileRemoveDispatch(t *testing.T) {
 // ActivePolicyUpdate for a new id
 func TestActivePolicyUpdateNonExist(t *testing.T) {
 	RegisterTestingT(t)
-	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
+	id := proto.PolicyID{Name: "test_id"}
 	store := NewPolicyStore()
 	update := &proto.ActivePolicyUpdate{
 		Id:     &id,
@@ -307,7 +318,7 @@ func TestActivePolicyUpdateNonExist(t *testing.T) {
 // ActivePolicyUpdate for an existing id
 func TestActivePolicyUpdateExist(t *testing.T) {
 	RegisterTestingT(t)
-	id := types.PolicyID{Tier: "test_tier", Name: "test_id"}
+	id := types.PolicyID{Name: "test_id"}
 	store := NewPolicyStore()
 	store.PolicyByID[id] = policy2
 	protoID := types.PolicyIDToProto(id)
@@ -322,7 +333,7 @@ func TestActivePolicyUpdateExist(t *testing.T) {
 // processUpdate handles ActivePolicyDispatch
 func TestActivePolicyUpdateDispatch(t *testing.T) {
 	RegisterTestingT(t)
-	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
+	id := proto.PolicyID{Name: "test_id"}
 	store := NewPolicyStore()
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
 		ActivePolicyUpdate: &proto.ActivePolicyUpdate{
@@ -336,7 +347,7 @@ func TestActivePolicyUpdateDispatch(t *testing.T) {
 // ActivePolicyRemove with unknown id is handled
 func TestActivePolicyRemoveNonExist(t *testing.T) {
 	RegisterTestingT(t)
-	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
+	id := proto.PolicyID{Name: "test_id"}
 	store := NewPolicyStore()
 	update := &proto.ActivePolicyRemove{Id: &id}
 	store.processActivePolicyRemove(update)
@@ -348,7 +359,7 @@ func TestActivePolicyRemoveNonExist(t *testing.T) {
 func TestActivePolicyRemoveExist(t *testing.T) {
 	RegisterTestingT(t)
 
-	id := types.PolicyID{Tier: "test_tier", Name: "test_id"}
+	id := types.PolicyID{Name: "test_id"}
 	store := NewPolicyStore()
 	store.PolicyByID[id] = policy1
 
@@ -361,7 +372,7 @@ func TestActivePolicyRemoveExist(t *testing.T) {
 // processUpdate handles ActivePolicyRemove
 func TestActivePolicyRemoveDispatch(t *testing.T) {
 	RegisterTestingT(t)
-	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
+	id := proto.PolicyID{Name: "test_id"}
 	store := NewPolicyStore()
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
 		ActivePolicyRemove: &proto.ActivePolicyRemove{Id: &id},
@@ -425,7 +436,8 @@ func TestServiceAccountRemoveDispatch(t *testing.T) {
 	id := types.ProtoToServiceAccountID(serviceAccount1.GetId())
 	store.ServiceAccountByID[id] = serviceAccount1
 	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{
-		ServiceAccountRemove: &proto.ServiceAccountRemove{Id: serviceAccount1.Id}}}
+		ServiceAccountRemove: &proto.ServiceAccountRemove{Id: serviceAccount1.Id},
+	}}
 	Expect(func() { store.ProcessUpdate("", remove, false) }).ToNot(Panic())
 	Expect(store.ServiceAccountByID).To(Equal(map[types.ServiceAccountID]*proto.ServiceAccountUpdate{}))
 }
@@ -446,7 +458,8 @@ func TestNamespaceRemoveDispatch(t *testing.T) {
 	id := types.ProtoToNamespaceID(namespace1.GetId())
 	store.NamespaceByID[id] = namespace1
 	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceRemove{
-		NamespaceRemove: &proto.NamespaceRemove{Id: namespace1.Id}}}
+		NamespaceRemove: &proto.NamespaceRemove{Id: namespace1.Id},
+	}}
 	Expect(func() { store.ProcessUpdate("", remove, false) }).ToNot(Panic())
 	Expect(store.NamespaceByID).To(Equal(map[types.NamespaceID]*proto.NamespaceUpdate{}))
 }

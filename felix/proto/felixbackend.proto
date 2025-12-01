@@ -236,8 +236,13 @@ message ActivePolicyRemove {
 }
 
 message PolicyID {
-  string tier = 1;
+  // The "tier" field has been deprecated and removed.
+  reserved 1;
+  reserved "tier";
+
   string name = 2;
+  string namespace = 3;
+  string kind = 4;
 }
 
 message Policy {
@@ -253,6 +258,8 @@ message Policy {
   string original_selector = 6;
 
   repeated string perf_hints = 7;
+
+  string tier = 8;
 }
 
 enum IPVersion {
@@ -476,8 +483,8 @@ message HostEndpointRemove {
 
 message TierInfo {
   string name = 1;
-  repeated string ingress_policies = 2;
-  repeated string egress_policies = 3;
+  repeated PolicyID ingress_policies = 2;
+  repeated PolicyID egress_policies = 3;
   string default_action = 4;
 }
 
