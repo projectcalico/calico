@@ -80,10 +80,9 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 				// Then, perform the core file check.
 				logrus.WithField("test", ginkgo.CurrentGinkgoTestDescription().FullTestText).Info("DatastoreDescribe AfterEach: checking for core files.")
 				afterCoreFiles := readCoreFiles()
-				coreFilesAtStart.Iter(func(item string) error {
+				for item := range coreFilesAtStart.All() {
 					afterCoreFiles.Discard(item)
-					return nil
-				})
+				}
 				if afterCoreFiles.Len() != 0 {
 					if ginkgo.CurrentGinkgoTestDescription().Failed {
 						ginkgo.Fail(fmt.Sprintf("Test FAILED and new core files were detected during tear-down: %v.  "+

@@ -76,6 +76,10 @@ func (key PolicyKey) valueType() (reflect.Type, error) {
 	return typePolicy, nil
 }
 
+func (key PolicyKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[Policy](key, rawData)
+}
+
 func (key PolicyKey) String() string {
 	return fmt.Sprintf("Policy(Name=%s, Namespace=%s, Kind=%s)", key.Name, key.Namespace, key.Kind)
 }

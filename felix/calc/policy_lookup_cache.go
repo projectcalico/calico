@@ -313,12 +313,11 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 
 	// Delete the stale prefixes.
 	if oldPrefixes != nil {
-		oldPrefixes.Iter(func(item string) error {
+		for item := range oldPrefixes.All() {
 			if !newPrefixes.Contains(item) {
 				pc.deleteNFLogPrefixEntry(item)
 			}
-			return nil
-		})
+		}
 	}
 
 	return newPrefixes
@@ -327,10 +326,9 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 // deleteRulesNFLOGPrefixes deletes the supplied set of prefixes.
 func (pc *PolicyLookupsCache) deleteRulesNFLOGPrefixes(prefixes set.Set[string]) {
 	if prefixes != nil {
-		prefixes.Iter(func(item string) error {
+		for item := range prefixes.All() {
 			pc.deleteNFLogPrefixEntry(item)
-			return nil
-		})
+		}
 	}
 }
 

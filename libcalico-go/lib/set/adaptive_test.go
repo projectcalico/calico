@@ -47,6 +47,81 @@ var _ = Describe("Adaptive set", func() {
 			Fail("Sets are not equal")
 		}
 	})
+
+	Describe("Adaptive.All() iterator", func() {
+		It("should iterate over small array-backed set", func() {
+			s := set.AdaptiveFrom(1, 2, 3)
+			seen := make(map[int]bool)
+			for item := range s.All() {
+				seen[item] = true
+			}
+			if len(seen) != 3 {
+				Fail("Did not see all items")
+			}
+		})
+
+		It("should allow discarding during iteration of array-backed set", func() {
+			s := set.AdaptiveFrom(1, 2, 3, 4, 5)
+			for item := range s.All() {
+				if item%2 == 0 {
+					s.Discard(item)
+				}
+			}
+			if s.Len() != 3 {
+				Fail("Expected 3 items remaining")
+			}
+			if !s.Contains(1) || !s.Contains(3) || !s.Contains(5) {
+				Fail("Expected odd numbers to remain")
+			}
+		})
+
+		It("should iterate over large map-backed set", func() {
+			// Create a set large enough to trigger map backing (>16 items)
+			items := make([]int, 20)
+			for i := range items {
+				items[i] = i
+			}
+			s := set.AdaptiveFromArray(items)
+			seen := make(map[int]bool)
+			for item := range s.All() {
+				seen[item] = true
+			}
+			if len(seen) != 20 {
+				Fail("Did not see all items")
+			}
+		})
+
+		It("should allow discarding during iteration of map-backed set", func() {
+			// Create a set large enough to trigger map backing (>16 items)
+			items := make([]int, 20)
+			for i := range items {
+				items[i] = i
+			}
+			s := set.AdaptiveFromArray(items)
+			for item := range s.All() {
+				if item%2 == 0 {
+					s.Discard(item)
+				}
+			}
+			if s.Len() != 10 {
+				Fail("Expected 10 items remaining")
+			}
+		})
+
+		It("should support early termination", func() {
+			s := set.AdaptiveFrom(1, 2, 3, 4, 5)
+			count := 0
+			for range s.All() {
+				count++
+				if count >= 2 {
+					break
+				}
+			}
+			if count != 2 {
+				Fail("Expected to stop after 2 iterations")
+			}
+		})
+	})
 })
 
 func FuzzAdaptiveSet(f *testing.F) {
@@ -68,12 +143,11 @@ func FuzzAdaptiveSet(f *testing.F) {
 			if !s1.Equals(s2) || !s2.Equals(s1) {
 				t.Fatal("Sets are not equal")
 			}
-			s1.Iter(func(item string) error {
+			for item := range s1.All() {
 				if !s2.Contains(item) {
 					t.Fatal("Set 2 does not contain item")
 				}
-				return nil
-			})
+			}
 			if !s1.Contains(item) {
 				t.Fatal("Set does not contain item")
 			}

@@ -29,6 +29,9 @@ type Map struct {
 type Link struct {
 }
 
+type Program struct {
+}
+
 func (m *Map) Name() string {
 	panic("LIBBPF syscall stub")
 }
@@ -70,6 +73,18 @@ func (o *Obj) SetAttachType(progName string, attachType uint32) error {
 }
 
 func (m *Map) NextMap() (*Map, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (p *Program) NextProgram() (*Program, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) FirstProgram() (*Program, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (p *Program) Name() string {
 	panic("LIBBPF syscall stub")
 }
 

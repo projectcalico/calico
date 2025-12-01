@@ -3,6 +3,8 @@ global_job_config:
     - name: docker-hub
   prologue:
     commands:
+      - export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
+      - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
       - checkout
       - export CALICO_DIR="$(pwd)"
       - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"

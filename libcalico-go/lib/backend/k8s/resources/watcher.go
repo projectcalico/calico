@@ -117,6 +117,7 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 			}
 
 			for _, e := range events {
+				crw.logCxt.Debugf("Sending event: %s", e)
 				select {
 				case crw.resultChan <- *e:
 					crw.logCxt.Debug("Kubernetes event converted and sent to backend watcher")
