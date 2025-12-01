@@ -125,7 +125,7 @@ if [[ ${PRODUCT} == 'calient' ]]; then
 
     # Install Calico EE license (after the Calico apiserver comes up)
     echo "Wait for the Calico apiserver to be ready..."
-    timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-apiserver --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+    timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-apiserver --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
     echo "Calico apiserver is ready, installing Calico EE license"
 
     retry_command 60 "${KUBECTL} create -f ${TSEE_TEST_LICENSE}"
@@ -135,15 +135,19 @@ else
 fi
 
 echo "Wait for Calico to be ready on Linux nodes..."
-timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Linux nodes"
 
 # Install Calico on Windows nodes
+echo ""
+echo "=========================================="
+echo "Installing Calico on Windows nodes..."
+echo "=========================================="
 
-# Turn strict affinity on in the default IPAMConfig (required for Windows)
+echo "Enabling strict affinity in IPAMConfig (required for Windows)..."
 ${KUBECTL} patch ipamconfig default --type merge --patch='{"spec": {"strictAffinity": true}}'
 
-# Find out apiserver address and port and fill in 'kubernetes-services-endpoint' configmap (required for Windows)
+echo "Creating kubernetes-services-endpoint ConfigMap..."
 APISERVER=$(${KUBECTL} get configmap -n kube-system kube-proxy -o yaml | awk -F'://' '/server: https:\/\// { print $2 }')
 APISERVER_ADDR=$(echo ${APISERVER} | awk -F':' '{ print $1 }')
 APISERVER_PORT=$(echo ${APISERVER} | awk -F':' '{ print $2 }')
@@ -158,8 +162,12 @@ data:
   KUBERNETES_SERVICE_PORT: "${APISERVER_PORT}"
 EOF
 
-# Patch installation to include required serviceCIDRs information and enable the Windows daemonset
-${KUBECTL} patch installation default --type merge --patch='{"spec": {"serviceCIDRs": ["10.96.0.0/12"], "calicoNetwork": {"windowsDataplane": "HNS"}}}'
+echo "Enabling Windows dataplane (HNS) and configuring serviceCIDRs... (already configured in custom-resources.yaml)"
+# ${KUBECTL} patch installation default --type merge --patch='{"spec": {"serviceCIDRs": ["10.96.0.0/12"], "calicoNetwork": {"windowsDataplane": "HNS"}}}'
+
+echo "Configuring Windows CNI paths to match containerd configuration... (already configured in custom-resources.yaml)"
+# For some reason, patch not working with this.
+#${KUBECTL} patch installation default --type merge --patch='{"spec": {"windowsNodes": {"cniBinDir": "/Program Files/containerd/cni/bin", "cniConfigDir": "/Program Files/containerd/cni/conf", "cniLogDir": "/var/log/calico/cni"}}}'
 
 echo "Wait for Calico to be ready on Windows nodes..."
 timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"

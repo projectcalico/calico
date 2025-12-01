@@ -22,6 +22,13 @@ spec:
     ipPools:
       - cidr: 192.168.0.0/16
         encapsulation: VXLAN
+    windowsDataplane: HNS
+  serviceCIDRs:
+    - 10.96.0.0/12
+  windowsNodes:
+    cniBinDir: "/Program Files/containerd/cni/bin"
+    cniConfigDir: "/Program Files/containerd/cni/conf"
+    cniLogDir: /var/log/calico/cni
 ---
 # This section configures the Tigera web manager.
 # Remove this section for a Managed cluster.
