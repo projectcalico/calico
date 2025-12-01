@@ -16,7 +16,6 @@ package clientv3
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -78,10 +77,6 @@ func (r stagedNetworkPolicies) Create(ctx context.Context, res *apiv3.StagedNetw
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-	err := names.ValidateTieredPolicyName(res.Name, tier)
-	if err != nil {
-		return nil, err
-	}
 
 	// Add tier labels to policy for lookup.
 	if tier != "default" {
@@ -127,10 +122,6 @@ func (r stagedNetworkPolicies) Update(ctx context.Context, res *apiv3.StagedNetw
 	}
 
 	if err := validator.Validate(res); err != nil {
-		return nil, err
-	}
-	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
-	if err != nil {
 		return nil, err
 	}
 
@@ -180,21 +171,7 @@ func (r stagedNetworkPolicies) Get(ctx context.Context, namespace, name string, 
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
-		// Fill in the tier information from the policy name if we find it missing.
-		// We expect backend policies to have the right name (prefixed with tier name).
-		resOut := out.(*apiv3.StagedNetworkPolicy)
-		if resOut.Spec.Tier == "" {
-			tier, tierErr := names.TierFromPolicyName(resOut.Name)
-			if tierErr != nil {
-				log.WithError(tierErr).Infof("Skipping setting tier for name %v", resOut.Name)
-				return resOut, tierErr
-			}
-			resOut.Spec.Tier = tier
-		}
-		if resOut.Name != name {
-			return nil, fmt.Errorf("resource not found GlobalNetworkPolicy(%s)", name)
-		}
-		return resOut, err
+		return out.(*apiv3.StagedNetworkPolicy), err
 	}
 	return nil, err
 }
@@ -202,11 +179,6 @@ func (r stagedNetworkPolicies) Get(ctx context.Context, namespace, name string, 
 // List returns the list of StagedNetworkPolicy objects that match the supplied options.
 func (r stagedNetworkPolicies) List(ctx context.Context, opts options.ListOptions) (*apiv3.StagedNetworkPolicyList, error) {
 	res := &apiv3.StagedNetworkPolicyList{}
-	// Add the name prefix if name is provided
-	if opts.Name != "" && !opts.Prefix {
-		opts.Name = names.TieredPolicyName(opts.Name)
-	}
-
 	if err := r.client.resources.List(ctx, opts, apiv3.KindStagedNetworkPolicy, apiv3.KindStagedNetworkPolicyList, res); err != nil {
 		return nil, err
 	}
@@ -214,16 +186,6 @@ func (r stagedNetworkPolicies) List(ctx context.Context, opts options.ListOption
 	// Make sure the tier labels are added
 	for i := range res.Items {
 		res.Items[i].GetObjectMeta().SetLabels(defaultTierLabelIfMissing(res.Items[i].GetObjectMeta().GetLabels()))
-		// Fill in the tier information from the policy name if we find it missing.
-		// We expect backend policies to have the right name (prefixed with tier name).
-		if res.Items[i].Spec.Tier == "" {
-			tier, tierErr := names.TierFromPolicyName(res.Items[i].Name)
-			if tierErr != nil {
-				log.WithError(tierErr).Infof("Skipping setting tier for name %v", res.Items[i].Name)
-				continue
-			}
-			res.Items[i].Spec.Tier = tier
-		}
 	}
 
 	return res, nil
@@ -232,10 +194,5 @@ func (r stagedNetworkPolicies) List(ctx context.Context, opts options.ListOption
 // Watch returns a watch.Interface that watches the stagedNetworkPolicies that match the
 // supplied options.
 func (r stagedNetworkPolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	// Add the name prefix if name is provided
-	if opts.Name != "" {
-		opts.Name = names.TieredPolicyName(opts.Name)
-	}
-
 	return r.client.resources.Watch(ctx, opts, apiv3.KindStagedNetworkPolicy, &policyConverter{})
 }
