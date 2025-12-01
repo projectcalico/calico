@@ -183,6 +183,16 @@ echo "Wait for kube-proxy to be ready on Windows nodes..."
 timeout --foreground 1200 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
 echo "kube-proxy is ready on Windows nodes"
 
+echo "Wait for calico-node-windows pods to be ready..."
+timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+echo "calico-node-windows pods are ready"
+
+if [[ ${PRODUCT} == 'calient' ]]; then
+    echo "Wait for fluentd-node-windows pods to be ready..."
+    timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=fluentd-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+    echo "fluentd-node-windows pods are ready"
+fi
+
 echo ""
 echo "=========================================="
 echo "Calico installation completed successfully!"
