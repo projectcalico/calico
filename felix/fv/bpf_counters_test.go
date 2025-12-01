@@ -98,7 +98,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 		pol = createPolicy(pol)
 
-		bpfWaitForPolicy(tc.Felixes[0], w[1].InterfaceName, "ingress", "drop-workload0-to-workload1")
+		bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], w[1].InterfaceName, "ingress", "drop-workload0-to-workload1")
 
 		By("generating packets and checking the counter")
 		numberOfpackets := 10
@@ -226,7 +226,7 @@ func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string
 
 	startOfPol := -1
 	for idx, str := range strOut {
-		if strings.Contains(str, fmt.Sprintf("Start of policy %s", polName)) {
+		if strings.Contains(str, fmt.Sprintf("Start of GlobalNetworkPolicy %s", polName)) {
 			startOfPol = idx
 			break
 		}

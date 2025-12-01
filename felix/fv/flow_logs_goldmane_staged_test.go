@@ -342,8 +342,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 
 			Eventually(checkNat, "10s", "1s").Should(BeTrue(), "Expected NAT to be programmed")
 
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default.ep1-1-allow-all")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_2.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default.ep1-1-allow-all")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_2.InterfaceName, "ingress", "default", "tier1.np1-1")
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
@@ -791,10 +791,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
@@ -824,10 +824,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
@@ -854,10 +854,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
@@ -886,10 +886,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "tier1.np1-1")
+			bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForGlobalNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "tier1.np1-1")
+			bpfWaitForGlobalNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "tier1.np1-1")
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
@@ -1402,10 +1402,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
+
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
@@ -1507,10 +1508,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
@@ -1566,10 +1567,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "tier1.np1-1")
-			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
+			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
 			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
