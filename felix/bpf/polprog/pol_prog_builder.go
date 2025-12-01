@@ -550,11 +550,18 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 }
 
 func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
-	p.b.AddCommentF("Start of policy %s", policy.Name)
-	log.Debugf("Start of policy %q %d", policy.Name, p.policyID)
+	// Identifyin comment at the start and end of the policy.
+	cmtID := fmt.Sprintf("%s %s %d", policy.Kind, policy.Name, p.policyID)
+	if policy.Namespace != "" {
+		cmtID = fmt.Sprintf("%s %s/%s %d", policy.Kind, policy.Namespace, policy.Name, p.policyID)
+	}
+	p.b.AddCommentF("Start of %s", cmtID)
+	log.Debugf("Start of %s", cmtID)
+
 	p.writePolicyRules(policy, actionLabels, destLeg)
-	log.Debugf("End of policy %q %d", policy.Name, p.policyID)
-	p.b.AddCommentF("End of policy %s", policy.Name)
+
+	log.Debugf("End of %s", cmtID)
+	p.b.AddCommentF("End of %s", cmtID)
 	p.policyID++
 }
 

@@ -306,7 +306,6 @@ var _ = Describe("Rule Trace", func() {
 			It("should have not have action set", func() {
 				Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionAllow))
 				Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionDeny))
-				// Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionPass))
 			})
 		})
 		Context("Replacing a rule tracepoint that was conflicting", func() {

@@ -198,7 +198,6 @@ func (store *PolicyStore) processWorkloadEndpointUpdate(subscriptionType string,
 	case "per-host-policies":
 		store.Endpoints[types.ProtoToWorkloadEndpointID(update.Id)] = update.Endpoint
 		log.Debugf("%d endpoints received so far", len(store.Endpoints))
-		// store.wepUpdates.onWorkloadEndpointUpdate(update, store.IPToIndexes)
 	}
 }
 
@@ -216,7 +215,6 @@ func (store *PolicyStore) processWorkloadEndpointRemove(subscriptionType string,
 		store.Endpoint = nil
 	case "per-host-policies":
 		delete(store.Endpoints, types.ProtoToWorkloadEndpointID(update.Id))
-		// store.wepUpdates.onWorkloadEndpointRemove(update, store.IPToIndexes)
 	}
 }
 

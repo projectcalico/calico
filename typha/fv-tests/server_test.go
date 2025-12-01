@@ -761,6 +761,26 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			})
 		})
 
+		Describe("After sending Hello with no policy key support", func() {
+			BeforeEach(func() {
+				err := w.Encode(syncproto.Envelope{
+					Message: syncproto.MsgClientHello{
+						Hostname:                 "me",
+						Version:                  "test",
+						Info:                     "test info",
+						SyncerType:               syncproto.SyncerTypeFelix,
+						SupportsModernPolicyKeys: false,
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should disconnect the client", func() {
+				expectDisconnection(100 * time.Millisecond)
+				expectGlobalGaugeValue("typha_connections_active", 0.0)
+			})
+		})
+
 		Describe("After sending unexpected message", func() {
 			BeforeEach(func() {
 				err := w.Encode(syncproto.Envelope{
@@ -1680,7 +1700,7 @@ var _ = Describe("with server requiring TLS", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Client sends a few valid bytes of a Client hello but then stops...
-			_, err = tcpConn.Write([]byte{16, 3, 0o1})
+			_, err = tcpConn.Write([]byte{16, 3, 01})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start a read that we don't expect to complete.
@@ -1707,7 +1727,7 @@ var _ = Describe("with server requiring TLS", func() {
 				_ = tcpConn.Close()
 			}()
 			log.Info("Blocking connection source:", tcpConn.LocalAddr())
-			_, err = tcpConn.Write([]byte{16, 3, 0o1})
+			_, err = tcpConn.Write([]byte{16, 3, 01})
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(server.NumActiveConnections).Should(Equal(1))
 

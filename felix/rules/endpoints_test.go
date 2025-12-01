@@ -45,22 +45,18 @@ var (
 
 var (
 	// Expected ID suffixes for policies used in tests.
+	// These don't exceed the length limit for iptables chain names, so
+	// they do not get hashed.
 	gnpAI = "gnp/ai"
 	gnpBI = "gnp/bi"
 	gnpAE = "gnp/ae"
 	gnpBE = "gnp/be"
 
-	// These don't exceed the length limit for iptables chain names, so
-	// they do not get hashed.
-	npAI  = "np/ai"
-	npBI  = "np/bi"
-	npAE  = "np/ae"
-	npBE  = "np/be"
-	npC   = "np/c"
-	npAFI = "np/afi"
-	npBFI = "np/bfi"
-	npAFE = "np/afe"
-	npBFE = "np/bfe"
+	gnpC   = "gnp/c"
+	gnpAFI = "gnp/afi"
+	gnpBFI = "gnp/bfi"
+	gnpAFE = "gnp/afe"
+	gnpBFE = "gnp/bfe"
 )
 
 func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() {
@@ -546,7 +542,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npAI, npBI),
+						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 						withTierPassAction(),
 					).build()
@@ -557,7 +553,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withEgress(),
-						withPolicies(npAE, npBE),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
@@ -586,12 +582,12 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							Name:          "default",
 							DefaultAction: "Pass",
 							IngressPolicies: []*proto.PolicyID{
-								{Name: "ai", Kind: v3.KindNetworkPolicy},
-								{Name: "bi", Kind: v3.KindNetworkPolicy},
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
 							},
 							EgressPolicies: []*proto.PolicyID{
-								{Name: "ae", Kind: v3.KindNetworkPolicy},
-								{Name: "be", Kind: v3.KindNetworkPolicy},
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
 							},
 						}}),
 						[]string{"prof1", "prof2"},
@@ -605,23 +601,23 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name: "default",
 							IngressPolicies: []*proto.PolicyID{
-								{Name: "ai", Kind: v3.KindNetworkPolicy},
-								{Name: "bi", Kind: v3.KindNetworkPolicy},
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
 							},
 							EgressPolicies: []*proto.PolicyID{
-								{Name: "ae", Kind: v3.KindNetworkPolicy},
-								{Name: "be", Kind: v3.KindNetworkPolicy},
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
 							},
 						}}),
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name: "default",
 							IngressPolicies: []*proto.PolicyID{
-								{Name: "afi", Kind: v3.KindNetworkPolicy},
-								{Name: "bfi", Kind: v3.KindNetworkPolicy},
+								{Name: "afi", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bfi", Kind: v3.KindGlobalNetworkPolicy},
 							},
 							EgressPolicies: []*proto.PolicyID{
-								{Name: "afe", Kind: v3.KindNetworkPolicy},
-								{Name: "bfe", Kind: v3.KindNetworkPolicy},
+								{Name: "afe", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bfe", Kind: v3.KindGlobalNetworkPolicy},
 							},
 						}}),
 						epMarkMapper,
@@ -633,7 +629,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npAE, npBE),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
 						withEgress(),
@@ -644,7 +640,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npAI, npBI),
+						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
 					).build()
@@ -654,7 +650,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npAFE, npBFE),
+						withPolicies(gnpAFE, gnpBFE),
 						withForwardPolicies(),
 						withEgress(),
 						forHostEndpoint(),
@@ -665,7 +661,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npAFI, npBFI),
+						withPolicies(gnpAFI, gnpBFI),
 						withForwardPolicies(),
 						forHostEndpoint(),
 					).build()
@@ -701,7 +697,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npC),
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
 						withEgress(),
@@ -712,7 +708,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npC),
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
 					).build()
@@ -730,8 +726,8 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 					Expect(renderer.HostEndpointToRawChains("eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindNetworkPolicy}},
-							EgressPolicies:  []*proto.PolicyID{{Name: "c", Kind: v3.KindNetworkPolicy}},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
+							EgressPolicies:  []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
 					)).To(Equal(expected))
 				})
@@ -742,7 +738,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npC),
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
 					).build()
@@ -756,7 +752,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						"eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindNetworkPolicy}},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
 					)
 					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
@@ -914,7 +910,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies(npC),
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
 						withInvalidCTStateDisabled(),
@@ -930,7 +926,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						"eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindNetworkPolicy}},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
 					)
 					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
@@ -1217,7 +1213,7 @@ var _ = Describe("PolicyGroups", func() {
 			{
 				Namespace: "namespace",
 				Name:      "bar",
-				Kind:      v3.KindNetworkPolicy,
+				Kind:      v3.KindGlobalNetworkPolicy,
 			},
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeTrue())

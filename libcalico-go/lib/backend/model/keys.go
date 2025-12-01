@@ -347,7 +347,7 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					if len(parts) != 7 {
 						return nil
 					}
-					return buildLegacyPolicyKey(unescapeName(parts[6]))
+					return parseLegacyPolicyName(unescapeName(parts[6]))
 				}
 			case "profile":
 				pk := unescapeName(parts[4])

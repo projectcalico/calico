@@ -100,11 +100,11 @@ func TestInvalidStrings(t *testing.T) {
 		// Bad action field.
 		"0|kube-admin|kcnp.kube-admin.name|badaction|1",
 
-		// Tier fields do not match.
-		"0||namespace/tier.name|allow|1",
+		// Tier field is missing.
+		"0||namespace/name|allow|1",
 
 		// Missing a name section.
-		"0|tier1|default/|pass|0",
+		"0|tier1|namespace/|pass|0",
 
 		// Profile rules.
 		"1|___PROFILE__|__PROFILE__.kns.default|allow|0",

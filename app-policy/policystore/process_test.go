@@ -133,7 +133,6 @@ func TestIPSetUpdateDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	id := "test_id"
 	store := NewPolicyStore()
-	// inSync := make(chan struct{})
 	update := &proto.ToDataplane{
 		Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: &proto.IPSetUpdate{
 			Id:   id,

@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 type PolicySorter struct {
@@ -171,11 +172,14 @@ func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
 var polMetaDefaultOrder = math.Inf(1)
 
 func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
+	m := policyMetadata{Tier: policy.Tier}
+
 	if policy.Tier == "" {
 		// This shouldn't happen - all policies should have a tier assigned by now.
+		// Log a warning and assign to default tier to be safe.
 		logrus.WithField("policy", policy).Warn("Policy has no tier assigned")
+		m.Tier = names.DefaultTierName
 	}
-	m := policyMetadata{Tier: policy.Tier}
 	if policy.Order == nil {
 		m.Order = polMetaDefaultOrder
 	} else {

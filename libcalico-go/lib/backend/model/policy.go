@@ -128,12 +128,12 @@ func (p Policy) String() string {
 	return strings.Join(parts, ",")
 }
 
-// buildLegacyPolicyKey builds a legacy policy key from the given name.
+// parseLegacyPolicyName builds a legacy policy key from the given name.
 // Legacy policy key names included the namespace and name of the policy, with
 // hints of the kind that can be used to reconstruct the full key.
 //
 // Legacy policy keys will be sent by Typha versions prior to v3.32.0.
-func buildLegacyPolicyKey(name string) Key {
+func parseLegacyPolicyName(name string) PolicyKey {
 	// First, split based on "/" to see if we have a namespace.
 	parts := strings.SplitN(name, "/", 2)
 	if len(parts) == 2 {

@@ -14,10 +14,6 @@
 
 package names
 
-import (
-	"errors"
-)
-
 const (
 	DefaultTierName      = "default"
 	KubeAdminTierName    = "kube-admin"
@@ -34,14 +30,6 @@ const (
 	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
 	OpenStackNetworkPolicyNamePrefix = "ossg."
 )
-
-// ValidateTieredPolicyName is deprecated and only kept for backward compatibility.
-func ValidateTieredPolicyName(policy, tier string) error {
-	if policy == "" {
-		return errors.New("Policy name is empty")
-	}
-	return nil
-}
 
 // TierOrDefault returns the tier name, or the default if blank.
 func TierOrDefault(tier string) string {
