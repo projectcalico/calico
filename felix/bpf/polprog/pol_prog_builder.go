@@ -550,7 +550,7 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 }
 
 func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
-	// Identifyin comment at the start and end of the policy.
+	// Identifying comment at the start and end of the policy.
 	cmtID := fmt.Sprintf("%s %s %d", policy.Kind, policy.Name, p.policyID)
 	if policy.Namespace != "" {
 		cmtID = fmt.Sprintf("%s %s/%s %d", policy.Kind, policy.Namespace, policy.Name, p.policyID)

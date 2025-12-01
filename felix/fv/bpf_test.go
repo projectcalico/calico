@@ -6162,8 +6162,8 @@ func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, pol
 	startStr := ""
 	endStr := ""
 	if isPolicy {
-		startStr = fmt.Sprintf("Start of policy %s", polName)
-		endStr = fmt.Sprintf("End of policy %s", polName)
+		startStr = fmt.Sprintf("Start of GlobalNetworkPolicy %s", polName)
+		endStr = fmt.Sprintf("End of GlobalNetworkPolicy %s", polName)
 	}
 	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
 	var policyDbg bpf.PolicyDebugInfo
@@ -6240,7 +6240,7 @@ func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
 }
 
 func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, policy string) string {
-	search := fmt.Sprintf("Start of policy %s", policy)
+	search := fmt.Sprintf("Start of GlobalNetworkPolicy %s", policy)
 	out := ""
 	EventuallyWithOffset(1, func() string {
 		out = bpfDumpPolicy(felix, iface, hook)

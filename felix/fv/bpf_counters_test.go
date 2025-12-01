@@ -226,7 +226,7 @@ func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string
 
 	startOfPol := -1
 	for idx, str := range strOut {
-		if strings.Contains(str, fmt.Sprintf("Start of policy %s", polName)) {
+		if strings.Contains(str, fmt.Sprintf("Start of GlobalNetworkPolicy %s", polName)) {
 			startOfPol = idx
 			break
 		}
