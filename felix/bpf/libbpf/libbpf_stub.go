@@ -60,6 +60,10 @@ func (o *Obj) Load() error {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) SetProgramAutoload(progName string, autoload bool) {
+	panic("LIBBPF syscall stub")
+}
+
 func (o *Obj) FirstMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
