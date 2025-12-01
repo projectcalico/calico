@@ -424,20 +424,29 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		commonMaps.CountersMap = countersMap
 		commonMaps.RuleCountersMap = mock.NewMockMap(counters.PolicyMapParameters)
 
-		progsParams := bpfmaps.MapParameters{
+		progsParamsIng := bpfmaps.MapParameters{
 			Type:       "prog_array",
 			KeySize:    4,
 			ValueSize:  4,
 			MaxEntries: 1000,
-			Name:       "cali_progs",
-			Version:    3,
+			Name:       "cali_progs_ing",
+			Version:    2,
 		}
 
-		commonMaps.ProgramsMap = mock.NewMockMap(progsParams)
-		commonMaps.XDPProgramsMap = mock.NewMockMap(progsParams)
-		jumpMap = mock.NewMockMap(progsParams)
+		progsParamsEg := bpfmaps.MapParameters{
+			Type:       "prog_array",
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1000,
+			Name:       "cali_progs_eg",
+			Version:    2,
+		}
+		commonMaps.ProgramsMaps = append(commonMaps.ProgramsMaps, mock.NewMockMap(progsParamsIng))
+		commonMaps.ProgramsMaps = append(commonMaps.ProgramsMaps, mock.NewMockMap(progsParamsEg))
+		commonMaps.XDPProgramsMap = mock.NewMockMap(progsParamsIng)
+		jumpMap = mock.NewMockMap(progsParamsIng)
 		commonMaps.JumpMap = jumpMap
-		xdpJumpMap = mock.NewMockMap(progsParams)
+		xdpJumpMap = mock.NewMockMap(progsParamsIng)
 		commonMaps.XDPJumpMap = xdpJumpMap
 
 		maps.V4 = v4Maps

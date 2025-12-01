@@ -98,7 +98,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	Expect(err).NotTo(HaveOccurred())
 
 	commonMaps := bpfmaps.CommonMaps
-	programs := commonMaps.ProgramsMap.(*hook.ProgramsMap)
+	programsIng := commonMaps.ProgramsMaps[hook.Ingress].(*hook.ProgramsMap)
+	programsEg := commonMaps.ProgramsMaps[hook.Egress].(*hook.ProgramsMap)
 	loglevel := "off"
 
 	bpfEpMgr, err := newBPFTestEpMgr(
@@ -115,6 +116,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			BPFExtToServiceConnmark: 0,
 			BPFPolicyDebugEnabled:   true,
 			BPFIpv6Enabled:          ipv6Enabled,
+			BPFAttachType:           "TCX",
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -139,34 +141,38 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 15
+		programsIngCount := 8
+		programsEgCount := 7
 		if ipv6Enabled {
-			programsCount = 28
+			programsIngCount = 15
+			programsEgCount = 13
 		}
-		Expect(programs.Count()).To(Equal(programsCount))
-		at := programs.Programs()
-		Expect(at).To(HaveKey(hook.AttachType{
+		Expect(programsIng.Count()).To(Equal(programsIngCount))
+		Expect(programsEg.Count()).To(Equal(programsEgCount))
+		atIng := programsIng.Programs()
+		atEg := programsEg.Programs()
+		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false}))
-		Expect(at).To(HaveKey(hook.AttachType{
+		Expect(atEg).To(HaveKey(hook.AttachType{
 			Hook:       hook.Egress,
 			Family:     4,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false}))
-		Expect(at).NotTo(HaveKey(hook.AttachType{
+		Expect(atIng).NotTo(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     6,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false}))
-		Expect(at).NotTo(HaveKey(hook.AttachType{
+		Expect(atEg).NotTo(HaveKey(hook.AttachType{
 			Hook:       hook.Egress,
 			Family:     6,
 			Type:       tcdefs.EpTypeHost,
@@ -191,32 +197,33 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(programs.Count()).To(Equal(54))
+			Expect(programsIng.Count()).To(Equal(28))
 
-			at := programs.Programs()
+			atIng := programsIng.Programs()
+			atEg := programsEg.Programs()
 
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
 				Family:     4,
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
 				DSR:        false}))
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atEg).To(HaveKey(hook.AttachType{
 				Hook:       hook.Egress,
 				Family:     4,
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
 				DSR:        false}))
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
 				Family:     6,
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
 				DSR:        false}))
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atEg).To(HaveKey(hook.AttachType{
 				Hook:       hook.Egress,
 				Family:     6,
 				Type:       tcdefs.EpTypeHost,
@@ -327,13 +334,16 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programCount := 15
+		programIngCount := 8
+		programEgCount := 7
 		jumpMapLen := 2
 		if ipv6Enabled {
-			programCount = 54
+			programIngCount = 28
+			programEgCount = 26
 			jumpMapLen = 8
 		}
-		Expect(programs.Count()).To(Equal(programCount))
+		Expect(programsIng.Count()).To(Equal(programIngCount))
+		Expect(programsEg.Count()).To(Equal(programEgCount))
 
 		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(len(pm)).To(Equal(jumpMapLen)) // no policy for hep2
@@ -343,26 +353,32 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	defer deleteLink(workload1)
 
 	t.Run("create a workload", func(t *testing.T) {
+		programsIngCount := programsIng.Count()
+		programsEgCount := programsEg.Count()
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 28
+		programsIngCount = programsIngCount + 7
+		programsEgCount = programsEgCount + 6
 		if ipv6Enabled {
-			programsCount = 54
+			programsIngCount = 28
+			programsEgCount = 26
 		}
-		Expect(programs.Count()).To(Equal(programsCount))
+		Expect(programsIng.Count()).To(Equal(programsIngCount))
+		Expect(programsEg.Count()).To(Equal(programsEgCount))
 
-		at := programs.Programs()
-		Expect(at).To(HaveKey(hook.AttachType{
+		atIng := programsIng.Programs()
+		atEg := programsEg.Programs()
+		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
 			Type:       tcdefs.EpTypeWorkload,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false}))
-		Expect(at).To(HaveKey(hook.AttachType{
+		Expect(atEg).To(HaveKey(hook.AttachType{
 			Hook:       hook.Egress,
 			Family:     4,
 			Type:       tcdefs.EpTypeWorkload,
@@ -370,14 +386,14 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			ToHostDrop: false,
 			DSR:        false}))
 		if ipv6Enabled {
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
 				Family:     6,
 				Type:       tcdefs.EpTypeWorkload,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
 				DSR:        false}))
-			Expect(at).To(HaveKey(hook.AttachType{
+			Expect(atEg).To(HaveKey(hook.AttachType{
 				Hook:       hook.Egress,
 				Family:     6,
 				Type:       tcdefs.EpTypeWorkload,
@@ -409,19 +425,20 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	defer deleteLink(workload2)
 
 	t.Run("create another workload, should not load more than the preable", func(t *testing.T) {
+		programsIngCount := programsIng.Count()
+		programsEgCount := programsEg.Count()
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 28
 		jumpMapLen := 6
 
 		if ipv6Enabled {
-			programsCount = 54
 			jumpMapLen = 16
 		}
-		Expect(programs.Count()).To(Equal(programsCount))
+		Expect(programsIng.Count()).To(Equal(programsIngCount))
+		Expect(programsEg.Count()).To(Equal(programsEgCount))
 
 		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(len(pm)).To(Equal((jumpMapLen)))
@@ -535,7 +552,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(attached).To(HaveKey("hostep2"))
 		Expect(attached).NotTo(HaveKey("workloadep3"))
 
-		programs.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
+		programsIng.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
+		programsEg.ResetForTesting()  // Because we recycle it, restarted Felix would get a fresh copy.
 
 		bpfEpMgr, err = newBPFTestEpMgr(
 			&linux.Config{
@@ -573,16 +591,16 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		// And they still have the same data so that existing preamble programs
 		// and policies can still point to the right stuff.
-		oldProgsParams := hook.ProgramsMapParameters
-		oldProgsParams.PinDir = tmp
-		oldProgs := maps.NewPinnedMap(oldProgsParams)
+		oldProgsIngParams := hook.IngressProgramsMapParameters
+		oldProgsIngParams.PinDir = tmp
+		oldProgs := maps.NewPinnedMap(oldProgsIngParams)
 		err = oldProgs.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
-		programsCount := 28
+		programsCount := 15
 		oldPoliciesCount := 4
 		if ipv6Enabled {
-			programsCount = 54
+			programsCount = 28
 			oldPoliciesCount = 12
 		}
 		Expect(pm).To(HaveLen(programsCount))
@@ -596,8 +614,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(pm).To(HaveLen(oldPoliciesCount))
 
 		// After restat we get new maps which are empty
-		Expect(programs.Count()).To(Equal(0))
-		pm = jumpMapDump(commonMaps.ProgramsMap)
+		Expect(programsIng.Count()).To(Equal(0))
+		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
+		Expect(pm).To(HaveLen(0))
+		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Egress])
 		Expect(pm).To(HaveLen(0))
 		pm = jumpMapDump(commonMaps.JumpMap)
 		Expect(pm).To(HaveLen(0))
@@ -618,9 +638,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(28))
-		pm = jumpMapDump(commonMaps.ProgramsMap)
-		Expect(pm).To(HaveLen(28))
+		Expect(programsIng.Count()).To(Equal(15))
+		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
+		Expect(pm).To(HaveLen(15))
 
 		pm = jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
@@ -661,7 +681,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		deleteLink(workload3)
 
-		programs.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
+		programsIng.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
+		programsEg.ResetForTesting()  // Because we recycle it, restarted Felix would get a fresh copy.
 
 		bpfEpMgr, err = newBPFTestEpMgr(
 			&linux.Config{
@@ -717,7 +738,8 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	commonMaps := bpfmaps.CommonMaps
-	programs := commonMaps.ProgramsMap.(*hook.ProgramsMap)
+	programsIng := commonMaps.ProgramsMaps[hook.Ingress].(*hook.ProgramsMap)
+	programsEg := commonMaps.ProgramsMaps[hook.Egress].(*hook.ProgramsMap)
 	loglevel := "off"
 
 	bpfEpMgr, err := newBPFTestEpMgr(
@@ -790,15 +812,16 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(qosVal2.PacketRateTokens()).To(Equal(int16(-1)))
 	Expect(qosVal2.PacketRateLastUpdate()).To(Equal(uint64(0)))
 
-	at := programs.Programs()
-	Expect(at).To(HaveKey(hook.AttachType{
+	atIng := programsIng.Programs()
+	atEg := programsEg.Programs()
+	Expect(atIng).To(HaveKey(hook.AttachType{
 		Hook:       hook.Ingress,
 		Family:     4,
 		Type:       tcdefs.EpTypeWorkload,
 		LogLevel:   loglevel,
 		ToHostDrop: false,
 		DSR:        false}))
-	Expect(at).To(HaveKey(hook.AttachType{
+	Expect(atEg).To(HaveKey(hook.AttachType{
 		Hook:       hook.Egress,
 		Family:     4,
 		Type:       tcdefs.EpTypeWorkload,
@@ -955,7 +978,7 @@ func TestCTLBAttachLegacy(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		commonMaps := bpfmaps.CommonMaps
-		err = nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMap)
+		err = nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMaps)
 		Expect(err).NotTo(HaveOccurred())
 
 		checkPinPath := func(pinPath string, mustExist bool) {
@@ -1029,7 +1052,7 @@ func TestCTLBAttach(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		commonMaps := bpfmaps.CommonMaps
-		err = nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMap)
+		err = nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMaps)
 		Expect(err).NotTo(HaveOccurred())
 
 		checkPinPath := func(pinPath string, mustExist bool) {

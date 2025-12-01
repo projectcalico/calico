@@ -144,16 +144,14 @@ func (t *IpTrie) InsertKey(cidr ip.CIDR, key model.Key) {
 func (t *IpTrie) DumpCIDRKeys() []string {
 	ec := t.existingCidrs
 	lines := []string{}
-	ec.Iter(func(cidr ip.CIDR) error {
+	for cidr := range ec.All() {
 		keyStrings := []string{}
 		keys, _ := t.GetKeys(cidr)
 		for _, key := range keys {
 			keyStrings = append(keyStrings, key.String())
 		}
 		lines = append(lines, cidr.String()+": "+strings.Join(keyStrings, ","))
-
-		return nil
-	})
+	}
 
 	return lines
 }

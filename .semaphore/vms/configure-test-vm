@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+set -x
+
+vm_name=$1
+zone=${ZONE:-europe-west3-c}
+project=${GCP_PROJECT:-unique-caldron-775}
+
+vm_pub_key=""
+for attempt in $(seq 1 20); do
+  echo "Getting VM ssh key (attempt $attempt)..."
+  vm_pub_key=$(gcloud compute instances get-guest-attributes "${vm_name}" --zone="${zone}" --query-path="hostkeys/ssh-ed25519" --format='value(value)') || {
+    echo "Failed to get VM ssh key, retrying..."
+    sleep 1
+    continue
+  }
+  echo "VM SSH host key: $vm_pub_key"
+  if [[ -z "$vm_pub_key" ]]; then
+    echo "Empty key, retrying..."
+    sleep 1
+    continue
+  fi
+
+  break
+done
+
+if [[ -z "$vm_pub_key" ]]; then
+  echo "Failed to get VM ssh key after multiple attempts, exiting."
+  exit 22
+fi
+
+vm_ip=$(gcloud compute instances describe "${vm_name}" --zone="${zone}" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+echo "$vm_ip ssh-ed25519 $vm_pub_key" >> ~/.ssh/known_hosts
+
+ssh_cmd="ssh ubuntu@${vm_ip}"
+
+startup_success=false
+for ssh_try in $(seq 1 100); do
+  echo "Checking startup script completion: $ssh_try"
+  if ${ssh_cmd} test -e /var/run/startup-script-complete; then
+    echo "Startup script completed"
+    startup_success=true
+    break
+  fi
+  sleep $(( 1 + (RANDOM % 10) ))
+
+  # The ssh key occasionally gets clobbered by ssh rewriting the file. Check
+  # and re-add if necessary.
+  if ! grep -F -q "$vm_ip ssh-ed25519 $vm_pub_key" ~/.ssh/known_hosts; then
+    echo "Server's ssh key went missing; re-adding it to known_hosts"
+    echo "$vm_ip ssh-ed25519 $vm_pub_key" >> ~/.ssh/known_hosts
+  fi
+done
+
+if [ "$startup_success" = false ]; then
+  echo "VM startup script did not complete in time, exiting."
+  echo "Fetching serial console output for debugging:"
+  gcloud compute --project="$project" instances get-serial-port-output "$vm_name" --zone="$zone" --port=1
+  exit 23
+fi
+
+set +x
+echo "$DOCKERHUB_PASSWORD" | ssh "ubuntu@${vm_ip}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+scp -r -C "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets"
+set -x
+${ssh_cmd} "gcloud auth activate-service-account --key-file=/home/ubuntu/secrets/secret.google-service-account-key.json && \
+  gcloud config set project unique-caldron-775 && \
+  gcloud storage cp '${GCS_WORKFLOW_DIR}/${COMPONENT}/fv-artifacts/*' /tmp && \
+  tar -xzf /tmp/working-copy.tgz && \
+  ${CALICO_DIR_NAME}/${COMPONENT}/.semaphore/load-test-artifacts"
+

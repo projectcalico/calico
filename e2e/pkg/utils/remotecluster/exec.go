@@ -17,7 +17,7 @@ package remotecluster
 import (
 	"strings"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubernetes/test/e2e/framework"
 
@@ -52,7 +52,7 @@ func RemoteFrameworkAwareExec(f *framework.Framework, fn func()) {
 
 		// Resolve the new host.
 		newKubeconfig, err := clientcmd.LoadFromFile(newKubeconfigPath)
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		var newKubeconfigContext string
 		if strings.Contains(newKubeconfig.CurrentContext, "@") {
 			// Some generated kubeconfigs will include a username in the context string.
@@ -61,7 +61,7 @@ func RemoteFrameworkAwareExec(f *framework.Framework, fn func()) {
 			newKubeconfigContext = newKubeconfig.CurrentContext
 		}
 		cluster := newKubeconfig.Clusters[newKubeconfigContext]
-		Expect(cluster).NotTo(BeNil())
+		gomega.Expect(cluster).NotTo(gomega.BeNil())
 		newHost := cluster.Server
 
 		// Set the new kubeconfig path and host.

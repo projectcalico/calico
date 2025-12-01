@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,9 +37,9 @@ type Tier struct {
 }
 
 const (
-	AdminNetworkPolicyTierOrder         = float64(1_000)      // 1K
-	DefaultTierOrder                    = float64(1_000_000)  // 1Million
-	BaselineAdminNetworkPolicyTierOrder = float64(10_000_000) // 10Million
+	KubeAdminTierOrder    = float64(1_000)      // 1K
+	DefaultTierOrder      = float64(1_000_000)  // 1Million
+	KubeBaselineTierOrder = float64(10_000_000) // 10Million
 )
 
 // TierSpec contains the specification for a security policy tier resource.

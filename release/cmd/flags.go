@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
@@ -135,7 +136,7 @@ var (
 		Value:   archOptions,
 		Action: func(_ context.Context, c *cli.Command, values []string) error {
 			for _, arch := range values {
-				if !utils.Contains(archOptions, arch) {
+				if !slices.Contains(archOptions, arch) {
 					return fmt.Errorf("invalid architecture %s", arch)
 				}
 			}

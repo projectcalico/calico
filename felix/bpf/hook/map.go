@@ -94,7 +94,8 @@ type ProgramsMap struct {
 	programsLock sync.Mutex
 	programs     map[AttachType]*program
 
-	nextIdx atomic.Int64
+	expectedAttachType string
+	nextIdx            atomic.Int64
 }
 
 type program struct {
@@ -102,19 +103,44 @@ type program struct {
 	layout Layout
 }
 
-var ProgramsMapParameters = bpfmaps.MapParameters{
+var IngressProgramsMapParameters = bpfmaps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: maxPrograms,
-	Name:       "cali_progs",
-	Version:    3,
+	Name:       "cali_progs_fh",
+	Version:    2,
 }
 
-func NewProgramsMap() bpfmaps.Map {
+var EgressProgramsMapParameters = bpfmaps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: maxPrograms,
+	Name:       "cali_progs_th",
+	Version:    2,
+}
+
+func NewProgramsMaps() []bpfmaps.Map {
+	return []bpfmaps.Map{
+		NewIngressProgramsMap(),
+		NewEgressProgramsMap(),
+	}
+}
+
+func NewIngressProgramsMap() bpfmaps.Map {
+	return newProgramsMap(IngressProgramsMapParameters, "ingress")
+}
+
+func NewEgressProgramsMap() bpfmaps.Map {
+	return newProgramsMap(EgressProgramsMapParameters, "egress")
+}
+
+func newProgramsMap(ProgramsMapParameters bpfmaps.MapParameters, expectedAttachType string) bpfmaps.Map {
 	return &ProgramsMap{
-		PinnedMap: bpfmaps.NewPinnedMap(ProgramsMapParameters),
-		programs:  make(map[AttachType]*program),
+		PinnedMap:          bpfmaps.NewPinnedMap(ProgramsMapParameters),
+		programs:           make(map[AttachType]*program),
+		expectedAttachType: expectedAttachType,
 	}
 }
 
@@ -132,7 +158,7 @@ func NewXDPProgramsMap() bpfmaps.Map {
 	}
 }
 
-func (pm *ProgramsMap) LoadObj(at AttachType) (Layout, error) {
+func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
 	file := ObjectFile(at)
 	if file == "" {
 		return nil, fmt.Errorf("no object for attach type %+v", at)
@@ -150,13 +176,13 @@ func (pm *ProgramsMap) LoadObj(at AttachType) (Layout, error) {
 
 	var err error
 	if pi.layout == nil {
-		la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
+		la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
 		if err != nil && strings.Contains(file, "_co-re") {
 			log.WithError(err).Warn("Failed to load CO-RE object, kernel too old? Falling back to non-CO-RE.")
 			file := strings.ReplaceAll(file, "_co-re", "")
 			// Skip trying the same file again, as it will fail with the same error.
 			SetObjectFile(at, file)
-			la, err = pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
+			la, err = pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
 		}
 		if err == nil {
 			log.WithField("layout", la).Debugf("Loaded generic object file %s", file)
@@ -181,13 +207,13 @@ func (pm *ProgramsMap) getOrCreateProgramInfo(at AttachType) *program {
 	return pi
 }
 
-func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
+func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layout, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
 		return nil, fmt.Errorf("file %s: %w", file, err)
 	}
 
-	if err := pm.configureMaps(obj, file); err != nil {
+	if err := pm.configureMapsAndPrograms(obj, file, progAttachType); err != nil {
 		return nil, err
 	}
 
@@ -204,7 +230,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 			}
 
 			// Re-configure maps
-			if err := pm.configureMaps(obj, file); err != nil {
+			if err := pm.configureMapsAndPrograms(obj, file, progAttachType); err != nil {
 				return nil, err
 			}
 
@@ -229,7 +255,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 	return layout, err
 }
 
-func (pm *ProgramsMap) configureMaps(obj *libbpf.Obj, file string) error {
+func (pm *ProgramsMap) configureMapsAndPrograms(obj *libbpf.Obj, file, progAttachType string) error {
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		mapName := m.Name()
 		if strings.Contains(mapName, ".rodata") {
@@ -245,6 +271,19 @@ func (pm *ProgramsMap) configureMaps(obj *libbpf.Obj, file string) error {
 		log.Debugf("map %s k %d v %d pinned to %s for generic object file %s",
 			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
 	}
+
+	if progAttachType == "TCX" {
+		for prog, err := obj.FirstProgram(); prog != nil && err == nil; prog, err = prog.NextProgram() {
+			attachType := libbpf.AttachTypeTcxEgress
+			if pm.expectedAttachType == "ingress" {
+				attachType = libbpf.AttachTypeTcxIngress
+			}
+			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
+				return fmt.Errorf("error setting attach type for program %s: %w", prog.Name(), err)
+			}
+		}
+	}
+
 	return nil
 }
 

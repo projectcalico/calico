@@ -55,6 +55,10 @@ func (key NetworkSetKey) valueType() (reflect.Type, error) {
 	return typeNetworkSet, nil
 }
 
+func (key NetworkSetKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[NetworkSet](key, rawData)
+}
+
 func (key NetworkSetKey) String() string {
 	return fmt.Sprintf("NetworkSet(name=%s)", key.Name)
 }

@@ -83,6 +83,15 @@ func (key BlockAffinityKey) valueType() (reflect.Type, error) {
 	return typeBlockAff, nil
 }
 
+func (key BlockAffinityKey) parseValue(rawData []byte) (any, error) {
+	if len(rawData) == 0 {
+		// Special case: block affinities used to be stored with no value.
+		// "Upgrade" to equivalent empty JSON.
+		rawData = []byte("{}")
+	}
+	return parseJSONPointer[BlockAffinity](key, rawData)
+}
+
 func (key BlockAffinityKey) String() string {
 	return fmt.Sprintf("BlockAffinityKey(cidr=%s, host=%s, affinityType=%s)", key.CIDR, key.Host, key.AffinityType)
 }

@@ -3,8 +3,11 @@ global_job_config:
     - name: docker-hub
   prologue:
     commands:
+      - export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
+      - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
       - checkout
-      - export REPO_DIR="$(pwd)"
+      - export CALICO_DIR="$(pwd)"
+      - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
       - mkdir artifacts
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
@@ -12,5 +15,5 @@ global_job_config:
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
-      - cd "$REPO_DIR"
+      - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts

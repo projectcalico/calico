@@ -99,8 +99,8 @@ case "${DEVSTACK_BRANCH}" in
     unmaintained/yoga )
         export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
         ;;
-    stable/2024.1 )             # Caracal
-        export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+    unmaintained/2024.1 )             # Caracal
+        export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/unmaintained/2024.1/upper-constraints.txt
         ;;
 esac
 
