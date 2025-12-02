@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# set -o errexit
+set -o errexit
 set -o nounset
 set -o pipefail
 
@@ -189,7 +189,7 @@ echo "calico-node-windows pods are ready"
 
 if [[ ${PRODUCT} == 'calient' ]]; then
     echo "Wait for fluentd-node-windows pods to be ready..."
-    timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=fluentd-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+    timeout --foreground 900 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=fluentd-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
     echo "fluentd-node-windows pods are ready"
 fi
 
