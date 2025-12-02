@@ -17,17 +17,54 @@ auto_cancel:
 global_job_config:
   secrets:
     - name: docker-hub
+    - name: google-service-account-for-gce
+  env_vars:
+    - name: GOOGLE_PROJECT
+      value: unique-caldron-775
+    - name: GCS_BUILD_CACHE_BUCKET
+      value: calico-transient-build-artifacts-europe-west3
   prologue:
     commands:
       - export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
+      - export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache
       - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
-      - checkout
-      - export CALICO_DIR="$(pwd)"
-      - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
-      - mkdir artifacts
-      # Semaphore is doing shallow clone on a commit without tags.
-      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - if [[ "${SEMAPHORE_BLOCK_NAME}" != "Prerequisites" ]]; then retry git fetch --unshallow; fi
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+      - gcloud config set project ${GOOGLE_PROJECT}
+      - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
+      # For PRs, try to restore a build cache from the target branch of the PR.
+      # This includes a working copy and associated build cache with consistent
+      # file mtimes.  We then check out the PR commit on top of that working
+      # copy, which will invalidate build cache entries only for files changed
+      # in the PR. This must be inline in this file because it needs to run
+      # before code is checked out.
+      - sudo apt-get install -y lz4
+      - restored_cache=false
+      - >-
+        if [[ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
+          echo "Running in the context of a PR: ${SEMAPHORE_GIT_PR_NUMBER}"
+          # Look for a build cache from the target branch of the PR.
+          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.lz4" /tmp/working-copy.tar.lz4; then
+            echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
+            tar --use-compress-program=lz4 -xf /tmp/working-copy.tar.lz4
+            cd "${CALICO_DIR_NAME}"
+            git fetch origin ${SEMAPHORE_GIT_SHA}
+            git checkout ${SEMAPHORE_GIT_SHA} -B ${SEMAPHORE_GIT_PR_BRANCH}
+            restored_cache=true
+          fi
+        fi || true
+      - >-
+        if ! $restored_cache; then
+          echo "No cache restored, doing a fresh checkout..."
+          cd $HOME
+          rm -rf "${CALICO_DIR_NAME}"
+          git clone --filter=blob:none --revision=$SEMAPHORE_GIT_SHA $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
+          cd "${CALICO_DIR_NAME}" || exit 1
+        fi
+      - CALICO_DIR="$(pwd)"
+      - export CALICO_DIR
+      - mkdir -p artifacts
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
@@ -165,6 +202,27 @@ blocks:
         - name: Pre-flight checks
           commands:
             - make ci-preflight-checks
+  - name: Build core components
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: Build and save build cache
+          commands:
+            - make -C felix build fv-prereqs
+            - make -C cni-plugin build
+            - make -C typha build
+            - make -C apiserver build
+            - make -C kube-controllers build
+            - cd ..
+            - tar --use-compress-program=lz4 -cf /tmp/working-copy.tar.lz4 $CALICO_DIR_NAME go
+            - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+            - gcloud storage cp /tmp/working-copy.tar.lz4 "$gcs_branch_cache_dir/working-copy.tar.lz4"
   - name: API
     run:
       when: "false or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -432,8 +490,6 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
       secrets:
@@ -471,8 +527,6 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
       jobs:
         - name: "Felix: build multi-arch binaries"
           matrix:
@@ -496,8 +550,6 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
       jobs:
         - name: "Felix: build arm64 binaries"
           commands:
