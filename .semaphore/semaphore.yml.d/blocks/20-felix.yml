@@ -7,36 +7,37 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
-        - cache restore go-mod-cache
         - gcloud config set project unique-caldron-775
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
     secrets:
       - name: google-service-account-for-gce
     jobs:
-      - name: "Felix: Build and run UT, k8sfv"
+      - name: "Felix: Build and cache FV prerequisites"
         execution_time_limit:
-          minutes: 60
+          minutes: 20
         commands:
           - make build image fv-prereqs
           - ./.semaphore/cache-test-artifacts
+      - name: "Felix: UT"
+        execution_time_limit:
+          minutes: 30
+        commands:
           - ../.semaphore/run-and-monitor ut.log make ut
+      - name: "Felix: k8sfv"
+        execution_time_limit:
+          minutes: 15
+        commands:
           - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
           - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
       - name: "Felix: Static checks"
         execution_time_limit:
-          minutes: 60
+          minutes: 15
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
     epilogue:
       always:
         commands:
-          - 'test-results compile --name "Felix: FV" ./report/*k8sfv*.xml ./report/k8sfv_sem.json || true'
-          - rm -f ./report/*k8sfv*.xml
-          - 'test-results compile --name "Felix: UT" ./report/*.xml ./report/ut_sem.json || true'
-          - test-results combine report/*_sem.json report/report.json
-          - artifact push job report/report.json -d test-results/junit.json || true
-          - artifact push workflow report/report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
+          - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
 - name: "Felix: multi-arch build"
   run:
     when: "${CHANGE_IN(felix)}"
@@ -46,8 +47,6 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
-        - cache restore go-mod-cache
     jobs:
       - name: "Felix: build multi-arch binaries"
         matrix:
@@ -71,8 +70,6 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
-        - cache restore go-mod-cache
     jobs:
       - name: "Felix: build arm64 binaries"
         commands:
