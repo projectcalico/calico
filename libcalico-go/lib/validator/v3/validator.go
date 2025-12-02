@@ -1701,40 +1701,51 @@ func validateTier(structLevel validator.StructLevel) {
 		)
 	}
 
-	if tier.Name == names.DefaultTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.DefaultTierOrder {
+	validateTierSpec := func(tier api.Tier, expectedOrder float64, expectedDefaultAction api.Action) {
+		tierOrderMatched := false
+		tierOrderStr := "nil"
+		if tier.Spec.Order != nil {
+			tierOrderStr = fmt.Sprintf("%v", *tier.Spec.Order)
+			if *tier.Spec.Order == expectedOrder {
+				tierOrderMatched = true
+			}
+		}
+		if !tierOrderMatched {
 			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
+				tierOrderStr,
 				"TierSpec.Order",
 				"",
-				reason(fmt.Sprintf("default tier order must be %v", api.DefaultTierOrder)),
+				reason(fmt.Sprintf("%v tier order must be %v", tier.Name, expectedOrder)),
+				"",
+			)
+		}
+
+		tierDefaultActionMatched := false
+		tierDefaultActionStr := "nil"
+		if tier.Spec.DefaultAction != nil {
+			tierDefaultActionStr = fmt.Sprintf("%v", *tier.Spec.DefaultAction)
+			if *tier.Spec.DefaultAction == expectedDefaultAction {
+				tierDefaultActionMatched = true
+			}
+		}
+		if !tierDefaultActionMatched {
+			structLevel.ReportError(
+				tierDefaultActionStr,
+				"TierSpec.DefaultAction",
+				"",
+				reason(fmt.Sprintf("%v tier default action must be %v", tier.Name, expectedDefaultAction)),
 				"",
 			)
 		}
 	}
 
-	if tier.Name == names.KubeAdminTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeAdminTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("kube-admin tier order must be %v", api.KubeAdminTierOrder)),
-				"",
-			)
-		}
-	}
-
-	if tier.Name == names.KubeBaselineTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeBaselineTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("kube-baseline tier order must be %v", api.KubeBaselineTierOrder)),
-				"",
-			)
-		}
+	switch tier.Name {
+	case names.DefaultTierName:
+		validateTierSpec(tier, api.DefaultTierOrder, api.Deny)
+	case names.KubeAdminTierName:
+		validateTierSpec(tier, api.KubeAdminTierOrder, api.Pass)
+	case names.KubeBaselineTierName:
+		validateTierSpec(tier, api.KubeBaselineTierOrder, api.Pass)
 	}
 
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
