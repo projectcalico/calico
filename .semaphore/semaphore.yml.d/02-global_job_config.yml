@@ -42,23 +42,25 @@ global_job_config:
           fi
         fi || true
       - |-
-        if ! $restored_cache; then
+        if [[ $restored_cache != true && -z "$SKIP_CHECKOUT" ]]; then
           echo "No cache restored, doing a fresh checkout..."
           cd $HOME
           rm -rf "${CALICO_DIR_NAME}"
           git clone --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
           cd "${CALICO_DIR_NAME}" || exit 1
         fi
-      - git fetch origin --tags --prune-tags ${SEMAPHORE_GIT_SHA}
       - |-
-        if [ $SEMAPHORE_GIT_REF_TYPE = "branch" ]; then
-          git checkout ${SEMAPHORE_GIT_SHA} -B "${SEMAPHORE_GIT_BRANCH}"
-        else
-          git checkout ${SEMAPHORE_GIT_SHA}
+        if [[ -z "$SKIP_CHECKOUT" ]]; then
+          git fetch origin --tags --prune-tags ${SEMAPHORE_GIT_SHA}
+          if [ $SEMAPHORE_GIT_REF_TYPE = "branch" ]; then
+            git checkout ${SEMAPHORE_GIT_SHA} -B "${SEMAPHORE_GIT_BRANCH}"
+          else
+            git checkout ${SEMAPHORE_GIT_SHA}
+          fi
+          CALICO_DIR="$(pwd)"
+          export CALICO_DIR
+          mkdir -p artifacts
         fi
-      - CALICO_DIR="$(pwd)"
-      - export CALICO_DIR
-      - mkdir -p artifacts
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
