@@ -44,7 +44,7 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 		additionalTypes := []watchersyncer.ResourceType{
 			{
 				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy},
-				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
+				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(apiv3.KindGlobalNetworkPolicy),
 			},
 			{
 				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindStagedGlobalNetworkPolicy},
@@ -72,7 +72,7 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 			},
 			{
 				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
-				UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
+				UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(apiv3.KindNetworkPolicy),
 			},
 			{
 				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindStagedNetworkPolicy},
@@ -107,11 +107,11 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 		if cfg.DatastoreType == apiconfig.Kubernetes {
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
 				ListInterface:   model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy},
-				UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
+				UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(model.KindKubernetesNetworkPolicy),
 			})
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
 				ListInterface:   model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy},
-				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
+				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(model.KindKubernetesClusterNetworkPolicy),
 			})
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
 				ListInterface: model.ResourceListOptions{Kind: model.KindKubernetesEndpointSlice},

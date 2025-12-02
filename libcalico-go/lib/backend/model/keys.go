@@ -36,13 +36,17 @@ const (
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string
-type rawString string
-type rawBool bool
-type rawIP net.IP
+type (
+	rawString string
+	rawBool   bool
+	rawIP     net.IP
+)
 
-var rawStringType = reflect.TypeOf(rawString(""))
-var rawBoolType = reflect.TypeOf(rawBool(true))
-var rawIPType = reflect.TypeOf(rawIP{})
+var (
+	rawStringType = reflect.TypeOf(rawString(""))
+	rawBoolType   = reflect.TypeOf(rawBool(true))
+	rawIPType     = reflect.TypeOf(rawIP{})
+)
 
 // Key represents a parsed datastore key.
 type Key interface {
@@ -151,9 +155,9 @@ func KeyToDefaultPath(key Key) (string, error) {
 //
 //	"/calico/v1/policy/tier/a/metadata"
 //
-// and KeyToDefaultPath(PolicyKey{Tier: "a", Name: "b"}):
+// and KeyToDefaultPath(PolicyKey{Kind: "NetworkPolicy", Namespace: "default", Name: "b"}):
 //
-//	"/calico/v1/policy/tier/a/policy/b"
+//	"/calico/v1/policy/NetworkPolicy/default/b"
 func KeyToDefaultDeletePath(key Key) (string, error) {
 	return key.defaultDeletePath()
 }
@@ -320,7 +324,7 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 			}
 			return ReadyFlagKey{}
 		case "policy":
-			if len(parts) < 6 {
+			if len(parts) < 5 {
 				return nil
 			}
 			switch parts[3] {
@@ -337,13 +341,12 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 						Name: unescapeName(parts[4]),
 					}
 				case "policy":
+					// This is a legacy policy key of form /calico/v1/policy/tier/<Tier>/policy/<Name>.
+					// We can translate this to a modern PolicyKey by parsing the necessary info from the Name.
 					if len(parts) != 7 {
 						return nil
 					}
-					return PolicyKey{
-						Tier: unescapeName(parts[4]),
-						Name: unescapeName(parts[6]),
-					}
+					return parseLegacyPolicyName(unescapeName(parts[6]))
 				}
 			case "profile":
 				pk := unescapeName(parts[4])
@@ -352,6 +355,16 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					return ProfileRulesKey{ProfileKey: ProfileKey{pk}}
 				case "labels":
 					return ProfileLabelsKey{ProfileKey: ProfileKey{pk}}
+				}
+			default:
+				// Policy key of form /calico/v1/policy/<Kind>/<Namespace>/<Name>
+				if len(parts) != 6 {
+					return nil
+				}
+				return PolicyKey{
+					Kind:      unescapeName(parts[3]),
+					Namespace: unescapeName(parts[4]),
+					Name:      unescapeName(parts[5]),
 				}
 			}
 		}
@@ -527,8 +540,9 @@ func OldKeyFromDefaultPath(path string) Key {
 	} else if m := matchPolicy.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a policy: %v", path)
 		return PolicyKey{
-			Tier: unescapeName(m[1]),
-			Name: unescapeName(m[2]),
+			Kind:      unescapeName(m[1]),
+			Namespace: unescapeName(m[2]),
+			Name:      unescapeName(m[3]),
 		}
 	} else if m := matchProfile.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a profile: %v (%v)", path, m[2])
