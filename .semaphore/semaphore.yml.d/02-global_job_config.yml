@@ -14,12 +14,12 @@ global_job_config:
       - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - >-
-        if [[ $(uname -m) != "amd_64" || -n "$ARCH" ]]; then
+        if [[ $(uname -m) != "x86_64" || -n "$ARCH" ]]; then
           echo "Skipping build cache for non-AMD build: $(uname -m)";
           export SKIP_CACHE_RESTORE=true;
         fi
-      - '[ -n "$SKIP_CACHE_RESTORE" ] || gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"'
-      - '[ -n "$SKIP_CACHE_RESTORE" ] || gcloud config set project ${GOOGLE_PROJECT}'
+      - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" || true
+      - gcloud config set project ${GOOGLE_PROJECT} || true
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
       # For PRs, try to restore a build cache from the target branch of the PR.
       # This includes a working copy and associated build cache with consistent
@@ -27,7 +27,7 @@ global_job_config:
       # copy, which will invalidate build cache entries only for files changed
       # in the PR. This must be inline in this file because it needs to run
       # before code is checked out.
-      - '[ -n "$SKIP_CACHE_RESTORE" ] || sudo apt-get install -y zstd'
+      - sudo apt-get install -y zstd || true
       - restored_cache=false
       - >-
         if [[ -n "${SEMAPHORE_GIT_PR_NUMBER}" && -z "$SKIP_CACHE_RESTORE" ]]; then
