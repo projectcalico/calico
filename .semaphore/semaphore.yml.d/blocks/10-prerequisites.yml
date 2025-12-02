@@ -1,13 +1,96 @@
+- name: Check semaphore/YAML files
+  run:
+    when: >-
+      ${FORCE_RUN} or 
+      change_in(['/**/*.yml', '/**/*.yaml', '/.semaphore/semaphore.yml.d', '/hack'], {pipeline_file: 'track'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check semaphore files
+        commands:
+          - make gen-semaphore-yaml
+          - make yaml-lint
+          - make check-dirty
+- name: Check Go
+  run:
+    when: >-
+      ${FORCE_RUN} or 
+      change_in(['go.mod', 'go.sum','**/*.go', '**/deps.txt'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check Go files
+        commands:
+          - make check-go-mod
+          - make verify-go-mods
+          - make gen-deps-files
+          - make go-vet
+          - make check-dirty
+- name: Check protobufs
+  run:
+    when: >-
+      ${FORCE_RUN} or 
+      change_in(['**/*.pb.go','**/*.proto'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check protobufs
+        commands:
+          - make protobuf fix-changed
+          - make check-dirty
+- name: Manifests and API docs
+  run:
+    when: >-
+      ${FORCE_RUN} or 
+      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check protobufs
+        commands:
+          - make protobuf fix-changed
+          - make -C lib gen-files
+          - make -C api gen-files
+          - make -C libcalico-go gen-files
+          - make -C felix gen-files
+          - make -C goldmane gen-files
+          - make gen-manifests
+          - make fix-changed
+          - make check-dirty
 - name: Prerequisites
   run:
     when: "${FORCE_RUN} or change_in(['/'], {pipeline_file: 'track'})"
+  dependencies:
+    - Check semaphore/YAML files
+    - Check Go
+    - Check protobufs
+    - Manifests and API docs
+  task:
+    jobs:
+      - name: Pre-flight checks
+        commands:
+          - true
+        env_vars:
+          - name: SKIP_CACHE_RESTORE
+            value: "true"
+- name: Build core components
+  run:
+    when: "true"
   dependencies: []
   task:
     agent:
       machine:
-        type: f1-standard-2
+        type: f1-standard-4
         os_image: ubuntu2204
     jobs:
-      - name: Pre-flight checks
+      - name: Build and save build cache
         commands:
-          - make ci-preflight-checks
+          - make -C felix build fv-prereqs
+          - make -C cni-plugin build
+          - make -C typha build
+          - make -C apiserver build
+          - make -C kube-controllers build
+          - cd ..
+          - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME go
+          - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
