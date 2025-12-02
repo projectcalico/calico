@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -1701,40 +1702,53 @@ func validateTier(structLevel validator.StructLevel) {
 		)
 	}
 
-	if tier.Name == names.DefaultTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.DefaultTierOrder {
+	validateTierSpec := func(tier api.Tier, expectedOrder float64, expectedDefaultAction api.Action) {
+		var (
+			tierOrderMatched bool
+			tierOrderStr     = "nil"
+
+			tierDefaultActionMatched bool
+			tierDefaultActionStr     = "nil"
+		)
+		if tier.Spec.Order != nil {
+			tierOrderStr = fmt.Sprintf("%v", *tier.Spec.Order)
+			if *tier.Spec.Order == expectedOrder {
+				tierOrderMatched = true
+			}
+		}
+		if !tierOrderMatched {
 			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
+				tierOrderStr,
 				"TierSpec.Order",
 				"",
-				reason(fmt.Sprintf("default tier order must be %v", api.DefaultTierOrder)),
+				reason(fmt.Sprintf("%v tier order must be %v", tier.Name, expectedOrder)),
+				"",
+			)
+		}
+		if tier.Spec.DefaultAction != nil {
+			tierDefaultActionStr = fmt.Sprintf("%v", *tier.Spec.DefaultAction)
+			if *tier.Spec.DefaultAction == expectedDefaultAction {
+				tierDefaultActionMatched = true
+			}
+		}
+		if !tierDefaultActionMatched {
+			structLevel.ReportError(
+				tierDefaultActionStr,
+				"TierSpec.DefaultAction",
+				"",
+				reason(fmt.Sprintf("%v tier default action must be %v", tier.Name, expectedDefaultAction)),
 				"",
 			)
 		}
 	}
 
-	if tier.Name == names.KubeAdminTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeAdminTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("kube-admin tier order must be %v", api.KubeAdminTierOrder)),
-				"",
-			)
-		}
-	}
-
-	if tier.Name == names.KubeBaselineTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeBaselineTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("kube-baseline tier order must be %v", api.KubeBaselineTierOrder)),
-				"",
-			)
-		}
+	switch tier.Name {
+	case names.DefaultTierName:
+		validateTierSpec(tier, v3.DefaultTierOrder, v3.Deny)
+	case names.KubeAdminTierName:
+		validateTierSpec(tier, v3.KubeAdminTierOrder, v3.Pass)
+	case names.KubeBaselineTierName:
+		validateTierSpec(tier, v3.KubeBaselineTierOrder, v3.Pass)
 	}
 
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
