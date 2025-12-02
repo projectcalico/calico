@@ -16,7 +16,6 @@ package namespace_test
 
 import (
 	"context"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -36,11 +35,13 @@ import (
 var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
 	var (
 		etcd              *containers.Container
-		policyController  *containers.Container
+		kubeControllers   *containers.Container
 		apiserver         *containers.Container
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		kconfigfile       string
+		removeKubeconfig  func()
 	)
 
 	BeforeEach(func() {
@@ -52,20 +53,13 @@ var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		// Run the controller.
-		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
+		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		var err error
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -85,9 +79,10 @@ var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
 	AfterEach(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
-		policyController.Stop()
+		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
 	})
 
 	Context("Namespace Profile FV tests", func() {
