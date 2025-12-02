@@ -20,13 +20,14 @@ import (
 	"strings"
 	"sync"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -35,12 +36,10 @@ type pcRuleID struct {
 	id64   uint64
 }
 
-var (
-	gaugePolicyCacheLength = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_collector_lookups_cache_policies",
-		Help: "Total number of entries currently residing in the endpoints lookup cache.",
-	})
-)
+var gaugePolicyCacheLength = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "felix_collector_lookups_cache_policies",
+	Help: "Total number of entries currently residing in the endpoints lookup cache.",
+})
 
 // PolicyLookupsCache provides an API to lookup policy to NFLOG prefix mapping.
 // To do this, the PolicyLookupsCache hooks into the calculation graph
@@ -55,7 +54,8 @@ type PolicyLookupsCache struct {
 	useIDs bool
 	ids    *idalloc.IDAllocator
 
-	tierRefs map[string]int
+	tierRefs  map[string]int
+	keyToTier map[model.PolicyKey]string
 }
 
 func NewPolicyLookupsCache() *PolicyLookupsCache {
@@ -64,17 +64,18 @@ func NewPolicyLookupsCache() *PolicyLookupsCache {
 		nflogPrefixesProfile: map[model.ProfileRulesKey]set.Set[string]{},
 		nflogPrefixHash:      map[[64]byte]pcRuleID{},
 		tierRefs:             map[string]int{},
+		keyToTier:            map[model.PolicyKey]string{},
 		ids:                  idalloc.New(),
 	}
 	// Add NFLog mappings for the no-profile match.
 	pc.addNFLogPrefixEntry(
 		rules.CalculateNoMatchProfileNFLOGPrefixStr(rules.RuleDirIngress),
-		NewRuleID("", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny),
+		NewRuleID("", "", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny),
 	)
 
 	pc.addNFLogPrefixEntry(
 		rules.CalculateNoMatchProfileNFLOGPrefixStr(rules.RuleDirEgress),
-		NewRuleID("", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny),
+		NewRuleID("", "", "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny),
 	)
 
 	return pc
@@ -141,41 +142,44 @@ func (pc *PolicyLookupsCache) deleteNFLogPrefixEntry(prefix string) {
 // updatePolicyRulesNFLOGPrefixes stores the required prefix to RuleID maps for a policy, deleting any
 // stale entries if the number of rules or action types have changed.
 func (pc *PolicyLookupsCache) updatePolicyRulesNFLOGPrefixes(key model.PolicyKey, policy *model.Policy) {
+	// Track mapping of key to tier, allowing us to manage tier reference counts. If the tier for a policy
+	// changes, we need to treat that as a removal from the old tier and an addition to the new tier.
+	oldTier, ok := pc.keyToTier[key]
+	if ok && oldTier != policy.Tier {
+		pc.removePolicyRulesNFLOGPrefixes(key)
+	}
+	pc.keyToTier[key] = policy.Tier
+
 	// If this is the first time we have seen this tier, add the default deny entries for the tier, and the default
 	// pass (for staged-only tiers).
-	count, ok := pc.tierRefs[key.Tier]
+	count, ok := pc.tierRefs[policy.Tier]
 	if !ok {
 		pc.addNFLogPrefixEntry(
-			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirIngress, key.Tier),
-			NewRuleID(key.Tier, "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny),
+			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirIngress, policy.Tier),
+			NewRuleID("", policy.Tier, "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny),
 		)
 		pc.addNFLogPrefixEntry(
-			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirEgress, key.Tier),
-			NewRuleID(key.Tier, "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny),
+			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirEgress, policy.Tier),
+			NewRuleID("", policy.Tier, "", "", 0, rules.RuleDirEgress, rules.RuleActionDeny),
 		)
 		pc.addNFLogPrefixEntry(
-			rules.CalculateEndOfTierPassNFLOGPrefixStr(rules.RuleDirIngress, key.Tier),
-			NewRuleID(key.Tier, "", "", 0, rules.RuleDirIngress, rules.RuleActionPass),
+			rules.CalculateEndOfTierPassNFLOGPrefixStr(rules.RuleDirIngress, policy.Tier),
+			NewRuleID("", policy.Tier, "", "", 0, rules.RuleDirIngress, rules.RuleActionPass),
 		)
 		pc.addNFLogPrefixEntry(
-			rules.CalculateEndOfTierPassNFLOGPrefixStr(rules.RuleDirEgress, key.Tier),
-			NewRuleID(key.Tier, "", "", 0, rules.RuleDirEgress, rules.RuleActionPass),
+			rules.CalculateEndOfTierPassNFLOGPrefixStr(rules.RuleDirEgress, policy.Tier),
+			NewRuleID("", policy.Tier, "", "", 0, rules.RuleDirEgress, rules.RuleActionPass),
 		)
 	}
-	pc.tierRefs[key.Tier] = count + 1
-
-	namespace, tier, name, err := names.DeconstructPolicyName(key.Name)
-	if err != nil {
-		log.WithError(err).Error("Unable to parse policy name")
-		return
-	}
+	pc.tierRefs[policy.Tier] = count + 1
 
 	oldPrefixes := pc.nflogPrefixesPolicy[key]
 	pc.nflogPrefixesPolicy[key] = pc.updateRulesNFLOGPrefixes(
+		&types.PolicyID{Name: key.Name, Namespace: key.Namespace, Kind: key.Kind},
+		key.Kind,
+		key.Namespace,
 		key.Name,
-		namespace,
-		tier,
-		name,
+		policy.Tier,
 		oldPrefixes,
 		policy.InboundRules,
 		policy.OutboundRules,
@@ -186,19 +190,28 @@ func (pc *PolicyLookupsCache) updatePolicyRulesNFLOGPrefixes(key model.PolicyKey
 
 // removePolicyRulesNFLOGPrefixes removes the prefix to RuleID maps for a policy.
 func (pc *PolicyLookupsCache) removePolicyRulesNFLOGPrefixes(key model.PolicyKey) {
-	// If this is the last entry for the tier, remove the default action entries for the tier.
-	// Increment the reference count so that we don't keep adding tiers.
-	count := pc.tierRefs[key.Tier]
+	// Look up the tier for this policy.
+	tier, ok := pc.keyToTier[key]
+	if !ok {
+		// We have never seen this policy. Nothing to do.
+		log.Warnf("Attempted to remove unknown policy %v from PolicyLookupsCache", key)
+		return
+	}
+	delete(pc.keyToTier, key)
+
+	count := pc.tierRefs[tier]
 	if count == 1 {
-		delete(pc.tierRefs, key.Tier)
+		// This is the last entry for the tier, remove the default action entries for the tier.
+		delete(pc.tierRefs, tier)
 		pc.deleteNFLogPrefixEntry(
-			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirIngress, key.Tier),
+			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirIngress, tier),
 		)
 		pc.deleteNFLogPrefixEntry(
-			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirEgress, key.Tier),
+			rules.CalculateEndOfTierDropNFLOGPrefixStr(rules.RuleDirEgress, tier),
 		)
 	} else {
-		pc.tierRefs[key.Tier] = count - 1
+		// Decrement the reference count.
+		pc.tierRefs[tier] = count - 1
 	}
 
 	oldPrefixes := pc.nflogPrefixesPolicy[key]
@@ -213,10 +226,11 @@ func (pc *PolicyLookupsCache) removePolicyRulesNFLOGPrefixes(key model.PolicyKey
 func (pc *PolicyLookupsCache) updateProfileRulesNFLOGPrefixes(key model.ProfileRulesKey, profile *model.ProfileRules) {
 	oldPrefixes := pc.nflogPrefixesProfile[key]
 	pc.nflogPrefixesProfile[key] = pc.updateRulesNFLOGPrefixes(
-		key.Name,
+		&types.ProfileID{Name: key.Name},
 		"",
 		"",
 		key.Name,
+		"",
 		oldPrefixes,
 		profile.InboundRules,
 		profile.OutboundRules,
@@ -235,7 +249,11 @@ func (pc *PolicyLookupsCache) removeProfileRulesNFLOGPrefixes(key model.ProfileR
 // settings. This method adds any new rules and removes any obsolete rules.
 // TODO (rlb): Maybe we should do a lazy clean up of rules?
 func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
-	v1Name, namespace, tier, name string, oldPrefixes set.Set[string], ingress []model.Rule, egress []model.Rule,
+	id types.IDMaker,
+	kind, namespace, name, tier string,
+	oldPrefixes set.Set[string],
+	ingress []model.Rule,
+	egress []model.Rule,
 ) set.Set[string] {
 	newPrefixes := set.New[string]()
 
@@ -256,19 +274,19 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	}
 	for ii, rule := range ingress {
 		action := convertAction(rule.Action)
-		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirIngress, ii, v1Name)
+		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirIngress, ii, id)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, ii, rules.RuleDirIngress, action),
+			NewRuleID(kind, tier, name, namespace, ii, rules.RuleDirIngress, action),
 		)
 		newPrefixes.Add(prefix)
 	}
 	for ii, rule := range egress {
 		action := convertAction(rule.Action)
-		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirEgress, ii, v1Name)
+		prefix := rules.CalculateNFLOGPrefixStr(action, owner, rules.RuleDirEgress, ii, id)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, ii, rules.RuleDirEgress, action),
+			NewRuleID(kind, tier, name, namespace, ii, rules.RuleDirEgress, action),
 		)
 		newPrefixes.Add(prefix)
 	}
@@ -277,18 +295,18 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	// actually map to the end-of-tier defaultActions associated with that policy since that is how
 	// they will be reported by the collector. The collector will only report these stats if we hit
 	// the end-of-tier pass indicating that the tier contains only staged policies.
-	if model.PolicyIsStaged(v1Name) {
-		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, v1Name)
+	if model.KindIsStaged(kind) {
+		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, id)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny),
+			NewRuleID(kind, tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
 
-		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, v1Name)
+		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, id)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny),
+			NewRuleID(kind, tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
 	}
@@ -368,15 +386,17 @@ const (
 )
 
 type PolicyID struct {
-	// The tier name. If this is blank this represents a Profile backed rule.
-	Tier string
+	// The kind of policy.
+	Kind string
+
+	// The namespace. This is only non-blank for a NetworkPolicy type. For Tiers, GlobalNetworkPolicies and the
+	// no match rules this will be blank.
+	Namespace string
+
 	// The policy or profile name. This has the tier removed from the name. If this is blank, this represents
 	// a "no match" rule. For k8s policies, this will be the full v3 name (knp.default.<k8s name>) - this avoids
 	// name conflicts with Calico policies.
 	Name string
-	// The namespace. This is only non-blank for a NetworkPolicy type. For Tiers, GlobalNetworkPolicies and the
-	// no match rules this will be blank.
-	Namespace string
 }
 
 // RuleID contains the complete identifiers for a particular rule. This is a breakdown of the
@@ -392,25 +412,28 @@ type RuleID struct {
 	IndexStr string
 	// The rule action.
 	Action rules.RuleAction
+	// The tier of the policy. Empty for profiles.
+	Tier string
 
 	// Optimization so that the hot path doesn't need to create strings.
-	dpName string
 	fpName string
 }
 
-func NewRuleID(tier, policy, namespace string, ruleIndex int, ruleDirection rules.RuleDir, ruleAction rules.RuleAction) *RuleID {
+func NewRuleID(kind, tier, name, namespace string, ruleIndex int, ruleDirection rules.RuleDir, ruleAction rules.RuleAction) *RuleID {
 	rid := &RuleID{
+		// Note: we use a PolicyID here even for profiles to avoid creating a separate struct. Profile type RuleIDs
+		// will have empty Kind and Namespace, and empty Tier in the RuleID itself.
 		PolicyID: PolicyID{
-			Tier:      tier,
-			Name:      policy,
+			Name:      name,
 			Namespace: namespace,
+			Kind:      kind,
 		},
+		Tier:      tier,
 		Direction: ruleDirection,
 		Index:     ruleIndex,
 		IndexStr:  strconv.Itoa(ruleIndex),
 		Action:    ruleAction,
 	}
-	rid.setDeniedPacketRuleName()
 	rid.setFlowLogPolicyName()
 	return rid
 }
@@ -424,8 +447,8 @@ func (r *RuleID) Equals(r2 *RuleID) bool {
 
 func (r *RuleID) String() string {
 	return fmt.Sprintf(
-		"Rule(Tier=%s,Name=%s,Namespace=%s,Direction=%s,Index=%s,Action=%s)",
-		r.TierString(), r.NameString(), r.NamespaceString(), r.DirectionString(), r.IndexStr, r.ActionString(),
+		"Rule(Tier=%s,Kind=%s,Name=%s,Namespace=%s,Direction=%s,Index=%s,Action=%s)",
+		r.Tier, r.Kind, r.Name, r.Namespace, r.Direction, r.IndexStr, r.Action,
 	)
 }
 
@@ -434,7 +457,7 @@ func (r *RuleID) IsNamespaced() bool {
 }
 
 func (r *RuleID) IsProfile() bool {
-	return len(r.Tier) == 0
+	return len(r.Tier) == 0 || r.Tier == ProfileTierStr
 }
 
 func (r *RuleID) IsEndOfTier() bool {
@@ -497,48 +520,35 @@ func (r *RuleID) DirectionString() string {
 	return ""
 }
 
-func (r *RuleID) setDeniedPacketRuleName() {
-	if r.Action != rules.RuleActionDeny {
-		return
-	}
-	if !r.IsNamespaced() {
-		r.dpName = fmt.Sprintf(
-			"%s|%s|%s|%s",
-			r.TierString(),
-			r.NameString(),
-			r.IndexStr,
-			r.ActionString(),
-		)
-		return
-	}
-	r.dpName = fmt.Sprintf(
-		"%s|%s/%s|%s|%s",
-		r.TierString(),
-		r.Namespace,
-		r.NameString(),
-		r.IndexStr,
-		r.ActionString(),
-	)
-}
-
-func (r *RuleID) GetDeniedPacketRuleName() string {
-	if r == nil {
-		return ""
-	}
-	return r.dpName
-}
-
 func (r *RuleID) setFlowLogPolicyName() {
-	if !r.IsNamespaced() {
+	if r.IsProfile() {
+		// Profile.
 		r.fpName = fmt.Sprintf(
 			"%s|%s.%s|%s",
+			ProfileTierStr,
+			ProfileTierStr,
+			r.NameString(),
+			r.ActionString(),
+		)
+	} else if r.Kind == v3.KindGlobalNetworkPolicy || r.Kind == model.KindKubernetesClusterNetworkPolicy {
+		// GlobalNetworkPolicy, ClusterNetworkPolicy.
+		r.fpName = fmt.Sprintf(
+			"%s|%s|%s",
+			r.TierString(),
+			r.NameString(),
+			r.ActionString(),
+		)
+	} else if r.Kind == v3.KindStagedGlobalNetworkPolicy {
+		// Staged GlobalNetworkPolicy.
+		r.fpName = fmt.Sprintf(
+			"%s|%s.staged:%s|%s",
 			r.TierString(),
 			r.TierString(),
 			r.NameString(),
 			r.ActionString(),
 		)
-	} else if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(r.Name, model.PolicyNamePrefixStaged+names.K8sNetworkPolicyNamePrefix) {
+	} else if r.Kind == model.KindKubernetesNetworkPolicy {
+		// Kubernetes NetworkPolicy.
 		r.fpName = fmt.Sprintf(
 			"%s|%s/%s|%s",
 			r.TierString(),
@@ -546,15 +556,43 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.NameString(),
 			r.ActionString(),
 		)
-	} else {
+	} else if r.Kind == v3.KindStagedKubernetesNetworkPolicy {
+		// StagedKubernetesNetworkPolicy.
 		r.fpName = fmt.Sprintf(
-			"%s|%s/%s.%s|%s",
+			"%s|%s/staged:%s|%s",
+			r.TierString(),
+			r.Namespace,
+			r.NameString(),
+			r.ActionString(),
+		)
+	} else if r.Kind == v3.KindStagedNetworkPolicy {
+		// StagedNetworkPolicy.
+		r.fpName = fmt.Sprintf(
+			"%s|%s/%s.staged:%s|%s",
 			r.TierString(),
 			r.Namespace,
 			r.TierString(),
 			r.NameString(),
 			r.ActionString(),
 		)
+	} else if r.Kind == v3.KindNetworkPolicy {
+		r.fpName = fmt.Sprintf(
+			"%s|%s/%s|%s",
+			r.TierString(),
+			r.Namespace,
+			r.NameString(),
+			r.ActionString(),
+		)
+	} else if r.Kind == "" {
+		// This is not a profile rule, nor a known policy kind. This makes it an end-of-tier rule.
+		r.fpName = fmt.Sprintf(
+			"%s|%s|%s",
+			r.TierString(),
+			NoMatchNameStr,
+			r.ActionString(),
+		)
+	} else {
+		log.WithField("ruleID", r.String()).Warn("Unknown RuleID kind")
 	}
 }
 
