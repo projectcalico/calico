@@ -4443,7 +4443,23 @@ spec:
                 order:
                   type: number
               type: object
+          required:
+            - metadata
+            - spec
           type: object
+          x-kubernetes-validations:
+            - message: The 'kube-admin' tier must have default action 'Pass'
+              rule:
+                "self.metadata.name == 'kube-admin' ? self.spec.defaultAction ==
+                'Pass' : true"
+            - message: The 'kube-baseline' tier must have default action 'Pass'
+              rule:
+                "self.metadata.name == 'kube-baseline' ? self.spec.defaultAction
+                == 'Pass' : true"
+            - message: The 'default' tier must have default action 'Deny'
+              rule:
+                "self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny'
+                : true"
       served: true
       storage: true
 ---
