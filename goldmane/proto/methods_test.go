@@ -100,15 +100,11 @@ func TestInvalidStrings(t *testing.T) {
 		// Bad action field.
 		"0|kube-admin|kcnp.kube-admin.name|badaction|1",
 
-		// Tier fields do not match.
-		"0|tier|namespace/knp.default.name|allow|2",
-		"0|kube-admin|kcnp.foobar.policy1|allow|-1",
-		"1|tier|tier2.name|allow|0",
-		"0||namespace/tier.name|allow|1",
+		// Tier field is missing.
+		"0||namespace/name|allow|1",
 
 		// Missing a name section.
-		"0|tier1|default/|pass|0",
-		"1|tier|namespace/knp.default|deny|3",
+		"0|tier1|namespace/|pass|0",
 
 		// Profile rules.
 		"1|___PROFILE__|__PROFILE__.kns.default|allow|0",
@@ -133,7 +129,7 @@ func TestToString(t *testing.T) {
 	tests := []testCase{
 		{
 			name:   "Valid base case",
-			strVal: "0|tier|tier.name|allow|0",
+			strVal: "0|tier|name|allow|0",
 			hit: &PolicyHit{
 				Kind:        PolicyKind_GlobalNetworkPolicy,
 				Tier:        "tier",

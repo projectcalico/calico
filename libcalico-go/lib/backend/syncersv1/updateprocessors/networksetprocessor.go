@@ -29,7 +29,11 @@ import (
 
 // Create a new SyncerUpdateProcessor to sync NetworkSet data in v1 format for consumption by Felix.
 func NewNetworkSetUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(apiv3.KindNetworkSet, convertNetworkSetV2ToV1Key, convertNetworkSetV2ToV1Value)
+	return NewSimpleUpdateProcessor(
+		apiv3.KindNetworkSet,
+		convertNetworkSetV2ToV1Key,
+		convertNetworkSetV2ToV1Value,
+	)
 }
 
 func convertNetworkSetV2ToV1Key(v3key model.ResourceKey) (model.Key, error) {
