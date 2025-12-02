@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,42 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# Common utility functions for testing scripts
-
-# Logging functions with timestamps and colors
-function log_info() {
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo -e "\033[32m[INFO]\033[0m [$timestamp] $*"
-}
-
-function log_warning() {
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo -e "\033[33m[WARNING]\033[0m [$timestamp] $*" >&2
-}
-
-function log_fail() {
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo -e "\033[31m[FAIL]\033[0m [$timestamp] $*" >&2
-}
-
-# Alias for backwards compatibility
-function log_warn() {
-    log_warning "$@"
-}
-
-function log_error() {
-    log_fail "$@"
-}
-
-# Helper function to redirect output based on VERBOSE setting
-function redirect_output() {
-  if [[ "${VERBOSE}" == "true" ]]; then
-    "$@"
-  else
-    "$@" > /dev/null 2>&1
-  fi
-}
 
 unset -f retry_command
 function retry_command() {
@@ -73,3 +37,4 @@ function pause-for-debug() {
     sleep 30
   done
 }
+
