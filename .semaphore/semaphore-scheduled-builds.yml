@@ -65,7 +65,7 @@ global_job_config:
           git clone --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
           cd "${CALICO_DIR_NAME}" || exit 1
         fi
-      - git fetch origin ${SEMAPHORE_GIT_SHA}
+      - git fetch origin --tags --prune-tags ${SEMAPHORE_GIT_SHA}
       - |-
         if [ $SEMAPHORE_GIT_REF_TYPE = "branch" ]; then
           git checkout ${SEMAPHORE_GIT_SHA} -B "${SEMAPHORE_GIT_BRANCH}"
