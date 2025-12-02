@@ -1,16 +1,78 @@
+- name: Check semaphore/YAML files
+  run:
+    when: >-
+      ${FORCE_RUN} or 
+      change_in(['/**/*.yml', '/**/*.yaml', '/.semaphore/semaphore.yml.d', '/hack'], {pipeline_file: 'track'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check semaphore files
+        commands:
+          - make gen-semaphore-yaml
+          - make yaml-lint
+          - make check-dirty
+- name: Check Go
+  run:
+    when: >-
+      ${FORCE_RUN} or 
+      change_in(['go.mod', 'go.sum','**/*.go', '**/deps.txt'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check Go files
+        commands:
+          - make check-go-mod
+          - make verify-go-mods
+          - make gen-deps-files
+          - make go-vet
+          - make check-dirty
+- name: Check protobufs
+  run:
+    when: >-
+      ${FORCE_RUN} or 
+      change_in(['**/*.pb.go','**/*.proto'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check protobufs
+        commands:
+          - make protobuf fix-changed
+          - make check-dirty
+- name: Manifests and API docs
+  run:
+    when: >-
+      ${FORCE_RUN} or 
+      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check protobufs
+        commands:
+          - make protobuf fix-changed
+          - make -C lib gen-files
+          - make -C api gen-files
+          - make -C libcalico-go gen-files
+          - make -C felix gen-files
+          - make -C goldmane gen-files
+          - make gen-manifests
+          - make fix-changed
+          - make check-dirty
 - name: Prerequisites
   run:
     when: "${FORCE_RUN} or change_in(['/'], {pipeline_file: 'track'})"
-  dependencies: []
+  dependencies:
+    - Check semaphore/YAML files
+    - Check Go
+    - Check protobufs
+    - Manifests and API docs
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2204
     jobs:
       - name: Pre-flight checks
         commands:
-          - make ci-preflight-checks
+          - true
+        env_vars:
+          - name: SKIP_CACHE_RESTORE
+            value: "true"
 - name: Build core components
   run:
     when: "true"
