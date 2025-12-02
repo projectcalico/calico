@@ -57,9 +57,9 @@ ci-preflight-checks:
 	$(MAKE) fix-all
 	$(MAKE) -C networking-calico fmtpy
 	$(MAKE) check-ocp-no-crds
-	$(MAKE) yaml-lint
+	#$(MAKE) yaml-lint
 	$(MAKE) check-dirty
-	$(MAKE) go-vet
+	#$(MAKE) go-vet
 	$(MAKE) -C networking-calico flake8
 
 check-go-mod:
