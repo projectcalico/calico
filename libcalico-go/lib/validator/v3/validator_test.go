@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -3828,7 +3827,7 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 		Entry("should reject kube-baseline with wrong default action",
 			api.Tier{
 				ObjectMeta: v1.ObjectMeta{Name: "kube-baseline"},
-				Spec:       api.TierSpec{DefaultAction: ptr.To(v3.Deny), Order: ptr.To(api.KubeBaselineTierOrder)},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Deny), Order: ptr.To(api.KubeBaselineTierOrder)},
 			},
 			"must have default action",
 		),
@@ -3836,7 +3835,7 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 		Entry("should accept kube-baseline with correct default action",
 			api.Tier{
 				ObjectMeta: v1.ObjectMeta{Name: "kube-baseline"},
-				Spec:       api.TierSpec{DefaultAction: ptr.To(v3.Pass), Order: ptr.To(api.KubeBaselineTierOrder)},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.KubeBaselineTierOrder)},
 			},
 			"",
 		),
@@ -3844,7 +3843,7 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 		Entry("should reject kube-admin with wrong default action",
 			api.Tier{
 				ObjectMeta: v1.ObjectMeta{Name: "kube-admin"},
-				Spec:       api.TierSpec{DefaultAction: ptr.To(v3.Deny), Order: ptr.To(api.KubeAdminTierOrder)},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Deny), Order: ptr.To(api.KubeAdminTierOrder)},
 			},
 			"must have default action",
 		),
@@ -3852,7 +3851,7 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 		Entry("should accept kube-admin with correct default action",
 			api.Tier{
 				ObjectMeta: v1.ObjectMeta{Name: "kube-admin"},
-				Spec:       api.TierSpec{DefaultAction: ptr.To(v3.Pass), Order: ptr.To(api.KubeAdminTierOrder)},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.KubeAdminTierOrder)},
 			},
 			"",
 		),
@@ -3860,7 +3859,7 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 		Entry("should reject default tier with wrong default action",
 			api.Tier{
 				ObjectMeta: v1.ObjectMeta{Name: "default"},
-				Spec:       api.TierSpec{DefaultAction: ptr.To(v3.Pass), Order: ptr.To(api.DefaultTierOrder)},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.DefaultTierOrder)},
 			},
 			"must have default action",
 		),
