@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -1744,11 +1743,11 @@ func validateTier(structLevel validator.StructLevel) {
 
 	switch tier.Name {
 	case names.DefaultTierName:
-		validateTierSpec(tier, v3.DefaultTierOrder, v3.Deny)
+		validateTierSpec(tier, api.DefaultTierOrder, api.Deny)
 	case names.KubeAdminTierName:
-		validateTierSpec(tier, v3.KubeAdminTierOrder, v3.Pass)
+		validateTierSpec(tier, api.KubeAdminTierOrder, api.Pass)
 	case names.KubeBaselineTierName:
-		validateTierSpec(tier, v3.KubeBaselineTierOrder, v3.Pass)
+		validateTierSpec(tier, api.KubeBaselineTierOrder, api.Pass)
 	}
 
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
