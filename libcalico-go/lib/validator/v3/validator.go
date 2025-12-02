@@ -1702,13 +1702,8 @@ func validateTier(structLevel validator.StructLevel) {
 	}
 
 	validateTierSpec := func(tier api.Tier, expectedOrder float64, expectedDefaultAction api.Action) {
-		var (
-			tierOrderMatched bool
-			tierOrderStr     = "nil"
-
-			tierDefaultActionMatched bool
-			tierDefaultActionStr     = "nil"
-		)
+		tierOrderMatched := false
+		tierOrderStr := "nil"
 		if tier.Spec.Order != nil {
 			tierOrderStr = fmt.Sprintf("%v", *tier.Spec.Order)
 			if *tier.Spec.Order == expectedOrder {
@@ -1724,6 +1719,9 @@ func validateTier(structLevel validator.StructLevel) {
 				"",
 			)
 		}
+
+		tierDefaultActionMatched := false
+		tierDefaultActionStr := "nil"
 		if tier.Spec.DefaultAction != nil {
 			tierDefaultActionStr = fmt.Sprintf("%v", *tier.Spec.DefaultAction)
 			if *tier.Spec.DefaultAction == expectedDefaultAction {
