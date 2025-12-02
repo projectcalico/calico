@@ -11,3 +11,24 @@
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
+- name: Build core components
+  run:
+    when: "true"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: Build and save build cache
+        commands:
+          - make -C felix build fv-prereqs
+          - make -C cni-plugin build
+          - make -C typha build
+          - make -C apiserver build
+          - make -C kube-controllers build
+          - cd ..
+          - tar --use-compress-program=lz4 -cf /tmp/working-copy.tar.lz4 $CALICO_DIR_NAME go
+          - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          - gcloud storage cp /tmp/working-copy.tar.lz4 "$gcs_branch_cache_dir/working-copy.tar.lz4"
