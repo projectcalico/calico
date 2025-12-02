@@ -1603,7 +1603,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pol = createPolicy(pol)
 						})
 
-						bpfWaitForPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
+						bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
 					})
 
 					It("should handle NAT outgoing", func() {
@@ -6239,10 +6239,22 @@ func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
 	return out
 }
 
-func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, policy string) string {
-	search := fmt.Sprintf("Start of GlobalNetworkPolicy %s", policy)
+// bpfWaitForGlobalNetworkPolicy waits for the given global network policy to appear in BPF policy.
+func bpfWaitForGlobalNetworkPolicy(felix *infrastructure.Felix, iface, hook, policyName string) string {
+	search := fmt.Sprintf("Start of GlobalNetworkPolicy %s", policyName)
+	return bpfWaitForPolicy(felix, iface, hook, search)
+}
+
+// bpfWaitForNetworkPolicy waits for the given network policy in the given namespace to appear in BPF policy.
+func bpfWaitForNetworkPolicy(felix *infrastructure.Felix, iface, hook, ns, policyName string) string {
+	search := fmt.Sprintf("Start of NetworkPolicy %s/%s", ns, policyName)
+	return bpfWaitForPolicy(felix, iface, hook, search)
+}
+
+// bpfWaitForNetworkPolicy waits for the given search string to appear in BPF policy.
+func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, search string) string {
 	out := ""
-	EventuallyWithOffset(1, func() string {
+	EventuallyWithOffset(2, func() string {
 		out = bpfDumpPolicy(felix, iface, hook)
 		return out
 	}, "5s", "200ms").Should(ContainSubstring(search))
