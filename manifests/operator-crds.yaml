@@ -33050,6 +33050,10 @@ spec:
               rule:
                 "self.metadata.name == 'kube-baseline' ? self.spec.defaultAction
                 == 'Pass' : true"
+            - message: The 'default' tier must have default action 'Deny'
+              rule:
+                "self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny'
+                : true"
       served: true
       storage: true
 ---
