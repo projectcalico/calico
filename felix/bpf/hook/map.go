@@ -211,6 +211,53 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		return nil, fmt.Errorf("file %s: %w", file, err)
 	}
 
+	if err := pm.configureMaps(obj, file); err != nil {
+		return nil, err
+	}
+
+	if !at.hasIPDefrag() {
+		// Disable autoload for the IP defrag program
+		obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
+	}
+	skipIPDefrag := false
+	if err := obj.Load(); err != nil {
+		// If load fails and this attach type has IP defrag, try loading without the IP defrag program
+		if at.hasIPDefrag() {
+			log.WithError(err).Warn("Failed to load object with IP defrag program, retrying without it")
+			// Close the failed object and reopen
+			obj.Close()
+			obj, err = libbpf.OpenObject(file)
+			if err != nil {
+				return nil, fmt.Errorf("file %s: %w", file, err)
+			}
+
+			// Re-configure maps
+			if err := pm.configureMaps(obj, file); err != nil {
+				return nil, err
+			}
+
+			// Disable autoload for the IP defrag program
+			obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
+			skipIPDefrag = true
+
+			// Try loading again
+			if err := obj.Load(); err != nil {
+				return nil, fmt.Errorf("error loading program: %w", err)
+			}
+			log.WithField("attach type", at).
+				Warn("Object loaded without IP defrag - processing of fragmented packets will not be supported")
+		} else {
+			return nil, fmt.Errorf("error loading program: %w", err)
+		}
+	}
+
+	layout, err := pm.allocateLayout(at, obj, skipIPDefrag)
+	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s into %s", file, pm.GetName())
+
+	return layout, err
+}
+
+func (pm *ProgramsMap) configureMaps(obj *libbpf.Obj, file string) error {
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		mapName := m.Name()
 		if strings.Contains(mapName, ".rodata") {
@@ -218,35 +265,15 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		}
 
 		if err := pm.setMapSize(m); err != nil {
-			return nil, fmt.Errorf("error setting map size %s : %w", mapName, err)
+			return fmt.Errorf("error setting map size %s : %w", mapName, err)
 		}
 		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
-			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
+			return fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
 		log.Debugf("map %s k %d v %d pinned to %s for generic object file %s",
 			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
 	}
-
-	if progAttachType == "TCX" {
-		for prog, err := obj.FirstProgram(); prog != nil && err == nil; prog, err = prog.NextProgram() {
-			attachType := libbpf.AttachTypeTcxEgress
-			if pm.expectedAttachType == "ingress" {
-				attachType = libbpf.AttachTypeTcxIngress
-			}
-			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
-				return nil, fmt.Errorf("error setting attach type for program %s: %w", prog.Name(), err)
-			}
-		}
-	}
-
-	if err := obj.Load(); err != nil {
-		return nil, fmt.Errorf("error loading program: %w", err)
-	}
-
-	layout, err := pm.allocateLayout(at, obj)
-	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s into %s", file, pm.GetName())
-
-	return layout, err
+	return nil
 }
 
 func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
@@ -256,7 +283,7 @@ func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
 	return nil
 }
 
-func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, error) {
+func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefrag bool) (Layout, error) {
 	mapName := pm.GetName()
 
 	l := make(Layout)
@@ -278,7 +305,7 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, e
 			continue
 		}
 
-		if SubProg(idx) == SubProgIPFrag && !at.hasIPDefrag() {
+		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
 			continue
 		}
 
