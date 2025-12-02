@@ -29,6 +29,6 @@
           - make -C apiserver build
           - make -C kube-controllers build
           - cd ..
-          - tar --use-compress-program="lz4 --best" -cf /tmp/working-copy.tar.lz4 $CALICO_DIR_NAME go
+          - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME go
           - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          - gcloud storage cp /tmp/working-copy.tar.lz4 "$gcs_branch_cache_dir/working-copy.tar.lz4"
+          - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"

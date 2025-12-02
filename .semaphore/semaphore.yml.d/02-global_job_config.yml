@@ -22,16 +22,16 @@ global_job_config:
       # copy, which will invalidate build cache entries only for files changed
       # in the PR. This must be inline in this file because it needs to run
       # before code is checked out.
-      - sudo apt-get install -y lz4
+      - sudo apt-get install -y zstd
       - restored_cache=false
       - >-
         if [[ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
           echo "Running in the context of a PR: ${SEMAPHORE_GIT_PR_NUMBER}"
           # Look for a build cache from the target branch of the PR.
           gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.lz4" /tmp/working-copy.tar.lz4; then
+          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd; then
             echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
-            tar --use-compress-program=lz4 -xf /tmp/working-copy.tar.lz4
+            tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd
             cd "${CALICO_DIR_NAME}"
             git fetch origin ${SEMAPHORE_GIT_SHA}
             git checkout ${SEMAPHORE_GIT_SHA} -B ${SEMAPHORE_GIT_PR_BRANCH}
