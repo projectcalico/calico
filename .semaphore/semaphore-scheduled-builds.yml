@@ -39,29 +39,31 @@ global_job_config:
       # This includes a working copy and associated build cache with consistent
       # file mtimes.  We then check out the PR commit on top of that working
       # copy, which will invalidate build cache entries only for files changed
-      # in the PR.
+      # in the PR. This must be inline in this file because it needs to run
+      # before code is checked out.
+      - sudo apt-get install -y lz4
       - >-
-        if [[ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
+        restored_cache=false
+        if [[ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then 
           echo "Running in the context of a PR: ${SEMAPHORE_GIT_PR_NUMBER}"
           # Look for a build cache from the target branch of the PR.
           gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.gz" /tmp/working-copy.tar.gz; then
+          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.lz4" /tmp/working-copy.tar.lz4; then
             echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
-            tar -xzf /tmp/working-copy.tar.gz
-            cd "${CALICO_DIR_NAME}" || exit 1
+            tar --use-compress-program=lz4 -xf /tmp/working-copy.tar.lz4 
+            cd "${CALICO_DIR_NAME}" 
             git fetch origin ${SEMAPHORE_GIT_SHA}
             git checkout ${SEMAPHORE_GIT_SHA} -B ${SEMAPHORE_GIT_PR_BRANCH}
-          else
-            echo "No cache found for branch ${SEMAPHORE_GIT_BRANCH}"
-            git clone --filter=blob:none --revision=$SEMAPHORE_GIT_SHA $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
-            cd "${CALICO_DIR_NAME}" || exit 1
+            restored_cache=true
           fi
-        else
-          echo "Not running in the context of a PR, doing a clean checkout."
-          git clone --filter=blob:none -b $SEMAPHORE_GIT_BRANCH $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
+        fi || true
+        if ! $restored_cache; then
+          echo "No cache restored, doing a fresh checkout..."
+          cd $HOME
+          rm -rf "${CALICO_DIR_NAME}"
+          git clone --filter=blob:none --revision=$SEMAPHORE_GIT_SHA $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
           cd "${CALICO_DIR_NAME}" || exit 1
         fi
-
       - CALICO_DIR="$(pwd)"
       - export CALICO_DIR
 
@@ -222,9 +224,9 @@ blocks:
             - make -C apiserver build
             - make -C kube-controllers build
             - cd ..
-            - tar -czf /tmp/working-copy.tar.gz $CALICO_DIR_NAME go
+            - tar --use-compress-program=lz4 -cf /tmp/working-copy.tar.lz4 $CALICO_DIR_NAME go
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-            - gcloud storage cp /tmp/working-copy.tar.gz "$gcs_branch_cache_dir/working-copy.tar.gz"
+            - gcloud storage cp /tmp/working-copy.tar.lz4 "$gcs_branch_cache_dir/working-copy.tar.lz4"
   - name: API
     run:
       when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -492,8 +494,6 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
       secrets:
@@ -531,8 +531,6 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
       jobs:
         - name: "Felix: build multi-arch binaries"
           matrix:
@@ -556,8 +554,6 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
       jobs:
         - name: "Felix: build arm64 binaries"
           commands:
