@@ -841,7 +841,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						By("Waiting for the policy to apply")
 						if BPFMode() {
 							for _, felix := range topologyContainers.Felixes {
-								bpfWaitForPolicy(felix, "eth0", "egress", "default.deny-wg-port")
+								bpfWaitForGlobalNetworkPolicy(felix, "eth0", "egress", "deny-wg-port")
 							}
 						}
 
