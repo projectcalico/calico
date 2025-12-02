@@ -6217,7 +6217,8 @@ func bpfCheckIfRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName,
 }
 
 func bpfCheckIfNetworkPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNS, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, "NetworkPolicy", proto.IPVersion_IPV4)
+	namespacedName := fmt.Sprintf("%s/%s", polNS, polName)
+	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, namespacedName, action, isWorkload, "NetworkPolicy", proto.IPVersion_IPV4)
 }
 
 func bpfCheckIfGlobalNetworkPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
