@@ -57,9 +57,10 @@
           - make gen-manifests
           - make fix-changed
           - make check-dirty
+# Dummy node that depends on all the individual pre-flight checks.
 - name: Prerequisites
   run:
-    when: "${FORCE_RUN} or change_in(['/'], {pipeline_file: 'track'})"
+    when: "false"
   dependencies:
     - Check semaphore/YAML files
     - Check Go
@@ -70,11 +71,6 @@
       - name: Pre-flight checks
         commands:
           - "true"
-        env_vars:
-          - name: SKIP_CACHE_RESTORE
-            value: "true"
-          - name: SKIP_CHECKOUT
-            value: "true"
 - name: Build core components
   run:
     when: "true"
