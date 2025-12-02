@@ -23,12 +23,14 @@ import (
 	"github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 func init() {
@@ -36,8 +38,26 @@ func init() {
 	format.MaxLength = 0
 }
 
-var _ = Describe("Endpoints", endpointRulesTests(false, "DROP"))
-var _ = Describe("Endpoints with flowlogs", endpointRulesTests(true, "DROP"))
+var (
+	_ = Describe("Endpoints", endpointRulesTests(false, "DROP"))
+	_ = Describe("Endpoints with flowlogs", endpointRulesTests(true, "DROP"))
+)
+
+var (
+	// Expected ID suffixes for policies used in tests.
+	// These don't exceed the length limit for iptables chain names, so
+	// they do not get hashed.
+	gnpAI = "gnp/ai"
+	gnpBI = "gnp/bi"
+	gnpAE = "gnp/ae"
+	gnpBE = "gnp/be"
+
+	gnpC   = "gnp/c"
+	gnpAFI = "gnp/afi"
+	gnpBFI = "gnp/bfi"
+	gnpAFE = "gnp/afe"
+	gnpBFE = "gnp/bfe"
+)
 
 func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() {
 	return func() {
@@ -189,7 +209,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("ai", "bi"),
+						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 					).build()
 
@@ -201,7 +221,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
 						withEgress(),
-						withPolicies("ae", "be"),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
 					).build()
 
@@ -219,44 +239,60 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-					Expect(renderer.WorkloadEndpointToIptablesChains(
+					actual := renderer.WorkloadEndpointToIptablesChains(
 						"cali1234",
 						epMarkMapper,
 						true,
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"ai", "bi"},
-							EgressPolicies:  []string{"ae", "be"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
+							},
 						}}),
 						[]string{"prof1", "prof2"},
 						nil,
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
 				It("should render a workload endpoint with policy groups", func() {
 					polGrpInABC := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"a", "b", "c"},
-						Selector:    "all()",
+						Direction: PolicyDirectionInbound,
+						Policies: []*types.PolicyID{
+							{Name: "a"},
+							{Name: "b"},
+							{Name: "c"},
+						},
+						Selector: "all()",
 					}
 					polGrpInEF := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"e", "f"},
-						Selector:    "someLabel == 'bar'",
+						Direction: PolicyDirectionInbound,
+						Policies: []*types.PolicyID{
+							{Name: "e"},
+							{Name: "f"},
+						},
+						Selector: "someLabel == 'bar'",
 					}
 					polGrpOutAB := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"a", "b"},
-						Selector:    "all()",
+						Direction: PolicyDirectionOutbound,
+						Policies: []*types.PolicyID{
+							{Name: "a"},
+							{Name: "b"},
+						},
+						Selector: "all()",
 					}
 					polGrpOutDE := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"d", "e"},
-						Selector:    "someLabel == 'bar'",
+						Direction: PolicyDirectionOutbound,
+						Policies: []*types.PolicyID{
+							{Name: "d"},
+							{Name: "e"},
+						},
+						Selector: "someLabel == 'bar'",
 					}
 
 					toWlRules := newRuleBuilder(
@@ -323,7 +359,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("staged:ai", "bi"),
+						withPolicies("staged:ai", gnpBI),
 						withProfiles("prof1", "prof2"),
 					).build()
 
@@ -333,7 +369,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withEgress(),
-						withPolicies("ae", "staged:be"),
+						withPolicies(gnpAE, "staged:be"),
 						withProfiles("prof1", "prof2"),
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
@@ -353,18 +389,25 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-					Expect(renderer.WorkloadEndpointToIptablesChains(
+					actual := renderer.WorkloadEndpointToIptablesChains(
 						"cali1234",
 						epMarkMapper,
 						true,
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"staged:ai", "bi"},
-							EgressPolicies:  []string{"ae", "staged:be"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindStagedGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindStagedGlobalNetworkPolicy},
+							},
 						}}),
 						[]string{"prof1", "prof2"},
 						nil,
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
 				It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
@@ -408,9 +451,15 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						epMarkMapper,
 						true,
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"staged:ai", "staged:bi"},
-							EgressPolicies:  []string{"staged:ae", "staged:be"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindStagedGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindStagedGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindStagedGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindStagedGlobalNetworkPolicy},
+							},
 						}}),
 						[]string{"prof1", "prof2"},
 						nil,
@@ -419,16 +468,20 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 
 				It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
 					polGrpIngress := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"staged:ai", "staged:bi"},
-						Selector:    "all()",
+						Direction: PolicyDirectionInbound,
+						Policies: []*types.PolicyID{
+							{Name: "ai", Kind: v3.KindStagedGlobalNetworkPolicy},
+							{Name: "bi", Kind: v3.KindStagedGlobalNetworkPolicy},
+						},
+						Selector: "all()",
 					}
 					polGrpEgress := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"staged:ae", "staged:be"},
-						Selector:    "all()",
+						Direction: PolicyDirectionOutbound,
+						Policies: []*types.PolicyID{
+							{Name: "ae", Kind: v3.KindStagedGlobalNetworkPolicy},
+							{Name: "be", Kind: v3.KindStagedGlobalNetworkPolicy},
+						},
+						Selector: "all()",
 					}
 					toWlRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
@@ -483,12 +536,13 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
+					// Suffixes for policy IDs "ai" and "bi".
 					toWlRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("ai", "bi"),
+						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 						withTierPassAction(),
 					).build()
@@ -499,7 +553,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withEgress(),
-						withPolicies("ae", "be"),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
@@ -520,42 +574,62 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-					Expect(renderer.WorkloadEndpointToIptablesChains(
+					actual := renderer.WorkloadEndpointToIptablesChains(
 						"cali1234",
 						epMarkMapper,
 						true,
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							DefaultAction:   "Pass",
-							IngressPolicies: []string{"ai", "bi"},
-							EgressPolicies:  []string{"ae", "be"},
+							Name:          "default",
+							DefaultAction: "Pass",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
+							},
 						}}),
 						[]string{"prof1", "prof2"},
 						nil,
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
 				It("should render a host endpoint", func() {
 					actual := renderer.HostEndpointToFilterChains("eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"ai", "bi"},
-							EgressPolicies:  []string{"ae", "be"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
+							},
 						}}),
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"afi", "bfi"},
-							EgressPolicies:  []string{"afe", "bfe"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "afi", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bfi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "afe", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bfe", Kind: v3.KindGlobalNetworkPolicy},
+							},
 						}}),
 						epMarkMapper,
 						[]string{"prof1", "prof2"},
 					)
+
 					toHostRules := newRuleBuilder(
 						withDropActionOverride(dropActionOverride),
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("ae", "be"),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
 						withEgress(),
@@ -566,7 +640,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("ai", "bi"),
+						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
 					).build()
@@ -576,7 +650,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("afe", "bfe"),
+						withPolicies(gnpAFE, gnpBFE),
 						withForwardPolicies(),
 						withEgress(),
 						forHostEndpoint(),
@@ -587,7 +661,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("afi", "bfi"),
+						withPolicies(gnpAFI, gnpBFI),
 						withForwardPolicies(),
 						forHostEndpoint(),
 					).build()
@@ -623,7 +697,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("c"),
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
 						withEgress(),
@@ -634,7 +708,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("c"),
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
 					).build()
@@ -652,8 +726,8 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 					Expect(renderer.HostEndpointToRawChains("eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []string{"c"},
-							EgressPolicies:  []string{"c"},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
+							EgressPolicies:  []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
 					)).To(Equal(expected))
 				})
@@ -664,7 +738,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("c"),
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
 					).build()
@@ -674,13 +748,14 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							Rules: fromHostRules,
 						},
 					}
-					Expect(renderer.HostEndpointToMangleIngressChains(
+					actual := renderer.HostEndpointToMangleIngressChains(
 						"eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []string{"c"},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
 				It("should render a workload endpoint with packet rate limiting QoSControls", func() {
@@ -835,7 +910,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicies("c"),
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
 						withInvalidCTStateDisabled(),
@@ -847,13 +922,14 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							Rules: fromHostRules,
 						},
 					}
-					Expect(renderer.HostEndpointToMangleIngressChains(
+					actual := renderer.HostEndpointToMangleIngressChains(
 						"eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []string{"c"},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 			})
 
@@ -1029,15 +1105,15 @@ func tiersToSinglePolGroups(tiers []*proto.TierInfo) (tierGroups []TierPolicyGro
 			DefaultAction: t.DefaultAction,
 		}
 		for _, n := range t.IngressPolicies {
+			conv := types.ProtoToPolicyID(n)
 			tg.IngressPolicies = append(tg.IngressPolicies, &PolicyGroup{
-				Tier:        t.Name,
-				PolicyNames: []string{n},
+				Policies: []*types.PolicyID{&conv},
 			})
 		}
 		for _, n := range t.EgressPolicies {
+			conv := types.ProtoToPolicyID(n)
 			tg.EgressPolicies = append(tg.EgressPolicies, &PolicyGroup{
-				Tier:        t.Name,
-				PolicyNames: []string{n},
+				Policies: []*types.PolicyID{&conv},
 			})
 		}
 		tierGroups = append(tierGroups, tg)
@@ -1050,60 +1126,51 @@ var _ = Describe("PolicyGroups", func() {
 	It("should make sensible UIDs", func() {
 		pgs := []PolicyGroup{
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "foo",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionOutbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Direction: PolicyDirectionOutbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"a"},
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  []*types.PolicyID{{Name: "a"}},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "a == 'b'",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "a == 'b'",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"a", "b"},
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  []*types.PolicyID{{Name: "a"}, {Name: "b"}},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"ab"},
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  []*types.PolicyID{{Name: "ab"}},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"aaa", "bbb"},
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  []*types.PolicyID{{Name: "aaa"}, {Name: "bbb"}},
+				Selector:  "all()",
 			},
 			{
-				Tier:      "default",
 				Direction: PolicyDirectionInbound,
 				// Between this and the entry above, we check that the data
 				// sent to the hasher is delimited somehow.
-				PolicyNames: []string{"aaab", "bb"},
-				Selector:    "all()",
+				Policies: []*types.PolicyID{{Name: "aaab"}, {Name: "bb"}},
+				Selector: "all()",
 			},
 		}
 
@@ -1117,27 +1184,71 @@ var _ = Describe("PolicyGroups", func() {
 
 	It("should detect staged policies", func() {
 		pg := PolicyGroup{
-			Tier:      "default",
 			Direction: PolicyDirectionInbound,
-			PolicyNames: []string{
-				"namespace/staged:foo",
+			Policies: []*types.PolicyID{
+				{
+					Namespace: "namespace",
+					Name:      "foo",
+					Kind:      v3.KindStagedNetworkPolicy,
+				},
 			},
 			Selector: "all()",
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeFalse())
 
-		pg.PolicyNames = []string{
-			"staged:foo",
+		pg.Policies = []*types.PolicyID{
+			{
+				Name: "bar",
+				Kind: v3.KindStagedGlobalNetworkPolicy,
+			},
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeFalse())
 
-		pg.PolicyNames = []string{
-			"namespace/staged:foo",
-			"namespace/bar",
+		pg.Policies = []*types.PolicyID{
+			{
+				Namespace: "namespace",
+				Name:      "foo",
+				Kind:      v3.KindStagedNetworkPolicy,
+			},
+			{
+				Namespace: "namespace",
+				Name:      "bar",
+				Kind:      v3.KindGlobalNetworkPolicy,
+			},
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeTrue())
 	})
 })
+
+var (
+	// Chain names for policy ID "a".
+	cali_pi_a = PolicyChainName("cali-pi-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_a = PolicyChainName("cali-po-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "b".
+	cali_pi_b = PolicyChainName("cali-pi-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_b = PolicyChainName("cali-po-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "c".
+	cali_pi_c = PolicyChainName("cali-pi-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_c = PolicyChainName("cali-po-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "d".
+	cali_pi_d = PolicyChainName("cali-pi-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_d = PolicyChainName("cali-po-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "e".
+	cali_pi_e = PolicyChainName("cali-pi-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_e = PolicyChainName("cali-po-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "f".
+	cali_pi_f = PolicyChainName("cali-pi-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_f = PolicyChainName("cali-po-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	cali_po_g = PolicyChainName("cali-po-", &types.PolicyID{Name: "g", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_h = PolicyChainName("cali-po-", &types.PolicyID{Name: "h", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_i = PolicyChainName("cali-po-", &types.PolicyID{Name: "i", Kind: v3.KindGlobalNetworkPolicy}, false)
+)
 
 var _ = table.DescribeTable("PolicyGroup chains",
 	func(group PolicyGroup, expectedRules []generictables.Rule) {
@@ -1154,86 +1265,107 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		Expect(chains).To(HaveLen(1))
 		Expect(chains[0].Name).ToNot(BeEmpty())
 		Expect(chains[0].Name).To(Equal(group.ChainName()))
-		Expect(chains[0].Rules).To(Equal(expectedRules))
+		Expect(chains[0].Rules).To(Equal(expectedRules), cmp.Diff(chains[0].Rules, expectedRules))
 	},
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
+			jumpToPolicyGroup(cali_pi_a, 0),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			jumpToPolicyGroup("cali-pi-default/c", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
+			jumpToPolicyGroup(cali_pi_c, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			jumpToPolicyGroup("cali-pi-default/d", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
+			jumpToPolicyGroup(cali_pi_c, 0x18),
+			jumpToPolicyGroup(cali_pi_d, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			jumpToPolicyGroup("cali-pi-default/d", 0x18),
-			jumpToPolicyGroup("cali-pi-default/e", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
+			jumpToPolicyGroup(cali_pi_c, 0x18),
+			jumpToPolicyGroup(cali_pi_d, 0x18),
+			jumpToPolicyGroup(cali_pi_e, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e", "f"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			jumpToPolicyGroup("cali-pi-default/d", 0x18),
-			jumpToPolicyGroup("cali-pi-default/e", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
+			jumpToPolicyGroup(cali_pi_c, 0x18),
+			jumpToPolicyGroup(cali_pi_d, 0x18),
+			jumpToPolicyGroup(cali_pi_e, 0x18),
 			{
 				// Only get a return action every 5 rules and only if it's
 				// not the last action.
@@ -1241,82 +1373,112 @@ var _ = table.DescribeTable("PolicyGroup chains",
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			jumpToPolicyGroup("cali-pi-default/f", 0),
+			jumpToPolicyGroup(cali_pi_f, 0),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e", "f", "g"},
-			Selector:    "all()",
+			Direction: PolicyDirectionOutbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "g", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-po-default/a", 0),
-			jumpToPolicyGroup("cali-po-default/b", 0x18),
-			jumpToPolicyGroup("cali-po-default/c", 0x18),
-			jumpToPolicyGroup("cali-po-default/d", 0x18),
-			jumpToPolicyGroup("cali-po-default/e", 0x18),
+			jumpToPolicyGroup(cali_po_a, 0),
+			jumpToPolicyGroup(cali_po_b, 0x18),
+			jumpToPolicyGroup(cali_po_c, 0x18),
+			jumpToPolicyGroup(cali_po_d, 0x18),
+			jumpToPolicyGroup(cali_po_e, 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			jumpToPolicyGroup("cali-po-default/f", 0),
-			jumpToPolicyGroup("cali-po-default/g", 0x18),
+			jumpToPolicyGroup(cali_po_f, 0),
+			jumpToPolicyGroup(cali_po_g, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "c", "d", "e", "f", "g", "h", "i"},
-			Selector:    "all()",
+			Direction: PolicyDirectionOutbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "g", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "h", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "i", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			jumpToPolicyGroup("cali-po-default/c", 0),
-			jumpToPolicyGroup("cali-po-default/d", 0x18),
-			jumpToPolicyGroup("cali-po-default/e", 0x18),
-			jumpToPolicyGroup("cali-po-default/f", 0x18),
-			jumpToPolicyGroup("cali-po-default/g", 0x18),
+			jumpToPolicyGroup(cali_po_c, 0),
+			jumpToPolicyGroup(cali_po_d, 0x18),
+			jumpToPolicyGroup(cali_po_e, 0x18),
+			jumpToPolicyGroup(cali_po_f, 0x18),
+			jumpToPolicyGroup(cali_po_g, 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			jumpToPolicyGroup("cali-po-default/h", 0),
-			jumpToPolicyGroup("cali-po-default/i", 0x18),
+			jumpToPolicyGroup(cali_po_h, 0),
+			jumpToPolicyGroup(cali_po_i, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "staged:c", "d", "staged:e", "f", "g"},
-			Selector:    "all()",
+			Direction: PolicyDirectionOutbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "g", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			jumpToPolicyGroup("cali-po-default/d", 0),
-			jumpToPolicyGroup("cali-po-default/f", 0x18),
-			jumpToPolicyGroup("cali-po-default/g", 0x18),
+			jumpToPolicyGroup(cali_po_d, 0),
+			jumpToPolicyGroup(cali_po_f, 0x18),
+			jumpToPolicyGroup(cali_po_g, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "staged:c", "staged:d", "staged:e", "f", "g"},
-			Selector:    "all()",
+			Direction: PolicyDirectionOutbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "g", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			jumpToPolicyGroup("cali-po-default/f", 0),
-			jumpToPolicyGroup("cali-po-default/g", 0x18),
+			jumpToPolicyGroup(cali_po_f, 0),
+			jumpToPolicyGroup(cali_po_g, 0x18),
 		},
 	),
 )
@@ -1745,9 +1907,9 @@ func (b *ruleBuilder) matchPolicies() []generictables.Rule {
 			continue
 		}
 		endOfTierDrop = true
-		target := fmt.Sprintf("cali-pi-default/%v", p)
+		target := fmt.Sprintf("cali-pi-%v", p)
 		if b.egress {
-			target = fmt.Sprintf("cali-po-default/%v", p)
+			target = fmt.Sprintf("cali-po-%v", p)
 		}
 		rules = append(rules, generictables.Rule{
 			Match:  Match().MarkClear(0x10),
