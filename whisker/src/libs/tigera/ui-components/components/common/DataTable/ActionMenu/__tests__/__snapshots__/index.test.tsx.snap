@@ -50,7 +50,7 @@ exports[`<ActionMenu/> it renders 1`] = `
       tabindex="-1"
     >
       <button
-        class="chakra-menu__menuitem css-1igovtx"
+        class="chakra-menu__menuitem css-1a92k4b"
         data-index="0"
         id="menu-list-:r1:-menuitem-:r2:"
         role="menuitem"

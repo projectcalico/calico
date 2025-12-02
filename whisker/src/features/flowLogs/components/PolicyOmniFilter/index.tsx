@@ -110,11 +110,11 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
 
                         <OmniFilterFooter
                             testId={testId}
-                            clearButtonProps={{
+                            leftButtonProps={{
                                 onClick: () => onClearFilter(onClose),
                                 children: 'Clear all',
                             }}
-                            submitButtonProps={{
+                            rightButtonProps={{
                                 onClick: () => onSubmitFilter(onClose),
                             }}
                         />

@@ -3,22 +3,26 @@ import { Button, ButtonProps } from '@chakra-ui/react';
 
 type OmniFilterFooterProps = {
     testId: string;
-    clearButtonProps: ButtonProps;
-    submitButtonProps: ButtonProps;
+    leftButtonProps?: ButtonProps;
+    rightButtonProps?: ButtonProps;
 };
 
 const FilterFooter: React.FC<OmniFilterFooterProps> = ({
     testId,
-    clearButtonProps,
-    submitButtonProps,
+    leftButtonProps,
+    rightButtonProps,
 }) => (
     <OmniFilterFooter data-testid={`${testId}-popover-footer`}>
-        <Button variant='ghost' {...clearButtonProps}>
-            {clearButtonProps.children ?? 'Clear'}
-        </Button>
-        <Button ml='auto' {...submitButtonProps}>
-            {submitButtonProps.children ?? 'Update'}
-        </Button>
+        {leftButtonProps && (
+            <Button variant='ghost' {...leftButtonProps}>
+                {leftButtonProps.children ?? 'Clear'}
+            </Button>
+        )}
+        {rightButtonProps && (
+            <Button ml='auto' {...rightButtonProps}>
+                {rightButtonProps.children ?? 'Update'}
+            </Button>
+        )}
     </OmniFilterFooter>
 );
 

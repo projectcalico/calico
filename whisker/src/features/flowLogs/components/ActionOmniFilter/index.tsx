@@ -210,7 +210,7 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                 </OmniFilterBody>
                 <OmniFilterFooter
                     testId={testId}
-                    clearButtonProps={{
+                    leftButtonProps={{
                         onClick: () => {
                             onChange({
                                 action: undefined,
@@ -220,7 +220,7 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                             onClose();
                         },
                     }}
-                    submitButtonProps={{
+                    rightButtonProps={{
                         onClick: () => {
                             onChange(actions);
                             onClose();

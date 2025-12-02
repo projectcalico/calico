@@ -12,7 +12,7 @@ jest.mock(
 describe('<StartTimeFilter />', () => {
     const mockOnChange = jest.fn();
     const mockOnClick = jest.fn();
-    const mockOnClear = jest.fn();
+    const mockOnReset = jest.fn();
     const mockOnSubmit = jest.fn();
 
     const options = [
@@ -27,9 +27,10 @@ describe('<StartTimeFilter />', () => {
         value: { label: 'Last 1 hour', value: '1h' },
         isActive: true,
         options,
+        hasChanged: false,
         onChange: mockOnChange,
         onClick: mockOnClick,
-        onClear: mockOnClear,
+        onReset: mockOnReset,
         onSubmit: mockOnSubmit,
     };
 
@@ -58,9 +59,6 @@ describe('<StartTimeFilter />', () => {
         await userEvent.click(screen.getByText('Mock Select'));
         expect(mockOnChange).toHaveBeenCalledWith(options[2]);
 
-        await userEvent.click(screen.getByRole('button', { name: 'Update' }));
-
-        expect(mockOnSubmit).toHaveBeenCalledTimes(1);
         await waitFor(() => {
             expect(
                 screen.queryByTestId('start-time-popover-body'),
@@ -69,11 +67,13 @@ describe('<StartTimeFilter />', () => {
     });
 
     it('should call onClear and close popover when clear button is clicked', async () => {
-        render(<StartTimeFilter {...defaultProps} />);
+        render(<StartTimeFilter {...defaultProps} hasChanged={true} />);
 
         await openFilter();
-        await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
+        await userEvent.click(
+            screen.getByRole('button', { name: 'Reset filter' }),
+        );
 
-        expect(mockOnClear).toHaveBeenCalledTimes(1);
+        expect(mockOnReset).toHaveBeenCalledTimes(1);
     });
 });

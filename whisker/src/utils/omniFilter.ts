@@ -288,8 +288,8 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         transformToFilterSearchRequest: transformToListFilterSearchRequest,
         filterComponentProps: {
             filters: [
-                { label: ReporterLabels.src, value: 'src' },
-                { label: ReporterLabels.dst, value: 'dst' },
+                { label: ReporterLabels.Src, value: 'Src' },
+                { label: ReporterLabels.Dst, value: 'Dst' },
             ],
             listType: 'radio',
             showSearch: false,

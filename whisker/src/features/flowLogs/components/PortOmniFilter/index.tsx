@@ -192,7 +192,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                 </OmniFilterBody>
                                 <FilterFooter
                                     testId={testId}
-                                    clearButtonProps={{
+                                    leftButtonProps={{
                                         onClick: () => {
                                             reset({
                                                 port: '',
@@ -205,7 +205,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                             onClose();
                                         },
                                     }}
-                                    submitButtonProps={{
+                                    rightButtonProps={{
                                         disabled: !isDirty || !isValid,
                                         type: 'submit',
                                     }}

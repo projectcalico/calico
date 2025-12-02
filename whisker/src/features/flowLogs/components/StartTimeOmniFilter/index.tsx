@@ -4,21 +4,22 @@ import { CustomOmniFilterParam } from '@/utils/omniFilter';
 import React from 'react';
 import StartTimeFilter from './components/StartTimeFilter';
 
+const DEFAULT_VALUE = '1';
 const options = [
     { label: 'Now', value: '0' },
-    { label: '1 minute ago', value: '1' },
-    { label: '5 minutes ago', value: '5' },
-    { label: '10 minutes ago', value: '10' },
-    { label: '15 minutes ago', value: '15' },
-    { label: '20 minutes ago', value: '20' },
-    { label: '25 minutes ago', value: '25' },
-    { label: '30 minutes ago', value: '30' },
-    { label: '35 minutes ago', value: '35' },
-    { label: '40 minutes ago', value: '40' },
-    { label: '45 minutes ago', value: '45' },
-    { label: '50 minutes ago', value: '50' },
-    { label: '55 minutes ago', value: '55' },
-    { label: '1 hour ago', value: '60' },
+    { label: 'Last 1 minute', value: '1' },
+    { label: 'Last 5 minutes', value: '5' },
+    { label: 'Last 10 minutes', value: '10' },
+    { label: 'Last 15 minutes', value: '15' },
+    { label: 'Last 20 minutes', value: '20' },
+    { label: 'Last 25 minutes', value: '25' },
+    { label: 'Last 30 minutes', value: '30' },
+    { label: 'Last 35 minutes', value: '35' },
+    { label: 'Last 40 minutes', value: '40' },
+    { label: 'Last 45 minutes', value: '45' },
+    { label: 'Last 50 minutes', value: '50' },
+    { label: 'Last 55 minutes', value: '55' },
+    { label: 'Last hour', value: '60' },
 ];
 
 type StartTimeOmniFilterProps = {
@@ -26,14 +27,14 @@ type StartTimeOmniFilterProps = {
     filterLabel: string;
     filterId: CustomOmniFilterParam;
     onChange: (event: OmniFilterChangeEvent) => void;
-    onClear: () => void;
+    onReset: () => void;
     value: string;
 };
 
 const StartTimeOmniFilter: React.FC<StartTimeOmniFilterProps> = ({
     value,
     onChange,
-    onClear,
+    onReset,
     filterId,
     filterLabel,
 }) => {
@@ -44,16 +45,12 @@ const StartTimeOmniFilter: React.FC<StartTimeOmniFilterProps> = ({
     const [startTime, setStartTime] =
         React.useState<OmniFilterOption>(initialValue);
 
-    const handleClear = () => {
-        onClear();
-    };
-
-    const handleChange = () => {
-        if (initialValue.value !== startTime.value) {
+    const handleChange = (change: OmniFilterOption) => {
+        if (initialValue.value !== change.value) {
             onChange({
                 filterId: filterId,
                 filterLabel: filterLabel,
-                filters: [startTime],
+                filters: [change],
                 operator: undefined,
             });
         }
@@ -65,11 +62,11 @@ const StartTimeOmniFilter: React.FC<StartTimeOmniFilterProps> = ({
             value={startTime}
             triggerLabel={initialValue.label}
             isActive={!!value}
-            onChange={setStartTime}
-            onClear={handleClear}
+            onChange={handleChange}
+            onReset={onReset}
             onClick={() => setStartTime(initialValue!)}
-            onSubmit={handleChange}
             options={options}
+            hasChanged={initialValue.value !== DEFAULT_VALUE}
         />
     );
 };

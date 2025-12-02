@@ -6,10 +6,10 @@ const MockStartTimeFilter: any = {};
 jest.mock(
     '../components/StartTimeFilter',
     () =>
-        ({ onChange, onClear, onSubmit }: any) => {
+        ({ onChange, onClear, onClick }: any) => {
             MockStartTimeFilter.onChange = onChange;
             MockStartTimeFilter.onClear = onClear;
-            MockStartTimeFilter.onSubmit = onSubmit;
+            MockStartTimeFilter.onClick = onClick;
             return (
                 <div data-testid='start-time-filter'>Mock StartTimeFilter</div>
             );
@@ -27,18 +27,11 @@ describe('<StartTimeOmniFilter />', () => {
         onChange: mockOnChange,
         onClear: mockOnClear,
         value: '5',
+        onReset: jest.fn(),
     };
 
     beforeEach(() => {
         jest.clearAllMocks();
-    });
-
-    it('should call onClear when StartTimeFilter calls onClear', () => {
-        render(<StartTimeOmniFilter {...defaultProps} />);
-
-        MockStartTimeFilter.onClear();
-
-        expect(mockOnClear).toHaveBeenCalledTimes(1);
     });
 
     it('should call onChange with correct event when value changes', () => {
@@ -47,17 +40,15 @@ describe('<StartTimeOmniFilter />', () => {
         // Simulate changing the start time to a different value
         act(() =>
             MockStartTimeFilter.onChange({
-                label: '10 minutes ago',
+                label: 'Last 10 minutes',
                 value: '10',
             }),
         );
 
-        act(() => MockStartTimeFilter.onSubmit());
-
         expect(mockOnChange).toHaveBeenCalledWith({
             filterId: 'startTime',
             filterLabel: 'Start Time',
-            filters: [{ label: '10 minutes ago', value: '10' }],
+            filters: [{ label: 'Last 10 minutes', value: '10' }],
             operator: undefined,
         });
     });
@@ -68,12 +59,39 @@ describe('<StartTimeOmniFilter />', () => {
         // Simulate changing back to the initial value
         act(() =>
             MockStartTimeFilter.onChange({
-                label: '5 minutes ago',
+                label: 'Last 5 minutes',
                 value: '5',
             }),
         );
-        act(() => MockStartTimeFilter.onSubmit());
 
         expect(mockOnChange).not.toHaveBeenCalled();
+    });
+
+    it('should reset startTime when onClick is called', () => {
+        const { rerender } = render(<StartTimeOmniFilter {...defaultProps} />);
+
+        // Change the value
+        act(() =>
+            MockStartTimeFilter.onChange({
+                label: 'Last 10 minutes',
+                value: '10',
+            }),
+        );
+
+        // Click to reset
+        act(() => MockStartTimeFilter.onClick());
+
+        // Rerender with same value to verify reset
+        rerender(<StartTimeOmniFilter {...defaultProps} />);
+
+        // Changing back to initial should not trigger onChange
+        act(() =>
+            MockStartTimeFilter.onChange({
+                label: 'Last 5 minutes',
+                value: '5',
+            }),
+        );
+
+        expect(mockOnChange).toHaveBeenCalledTimes(1);
     });
 });

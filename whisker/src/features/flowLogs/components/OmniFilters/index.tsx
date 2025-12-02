@@ -221,7 +221,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     selectedFilters={selectedValues.start_time ?? null}
                     value={startTime.toString()}
                     onChange={onChange}
-                    onClear={() => handleClear(CustomOmniFilterKeys.start_time)}
+                    onReset={() => handleClear(CustomOmniFilterKeys.start_time)}
                 />
             </OmniFilterList>
         </>
