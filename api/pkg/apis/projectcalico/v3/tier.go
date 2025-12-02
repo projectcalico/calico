@@ -28,12 +28,14 @@ const (
 // Tier contains a set of policies that are applied to packets.  Multiple tiers may
 // be created and each tier is applied in the order specified in the tier specification.
 // Tier is globally-scoped (i.e. not Namespaced).
+//
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'kube-admin' ? self.spec.defaultAction == 'Pass' : true", message="The 'kube-admin' tier must have default action 'Pass'"
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'kube-baseline' ? self.spec.defaultAction == 'Pass' : true", message="The 'kube-baseline' tier must have default action 'Pass'"
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny' : true", message="The 'default' tier must have default action 'Deny'"
 type Tier struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	// Specification of the Tier.
-	Spec TierSpec `json:"spec,omitempty" protobuf:"bytes,2,rep,name=spec"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	Spec              TierSpec `json:"spec" protobuf:"bytes,2,rep,name=spec"`
 }
 
 const (
