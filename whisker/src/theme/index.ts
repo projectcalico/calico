@@ -22,6 +22,7 @@ import {
     ReorderableCheckList,
     Tooltip,
 } from './components';
+import SearchInput from '@/libs/tigera/ui-components/components/common/SearchInput/styles';
 
 const config: ThemeConfig = {
     initialColorMode: 'dark',
@@ -54,6 +55,7 @@ const theme = extendTheme({
         CheckboxListLoadingSkeleton,
         ReorderableCheckList,
         Tooltip,
+        SearchInput,
     },
     fontSizes: {
         xxs: '0.625rem',

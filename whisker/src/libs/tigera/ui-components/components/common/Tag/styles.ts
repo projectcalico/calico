@@ -20,6 +20,28 @@ export default {
                 },
             },
         },
+        solid: {
+            container: {
+                bg: 'tigeraGrey.600',
+                borderRadius: 'sm',
+                lineHeight: '1',
+                minHeight: '1',
+                fontWeight: 'normal',
+                fontSize: 'sm',
+                pr: 0,
+                gap: 1,
+            },
+            closeButton: {
+                m: 0,
+                fontSize: 'sm',
+                borderRadius: 'none',
+                height: '22px',
+                _hover: {
+                    bg: 'tigeraGrey.400',
+                    color: 'tigeraBlack',
+                },
+            },
+        },
     },
 };
 
