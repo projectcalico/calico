@@ -103,6 +103,23 @@
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	((CALI_COMPILE_FLAGS & CALI_TC_DSR) != 0)
 
+#if CALI_F_HEP || CALI_F_PREAMBLE || CALI_F_DEF_POLICY
+// For HEPs policy direction (CALI_F_INGRESS) matches attachment direction.
+#if CALI_F_INGRESS
+#define CALI_HOOK_INGRESS
+#else
+#define CALI_F_HOOK_EGRESS
+#endif
+#else
+// For WEPs, the policy direction is opposite to the tc hook that the
+// program is attached to.
+#if CALI_F_INGRESS
+#define CALI_HOOK_EGRESS
+#else
+#define CALI_HOOK_INGRESS
+#endif
+#endif
+
 #define CALI_RES_REDIR_BACK	108 /* packet should be sent back the same iface */
 #define CALI_RES_REDIR_IFINDEX	109 /* packet should be sent straight to
 				     * state->ct_result->ifindex_fwd

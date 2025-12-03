@@ -189,7 +189,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix-changed
 
-BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
+BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o common_map_stub_ing.o)
 
 # Generated map stub .c files are in the bpf-gpl/ dir, not bpf-gpl/bin
 BPF_GPL_MAP_STUB_C_FILES := $(BPF_GPL_MAP_STUB_O_FILES:bpf-gpl/bin/%.o=bpf-gpl/%.c)
