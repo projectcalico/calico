@@ -111,7 +111,8 @@ OBJS+=bin/tc_preamble_ingress.o
 OBJS+=bin/tc_preamble_egress.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
-OBJS+=bin/policy_default.o
+OBJS+=bin/policy_default_ingress.o
+OBJS+=bin/policy_default_egress.o
 OBJS+=$(MAP_OBJS)
 C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
@@ -158,8 +159,10 @@ tcx_test.ll: tcx_test.c tcx_test.d
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
-policy_default.ll: policy_default.c policy_default.d
-	$(CC) $(CFLAGS) -c $< -o $@
+policy_default_ingress.ll: policy_default.c policy_default.d
+	$(COMPILE)
+policy_default_egress.ll: policy_default.c policy_default.d
+	$(COMPILE)
 
 # Production and UT versions of the main binaries.
 # Combining the targets into one rule causes make to fail to rebuild the .ll files.  Not sure why.
@@ -199,7 +202,9 @@ bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
 	$(LINK)
-bin/policy_default.o: policy_default.ll | bin
+bin/policy_default_ingress.o: policy_default_ingress.ll | bin
+	$(LINK)
+bin/policy_default_egress.o: policy_default_egress.ll | bin
 	$(LINK)
 bin/to%.o: to%.ll | bin
 	$(LINK)
