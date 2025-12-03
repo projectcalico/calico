@@ -57,23 +57,9 @@
           - make gen-manifests
           - make fix-changed
           - make check-dirty
-# Dummy node that depends on all the individual pre-flight checks.
-- name: Prerequisites
-  run:
-    when: "false"
-  dependencies:
-    - Check semaphore/YAML files
-    - Check Go
-    - Check protobufs
-    - Manifests and API docs
-  task:
-    jobs:
-      - name: Pre-flight checks
-        commands:
-          - "true"
 - name: Store working copy
   run:
-    when: "true"
+    when: 'branch =~ ".*"'
   dependencies: []
   task:
     env_vars:
@@ -86,3 +72,19 @@
           - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
           - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+# Dummy node that depends on all the individual pre-flight checks.
+- name: Prerequisites
+  run:
+    when: "false"
+  dependencies:
+    - Store working copy
+    - Check semaphore/YAML files
+    - Check Go
+    - Check protobufs
+    - Manifests and API docs
+  task:
+    jobs:
+      - name: Pre-flight checks
+        commands:
+          - "true"
+

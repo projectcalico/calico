@@ -281,23 +281,9 @@ blocks:
             - make gen-manifests
             - make fix-changed
             - make check-dirty
-  # Dummy node that depends on all the individual pre-flight checks.
-  - name: Prerequisites
-    run:
-      when: "false"
-    dependencies:
-      - Check semaphore/YAML files
-      - Check Go
-      - Check protobufs
-      - Manifests and API docs
-    task:
-      jobs:
-        - name: Pre-flight checks
-          commands:
-            - "true"
   - name: Store working copy
     run:
-      when: "true"
+      when: 'branch =~ ".*"'
     dependencies: []
     task:
       env_vars:
@@ -310,6 +296,21 @@ blocks:
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
             - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+  # Dummy node that depends on all the individual pre-flight checks.
+  - name: Prerequisites
+    run:
+      when: "false"
+    dependencies:
+      - Store working copy
+      - Check semaphore/YAML files
+      - Check Go
+      - Check protobufs
+      - Manifests and API docs
+    task:
+      jobs:
+        - name: Pre-flight checks
+          commands:
+            - "true"
   - name: API
     run:
       when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -934,6 +935,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "guardian"
       prologue:
         commands:
           - cd guardian
@@ -941,6 +945,9 @@ blocks:
         - name: "Guardian: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
         - name: "Guardian: build multi-arch"
           matrix:
             - env_var: ARCH
@@ -1196,6 +1203,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "whisker"
       prologue:
         commands:
           - cd whisker
@@ -1203,6 +1213,9 @@ blocks:
         - name: "Whisker: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
         - name: "Whisker: build multi-arch images"
           matrix:
             - env_var: ARCH
