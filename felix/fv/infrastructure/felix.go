@@ -666,7 +666,7 @@ func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int) (contiguous, to
 		k := polprog.SubProgramJumpIdx(entryPointIdx, i, jump.TCMaxEntryPoints)
 		out, err := f.ExecOutput(
 			"bpftool", "map", "lookup",
-			"pinned", "/sys/fs/bpf/tc/globals/cali_jump_th2",
+			"pinned", "/sys/fs/bpf/tc/globals/cali_jump_egr2",
 			"key",
 			fmt.Sprintf("%d", k&0xff),
 			fmt.Sprintf("%d", (k>>8)&0xff),
