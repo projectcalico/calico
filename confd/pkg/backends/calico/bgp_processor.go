@@ -529,7 +529,12 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 
 	// Filters - build inline filter blocks
 	peer.ImportFilter = c.buildImportFilter(raw)
-	peer.ExportFilter = c.buildExportFilter(raw, peer.AsNumber, config.AsNumber)
+	// Use effective node AS number (local_as_num if set, otherwise node AS)
+	effectiveNodeAS := config.AsNumber
+	if peer.LocalAsNumber != "" {
+		effectiveNodeAS = peer.LocalAsNumber
+	}
+	peer.ExportFilter = c.buildExportFilter(raw, peer.AsNumber, effectiveNodeAS)
 
 	// Optional fields
 	if pwd, ok := raw["password"].(string); ok {
@@ -556,13 +561,16 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 			peer.NextHopKeep = true
 		}
 	}
-	// Legacy keep_next_hop field
+	// Legacy keep_next_hop field - only apply for eBGP peers
 	if keepNH, ok := raw["keep_next_hop"].(bool); ok && keepNH {
-		peer.NextHopKeep = true
+		// Only set NextHopKeep if peer AS != effective node AS (eBGP)
+		if peer.AsNumber != effectiveNodeAS {
+			peer.NextHopKeep = true
+		}
 	}
 
 	// Route reflector handling
-	if peer.AsNumber == config.AsNumber && nodeClusterID != "" {
+	if peer.AsNumber == effectiveNodeAS && nodeClusterID != "" {
 		if peerRRClusterID, ok := raw["rr_cluster_id"].(string); ok {
 			if peerRRClusterID != nodeClusterID {
 				peer.RouteReflector = true
