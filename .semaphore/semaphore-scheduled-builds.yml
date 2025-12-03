@@ -55,6 +55,14 @@ global_job_config:
             tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd
             cd "${CALICO_DIR_NAME}"
             restored_cache=true
+            if [[ -n "$BUILD_CACHE_GROUP" ]]; then
+              if gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd; then
+                echo "Restoring build cache group ${BUILD_CACHE_GROUP}"
+                tar --use-compress-program=zstd -xf /tmp/build-cache.tar.zstd -C .
+              else
+                echo "No build cache found for group ${BUILD_CACHE_GROUP}"
+              fi
+            fi
           fi
         fi || true
       - |-
@@ -80,6 +88,14 @@ global_job_config:
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
+      - cd $HOME
+      - |-
+        if [[ -n "$BUILD_CACHE_GROUP" && "$STORE_BUILD_CACHE" = "true" ]]; then
+          echo "Storing build cache group ${BUILD_CACHE_GROUP}"
+          tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
+          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+        fi
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
 promotions:
@@ -274,25 +290,16 @@ blocks:
         - name: Pre-flight checks
           commands:
             - "true"
-  - name: Build core components
+  - name: Store working copy
     run:
       when: "true"
     dependencies: []
     task:
-      agent:
-        machine:
-          type: f1-standard-4
-          os_image: ubuntu2204
       jobs:
-        - name: Build and save build cache
+        - name: Save working copy to cache
           commands:
-            - make -C felix build fv-prereqs
-            - make -C cni-plugin build
-            - make -C typha build
-            - make -C apiserver build
-            - make -C kube-controllers build
             - cd ..
-            - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME go
+            - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
             - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
   - name: API
@@ -366,6 +373,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "cni-plugin"
       prologue:
         commands:
           - cd cni-plugin
@@ -373,6 +383,9 @@ blocks:
         - name: "CNI Plugin: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
         - name: "CNI Plugin: build windows images"
           commands:
             - ../.semaphore/run-and-monitor ci.log make image-windows
@@ -404,6 +417,8 @@ blocks:
             - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
             - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
       env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "cni-plugin"
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
         - name: AZURE_LOCATION
@@ -559,6 +574,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "felix"
       prologue:
         commands:
           - cd felix
@@ -568,6 +586,9 @@ blocks:
         - name: google-service-account-for-gce
       jobs:
         - name: "Felix: Build and cache FV prerequisites"
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
           execution_time_limit:
             minutes: 20
           commands:
@@ -635,6 +656,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "felix"
       jobs:
         - name: "Felix: Build Windows binaries"
           commands:
@@ -666,6 +690,8 @@ blocks:
           commands:
             - artifact push job ${REPORT_DIR} --destination test-results || true
       env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "felix"
         - name: FV_PROVISIONER
           value: "capz"
         - name: FV_TYPE
@@ -892,6 +918,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "kube-controllers"
       prologue:
         commands:
           - cd kube-controllers
@@ -899,6 +928,9 @@ blocks:
         - name: "kube-controllers: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Libraries (lib)
     run:
       when: "true or change_in(['/lib/'], {pipeline_file: 'ignore'})"
@@ -920,6 +952,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "cni-plugin"
       prologue:
         commands:
           - cd libcalico-go
@@ -927,12 +962,18 @@ blocks:
         - name: "libcalico-go: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: "Node: Build"
     run:
       when: "true"
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "node"
       agent:
         machine:
           type: f1-standard-4
@@ -944,6 +985,9 @@ blocks:
         - name: "Node: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: "Node: multi-arch build"
     run:
       when: "true"
@@ -991,6 +1035,9 @@ blocks:
     dependencies:
       - "Prerequisites"
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "node"
       prologue:
         commands:
           # Set up access to GCP buckets.
@@ -1054,6 +1101,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "typha"
       prologue:
         commands:
           - cd typha
@@ -1062,6 +1112,9 @@ blocks:
           commands:
             - export TEST_SUITE_PREFIX="calico/base"
             - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
         - name: "Typha: FV tests on UBI-minimal"
           commands:
             - 'export TEST_SUITE_PREFIX="UBI-minimal"'

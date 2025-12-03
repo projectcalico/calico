@@ -39,6 +39,14 @@ global_job_config:
             tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd
             cd "${CALICO_DIR_NAME}"
             restored_cache=true
+            if [[ -n "$BUILD_CACHE_GROUP" ]]; then
+              if gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd; then
+                echo "Restoring build cache group ${BUILD_CACHE_GROUP}"
+                tar --use-compress-program=zstd -xf /tmp/build-cache.tar.zstd -C .
+              else
+                echo "No build cache found for group ${BUILD_CACHE_GROUP}"
+              fi
+            fi
           fi
         fi || true
       - |-
@@ -64,5 +72,13 @@ global_job_config:
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
+      - cd $HOME
+      - |-
+        if [[ -n "$BUILD_CACHE_GROUP" && "$STORE_BUILD_CACHE" = "true" ]]; then
+          echo "Storing build cache group ${BUILD_CACHE_GROUP}"
+          tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
+          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+        fi
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
