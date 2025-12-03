@@ -13,9 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set +e
+set -e
 
-source $(pwd)/.semaphore/batches.sh
+# Enable job control so that background processes get their own process groups.
+set -m
+
+my_dir="$(dirname $0)"
+repo_dir="$my_dir/../.."
+
+# shellcheck source=../../felix/.semaphore/batches.sh
+source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
 
 log_monitor_regexps=(
   "(?<!Decode)Failure"
@@ -33,6 +40,7 @@ log_monitor_regexps=(
   "^XML:"
   "^\[success\]"
   "^\[error\]"
+  "RUNNER:"
 )
 
 # Combine the regexps; in Perl mode, grep only supports one
@@ -43,10 +51,7 @@ for r in "${log_monitor_regexps[@]}"; do
 done
 monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 
-zone=${ZONE:-europe-west3-c}
-my_dir="$(dirname $0)"
 vm_name_prefix=$1
-repo_dir="$my_dir/../.."
 artifacts_dir="$repo_dir/artifacts"
 
 echo
@@ -59,6 +64,7 @@ log_files=()
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   log_file="$artifacts_dir/test-$batch.log"
+  touch "$log_file"
 
   (run_batch "$my_dir/on-test-vm" $batch $vm_name $log_file) &
   pid=$!
@@ -66,14 +72,15 @@ for batch in "${batches[@]}"; do
   log_files+=( $log_file )
   pids+=( $pid )
 
-  prefix="[batch=${batch} pid=${pid}]"
-  echo "$prefix Started test batch in background; monitoring its log ($log_file)."
+  prefix="[batch=${batch}]"
+  echo "$prefix Started test batch in background with PID=$pid; monitoring its log ($log_file)."
   (
     # Redirect tail's stdin from /dev/null to prevent waiting
     # forever on reads in semaphore CI
     tail -F $log_file < /dev/null | \
       grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
-      sed 's/.*/'"${prefix}"' &/';
+      sed 's/.*/'"${prefix}"' &/' | \
+      grep --perl --line-buffered -v '^\[batch=[^\]]+\]\s+$';
   ) &
   mon_pid=$!
   monitor_pids+=( $mon_pid )
@@ -103,7 +110,8 @@ done
 echo
 echo "===== Shutting down test monitors ====="
 for pid in "${monitor_pids[@]}"; do
-  kill $pid || true
+  # Note: negative PID to kill the entire process group.
+  kill -TERM -$pid || true
 done
 
 echo "===== Results summary ====="

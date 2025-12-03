@@ -30,12 +30,42 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
 )
 
+type resourceInfo interface {
+	TypeOf() reflect.Type
+	Plural() string
+	KindLower() string
+	Kind() string
+	ParseValue(key ResourceKey, data []byte) (any, error)
+}
+
 // Name/type information about a single resource.
-type resourceInfo struct {
+type resourceInfoTyped[V any] struct {
 	typeOf    reflect.Type
 	plural    string
 	kindLower string
 	kind      string
+}
+
+var _ resourceInfo = &resourceInfoTyped[any]{}
+
+func (ri resourceInfoTyped[V]) TypeOf() reflect.Type {
+	return ri.typeOf
+}
+
+func (ri resourceInfoTyped[V]) ParseValue(key ResourceKey, data []byte) (any, error) {
+	return parseJSONPointer[V](key, data)
+}
+
+func (ri resourceInfoTyped[V]) Plural() string {
+	return ri.plural
+}
+
+func (ri resourceInfoTyped[V]) KindLower() string {
+	return ri.kindLower
+}
+
+func (ri resourceInfoTyped[V]) Kind() string {
+	return ri.kind
 }
 
 var (
@@ -45,11 +75,12 @@ var (
 	resourceInfoByPlural    = make(map[string]resourceInfo)
 )
 
-func registerResourceInfo(kind string, plural string, typeOf reflect.Type) {
+func registerResourceInfo[V any](kind string, plural string) {
 	kindLower := strings.ToLower(kind)
 	plural = strings.ToLower(plural)
-	ri := resourceInfo{
-		typeOf:    typeOf,
+	var v V
+	ri := resourceInfoTyped[V]{
+		typeOf:    reflect.TypeOf(v),
 		kindLower: kindLower,
 		kind:      kind,
 		plural:    plural,
@@ -67,150 +98,33 @@ func AllResourcePlurals() []string {
 }
 
 func init() {
-	registerResourceInfo(
-		apiv3.KindBGPPeer,
-		"bgppeers",
-		reflect.TypeOf(apiv3.BGPPeer{}),
-	)
-	registerResourceInfo(
-		apiv3.KindBGPConfiguration,
-		"bgpconfigurations",
-		reflect.TypeOf(apiv3.BGPConfiguration{}),
-	)
-	registerResourceInfo(
-		apiv3.KindClusterInformation,
-		"clusterinformations",
-		reflect.TypeOf(apiv3.ClusterInformation{}),
-	)
-	registerResourceInfo(
-		apiv3.KindFelixConfiguration,
-		"felixconfigurations",
-		reflect.TypeOf(apiv3.FelixConfiguration{}),
-	)
-	registerResourceInfo(
-		apiv3.KindGlobalNetworkPolicy,
-		"globalnetworkpolicies",
-		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
-	)
-	registerResourceInfo(
-		apiv3.KindStagedGlobalNetworkPolicy,
-		"stagedglobalnetworkpolicies",
-		reflect.TypeOf(apiv3.StagedGlobalNetworkPolicy{}),
-	)
-	registerResourceInfo(
-		apiv3.KindHostEndpoint,
-		"hostendpoints",
-		reflect.TypeOf(apiv3.HostEndpoint{}),
-	)
-	registerResourceInfo(
-		apiv3.KindGlobalNetworkSet,
-		"globalnetworksets",
-		reflect.TypeOf(apiv3.GlobalNetworkSet{}),
-	)
-	registerResourceInfo(
-		KindKubernetesClusterNetworkPolicy,
-		"kubernetesclusternetworkpolicies",
-		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
-	)
-	registerResourceInfo(
-		KindKubernetesAdminNetworkPolicy,
-		"kubernetesadminnetworkpolicies",
-		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
-	)
-	registerResourceInfo(
-		KindKubernetesBaselineAdminNetworkPolicy,
-		"kubernetesbaselineadminnetworkpolicies",
-		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
-	)
-	registerResourceInfo(
-		apiv3.KindIPPool,
-		"ippools",
-		reflect.TypeOf(apiv3.IPPool{}),
-	)
-	registerResourceInfo(
-		apiv3.KindIPReservation,
-		"ipreservations",
-		reflect.TypeOf(apiv3.IPReservation{}),
-	)
-	registerResourceInfo(
-		apiv3.KindNetworkPolicy,
-		"networkpolicies",
-		reflect.TypeOf(apiv3.NetworkPolicy{}),
-	)
-	registerResourceInfo(
-		apiv3.KindStagedNetworkPolicy,
-		"stagednetworkpolicies",
-		reflect.TypeOf(apiv3.StagedNetworkPolicy{}),
-	)
-	registerResourceInfo(
-		KindKubernetesNetworkPolicy,
-		"kubernetesnetworkpolicies",
-		reflect.TypeOf(apiv3.NetworkPolicy{}),
-	)
-	registerResourceInfo(
-		apiv3.KindStagedKubernetesNetworkPolicy,
-		"stagedkubernetesnetworkpolicies",
-		reflect.TypeOf(apiv3.StagedKubernetesNetworkPolicy{}),
-	)
-	registerResourceInfo(
-		KindKubernetesEndpointSlice,
-		"kubernetesendpointslices",
-		reflect.TypeOf(discovery.EndpointSlice{}),
-	)
-	registerResourceInfo(
-		apiv3.KindNetworkSet,
-		"networksets",
-		reflect.TypeOf(apiv3.NetworkSet{}),
-	)
-	registerResourceInfo(
-		apiv3.KindTier,
-		"tiers",
-		reflect.TypeOf(apiv3.Tier{}),
-	)
-	registerResourceInfo(
-		libapiv3.KindNode,
-		"nodes",
-		reflect.TypeOf(libapiv3.Node{}),
-	)
-	registerResourceInfo(
-		apiv3.KindCalicoNodeStatus,
-		"caliconodestatuses",
-		reflect.TypeOf(apiv3.CalicoNodeStatus{}),
-	)
-	registerResourceInfo(
-		apiv3.KindProfile,
-		"profiles",
-		reflect.TypeOf(apiv3.Profile{}),
-	)
-	registerResourceInfo(
-		libapiv3.KindWorkloadEndpoint,
-		"workloadendpoints",
-		reflect.TypeOf(libapiv3.WorkloadEndpoint{}),
-	)
-	registerResourceInfo(
-		libapiv3.KindIPAMConfig,
-		"ipamconfigs",
-		reflect.TypeOf(libapiv3.IPAMConfig{}),
-	)
-	registerResourceInfo(
-		apiv3.KindKubeControllersConfiguration,
-		"kubecontrollersconfigurations",
-		reflect.TypeOf(apiv3.KubeControllersConfiguration{}))
-	registerResourceInfo(
-		KindKubernetesService,
-		"kubernetesservice",
-		reflect.TypeOf(kapiv1.Service{}),
-	)
-	registerResourceInfo(
-		libapiv3.KindBlockAffinity,
-		"blockaffinities",
-		reflect.TypeOf(libapiv3.BlockAffinity{}),
-	)
-	registerResourceInfo(
-		apiv3.KindBGPFilter,
-		"BGPFilters",
-		reflect.TypeOf(apiv3.BGPFilter{}),
-	)
+	registerResourceInfo[apiv3.BGPPeer](apiv3.KindBGPPeer, "bgppeers")
+	registerResourceInfo[apiv3.BGPConfiguration](apiv3.KindBGPConfiguration, "bgpconfigurations")
+	registerResourceInfo[apiv3.ClusterInformation](apiv3.KindClusterInformation, "clusterinformations")
+	registerResourceInfo[apiv3.FelixConfiguration](apiv3.KindFelixConfiguration, "felixconfigurations")
+	registerResourceInfo[apiv3.GlobalNetworkPolicy](apiv3.KindGlobalNetworkPolicy, "globalnetworkpolicies")
+	registerResourceInfo[apiv3.StagedGlobalNetworkPolicy](apiv3.KindStagedGlobalNetworkPolicy, "stagedglobalnetworkpolicies")
+	registerResourceInfo[apiv3.HostEndpoint](apiv3.KindHostEndpoint, "hostendpoints")
+	registerResourceInfo[apiv3.GlobalNetworkSet](apiv3.KindGlobalNetworkSet, "globalnetworksets")
+	registerResourceInfo[apiv3.GlobalNetworkPolicy](KindKubernetesClusterNetworkPolicy, "kubernetesclusternetworkpolicies")
+	registerResourceInfo[apiv3.IPPool](apiv3.KindIPPool, "ippools")
+	registerResourceInfo[apiv3.IPReservation](apiv3.KindIPReservation, "ipreservations")
+	registerResourceInfo[apiv3.NetworkPolicy](apiv3.KindNetworkPolicy, "networkpolicies")
+	registerResourceInfo[apiv3.StagedNetworkPolicy](apiv3.KindStagedNetworkPolicy, "stagednetworkpolicies")
+	registerResourceInfo[apiv3.NetworkPolicy](KindKubernetesNetworkPolicy, "kubernetesnetworkpolicies")
+	registerResourceInfo[apiv3.StagedKubernetesNetworkPolicy](apiv3.KindStagedKubernetesNetworkPolicy, "stagedkubernetesnetworkpolicies")
+	registerResourceInfo[discovery.EndpointSlice](KindKubernetesEndpointSlice, "kubernetesendpointslices")
+	registerResourceInfo[apiv3.NetworkSet](apiv3.KindNetworkSet, "networksets")
+	registerResourceInfo[apiv3.Tier](apiv3.KindTier, "tiers")
+	registerResourceInfo[libapiv3.Node](libapiv3.KindNode, "nodes")
+	registerResourceInfo[apiv3.CalicoNodeStatus](apiv3.KindCalicoNodeStatus, "caliconodestatuses")
+	registerResourceInfo[apiv3.Profile](apiv3.KindProfile, "profiles")
+	registerResourceInfo[libapiv3.WorkloadEndpoint](libapiv3.KindWorkloadEndpoint, "workloadendpoints")
+	registerResourceInfo[libapiv3.IPAMConfig](libapiv3.KindIPAMConfig, "ipamconfigs")
+	registerResourceInfo[apiv3.KubeControllersConfiguration](apiv3.KindKubeControllersConfiguration, "kubecontrollersconfigurations")
+	registerResourceInfo[kapiv1.Service](KindKubernetesService, "kubernetesservice")
+	registerResourceInfo[libapiv3.BlockAffinity](libapiv3.KindBlockAffinity, "blockaffinities")
+	registerResourceInfo[apiv3.BGPFilter](apiv3.KindBGPFilter, "BGPFilters")
 }
 
 type ResourceKey struct {
@@ -232,9 +146,9 @@ func (key ResourceKey) defaultDeletePath() (string, error) {
 		return "", fmt.Errorf("couldn't convert key: %+v", key)
 	}
 	if namespace.IsNamespaced(key.Kind) {
-		return fmt.Sprintf("/calico/resources/v3/projectcalico.org/%s/%s/%s", ri.plural, key.Namespace, key.Name), nil
+		return fmt.Sprintf("/calico/resources/v3/projectcalico.org/%s/%s/%s", ri.Plural(), key.Namespace, key.Name), nil
 	}
-	return fmt.Sprintf("/calico/resources/v3/projectcalico.org/%s/%s", ri.plural, key.Name), nil
+	return fmt.Sprintf("/calico/resources/v3/projectcalico.org/%s/%s", ri.Plural(), key.Name), nil
 }
 
 func (key ResourceKey) defaultDeleteParentPaths() ([]string, error) {
@@ -244,9 +158,47 @@ func (key ResourceKey) defaultDeleteParentPaths() ([]string, error) {
 func (key ResourceKey) valueType() (reflect.Type, error) {
 	ri, ok := resourceInfoByKindLower[strings.ToLower(key.Kind)]
 	if !ok {
-		return nil, fmt.Errorf("unexpected resource kind: %s", key.Kind)
+		return nil, fmt.Errorf("unknown resource kind: %s", key.Kind)
 	}
-	return ri.typeOf, nil
+	return ri.TypeOf(), nil
+}
+
+func (key ResourceKey) parseValue(rawData []byte) (any, error) {
+	ri, ok := resourceInfoByKindLower[strings.ToLower(key.Kind)]
+	if !ok {
+		return nil, fmt.Errorf("unknown resource kind: %s", key.Kind)
+	}
+	v, err := ri.ParseValue(key, rawData)
+	if err != nil {
+		return nil, err
+	}
+
+	// Special case handling for network policy names to handle migration of
+	// names based on tier.
+	switch policy := v.(type) {
+	case *apiv3.NetworkPolicy:
+		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
+		if err != nil {
+			return nil, err
+		}
+	case *apiv3.GlobalNetworkPolicy:
+		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
+		if err != nil {
+			return nil, err
+		}
+	case *apiv3.StagedNetworkPolicy:
+		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
+		if err != nil {
+			return nil, err
+		}
+	case *apiv3.StagedGlobalNetworkPolicy:
+		policy.Name, policy.Annotations, err = determinePolicyName(policy.Name, policy.Spec.Tier, policy.Annotations)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return v, err
 }
 
 func (key ResourceKey) String() string {
@@ -307,7 +259,7 @@ func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
 		if len(options.Kind) == 0 {
 			panic("Kind must be specified in List option but is not")
 		}
-		if kindPlural != ri.plural {
+		if kindPlural != ri.Plural() {
 			log.Debugf("Didn't match kind %s != %s", kindPlural, kindPlural)
 			return nil
 		}
@@ -335,8 +287,8 @@ func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
 	}
 	kindPlural := r[0][1]
 	name := r[0][2]
-	if kindPlural != ri.plural {
-		log.Debugf("Didn't match kind %s != %s", kindPlural, ri.plural)
+	if kindPlural != ri.Plural() {
+		log.Debugf("Didn't match kind %s != %s", kindPlural, ri.Plural())
 		return nil
 	}
 	if len(options.Name) != 0 {
@@ -357,7 +309,7 @@ func (options ResourceListOptions) defaultPathRoot() string {
 		log.Panic("Unexpected resource kind: " + options.Kind)
 	}
 
-	k := "/calico/resources/v3/projectcalico.org/" + ri.plural
+	k := "/calico/resources/v3/projectcalico.org/" + ri.Plural()
 	if namespace.IsNamespaced(options.Kind) {
 		if options.Namespace == "" {
 			return k

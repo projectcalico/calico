@@ -35,9 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 	clusternetpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha2"
-	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -2925,7 +2923,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
 		c          *KubeClient
-		anpClient  *adminpolicyclient.PolicyV1alpha1Client
 		kcnpClient *netpolicyclient.PolicyV1alpha2Client
 		ctx        context.Context
 	)
@@ -2939,8 +2936,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		config, _, err := CreateKubernetesClientset(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		config.ContentType = runtime.ContentTypeJSON
-		anpClient, err = buildK8SAdminPolicyClient(config)
-		Expect(err).NotTo(HaveOccurred())
 		kcnpClient, err = buildK8SCNPClient(config)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -2999,69 +2994,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "default", Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("Unsupported prefix for resource name: default"))
-		})
-	})
-
-	Describe("watching AdminNetworkPolicies", func() {
-		createTestAdminNetworkPolicy := func(name string) {
-			anp := &adminpolicy.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: name,
-				},
-				Spec: adminpolicy.AdminNetworkPolicySpec{
-					Priority: 100,
-					Subject: adminpolicy.AdminNetworkPolicySubject{
-						Namespaces: &metav1.LabelSelector{
-							MatchLabels: map[string]string{
-								"label": "value",
-							},
-						},
-					},
-				},
-			}
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		}
-		deleteAllAdminNetworkPolicies := func() {
-			var zero int64
-			err := anpClient.AdminNetworkPolicies().DeleteCollection(
-				ctx,
-				metav1.DeleteOptions{GracePeriodSeconds: &zero},
-				metav1.ListOptions{},
-			)
-			Expect(err).NotTo(HaveOccurred())
-		}
-		BeforeEach(func() {
-			createTestAdminNetworkPolicy("test-admin-net-policy-1")
-			createTestAdminNetworkPolicy("test-admin-net-policy-2")
-		})
-		AfterEach(func() {
-			deleteAllAdminNetworkPolicies()
-		})
-		It("supports watching all adminnetworkpolicies", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: ""})
-			Expect(err).NotTo(HaveOccurred())
-			defer watch.Stop()
-			ExpectAddedEvent(watch.ResultChan())
-		})
-		It("supports resuming watch from previous revision", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: ""})
-			Expect(err).NotTo(HaveOccurred())
-			event := ExpectAddedEvent(watch.ResultChan())
-			watch.Stop()
-
-			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: event.New.Revision})
-			Expect(err).NotTo(HaveOccurred())
-			watch.Stop()
-		})
-		It("should handle a list for many network policies with a revision", func() {
-			for i := 3; i < 1000; i++ {
-				createTestAdminNetworkPolicy(fmt.Sprintf("test-admin-net-policy-%d", i))
-			}
-			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
-			Expect(err).NotTo(HaveOccurred())
-			_, err = c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, kvs.Revision)
-			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -3270,34 +3202,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			)
 			Expect(err).NotTo(HaveOccurred())
 		}
-		createTestAdminNetworkPolicy := func(name string) {
-			anp := &adminpolicy.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: name,
-				},
-				Spec: adminpolicy.AdminNetworkPolicySpec{
-					Priority: 100,
-					Subject: adminpolicy.AdminNetworkPolicySubject{
-						Namespaces: &metav1.LabelSelector{
-							MatchLabels: map[string]string{
-								"label": "value",
-							},
-						},
-					},
-				},
-			}
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		}
-		deleteAllAdminNetworkPolicies := func() {
-			var zero int64
-			err := anpClient.AdminNetworkPolicies().DeleteCollection(
-				ctx,
-				metav1.DeleteOptions{GracePeriodSeconds: &zero},
-				metav1.ListOptions{},
-			)
-			Expect(err).NotTo(HaveOccurred())
-		}
 		createCalicoNetworkPolicy := func(name string) {
 			np := &model.KVPair{
 				Key: model.ResourceKey{
@@ -3336,11 +3240,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 		}
 		BeforeEach(func() {
-			// Create 2x Calico NP and 2x k8s NP, 2x k8s ANP and 2x k8s CNP
+			// Create 2x Calico NP and 2x k8s NP,and 2x k8s CNP
 			createTestClusterNetworkPolicy("test-cluster-net-policy-1")
 			createTestClusterNetworkPolicy("test-cluster-net-policy-2")
-			createTestAdminNetworkPolicy("test-admin-net-policy-1")
-			createTestAdminNetworkPolicy("test-admin-net-policy-2")
 			createCalicoNetworkPolicy("test-net-policy-1")
 			createCalicoNetworkPolicy("test-net-policy-2")
 			createK8sNetworkPolicy("test-net-policy-3")
@@ -3350,7 +3252,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		AfterEach(func() {
 			log.Info("[Test] Beginning Cleanup ----")
 			deleteAllNetworkPolicies()
-			deleteAllAdminNetworkPolicies()
 			deleteAllClusterNetworkPolicies()
 		})
 
@@ -3480,72 +3381,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			watch.Stop()
 		})
 
-		It("supports resuming watch from previous revision k8s admin network policy", func() {
-			// Should only return k8s ANPs
-			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(l.KVPairs).To(HaveLen(2))
-
-			// Now, modify all the policies.  It's important to do this with
-			// multiple policies of each type, because we want to test that revision
-			// numbers come out in a sensible order. We're going to resume the watch
-			// from the "last" event to come out of the watch, and if it doesn't
-			// really represent the latest update, when we resume watching, we
-			// will get duplicate events. Worse, if the "last" event from a watch
-			// doesn't represent the latest state, this implies some earlier
-			// event from the watch did, and if we happened to have stopped the
-			// watch at that point we would have missed some data!
-
-			// Modify the kubernetes policies
-			found := 0
-			for _, kvp := range l.KVPairs {
-				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kanp.adminnetworkpolicy.")
-				p, err := anpClient.AdminNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
-				Expect(err).ToNot(HaveOccurred())
-				p.SetLabels(map[string]string{"test": "00"})
-				_, err = anpClient.AdminNetworkPolicies().Update(ctx, p, metav1.UpdateOptions{})
-				Expect(err).ToNot(HaveOccurred())
-				found++
-			}
-			Expect(found).To(Equal(2))
-
-			log.WithField("revision", l.Revision).Info("[TEST] first watch")
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: l.Revision})
-			Expect(err).NotTo(HaveOccurred())
-
-			event := ExpectModifiedEvent(watch.ResultChan())
-			log.WithField("revision", event.New.Revision).Info("[TEST] first k8s event")
-			event = ExpectModifiedEvent(watch.ResultChan())
-			log.WithField("revision", event.New.Revision).Info("[TEST] second k8s event")
-
-			// There should be no more events
-			Expect(watch.ResultChan()).ToNot(Receive())
-			watch.Stop()
-
-			// Make a second change to one of the NPs
-			for _, kvp := range l.KVPairs {
-				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kanp.adminnetworkpolicy.")
-				p, err := anpClient.AdminNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
-				Expect(err).ToNot(HaveOccurred())
-				p.SetLabels(map[string]string{"test": "01"})
-				_, err = anpClient.AdminNetworkPolicies().Update(ctx, p, metav1.UpdateOptions{})
-				Expect(err).ToNot(HaveOccurred())
-				break
-			}
-
-			// Resume watching at the revision of the event we got
-			log.WithField("revision", event.New.Revision).Info("second watch")
-			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: event.New.Revision})
-			Expect(err).NotTo(HaveOccurred())
-
-			// We should only get 1 update, because the event from the previous watch should have been "latest"
-			ExpectModifiedEvent(watch.ResultChan())
-
-			// There should be no more events
-			Expect(watch.ResultChan()).ToNot(Receive())
-			watch.Stop()
-		})
-
 		It("supports resuming watch from previous revision k8s cluster network policy", func() {
 			// Should only return k8s CNPs
 			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, "")
@@ -3648,28 +3483,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 					"key":      l.KVPairs[i].Key.String(),
 				}).Info("[Test] starting watch")
 				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, api.WatchOptions{Revision: revision})
-				Expect(err).ToNot(HaveOccurred())
-				// Since the items in the list aren't guaranteed to be in any specific order, we
-				// can't assert anything useful about what you should get out of this watch, so we
-				// just confirm that there is no error.
-				watch.Stop()
-			}
-		})
-
-		It("supports watching from part way through a list of Admin Network Policies", func() {
-			// Only 2 k8s ANPs
-			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(l.KVPairs).To(HaveLen(2))
-
-			// Watch from part way
-			for i := 0; i < 2; i++ {
-				revision := l.KVPairs[i].Revision
-				log.WithFields(log.Fields{
-					"revision": revision,
-					"key":      l.KVPairs[i].Key.String(),
-				}).Info("[Test] starting watch")
-				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, api.WatchOptions{Revision: revision})
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
 				// can't assert anything useful about what you should get out of this watch, so we
@@ -3817,8 +3630,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
-					Expect(e.Error).NotTo(HaveOccurred())
-					Expect(e.Type).To(Equal(api.WatchAdded))
+					Expect(e.Error).NotTo(HaveOccurred(), fmt.Sprintf("Got: %s", e))
+					// Nodes get updated out-of-band by k8s, so we may see created or modified here.
+					Expect(e.Type).To(Or(Equal(api.WatchAdded), Equal(api.WatchModified)), fmt.Sprintf("Got: %s", e))
 					receivedEvent = true
 					break
 				default:
@@ -3839,8 +3653,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
-					Expect(e.Error).NotTo(HaveOccurred())
-					Expect(e.Type).To(Equal(api.WatchAdded))
+					Expect(e.Error).NotTo(HaveOccurred(), fmt.Sprintf("Got: %s", e))
+					Expect(e.Type).To(Or(Equal(api.WatchAdded), Equal(api.WatchModified)))
 					receivedEvent = true
 					break
 				default:

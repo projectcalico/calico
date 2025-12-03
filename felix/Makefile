@@ -201,7 +201,7 @@ $(BPF_GPL_MAP_STUB_C_FILES):
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
-BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
+BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble_ingress.o bpf-gpl/bin/tc_preamble_egress.o \
 		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o \
 		 bpf-gpl/bin/tcx_test.o
 BPF_GPL_O_FILES+=$(BPF_GPL_MAP_STUB_O_FILES)
@@ -389,6 +389,9 @@ fv-no-prereqs:
 fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
 
+fv-bpf-no-prereqs:
+	$(MAKE) fv-no-prereqs FELIX_FV_ENABLE_BPF=true
+
 fv-nft:
 	$(MAKE) fv FELIX_FV_NFTABLES=Enabled
 
@@ -561,7 +564,7 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		gotestsum --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
+		gotestsum --format dots --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
 	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
 		-e $(ACK_GINKGO) \
@@ -572,7 +575,7 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
 		../../bin/bpf_ut.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		gotestsum --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
+		gotestsum --format dots --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
 
 .PHONY: bench-bpf
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf

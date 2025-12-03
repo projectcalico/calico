@@ -1,6 +1,9 @@
 package time
 
-import "time"
+import (
+	"testing"
+	"time"
+)
 
 func init() {
 	activeClock = newStdClock()
@@ -69,6 +72,8 @@ const (
 var (
 	UTC   = time.UTC
 	Local = time.Local
+
+	localOverride *time.Location
 )
 
 // DoWithClock temporarily sets the shim as the time and runs the given function. After the function is run, the time
@@ -81,6 +86,13 @@ func DoWithClock(shim Clock, fn func() error) error {
 
 type CleanUpRegisterable interface {
 	Cleanup(func())
+}
+
+// ShimLocalForTesting temporarily sets the local used by the time package to the given location. This helps with time
+// comparisons where two equal times with different locations are considered unequal.
+func ShimLocalForTesting(t *testing.T, local *time.Location) {
+	localOverride = local
+	t.Cleanup(func() { localOverride = nil })
 }
 
 // ShimClockForTestingT temporarily sets the shim as the time and runs the given function for a test and when the test

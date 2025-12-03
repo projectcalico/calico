@@ -40,23 +40,25 @@ func TestIterUnion(t *testing.T) {
 
 		// First sub-test verifies the actual union is correct.
 		t.Run(fmt.Sprint(testSets), func(t *testing.T) {
-			expected := New[int]()
-			var sets []Set[int]
-			for _, i := range testSets {
-				// We trust FromArray in this test; it is tested elsewhere...
-				sets = append(sets, FromArray(i))
-				// Trivial implementation of union for us to compare against.
-				for _, item := range i {
-					expected.Add(item)
+			for i := 0; i < 100; i++ {
+				expected := New[int]()
+				var sets []Set[int]
+				for _, i := range testSets {
+					// We trust FromArray in this test; it is tested elsewhere...
+					sets = append(sets, FromArray(i))
+					// Trivial implementation of union for us to compare against.
+					for _, item := range i {
+						expected.Add(item)
+					}
 				}
+				actual := New[int]()
+				IterUnion(sets, func(item int) bool {
+					Expect(actual.Contains(item)).To(BeFalse(), fmt.Sprintf("IterUnion produced duplicate value: %v", item))
+					actual.Add(item)
+					return true
+				})
+				Expect(actual).To(Equal(expected), fmt.Sprintf("Union of %v was incorrect", sets))
 			}
-			actual := New[int]()
-			IterUnion(sets, func(item int) bool {
-				Expect(actual.Contains(item)).To(BeFalse(), fmt.Sprintf("IterUnion produced duplicate value: %v", item))
-				actual.Add(item)
-				return true
-			})
-			Expect(actual).To(Equal(expected), fmt.Sprintf("Union of %v was incorrect", sets))
 		})
 
 		// Second sub-test verifies that we can stop by returning false.

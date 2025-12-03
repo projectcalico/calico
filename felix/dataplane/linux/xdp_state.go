@@ -346,15 +346,13 @@ func (i *ipsetIDsToMembers) AddMembers(setID string, members set.Set[string]) {
 		return
 	}
 	if rs, ok := i.pendingReplaces[setID]; ok {
-		members.Iter(func(member string) error {
+		for member := range members.All() {
 			rs.Add(member)
-			return nil
-		})
+		}
 	} else {
-		members.Iter(func(member string) error {
+		for member := range members.All() {
 			safeAdd(i.pendingAdds, setID, member)
-			return nil
-		})
+		}
 	}
 }
 
@@ -364,15 +362,13 @@ func (i *ipsetIDsToMembers) RemoveMembers(setID string, members set.Set[string])
 		return
 	}
 	if rs, ok := i.pendingReplaces[setID]; ok {
-		members.Iter(func(member string) error {
+		for member := range members.All() {
 			rs.Discard(member)
-			return nil
-		})
+		}
 	} else {
-		members.Iter(func(member string) error {
+		for member := range members.All() {
 			safeAdd(i.pendingDeletions, setID, member)
-			return nil
-		})
+		}
 	}
 }
 
@@ -402,25 +398,22 @@ func (i *ipsetIDsToMembers) UpdateCache() {
 		cachedSetIDs.Add(setID)
 	}
 
-	cachedSetIDs.Iter(func(setID string) error {
+	for setID := range cachedSetIDs.All() {
 		if m, ok := i.pendingReplaces[setID]; ok {
 			i.cache[setID] = m
 		} else {
 			if m, ok := i.pendingDeletions[setID]; ok {
-				m.Iter(func(member string) error {
+				for member := range m.All() {
 					i.cache[setID].Discard(member)
-					return nil
-				})
+				}
 			}
 			if m, ok := i.pendingAdds[setID]; ok {
-				m.Iter(func(member string) error {
+				for member := range m.All() {
 					i.cache[setID].Add(member)
-					return nil
-				})
+				}
 			}
 		}
-		return nil
-	})
+	}
 
 	// flush everything
 	i.pendingReplaces = make(map[string]set.Set[string])
@@ -548,14 +541,14 @@ func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsets
 	for _, data := range s.newCurrentState.IfaceNameToData {
 		for _, setIDs := range data.PoliciesToSetIDs {
 			var opErr error
-			setIDs.Iter(func(setID string) error {
+			for setID := range setIDs.All() {
 				if visited.Contains(setID) {
-					return nil
+					continue
 				}
 				members, err := s.getIPSetMembers(setID, ipsSource)
 				if err != nil {
 					opErr = err
-					return set.StopIteration
+					break
 				}
 				s.logCxt.WithFields(log.Fields{
 					"setID":       setID,
@@ -563,8 +556,7 @@ func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsets
 				}).Debug("Information about ipset members.")
 				ipsetMembers[setID] = members
 				visited.Add(setID)
-				return nil
-			})
+			}
 			if opErr != nil {
 				return nil, opErr
 			}
@@ -642,7 +634,7 @@ func (s *xdpIPState) tryResync(common *xdpStateCommon, ipsSource ipsetsSource) e
 // In case of mismatched maps, only the program gets replaced.
 func (s *xdpIPState) fixupXDPProgramAndMapConsistency(resyncState *xdpResyncState) {
 	ifaces := s.getIfaces(resyncState, giNS|giWX|giIX|giUX|giWM|giCM|giRM)
-	ifaces.Iter(func(iface string) error {
+	for iface := range ifaces.All() {
 		shouldHaveXDP := func() bool {
 			if data, ok := s.newCurrentState.IfaceNameToData[iface]; ok {
 				return data.NeedsXDP()
@@ -784,8 +776,7 @@ func (s *xdpIPState) fixupXDPProgramAndMapConsistency(resyncState *xdpResyncStat
 			"createMap":    s.bpfActions.CreateMap.Contains(iface),
 			"removeMap":    s.bpfActions.RemoveMap.Contains(iface),
 		}).Debug("Resync - finished fixing XDP program and map consistency.")
-		return nil
-	})
+	}
 }
 
 // fixupBlocklistContents ensures that contents of the BPF maps are in
@@ -801,7 +792,7 @@ func (s *xdpIPState) fixupXDPProgramAndMapConsistency(resyncState *xdpResyncStat
 // maps on a member level.
 func (s *xdpIPState) fixupBlocklistContents(resyncState *xdpResyncState) {
 	ifaces := s.getIfaces(resyncState, giNS)
-	ifaces.Iter(func(iface string) error {
+	for iface := range ifaces.All() {
 		createMap := s.bpfActions.CreateMap.Contains(iface)
 		s.logCxt.WithFields(log.Fields{
 			"iface":     iface,
@@ -822,8 +813,7 @@ func (s *xdpIPState) fixupBlocklistContents(resyncState *xdpResyncState) {
 			"membersToAdd":  s.bpfActions.MembersToAdd[iface],
 			"membersToDrop": s.bpfActions.MembersToDrop[iface],
 		}).Debug("Resync - finished fixing map contents.")
-		return nil
-	})
+	}
 	for _, m := range []map[string]map[string]uint32{s.bpfActions.AddToMap, s.bpfActions.RemoveFromMap} {
 		for iface := range m {
 			if !ifaces.Contains(iface) {
@@ -851,10 +841,9 @@ func (s *xdpIPState) fixupBlocklistContentsExistingMap(resyncState *xdpResyncSta
 				"wantedRefCount": refCount,
 			}).Panic("Resync - set id missing from ip set members in resync state!")
 		}
-		resyncState.ipsetMembers[setID].Iter(func(member string) error {
+		for member := range resyncState.ipsetMembers[setID].All() {
 			membersInNS[member] += refCount
-			return nil
-		})
+		}
 	}
 	for mapKey, actualRefCount := range membersInBpfMap {
 		member := mapKey.ToIPNet().String()
@@ -900,10 +889,9 @@ func (s *xdpIPState) getSetIDToRefCountFromNewState(iface string) map[string]uin
 	setIDToRefCount := make(map[string]uint32)
 	if data, ok := s.newCurrentState.IfaceNameToData[iface]; ok {
 		for _, setIDs := range data.PoliciesToSetIDs {
-			setIDs.Iter(func(setID string) error {
+			for setID := range setIDs.All() {
 				setIDToRefCount[setID] += 1
-				return nil
-			})
+			}
 		}
 	}
 	return setIDToRefCount
@@ -930,10 +918,6 @@ const (
 
 func (s *xdpIPState) getIfaces(resyncState *xdpResyncState, flags IfaceFlags) set.Set[string] {
 	ifaces := set.New[string]()
-	addFromSet := func(item string) error {
-		ifaces.Add(item)
-		return nil
-	}
 	if flags&giNS == giNS {
 		for iface, data := range s.newCurrentState.IfaceNameToData {
 			if data.NeedsXDP() {
@@ -942,10 +926,14 @@ func (s *xdpIPState) getIfaces(resyncState *xdpResyncState, flags IfaceFlags) se
 		}
 	}
 	if flags&giIX == giIX {
-		s.bpfActions.InstallXDP.Iter(addFromSet)
+		for item := range s.bpfActions.InstallXDP.All() {
+			ifaces.Add(item)
+		}
 	}
 	if flags&giUX == giUX {
-		s.bpfActions.UninstallXDP.Iter(addFromSet)
+		for item := range s.bpfActions.UninstallXDP.All() {
+			ifaces.Add(item)
+		}
 	}
 	if flags&giWX == giWX {
 		for iface := range resyncState.ifacesWithProgs {
@@ -953,10 +941,14 @@ func (s *xdpIPState) getIfaces(resyncState *xdpResyncState, flags IfaceFlags) se
 		}
 	}
 	if flags&giCM == giCM {
-		s.bpfActions.CreateMap.Iter(addFromSet)
+		for item := range s.bpfActions.CreateMap.All() {
+			ifaces.Add(item)
+		}
 	}
 	if flags&giRM == giRM {
-		s.bpfActions.RemoveMap.Iter(addFromSet)
+		for item := range s.bpfActions.RemoveMap.All() {
+			ifaces.Add(item)
+		}
 	}
 	if flags&giWM == giWM {
 		for iface := range resyncState.ifacesWithMaps {
@@ -1070,7 +1062,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 	}
 
 	// dropped ifaces
-	pds.IfaceNamesToDrop.Iter(func(ifName string) error {
+	for ifName := range pds.IfaceNamesToDrop.All() {
 		s.logCxt.WithField("iface", ifName).Debug("Iface is gone.")
 
 		dropXDP := false
@@ -1084,9 +1076,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 
 		delete(newCs.IfaceNameToData, ifName)
 		processedIfaces.Add(ifName)
-
-		return nil
-	})
+	}
 
 	// Host Endpoints that changed
 	for ifaceName, newEpID := range pds.IfaceEpIDChange {
@@ -1103,7 +1093,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 	// CHANGES IN HOST ENDPOINTS
 
 	// Host Endpoints that were updated
-	pds.UpdatedHostEndpoints.Iter(func(hepID types.HostEndpointID) error {
+	for hepID := range pds.UpdatedHostEndpoints.All() {
 		s.logCxt.WithField("hostEpId", hepID.String()).Debug("Host endpoint has changed.")
 		for ifaceName, data := range cs.IfaceNameToData {
 			if processedIfaces.Contains(ifaceName) {
@@ -1122,23 +1112,14 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 			s.processHostEndpointChange(ifaceName, &data, hepID, rawHep[hepID], changeInMaps)
 			processedIfaces.Add(ifaceName)
 		}
-
-		return nil
-	})
-
-	// Host Endpoints that were removed
-	pds.RemovedHostEndpoints.Iter(func(hepID types.HostEndpointID) error {
-		// XXX do nothing
-		return nil
-	})
+	}
 
 	// CHANGES IN POLICIES
 
 	// Policies that should be removed
-	pds.PoliciesToRemove.Iter(func(policyID types.PolicyID) error {
+	for policyID := range pds.PoliciesToRemove.All() {
 		delete(newCs.XDPEligiblePolicies, policyID)
-		return nil
-	})
+	}
 
 	// Policies that should be updated
 	ifacesWithUpdatedPolicies := set.New[string]()
@@ -1182,10 +1163,9 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 			}).Debug("Considering old set ID of policy.")
 			if oldSetIDs != nil {
 				// it means that the old version of the policy was optimized
-				oldSetIDs.Iter(func(setID string) error {
+				for setID := range oldSetIDs.All() {
 					m[setID] -= 1
-					return nil
-				})
+				}
 			}
 			if rules != nil {
 				// this means that new policy can be optimized
@@ -1203,10 +1183,9 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 					"policyID":   policyID.String(),
 				}).Info("Policy will be optimized.")
 
-				newSetIDs.Iter(func(setID string) error {
+				for setID := range newSetIDs.All() {
 					m[setID] += 1
-					return nil
-				})
+				}
 				newCs.IfaceNameToData[ifaceName].PoliciesToSetIDs[policyID] = newSetIDs
 			} else {
 				s.logCxt.WithFields(log.Fields{
@@ -1231,7 +1210,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 		}
 	}
 
-	ifacesWithUpdatedPolicies.Iter(func(ifaceName string) error {
+	for ifaceName := range ifacesWithUpdatedPolicies.All() {
 		oldData := cs.IfaceNameToData[ifaceName]
 		newData := newCs.IfaceNameToData[ifaceName]
 		oldNeedsXDP := oldData.NeedsXDP()
@@ -1243,8 +1222,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 			ba.InstallXDP.Add(ifaceName)
 			ba.CreateMap.Add(ifaceName)
 		}
-		return nil
-	})
+	}
 
 	// populate map changes
 	for ifaceName, ips := range changeInMaps {
@@ -1279,10 +1257,9 @@ func dumpSetToString(s set.Set[string]) string {
 		return "<empty>"
 	}
 	strs := make([]string, 0, s.Len())
-	s.Iter(func(item string) error {
+	for item := range s.All() {
 		strs = append(strs, fmt.Sprintf("%v", item))
-		return nil
-	})
+	}
 	return strings.Join(strs, ", ")
 }
 
@@ -1290,10 +1267,9 @@ func (s *xdpIPState) processHostEndpointChange(ifaceName string, oldData *xdpIfa
 	policiesToSetIDs := make(map[types.PolicyID]set.Set[string] /*<string>*/)
 	oldSetIDs := make(map[string]int)
 	for _, setIDs := range oldData.PoliciesToSetIDs {
-		setIDs.Iter(func(setID string) error {
+		for setID := range setIDs.All() {
 			oldSetIDs[setID] += 1
-			return nil
-		})
+		}
 	}
 
 	newPolicyIDs := getPolicyIDs(newEP)
@@ -1318,10 +1294,9 @@ func (s *xdpIPState) processHostEndpointChange(ifaceName string, oldData *xdpIfa
 		rulesSetIDs := getSetIDs(rules)
 		policiesToSetIDs[policyID] = rulesSetIDs
 
-		rulesSetIDs.Iter(func(setID string) error {
+		for setID := range rulesSetIDs.All() {
 			newSetIDs[setID] += 1
-			return nil
-		})
+		}
 	}
 
 	s.logCxt.WithFields(log.Fields{
@@ -1540,15 +1515,14 @@ func (s *xdpIPState) cleanupCache() {
 	for setID := range s.ipsetIDsToMembers.pendingDeletions {
 		setIDs.Add(setID)
 	}
-	setIDs.Iter(func(setID string) error {
+	for setID := range setIDs.All() {
 		if !s.isSetIDInCurrentState(setID) {
 			delete(s.ipsetIDsToMembers.cache, setID)
 			delete(s.ipsetIDsToMembers.pendingReplaces, setID)
 			delete(s.ipsetIDsToMembers.pendingAdds, setID)
 			delete(s.ipsetIDsToMembers.pendingDeletions, setID)
 		}
-		return nil
-	})
+	}
 }
 
 func (s *xdpIPState) isSetIDInCurrentState(setID string) bool {
@@ -1644,12 +1618,11 @@ func (s *xdpIPState) getMemberChanges() map[string]memberChanges {
 
 func setDifference[T comparable](a, b set.Set[T]) set.Set[T] {
 	result := set.New[T]()
-	a.Iter(func(item T) error {
+	for item := range a.All() {
 		if !b.Contains(item) {
 			result.Add(item)
 		}
-		return nil
-	})
+	}
 	return result
 }
 
@@ -1800,7 +1773,7 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 	// had generic xdp enabled.
 	allXDPModes := getXDPModes(true)
 	logCxt.Debug("Processing BPF actions.")
-	a.UninstallXDP.Iter(func(iface string) error {
+	for iface := range a.UninstallXDP.All() {
 		var removeErrs []error
 		logCxt.WithField("iface", iface).Debug("Removing XDP programs.")
 		for _, mode := range allXDPModes {
@@ -1816,34 +1789,31 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 		// Only report an error if _all_ of the mode-specific removals failed.
 		if len(removeErrs) == len(allXDPModes) {
 			opErr = fmt.Errorf("failed to remove XDP program from %s: %v", iface, removeErrs)
-			return set.StopIteration
+			break
 		}
-		return nil
-	})
+	}
 	if opErr != nil {
 		return opErr
 	}
 
-	a.RemoveMap.Iter(func(iface string) error {
+	for iface := range a.RemoveMap.All() {
 		logCxt.WithField("iface", iface).Debug("Removing BPF blocklist map.")
 		if err := memberCache.bpfLib.RemoveCIDRMap(iface, memberCache.GetFamily()); err != nil {
 			opErr = err
-			return set.StopIteration
+			break
 		}
-		return nil
-	})
+	}
 	if opErr != nil {
 		return opErr
 	}
 
-	a.CreateMap.Iter(func(iface string) error {
+	for iface := range a.CreateMap.All() {
 		logCxt.WithField("iface", iface).Debug("Creating a BPF blocklist map.")
 		if _, err := memberCache.bpfLib.NewCIDRMap(iface, memberCache.GetFamily()); err != nil {
 			opErr = err
-			return set.StopIteration
+			break
 		}
-		return nil
-	})
+	}
 	if opErr != nil {
 		return opErr
 	}
@@ -1909,7 +1879,7 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 		}
 	}
 
-	a.InstallXDP.Iter(func(iface string) error {
+	for iface := range a.InstallXDP.All() {
 		logCxt.WithField("iface", iface).Debug("Loading XDP program.")
 		var loadErrs []error
 		for _, mode := range xdpModes {
@@ -1926,10 +1896,9 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 		}
 		if loadErrs != nil {
 			opErr = fmt.Errorf("failed to load XDP program from %s: %v", iface, loadErrs)
-			return set.StopIteration
+			break
 		}
-		return nil
-	})
+	}
 	if opErr != nil {
 		return opErr
 	}
@@ -2003,10 +1972,9 @@ func convertMembersToMasked(members set.Set[string], setType ipsets.IPSetType) s
 	switch setType {
 	case ipsets.IPSetTypeHashIP:
 		newMembers := set.New[string]()
-		members.Iter(func(member string) error {
+		for member := range members.All() {
 			newMembers.Add(member + "/32")
-			return nil
-		})
+		}
 		return newMembers
 	case ipsets.IPSetTypeHashNet:
 		return members
@@ -2281,13 +2249,12 @@ type memberIterSet struct {
 
 func (m *memberIterSet) Iter(f func(member string, refCount uint32) error) error {
 	var opErr error
-	m.members.Iter(func(member string) error {
+	for member := range m.members.All() {
 		if err := f(member, m.refCount); err != nil {
 			opErr = err
-			return set.StopIteration
+			break
 		}
-		return nil
-	})
+	}
 	return opErr
 }
 

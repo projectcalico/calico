@@ -645,12 +645,13 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		// In case of conflicts (more than one route with the same CIDR), pick
 		// one deterministically so that we don't churn the dataplane.
 
-		ifaces.Iter(func(ifaceName string) error {
+	ifacesLoop:
+		for ifaceName := range ifaces.All() {
 			candidates = append(candidates, ifaceName)
 			ifIndex, ok := r.ifaceIndexForName(ifaceName)
 			if !ok {
 				r.logCxt.WithField("ifaceName", ifaceName).Debug("Skipping route for missing interface.")
-				return nil
+				continue
 			}
 
 			someUp := false
@@ -660,12 +661,12 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 					"ifaceName": ifaceName,
 					"cidr":      cidr,
 				}).Warn("Bug? No route for iface/CIDR (recalculateDesiredKernelRoute called too early?).")
-				return nil
+				continue
 			}
 			for _, nh := range target.MultiPath {
 				if ifIndex, ok := r.ifaceIndexForName(nh.IfaceName); !ok {
 					r.logCxt.WithField("ifaceName", nh.IfaceName).Debug("Skipping multi-path route for missing interface.")
-					return nil
+					continue ifacesLoop
 				} else {
 					if r.ifaceIndexToState[ifIndex] == ifacemonitor.StateUp {
 						someUp = true
@@ -682,11 +683,11 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 
 			if ifaceName != InterfaceNone && r.ifaceIndexToState[ifIndex] != ifacemonitor.StateUp {
 				r.logCxt.WithField("ifaceName", ifaceName).Debug("Skipping route for down interface.")
-				return nil
+				continue
 			} else if len(target.MultiPath) > 0 && !someUp {
 				// Multi-path routes require at least one interface to be up.
 				r.logCxt.Debug("Skipping multi-path route; all interfaces down.")
-				return nil
+				continue
 			}
 
 			// Main tie-breaker is the RouteClass, which is prioritised
@@ -698,8 +699,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 				bestRouteClass = routeClass
 				bestTarget = target
 			}
-			return nil
-		})
+		}
 	}
 
 	if bestIfaceIdx == -1 {
@@ -1015,15 +1015,15 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 		return nil
 	}
 	r.opReporter.RecordOperation(fmt.Sprint("partial-resync-routes-v", r.ipVersion))
-	r.ifacesToRescan.Iter(func(ifaceName string) error {
+	for ifaceName := range r.ifacesToRescan.All() {
 		r.livenessCallback()
 		err := r.resyncIface(nl, ifaceName)
 		if err != nil {
 			r.nl.MarkHandleForReopen()
-			return nil
+			continue
 		}
-		return set.RemoveItem
-	})
+		r.ifacesToRescan.Discard(ifaceName)
+	}
 	return nil
 }
 

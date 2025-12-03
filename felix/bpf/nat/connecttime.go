@@ -68,7 +68,7 @@ var RecvMapParameters = maps.MapParameters{
 	Name:       "cali_ctlb_recv",
 }
 
-func ProgramsMap() []maps.Map {
+func ProgramsMaps() []maps.Map {
 	return []maps.Map{
 		maps.NewPinnedMap(ConnMapParameters),
 		maps.NewPinnedMap(SendMapParameters),
@@ -89,7 +89,7 @@ func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
 
 	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
 	defer bpf.CleanUpCalicoPins(pinDir)
-	ctlbProgsMap := ProgramsMap()
+	ctlbProgsMap := ProgramsMaps()
 	for _, index := range ctlbProgToIndex {
 		if err := ctlbProgsMap[index].EnsureExists(); err != nil {
 			return fmt.Errorf("failed to create ctlb jump map: %w", err)

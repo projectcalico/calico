@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2019 Tigera, Inc. All rights reserved.
+# Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,27 +16,54 @@
 
 set -e
 
-source $(pwd)/.semaphore/batches.sh
-
-vm_name_prefix=$1
-project=unique-caldron-775
-zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
 repo_dir="$my_dir/../.."
+
+# shellcheck source=../../felix/.semaphore/batches.sh
+source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
+
+vm_name_prefix=$1
 artifacts_dir="$repo_dir/artifacts"
+zone=${ZONE:-europe-west3-c}
+: "${IMAGE_FAMILY:=ubuntu-minimal-2204-lts}"
+: "${MAX_RUN_DURATION:=4h}"
+disk_size=${VM_DISK_SIZE:-20GB}
 
 pids=()
+names=""
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
-  log_file="$artifacts_dir/create-vm-$batch.log"
+  if [ -n "$names" ]; then
+    names="$names,$vm_name"
+  else
+    names="$vm_name"
+  fi
+done
+
+# Do a bulk create; this is faster and it saves API quota.
+gcloud --quiet compute instances bulk create \
+       --predefined-names="$names" \
+       --zone=${zone} \
+       --machine-type=n4-standard-4 \
+       --image-family=${IMAGE_FAMILY} \
+       --image-project=ubuntu-os-cloud \
+       --boot-disk-size=$disk_size \
+       --boot-disk-type=hyperdisk-balanced \
+       --max-run-duration="${MAX_RUN_DURATION}" \
+       --instance-termination-action=DELETE \
+       --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
+       --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
+
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  log_file="$artifacts_dir/configure-vm-$batch.log"
   echo "Creating test VM $vm_name in background. Redirecting log to $log_file."
-  "${my_dir}/create-test-vm" "$vm_name" >& "$log_file" &
+  "${my_dir}/configure-test-vm" "$vm_name" >& "$log_file" &
   pids+=( $! )
-  sleep 1
 done
 
 for pid in "${pids[@]}"; do
-  echo "Waiting for create-test-vm process PID=$pid to finish"
+  echo "Waiting for configure-test-vm process PID=$pid to finish"
   if ! wait "$pid"; then
     echo "Creating one of the test VMs failed, exiting. Logs should be attached as artifacts."
     exit 1

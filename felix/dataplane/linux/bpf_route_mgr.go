@@ -244,10 +244,11 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 }
 
 func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {
-	m.dirtyCIDRs.Iter(func(cidr ip.CIDR) error {
+	for cidr := range m.dirtyCIDRs.All() {
 		// Ignore IPv4 routes if IPv6 is enabled and vice-versa.
 		if uint8(m.ipFamily) != cidr.Version() {
-			return set.RemoveItem
+			m.dirtyCIDRs.Discard(cidr)
+			continue
 		}
 		dataplaneKey := m.bpfOps.NewKey(cidr)
 		newValue := m.calculateRoute(cidr)
@@ -256,21 +257,23 @@ func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {
 		if newValue != nil {
 			if exists && oldValue.Equal(newValue) {
 				// Value is already correct.  We're done.
-				return set.RemoveItem
+				m.dirtyCIDRs.Discard(cidr)
+				continue
 			}
 			m.desiredRoutes[dataplaneKey] = newValue
 			m.onRouteUpdateCB(dataplaneKey, newValue)
 		} else {
 			if !exists {
 				// Value is already correct.  We're done.
-				return set.RemoveItem
+				m.dirtyCIDRs.Discard(cidr)
+				continue
 			}
 			delete(m.desiredRoutes, dataplaneKey)
 			m.onRouteDeleteCB(dataplaneKey)
 		}
 		m.dirtyRoutes.Add(dataplaneKey)
-		return set.RemoveItem
-	})
+		m.dirtyCIDRs.Discard(cidr)
+	}
 }
 
 func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
@@ -349,7 +352,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 					"Multiple local workloads with same IP but BPF dataplane only supports single route. " +
 						"Will choose one route.")
 			}
-			wepIDs.Iter(func(wepID types.WorkloadEndpointID) error {
+			for wepID := range wepIDs.All() {
 				// Route is a local workload, look up its name and interface details.
 				wepScore := 0
 				wep := m.wepIDToWorkload[wepID]
@@ -368,8 +371,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 					bestWepID = pWepID
 					bestWepScore = wepScore
 				}
-				return nil
-			})
+			}
 		}
 	} else if rts&proto.RouteType_REMOTE_HOST == proto.RouteType_REMOTE_HOST {
 		flags |= routes.FlagsRemoteHost
@@ -418,7 +420,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 func (m *bpfRouteManager) applyUpdates() (numDels uint, numAdds uint) {
 	debug := log.GetLevel() >= log.DebugLevel
 
-	m.dirtyRoutes.Iter(func(key routes.KeyInterface) error {
+	for key := range m.dirtyRoutes.All() {
 		value, present := m.desiredRoutes[key]
 		if !present {
 			// Delete the key.
@@ -430,9 +432,10 @@ func (m *bpfRouteManager) applyUpdates() (numDels uint, numAdds uint) {
 			if err != nil {
 				log.WithFields(log.Fields{"key": key}).Error("Failed to delete from BPF map")
 				m.resyncScheduled = true
-				return nil
+				continue
 			}
-			return set.RemoveItem
+			m.dirtyRoutes.Discard(key)
+			continue
 		}
 
 		// If we get here, we're doing an update.
@@ -444,10 +447,10 @@ func (m *bpfRouteManager) applyUpdates() (numDels uint, numAdds uint) {
 		if err != nil {
 			log.WithFields(log.Fields{"key": key}).Error("Failed to update BPF map")
 			m.resyncScheduled = true
-			return nil
+			continue
 		}
-		return set.RemoveItem
-	})
+		m.dirtyRoutes.Discard(key)
+	}
 
 	return
 }
@@ -518,12 +521,11 @@ func (m *bpfRouteManager) onIfaceIdxChanged(name string) {
 	if wepIDs == nil {
 		return
 	}
-	wepIDs.Iter(func(wepID types.WorkloadEndpointID) error {
+	for wepID := range wepIDs.All() {
 		wep := m.wepIDToWorkload[wepID]
 		cidrs := m.getWorkloadCIDRs(wep)
 		m.markCIDRsDirty(cidrs...)
-		return nil
-	})
+	}
 }
 
 func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
@@ -534,25 +536,24 @@ func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 		newCIDRs = set.Empty[ip.CIDR]()
 	} else {
 		newCIDRs = set.New[ip.CIDR]()
-		update.Addrs.Iter(func(cidrStr string) error {
+		for cidrStr := range update.Addrs.All() {
 			cidr := ip.MustParseCIDROrIP(cidrStr)
 			if uint8(m.ipFamily) != cidr.Version() {
-				return nil
+				continue
 			}
 			if cidr.Addr().AsNetIP().IsGlobalUnicast() {
 				newCIDRs.Add(cidr)
 			}
-			return nil
-		})
+		}
 	}
 
 	cidrs := m.localIfaceToCIDRs[update.Name]
 	if cidrs != nil {
-		cidrs.Iter(func(cidr ip.CIDR) error {
+		for cidr := range cidrs.All() {
 			if newCIDRs.Contains(cidr) {
 				// No change for this address.
 				newCIDRs.Discard(cidr)
-				return nil
+				continue
 			}
 			// Address deleted.
 			changed = true
@@ -561,11 +562,11 @@ func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 				delete(m.cidrToLocalIfaces, cidr)
 			}
 			m.markCIDRsDirty(cidr)
-			return set.RemoveItem
-		})
+			cidrs.Discard(cidr)
+		}
 	}
 
-	newCIDRs.Iter(func(cidr ip.CIDR) error {
+	for cidr := range newCIDRs.All() {
 		changed = true
 		ifaceNames := m.cidrToLocalIfaces[cidr]
 		if ifaceNames == nil {
@@ -579,8 +580,8 @@ func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 		}
 		m.markCIDRsDirty(cidr)
 		cidrs.Add(cidr)
-		return set.RemoveItem
-	})
+		newCIDRs.Discard(cidr)
+	}
 
 	if changed {
 		var newIPs []net.IP
@@ -696,13 +697,13 @@ func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 		cidrsToDel.Discard(cidr)
 	}
 	// Delete the unused routes.
-	cidrsToDel.Iter(func(cidr ip.CIDR) error {
+	for cidr := range cidrsToDel.All() {
 		if _, ok := m.cidrToRoute[cidr]; ok {
 			delete(m.cidrToRoute, cidr)
 			m.dirtyCIDRs.Add(cidr)
 		}
-		return set.RemoveItem
-	})
+		cidrsToDel.Discard(cidr)
+	}
 }
 
 func (m *bpfRouteManager) removeWEP(id *types.WorkloadEndpointID) {
