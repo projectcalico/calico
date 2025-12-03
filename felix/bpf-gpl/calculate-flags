@@ -114,14 +114,14 @@ fi
 
 if [[ "${filename}" =~ policy_default.* ]]; then
 	((flags = CALI_TC_DEF_POLICY))
-	if [[ "${filename}" =~ .*_fh.* ]]; then
+	if [[ "${filename}" =~ .*_ingress.* ]]; then
 		((flags |= CALI_TC_INGRESS))
 	fi
 fi
 
 if [[ "${filename}" =~ _preamble.* ]]; then
   ((flags |= CALI_TC_PREAMBLE))
-  if [[ "${filename}" =~ _fh.* ]]; then
+  if [[ "${filename}" =~ _ingress.* ]]; then
     ((flags |= CALI_TC_INGRESS))
   fi
 fi

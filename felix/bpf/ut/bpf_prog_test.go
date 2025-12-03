@@ -390,9 +390,9 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	} else {
-		fileToLoad := "../../bpf-gpl/bin/tc_preamble_th.o"
+		fileToLoad := "../../bpf-gpl/bin/tc_preamble_egress.o"
 		if useIngressProgMap {
-			fileToLoad = "../../bpf-gpl/bin/tc_preamble_fh.o"
+			fileToLoad = "../../bpf-gpl/bin/tc_preamble_ingress.o"
 		}
 		o, err := objLoad(fileToLoad, bpfFsDir, "preamble", topts, false, false, useIngressProgMap)
 		Expect(err).NotTo(HaveOccurred())
