@@ -51,7 +51,7 @@ void bpf_attr_setup_obj_pin(union bpf_attr *attr, char *path, __u32 fd, __u32 fl
    attr->file_flags = flags;
 }
 
-int bpf_load_prog(const char *name, __u32 prog_type, __u32 attach_type,
+int bpf_load_prog(char *name, __u32 prog_type, __u32 attach_type,
 		  void *insns, __u32 insn_count,
 		  char *license, __u32 log_level,
 		  __u32 log_size, void *log_buf)
@@ -63,6 +63,17 @@ int bpf_load_prog(const char *name, __u32 prog_type, __u32 attach_type,
 		.kern_version = 0,
 		.expected_attach_type = attach_type,
 	);
+	if (name) {
+		for (int i = 0; i < BPF_OBJ_NAME_LEN; i++) {
+			if (name[i] == '\0') {
+				break;
+			}
+			if (isalnum(name[i]) || name[i] == '_' || name[i] == '.')
+				continue;
+			name[i] = '_';
+		}
+	}
+
 	int fd = bpf_prog_load(prog_type, name, license, insns, insn_count, &opts);
 	if (fd < 0)
 		errno = -fd;
