@@ -1481,10 +1481,13 @@ func configureProcSysForInterface(name string, ipVersion int, rpFilter string, w
 		//   means that we don't need to assign the link local address explicitly to each
 		//   host side of the veth, which is one fewer thing to maintain and one fewer
 		//   thing we may clash over.
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
-		if err != nil {
-			return err
+		if strings.HasPrefix(name, "tap") {
+			err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+			if err != nil {
+				return err
+			}
 		}
+
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
