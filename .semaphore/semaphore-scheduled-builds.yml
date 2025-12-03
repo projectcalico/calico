@@ -333,6 +333,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "apiserver"
       prologue:
         commands:
           - cd apiserver
@@ -340,6 +343,9 @@ blocks:
         - name: "API Server: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
         - name: "API Server: Build"
           matrix:
             - env_var: ARCH
@@ -368,6 +374,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calicoctl"
       prologue:
         commands:
           - cd calicoctl
@@ -375,6 +384,9 @@ blocks:
         - name: "calicoctl: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: CNI Plugin
     run:
       when: "true"
@@ -456,6 +468,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "confd"
       prologue:
         commands:
           - cd confd
@@ -465,6 +480,9 @@ blocks:
             minutes: 60
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Crypto
     run:
       when: "true"
@@ -496,6 +514,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "e2e-tests"
       agent:
         machine:
           type: f1-standard-4
@@ -504,6 +525,9 @@ blocks:
         - name: "E2E tests: Conformance"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Envoy Gateway
     run:
       when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -876,6 +900,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "goldmane"
       prologue:
         commands:
           # The Makefile sometimes tries to rebuild the protobuf files on non-amd architectures
@@ -887,6 +914,9 @@ blocks:
         - name: "Goldmane: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
         - name: "Goldmane: build multi-arch"
           matrix:
             - env_var: ARCH
@@ -1188,6 +1218,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "key-cert-provisioner"
       prologue:
         commands:
           - cd key-cert-provisioner
@@ -1195,6 +1228,9 @@ blocks:
         - name: "key-cert-provisioner: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: "OpenStack integration (Yoga)"
     run:
       when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"
@@ -1286,6 +1322,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "mock-node"
       prologue:
         commands:
           - cd test-tools/mocknode
@@ -1293,6 +1332,9 @@ blocks:
         - name: "Mock node: CI"
           commands:
             - ../../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Release tooling
     run:
       when: "true"
