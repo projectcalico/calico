@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package ipsets_test
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -207,6 +208,7 @@ var _ = Describe("IPFamily", func() {
 var _ = Describe("IP sets dataplane", func() {
 	var dataplane *mockDataplane
 	var ipsets *IPSets
+	var listener *mockListener
 
 	meta := IPSetMetadata{
 		MaxSize: 1234,
@@ -248,7 +250,11 @@ var _ = Describe("IP sets dataplane", func() {
 
 	reschedRequested := false
 	apply := func() {
-		ipsets.ApplyUpdates()
+		if listener != nil { // Avoid nil interface/pointer confusion
+			ipsets.ApplyUpdates(listener)
+		} else {
+			ipsets.ApplyUpdates(nil)
+		}
 		reschedRequested = ipsets.ApplyDeletions()
 	}
 
@@ -258,6 +264,7 @@ var _ = Describe("IP sets dataplane", func() {
 	}
 
 	BeforeEach(func() {
+		listener = nil
 		dataplane = newMockDataplane()
 		ipsets = NewIPSetsWithShims(
 			v4VersionConf,
@@ -281,7 +288,7 @@ var _ = Describe("IP sets dataplane", func() {
 		// Apply updates.
 		ipsets.ApplyDeletions() // No-op
 		dataplane.ExpectMembers(map[string][]string{})
-		ipsets.ApplyUpdates()
+		ipsets.ApplyUpdates(nil)
 		dataplane.ExpectMembers(map[string][]string{
 			v4MainIPSetName: {"10.0.0.2", "10.0.0.3"},
 		})
@@ -454,6 +461,45 @@ var _ = Describe("IP sets dataplane", func() {
 		It("IP set should get cleaned up", func() {
 			apply()
 			dataplane.ExpectMembers(map[string][]string{})
+		})
+	})
+
+	It("Calico IP sets with unsupported revision and in desired sets should be re-created", func() {
+		dataplane.IPSetMetadata = map[string]setMetadata{
+			v4MainIPSetName: {
+				Name:     v4MainIPSetName,
+				Family:   "inet",
+				Type:     IPSetTypeHashIP,
+				MaxSize:  1234,
+				Revision: supportedMockRevision + 1,
+			},
+			v4MainIPSetName2: {
+				Name:     v4MainIPSetName2,
+				Family:   "inet",
+				Type:     IPSetTypeHashIP,
+				MaxSize:  1234,
+				Revision: supportedMockRevision + 1,
+			},
+			v4MainIPSetName3: {
+				Name:     v4MainIPSetName3,
+				Family:   "inet",
+				Type:     IPSetTypeHashIP,
+				MaxSize:  1234,
+				Revision: supportedMockRevision,
+			},
+		}
+		dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3")
+		dataplane.IPSetMembers[v4MainIPSetName2] = set.From("10.0.0.1", "10.0.0.4")
+		dataplane.IPSetMembers[v4MainIPSetName3] = set.From("10.0.0.5", "10.0.0.6")
+
+		ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+		ipsets.AddOrReplaceIPSet(meta3, []string{"10.0.0.5", "10.0.0.6"})
+
+		apply()
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName: []string{"10.0.0.1", "10.0.0.2"},
+			// v4MainIPSetName2 should be destroyed since it's not in the desired state.
+			v4MainIPSetName3: []string{"10.0.0.5", "10.0.0.6"}, // This IPSet should not be touched.
 		})
 	})
 
@@ -684,8 +730,9 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 		})
 
-		Describe("after creating second IP set", func() {
+		Describe("after creating second IP set, with a listener that filters to the main IP set", func() {
 			BeforeEach(func() {
+				listener = &mockListener{}
 				ipsets.AddOrReplaceIPSet(meta2, []string{"10.0.0.1", "10.0.0.3"})
 				apply()
 			})
@@ -695,6 +742,12 @@ var _ = Describe("IP sets dataplane", func() {
 					v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 					v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
 				})
+			})
+
+			It("should record main IP set update only", func() {
+				ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.2", "10.0.0.4"})
+				apply()
+				Expect(listener.SeenMembers).To(Equal(set.From[string]("10.0.0.4")))
 			})
 
 			Context("with filtering to single IP set", func() {
@@ -741,9 +794,12 @@ var _ = Describe("IP sets dataplane", func() {
 				})
 			})
 
-			Describe("after another process flushes an IP set", func() {
+			Describe("after another process interferes with our IP sets", func() {
 				BeforeEach(func() {
+					// Flush one IP set.
 					dataplane.IPSetMembers[v4MainIPSetName] = set.New[string]()
+					// Remove one IP from the other IP set.
+					dataplane.IPSetMembers[v4MainIPSetName2] = set.From("10.0.0.1")
 				})
 
 				It("should be detected and fixed by a resync", func() {
@@ -751,6 +807,43 @@ var _ = Describe("IP sets dataplane", func() {
 					dataplane.ExpectMembers(map[string][]string{
 						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
+					})
+				})
+
+				It("should only fix one IP set if problem is discovered as part of an update", func() {
+					// Simulate a failure to write one IP set.
+					dataplane.RestoreOpFailures = []string{"write-ip"}
+					// Trigger an update to only one IP set.
+					ipsets.AddMembers(ipSetID2, []string{"10.0.0.4"})
+
+					apply()
+					// The _other_ IP set shouldn't get fixed due to the
+					// targeted resync.
+					dataplane.ExpectMembers(map[string][]string{
+						v4MainIPSetName:  {},
+						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3", "10.0.0.4"},
+					})
+
+					// But the next timer-triggered resync should catch it.
+					resyncAndApply()
+					dataplane.ExpectMembers(map[string][]string{
+						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
+						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3", "10.0.0.4"},
+					})
+				})
+
+				It("should be detected after many transient errors", func() {
+					// Simulate lots of transient failures in a row, followed by success.
+					dataplane.RestoreOpFailures = slices.Repeat([]string{"write-ip"}, (MaxRetryAttempt/2)+1)
+					// Trigger an update to only one IP set.
+					ipsets.AddMembers(ipSetID2, []string{"10.0.0.4"})
+					apply()
+
+					// This time, the dataplane should escalate to a full resync,
+					// and both IP sets should get fixed.
+					dataplane.ExpectMembers(map[string][]string{
+						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
+						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3", "10.0.0.4"},
 					})
 				})
 			})
@@ -802,7 +895,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.AddMembers(ipSetID, []string{"10.0.0.5"})
-				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -812,7 +905,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.QueueResync()
-				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -823,7 +916,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.QueueResync()
-				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -1073,3 +1166,18 @@ var _ = DescribeTable("ParseRange tests",
 	Entry("FOO-1", "FOO-1", 0, 0, true),
 	Entry("FOO", "FOO", 0, 0, true),
 )
+
+type mockListener struct {
+	SeenMembers set.Typed[string]
+}
+
+func (m *mockListener) CaresAboutIPSet(ipSetName string) bool {
+	return ipSetName == v4MainIPSetName
+}
+
+func (m *mockListener) OnMemberProgrammed(rawIPSetMember string) {
+	if m.SeenMembers == nil {
+		m.SeenMembers = set.New[string]()
+	}
+	m.SeenMembers.Add(rawIPSetMember)
+}
