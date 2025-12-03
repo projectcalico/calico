@@ -205,6 +205,10 @@ promotions:
     pipeline_file: push-images/packaging.yaml
     auto_promote:
       when: "branch =~ 'master'"
+  - name: Push third-party istio-ztunnel images
+    pipeline_file: push-images/third_party/istio-ztunnel.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
@@ -1413,6 +1417,55 @@ blocks:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
             - artifact push job logs
+  - name: Publish istio-ztunnel images
+    run:
+      when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'})"
+    dependencies:
+      - Prerequisites
+    task:
+      secrets:
+        - name: google-service-account-for-gcr
+      prologue:
+        commands:
+          - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+      jobs:
+        - name: Linux amd64
+          commands:
+            - make -C third_party/istio-ztunnel cd ARCHES=amd64 CONFIRM=true
+  - name: Publish istio-ztunnel images - native arm64 runner
+    run:
+      when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'})"
+    dependencies:
+      - Prerequisites
+    task:
+      agent:
+        machine:
+          type: s1-aws-arm64-2
+      secrets:
+        - name: google-service-account-for-gcr
+      prologue:
+        commands:
+          - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+      jobs:
+        - name: Linux arm64
+          commands:
+            - make -C third_party/istio-ztunnel cd ARCHES=arm64 CONFIRM=true
+  - name: Publish istio-ztunnel multi-arch manifests
+    run:
+      when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'})"
+    dependencies:
+      - Publish istio-ztunnel images
+      - Publish istio-ztunnel images - native arm64 runner
+    task:
+      secrets:
+        - name: google-service-account-for-gcr
+      prologue:
+        commands:
+          - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+      jobs:
+        - name: Linux multi-arch manifests
+          commands:
+            - make -C third_party/istio-ztunnel push-manifest CONFIRM=true
   - name: Mock node
     run:
       when: "true"
