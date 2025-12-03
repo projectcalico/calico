@@ -44,16 +44,16 @@ var _ = Describe("Test the StagedGlobalNetworkPolicy update processor", func() {
 		Name: name3,
 	}
 	v1StagedGlobalNetworkPolicyKey1 := model.PolicyKey{
-		Name: model.PolicyNamePrefixStaged + name1,
-		Tier: "default",
+		Name: name1,
+		Kind: apiv3.KindStagedGlobalNetworkPolicy,
 	}
 	v1StagedGlobalNetworkPolicyKey2 := model.PolicyKey{
-		Name: model.PolicyNamePrefixStaged + name2,
-		Tier: "default",
+		Name: name2,
+		Kind: apiv3.KindStagedGlobalNetworkPolicy,
 	}
 	v1StagedGlobalNetworkPolicyKey3 := model.PolicyKey{
-		Name: model.PolicyNamePrefixStaged + name3,
-		Tier: mytier,
+		Name: name3,
+		Kind: apiv3.KindStagedGlobalNetworkPolicy,
 	}
 
 	It("should handle conversion of valid StagedGlobalNetworkPolicys", func() {
@@ -75,6 +75,7 @@ var _ = Describe("Test the StagedGlobalNetworkPolicy update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1StagedGlobalNetworkPolicyKey1,
 			Value: &model.Policy{
+				Tier:           "default",
 				PreDNAT:        true,
 				ApplyOnForward: true,
 				StagedAction:   &res.Spec.StagedAction,
@@ -185,6 +186,7 @@ var _ = Describe("Test the StagedGlobalNetworkPolicy update processor", func() {
 			{
 				Key: v1StagedGlobalNetworkPolicyKey2,
 				Value: &model.Policy{
+					Tier:           "default",
 					Order:          &order,
 					InboundRules:   []model.Rule{v1irule},
 					OutboundRules:  []model.Rule{v1erule},
@@ -215,6 +217,7 @@ var _ = Describe("Test the StagedGlobalNetworkPolicy update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1StagedGlobalNetworkPolicyKey3,
 			Value: &model.Policy{
+				Tier:           mytier,
 				PreDNAT:        true,
 				ApplyOnForward: true,
 				StagedAction:   &res.Spec.StagedAction,

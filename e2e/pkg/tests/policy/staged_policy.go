@@ -371,7 +371,7 @@ func verifyPortForward(url string) {
 func verifyFlowCount(url string, count int) {
 	var response apiutil.List[whiskerv1.FlowResponse]
 
-	Eventually(func() error {
+	EventuallyWithOffset(1, func() error {
 		resp, err := http.Get(url)
 		if err != nil {
 			return err
@@ -412,14 +412,21 @@ func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.Polic
 	ExpectWithOffset(1, kind).NotTo(Equal(""), "BUG: kind should not be empty")
 
 	// Build up an error message to help debug if the policy is not found
-	msg := fmt.Sprintf("Could not find %s %s in tier %s with action %s in flow logs.\n", kind, name, tier, action)
+	msg := fmt.Sprintf("Could not find flow:\nKind:%s Name:%s Tier:%s Action:%s\n\n", kind, name, tier, action)
 	msg += fmt.Sprintf("Found %d flow items:\n", len(response.Items))
 
 responseLoop:
 	for _, item := range response.Items {
 		pendingPolicies := item.Policies.Pending
 		for _, pending := range pendingPolicies {
-			msg += fmt.Sprintf("  - %s %s in tier %s with action %s\n", pending.Kind, pending.Name, pending.Tier, pending.Action)
+			msg += fmt.Sprintf(
+				"  - %s\n", policyHitString(
+					pending.Kind,
+					pending.Namespace,
+					pending.Name,
+					pending.Tier,
+					pending.Action,
+				))
 
 			if pending.Name == name &&
 				pending.Tier == tier &&
@@ -430,7 +437,15 @@ responseLoop:
 			}
 
 			if pending.Trigger != nil {
-				msg += fmt.Sprintf("    - triggered by %s %s in tier %s with action %s\n", pending.Trigger.Kind, pending.Trigger.Name, pending.Trigger.Tier, pending.Trigger.Action)
+				msg += fmt.Sprintf(
+					"    - TriggeredBy(%s)\n",
+					policyHitString(
+						pending.Trigger.Kind,
+						pending.Trigger.Namespace,
+						pending.Trigger.Name,
+						pending.Trigger.Tier,
+						pending.Trigger.Action,
+					))
 				if pending.Trigger.Name == name &&
 					pending.Trigger.Tier == tier &&
 					pending.Trigger.Kind == kind &&
@@ -445,6 +460,21 @@ responseLoop:
 	Expect(containsStagedPolicy).Should(BeTrue(), msg)
 }
 
+func policyHitString(kind whiskerv1.PolicyKind, namespace, name, tier string, action whiskerv1.Action) string {
+	msg := fmt.Sprintf("Kind:%s ", kind)
+	if namespace != "" {
+		msg += fmt.Sprintf("Namespace:%s ", namespace)
+	}
+	if name != "" {
+		msg += fmt.Sprintf("Name:%s ", name)
+	}
+	if tier != "" {
+		msg += fmt.Sprintf("Tier:%s ", tier)
+	}
+	msg += fmt.Sprintf("Action:%s ", action)
+	return msg
+}
+
 func CreateStagedNetworkPolicy(
 	policyName, tier, namespace string,
 	order float64,
@@ -452,7 +482,7 @@ func CreateStagedNetworkPolicy(
 	ingressRules, egressRules []v3.Rule,
 ) *v3.StagedNetworkPolicy {
 	policy := v3.NewStagedNetworkPolicy()
-	policy.ObjectMeta = metav1.ObjectMeta{Name: fmt.Sprintf("%s.%s", tier, policyName), Namespace: namespace}
+	policy.ObjectMeta = metav1.ObjectMeta{Name: policyName, Namespace: namespace}
 
 	var types []v3.PolicyType
 	if len(ingressRules) > 0 {
@@ -499,7 +529,7 @@ func CreateStagedGlobalNetworkPolicy(
 	ingressRules, egressRules []v3.Rule,
 ) *v3.StagedGlobalNetworkPolicy {
 	policy := v3.NewStagedGlobalNetworkPolicy()
-	policy.ObjectMeta = metav1.ObjectMeta{Name: fmt.Sprintf("%s.%s", tier, policyName)}
+	policy.ObjectMeta = metav1.ObjectMeta{Name: policyName}
 
 	var types []v3.PolicyType
 	if len(ingressRules) > 0 {

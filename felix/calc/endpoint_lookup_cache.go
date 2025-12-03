@@ -34,7 +34,6 @@ import (
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -243,18 +242,13 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 
 		var hasIngress, hasEgress bool
 		for _, pol := range ti.OrderedPolicies {
-			namespace, tier, name, err := names.DeconstructPolicyName(pol.Key.Name)
-			if err != nil {
-				log.WithError(err).Error("Unable to parse policy name")
-				continue
-			}
+
 			if pol.GovernsIngress() {
 				// Add an ingress tier default action lookup.
-				rid := NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction,
-					rules.RuleDirIngress, tierDefaultAction)
+				rid := NewRuleID(pol.Key.Kind, ti.Name, pol.Key.Name, pol.Key.Namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, tierDefaultAction)
 				ed.Ingress.PolicyMatches[rid.PolicyID] = policyMatchIdxIngress
 
-				if model.PolicyIsStaged(pol.Key.Name) {
+				if model.KindIsStaged(pol.Key.Kind) {
 					// Increment the match index. We don't do this for non-staged policies because they replace the
 					// subsequent staged policy in the results.
 					policyMatchIdxIngress++
@@ -266,11 +260,10 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 			}
 			if pol.GovernsEgress() {
 				// Add an egress tier default action lookup.
-				rid := NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction,
-					rules.RuleDirEgress, tierDefaultAction)
+				rid := NewRuleID(pol.Key.Kind, ti.Name, pol.Key.Name, pol.Key.Namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, tierDefaultAction)
 				ed.Egress.PolicyMatches[rid.PolicyID] = policyMatchIdxEgress
 
-				if model.PolicyIsStaged(pol.Key.Name) {
+				if model.KindIsStaged(pol.Key.Kind) {
 					// Increment the match index. We don't do this for non-staged policies because they replace the
 					// subsequent staged policy in the results.
 					policyMatchIdxEgress++
@@ -904,8 +897,10 @@ type LocalEndpointData struct {
 	Egress *MatchData
 }
 
-var _ endpointData = &LocalEndpointData{}
-var _ endpointData = &RemoteEndpointData{}
+var (
+	_ endpointData = &LocalEndpointData{}
+	_ endpointData = &RemoteEndpointData{}
+)
 
 func (ed *LocalEndpointData) IsLocal() bool {
 	return true
