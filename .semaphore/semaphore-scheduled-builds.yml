@@ -95,8 +95,8 @@ global_job_config:
     commands:
       - cd $HOME
       - |-
-        if [[ -n "$BUILD_CACHE_GROUP" && "$STORE_BUILD_CACHE" = "true" ]]; then
-          echo "Storing build cache group ${BUILD_CACHE_GROUP}"
+        if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -n "$BUILD_CACHE_GROUP" && "$STORE_BUILD_CACHE" = "true" ]]; then
+          echo "On branch, storing build cache group ${BUILD_CACHE_GROUP}"
           tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
           gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
