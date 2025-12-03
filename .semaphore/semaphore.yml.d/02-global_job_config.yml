@@ -28,7 +28,7 @@ global_job_config:
       # in the PR. This must be inline in this file because it needs to run
       # before code is checked out.
       - sudo apt-get install -y zstd || true
-      - restored_cache=false
+      - restored_wc_cache=false
       - |-
         if [[ -n "${SEMAPHORE_GIT_PR_NUMBER}" && -z "$SKIP_CACHE_RESTORE" ]]; then
           echo "Running in the context of a PR: ${SEMAPHORE_GIT_PR_NUMBER}"
@@ -36,21 +36,26 @@ global_job_config:
           gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd; then
             echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
-            tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd
-            cd "${CALICO_DIR_NAME}"
-            restored_cache=true
+            tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd & tar_pid=$!
+            downloaded_build_cache=false
             if [[ -n "$BUILD_CACHE_GROUP" ]]; then
               if gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd; then
-                echo "Restoring build cache group ${BUILD_CACHE_GROUP}"
-                tar --use-compress-program=zstd -xf /tmp/build-cache.tar.zstd -C .
-              else
-                echo "No build cache found for group ${BUILD_CACHE_GROUP}"
+                echo "Found build cache for group ${BUILD_CACHE_GROUP}"
+                downloaded_build_cache=true
               fi
             fi
+            wait $tar_pid
+            restored_wc_cache=true
+            if ${downloaded_build_cache}; then
+              echo "Extracting build cache"
+              tar --use-compress-program=zstd -xf /tmp/build-cache.tar.zstd -C .
+              rm /tmp/build-cache.tar.zstd
+            fi
+            cd "${CALICO_DIR_NAME}"
           fi
         fi || true
       - |-
-        if [[ $restored_cache != true && -z "$SKIP_CHECKOUT" ]]; then
+        if [[ $restored_wc_cache != true && -z "$SKIP_CHECKOUT" ]]; then
           echo "No cache restored, doing a fresh checkout..."
           cd $HOME
           rm -rf "${CALICO_DIR_NAME}"
