@@ -107,12 +107,12 @@ bin/xdp_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
 OBJS:=$(shell ./list-objs)
-OBJS+=bin/tc_preamble_fh.o
-OBJS+=bin/tc_preamble_th.o
+OBJS+=bin/tc_preamble_ingress.o
+OBJS+=bin/tc_preamble_egress.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
-OBJS+=bin/policy_default_fh.o
-OBJS+=bin/policy_default_th.o
+OBJS+=bin/policy_default_ingress.o
+OBJS+=bin/policy_default_egress.o
 OBJS+=$(MAP_OBJS)
 C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
@@ -149,9 +149,9 @@ ut/%.ll: ut/%.c ut/ut.h
 
 ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 
-tc_preamble_fh.ll: tc_preamble.c tc_preamble.d
+tc_preamble_ingress.ll: tc_preamble.c tc_preamble.d
 	$(COMPILE)
-tc_preamble_th.ll: tc_preamble.c tc_preamble.d
+tc_preamble_egress.ll: tc_preamble.c tc_preamble.d
 	$(COMPILE)
 tcx_test.ll: tcx_test.c tcx_test.d
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -159,9 +159,9 @@ tcx_test.ll: tcx_test.c tcx_test.d
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
-policy_default_fh.ll: policy_default.c policy_default.d
+policy_default_ingress.ll: policy_default.c policy_default.d
 	$(COMPILE)
-policy_default_th.ll: policy_default.c policy_default.d
+policy_default_egress.ll: policy_default.c policy_default.d
 	$(COMPILE)
 
 # Production and UT versions of the main binaries.
@@ -194,17 +194,17 @@ xdp_v6.d: xdp.c
 
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
-bin/tc_preamble_fh.o: tc_preamble_fh.ll | bin
+bin/tc_preamble_ingress.o: tc_preamble_ingress.ll | bin
 	$(LINK)
-bin/tc_preamble_th.o: tc_preamble_th.ll | bin
+bin/tc_preamble_egress.o: tc_preamble_egress.ll | bin
 	$(LINK)
 bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
 	$(LINK)
-bin/policy_default_fh.o: policy_default_fh.ll | bin
+bin/policy_default_ingress.o: policy_default_ingress.ll | bin
 	$(LINK)
-bin/policy_default_th.o: policy_default_th.ll | bin
+bin/policy_default_egress.o: policy_default_egress.ll | bin
 	$(LINK)
 bin/to%.o: to%.ll | bin
 	$(LINK)
