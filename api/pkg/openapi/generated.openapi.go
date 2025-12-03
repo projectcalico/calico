@@ -6601,19 +6601,18 @@ func schema_pkg_apis_projectcalico_v3_Tier(ref common.ReferenceCallback) common.
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Specification of the Tier.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec"),
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec"),
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{

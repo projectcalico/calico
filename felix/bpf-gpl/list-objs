@@ -39,6 +39,7 @@ for log_level in debug no_log; do
         directions="from"
       else
         ep_types="wep hep ipip l3 nat lo vxlan"
+        directions="from to"
       fi
       for ep_type in $ep_types; do
         for from_or_to in $directions; do

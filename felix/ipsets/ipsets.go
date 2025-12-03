@@ -473,11 +473,8 @@ func (s *IPSets) tryResync() (err error) {
 		}
 		if err = s.resyncIPSet(name); err != nil {
 			// Ignore failures of IP sets not in desired state, as those will be cleaned up later.
-			_, desired := s.setNameToProgrammedMetadata.Desired().Get(name)
-			if desired {
+			if _, desired := s.setNameToProgrammedMetadata.Desired().Get(name); desired {
 				failedIPSets = append(failedIPSets, name)
-			}
-			if desired {
 				s.logCxt.WithError(err).WithField("name", name).
 					Warn("Failed to parse required Calico-owned ipset that is needed, will try recreating it.")
 			} else {
