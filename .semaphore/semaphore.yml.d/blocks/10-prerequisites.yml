@@ -76,6 +76,9 @@
     when: "true"
   dependencies: []
   task:
+    env_vars:
+      - name: SKIP_CACHE_RESTORE
+        value: "true"
     jobs:
       - name: Save working copy to cache
         commands:
