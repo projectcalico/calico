@@ -36,28 +36,28 @@ const (
 	XDPMaxEntries     = XDPMaxEntryPoints * MaxSubPrograms
 )
 
-var FromHostMapParameters = maps.MapParameters{
+var IngressMapParameters = maps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: TCMaxEntries,
-	Name:       "cali_jump_fh",
+	Name:       "cali_jump_ing",
 	Version:    2,
 }
 
-var ToHostMapParameters = maps.MapParameters{
+var EgressMapParameters = maps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: TCMaxEntries,
-	Name:       "cali_jump_th",
+	Name:       "cali_jump_egr",
 	Version:    2,
 }
 
 func Maps() []maps.Map {
 	return []maps.Map{
-		maps.NewPinnedMap(FromHostMapParameters),
-		maps.NewPinnedMap(ToHostMapParameters),
+		maps.NewPinnedMap(IngressMapParameters),
+		maps.NewPinnedMap(EgressMapParameters),
 	}
 }
 

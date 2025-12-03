@@ -103,21 +103,21 @@ type program struct {
 	layout Layout
 }
 
-var FromHostProgramsMapParameters = bpfmaps.MapParameters{
+var IngressProgramsMapParameters = bpfmaps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: maxPrograms,
-	Name:       "cali_progs_fh",
+	Name:       "cali_progs_ing",
 	Version:    2,
 }
 
-var ToHostProgramsMapParameters = bpfmaps.MapParameters{
+var EgressProgramsMapParameters = bpfmaps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: maxPrograms,
-	Name:       "cali_progs_th",
+	Name:       "cali_progs_egr",
 	Version:    2,
 }
 
@@ -129,11 +129,11 @@ func NewProgramsMaps() []bpfmaps.Map {
 }
 
 func NewIngressProgramsMap() bpfmaps.Map {
-	return newProgramsMap(FromHostProgramsMapParameters, "ingress")
+	return newProgramsMap(IngressProgramsMapParameters, "ingress")
 }
 
 func NewEgressProgramsMap() bpfmaps.Map {
-	return newProgramsMap(ToHostProgramsMapParameters, "egress")
+	return newProgramsMap(EgressProgramsMapParameters, "egress")
 }
 
 func newProgramsMap(ProgramsMapParameters bpfmaps.MapParameters, expectedAttachType string) bpfmaps.Map {
