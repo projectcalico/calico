@@ -15,6 +15,7 @@
 package maps
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -342,7 +343,7 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 	if b.perCPU {
 		valueSize = b.ValueSize * NumPossibleCPUs()
 	}
-	it, err := NewIterator(b.MapFD(), b.KeySize, valueSize, b.MaxEntries)
+	it, err := NewIterator(b.MapFD(), b.KeySize, valueSize, b.MaxEntries, isBatchOpsSupported())
 	if err != nil {
 		return fmt.Errorf("failed to create BPF map iterator: %w", err)
 	}
@@ -481,7 +482,7 @@ func (b *PinnedMap) updateDeltaEntries() error {
 
 	numEntriesCopied := 0
 	mapMem := make(map[string]struct{})
-	it, err := NewIterator(b.oldfd, b.KeySize, b.ValueSize, b.oldSize)
+	it, err := NewIterator(b.oldfd, b.KeySize, b.ValueSize, b.oldSize, isBatchOpsSupported())
 	if err != nil {
 		return fmt.Errorf("failed to create BPF map iterator: %w", err)
 	}
@@ -530,7 +531,7 @@ func (b *PinnedMap) updateDeltaEntries() error {
 func (b *PinnedMap) copyFromOldMap() error {
 	numEntriesCopied := 0
 	mapMem := make(map[string]struct{})
-	it, err := NewIterator(b.oldfd, b.KeySize, b.ValueSize, b.oldSize)
+	it, err := NewIterator(b.oldfd, b.KeySize, b.ValueSize, b.oldSize, isBatchOpsSupported())
 	if err != nil {
 		return fmt.Errorf("failed to create BPF map iterator: %w", err)
 	}
@@ -978,15 +979,17 @@ func (m *TypedMap[K, V]) BatchUpdate(ks []K, vs []V) (int, error) {
 	}
 
 	if b, ok := m.untypedMap.(RawBatchOps); ok {
-		k := make([]byte, 0, count*b.GetKeySize())
-		v := make([]byte, 0, count*b.GetValueSize())
+		if isBatchOpsSupported() {
+			k := make([]byte, 0, count*b.GetKeySize())
+			v := make([]byte, 0, count*b.GetValueSize())
 
-		for i := 0; i < count; i++ {
-			k = append(k, ks[i].AsBytes()...)
-			v = append(v, vs[i].AsBytes()...)
+			for i := 0; i < count; i++ {
+				k = append(k, ks[i].AsBytes()...)
+				v = append(v, vs[i].AsBytes()...)
+			}
+
+			return b.BatchUpdateRaw(k, v, count, 0)
 		}
-
-		return b.BatchUpdateRaw(k, v, count, 0)
 	}
 
 	cnt := 0
@@ -1031,13 +1034,15 @@ func (m *TypedMap[K, V]) BatchDelete(ks []K) (int, error) {
 	}
 
 	if b, ok := m.untypedMap.(RawBatchOps); ok {
-		k := make([]byte, 0, count*b.GetKeySize())
+		if isBatchOpsSupported() {
+			k := make([]byte, 0, count*b.GetKeySize())
 
-		for i := 0; i < count; i++ {
-			k = append(k, ks[i].AsBytes()...)
+			for i := 0; i < count; i++ {
+				k = append(k, ks[i].AsBytes()...)
+			}
+
+			return b.BatchDeleteRaw(k, count, 0)
 		}
-
-		return b.BatchDeleteRaw(k, count, 0)
 	}
 
 	cnt := 0
@@ -1074,3 +1079,25 @@ func NewTypedMap[K Key, V Value](m MapWithExistsCheck, kConstructor func([]byte)
 		vConstructor: vConstructor,
 	}
 }
+
+var isBatchOpsSupported = sync.OnceValue(func() bool {
+	// Check if the kernel supports batch operations.
+	fd, err := createMap("testMap", unix.BPF_MAP_TYPE_LPM_TRIE, 8, 4, 1, unix.BPF_F_NO_PREALLOC)
+	if err != nil {
+		log.WithError(err).Warn("Failed to create test map for batch ops support check")
+		return false
+	}
+	defer func() {
+		err := unix.Close(int(fd))
+		if err != nil {
+			log.WithError(err).Warn("Failed to close test map fd")
+		}
+	}()
+	err = batchLookup(fd, 8, 4)
+	// kernel errno 524 indicated that batch ops are not supported.
+	if err != nil && errors.Is(err, syscall.Errno(524)) {
+		return false
+	}
+
+	return true
+})
