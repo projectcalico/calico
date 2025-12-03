@@ -43,7 +43,7 @@ global_job_config:
       - sudo apt-get install -y zstd || true
       - restored_wc_cache=false
       - |-
-        if [[ -n ${SEMAPHORE_GIT_BRANCH} && -z "$SKIP_CACHE_RESTORE" ]]; then
+        if [[ -n "${SEMAPHORE_GIT_BRANCH}" && -z "$SKIP_CACHE_RESTORE" ]]; then
           echo "Looking for cached working copy for branch ${SEMAPHORE_GIT_BRANCH}"
           gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd; then
@@ -56,8 +56,12 @@ global_job_config:
                 downloaded_build_cache=true
               fi
             fi
-            wait $tar_pid
-            restored_wc_cache=true
+            if wait $tar_pid; then
+              restored_wc_cache=true
+            else
+              echo "ERROR: Failed to extract working copy"
+              restored_wc_cache=false
+            fi
             if ${downloaded_build_cache}; then
               echo "Extracting build cache"
               tar --use-compress-program=zstd -xf /tmp/build-cache.tar.zstd -C .
@@ -67,7 +71,7 @@ global_job_config:
           fi
         fi || true
       - |-
-        if [[ $restored_wc_cache != true && -z "$SKIP_CHECKOUT" ]]; then
+        if [[ ${restored_wc_cache} != true && -z "$SKIP_CHECKOUT" ]]; then
           echo "No cache restored, doing a fresh checkout..."
           cd $HOME
           rm -rf "${CALICO_DIR_NAME}"
@@ -77,7 +81,7 @@ global_job_config:
       - |-
         if [[ -z "$SKIP_CHECKOUT" ]]; then
           git fetch origin --tags --prune-tags ${SEMAPHORE_GIT_SHA}
-          if [ $SEMAPHORE_GIT_REF_TYPE = "branch" ]; then
+          if [ "$SEMAPHORE_GIT_REF_TYPE" = "branch" ]; then
             git checkout ${SEMAPHORE_GIT_SHA} -B "${SEMAPHORE_GIT_BRANCH}"
           else
             git checkout ${SEMAPHORE_GIT_SHA}
@@ -934,7 +938,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "cni-plugin"
+          value: "libcalico-go"
       prologue:
         commands:
           - cd libcalico-go

@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "cni-plugin"
+        value: "libcalico-go"
     prologue:
       commands:
         - cd libcalico-go
