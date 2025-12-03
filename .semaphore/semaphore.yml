@@ -85,8 +85,7 @@ blocks:
             - echo "export BACKEND=l2bridge or export BACKEND=overlay" for CNI-Plugin FV
             - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
-            - cd ~/calico/process/testing/aso
-            - ../.semaphore/run-and-monitor win-fv-containerd.log ./run-win-fv.sh
+            - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/aso/run-win-fv.sh
 after_pipeline:
   task:
     jobs:
