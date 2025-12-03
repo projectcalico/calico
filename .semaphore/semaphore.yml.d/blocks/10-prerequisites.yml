@@ -59,7 +59,7 @@
           - make check-dirty
 - name: Store working copy
   run:
-    when: 'branch =~ ".*"'
+    when: "branch =~ '.*'"
   dependencies: []
   task:
     env_vars:
