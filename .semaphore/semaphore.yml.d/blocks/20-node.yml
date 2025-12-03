@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "node"
     agent:
       machine:
         type: f1-standard-4
@@ -15,6 +18,9 @@
       - name: "Node: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
 - name: "Node: multi-arch build"
   run:
     when: "${CHANGE_IN(node)}"
@@ -56,6 +62,9 @@
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
 - name: "Node: kind-cluster tests"
+  env_vars:
+    - name: BUILD_CACHE_GROUP
+      value: "node"
   run:
     # KinD tests also build and run all the other images.
     when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,non-go:/.semaphore/vms/)}"
