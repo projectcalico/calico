@@ -41,6 +41,7 @@ type BirdBGPPeer struct {
 	NextHopKeep     bool   `json:"next_hop_keep,omitempty"`
 	AddPaths        string `json:"add_paths,omitempty"`
 	Passive         bool   `json:"passive,omitempty"`
+	PassiveComment  string `json:"passive_comment,omitempty"` // Comment for passive mode (only for auto-passive)
 	GracefulRestart string `json:"graceful_restart,omitempty"` // restart time value
 	KeepaliveTime   string `json:"keepalive_time,omitempty"`
 	NumAllowLocalAs string `json:"num_allow_local_as,omitempty"`

@@ -52,7 +52,7 @@ protocol device {
 
 protocol direct {
 {{- template "LOGGING" $config}}
-  interface {{$config.DirectInterfaces}}; # Exclude cali* and kube-ipvs* but
+  interface {{$config.DirectInterfaces}};{{if eq $config.DirectInterfaces `-"cali*", -"kube-ipvs*", "*"`}} # Exclude cali* and kube-ipvs* but
                                           # include everything else.  In
                                           # IPVS-mode, kube-proxy creates a
                                           # kube-ipvs0 interface. We exclude
@@ -60,7 +60,7 @@ protocol direct {
                                           # gets an address for every in use
                                           # cluster IP. We use static routes
                                           # for when we legitimately want to
-                                          # export cluster IPs.
+                                          # export cluster IPs.{{end}}
 }
 
 {{if eq "" $config.NodeIP}}# IPv4 disabled on this node.
@@ -119,7 +119,7 @@ protocol bgp {{.Name}} from bgp_template {
   export all;
 {{- end}}
 {{- if .Passive}}
-  passive on;{{if eq .Type "mesh"}} # Mesh is unidirectional, peer will connect to us.{{end}}
+  passive on;{{.PassiveComment}}
 {{- end}}
 {{- if .GracefulRestart}}
   graceful restart time {{.GracefulRestart}};

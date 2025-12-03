@@ -355,6 +355,7 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		// Make mesh unidirectional to avoid race conditions
 		if peerIP > config.NodeIP {
 			peer.Passive = true
+			peer.PassiveComment = " # Mesh is unidirectional, peer will connect to us."
 		}
 
 		config.Peers = append(config.Peers, peer)
@@ -577,6 +578,7 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 		if calicoNode, ok := raw["calico_node"].(bool); ok && calicoNode {
 			if peerIP > config.NodeIP {
 				peer.Passive = true
+				peer.PassiveComment = " # Peering is unidirectional, peer will connect to us."
 			}
 		}
 	}
@@ -631,7 +633,7 @@ func (c *client) buildImportFilter(raw map[string]interface{}) string {
 		}
 	}
 
-	filterLines = append(filterLines, "accept;")
+	filterLines = append(filterLines, "accept; # Prior to introduction of BGP Filters we used \"import all\" so use default accept behaviour on import")
 	return strings.Join(filterLines, "\n    ")
 }
 

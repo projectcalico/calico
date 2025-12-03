@@ -893,12 +893,16 @@ diff_files_ignoring_comments_and_blank_lines() {
     actual=$2
     output=$3
     
-    # Function to normalize a file: remove blank lines, comment-only lines, inline comments, and trailing whitespace
+    # Function to normalize a file: remove blank lines, comment-only lines, and trailing whitespace
     # Preserves leading whitespace (indentation) which is significant in BIRD config
     # Also removes section headers like "# ------------- Node-to-node mesh -------------"
     # and peer-specific comments like "# For peer /bgp/v1/host/..."
+    # IMPORTANT: Does NOT remove inline comments (e.g., "source address 10.0.0.1;  # comment")
+    # because those are part of the template output and should be preserved
     normalize_file() {
-        sed 's/#.*$//' "$1" | \
+        # First remove comment-only lines (lines that are only whitespace and comments)
+        # Then remove blank lines and trailing whitespace
+        sed '/^[[:space:]]*#/d' "$1" | \
         sed '/^[[:space:]]*$/d' | \
         sed 's/[[:space:]]*$//'
     }
