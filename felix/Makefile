@@ -189,7 +189,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix-changed
 
-BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
+BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o common_map_stub_ing.o)
 
 # Generated map stub .c files are in the bpf-gpl/ dir, not bpf-gpl/bin
 BPF_GPL_MAP_STUB_C_FILES := $(BPF_GPL_MAP_STUB_O_FILES:bpf-gpl/bin/%.o=bpf-gpl/%.c)
@@ -202,7 +202,7 @@ $(BPF_GPL_MAP_STUB_C_FILES):
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble_ingress.o bpf-gpl/bin/tc_preamble_egress.o \
-		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o \
+		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default_ingress.o  bpf-gpl/bin/policy_default_egress.o \
 		 bpf-gpl/bin/tcx_test.o
 BPF_GPL_O_FILES+=$(BPF_GPL_MAP_STUB_O_FILES)
 

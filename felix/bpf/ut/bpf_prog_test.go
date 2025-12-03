@@ -428,10 +428,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 	if rules != nil {
 		staticProgMap := progMap[hook.Egress]
+		polMap := policyJumpMap[hook.Egress]
 		if useIngressProgMap {
 			staticProgMap = progMap[hook.Ingress]
+			polMap = policyJumpMap[hook.Ingress]
 		}
-		polMap := policyJumpMap
 		popts := []polprog.Option{}
 		stride := jump.TCMaxEntryPoints
 		if topts.xdp {
@@ -596,7 +597,8 @@ var (
 
 	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap maps.Map
 	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6       maps.Map
-	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                           maps.Map
+	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMapXDP                                                          maps.Map
+	policyJumpMap                                                                                                            []maps.Map
 	perfMap                                                                                                                  maps.Map
 	profilingMap, ipfragsMapTmp                                                                                              maps.Map
 	qosMap                                                                                                                   maps.Map
@@ -631,7 +633,7 @@ func initMapsOnce() {
 		ipfragsMap = ipfrags.Map()
 		ipfragsMapTmp = ipfrags.MapTmp()
 		ifstateMap = ifstate.Map()
-		policyJumpMap = jump.Map()
+		policyJumpMap = jump.Maps()
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
 		ctlbProgsMap = nat.ProgramsMaps()
@@ -645,7 +647,7 @@ func initMapsOnce() {
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
-			policyJumpMap, policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6}
+			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -763,13 +765,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	// XXX we do not need to create both sets of maps, but, well, who cares here ;-)
 	progMap = hook.NewProgramsMaps()
-	policyJumpMap = jump.Map()
+	policyJumpMap = jump.Maps()
 	progMapXDP = hook.NewXDPProgramsMap()
 	policyJumpMapXDP = jump.XDPMap()
 	if ipFamily == "preamble" {
 		_ = unix.Unlink(progMap[hook.Ingress].Path())
 		_ = unix.Unlink(progMap[hook.Egress].Path())
-		_ = unix.Unlink(policyJumpMap.Path())
+		_ = unix.Unlink(policyJumpMap[hook.Ingress].Path())
+		_ = unix.Unlink(policyJumpMap[hook.Egress].Path())
 		_ = unix.Unlink(progMapXDP.Path())
 		_ = unix.Unlink(policyJumpMapXDP.Path())
 	}
@@ -777,7 +780,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	Expect(err).NotTo(HaveOccurred())
 	err = progMap[hook.Egress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
-	err = policyJumpMap.EnsureExists()
+	err = policyJumpMap[hook.Ingress].EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = policyJumpMap[hook.Egress].EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	err = progMapXDP.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
@@ -916,7 +921,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 		polProgPath = path.Join(bpfFsDir, polProgPath)
 		_, err = os.Stat(polProgPath)
 		if err == nil {
-			m := policyJumpMap
+			m := policyJumpMap[hook.Egress]
+			if useIngressProgMap {
+				m = policyJumpMap[hook.Ingress]
+			}
 			if forXDP {
 				m = policyJumpMapXDP
 			}
@@ -2218,7 +2226,7 @@ func TestJumpMap(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	jumpMapFD := progMap[hook.Ingress].MapFD()
-	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, policyJumpMap.MapFD(),
+	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, policyJumpMap[hook.Ingress].MapFD(),
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)
