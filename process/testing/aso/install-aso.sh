@@ -36,7 +36,7 @@ echo; echo "Wait for cert manager to be installed ..."
 ${KUBECTL} apply -f https://github.com/jetstack/cert-manager/releases/download/v1.14.1/cert-manager.yaml
 ${CMCTL} check api --wait=2m
 
-echo; echo "Installing ASO ..."
+echo; echo "Installing ASO..."
 
 ${HELM} repo add aso2 https://raw.githubusercontent.com/Azure/azure-service-operator/main/v2/charts
 ${HELM} upgrade --install aso2 aso2/azure-service-operator \
@@ -45,6 +45,6 @@ ${HELM} upgrade --install aso2 aso2/azure-service-operator \
     --set crdPattern=${CRD_PATTERN}
 
 # Wait for ASO deployments
-echo "Wait for ASO controller manager to be ready (up to 2m) ..."
-${KUBECTL} wait --for=condition=available --timeout=2m -n azureserviceoperator-system deployment azureserviceoperator-controller-manager
+echo "Wait for ASO controller manager to be ready (up to 5m) ..."
+${KUBECTL} wait --for=condition=available --timeout=5m -n azureserviceoperator-system deployment azureserviceoperator-controller-manager
 echo "ASO installed and the controller manager is ready."
