@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"sort"
 	"strconv"
