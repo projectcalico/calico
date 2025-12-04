@@ -620,10 +620,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
 		programsCount := 14
-		oldPoliciesCount := 4
+		oldPoliciesCount := 2
 		if ipv6Enabled {
 			programsCount = 26
-			oldPoliciesCount = 12
+			oldPoliciesCount = 6
 		}
 		Expect(pm).To(HaveLen(programsCount))
 
