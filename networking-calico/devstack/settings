@@ -30,6 +30,7 @@ else
     # framework; and 'n-net' is Nova networking.
     disable_service dstat
     disable_service n-net
+    disable_service cinder
 
     # Enable services that Devstack doesn't enable by default, but
     # that we _do_ want for Calico demonstration: 'q-svc' is the
