@@ -138,7 +138,7 @@ blocks:
               value: aws-openshift
           matrix:
             - env_var: OPENSHIFT_VERSION
-              values: ["4.16.32"]
+              values: ["4.19.20"]
             - env_var: DATAPLANE
               values: ["CalicoIptables"]
             - env_var: INSTALLER
