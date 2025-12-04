@@ -182,6 +182,7 @@ func DeleteMapEntryIfExists(mapFD FD, k []byte) error {
 
 // Batch size established by trial and error; 8-32 seemed to be the sweet spot for the conntrack map.
 const IteratorNumKeys = 1024
+const IteratorNumKeysSlow = 16
 
 // align64 rounds up the given size to the nearest 8-bytes.
 func align64(size int) int {
@@ -191,7 +192,7 @@ func align64(size int) int {
 	return size + (8 - (size % 8))
 }
 
-func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error) {
+func NewIterator(mapFD FD, keySize, valueSize, maxEntries int, isBatchOpsSupported bool) (*Iterator, error) {
 	err := checkMapIfDebug(mapFD, keySize, valueSize)
 	if err != nil {
 		return nil, err
@@ -201,15 +202,16 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 	valueStride := align64(valueSize)
 
 	m := &Iterator{
-		mapFD:         mapFD,
-		maxEntries:    maxEntries,
-		keySize:       keySize,
-		valueSize:     valueSize,
-		keyStride:     keyStride,
-		valueStride:   valueStride,
-		keysBufSize:   keyStride * IteratorNumKeys,
-		valuesBufSize: valueStride * IteratorNumKeys,
-		keysValues:    make(chan keysValues),
+		mapFD:                mapFD,
+		maxEntries:           maxEntries,
+		keySize:              keySize,
+		valueSize:            valueSize,
+		keyStride:            keyStride,
+		valueStride:          valueStride,
+		keysBufSize:          keyStride * IteratorNumKeys,
+		valuesBufSize:        valueStride * IteratorNumKeys,
+		keysValues:           make(chan keysValues),
+		batchLookupSupported: isBatchOpsSupported,
 	}
 
 	m.cancelCtx, m.cancelCB = context.WithCancel(context.Background())
@@ -236,6 +238,21 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 	return m, nil
 }
 
+func (m *Iterator) slowIter(tokenIn, tokenC unsafe.Pointer) (int, error) {
+	rc := C.bpf_maps_map_load_multi(C.uint(m.mapFD), tokenIn, C.int(IteratorNumKeysSlow),
+		C.int(m.keyStride), m.keysBuff, C.int(m.valueStride), m.valuesBuff)
+	if rc < 0 {
+		return 0, unix.Errno(-rc)
+	}
+	if rc == 0 {
+		return 0, unix.ENOENT
+	}
+	count := int(rc)
+	offset := (count - 1) * m.keyStride
+	C.memcpy(tokenC, unsafe.Pointer(uintptr(m.keysBuff)+uintptr(offset)), C.size_t(m.keyStride))
+	return count, nil
+}
+
 func (m *Iterator) syscallThread() {
 	defer m.wg.Done()
 
@@ -248,8 +265,14 @@ func (m *Iterator) syscallThread() {
 
 	for {
 		count := IteratorNumKeys
-		_, err := C.bpf_map_batch_lookup(C.int(m.mapFD), tokenIn, tokenC, m.keysBuff, m.valuesBuff,
-			(*C.__u32)(unsafe.Pointer(&count)), 0)
+		var err error
+		if m.batchLookupSupported {
+			_, err = C.bpf_map_batch_lookup(C.int(m.mapFD), tokenIn, tokenC, m.keysBuff, m.valuesBuff,
+				(*C.__u32)(unsafe.Pointer(&count)), 0)
+		} else {
+			// Batch ops are not supported.
+			count, err = m.slowIter(tokenIn, tokenC)
+		}
 		if err != nil {
 			if errors.Is(err, unix.ENOENT) {
 				if count == 0 {
@@ -270,18 +293,24 @@ func (m *Iterator) syscallThread() {
 			}
 		}
 		tokenIn = tokenC
-
 		bk := C.GoBytes(m.keysBuff, C.int(m.keysBufSize))
 		bv := C.GoBytes(m.valuesBuff, C.int(m.valuesBufSize))
 
+		kstride := m.keySize
+		vstride := m.valueSize
+		if !m.batchLookupSupported {
+			kstride = m.keyStride
+			vstride = m.valueStride
+		}
 		select {
 		case m.keysValues <- keysValues{
-			keys:   bk[:count*m.keySize],
-			values: bv[:count*m.valueSize],
+			keys:   bk[:count*kstride],
+			values: bv[:count*vstride],
 			count:  count,
 		}:
 		case <-m.cancelCtx.Done():
 		}
+
 	}
 }
 
@@ -314,8 +343,19 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 		m.values = x.values
 	}
 
-	k = m.keys[m.entryIdx*m.keySize : (m.entryIdx+1)*m.keySize]
-	v = m.values[m.entryIdx*m.valueSize : (m.entryIdx+1)*m.valueSize]
+	kstride := m.keySize
+	vstride := m.valueSize
+	if !m.batchLookupSupported {
+		kstride = m.keyStride
+		vstride = m.valueStride
+	}
+	k = m.keys[m.entryIdx*kstride : (m.entryIdx+1)*kstride]
+	v = m.values[m.entryIdx*vstride : (m.entryIdx+1)*vstride]
+	if !m.batchLookupSupported {
+		// For slow iteration, trim the key and value to their actual sizes.
+		k = k[:m.keySize]
+		v = v[:m.valueSize]
+	}
 
 	m.entryIdx++
 	m.numEntriesVisited++
@@ -335,4 +375,33 @@ func (m *Iterator) Close() error {
 	runtime.SetFinalizer(m, nil)
 
 	return nil
+}
+
+func createMap(name string, mapType, keySize, valueSize, maxEntries, flags uint32) (FD, error) {
+	cMapName := C.CString(name)
+	defer C.free(unsafe.Pointer(cMapName))
+
+	fd, err := C.bpf_create_map(mapType, cMapName, C.__u32(keySize), C.__u32(valueSize), C.__u32(maxEntries), C.__u32(flags))
+	if err != nil {
+		return 0, err
+	}
+	return FD(fd), nil
+}
+
+func batchLookup(mapFD FD, keySize, valueSize int) error {
+	token := make([]byte, keySize)
+	tokenC := C.CBytes(token)
+	defer C.free(tokenC)
+	tokenIn := unsafe.Pointer(nil)
+
+	keyStride := align64(keySize)
+	valueStride := align64(valueSize)
+	keysBuff := C.malloc(C.size_t(IteratorNumKeys * keyStride))
+	valuesBuff := C.malloc(C.size_t(IteratorNumKeys * valueStride))
+	defer C.free(keysBuff)
+	defer C.free(valuesBuff)
+
+	count := IteratorNumKeys
+	_, err := C.bpf_map_batch_lookup(C.int(mapFD), tokenIn, tokenC, keysBuff, valuesBuff, (*C.__u32)(unsafe.Pointer(&count)), 0)
+	return err
 }
