@@ -19,7 +19,6 @@ import (
 	"strings"
 	"unique"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tchap/go-patricia/v2/patricia"
 
 	"github.com/projectcalico/calico/felix/ip"
@@ -77,32 +76,6 @@ func newIPTrieNode(cidr ip.CIDR, key model.Key) *IPTrieNode {
 	}
 }
 
-// NamespaceFilterFunc defines a function that filters keys based on namespace preferences.
-// Returns: (isNamespaceMatch, isGlobal, accept)
-// - isNamespaceMatch: true if the key matches the preferred namespace
-// - isGlobal: true if the key is a global (non-namespaced) NetworkSet
-// - accept: true if the key should be accepted for processing
-type NamespaceFilterFunc func(key model.Key, preferredNamespace string) (isNamespaceMatch bool, isGlobal bool, accept bool)
-
-// DefaultNamespaceFilter is the standard namespace filtering logic
-func DefaultNamespaceFilter(key model.Key, preferredNamespace string) (isNamespaceMatch bool, isGlobal bool, accept bool) {
-	nsKey, ok := key.(model.NetworkSetKey)
-	if !ok {
-		logrus.Debugf("Non-NetworkSet key detected: %v", key)
-		return false, false, false // Non-NetworkSet keys are treated as global
-	}
-
-	namespace := nsKey.Namespace()
-	if namespace != "" {
-		// Namespaced NetworkSet
-		isMatch := namespace == preferredNamespace
-		return isMatch, false, true
-	}
-
-	// Global NetworkSet
-	return false, true, true
-}
-
 // GetLongestPrefixCidr finds the longest prefix match CIDR for the given IP and if successful returns the
 // lexicographically lowest key associated with that CIDR.
 func (trie *IpTrie) GetLongestPrefixCidr(ipAddr ip.Addr) (model.Key, bool) {
@@ -119,7 +92,7 @@ func (trie *IpTrie) GetLongestPrefixCidr(ipAddr ip.Addr) (model.Key, bool) {
 			return nil
 		})
 
-	if err != nil || len(longestPrefix) == 0 {
+	if err != nil || longestItem == nil {
 		return nil, false
 	}
 
@@ -165,7 +138,7 @@ func (trie *IpTrie) GetLongestPrefixCidrWithNamespaceIsolation(ipAddr ip.Addr, p
 			if !ok {
 				continue
 			}
-			ns := nsKey.Namespace()
+			ns := nsKey.GetNamespace()
 
 			switch {
 			case preferredNamespace != "" && ns == preferredNamespace:
