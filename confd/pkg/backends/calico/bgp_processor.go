@@ -554,12 +554,10 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 	}
 
 	// Next hop mode
-	if nhMode, ok := raw["next_hop_mode"].(string); ok {
-		if nhMode == "Self" {
-			peer.NextHopSelf = true
-		} else if nhMode == "Keep" {
-			peer.NextHopKeep = true
-		}
+	if nhMode, ok := raw["next_hop_mode"].(string); ok && nhMode == "Self" {
+		peer.NextHopSelf = true
+	} else if ok && nhMode == "Keep" {
+		peer.NextHopKeep = true
 	}
 	// Legacy keep_next_hop field - only apply for eBGP peers
 	if keepNH, ok := raw["keep_next_hop"].(bool); ok && keepNH {
@@ -675,130 +673,6 @@ func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS st
 	filterLines = append(filterLines, "reject;")
 
 	return strings.Join(filterLines, "\n    ")
-}
-
-// processPeerType processes a specific type of BGP peers
-func (c *client) processPeerType(peerType, keyPrefix, nodeIP, defaultAS string) ([]types.BirdBGPPeer, error) {
-	var peers []types.BirdBGPPeer
-
-	kvPairs, err := c.GetValues([]string{keyPrefix})
-	if err != nil {
-		return peers, nil // Not an error if key doesn't exist
-	}
-
-	for key, value := range kvPairs {
-		var rawPeer map[string]interface{}
-		if err := json.Unmarshal([]byte(value), &rawPeer); err != nil {
-			log.WithError(err).Warnf("Failed to parse peer data for key %s", key)
-			continue
-		}
-
-		peer := c.buildBGPPeer(rawPeer, peerType, nodeIP, defaultAS)
-		if peer != nil {
-			peers = append(peers, *peer)
-		}
-	}
-
-	return peers, nil
-}
-
-// buildBGPPeer constructs a BirdBGPPeer from raw datastore data
-func (c *client) buildBGPPeer(raw map[string]interface{}, peerType, nodeIP, defaultAS string) *types.BirdBGPPeer {
-	peerIP, ok := raw["ip"].(string)
-	if !ok || net.ParseIP(peerIP) == nil {
-		return nil
-	}
-
-	// Skip self-connections in mesh
-	if peerType == "mesh" && peerIP == nodeIP {
-		return nil
-	}
-
-	peer := &types.BirdBGPPeer{
-		IP:   peerIP,
-		Type: peerType,
-		Name: c.generatePeerName(peerIP, peerType, raw),
-	}
-
-	// Set AS number
-	if asNum, ok := raw["as_num"].(string); ok {
-		peer.AsNumber = asNum
-	} else {
-		peer.AsNumber = defaultAS
-	}
-
-	// Set filters based on type and configuration
-	peer.ImportFilter = c.determineImportFilter(peerType, raw)
-	peer.ExportFilter = c.determineExportFilter(peerType, raw)
-
-	// Set optional attributes
-	if password, ok := raw["password"].(string); ok {
-		peer.Password = password
-	}
-	if ttl, ok := raw["ttl_security"].(bool); ok && ttl {
-		peer.TTLSecurity = "on"
-	}
-	if rr, ok := raw["rr_client"].(bool); ok {
-		peer.RouteReflector = rr
-	}
-	if src, ok := raw["source_address"].(string); ok {
-		peer.SourceAddr = src
-	}
-	if nhs, ok := raw["next_hop_self"].(bool); ok {
-		peer.NextHopSelf = nhs
-	}
-	if addPaths, ok := raw["add_paths"].(string); ok {
-		peer.AddPaths = addPaths
-	}
-
-	return peer
-}
-
-// generatePeerName creates a consistent peer name
-func (c *client) generatePeerName(peerIP, peerType string, raw map[string]interface{}) string {
-	if name, ok := raw["name"].(string); ok && name != "" {
-		return name
-	}
-
-	// Generate name from IP and type
-	safeName := strings.ReplaceAll(strings.ReplaceAll(peerIP, ".", "_"), ":", "_")
-	return fmt.Sprintf("%s_%s", peerType, safeName)
-}
-
-// determineImportFilter determines the appropriate import filter
-func (c *client) determineImportFilter(peerType string, raw map[string]interface{}) string {
-	// Check for explicit filter
-	if filter, ok := raw["import_filter"].(string); ok && filter != "" {
-		return filter
-	}
-
-	// Default filters based on peer type
-	switch peerType {
-	case "mesh":
-		return "calico_pools" // Import only Calico pool routes from mesh peers
-	case "global", "nodeLocal", "globalLocal":
-		return "all" // Import all valid routes from external peers
-	default:
-		return "none"
-	}
-}
-
-// determineExportFilter determines the appropriate export filter
-func (c *client) determineExportFilter(peerType string, raw map[string]interface{}) string {
-	// Check for explicit filter
-	if filter, ok := raw["export_filter"].(string); ok && filter != "" {
-		return filter
-	}
-
-	// Default filters based on peer type
-	switch peerType {
-	case "mesh":
-		return "calico_pools" // Export only Calico pool routes to mesh peers
-	case "global", "nodeLocal", "globalLocal":
-		return "calico_export" // Export Calico routes to external peers
-	default:
-		return "none"
-	}
 }
 
 // processCommunityRules processes BGP community advertisements
