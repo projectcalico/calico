@@ -31,6 +31,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -125,7 +126,7 @@ func TestPolicyLoadKitchenSinkPolicy(t *testing.T) {
 
 	cleanIPSetMap()
 
-	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), policyJumpMap.MapFD(), 0,
+	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), policyJumpMap[hook.Ingress].MapFD(), 0,
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	insns, err := pg.Instructions(polprog.Rules{
 		Tiers: []polprog.Tier{{
@@ -2890,13 +2891,18 @@ func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 		setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
 	}
 
-	if policyJumpMap != nil {
-		_ = policyJumpMap.Close()
+	for _, polJumpMap := range policyJumpMap {
+		if polJumpMap != nil {
+			_ = polJumpMap.Close()
+		}
 	}
-	policyJumpMap = jump.Map()
-	_ = unix.Unlink(policyJumpMap.Path())
-	err = policyJumpMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
+
+	policyJumpMap = jump.Maps()
+	for _, hk := range []hook.Hook{hook.Egress, hook.Ingress} {
+		_ = unix.Unlink(policyJumpMap[hk].Path())
+		err = policyJumpMap[hk].EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	allowIdx := tcdefs.ProgIndexAllowed
 	denyIdx := tcdefs.ProgIndexDrop
@@ -2930,7 +2936,7 @@ func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 		ipsfd,
 		testStateMap.MapFD(),
 		staticProgsMap.MapFD(),
-		policyJumpMap.MapFD(),
+		policyJumpMap[hook.Ingress].MapFD(),
 		polprogOpts...,
 	)
 	insns, err := pg.Instructions(tp.Policy())
@@ -2953,7 +2959,7 @@ func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 		Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 		Expect(polProgFD).NotTo(BeZero())
 		polProgFDs = append(polProgFDs, polProgFD)
-		err = policyJumpMap.Update(
+		err = policyJumpMap[hook.Ingress].Update(
 			jump.Key(polprog.SubProgramJumpIdx(polProgIdx, i, stride)),
 			jump.Value(polProgFD.FD()),
 		)
