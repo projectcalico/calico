@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 var (
@@ -132,29 +131,27 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 
 		action := NO_MATCH
 	Policy:
-		for i, name := range policies {
-			pID := proto.PolicyID{Tier: tier.GetName(), Name: name}
-			policy := store.PolicyByID[ftypes.ProtoToPolicyID(&pID)]
+		for i, pID := range policies {
+			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
 			action, ruleIndex = checkPolicy(policy, dir, request)
-			log.Debugf("Policy checked (ordinal=%d, profileId=%v, action=%v)", i, &pID, action)
-			policyName := getPolicyName(name)
+			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
 			switch action {
 			case NO_MATCH:
 				if tierDefaultActionRuleID == nil {
-					tierDefaultActionRuleID = calc.NewRuleID(tier.GetName(), policyName, policy.GetNamespace(), tierDefaultActionIndex, dir, ruleActionFromStr(tier.DefaultAction))
+					tierDefaultActionRuleID = calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, tierDefaultActionIndex, dir, ruleActionFromStr(tier.DefaultAction))
 				}
 				continue Policy
 			// If the Policy matches, end evaluation (skipping profiles, if any)
 			case ALLOW:
 				s.Code = OK
-				trace = append(trace, calc.NewRuleID(tier.GetName(), policyName, policy.GetNamespace(), ruleIndex, dir, rules.RuleActionAllow))
+				trace = append(trace, calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, ruleIndex, dir, rules.RuleActionAllow))
 				return
 			case DENY:
 				s.Code = PERMISSION_DENIED
-				trace = append(trace, calc.NewRuleID(tier.GetName(), policyName, policy.GetNamespace(), ruleIndex, dir, rules.RuleActionDeny))
+				trace = append(trace, calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, ruleIndex, dir, rules.RuleActionDeny))
 				return
 			case PASS:
-				trace = append(trace, calc.NewRuleID(tier.GetName(), policyName, policy.GetNamespace(), ruleIndex, dir, rules.RuleActionPass))
+				trace = append(trace, calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, ruleIndex, dir, rules.RuleActionPass))
 				// Pass means end evaluation of policies and proceed to next tier (or profiles), if any.
 				break Policy
 			case LOG:
@@ -188,11 +185,11 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 				continue
 			case ALLOW:
 				s.Code = OK
-				trace = append(trace, calc.NewRuleID(profileStr, name, "", ruleIndex, dir, rules.RuleActionAllow))
+				trace = append(trace, calc.NewRuleID(v3.KindProfile, profileStr, name, "", ruleIndex, dir, rules.RuleActionAllow))
 				return
 			case DENY, PASS:
 				s.Code = PERMISSION_DENIED
-				trace = append(trace, calc.NewRuleID(profileStr, name, "", ruleIndex, dir, rules.RuleActionDeny))
+				trace = append(trace, calc.NewRuleID(v3.KindProfile, profileStr, name, "", ruleIndex, dir, rules.RuleActionDeny))
 				return
 			case LOG:
 				log.Debug("profile should never return LOG action")
@@ -203,7 +200,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	} else {
 		log.Debug("0 active profiles, deny request.")
 		s.Code = PERMISSION_DENIED
-		trace = append(trace, calc.NewRuleID(profileStr, profileStr, "", tierDefaultActionIndex, dir, rules.RuleActionDeny))
+		trace = append(trace, calc.NewRuleID(v3.KindProfile, profileStr, profileStr, "", tierDefaultActionIndex, dir, rules.RuleActionDeny))
 	}
 	return
 }
@@ -299,43 +296,9 @@ func handlePanic(s *status.Status) {
 }
 
 // getPoliciesByDirection returns the list of policy names for the given direction.
-func getPoliciesByDirection(dir rules.RuleDir, tier *proto.TierInfo) []string {
+func getPoliciesByDirection(dir rules.RuleDir, tier *proto.TierInfo) []*proto.PolicyID {
 	if dir == rules.RuleDirEgress {
 		return tier.EgressPolicies
 	}
 	return tier.IngressPolicies
-}
-
-// getPolicyName Removes any namespace and tier prefix to get the name of the policy only; preserves
-// the "staged:", knp.default, kcnp.kube-admin, and kcnp.kube-baseline prefixes, if
-// present.
-// The patterns that are handled are:
-// - "<namespace>/<tier>.<policy>"					=> "<policy>"
-// - "<namespace>/<tier>.staged:<policy>"			=> "staged:<policy>"
-// - "default/knp.default.<policy>" 				=> "knp.default.<policy>"
-// - "default/staged:knp.default.<policy>" 			=> "staged:knp.default.<policy>"
-// - "default/knp.default.staged:<policy>" 			=> "knp.default.staged:<policy>"
-// - "kcnp.kube-admin.<policy>" 			        => "kcnp.kube-admin.<policy>"
-// - "kcnp.kube-baseline.<policy>" 	                => "kcnp.kube-baseline.<policy>"
-func getPolicyName(s string) string {
-	// Remove namespace if present
-	if idx := strings.IndexByte(s, '/'); idx >= 0 && idx < len(s)-1 {
-		s = s[idx+1:]
-	}
-
-	// Track staged prefix
-	staged := ""
-	if strings.HasPrefix(s, "staged:") {
-		staged = "staged:"
-		s = s[len("staged:"):]
-	}
-
-	// If not one of the special prefixes, strip off the tier part
-	if !names.TierIsStatic(s) {
-		if idx := strings.IndexByte(s, '.'); idx >= 0 && idx < len(s)-1 {
-			s = s[idx+1:]
-		}
-	}
-
-	return staged + s
 }
