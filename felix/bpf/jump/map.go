@@ -36,17 +36,29 @@ const (
 	XDPMaxEntries     = XDPMaxEntryPoints * MaxSubPrograms
 )
 
-var MapParameters = maps.MapParameters{
+var IngressMapParameters = maps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: TCMaxEntries,
-	Name:       "cali_jump",
-	Version:    3,
+	Name:       "cali_jump_ing",
+	Version:    2,
 }
 
-func Map() maps.Map {
-	return maps.NewPinnedMap(MapParameters)
+var EgressMapParameters = maps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: TCMaxEntries,
+	Name:       "cali_jump_egr",
+	Version:    2,
+}
+
+func Maps() []maps.Map {
+	return []maps.Map{
+		maps.NewPinnedMap(IngressMapParameters),
+		maps.NewPinnedMap(EgressMapParameters),
+	}
 }
 
 var XDPMapParameters = maps.MapParameters{

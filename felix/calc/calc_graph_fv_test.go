@@ -146,6 +146,12 @@ var baseTests = []StateList{
 		localEpsWithProfile,
 	},
 
+	// Test movement of policy1 from the default tier to a non-default tier and back.
+	{
+		localEp1WithPolicy,
+		localEp1WithPolicyAndTier,
+	},
+
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
 
@@ -685,7 +691,6 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 		for _, expander := range testExpanders() {
 			expanderDesc, expandedTests := expander(baseTest)
 			for _, test := range expandedTests {
-				test := test
 				It("should handle: "+baseTest.String()+" "+expanderDesc, func() {
 					// Create the calculation graph.
 					conf := config.New()
