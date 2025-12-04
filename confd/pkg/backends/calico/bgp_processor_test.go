@@ -49,11 +49,11 @@ func TestBGPPeer(t *testing.T) {
 
 func TestCommunityRule(t *testing.T) {
 	rule := types.CommunityRule{
-		CIDR:        "10.0.0.0/8",
-		Communities: []string{"65000:100"},
+		CIDR:          "10.0.0.0/8",
+		AddStatements: []string{"bgp_community.add((65000, 100));"},
 	}
 
 	// Validate community rule structure
 	assert.Equal(t, "10.0.0.0/8", rule.CIDR)
-	assert.Equal(t, []string{"65000:100"}, rule.Communities)
+	assert.Equal(t, []string{"bgp_community.add((65000, 100));"}, rule.AddStatements)
 }
