@@ -16,6 +16,8 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/confd/pkg/backends/types"
 )
 
 func newFuncMap() map[string]interface{} {
@@ -31,6 +33,7 @@ func newFuncMap() map[string]interface{} {
 	m["datetime"] = time.Now
 	m["toUpper"] = strings.ToUpper
 	m["toLower"] = strings.ToLower
+	m["title"] = strings.Title
 	m["contains"] = strings.Contains
 	m["replace"] = strings.Replace
 	m["hasSuffix"] = strings.HasSuffix
@@ -48,6 +51,22 @@ func newFuncMap() map[string]interface{} {
 func addFuncs(out, in map[string]interface{}) {
 	for name, fn := range in {
 		out[name] = fn
+	}
+}
+
+// addCalicoFuncs adds Calico-specific template functions
+func addCalicoFuncs(funcMap map[string]interface{}, storeClient interface{}) {
+	// Add getBGPConfig function that takes the client as parameter
+	funcMap["getBGPConfig"] = func(client interface{}) (interface{}, error) {
+		if calicoClient, ok := client.(types.BirdBGPConfigProvider); ok {
+			config, err := calicoClient.GetBirdBGPConfig()
+			if err != nil {
+				// Return error to fail template execution and prevent broken config
+				return nil, err
+			}
+			return config, nil
+		}
+		return nil, errors.New("client does not support GetBirdBGPConfig")
 	}
 }
 
@@ -183,7 +202,7 @@ func BGPFilterFunctionName(filterName, direction, version string) (string, error
 	}
 	pieces := []string{"bgp_", "", "_", normalizedDirection, "FilterV", version}
 	maxBIRDSymLen := 64
-	resizedName, err := truncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
+	resizedName, err := TruncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
 	if err != nil {
 		return "", err
 	}
@@ -389,10 +408,12 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 	return lines, nil
 }
 
+// TruncateAndHashName truncates a name to maxLen characters, appending a hash suffix if truncation is needed.
 // The maximum length of a k8s resource (253 bytes) is longer than the maximum length of BIRD symbols (64 chars).
 // This function provides a way to map the k8s resource name to a BIRD symbol name that accounts
-// for the length difference in a way that minimizes the chance of collisions
-func truncateAndHashName(name string, maxLen int) (string, error) {
+// for the length difference in a way that minimizes the chance of collisions.
+// Exported so it can be reused by other packages that need consistent name truncation.
+func TruncateAndHashName(name string, maxLen int) (string, error) {
 	if len(name) <= maxLen {
 		return name, nil
 	}
