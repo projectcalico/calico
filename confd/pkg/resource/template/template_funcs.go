@@ -16,9 +16,13 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 )
+
+var title = cases.Title(language.English)
 
 func newFuncMap() map[string]interface{} {
 	m := make(map[string]interface{})
@@ -33,7 +37,7 @@ func newFuncMap() map[string]interface{} {
 	m["datetime"] = time.Now
 	m["toUpper"] = strings.ToUpper
 	m["toLower"] = strings.ToLower
-	m["title"] = strings.Title
+	m["title"] = title.String
 	m["contains"] = strings.Contains
 	m["replace"] = strings.Replace
 	m["hasSuffix"] = strings.HasSuffix
