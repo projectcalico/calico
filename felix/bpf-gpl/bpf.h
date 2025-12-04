@@ -108,7 +108,7 @@
 #if CALI_F_INGRESS
 #define CALI_HOOK_INGRESS
 #else
-#define CALI_F_HOOK_EGRESS
+#define CALI_HOOK_EGRESS
 #endif
 #else
 // For WEPs, the policy direction is opposite to the tc hook that the
