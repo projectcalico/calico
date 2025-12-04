@@ -64,10 +64,10 @@ func (key NetworkSetKey) String() string {
 	return fmt.Sprintf("NetworkSet(name=%s)", key.Name)
 }
 
-// Namespace extracts the namespace from a namespaced NetworkSetKey.
+// GetNamespace extracts the namespace from a namespaced NetworkSetKey.
 // NetworkSets with names in the format "namespace/name" are namespaced.
 // Returns empty string for global (non-namespaced) NetworkSets.
-func (key NetworkSetKey) Namespace() string {
+func (key NetworkSetKey) GetNamespace() string {
 	if strings.Contains(key.Name, "/") {
 		parts := strings.SplitN(key.Name, "/", 2)
 		return parts[0]

@@ -1815,18 +1815,50 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 		return result
 	}
 
-	// Helper function to replace the old lookupEndpointWithNamespace behavior
-	// This mimics the original function: first try direct endpoint lookup, then NetworkSet fallback
+	// Helper function to replace the old lookupEndpointWithNamespace behavior.
+	// This uses the public findEndpointBestMatch interface by setting up a dummy source endpoint
+	// to provide the preferredNamespace context.
 	testLookupEndpoint := func(c *collector, clientIPBytes, ip [16]byte, canCheckEgressDomains bool, preferredNamespace string) calc.EndpointData {
-		// Get the endpoint data for this entry.
-		if ep, ok := c.luc.GetEndpoint(ip); ok {
-			return ep
+		srcIP := clientIPBytes
+
+		// If we need a namespace context but don't have a source IP, generate a dummy one.
+		if preferredNamespace != "" && srcIP == [16]byte{} {
+			srcIP = ipToBytes("192.0.2.1")
 		}
-		// No matching endpoint, try NetworkSet lookup if enabled
-		if !c.config.EnableNetworkSets {
-			return nil
+
+		if preferredNamespace != "" {
+			// Create a dummy endpoint in the preferred namespace to simulate the source
+			epKey := model.WorkloadEndpointKey{
+				Hostname:       "test-host",
+				OrchestratorID: "k8s",
+				WorkloadID:     "test-workload-src",
+				EndpointID:     "test-endpoint-src",
+			}
+			ep := &model.WorkloadEndpoint{
+				Name:   "test-endpoint-src",
+				Labels: uniquelabels.Make(map[string]string{"env": "test"}),
+			}
+
+			common := calc.CalculateCommonEndpointData(epKey, ep)
+			var endpoint calc.EndpointData
+			if canCheckEgressDomains {
+				endpoint = &calc.LocalEndpointData{
+					CommonEndpointData: common,
+				}
+			} else {
+				endpoint = &calc.RemoteEndpointData{
+					CommonEndpointData: common,
+				}
+			}
+
+			// Inject the dummy endpoint into the cache
+			c.luc.SetMockData(map[[16]byte]calc.EndpointData{srcIP: endpoint}, nil, nil, nil)
 		}
-		return c.lookupNetworkSetWithNamespace(clientIPBytes, ip, canCheckEgressDomains, preferredNamespace)
+
+		// Perform the lookup using the public interface
+		t := tuple.Tuple{Src: srcIP, Dst: ip}
+		_, dstEp := c.findEndpointBestMatch(t)
+		return dstEp
 	}
 
 	BeforeEach(func() {
@@ -2010,7 +2042,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 	})
 
 	Context("when testing namespace optimization benefits", func() {
-		It("should demonstrate namespace-aware optimization with GetNetworkSetWithNamespace", func() {
+		It("should select the most specific NetworkSet match (narrowest CIDR)", func() {
 			// This test validates that the collector uses the namespace-aware lookup
 			// Create multiple overlapping NetworkSets to show specificity
 			broadNetworkSet := &model.NetworkSet{

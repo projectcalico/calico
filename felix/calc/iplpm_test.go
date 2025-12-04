@@ -269,6 +269,20 @@ var _ = Describe("IpTrie Namespace-Aware Functionality", func() {
 			_, found := it.GetLongestPrefixCidrWithNamespaceIsolation(testIP, "any-namespace")
 			Expect(found).To(BeFalse())
 		})
+
+		It("should handle 0.0.0.0/0 correctly", func() {
+			zeroCIDR := ip.MustParseCIDROrIP("0.0.0.0/0")
+			key := model.NetworkSetKey{Name: "zero-netset"}
+
+			it.InsertKey(zeroCIDR, key)
+
+			// Test with an arbitrary IP
+			testIP := ip.FromNetIP(net.ParseIP("1.2.3.4"))
+
+			foundKey, found := it.GetLongestPrefixCidr(testIP)
+			Expect(found).To(BeTrue(), "Should find key for 0.0.0.0/0")
+			Expect(foundKey).To(Equal(key))
+		})
 	})
 
 	Context("when testing multiple overlapping CIDRs", func() {
