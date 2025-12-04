@@ -1080,6 +1080,12 @@ func NewTypedMap[K Key, V Value](m MapWithExistsCheck, kConstructor func([]byte)
 	}
 }
 
+// isBatchOpsSupported checks if the kernel supports batch map operations.
+// It creates a test LPM_TRIE map and attempts a batch lookup operation.
+// Older kernels (< 5.13) return errno 524 (ENOTSUPP) for batch operations,
+// which indicates that batch ops are not supported. LPM_TRIE is used as previous
+// kernel versions supported batch ops for few other map types and support for
+// LPM_TRIE was added in 5.13.
 var isBatchOpsSupported = sync.OnceValue(func() bool {
 	// Check if the kernel supports batch operations.
 	fd, err := createMap("testMap", unix.BPF_MAP_TYPE_LPM_TRIE, 8, 4, 1, unix.BPF_F_NO_PREALLOC)
@@ -1094,10 +1100,11 @@ var isBatchOpsSupported = sync.OnceValue(func() bool {
 		}
 	}()
 	err = batchLookup(fd, 8, 4)
-	// kernel errno 524 indicated that batch ops are not supported.
+	// kernel errno 524 indicates that batch ops are not supported.
 	if err != nil && errors.Is(err, syscall.Errno(524)) {
 		return false
 	}
 
+	// Any other error (including ENOENT for empty map) or success means batch ops are supported.
 	return true
 })
