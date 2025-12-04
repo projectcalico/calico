@@ -146,3 +146,16 @@ void bpf_map_batch_lookup(int fd, void *in_batch, void *out_batch, void *keys,
 
 	set_errno(bpf_map_lookup_batch(fd, in_batch, out_batch, keys, values, count, &opts));
 }
+
+int bpf_create_map(enum bpf_map_type map_type,
+		   const char *name,
+		   __u32 key_size,
+		   __u32 value_size,
+		   __u32 max_entries,
+		   __u32 map_flags)
+{
+	DECLARE_LIBBPF_OPTS(bpf_map_create_opts, opts,
+		.map_flags = map_flags);
+
+	return bpf_map_create(map_type, name, key_size, value_size, max_entries, &opts);
+}

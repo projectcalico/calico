@@ -70,3 +70,11 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 func (m *Iterator) Close() error {
 	return nil
 }
+
+func createMap(name string, mapType, keySize, valueSize, maxEntries, flags uint32) (FD, error) {
+	panic("BPF syscall stub")
+}
+
+func batchLookup(mapFD FD, keySize, valueSize int) error {
+	panic("BPF syscall stub")
+}
