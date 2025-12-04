@@ -332,9 +332,7 @@ message Rule {
 
   RuleMetadata metadata = 123;
 
-  // Changed to config option.
-  reserved 200;
-  reserved "log_prefix";
+  string log_prefix = 200;
 
   // An opaque ID/hash for the rule.
   string rule_id = 201;

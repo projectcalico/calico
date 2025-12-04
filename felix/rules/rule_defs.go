@@ -424,6 +424,7 @@ type Config struct {
 	WireguardEncryptHostTraffic bool
 	RouteSource                 string
 
+	// TODO (mazdak): do we need this?
 	LogPrefix            string
 	EndpointToHostAction string
 	FilterAllowAction    string

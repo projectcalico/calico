@@ -358,6 +358,8 @@ type ParsedRule struct {
 	// does not implement the match, but other dataplanes such as Dikastes do.
 	HTTPMatch *model.HTTPMatch
 
+	LogPrefix string
+
 	Metadata *model.RuleMetadata
 }
 
@@ -485,6 +487,8 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 		OriginalDstService:                rule.DstService,
 		OriginalDstServiceNamespace:       rule.DstServiceNamespace,
 		HTTPMatch:                         rule.HTTPMatch,
+
+		LogPrefix: rule.LogPrefix,
 
 		// Pass through metadata (used by iptables backend)
 		Metadata: rule.Metadata,

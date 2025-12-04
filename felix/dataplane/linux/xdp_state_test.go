@@ -122,6 +122,7 @@ var knownProtoRuleFields = set.From(
 	"HttpMatch",
 	"Metadata",
 	"DstIpPortSetIds",
+	"LogPrefix",
 )
 
 func testAllProtoRuleFieldsAreKnown() {

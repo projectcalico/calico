@@ -280,6 +280,7 @@ func StartDataplaneDriver(
 				WireguardEncryptHostTraffic: configParams.WireguardHostEncryptionEnabled,
 				RouteSource:                 configParams.RouteSource,
 
+				// TODO (mazdak): needed?
 				LogPrefix:            configParams.LogPrefix,
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 				FilterAllowAction:    configParams.FilterAllowAction(),

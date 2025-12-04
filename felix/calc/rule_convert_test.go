@@ -92,7 +92,8 @@ var fullyLoadedParsedRule = ParsedRule{
 		{Prefix: "/bar"},
 	}},
 
-	Metadata: &model.RuleMetadata{Annotations: map[string]string{"key": "value"}},
+	LogPrefix: "foobar",
+	Metadata:  &model.RuleMetadata{Annotations: map[string]string{"key": "value"}},
 }
 
 var fullyLoadedProtoRule = &proto.Rule{
@@ -159,7 +160,8 @@ var fullyLoadedProtoRule = &proto.Rule{
 			{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/bar"}},
 		}},
 
-	Metadata: &proto.RuleMetadata{Annotations: map[string]string{"key": "value"}},
+	LogPrefix: "foobar",
+	Metadata:  &proto.RuleMetadata{Annotations: map[string]string{"key": "value"}},
 }
 
 var _ = DescribeTable("ParsedRulesToProtoRules",

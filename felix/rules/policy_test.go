@@ -339,6 +339,15 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
 
+			By("Rendering an explicit log prefix")
+			logRule.LogPrefix = "foobar"
+			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false)
+			// For deny, should be one match rule that just does the DROP.
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "foobar"}))
+
 			// Enabling flow log must not have any effect
 			rrConfigNormal.FlowLogsEnabled = true
 			renderer = NewRenderer(rrConfigNormal)
@@ -385,10 +394,10 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false)
 			// For deny, should be one match rule that just does the DROP.
-			Expect(len(rules)).To(Equal(2))
+			Expect(len(rules)).To(Equal(3))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
-			Expect(rules[1]).To(Equal(generictables.Rule{
+			Expect(rules[2]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.DropAction{},
 			}))
@@ -406,17 +415,17 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false)
 			// For deny, should be one match rule that just does the DROP.
-			Expect(len(rules)).To(Equal(3))
+			Expect(len(rules)).To(Equal(4))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
-			Expect(rules[1]).To(Equal(generictables.Rule{
+			Expect(rules[2]).To(Equal(generictables.Rule{
 				Match: iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.NflogAction{
 					Group:  1,
 					Prefix: "DPI0|default.foo",
 				},
 			}))
-			Expect(rules[2]).To(Equal(generictables.Rule{
+			Expect(rules[3]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.DropAction{},
 			}))
@@ -449,14 +458,14 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
-			Expect(inbound).To(HaveLen(2))
+			Expect(inbound).To(HaveLen(3))
 			Expect(outbound).To(ConsistOf(
 				generictables.Rule{
 					Comment: []string{"Policy default.foo egress"},
 				}))
 			Expect(inbound[0].Match.Render()).To(Equal(expMatch))
 			Expect(inbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
-			Expect(inbound[1]).To(Equal(generictables.Rule{
+			Expect(inbound[2]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.DropAction{},
 			}))
@@ -489,21 +498,21 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
-			Expect(inbound).To(HaveLen(3))
+			Expect(inbound).To(HaveLen(4))
 			Expect(outbound).To(ConsistOf(
 				generictables.Rule{
 					Comment: []string{"Policy default.foo egress"},
 				}))
 			Expect(inbound[0].Match.Render()).To(Equal(expMatch))
 			Expect(inbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
-			Expect(inbound[1]).To(Equal(generictables.Rule{
+			Expect(inbound[2]).To(Equal(generictables.Rule{
 				Match: iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.NflogAction{
 					Group:  1,
 					Prefix: "DPI0|default.foo",
 				},
 			}))
-			Expect(inbound[2]).To(Equal(generictables.Rule{
+			Expect(inbound[3]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.DropAction{},
 			}))
@@ -541,10 +550,10 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				generictables.Rule{
 					Comment: []string{"Policy default.foo ingress"},
 				}))
-			Expect(outbound).To(HaveLen(2))
+			Expect(outbound).To(HaveLen(3))
 			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
 			Expect(outbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
-			Expect(outbound[1]).To(Equal(generictables.Rule{
+			Expect(outbound[2]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.DropAction{},
 			}))
@@ -582,17 +591,17 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				generictables.Rule{
 					Comment: []string{"Policy default.foo ingress"},
 				}))
-			Expect(outbound).To(HaveLen(3))
+			Expect(outbound).To(HaveLen(4))
 			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
 			Expect(outbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
-			Expect(outbound[1]).To(Equal(generictables.Rule{
+			Expect(outbound[2]).To(Equal(generictables.Rule{
 				Match: iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.NflogAction{
 					Group:  2,
 					Prefix: "DPE0|default.foo",
 				},
 			}))
-			Expect(outbound[2]).To(Equal(generictables.Rule{
+			Expect(outbound[3]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.DropAction{},
 			}))
@@ -742,10 +751,10 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false)
 			// For deny, should be one match rule that just does the REJECT.
-			Expect(len(rules)).To(Equal(2))
+			Expect(len(rules)).To(Equal(3))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
-			Expect(rules[1]).To(Equal(generictables.Rule{
+			Expect(rules[2]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.RejectAction{},
 			}))
@@ -765,17 +774,17 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false)
 			// For deny, should be one match rule that just does the REJECT.
-			Expect(len(rules)).To(Equal(3))
+			Expect(len(rules)).To(Equal(4))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
-			Expect(rules[1]).To(Equal(generictables.Rule{
+			Expect(rules[2]).To(Equal(generictables.Rule{
 				Match: iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.NflogAction{
 					Group:  1,
 					Prefix: "DPI0|default.foo",
 				},
 			}))
-			Expect(rules[2]).To(Equal(generictables.Rule{
+			Expect(rules[3]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.RejectAction{},
 			}))

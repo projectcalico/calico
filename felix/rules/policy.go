@@ -597,9 +597,9 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	var rules []generictables.Rule
 	var mark uint32
 
-	if pRule.Action == "log" {
+	if pRule.LogPrefix != "" || pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
-		logPrefix := r.LogPrefix
+		logPrefix := pRule.LogPrefix
 		if logPrefix == "" {
 			logPrefix = "calico-packet"
 		}
