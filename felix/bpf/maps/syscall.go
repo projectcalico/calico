@@ -182,6 +182,7 @@ func DeleteMapEntryIfExists(mapFD FD, k []byte) error {
 
 // Batch size established by trial and error; 8-32 seemed to be the sweet spot for the conntrack map.
 const IteratorNumKeys = 1024
+const IteratorNumKeysSlow = 16
 
 // align64 rounds up the given size to the nearest 8-bytes.
 func align64(size int) int {
@@ -238,7 +239,7 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int, isBatchOpsSupport
 }
 
 func (m *Iterator) slowIter(tokenIn, tokenC unsafe.Pointer) (int, error) {
-	rc := C.bpf_maps_map_load_multi(C.uint(m.mapFD), tokenIn, 16,
+	rc := C.bpf_maps_map_load_multi(C.uint(m.mapFD), tokenIn, C.int(IteratorNumKeysSlow),
 		C.int(m.keyStride), m.keysBuff, C.int(m.valueStride), m.valuesBuff)
 	if rc < 0 {
 		return 0, unix.Errno(-rc)
