@@ -322,7 +322,6 @@ type bpfEndpointManager struct {
 	jumpMapAllocIngress *jumpMapAlloc
 	jumpMapAllocEgress  *jumpMapAlloc
 	xdpJumpMapAlloc     *jumpMapAlloc
-	policyDefaultObj    *libbpf.Obj
 	policyTcAllowFDs    [2]bpf.ProgFD
 	policyTcDenyFDs     [2]bpf.ProgFD
 
@@ -1620,6 +1619,8 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 	return nil
 }
 
+// loadDefaultPolicies loads the default allow and deny policy programs for the given hook
+// and not policy direction.
 func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
 	file := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("policy_default_%s.o", hk))
 	obj, err := libbpf.OpenObject(file)
@@ -1657,8 +1658,6 @@ func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
 	if err := obj.Load(); err != nil {
 		return fmt.Errorf("default policies: %w", err)
 	}
-
-	m.policyDefaultObj = obj
 
 	fd, err := obj.ProgramFD("calico_tc_deny")
 	if err != nil {
