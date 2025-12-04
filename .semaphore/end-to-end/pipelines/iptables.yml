@@ -48,7 +48,7 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: OPENSHIFT_VERSION
-              values: ["4.16.38", "4.17.25", "4.18.9"]
+              values: ["4.18.29", "4.19.20", "4.20.6"]
       env_vars:
         - name: PROVISIONER
           value: aws-openshift
@@ -65,28 +65,6 @@ blocks:
         - name: STERN_CHECK
           value: DISABLED
       jobs:
-        - name: Kubeadm - ARM64
-          execution_time_limit:
-            hours: 4
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            - name: PROVISIONER
-              value: gcp-kubeadm
-            - name: GOOGLE_MACHINE_TYPE
-              value: t2a-standard-2
-            - name: GOOGLE_REGION
-              value: us-central1
-            - name: GOOGLE_ZONE
-              value: us-central1-a
-            - name: K8S_VERSION
-              value: "stable-1"
-            - name: ENABLE_WIREGUARD
-              value: "true"
-          matrix:
-            - env_var: CLUSTER_IMAGE
-              values: ["ubuntu-2204-lts-arm64", "rocky-linux-9-arm64"]
-
         - name: AKS - ARM64
           execution_time_limit:
             hours: 4
@@ -127,42 +105,6 @@ blocks:
             - name: K8S_E2E_FLAGS
               value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
 
-  # This is the old every-weekday runs
-  - name: datastore k8s-e2e
-    dependencies: []
-    task:
-      jobs:
-        - name: kdd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable-3"]
-            - env_var: MANIFEST_FILE
-              values: ["calico.yaml", "calico-typha.yaml", "canal.yaml"]
-        - name: etcd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable-3"]
-          env_vars:
-            - name: INSTALL_ETCD_POD
-              value: "true"
-            - name: MANIFEST_FILE
-              value: calico-etcd.yaml
-      env_vars:
-        - name: PROVISIONER
-          value: gcp-kubeadm
-        - name: CNI_POD_SETUP_TIMEOUT_SECONDS
-          value: "15"
-        - name: CNI_PLUGIN
-          value: Calico
-
   - name: AKS
     dependencies: []
     task:
@@ -173,10 +115,6 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
-            - env_var: ENABLE_WIREGUARD
-              values:
-                - "false"
-                - "true"
             - env_var: CNI_PLUGIN
               values:
                 - "Calico"
@@ -235,66 +173,6 @@ blocks:
         - name: AZ_CREATE_MODE
           value: AKS
 
-  - name: k8s=stable
-    dependencies: []
-    task:
-      jobs:
-        - name: kdd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable"]
-            - env_var: MANIFEST_FILE
-              values: ["calico.yaml", "calico-typha.yaml", "canal.yaml"]
-      env_vars:
-        - name: PROVISIONER
-          value: gcp-kubeadm
-        - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
-
-  - name: VxLAN k8s-e2e
-    dependencies: []
-    task:
-      jobs:
-        - name: kdd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable-3"]
-            - env_var: DISABLE_VXLAN_BGP
-              values: ["true", "false"]
-      env_vars:
-        - name: USE_VXLAN
-          value: "true"
-        - name: PROVISIONER
-          value: gcp-kubeadm
-
-  - name: Nftables mode
-    dependencies: []
-    task:
-      jobs:
-        - name: kdd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable"]
-      env_vars:
-        - name: USE_VXLAN
-          value: "true"
-        - name: PROVISIONER
-          value: gcp-kubeadm
-        - name: DATAPLANE
-          value: CalicoNftables
-
   - name: dual-stack k8s-e2e
     dependencies: []
     task:
@@ -349,29 +227,6 @@ blocks:
             - role: worker
             - role: worker
 
-  - name: Operator Quickstart
-    dependencies: []
-    task:
-      agent:
-        machine:
-          type: f1-standard-2
-          os_image: ubuntu2204
-      jobs:
-        - name: Operator Quickstart
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            - name: PRODUCT
-              value: calico
-            - name: INSTALLER
-              value: helmerator
-            - name: PROVISIONER
-              value: "local-kind"
-            - name: UNRELEASED_STREAM
-              value: "v3.29"
-
   - name: AutoHEP test
     dependencies: []
     task:
@@ -391,116 +246,6 @@ blocks:
         - name: PROVISIONER
           value: "local-kind"
 
-  - name: EKS - AWSCNI
-    dependencies: []
-    task:
-      jobs:
-        - name: EKS, AWS CNI, helm
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            - name: AWS_K8S_CNI_VERSION
-              value: "NA"
-            - name: PROVISIONER
-              value: aws-eks
-            - name: EKS_CNI
-              value: aws
-            - name: INSTALLER
-              value: helmerator
-
-  - name: EKS - Calico CNI
-    dependencies: []
-    task:
-      jobs:
-        - name: EKS, Calico CNI, helm
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: PROVISIONER
-              values: ["aws-eks"]
-          env_vars:
-            - name: INSTALLER
-              value: "helmerator"
-            - name: IPV4_POD_CIDR
-              value: "172.16.0.0/16"
-            - name: IPAM_TEST_POOL_SUBNET
-              value: "10.0.0.0/29"
-      env_vars:
-        - name: PRODUCT
-          value: "calico"
-        - name: EKS_CNI
-          value: "calico"
-        - name: K8S_VERSION
-          value: "stable-1"
-        # The skip "EndpointSlice\|Services\sshould" is needed to skip Endpoint slice tests which are only possible in k8s 1.21+
-        # The skip "Ingress.API|IngressClass.API" is needed to skip Ingress tests which are only possible in k8s 1.21+
-        # The skip "Proxy.version.v1.*pod.and.service.Proxy.\[" is needed to skip an upstream test that only works on k8s 1.24+
-        # Skipping these upstream k8s tests since they are failing because of limitations of Calico CNI on EKS:
-        # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
-        # - [IT] "Proxy version v1 should proxy through a service and a pod"
-        # - [IT] "ReplicaSet should serve a basic image on each replica with a public image"
-        # - [IT] "ReplicationController should serve a basic image on each replica with a public image"
-        # - [It] "DNS should provide DNS for ExternalName services"
-        # - [It] "DNS should provide DNS for pods for Hostname"
-        # - [It] "DNS should provide DNS for pods for Subdomain"
-        # - [It] "DNS should provide DNS for services"
-        # - [It] "DNS should provide DNS for the cluster"
-        # - [It] "DNS should resolve DNS of partial qualified names for services"
-        # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
-        - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
-
-  # This is the old every-week tests
-  - name: datastore k8s-e2e
-    dependencies: []
-    task:
-      jobs:
-        - name: kdd - old
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable-3"]
-            - env_var: MANIFEST_FILE
-              values: ["calico.yaml", "calico-typha.yaml", "canal.yaml"]
-
-        - name: kdd - new
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable"]
-            - env_var: MANIFEST_FILE
-              values: ["calico.yaml", "calico-typha.yaml", "canal.yaml"]
-          env_vars:
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
-
-        - name: etcd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable-3"]
-          env_vars:
-            - name: INSTALL_ETCD_POD
-              value: "true"
-            - name: MANIFEST_FILE
-              value: calico-etcd.yaml
-      env_vars:
-        - name: PROVISIONER
-          value: gcp-kubeadm
-
   - name: IPVS
     dependencies: []
     task:
@@ -518,92 +263,6 @@ blocks:
               value: gcp-kubeadm
             - name: KUBE_PROXY_MODE
               value: ipvs
-
-  - name: VxLAN k8s-e2e
-    dependencies: []
-    task:
-      jobs:
-        - name: kdd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable"]
-            - env_var: DISABLE_VXLAN_BGP
-              values: ["true", "false"]
-          env_vars:
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
-      env_vars:
-        - name: USE_VXLAN
-          value: "true"
-        - name: PROVISIONER
-          value: gcp-kubeadm
-
-  - name: ALP k8s-e2e
-    dependencies: []
-    task:
-      jobs:
-        - name: kdd istio-1.1
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable-3"]
-          env_vars:
-            - name: MANIFEST_FILE
-              value: calico.yaml
-        - name: etcd istio-1.1
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable"]
-          env_vars:
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice)
-            - name: INSTALL_ETCD_POD
-              value: "true"
-            - name: MANIFEST_FILE
-              value: calico-etcd.yaml
-      env_vars:
-        - name: ENABLE_ALP
-          value: "true"
-        - name: ISTIO_VERSION
-          value: "1.6.13"
-        - name: PROVISIONER
-          value: gcp-kubeadm
-
-  - name: Helm
-    dependencies: []
-    task:
-      agent:
-        machine:
-          type: f1-standard-2
-          os_image: ubuntu2204
-      jobs:
-        - name: mainline
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            - name: PRODUCT
-              value: "calico"
-            - name: INSTALLER
-              value: "helmerator"
-            - name: PROVISIONER
-              value: "local-kind"
-            - name: USE_LATEST_RELEASE
-              value: "true"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
 
   - name: usage reporting
     dependencies: []
@@ -632,110 +291,6 @@ blocks:
           value: usage-reporting
       secrets:
         - name: dynamo-read-creds
-
-  - name: usage reporting with bpf
-    dependencies: []
-    task:
-      jobs:
-        - name: mainline
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable"]
-          env_vars:
-            - name: PROVISIONER
-              value: aws-kubeadm
-            - name: CLUSTER_NODES
-              value: "1"
-            - name: ENABLE_EXTERNAL_NODE
-              value: "true"
-            - name: CLUSTER_IMAGE
-              value: "eoan-19.10"
-            - name: DATAPLANE
-              value: "CalicoBPF"
-            - name: PRODUCT
-              value: calico
-            - name: USE_HASH_RELEASE
-              value: "false"
-            - name: E2E_IMAGE
-              value: gcr.io/unique-caldron-775/k8s-e2e:stable
-            - name: ENABLE_USAGE
-              value: "true"
-            - name: TEST_TYPE
-              value: usage-reporting
-            - name: USAGE_REPORTING_COUNTRY
-              value: "US"
-      secrets:
-        - name: dynamo-read-creds
-
-  - name: windows
-    dependencies: []
-    task:
-      jobs:
-        - name: windows etcd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable-3"]
-            - env_var: INSTALLER
-              values: ["manual"]
-            - env_var: ENCAPSULATION_TYPE
-              values: ["VXLAN", "None"]
-            - env_var: WINDOWS_OS_VERSION
-              values: ["2004"]
-          env_vars:
-            - name: VPC_SUBNETS
-              value: '["172.16.101.0/24"]' # single subnet because no encapsulation may be being used
-            - name: USE_HASH_RELEASE
-              value: "true"
-            - name: INSTALL_ETCD_POD
-              value: "true"
-            - name: MANIFEST_FILE
-              value: calico-etcd.yaml
-            - name: PROVISIONER
-              value: aws-kubeadm
-            - name: CREATE_WINDOWS_NODES
-              value: "true"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=\[sig-calico\].*\[RunsOnWindows\] --ginkgo.failFast=true --ginkgo.skip=\[EndpointSlice\]
-
-        - name: windows etcd - containerd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable"]
-            - env_var: INSTALLER
-              values: ["manual"]
-            - env_var: ENCAPSULATION_TYPE
-              values: ["VXLAN", "None"]
-            - env_var: WINDOWS_OS_VERSION
-              values: ["2004"]
-          env_vars:
-            - name: VPC_SUBNETS
-              value: '["172.16.101.0/24"]' # single subnet because no encapsulation may be being used
-            - name: USE_HASH_RELEASE
-              value: "true"
-            - name: INSTALL_ETCD_POD
-              value: "true"
-            - name: MANIFEST_FILE
-              value: calico-etcd.yaml
-            - name: PROVISIONER
-              value: aws-kubeadm
-            - name: CREATE_WINDOWS_NODES
-              value: "true"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=\[sig-calico\].*\[RunsOnWindows\] --ginkgo.failFast=true --ginkgo.skip=\[EndpointSlice\]
-            - name: WINDOWS_CONTAINER_RUNTIME
-              value: "containerd:1.4.6"
 
   # This is the old staging runs
   - name: k8s beta runs
@@ -777,20 +332,6 @@ blocks:
               value: "v1.7.1" # https://github.com/rancher/rke/releases/tag/v1.7.1
             - name: K8S_VERSION
               value: "v1.31.3" # RKE 1.7.1. supports: v1.31.3, v1.30.7, v1.29.11, v1.28.15
-
-        - name: preinstalled
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: PROVISIONER
-              values: ["gcp-gke", "aws-kops"]
-          env_vars:
-            - name: KOPS_RUN_TOO_NEW_VERSION # This kops flag allows kops to install k8s versions newer than it officially supports
-              value: "true"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
 
   - name: WireGuard VXLAN k8s-e2e
     dependencies: []
@@ -962,7 +503,7 @@ blocks:
             - name: PROVISIONER
               value: "aws-kubeadm"
 
-        - name: BPF + AKS w AKS CNI + Overlay
+        - name: AKS w AKS CNI + Overlay
           execution_time_limit:
             hours: 7
           commands:
@@ -1016,7 +557,7 @@ blocks:
         - name: ENCAPSULATION_TYPE
           value: "None"
         - name: INSTALLER
-          value: "helmerator" # manual install currently not working for AKS / EKS
+          value: "helmerator"
         - name: USE_HASH_RELEASE
           value: "true"
         - name: ENABLE_WIREGUARD
@@ -1044,7 +585,7 @@ blocks:
         - name: ENCAPSULATION_TYPE
           value: "VXLAN"
         - name: INSTALLER
-          value: "helmerator" # manual install currently not working for AKS / EKS
+          value: "helmerator"
         - name: USE_HASH_RELEASE
           value: "true"
         - name: ENABLE_WIREGUARD
@@ -1172,26 +713,6 @@ blocks:
             - name: MANIFEST_FILE
               value: calico-etcd.yaml
       env_vars:
-        - name: PROVISIONER
-          value: gcp-kubeadm
-
-  - name: VxLAN k8s-e2e
-    dependencies: []
-    task:
-      jobs:
-        - name: kdd
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: K8S_VERSION
-              values: ["stable"]
-            - env_var: DISABLE_VXLAN_BGP
-              values: ["true", "false"]
-      env_vars:
-        - name: USE_VXLAN
-          value: "true"
         - name: PROVISIONER
           value: gcp-kubeadm
 
