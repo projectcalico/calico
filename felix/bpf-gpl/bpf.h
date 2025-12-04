@@ -56,6 +56,7 @@
 #define CALI_CT_CLEANUP	(1<<9)
 #define CALI_TC_VXLAN	(1<<10)
 #define CALI_TC_PREAMBLE	(1<<11)
+#define CALI_TC_DEF_POLICY      (1<<12)
 
 #ifndef CALI_DROP_WORKLOAD_TO_HOST
 #define CALI_DROP_WORKLOAD_TO_HOST false
@@ -75,6 +76,7 @@
 #define CALI_F_NAT_IF    (((CALI_COMPILE_FLAGS) & CALI_TC_NAT_IF) != 0)
 #define CALI_F_LO        (((CALI_COMPILE_FLAGS) & CALI_TC_LO) != 0)
 #define CALI_F_CT_CLEANUP (((CALI_COMPILE_FLAGS) & CALI_CT_CLEANUP) != 0)
+#define CALI_F_DEF_POLICY (((CALI_COMPILE_FLAGS) & CALI_TC_DEF_POLICY) != 0)
 
 #define CALI_F_MAIN	(CALI_F_HEP && !CALI_F_IPIP && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !CALI_F_LO)
 
@@ -101,6 +103,23 @@
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	((CALI_COMPILE_FLAGS & CALI_TC_DSR) != 0)
 
+#if CALI_F_HEP || CALI_F_PREAMBLE || CALI_F_DEF_POLICY
+// For HEPs policy direction (CALI_F_INGRESS) matches attachment direction.
+#if CALI_F_INGRESS
+#define CALI_HOOK_INGRESS
+#else
+#define CALI_HOOK_EGRESS
+#endif
+#else
+// For WEPs, the policy direction is opposite to the tc hook that the
+// program is attached to.
+#if CALI_F_INGRESS
+#define CALI_HOOK_EGRESS
+#else
+#define CALI_HOOK_INGRESS
+#endif
+#endif
+
 #define CALI_RES_REDIR_BACK	108 /* packet should be sent back the same iface */
 #define CALI_RES_REDIR_IFINDEX	109 /* packet should be sent straight to
 				     * state->ct_result->ifindex_fwd
@@ -122,7 +141,7 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 		CALI_COMPILE_FLAGS == 0 ||
 		CALI_F_CT_CLEANUP ||
 		!!(CALI_COMPILE_FLAGS & CALI_CGROUP) !=
-		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_IPIP | CALI_TC_DSR | CALI_XDP_PROG | CALI_TC_PREAMBLE))
+		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_IPIP | CALI_TC_DSR | CALI_XDP_PROG | CALI_TC_PREAMBLE | CALI_TC_DEF_POLICY))
 	);
 	COMPILE_TIME_ASSERT(!CALI_F_DSR || (CALI_F_DSR && CALI_F_FROM_WEP) || (CALI_F_DSR && CALI_F_HEP));
 	COMPILE_TIME_ASSERT(CALI_F_TO_HOST || CALI_F_FROM_HOST);
