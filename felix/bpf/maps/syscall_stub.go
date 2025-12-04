@@ -16,7 +16,7 @@
 
 package maps
 
-func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error) {
+func NewIterator(mapFD FD, keySize, valueSize, maxEntries int, batchLookupSupported bool) (*Iterator, error) {
 	panic("BPF syscall stub")
 }
 
