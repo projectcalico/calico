@@ -4,7 +4,7 @@ set -e
 echo "=== Joining Kubernetes cluster as worker node ==="
 
 # Get the join command (should be passed as arguments)
-JOIN_COMMAND="$@"
+JOIN_COMMAND="$*"
 
 if [ -z "$JOIN_COMMAND" ]; then
   echo "ERROR: No join command provided"
