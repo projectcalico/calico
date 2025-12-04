@@ -4,7 +4,7 @@ name: NFTables
 
 agent:
   machine:
-    type: c1-standard-1  # Adequate for most e2e tests, since clusters run on separate machines
+    type: c1-standard-1 # Adequate for most e2e tests, since clusters run on separate machines
     os_image: ubuntu2204
 
 execution_time_limit:
@@ -39,7 +39,7 @@ global_job_config:
     - name: ENABLE_AUTOHEP
       value: "true"
     - name: PRIVATE_REGISTRY
-      value: "quay.io/"  # Pull from quay to avoid Docker Hub rate limits
+      value: "quay.io/" # Pull from quay to avoid Docker Hub rate limits
 
 blocks:
   - name: Nftables mode, arm64, WG
@@ -60,13 +60,13 @@ blocks:
                 - "rocky-linux-9-arm64"
           env_vars:
             - name: GOOGLE_REGION
-              value: us-central1  # Needed for arm machines
+              value: us-central1 # Needed for arm machines
             - name: GOOGLE_ZONE
-              value: us-central1-a  # Needed for arm machines
+              value: us-central1-a # Needed for arm machines
             - name: PROVISIONER
               value: gcp-kubeadm
             - name: STERN_CHECK
-              value: DISABLED    # Doesn't have an ARM build
+              value: DISABLED # Doesn't have an ARM build
             - name: GOOGLE_MACHINE_TYPE
               value: t2a-standard-2
             - name: ENABLE_WIREGUARD
@@ -106,7 +106,7 @@ blocks:
             - name: K8S_VERSION
               value: "stable-1"
             - name: IPV4_POD_CIDR
-              value: "172.16.0.0/16"  # Because nodes have 192.168.0.0/16 from VPC
+              value: "172.16.0.0/16" # Because nodes have 192.168.0.0/16 from VPC
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
             #  Details for why we skip these: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
@@ -118,7 +118,7 @@ blocks:
     task:
       agent:
         machine:
-          type: f1-standard-2  # Because KinD clusters run on the test runner, they need more powerful machines
+          type: f1-standard-2 # Because KinD clusters run on the test runner, they need more powerful machines
           os_image: ubuntu2204
       env_vars:
         - name: K8S_VERSION
@@ -136,14 +136,14 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
-          - name: IP_FAMILY
-            value: dual
-          - name: ENCAPSULATION_TYPE_V6
-            value: "VXLAN"
-          - name: ENCAPSULATION_TYPE
-            value: "VXLAN"
-          - name: IPV4_POD_CIDR
-            value: "192.168.0.0/16"
+            - name: IP_FAMILY
+              value: dual
+            - name: ENCAPSULATION_TYPE_V6
+              value: "VXLAN"
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            - name: IPV4_POD_CIDR
+              value: "192.168.0.0/16"
 
         - name: Nftables mode, ipv6-only
           execution_time_limit:
@@ -151,10 +151,10 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
-          - name: IP_FAMILY
-            value: ipv6
-          - name: ENCAPSULATION_TYPE_V6
-            value: "None"
+            - name: IP_FAMILY
+              value: ipv6
+            - name: ENCAPSULATION_TYPE_V6
+              value: "None"
 
 promotions:
   - name: Cleanup jobs
