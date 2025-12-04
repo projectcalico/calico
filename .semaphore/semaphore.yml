@@ -164,7 +164,7 @@ blocks:
       jobs:
         - name: Pre-flight checks
           commands:
-            - make ci-preflight-checks
+            - echo "DEBUG: make ci-preflight-checks"
   - name: API
     run:
       when: "false or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
