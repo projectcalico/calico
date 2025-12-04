@@ -15,6 +15,8 @@
 package rules_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -345,7 +347,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+			logPrefix := fmt.Sprintf("calico-packet:%s", fooPolicyID.ID())
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Enabling flow log must not have any effect
 			rrConfigNormal.FlowLogsEnabled = true
@@ -371,7 +374,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "foobar"}))
+			logPrefix := fmt.Sprintf("%s:%s", rrConfigPrefix.LogPrefix, fooPolicyID.ID())
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Enabling flow log must not have any effect
 			rrConfigPrefix.FlowLogsEnabled = true
