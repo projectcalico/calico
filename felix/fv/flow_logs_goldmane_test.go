@@ -998,7 +998,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log networkse
 			check(checkArgs{desc: "ns1 -> netset-1", srcNS: "ns1", srcAggName: "swl1-*", dstNS: "ns1", dstAggName: "netset-1"})
 			check(checkArgs{desc: "ns2 -> netset-2", srcNS: "ns2", srcAggName: "swl2-*", dstNS: "ns2", dstAggName: "netset-2"})
 			check(checkArgs{desc: "ns3 -> gns-1", srcNS: "ns3", srcAggName: "swl3-*", dstNS: flowlog.FieldNotIncluded, dstAggName: "gns-1"})
-			check(checkArgs{desc: "ns3 -> netset-3", srcNS: "ns3", srcAggName: "swl4-*", dstNS: "ns4", dstAggName: "netset-4"})
+			check(checkArgs{desc: "ns3 -> netset-4", srcNS: "ns3", srcAggName: "swl4-*", dstNS: "ns4", dstAggName: "netset-4"})
 
 			if err := flowTester.Finish(); err != nil {
 				return fmt.Errorf("Flows incorrect on Felix[0]:\n%v", err)
