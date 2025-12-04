@@ -351,6 +351,11 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 	}
 	k = m.keys[m.entryIdx*kstride : (m.entryIdx+1)*kstride]
 	v = m.values[m.entryIdx*vstride : (m.entryIdx+1)*vstride]
+	if !m.batchLookupSupported {
+		// For slow iteration, trim the key and value to their actual sizes.
+		k = k[:m.keySize]
+		v = v[:m.valueSize]
+	}
 
 	m.entryIdx++
 	m.numEntriesVisited++
