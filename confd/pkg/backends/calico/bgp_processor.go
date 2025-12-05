@@ -174,7 +174,9 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 		} else if config.NodeIP != "" {
 			config.RouterID = config.NodeIP
 		}
-		config.RouterIDComment = "# Use IPv4 address since router id is 4 octets, even in MP-BGP"
+		if ipVersion == 6 {
+			config.RouterIDComment = "# Use IPv4 address since router id is 4 octets, even in MP-BGP"
+		}
 	}
 
 	// Process bind mode and listen address (matching song-original.cfg.template)
