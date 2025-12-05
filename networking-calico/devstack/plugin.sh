@@ -25,9 +25,31 @@ if [ "${Q_AGENT}" = calico-felix ]; then
                     sudo apt-add-repository -y ppa:project-calico/master
                     REPOS_UPDATED=False
 
-                    # Also add BIRD project PPA as a package source.
-                    LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo add-apt-repository -y ppa:cz.nic-labs/bird
+                    if [ "${CALICO_BGP_MODE}" = bird ]; then
+                        # Also add BIRD project PPA as a package source.
+                        LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo add-apt-repository -y ppa:cz.nic-labs/bird
+                    fi
 
+                    # If running with OpenStack Yoga, update rtslib-fb to v2.1.76, specifically to
+                    # pick up https://github.com/open-iscsi/rtslib-fb/pull/183, in order to support
+                    # details of the file layout under /sys/kernel/config/target/iscsi/ that changed
+                    # between Ubuntu Focal and Ubuntu Jammy.
+                    #
+                    # Yoga-level OpenStack does not strictly support running on Jammy - in
+                    # particular, because of its upper-constraints.txt using an older version of
+                    # rtslib-fb that is incompatible with Jammy, and because DevStack's
+                    # SUPPORTED_DISTROS not including "jammy" - but we have been successfully
+                    # running our system test for some time with Yoga on Jammy.  So how does that
+                    # make sense?  The answer is that rtslib-fb is only used by Cinder, and we don't
+                    # use either Cinder or DevStack in our ST.
+                    #
+                    # We want to keep running DevStack CI with Yoga, and Semaphore's available
+                    # machine types mean that we now have to do that on Jammy.
+                    if [ "${DEVSTACK_BRANCH}" = unmaintained/yoga ]; then
+                        sed -i 's,rtslib-fb===2.1.74,rtslib-fb===2.1.76,' ${REQUIREMENTS_DIR}/upper-constraints.txt
+                        grep rtslib-fb ${REQUIREMENTS_DIR}/upper-constraints.txt
+                        pip_install rtslib-fb==2.1.76
+                    fi
                     ;;
 
                 install)
@@ -41,8 +63,10 @@ if [ "${Q_AGENT}" = calico-felix ]; then
                     # Install ipset.
                     install_package ipset
 
-                    # Install BIRD.
-                    install_package bird
+                    if [ "${CALICO_BGP_MODE}" = bird ]; then
+                        # Install BIRD.
+                        install_package bird
+                    fi
 
                     # Install the Calico agent.
                     sudo mkdir -p /etc/calico
@@ -138,8 +162,9 @@ EOF
                     # maintain BIRD config for the cluster.
                     export ETCDCTL_API=3
                     export ETCDCTL_ENDPOINTS=http://$SERVICE_HOST:$ETCD_PORT
-                    run_process calico-bird \
-                      "${DEST}/calico/devstack/auto-bird-conf.sh ${HOST_IP} ${ETCD_BIN_DIR}/etcdctl"
+                    if [ "${CALICO_BGP_MODE}" = bird ]; then
+                        run_process calico-bird "${DEST}/calico/devstack/auto-bird-conf.sh ${HOST_IP} ${ETCD_BIN_DIR}/etcdctl"
+                    fi
 
                     # Run the Calico DHCP agent.
                     sudo mkdir /var/log/neutron || true
