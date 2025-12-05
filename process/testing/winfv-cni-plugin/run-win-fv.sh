@@ -6,6 +6,7 @@ set -e
 set -x
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export REPO_DIR="${SCRIPT_DIR}/../../.."
 export ASO_DIR="${SCRIPT_DIR}/../aso"
 export UTILS_DIR="${SCRIPT_DIR}/../util"
 
@@ -13,20 +14,24 @@ export UTILS_DIR="${SCRIPT_DIR}/../util"
 
 : ${BACKEND:?Error: BACKEND is not set}
 
+# Build Windows executables and copy to ASO directory.
+pushd ${REPO_DIR}
+make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
+popd
+cp ${REPO_DIR}/cni-plugin/bin/windows/*.exe ${ASO_DIR}/windows
+
 # Create cluster with one Linux node and one Windows node.
 export LINUX_NODE_COUNT=1
 export WINDOWS_NODE_COUNT=1
 export VERBOSE=true # Enable verbose output for debugging as nodes count is small.
 
 # Create kubeadm cluster
-cd "${ASO_DIR}"
+pushd "${ASO_DIR}"
 make setup-kubeadm
-
-# Install Calico
-make install-calico
+popd
 
 # Setup and run FV test
-cd "${SCRIPT_DIR}"
+pushd "${SCRIPT_DIR}"
 BACKEND=${BACKEND} ./setup-fv.sh | tee setupfv.log
 
 # Copy report directory from windows node.
@@ -56,4 +61,5 @@ then
     exit 1
 fi
 
+popd
 echo "Windows CNI-Plugin FV test completed."

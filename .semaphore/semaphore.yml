@@ -63,7 +63,6 @@ blocks:
           - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-cni-plugin/report
           - export LOGS_DIR=~/fv.log
           - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
-          - cd cni-plugin
       epilogue:
         always:
           commands:
@@ -86,7 +85,7 @@ blocks:
             - export BACKEND=l2bridge
             - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
-            - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
+            - .semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
 after_pipeline:
   task:
     jobs:

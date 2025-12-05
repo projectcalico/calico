@@ -229,9 +229,8 @@ function get_and_export_node_ips() {
   # Wait for vm deployments with ASO v2 patterns
   log_info "Getting and exporting node IPs..."
   
-  # Wait for and get Linux node IPs
-  declare -a LINUX_PIPS=()
-  declare -a LINUX_EIPS=()
+  LINUX_PIPS=()
+  LINUX_EIPS=()
   
   for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
     local vm_name="vm-linux-${i}"
@@ -271,9 +270,8 @@ function get_and_export_node_ips() {
   export LINUX_PIPS_STR="${LINUX_PIPS[*]}"
   export LINUX_EIPS_STR="${LINUX_EIPS[*]}"
   
-  # Wait for and get Windows node IPs
-  declare -a WINDOWS_PIPS=()
-  declare -a WINDOWS_EIPS=()
+  WINDOWS_PIPS=()
+  WINDOWS_EIPS=()
   
   for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
     local vm_name="vm-windows-${i}"
