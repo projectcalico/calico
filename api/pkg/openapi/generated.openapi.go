@@ -2642,6 +2642,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"logPrefixMetadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogPrefixMetadata controls whether to include metadata with LogPrefix. [Default: None]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"logPrefix": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]",

@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -610,14 +611,9 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
-		logPrefix := r.LogPrefix
-		if logPrefix == "" {
-			logPrefix = "calico-packet"
-		}
-		logMsg := fmt.Sprintf("%s:%s", logPrefix, id.ID())
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch(),
-			Action: r.Log(logMsg),
+			Action: r.Log(r.generateLogPrefix(id)),
 		})
 	}
 
@@ -710,6 +706,19 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	}
 
 	return finalRules
+}
+
+func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker) string {
+	logPrefix := ""
+	if len(r.LogPrefix) != 0 {
+		logPrefix = r.LogPrefix
+	}
+
+	switch r.LogPrefixMetadata {
+	case string(v3.LogPrefixMetadataPolicy):
+		logPrefix = fmt.Sprintf("%s:%s", logPrefix, id.ID())
+	}
+	return logPrefix
 }
 
 func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
