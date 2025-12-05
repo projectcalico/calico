@@ -4,7 +4,7 @@ name: NFTables
 
 agent:
   machine:
-    type: c1-standard-1
+    type: c1-standard-1 # Adequate for most e2e tests, since clusters run on separate machines
     os_image: ubuntu2204
 
 execution_time_limit:
@@ -21,30 +21,32 @@ global_job_config:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
   env_vars:
-    # The skip "EndpointSlice\|Services\sshould" is needed to skip Endpoint slice tests which are only possible in k8s 1.21+
-    # The skip "Ingress.API|IngressClass.API" is needed to skip Ingress tests which are only possible in k8s 1.21+
-    # The skip "Proxy.version.v1.*pod.and.service.Proxy.\[" is needed to skip an upstream test that only works on k8s 1.24+
+    # The skips for sig-* are tests that are not relevant to OSS Calico
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[)
+      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)
     - name: K8S_VERSION
       value: "stable-3"
     - name: FUNCTIONAL_AREA
       value: "nftables.yml"
-    - name: IPV4_POD_CIDR
-      value: "192.168.0.0/16"
     - name: DATAPLANE
       value: CalicoNftables
+    - name: KUBE_PROXY_MODE
+      value: "nftables"
+    - name: INSTALLER
+      value: "operator"
     - name: USE_PRIVATE_REGISTRY
       value: "true"
+    - name: ENABLE_AUTOHEP
+      value: "true"
     - name: PRIVATE_REGISTRY
-      value: "quay.io/"
+      value: "quay.io/" # Pull from quay to avoid Docker Hub rate limits
 
 blocks:
-  - name: Nftables mode
+  - name: Nftables mode, arm64, WG
     dependencies: []
     task:
       jobs:
-        - name: kdd
+        - name: Nftables mode, arm64, WG
           execution_time_limit:
             hours: 7
           commands:
@@ -52,11 +54,107 @@ blocks:
           matrix:
             - env_var: K8S_VERSION
               values: ["stable"]
+            - env_var: CLUSTER_IMAGE
+              values:
+                - "ubuntu-2204-lts-arm64"
+                - "rocky-linux-9-arm64"
+          env_vars:
+            - name: GOOGLE_REGION
+              value: us-central1 # Needed for arm machines
+            - name: GOOGLE_ZONE
+              value: us-central1-a # Needed for arm machines
+            - name: PROVISIONER
+              value: gcp-kubeadm
+            - name: STERN_CHECK
+              value: DISABLED # Doesn't have an ARM build
+            - name: GOOGLE_MACHINE_TYPE
+              value: t2a-standard-2
+            - name: ENABLE_WIREGUARD
+              value: "true"
+
+  - name: Nftables mode, EKS
+    dependencies: []
+    task:
+      jobs:
+        - name: EKS w/ aws CNI
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: CNI_PLUGIN
+              values: ["AmazonVPC"]
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-eks"
+            - name: K8S_VERSION
+              value: "stable-1"
+
+        - name: EKS w/ Calico CNI
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: CNI_PLUGIN
+              values: ["Calico"]
+          env_vars:
+            - name: INSTALLER
+              value: "helmerator"
+            - name: PROVISIONER
+              value: "aws-eks"
+            - name: K8S_VERSION
+              value: "stable-1"
+            - name: IPV4_POD_CIDR
+              value: "172.16.0.0/16" # Because nodes have 192.168.0.0/16 from VPC
+            - name: IPAM_TEST_POOL_SUBNET
+              value: "10.0.0.0/29"
+            #  Details for why we skip these: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+
+  - name: Nftables mode, KinD
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-2 # Because KinD clusters run on the test runner, they need more powerful machines
+          os_image: ubuntu2204
       env_vars:
-        - name: USE_VXLAN
-          value: "true"
+        - name: K8S_VERSION
+          value: "stable-3"
         - name: PROVISIONER
-          value: gcp-kubeadm
+          value: local-kind
+        - name: ENABLE_DUAL_STACK
+          value: "true"
+        - name: IPV6_POD_CIDR
+          value: "fd00:10:244::/64"
+      jobs:
+        - name: Nftables mode, vxlan, dual-stack
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: IP_FAMILY
+              value: dual
+            - name: ENCAPSULATION_TYPE_V6
+              value: "VXLAN"
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            - name: IPV4_POD_CIDR
+              value: "192.168.0.0/16"
+
+        - name: Nftables mode, ipv6-only
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: IP_FAMILY
+              value: ipv6
+            - name: ENCAPSULATION_TYPE_V6
+              value: "None"
 
 promotions:
   - name: Cleanup jobs
