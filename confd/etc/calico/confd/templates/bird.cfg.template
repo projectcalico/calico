@@ -1,4 +1,4 @@
-{{- $config := getBGPConfig . -}}
+{{- $config := getBGPConfig 4 . -}}
 
 function apply_communities ()
 {

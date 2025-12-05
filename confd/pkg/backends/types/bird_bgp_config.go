@@ -2,7 +2,7 @@ package types
 
 // BirdBGPConfigProvider is an interface for clients that can provide BIRD BGP configuration
 type BirdBGPConfigProvider interface {
-	GetBirdBGPConfig() (*BirdBGPConfig, error)
+	GetBirdBGPConfig(ipVersion int) (*BirdBGPConfig, error)
 }
 
 // BirdBGPConfig represents the processed BGP configuration for templates

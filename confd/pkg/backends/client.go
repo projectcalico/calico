@@ -11,5 +11,5 @@ type StoreClient interface {
 	GetValues(keys []string) (map[string]string, error)
 	WatchPrefix(prefix string, keys []string, waitIndex uint64, stopChan chan bool) (string, error)
 	GetCurrentRevision() uint64
-	GetBirdBGPConfig() (*types.BirdBGPConfig, error)
+	GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error)
 }

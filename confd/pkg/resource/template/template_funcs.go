@@ -60,10 +60,10 @@ func addFuncs(out, in map[string]interface{}) {
 
 // addCalicoFuncs adds Calico-specific template functions
 func addCalicoFuncs(funcMap map[string]interface{}, storeClient interface{}) {
-	// Add getBGPConfig function that takes the client as parameter
-	funcMap["getBGPConfig"] = func(client interface{}) (interface{}, error) {
+	// Add getBGPConfig function that takes the ipVersion and client as parameters
+	funcMap["getBGPConfig"] = func(ipVersion int, client interface{}) (interface{}, error) {
 		if calicoClient, ok := client.(types.BirdBGPConfigProvider); ok {
-			config, err := calicoClient.GetBirdBGPConfig()
+			config, err := calicoClient.GetBirdBGPConfig(ipVersion)
 			if err != nil {
 				// Return error to fail template execution and prevent broken config
 				return nil, err

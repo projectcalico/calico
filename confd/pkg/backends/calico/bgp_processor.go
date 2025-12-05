@@ -28,21 +28,31 @@ type bgpConfigCache struct {
 
 var (
 	configCache           *bgpConfigCache
+	configCacheV6         *bgpConfigCache
 	cacheValidityDuration = 30 * time.Second
 )
 
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
-func (c *client) GetBirdBGPConfig() (*types.BirdBGPConfig, error) {
-	// Check cache validity
+// ipVersion should be 4 for IPv4 or 6 for IPv6
+func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
+	// Use separate caches for IPv4 and IPv6
 	currentRevision := c.GetCurrentRevision()
-	if configCache != nil &&
+	
+	if ipVersion == 4 && configCache != nil &&
 		time.Since(configCache.timestamp) < cacheValidityDuration &&
 		configCache.revision == currentRevision {
-		log.Debug("BGP config cache hit, returning cached configuration")
+		log.Debug("BGP config cache hit (IPv4), returning cached configuration")
 		return configCache.config, nil
 	}
+	
+	if ipVersion == 6 && configCacheV6 != nil &&
+		time.Since(configCacheV6.timestamp) < cacheValidityDuration &&
+		configCacheV6.revision == currentRevision {
+		log.Debug("BGP config cache hit (IPv6), returning cached configuration")
+		return configCacheV6.config, nil
+	}
 
-	log.Debug("BGP config cache miss or expired, processing new configuration")
+	log.Debugf("BGP config cache miss or expired, processing new configuration for IPv%d", ipVersion)
 
 	config := &types.BirdBGPConfig{
 		NodeName:    NodeName,
@@ -51,19 +61,19 @@ func (c *client) GetBirdBGPConfig() (*types.BirdBGPConfig, error) {
 		Communities: make([]types.CommunityRule, 0),
 	}
 
-	log.Debug("Initialized BGP config structure")
+	log.Debugf("Initialized BGP config structure for IPv%d", ipVersion)
 
 	// Get basic node configuration
-	if err := c.populateNodeConfig(config); err != nil {
+	if err := c.populateNodeConfig(config, ipVersion); err != nil {
 		log.WithError(err).Warn("Failed to populate node configuration")
 	}
-	log.Debugf("Populated node configuration: node=%s, ip=%s, ipv6=%s, as=%s", config.NodeName, config.NodeIP, config.NodeIPv6, config.AsNumber)
+	log.Debugf("Populated node configuration (IPv%d): node=%s, ip=%s, ipv6=%s, as=%s", ipVersion, config.NodeName, config.NodeIP, config.NodeIPv6, config.AsNumber)
 
 	// Process all peer types
-	if err := c.processPeers(config); err != nil {
-		log.WithError(err).Warn("Failed to process BGP peers")
+	if err := c.processPeers(config, ipVersion); err != nil {
+		log.WithError(err).Warnf("Failed to process BGP peers for IPv%d", ipVersion)
 	}
-	log.Debugf("Processed BGP peers: found %d peers", len(config.Peers))
+	log.Debugf("Processed BGP peers (IPv%d): found %d peers", ipVersion, len(config.Peers))
 
 	// Sort peers by name for consistent output ordering
 	sort.Slice(config.Peers, func(i, j int) bool {
@@ -71,30 +81,39 @@ func (c *client) GetBirdBGPConfig() (*types.BirdBGPConfig, error) {
 	})
 
 	// Process community rules
-	if err := c.processCommunityRules(config); err != nil {
-		log.WithError(err).Warn("Failed to process community rules")
+	if err := c.processCommunityRules(config, ipVersion); err != nil {
+		log.WithError(err).Warnf("Failed to process community rules for IPv%d", ipVersion)
 	}
-	log.Debugf("Processed community rules: found %d rules", len(config.Communities))
+	log.Debugf("Processed community rules (IPv%d): found %d rules", ipVersion, len(config.Communities))
 
 	// Process BGP filters
-	if err := c.processBGPFilters(config); err != nil {
-		log.WithError(err).Warn("Failed to process BGP filters")
+	if err := c.processBGPFilters(config, ipVersion); err != nil {
+		log.WithError(err).Warnf("Failed to process BGP filters for IPv%d", ipVersion)
 	}
-	log.Debugf("Processed BGP filters: found %d filters", len(config.Filters))
+	log.Debugf("Processed BGP filters (IPv%d): found %d filters", ipVersion, len(config.Filters))
 
-	// Update cache
-	configCache = &bgpConfigCache{
-		config:    config,
-		timestamp: time.Now(),
-		revision:  currentRevision,
+	// Update appropriate cache
+	if ipVersion == 4 {
+		configCache = &bgpConfigCache{
+			config:    config,
+			timestamp: time.Now(),
+			revision:  currentRevision,
+		}
+		log.Debug("Updated BGP config cache for IPv4")
+	} else {
+		configCacheV6 = &bgpConfigCache{
+			config:    config,
+			timestamp: time.Now(),
+			revision:  currentRevision,
+		}
+		log.Debug("Updated BGP config cache for IPv6")
 	}
 
-	log.Debug("Updated BGP config cache")
 	return config, nil
 }
 
 // populateNodeConfig fills in basic node configuration
-func (c *client) populateNodeConfig(config *types.BirdBGPConfig) error {
+func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) error {
 	// Get node IPv4 address
 	nodeIPv4Key := fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v4", NodeName)
 	if nodeIP, err := c.GetValue(nodeIPv4Key); err == nil {
@@ -164,8 +183,12 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig) error {
 	}
 
 	// Set listen address if bind mode is NodeIP and we have a node IP
-	if bindMode == "NodeIP" && config.NodeIP != "" {
-		config.ListenAddress = config.NodeIP
+	if bindMode == "NodeIP" {
+		if ipVersion == 6 && config.NodeIPv6 != "" {
+			config.ListenAddress = config.NodeIPv6
+		} else if ipVersion == 4 && config.NodeIP != "" {
+			config.ListenAddress = config.NodeIP
+		}
 	}
 
 	// Process listen port (node-specific takes precedence over global)
@@ -226,30 +249,30 @@ func hashToIPv4(nodeName string) string {
 }
 
 // processPeers processes all BGP peers (mesh, global, and node-specific)
-func (c *client) processPeers(config *types.BirdBGPConfig) error {
+func (c *client) processPeers(config *types.BirdBGPConfig, ipVersion int) error {
 	// Get node's route reflector cluster ID
 	nodeClusterID, _ := c.GetValue(fmt.Sprintf("/calico/bgp/v1/host/%s/rr_cluster_id", NodeName))
 
 	// Process node-to-node mesh peers
-	if err := c.processMeshPeers(config, nodeClusterID); err != nil {
-		log.WithError(err).Warn("Failed to process mesh peers")
+	if err := c.processMeshPeers(config, nodeClusterID, ipVersion); err != nil {
+		log.WithError(err).Warnf("Failed to process mesh peers for IPv%d", ipVersion)
 	}
 
 	// Process global peers (both regular and local BGP peers)
-	if err := c.processGlobalPeers(config, nodeClusterID); err != nil {
-		log.WithError(err).Warn("Failed to process global peers")
+	if err := c.processGlobalPeers(config, nodeClusterID, ipVersion); err != nil {
+		log.WithError(err).Warnf("Failed to process global peers for IPv%d", ipVersion)
 	}
 
 	// Process node-specific peers (both regular and local BGP peers)
-	if err := c.processNodePeers(config, nodeClusterID); err != nil {
-		log.WithError(err).Warn("Failed to process node-specific peers")
+	if err := c.processNodePeers(config, nodeClusterID, ipVersion); err != nil {
+		log.WithError(err).Warnf("Failed to process node-specific peers for IPv%d", ipVersion)
 	}
 
 	return nil
 }
 
 // processMeshPeers processes node-to-node mesh BGP peers
-func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID string) error {
+func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
 	// If this node is a route reflector, skip mesh processing
 	if nodeClusterID != "" {
 		log.Infof("Node %s is a route reflector with cluster ID %s, skipping mesh", NodeName, nodeClusterID)
@@ -283,6 +306,18 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 	meshPassword, _ := c.GetValue("/calico/bgp/v1/global/node_mesh_password")
 	meshRestartTime, _ := c.GetValue("/calico/bgp/v1/global/node_mesh_restart_time")
 
+	// Determine which IP address field to use
+	ipAddrSuffix := "ip_addr_v4"
+	if ipVersion == 6 {
+		ipAddrSuffix = "ip_addr_v6"
+	}
+	
+	// Get the current node's IP for this version
+	currentNodeIP := config.NodeIP
+	if ipVersion == 6 {
+		currentNodeIP = config.NodeIPv6
+	}
+
 	// Get all host IP addresses
 	hostIPsMap, err := c.GetValues([]string{"/calico/bgp/v1/host"})
 	if err != nil {
@@ -300,14 +335,14 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 	}
 
 	for host := range hostsMap {
-		peerIPKey := fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v4", host)
+		peerIPKey := fmt.Sprintf("/calico/bgp/v1/host/%s/%s", host, ipAddrSuffix)
 		peerIP, err := c.GetValue(peerIPKey)
 		if err != nil || peerIP == "" {
 			continue
 		}
 
 		// Skip ourselves
-		if peerIP == config.NodeIP {
+		if peerIP == currentNodeIP {
 			continue
 		}
 
@@ -333,17 +368,24 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 			peerListenPort, _ = c.GetValue("/calico/bgp/v1/global/listen_port")
 		}
 
-		// Create mesh peer
+		// Create mesh peer name based on IP version
+		var peerName string
+		if ipVersion == 4 {
+			peerName = fmt.Sprintf("Mesh_%s", strings.ReplaceAll(peerIP, ".", "_"))
+		} else {
+			peerName = fmt.Sprintf("Mesh_%s", strings.ReplaceAll(peerIP, ":", "_"))
+		}
+		
 		// Mesh peers have same AS, so use true for calico_export_to_bgp_peers
 		exportFilter := "calico_export_to_bgp_peers(true);\n    reject;"
 
 		peer := types.BirdBGPPeer{
-			Name:            fmt.Sprintf("Mesh_%s", strings.ReplaceAll(peerIP, ".", "_")),
+			Name:            peerName,
 			IP:              peerIP,
 			Port:            peerListenPort,
 			AsNumber:        peerAS,
 			Type:            "mesh",
-			SourceAddr:      config.NodeIP,
+			SourceAddr:      currentNodeIP,
 			ImportFilter:    "", // Empty means "import all;" in template
 			ExportFilter:    exportFilter,
 			Password:        meshPassword,
@@ -352,7 +394,7 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		}
 
 		// Make mesh unidirectional to avoid race conditions
-		if peerIP > config.NodeIP {
+		if peerIP > currentNodeIP {
 			peer.Passive = true
 			peer.PassiveComment = " # Mesh is unidirectional, peer will connect to us."
 		}
@@ -364,15 +406,21 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 }
 
 // processGlobalPeers processes global BGP peers (both regular and local)
-func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID string) error {
+func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
+	// Determine peer path based on IP version
+	peerPath := "/calico/bgp/v1/global/peer_v4"
+	if ipVersion == 6 {
+		peerPath = "/calico/bgp/v1/global/peer_v6"
+	}
+	
 	// Process regular global peers
-	kvPairs, err := c.GetValues([]string{"/calico/bgp/v1/global/peer_v4"})
+	kvPairs, err := c.GetValues([]string{peerPath})
 	if err != nil {
-		log.WithError(err).Debug("No global peers found or error retrieving them")
+		log.WithError(err).Debugf("No global IPv%d peers found or error retrieving them", ipVersion)
 		return nil
 	}
 
-	log.Debugf("Found %d global peer entries", len(kvPairs))
+	log.Debugf("Found %d global IPv%d peer entries", len(kvPairs), ipVersion)
 
 	for key, value := range kvPairs {
 		log.Debugf("Processing global peer key: %s", key)
@@ -388,7 +436,7 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 			continue
 		}
 
-		peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID)
+		peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID, ipVersion)
 		if peer != nil {
 			peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
 			config.Peers = append(config.Peers, *peer)
@@ -410,7 +458,7 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 			continue
 		}
 
-		peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID)
+		peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
 		if peer != nil {
 			peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
 			config.Peers = append(config.Peers, *peer)
@@ -422,8 +470,13 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 }
 
 // processNodePeers processes node-specific BGP peers (both regular and local)
-func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID string) error {
-	peerKey := fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v4", NodeName)
+func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
+	// Determine peer path based on IP version
+	peerSuffix := "peer_v4"
+	if ipVersion == 6 {
+		peerSuffix = "peer_v6"
+	}
+	peerKey := fmt.Sprintf("/calico/bgp/v1/host/%s/%s", NodeName, peerSuffix)
 
 	// Process regular node-specific peers
 	kvPairs, err := c.GetValues([]string{peerKey})
@@ -439,7 +492,7 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 				continue
 			}
 
-			peer := c.buildPeerFromData(peerData, "Node", config, nodeClusterID)
+			peer := c.buildPeerFromData(peerData, "Node", config, nodeClusterID, ipVersion)
 			if peer != nil {
 				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
 				config.Peers = append(config.Peers, *peer)
@@ -460,7 +513,7 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 				continue
 			}
 
-			peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID)
+			peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
 			if peer != nil {
 				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
 				config.Peers = append(config.Peers, *peer)
@@ -472,23 +525,32 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 }
 
 // buildPeerFromData constructs a BirdBGPPeer from raw peer data
-func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, config *types.BirdBGPConfig, nodeClusterID string) *types.BirdBGPPeer {
+func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) *types.BirdBGPPeer {
 	peerIP, ok := raw["ip"].(string)
 	if !ok || peerIP == "" {
 		log.Debugf("buildPeerFromData: no IP found in peer data, ok=%v, peerIP=%s", ok, peerIP)
 		return nil
 	}
 
-	// Skip ourselves
-	if peerIP == config.NodeIP {
-		log.Debugf("buildPeerFromData: skipping ourselves (peerIP=%s, NodeIP=%s)", peerIP, config.NodeIP)
+	// Skip ourselves - check appropriate IP based on version
+	currentNodeIP := config.NodeIP
+	if ipVersion == 6 {
+		currentNodeIP = config.NodeIPv6
+	}
+	if peerIP == currentNodeIP {
+		log.Debugf("buildPeerFromData: skipping ourselves (peerIP=%s, currentNodeIP=%s)", peerIP, currentNodeIP)
 		return nil
 	}
 
 	log.Debugf("buildPeerFromData: building peer for IP=%s, prefix=%s", peerIP, prefix)
 
-	// Generate peer name
-	peerName := fmt.Sprintf("%s_%s", prefix, strings.ReplaceAll(peerIP, ".", "_"))
+	// Generate peer name based on IP version
+	var peerName string
+	if ipVersion == 4 {
+		peerName = fmt.Sprintf("%s_%s", prefix, strings.ReplaceAll(peerIP, ".", "_"))
+	} else {
+		peerName = fmt.Sprintf("%s_%s", prefix, strings.ReplaceAll(peerIP, ":", "_"))
+	}
 	if port, ok := raw["port"].(float64); ok && port > 0 {
 		peerName = fmt.Sprintf("%s_port_%.0f", peerName, port)
 	}
@@ -521,19 +583,19 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 		peer.TTLSecurity = "off"
 	}
 
-	// Source address
+	// Source address - use appropriate node IP based on version
 	if src, ok := raw["source_addr"].(string); ok && src == "UseNodeIP" {
-		peer.SourceAddr = config.NodeIP
+		peer.SourceAddr = currentNodeIP
 	}
 
 	// Filters - build inline filter blocks
-	peer.ImportFilter = c.buildImportFilter(raw)
+	peer.ImportFilter = c.buildImportFilter(raw, ipVersion)
 	// Use effective node AS number (local_as_num if set, otherwise node AS)
 	effectiveNodeAS := config.AsNumber
 	if peer.LocalAsNumber != "" {
 		effectiveNodeAS = peer.LocalAsNumber
 	}
-	peer.ExportFilter = c.buildExportFilter(raw, peer.AsNumber, effectiveNodeAS)
+	peer.ExportFilter = c.buildExportFilter(raw, peer.AsNumber, effectiveNodeAS, ipVersion)
 
 	// Optional fields
 	if pwd, ok := raw["password"].(string); ok {
@@ -576,14 +638,15 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 		}
 	}
 
-	// Passive for Calico nodes (unidirectional peering)
-	// Only apply to global and local_workload peers, NOT node-specific peers
-	// Node-specific peers only use passive if explicitly set via passive_mode
-	if peer.Type == "global" || peer.Type == "local_workload" {
+	if (peer.Type == "mesh" || peer.Type == "global" || peer.Type == "local_workload") && !peer.Passive {
 		if calicoNode, ok := raw["calico_node"].(bool); ok && calicoNode {
-			if peerIP > config.NodeIP {
+			if peerIP > currentNodeIP {
 				peer.Passive = true
-				peer.PassiveComment = " # Peering is unidirectional, peer will connect to us."
+				if peer.Type == "mesh" {
+					peer.PassiveComment = " # Mesh is unidirectional, peer will connect to us."
+				} else {
+					peer.PassiveComment = " # Peering is unidirectional, peer will connect to us."
+				}
 			}
 		}
 	}
@@ -615,8 +678,16 @@ func truncateBGPFilterName(name string) string {
 }
 
 // buildImportFilter builds the import filter block
-func (c *client) buildImportFilter(raw map[string]interface{}) string {
+func (c *client) buildImportFilter(raw map[string]interface{}, ipVersion int) string {
 	var filterLines []string
+
+	// Determine which import field to check based on IP version
+	importField := "importV4"
+	filterSuffix := "V4"
+	if ipVersion == 6 {
+		importField = "importV6"
+		filterSuffix = "V6"
+	}
 
 	// Process BGP filters
 	if filters, ok := raw["filters"].([]interface{}); ok {
@@ -627,9 +698,9 @@ func (c *client) buildImportFilter(raw map[string]interface{}) string {
 					var filterSpec map[string]interface{}
 					if json.Unmarshal([]byte(filterValue), &filterSpec) == nil {
 						if spec, ok := filterSpec["spec"].(map[string]interface{}); ok {
-							if importV4, ok := spec["importV4"].([]interface{}); ok && len(importV4) > 0 {
+							if importRules, ok := spec[importField].([]interface{}); ok && len(importRules) > 0 {
 								truncatedName := truncateBGPFilterName(filterName)
-								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilterV4'();", truncatedName))
+								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'();", truncatedName, filterSuffix))
 							}
 						}
 					}
@@ -643,8 +714,16 @@ func (c *client) buildImportFilter(raw map[string]interface{}) string {
 }
 
 // buildExportFilter builds the export filter block
-func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS string) string {
+func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS string, ipVersion int) string {
 	var filterLines []string
+
+	// Determine which export field to check based on IP version
+	exportField := "exportV4"
+	filterSuffix := "V4"
+	if ipVersion == 6 {
+		exportField = "exportV6"
+		filterSuffix = "V6"
+	}
 
 	// Process BGP filters
 	if filters, ok := raw["filters"].([]interface{}); ok {
@@ -655,9 +734,9 @@ func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS st
 					var filterSpec map[string]interface{}
 					if json.Unmarshal([]byte(filterValue), &filterSpec) == nil {
 						if spec, ok := filterSpec["spec"].(map[string]interface{}); ok {
-							if exportV4, ok := spec["exportV4"].([]interface{}); ok && len(exportV4) > 0 {
+							if exportRules, ok := spec[exportField].([]interface{}); ok && len(exportRules) > 0 {
 								truncatedName := truncateBGPFilterName(filterName)
-								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilterV4'();", truncatedName))
+								filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'();", truncatedName, filterSuffix))
 							}
 						}
 					}
@@ -675,10 +754,16 @@ func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS st
 }
 
 // processCommunityRules processes BGP community advertisements
-func (c *client) processCommunityRules(config *types.BirdBGPConfig) error {
+func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion int) error {
+	// Determine path suffix based on IP version
+	ipSuffix := "ip_v4"
+	if ipVersion == 6 {
+		ipSuffix = "ip_v6"
+	}
+	
 	// Try node-specific first, then fall back to global
-	nodeKey := fmt.Sprintf("/calico/bgp/v1/host/%s/prefix_advertisements/ip_v4", NodeName)
-	globalKey := "/calico/bgp/v1/global/prefix_advertisements/ip_v4"
+	nodeKey := fmt.Sprintf("/calico/bgp/v1/host/%s/prefix_advertisements/%s", NodeName, ipSuffix)
+	globalKey := fmt.Sprintf("/calico/bgp/v1/global/prefix_advertisements/%s", ipSuffix)
 
 	var communitiesKey string
 	if _, err := c.GetValue(nodeKey); err == nil {
@@ -745,7 +830,7 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig) error {
 }
 
 // TODO: processBGPFilters processes BGP filter definitions
-func (c *client) processBGPFilters(config *types.BirdBGPConfig) error {
+func (c *client) processBGPFilters(config *types.BirdBGPConfig, ipVersion int) error {
 	// This would process BGP filter resources from the datastore
 	// For now, we'll include standard filters.
 
