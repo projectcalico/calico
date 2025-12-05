@@ -487,6 +487,10 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 		cc.registerInformers(serviceInformer, namespaceInformer)
 	}
 
+	// Register the policy name transormer controller.
+	policyMigrator := networkpolicy.NewMigratorController(ctx, k8sClientset, calicoClient)
+	cc.controllers["NetworkPolicyMigrator"] = policyMigrator
+
 	// We don't need the full Pod object. In order to reduce memory usage, add a transform that only
 	// includes the fields we need.
 	if err := podInformer.SetTransform(converter.PodTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
