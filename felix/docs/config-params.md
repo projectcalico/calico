@@ -429,6 +429,19 @@ The log prefix that Felix uses when rendering LOG rules.
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | `calico-packet` |
 
+### `LogPrefixMetadata` (config file) / `logPrefixMetadata` (YAML)
+
+Controls whether to include metadata with LogPrefix.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogPrefixMetadata` |
+| Encoding (env var/config file) | One of: <code>None</code>, <code>Policy</code> (case insensitive) |
+| Default value (above encoding) | `None` |
+| `FelixConfiguration` field | `logPrefixMetadata` (YAML) `LogPrefixMetadata` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"None"</code>, <code>"Policy"</code>. |
+| Default value (YAML) | `None` |
+
 ### `LogSeverityFile` (config file) / `logSeverityFile` (YAML)
 
 The log severity above which logs are sent to the log file.

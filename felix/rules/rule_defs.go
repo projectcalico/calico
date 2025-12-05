@@ -425,6 +425,7 @@ type Config struct {
 	RouteSource                 string
 
 	LogPrefix            string
+	LogPrefixMetadata    string
 	EndpointToHostAction string
 	FilterAllowAction    string
 	MangleAllowAction    string
