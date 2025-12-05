@@ -31,14 +31,14 @@
 # - Azure credentials (AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET)
 #
 
-VMSS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+: ${ASO_DIR:="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"}
 
-. ${VMSS_SCRIPT_DIR}/export-env.sh
+. ${ASO_DIR}/export-env.sh
 
-. ${VMSS_SCRIPT_DIR}/../util/utils.sh
+. ${ASO_DIR}/../util/utils.sh
 
-: ${KUBECTL:=${VMSS_SCRIPT_DIR}/bin/kubectl}
-: ${GOMPLATE:=${VMSS_SCRIPT_DIR}/bin/gomplate}
+: ${KUBECTL:=${ASO_DIR}/bin/kubectl}
+: ${GOMPLATE:=${ASO_DIR}/bin/gomplate}
 
 # Trap function to run diagnostics on non-zero exit
 function exit_handler() {
@@ -101,7 +101,7 @@ function apply_azure_crds() {
   # Generate and export a secure password for Windows RDP.
   export PASSWORD=$(openssl rand -base64 16)
   export PASSWORD_BASE64=$(echo -n "$PASSWORD" | base64)
-  cat << EOF > ${VMSS_SCRIPT_DIR}/password.txt
+  cat << EOF > ${ASO_DIR}/password.txt
 -------------Connect to Windows Instances-------------
 username: winfv 
 password: $PASSWORD
@@ -114,8 +114,8 @@ EOF
   log_info "Machine SSH key generated in ${SSH_KEY_FILE}"
   export PUBLIC_KEY=$(cat ${SSH_KEY_FILE}.pub)
 
-  rm -rf ${VMSS_SCRIPT_DIR}/infra/manifests || true
-  ${GOMPLATE} --input-dir ${VMSS_SCRIPT_DIR}/infra/templates --output-dir ${VMSS_SCRIPT_DIR}/infra/manifests
+  rm -rf ${ASO_DIR}/infra/manifests || true
+  ${GOMPLATE} --input-dir ${ASO_DIR}/infra/templates --output-dir ${ASO_DIR}/infra/manifests
   log_info "Generated manifests with gomplate"
 
   # Apply resources in dependency order with ASO v2 patterns
@@ -123,7 +123,7 @@ EOF
   
   # Step 1: Resource Group (foundational)  
   log_info "Creating Resource Group..."
-  ${KUBECTL} apply -f ${VMSS_SCRIPT_DIR}/infra/manifests/resource-group.yaml
+  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/resource-group.yaml
 
   if ! wait_for_aso_resource "resourcegroup" "$AZURE_RESOURCE_GROUP" "winfv" "300s"; then
     log_error "Failed to create Resource Group"
@@ -132,8 +132,8 @@ EOF
   
   # Step 2: Networking components
   log_info "Creating networking components..."
-  ${KUBECTL} apply -f ${VMSS_SCRIPT_DIR}/infra/manifests/vnet.yaml
-  ${KUBECTL} apply -f ${VMSS_SCRIPT_DIR}/infra/manifests/security-group.yaml
+  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vnet.yaml
+  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/security-group.yaml
   
   # Wait for VNet to be ready before proceeding
   if ! wait_for_aso_resource "virtualnetwork" "vnet-winfv" "winfv" "300s"; then
@@ -143,12 +143,12 @@ EOF
   
   # Step 3: Secrets
   log_info "Creating secrets..."
-  ${KUBECTL} apply -f ${VMSS_SCRIPT_DIR}/infra/manifests/password.yaml
+  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/password.yaml
   
   # Step 4: Virtual Machines and Network Resources
   log_info "Creating Virtual Machines and network resources..."
-  ${KUBECTL} apply -f ${VMSS_SCRIPT_DIR}/infra/manifests/vmss-linux.yaml
-  ${KUBECTL} apply -f ${VMSS_SCRIPT_DIR}/infra/manifests/vmss-windows.yaml
+  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vmss-linux.yaml
+  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vmss-windows.yaml
   
   # Build list of all VMs to wait for based on node counts
   local vm_resources=()
@@ -343,7 +343,7 @@ function get_and_export_node_ips() {
 function generate_and_show_connect_file() {
   log_info "Generating connect.txt..."
   
-  WIN_PASSWORD=$(grep "password:" ${VMSS_SCRIPT_DIR}/password.txt | awk -F':' '{print $2}')
+  WIN_PASSWORD=$(grep "password:" ${ASO_DIR}/password.txt | awk -F':' '{print $2}')
 
   cat << EOF > connect.txt
 -------------Connect to Linux Master Instance---------
@@ -384,7 +384,7 @@ function generate_helper_files() {
   log_info "Generating helper files..."
   
   # Generate ssh-node-linux.sh with node index support
-  cat << EOF > ${VMSS_SCRIPT_DIR}/ssh-node-linux.sh
+  cat << EOF > ${ASO_DIR}/ssh-node-linux.sh
 #!/bin/bash
 # Usage: ./ssh-node-linux.sh [node_index] [command...]
 # Examples:
@@ -413,10 +413,10 @@ fi
 LINUX_EIP="\${LINUX_EIPS[\$NODE_INDEX]}"
 ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@\${LINUX_EIP} "\$@"
 EOF
-  chmod +x ${VMSS_SCRIPT_DIR}/ssh-node-linux.sh
+  chmod +x ${ASO_DIR}/ssh-node-linux.sh
 
   # Generate ssh-node-windows.sh with node index support
-  cat << EOF > ${VMSS_SCRIPT_DIR}/ssh-node-windows.sh
+  cat << EOF > ${ASO_DIR}/ssh-node-windows.sh
 #!/bin/bash
 # Usage: ./ssh-node-windows.sh [node_index] [command]
 # Examples:
@@ -445,10 +445,10 @@ fi
 WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
 ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@\${WINDOWS_EIP} powershell "\$@"
 EOF
-  chmod +x ${VMSS_SCRIPT_DIR}/ssh-node-windows.sh
+  chmod +x ${ASO_DIR}/ssh-node-windows.sh
 
   # Generate scp-to-windows.sh with node index support
-  cat << EOF > ${VMSS_SCRIPT_DIR}/scp-to-windows.sh
+  cat << EOF > ${ASO_DIR}/scp-to-windows.sh
 #!/bin/bash
 # Usage: ./scp-to-windows.sh [node_index] <local_file> <remote_path>
 # Examples:
@@ -489,12 +489,12 @@ if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
 fi
 
 WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
-scp -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 "\$LOCAL_FILE" winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH"
+scp -r -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 "\$LOCAL_FILE" winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH"
 EOF
-  chmod +x ${VMSS_SCRIPT_DIR}/scp-to-windows.sh
+  chmod +x ${ASO_DIR}/scp-to-windows.sh
 
   # Generate scp-from-windows.sh with node index support
-  cat << EOF > ${VMSS_SCRIPT_DIR}/scp-from-windows.sh
+  cat << EOF > ${ASO_DIR}/scp-from-windows.sh
 #!/bin/bash
 # Usage: ./scp-from-windows.sh [node_index] <remote_path> <local_file>
 # Examples:
@@ -535,9 +535,9 @@ if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
 fi
 
 WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
-scp -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH" "\$LOCAL_FILE"
+scp -r -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH" "\$LOCAL_FILE"
 EOF
-  chmod +x ${VMSS_SCRIPT_DIR}/scp-from-windows.sh
+  chmod +x ${ASO_DIR}/scp-from-windows.sh
 
   log_info "Helper files generated successfully"
 }
@@ -569,10 +569,10 @@ function confirm-nodes-ssh() {
       # Use the generated helper scripts with timeout
       local test_result=0
       if [[ "$vm_type" == "linux" ]]; then
-        timeout 30 ${VMSS_SCRIPT_DIR}/ssh-node-linux.sh $node_index "echo 'SSH test successful'" >/dev/null 2>&1
+        timeout 30 ${ASO_DIR}/ssh-node-linux.sh $node_index "echo 'SSH test successful'" >/dev/null 2>&1
         test_result=$?
       else
-        timeout 30 ${VMSS_SCRIPT_DIR}/ssh-node-windows.sh $node_index "Write-Host 'SSH test successful'" >/dev/null 2>&1
+        timeout 30 ${ASO_DIR}/ssh-node-windows.sh $node_index "Write-Host 'SSH test successful'" >/dev/null 2>&1
         test_result=$?
       fi
       

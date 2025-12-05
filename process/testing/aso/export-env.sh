@@ -1,3 +1,6 @@
+# Get the directory where this script is located (ASO directory)
+ASO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Verify required environment variables
 : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
 : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
@@ -27,7 +30,7 @@ export KUBE_VERSION="${KUBE_VERSION:="v1.33.6"}"
 
 export CONTAINERD_VERSION="${CONTAINERD_VERSION:="1.7.22"}"
 
-export SSH_KEY_FILE="$PWD/.sshkey"
+export SSH_KEY_FILE="${ASO_DIR}/.sshkey"
 
 export GCR_IO_PULL_SECRET="${GCR_IO_PULL_SECRET:="${HOME}/secrets/docker_cfg.json"}"
 export TSEE_TEST_LICENSE="${TSEE_TEST_LICENSE:="${HOME}/secrets/license.yaml"}"
