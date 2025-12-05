@@ -12,6 +12,7 @@ type BirdBGPConfig struct {
 	NodeIPv6         string            `json:"node_ipv6,omitempty"`
 	AsNumber         string            `json:"as_number"`
 	RouterID         string            `json:"router_id,omitempty"`
+	RouterIDComment  string            `json:"router_id_comment,omitempty"`
 	Peers            []BirdBGPPeer     `json:"peers"`
 	Filters          map[string]string `json:"filters"`
 	Communities      []CommunityRule   `json:"communities"`
