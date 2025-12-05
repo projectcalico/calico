@@ -15,7 +15,7 @@ export UTILS_DIR="${SCRIPT_DIR}/../util"
 : ${BACKEND:?Error: BACKEND is not set}
 
 # Build Windows executables and copy to ASO directory.
-pushd ${REPO_DIR}
+pushd ${REPO_DIR}/cni-plugin
 make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
 popd
 cp ${REPO_DIR}/cni-plugin/bin/windows/*.exe ${ASO_DIR}/windows
