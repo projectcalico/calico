@@ -15,6 +15,8 @@
 package rules_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -216,7 +218,6 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		MarkScratch1:      0x400,
 		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
-		LogPrefix:         "calico-packet",
 	}
 
 	DescribeTable(
@@ -337,6 +338,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		"Log rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigNormal.FlowLogsEnabled = false
+			rrConfigNormal.LogPrefixMetadata = string(v3.LogPrefixMetadataPolicy)
 			renderer := NewRenderer(rrConfigNormal)
 			logRule := in
 			logRule.Action = "log"
@@ -345,7 +347,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+			logPrefix := fmt.Sprintf("calico-packet:%s", fooPolicyID.ID())
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Enabling flow log must not have any effect
 			rrConfigNormal.FlowLogsEnabled = true
@@ -363,6 +366,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rrConfigNormal.FlowLogsEnabled = false
 			rrConfigPrefix := rrConfigNormal
 			rrConfigPrefix.LogPrefix = "foobar"
+			rrConfigPrefix.LogPrefixMetadata = string(v3.LogPrefixMetadataPolicy)
 			renderer := NewRenderer(rrConfigPrefix)
 			logRule := in
 			logRule.Action = "log"
@@ -371,7 +375,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "foobar"}))
+			logPrefix := fmt.Sprintf("%s:%s", rrConfigPrefix.LogPrefix, fooPolicyID.ID())
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Enabling flow log must not have any effect
 			rrConfigPrefix.FlowLogsEnabled = true
@@ -2012,7 +2017,6 @@ var _ = Describe("Filtered rules (negated catch-all CIDR validation)", func() {
 		MarkScratch1:      0x400,
 		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
-		LogPrefix:         "calico-packet",
 	}
 
 	DescribeTable(
@@ -2203,7 +2207,6 @@ var _ = Describe("rule metadata tests", func() {
 		MarkScratch1:      0x400,
 		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
-		LogPrefix:         "calico-packet",
 	}
 
 	It("IPv4 should include annotations in comments", func() {
