@@ -29,6 +29,14 @@ if [ "${Q_AGENT}" = calico-felix ]; then
                         # Also add BIRD project PPA as a package source.
                         LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo add-apt-repository -y ppa:cz.nic-labs/bird
                     fi
+
+                    # If running with OpenStack Yoga, update rtslib-fb to v2.1.76, specifically to
+                    # pick up https://github.com/open-iscsi/rtslib-fb/pull/183, in order to support
+                    # details of the file layout under /sys/kernel/config/target/iscsi/ that changed
+                    # between Ubuntu Focal and Ubuntu Jammy.
+                    if [ "${DEVSTACK_BRANCH}" = unmaintained/yoga ]; then
+                        pip_install rtslib-fb==2.1.76
+                    fi
                     ;;
 
                 install)
