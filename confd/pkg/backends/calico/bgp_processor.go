@@ -37,14 +37,14 @@ var (
 func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	// Use separate caches for IPv4 and IPv6
 	currentRevision := c.GetCurrentRevision()
-	
+
 	if ipVersion == 4 && configCache != nil &&
 		time.Since(configCache.timestamp) < cacheValidityDuration &&
 		configCache.revision == currentRevision {
 		log.Debug("BGP config cache hit (IPv4), returning cached configuration")
 		return configCache.config, nil
 	}
-	
+
 	if ipVersion == 6 && configCacheV6 != nil &&
 		time.Since(configCacheV6.timestamp) < cacheValidityDuration &&
 		configCacheV6.revision == currentRevision {
@@ -311,7 +311,7 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 	if ipVersion == 6 {
 		ipAddrSuffix = "ip_addr_v6"
 	}
-	
+
 	// Get the current node's IP for this version
 	currentNodeIP := config.NodeIP
 	if ipVersion == 6 {
@@ -375,7 +375,7 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		} else {
 			peerName = fmt.Sprintf("Mesh_%s", strings.ReplaceAll(peerIP, ":", "_"))
 		}
-		
+
 		// Mesh peers have same AS, so use true for calico_export_to_bgp_peers
 		exportFilter := "calico_export_to_bgp_peers(true);\n    reject;"
 
@@ -412,7 +412,7 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 	if ipVersion == 6 {
 		peerPath = "/calico/bgp/v1/global/peer_v6"
 	}
-	
+
 	// Process regular global peers
 	kvPairs, err := c.GetValues([]string{peerPath})
 	if err != nil {
@@ -760,7 +760,7 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	if ipVersion == 6 {
 		ipSuffix = "ip_v6"
 	}
-	
+
 	// Try node-specific first, then fall back to global
 	nodeKey := fmt.Sprintf("/calico/bgp/v1/host/%s/prefix_advertisements/%s", NodeName, ipSuffix)
 	globalKey := fmt.Sprintf("/calico/bgp/v1/global/prefix_advertisements/%s", ipSuffix)
