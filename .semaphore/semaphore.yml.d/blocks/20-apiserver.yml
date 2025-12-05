@@ -6,6 +6,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "apiserver"
     prologue:
       commands:
         - cd apiserver
@@ -13,6 +16,9 @@
       - name: "API Server: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
       - name: "API Server: Build"
         matrix:
           - env_var: ARCH

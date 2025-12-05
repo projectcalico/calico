@@ -6,6 +6,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "guardian"
     prologue:
       commands:
         - cd guardian
@@ -13,6 +16,9 @@
       - name: "Guardian: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
       - name: "Guardian: build multi-arch"
         matrix:
           - env_var: ARCH

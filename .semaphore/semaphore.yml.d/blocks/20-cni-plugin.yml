@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "cni-plugin"
     prologue:
       commands:
         - cd cni-plugin
@@ -11,6 +14,9 @@
       - name: "CNI Plugin: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
       - name: "CNI Plugin: build windows images"
         commands:
           - ../.semaphore/run-and-monitor ci.log make image-windows
@@ -42,6 +48,8 @@
           - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
           - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
     env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "cni-plugin"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
       - name: AZURE_LOCATION

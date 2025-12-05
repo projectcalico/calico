@@ -6,6 +6,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "whisker"
     prologue:
       commands:
         - cd whisker
@@ -13,6 +16,9 @@
       - name: "Whisker: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
       - name: "Whisker: build multi-arch images"
         matrix:
           - env_var: ARCH
