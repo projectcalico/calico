@@ -41,6 +41,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("IPIP"),
 	describe.WithCategory(describe.Networking),
+	describe.RequiresNoEncap(),
 	"IP-in-IP tests",
 	func() {
 		// Define variables common across all tests.
@@ -52,7 +53,7 @@ var _ = describe.CalicoDescribe(
 		var poolName string
 
 		// Create a new framework for the tests.
-		f := utils.NewDefaultFramework("bgp-export")
+		f := utils.NewDefaultFramework("ipip")
 
 		ginkgo.BeforeEach(func() {
 			if windows.ClusterIsWindows() {
