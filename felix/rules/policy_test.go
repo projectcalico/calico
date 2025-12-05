@@ -218,7 +218,6 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		MarkScratch1:      0x400,
 		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
-		LogPrefix:         "calico-packet",
 	}
 
 	DescribeTable(
@@ -2018,7 +2017,6 @@ var _ = Describe("Filtered rules (negated catch-all CIDR validation)", func() {
 		MarkScratch1:      0x400,
 		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
-		LogPrefix:         "calico-packet",
 	}
 
 	DescribeTable(
@@ -2209,7 +2207,6 @@ var _ = Describe("rule metadata tests", func() {
 		MarkScratch1:      0x400,
 		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
-		LogPrefix:         "calico-packet",
 	}
 
 	It("IPv4 should include annotations in comments", func() {

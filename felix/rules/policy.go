@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"strings"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -709,7 +709,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 }
 
 func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker) string {
-	logPrefix := ""
+	logPrefix := "calico-packet"
 	if len(r.LogPrefix) != 0 {
 		logPrefix = r.LogPrefix
 	}
