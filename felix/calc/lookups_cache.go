@@ -79,6 +79,12 @@ func (lc *LookupsCache) GetNetworkSet(addr [16]byte) (EndpointData, bool) {
 	return lc.nsCache.GetNetworkSetFromIP(addr)
 }
 
+// GetNetworkSetWithNamespace returns the NetworkSet information for an address with namespace
+// precedence. If preferredNamespace is provided, NetworkSets in that namespace are prioritized.
+func (lc *LookupsCache) GetNetworkSetWithNamespace(addr [16]byte, preferredNamespace string) (EndpointData, bool) {
+	return lc.nsCache.GetNetworkSetFromIPWithNamespace(addr, preferredNamespace)
+}
+
 // GetRuleIDFromNFLOGPrefix returns the RuleID associated with the supplied NFLOG prefix.
 func (lc *LookupsCache) GetRuleIDFromNFLOGPrefix(prefix [64]byte) *RuleID {
 	return lc.polCache.GetRuleIDFromNFLOGPrefix(prefix)
