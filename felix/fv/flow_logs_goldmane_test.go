@@ -899,11 +899,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log networkse
 		Expect(err).NotTo(HaveOccurred())
 
 		if !BPFMode() {
-			Eventually(getRuleFuncTable(tc.Felixes[0], "API0|default.allow-all", "filter"), "10s", "1s").ShouldNot(HaveOccurred())
-			Eventually(getRuleFuncTable(tc.Felixes[0], "APE0|default.allow-all", "filter"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFuncTable(tc.Felixes[0], "API0|gnp/allow-all", "filter"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFuncTable(tc.Felixes[0], "APE0|gnp/allow-all", "filter"), "10s", "1s").ShouldNot(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], swl1.InterfaceName, "ingress", "default.allow-all")
-			bpfWaitForPolicy(tc.Felixes[0], swl1.InterfaceName, "egress", "default.allow-all")
+			bpfWaitForPolicy(tc.Felixes[0], swl1.InterfaceName, "ingress", "allow-all")
+			bpfWaitForPolicy(tc.Felixes[0], swl1.InterfaceName, "egress", "allow-all")
 		}
 
 		// NetworkSets
@@ -991,7 +991,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log networkse
 						DstService: flowlog.FlowService{Namespace: flowlog.FieldNotIncluded, Name: flowlog.FieldNotIncluded, PortName: flowlog.FieldNotIncluded, PortNum: 0},
 						Action:     "allow", Reporter: "src",
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{"0|default|default.allow-all|allow|0": {}},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{"0|default|allow-all|allow|0": {}},
 				})
 			}
 
