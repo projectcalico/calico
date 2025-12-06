@@ -25,6 +25,7 @@ CRD_PATTERN="resources.azure.com/*;containerservice.azure.com/*;compute.azure.co
 : ${KUBECTL:=./bin/kubectl}
 : ${CMCTL:=./bin/cmctl}
 : ${ASOCTL:=./bin/asoctl}
+: ${HELM:=./bin/helm}
 
 # Create management cluster
 ${KIND} create cluster --image kindest/node:${KUBE_VERSION} --name kind
@@ -37,8 +38,8 @@ ${CMCTL} check api --wait=2m
 
 echo; echo "Installing ASO ..."
 
-helm repo add aso2 https://raw.githubusercontent.com/Azure/azure-service-operator/main/v2/charts
-helm upgrade --install aso2 aso2/azure-service-operator \
+${HELM} repo add aso2 https://raw.githubusercontent.com/Azure/azure-service-operator/main/v2/charts
+${HELM} upgrade --install aso2 aso2/azure-service-operator \
     --create-namespace \
     --namespace=azureserviceoperator-system \
     --set crdPattern=${CRD_PATTERN}
