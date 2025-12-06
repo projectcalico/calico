@@ -32,6 +32,23 @@ cd "${SCRIPT_DIR}"
 # Kubeadm API server runs on port 6443
 export APISERVER_PORT=6443
 
+function setup_etcd() {
+  echo "Setting up etcd server on Linux node..."
+  
+  # Remove any existing etcd container and start fresh
+  ${MASTER_CONNECT_COMMAND} "docker rm -f calico-etcd" || true
+  
+  # Start etcd container
+  ETCD_CONTAINER="quay.io/coreos/etcd:v3.4.6"
+  ${MASTER_CONNECT_COMMAND} "docker run --detach -p 2389:2389 -p 8001:8001 --name calico-etcd ${ETCD_CONTAINER} etcd --advertise-client-urls 'http://${LINUX_PIP}:2389,http://127.0.0.1:2389,http://${LINUX_PIP}:8001,http://127.0.0.1:8001' --listen-client-urls 'http://0.0.0.0:2389,http://0.0.0.0:8001'"
+  
+  echo "Waiting for etcd to be ready..."
+  sleep 5
+  ${MASTER_CONNECT_COMMAND} docker ps -a
+  
+  echo "etcd server is running at ${LINUX_PIP}:2389"
+}
+
 function create_l2bridge_network() {
   # Create external network will cause ssh session to hang.
   # Use timeout and ignore error state to make sure the script will 
@@ -68,6 +85,7 @@ function copy_run_fv_script_to_windows() {
 }
 
 # Main execution
+setup_etcd
 copy_run_fv_script_to_windows
 
 if [[ "$BACKEND" == "overlay" ]]; then
