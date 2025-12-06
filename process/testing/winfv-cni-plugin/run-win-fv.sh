@@ -23,7 +23,6 @@ cp ${REPO_DIR}/cni-plugin/bin/windows/*.exe ${ASO_DIR}/windows
 # Create cluster with one Linux node and one Windows node.
 export LINUX_NODE_COUNT=1
 export WINDOWS_NODE_COUNT=1
-export VERBOSE=true # Enable verbose output for debugging as nodes count is small.
 
 # Create kubeadm cluster
 pushd "${ASO_DIR}"
