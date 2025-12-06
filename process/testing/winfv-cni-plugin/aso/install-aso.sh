@@ -35,7 +35,7 @@ SUFFIX=""
 : ${ASOCTL:=./bin/asoctl}
 
 # Create management cluster
-${KIND} create cluster --image kindest/node:${KUBE_VERSION} --name kind${SUFFIX}
+${KIND} create cluster --image ghcr.io/carvel-dev/kindest/node:${KUBE_VERSION} --name kind${SUFFIX}
 ${KUBECTL} wait node kind${SUFFIX}-control-plane --for=condition=ready --timeout=90s
 
 # Install cert-manager
