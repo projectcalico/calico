@@ -15,7 +15,7 @@ Set-Item -Path env:CONTAINER_RUNTIME -Value "containerd"
 Set-Item -Path env:CNI_VERSION -Value "0.3.0"
 Set-Item -Path env:MAC_PREFIX -Value "0E-2A"
 Set-Item -Path env:VSID -Value "4096"
-Set-Item -Path env:WINDOWS_OS -Value "Windows1809container"
+Set-Item -Path env:WINDOWS_OS -Value "Windows2022container"
 
 if (!(Test-Path C:\\k\\helper.psm1))
 {
