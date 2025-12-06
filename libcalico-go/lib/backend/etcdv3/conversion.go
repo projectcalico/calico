@@ -82,6 +82,11 @@ func convertWatchEvent(e *clientv3.Event, l model.ListInterface) (*api.WatchEven
 		return nil, nil
 	}
 
+	// "projectcalico.org/kind" label is expected for certain resources
+	// for selection
+	model.AddKindLabel(oldKV)
+	model.AddKindLabel(newKV)
+
 	return &api.WatchEvent{
 		Old:  oldKV,
 		New:  newKV,
@@ -89,9 +94,7 @@ func convertWatchEvent(e *clientv3.Event, l model.ListInterface) (*api.WatchEven
 	}, nil
 }
 
-var (
-	ErrMissingValue = fmt.Errorf("missing etcd KV")
-)
+var ErrMissingValue = fmt.Errorf("missing etcd KV")
 
 // etcdToKVPair converts an etcd KeyValue into model.KVPair.
 func etcdToKVPair(key model.Key, ekv *mvccpb.KeyValue) (*model.KVPair, error) {
