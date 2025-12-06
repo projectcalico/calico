@@ -65,7 +65,7 @@ run_batch() {
   #   a retry loop.
   # - nohup swallows the return code of the process so we use a 'bash -c'
   #   wrapper to capture it in a file.
-  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c '$cmd_quot > /tmp/test.log; echo \$? > /tmp/test.rc' < /dev/null >& /dev/null &"
+  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c '$cmd_quot > test.log; echo \$? > test.rc' < /dev/null >& /dev/null & while [ ! -e test.log ]; do sleep 1; done"
   echo "RUNNER: Started batch '$batch' on VM '$vm_name', monitoring log..." >> "$log_file"
 
   # Subshell to limit scope of trap.
@@ -76,7 +76,7 @@ run_batch() {
     # Monitor the log in the background with a retry loop.
     stopped=false
     while ! $stopped; do
-      VM_NAME="$vm_name" ${remote_exec} 'tail -F -n 0 "/tmp/test.log" 2>/dev/null' >> "$log_file" || true
+      VM_NAME="$vm_name" ${remote_exec} 'tail -F -n 0 "test.log" 2>/dev/null' >> "$log_file" || true
       echo "RUNNER: WARNING: Tail process on VM '$vm_name' ended, restarting..." >> "$log_file"
       sleep 1
     done &
@@ -87,7 +87,7 @@ run_batch() {
 
     num_fails=0
     while true; do
-      rc=$(VM_NAME="$vm_name" ${remote_exec} 'while [ ! -f /tmp/test.rc ]; do sleep 1; done; cat /tmp/test.rc' || echo "ssh error $?")
+      rc=$(VM_NAME="$vm_name" ${remote_exec} 'while [ ! -f test.rc ]; do sleep 1; done; cat test.rc' || echo "ssh error $?")
       # Verify that we got a number; if not, probably an ssh error or similar.
       if grep -q '^[0-9]\+$' <<< "$rc"; then
         echo "RUNNER: Batch '$batch' on VM '$vm_name' completed with rc=$rc" >> "$log_file"
