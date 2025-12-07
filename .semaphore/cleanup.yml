@@ -42,7 +42,9 @@ blocks:
         - name: Clean up windows cni resources
           commands:
             - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
-            - ./delete-az-rg.sh ${RG_PREFIX}-overlay-rg
-            - ./delete-az-rg.sh ${RG_PREFIX}-l2bridge-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-overlay-rg
+            - cd ~/calico/process/testing/aso && make dist-clean
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-l2bridge-rg
+            - cd ~/calico/process/testing/aso && make dist-clean
       secrets:
         - name: banzai-secrets

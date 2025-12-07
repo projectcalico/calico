@@ -1,0 +1,99 @@
+# This section includes base Calico Enterprise installation configuration.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.Installation
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  # Install Calico Enterprise
+  variant: TigeraSecureEnterprise
+
+  # List of image pull secrets to use when installing images from a container registry.
+  # If specified, secrets must be created in the `tigera-operator` namespace.
+  imagePullSecrets:
+    - name: tigera-pull-secret
+  # Optionally, a custom registry to use for pulling images.
+  # registry: <my-registry>
+
+  cni:
+    type: Calico
+  calicoNetwork:
+    bgp: Enabled
+    ipPools:
+      - cidr: 192.168.0.0/16
+        encapsulation: None
+    windowsDataplane: HNS
+  serviceCIDRs:
+    - 10.96.0.0/12
+  windowsNodes:
+    cniBinDir: "/Program Files/containerd/cni/bin"
+    cniConfigDir: "/Program Files/containerd/cni/conf"
+    cniLogDir: /var/log/calico/cni
+---
+# This section configures the Tigera web manager.
+# Remove this section for a Managed cluster.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.Manager
+apiVersion: operator.tigera.io/v1
+kind: Manager
+metadata:
+  name: tigera-secure
+
+---
+# This section installs and configures the Calico Enterprise API server.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.APIServer
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: tigera-secure
+
+---
+# This section installs and configures Calico Enterprise compliance functionality.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.Compliance
+apiVersion: operator.tigera.io/v1
+kind: Compliance
+metadata:
+  name: tigera-secure
+
+---
+# This section installs and configures Calico Enterprise intrusion detection functionality.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.IntrusionDetection
+apiVersion: operator.tigera.io/v1
+kind: IntrusionDetection
+metadata:
+  name: tigera-secure
+
+---
+# This section configures the Elasticsearch cluster used by Calico Enterprise.
+# Remove this section for a Managed cluster.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.LogStorage
+apiVersion: operator.tigera.io/v1
+kind: LogStorage
+metadata:
+  name: tigera-secure
+spec:
+  nodes:
+    count: 1
+
+---
+# This section configures collection of Tigera flow, DNS, and audit logs.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.LogCollector
+apiVersion: operator.tigera.io/v1
+kind: LogCollector
+metadata:
+  name: tigera-secure
+
+---
+# This section configures Prometheus for Calico Enterprise.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.Monitor
+apiVersion: operator.tigera.io/v1
+kind: Monitor
+metadata:
+  name: tigera-secure
+
+---
+# This section installs and configures Calico Enterprise policy recommendation functionality.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.PolicyRecommendation
+apiVersion: operator.tigera.io/v1
+kind: PolicyRecommendation
+metadata:
+  name: tigera-secure

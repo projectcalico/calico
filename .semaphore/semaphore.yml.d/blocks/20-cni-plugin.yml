@@ -40,7 +40,7 @@
         commands:
           - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
           - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
-          - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
+          - cd ~/calico/process/testing/aso && make dist-clean
     env_vars:
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
@@ -56,7 +56,7 @@
           - export BACKEND=overlay
           - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
           - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
-          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
       - name: "CNI Plugin: Windows Containerd FV - l2bridge"
         execution_time_limit:
           minutes: 60
@@ -64,4 +64,4 @@
           - export BACKEND=l2bridge
           - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
           - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
-          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
