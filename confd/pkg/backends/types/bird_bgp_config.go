@@ -46,7 +46,6 @@ type BirdBGPPeer struct {
 	GracefulRestart string `json:"graceful_restart,omitempty"` // restart time value
 	KeepaliveTime   string `json:"keepalive_time,omitempty"`
 	NumAllowLocalAs string `json:"num_allow_local_as,omitempty"`
-	Comment         string `json:"comment,omitempty"` // Comment to output before the peer block
 }
 
 // CommunityRule represents BGP community application rules

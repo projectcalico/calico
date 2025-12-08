@@ -86,9 +86,6 @@ template bgp bgp_template {
 {{- if $config.Peers}}
 # BGP Protocol Configurations
 {{- range $config.Peers}}
-{{- if .Comment}}
-# {{.Comment}}
-{{- end}}
 protocol bgp {{.Name}} from bgp_template {
 {{- if eq .TTLSecurity "off"}}
   ttl security off;

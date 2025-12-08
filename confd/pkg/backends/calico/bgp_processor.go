@@ -437,14 +437,13 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 			continue
 		}
 
-		peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID, ipVersion)
-		if peer != nil {
-			peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
-			config.Peers = append(config.Peers, *peer)
-			log.Debugf("Added global peer: %s", peer.Name)
-		} else {
-			log.Debugf("buildPeerFromData returned nil for key %s", key)
-		}
+	peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID, ipVersion)
+	if peer != nil {
+		config.Peers = append(config.Peers, *peer)
+		log.Debugf("Added global peer: %s", peer.Name)
+	} else {
+		log.Debugf("buildPeerFromData returned nil for key %s", key)
+	}
 	}
 
 	// Process global local BGP peers
@@ -459,12 +458,11 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 			continue
 		}
 
-		peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
-		if peer != nil {
-			peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
-			config.Peers = append(config.Peers, *peer)
-			log.Debugf("Added local workload peer: %s", peer.Name)
-		}
+	peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
+	if peer != nil {
+		config.Peers = append(config.Peers, *peer)
+		log.Debugf("Added local workload peer: %s", peer.Name)
+	}
 	}
 
 	return nil
@@ -493,11 +491,10 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 				continue
 			}
 
-			peer := c.buildPeerFromData(peerData, "Node", config, nodeClusterID, ipVersion)
-			if peer != nil {
-				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
-				config.Peers = append(config.Peers, *peer)
-			}
+		peer := c.buildPeerFromData(peerData, "Node", config, nodeClusterID, ipVersion)
+		if peer != nil {
+			config.Peers = append(config.Peers, *peer)
+		}
 		}
 	}
 
@@ -514,11 +511,10 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 				continue
 			}
 
-			peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
-			if peer != nil {
-				peer.Comment = fmt.Sprintf("For peer %s", strings.TrimPrefix(key, "/calico"))
-				config.Peers = append(config.Peers, *peer)
-			}
+		peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
+		if peer != nil {
+			config.Peers = append(config.Peers, *peer)
+		}
 		}
 	}
 
