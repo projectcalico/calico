@@ -323,6 +323,9 @@ type FelixConfigurationSpec struct {
 	// LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]
 	LogPrefix string `json:"logPrefix,omitempty"`
 
+	// LogActionRate sets the rate of hitting a Log action. [Default: nil (unset)]
+	LogActionRate *int `json:"logActionRate,omitempty"`
+
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath string `json:"logFilePath,omitempty"`
 

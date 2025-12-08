@@ -387,6 +387,19 @@ subcomponents, see Felix's logs.
 
 ## <a id="process-logging">Process: Logging
 
+### `LogActionRate` (config file) / `logActionRate` (YAML)
+
+Sets the rate of hitting a Log action.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogActionRate` |
+| Encoding (env var/config file) | Integer |
+| Default value (above encoding) | `0` |
+| `FelixConfiguration` field | `logActionRate` (YAML) `LogActionRate` (Go API) |
+| `FelixConfiguration` schema | Integer |
+| Default value (YAML) | `0` |
+
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
 
 Controls which source code files have their Debug log output included in the logs.
