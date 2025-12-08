@@ -206,5 +206,3 @@ ${KUBECTL} get nodes -o wide
 echo ""
 echo "Calico pods:"
 ${KUBECTL} get pods -n calico-system -o wide
-
-pause-for-debug
