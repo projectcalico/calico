@@ -825,19 +825,6 @@ compare_templates() {
         expected=/tests/compiled_templates/${testdir}/${f}
         actual=/etc/calico/confd/config/${f}
 
-        # Debug: Print the value of ${f} and check if actual file exists
-        echo "Processing template file: ${f}"
-        if [ -f "${actual}" ]; then
-            echo "Actual file exists at: ${actual}"
-            if [ "${actual}" = "/etc/calico/confd/config/bird.cfg" ]; then
-                echo "Content of actual file: Skip"
-                #cat "${actual}"
-            fi
-        else
-            echo "Actual file does NOT exist at: ${actual}"
-        fi
-        echo "---"
-
         if ! diff_files_ignoring_comments_and_blank_lines ${expected} ${actual} ${output}; then
             if ! $record; then
                 rc=1;

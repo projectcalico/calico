@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -21,15 +20,13 @@ var NodeName = os.Getenv("NODENAME")
 
 // BGP configuration cache
 type bgpConfigCache struct {
-	config    *types.BirdBGPConfig
-	timestamp time.Time
-	revision  uint64
+	config   *types.BirdBGPConfig
+	revision uint64
 }
 
 var (
-	configCache           *bgpConfigCache
-	configCacheV6         *bgpConfigCache
-	cacheValidityDuration = 30 * time.Second
+	configCache   *bgpConfigCache
+	configCacheV6 *bgpConfigCache
 )
 
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
@@ -39,14 +36,12 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	currentRevision := c.GetCurrentRevision()
 
 	if ipVersion == 4 && configCache != nil &&
-		time.Since(configCache.timestamp) < cacheValidityDuration &&
 		configCache.revision == currentRevision {
 		log.Debug("BGP config cache hit (IPv4), returning cached configuration")
 		return configCache.config, nil
 	}
 
 	if ipVersion == 6 && configCacheV6 != nil &&
-		time.Since(configCacheV6.timestamp) < cacheValidityDuration &&
 		configCacheV6.revision == currentRevision {
 		log.Debug("BGP config cache hit (IPv6), returning cached configuration")
 		return configCacheV6.config, nil
@@ -95,16 +90,14 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	// Update appropriate cache
 	if ipVersion == 4 {
 		configCache = &bgpConfigCache{
-			config:    config,
-			timestamp: time.Now(),
-			revision:  currentRevision,
+			config:   config,
+			revision: currentRevision,
 		}
 		log.Debug("Updated BGP config cache for IPv4")
 	} else {
 		configCacheV6 = &bgpConfigCache{
-			config:    config,
-			timestamp: time.Now(),
-			revision:  currentRevision,
+			config:   config,
+			revision: currentRevision,
 		}
 		log.Debug("Updated BGP config cache for IPv6")
 	}
