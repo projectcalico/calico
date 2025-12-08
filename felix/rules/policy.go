@@ -614,8 +614,12 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		if logPrefix == "" {
 			logPrefix = "calico-packet"
 		}
+		match := r.NewMatch()
+		if r.LogActionRate > 0 {
+			match = match.Limit(uint32(r.LogActionRate), 0)
+		}
 		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch(),
+			Match:  match,
 			Action: r.Log(logPrefix),
 		})
 	}
