@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is entry point for Windows CNI-Plugin FV test.
+# This is the entry point for Windows Felix FV test.
 
 set -e
 set -x
@@ -27,9 +27,6 @@ export UTILS_DIR="${SCRIPT_DIR}/../util"
 
 : ${BACKEND:?Error: BACKEND is not set}
 
-# Copy Windows executables to ASO directory.
-cp ${REPO_DIR}/cni-plugin/bin/windows/*.exe ${ASO_DIR}/windows
-
 # Create cluster with one Linux node and one Windows node.
 export LINUX_NODE_COUNT=1
 export WINDOWS_NODE_COUNT=1
@@ -37,6 +34,7 @@ export WINDOWS_NODE_COUNT=1
 # Create kubeadm cluster
 pushd "${ASO_DIR}"
 make setup-kubeadm
+make install-calico
 popd
 
 # Setup and run FV test
@@ -71,4 +69,4 @@ then
 fi
 
 popd
-echo "Windows CNI-Plugin FV test completed."
+echo "Windows Felix FV test completed."
