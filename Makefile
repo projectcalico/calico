@@ -188,6 +188,7 @@ e2e-run-test:
 
 ## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
 e2e-run-cnp-test:
+	CALICO_E2E_BASE_MANIFESTS=`pwd`/e2e/manifests.yaml \
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)

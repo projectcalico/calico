@@ -17,6 +17,7 @@ limitations under the License.
 package conformance_test
 
 import (
+	"os"
 	"testing"
 
 	"k8s.io/client-go/kubernetes"
@@ -69,8 +70,8 @@ func TestConformance(t *testing.T) {
 		SupportedFeatures:          supportedFeatures,
 		ExemptFeatures:             exemptFeatures,
 		EnableAllSupportedFeatures: *flags.EnableAllSupportedFeatures,
-		BaseManifests:              "e2e/manifests.yaml",
 	})
+	cSuite.BaseManifests = os.Getenv("CALICO_E2E_BASE_MANIFESTS")
 	cSuite.Setup(t)
 
 	cSuite.Run(t, tests.ConformanceTests)
