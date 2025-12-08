@@ -15,17 +15,29 @@
 package rules_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	. "github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
+)
+
+var (
+	// 62 characters with XXX0|gnp/ prefixed.
+	chars62 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	// 63 characters with XXX0|gnp/ prefixed.
+	chars63 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0"
 )
 
 var _ = Describe("NFLOG prefix construction tests", func() {
 	DescribeTable(
 		"CalculateNFLOGPrefixStr should return correct result",
-		func(action RuleAction, owner RuleOwnerType, dir RuleDir, idx int, name string, expected string, expectHash bool) {
+		func(action RuleAction, owner RuleOwnerType, dir RuleDir, idx int, name types.IDMaker, expected string, expectHash bool) {
 			actual := CalculateNFLOGPrefixStr(action, owner, dir, idx, name)
 			Expect(actual).To(Equal(expected), actual)
 			if expectHash {
@@ -37,38 +49,39 @@ var _ = Describe("NFLOG prefix construction tests", func() {
 		Entry(
 			"Short NP name - will not hash",
 			RuleActionAllow, RuleOwnerTypePolicy, RuleDirIngress, 0,
-			"namespace1/default.policy",
-			"API0|namespace1/default.policy", false,
+			types.PolicyID{Name: "default.policy", Namespace: "namespace1", Kind: v3.KindNetworkPolicy},
+			"API0|np/namespace1/default.policy",
+			false,
 		),
 		Entry(
 			"Short profile name - will not hash",
 			RuleActionPass, RuleOwnerTypeProfile, RuleDirEgress, 999,
-			"short.profile.name",
+			types.ProfileID{Name: "short.profile.name"},
 			"PRE999|short.profile.name", false,
 		),
 		Entry(
 			"Policy name makes raw prefix 62 bytes - will not hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 88,
-			"01234567890123456789012345678901234567890123456789012345",
-			"DPE88|01234567890123456789012345678901234567890123456789012345", false,
+			types.PolicyID{Name: chars62, Kind: v3.KindGlobalNetworkPolicy},
+			fmt.Sprintf("DPE88|gnp/%s", chars62), false,
 		),
 		Entry(
 			"Policy name makes raw prefix 63 bytes - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirIngress, 88,
-			"012345678901234567890123456789012345678901234567890123456",
-			"DPI88|0123_S7GBfc7R7_4bzrXpbzglqoJrRG_UxIP0CuYjRWshz_7890123456", true,
+			types.PolicyID{Name: chars63, Kind: v3.KindGlobalNetworkPolicy},
+			"DPI88|gnp/_12IXaBPahNM7a7dZhI8zg6PStmHsgneYaax8LVSIq_RSTUVWXYZ0", true,
 		),
 		Entry(
 			"Very long GNP name - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 1,
-			"quite-a-long-namespace/quite-a-long-tier-name.quite-a-long-policy-name",
-			"DPE1|quite_nnW4FYptgISH4G3jdI6KJWVcEx19s0BDp2On0wVAY_olicy-name", true,
+			types.PolicyID{Name: "this-is-still-quite-a-long-tier-name-even-though-its-not-required.quite-a-long-policy-name", Kind: v3.KindGlobalNetworkPolicy},
+			"DPE1|gnp/t_FSGxA9eGa6t_A5Rj2agPvl4aq8-eohq0An6xEW4n7_olicy-name", true,
 		),
 		Entry(
 			"A similar (but different) very long GNP name - will hash",
 			RuleActionDeny, RuleOwnerTypePolicy, RuleDirEgress, 2,
-			"quite-a-long-namespace/quite-a-long-tier-name.quite-a-long-policy-name2",
-			"DPE2|quite_1G46uquk9ypeSpt4I-AIn1FSwWxCefDd8GEcuoxHP_licy-name2", true,
+			types.PolicyID{Name: "this-is-still-quite-a-long-tier-name-even-though-its-not-required.quite-a-long-policy-name2", Kind: v3.KindGlobalNetworkPolicy},
+			"DPE2|gnp/t_G4MaamO0BQNQg8Ibyy-r9qg2HIK8-7EaPOVzsy5Nv_licy-name2", true,
 		),
 	)
 

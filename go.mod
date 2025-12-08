@@ -1,10 +1,11 @@
 module github.com/projectcalico/calico
 
-go 1.25.4
+go 1.25.5
 
 require (
 	cloud.google.com/go/storage v1.57.1
 	github.com/BurntSushi/toml v1.5.0
+	github.com/DeRuina/timberjack v1.3.9
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/Microsoft/hcsshim v0.13.0
 	github.com/apparentlymart/go-cidr v1.1.0
@@ -19,7 +20,7 @@ require (
 	github.com/container-storage-interface/spec v1.9.0
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.8.0
-	github.com/coreos/go-semver v0.3.1
+	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/distribution v2.8.3+incompatible
 	github.com/docker/docker v28.5.1+incompatible
@@ -100,8 +101,6 @@ require (
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
 	gopkg.in/go-playground/validator.v9 v9.30.2
-	// Replaced with older version below until we can handle the updated permissions it now puts on log files.
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	helm.sh/helm/v3 v3.19.0
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1
@@ -348,6 +347,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250818200422-3122310a409c // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -374,9 +374,6 @@ replace (
 	github.com/projectcalico/api => ./api
 	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
 	github.com/projectcalico/calico/lib/std => ./lib/std
-
-	// Newer versions set the file mode on logs to 0600, which breaks a lot of our tests.
-	gopkg.in/natefinch/lumberjack.v2 => gopkg.in/natefinch/lumberjack.v2 v2.0.0
 
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because
 	// the kubernets repo pulls them in via a replacement to its own vendored copies, which doesn't work for

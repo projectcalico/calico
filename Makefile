@@ -168,17 +168,26 @@ E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
 E2E_SKIP ?= ""
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
+
+## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
-	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
+	$(MAKE) e2e-run-test
+	$(MAKE) e2e-run-cnp-test
 
+## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
+	$(MAKE) e2e-run-cnp-test
+
+## Run the general e2e tests against a pre-existing kind cluster.
+e2e-run-test:
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
+
+## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
+e2e-run-cnp-test:
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
