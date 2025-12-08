@@ -86,6 +86,9 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	tr.syncOnly = config.SyncOnly
 	addFuncs(tr.funcMap, tr.store.FuncMap)
 
+	// Add Calico-specific functions.
+	addCalicoFuncs(tr.funcMap, config.StoreClient)
+
 	if runtime.GOOS == "windows" {
 		// On Windows HPC containers, $PATH does not contain the directory with 'powershell.exe'. Add it so that the powershell command works.
 		_, err = exec.LookPath("powershell.exe")
@@ -178,7 +181,7 @@ func (t *TemplateResource) createStageFile() error {
 		return err
 	}
 
-	if err = tmpl.Execute(temp, nil); err != nil {
+	if err = tmpl.Execute(temp, t.storeClient); err != nil {
 		// The key error to return is the failure to execute.
 		// to preserve that error ignore the errors in close and clean
 		temp.Close()           // nolint:errcheck
@@ -316,6 +319,12 @@ func (t *TemplateResource) check() error {
 	output, err := c.CombinedOutput()
 	if err != nil {
 		log.Errorf("Error from checkcmd %q: %q", cmdBuffer.String(), string(output))
+		// DEBUG: Print the failed config file contents
+		if fileContents, readErr := os.ReadFile(t.StageFile.Name()); readErr == nil {
+			log.Errorf("DEBUG: Failed bird.cfg contents:\n%s", string(fileContents))
+		} else {
+			log.Errorf("DEBUG: Could not read failed config file %s: %v", t.StageFile.Name(), readErr)
+		}
 		return err
 	}
 	log.Debug(fmt.Sprintf("Output from checkcmd: %q", string(output)))
