@@ -69,6 +69,7 @@ func TestConformance(t *testing.T) {
 		SupportedFeatures:          supportedFeatures,
 		ExemptFeatures:             exemptFeatures,
 		EnableAllSupportedFeatures: *flags.EnableAllSupportedFeatures,
+		BaseManifests:              "e2e/manifests.yaml",
 	})
 	cSuite.Setup(t)
 
