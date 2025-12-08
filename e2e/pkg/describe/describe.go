@@ -71,6 +71,14 @@ var features = map[string]bool{
 	"IPIP":            true,
 }
 
+// RequiresNoEncap marks tests that require unencapsulated traffic to function.
+// This is typically used for tests that verify BGP functionality without IPIP, or other similar tests.
+// Such tests must be run on clusters that support unencapsulated traffic, such as bare-metal clusters
+// or cloud clusters with appropriate configuration.
+func RequiresNoEncap() any {
+	return framework.WithLabel("NoEncap")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {
