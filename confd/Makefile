@@ -43,7 +43,7 @@ endif
 # checking them.
 UPDATE_EXPECTED_DATA?=false
 
-test: ut test-kdd
+test: ut test-kdd test-etcd
 
 .PHONY: test-kdd
 ## Run template tests against KDD
