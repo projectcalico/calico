@@ -17823,6 +17823,11 @@ spec:
                   type: string
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default', 'tigera-secure', or 'overlay'
+              rule:
+                self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
+                || self.metadata.name == 'overlay'
       served: true
       storage: true
       subresources:
