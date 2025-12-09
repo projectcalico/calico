@@ -391,7 +391,6 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 			ExportFilter:    exportFilter,
 			Password:        meshPassword,
 			GracefulRestart: meshRestartTime,
-			Comment:         fmt.Sprintf("For peer %s", strings.TrimPrefix(peerIPKey, "/calico")),
 		}
 
 		// Make mesh unidirectional to avoid race conditions
@@ -437,17 +436,17 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 			continue
 		}
 
-	peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID, ipVersion)
-	if peer != nil {
-		config.Peers = append(config.Peers, *peer)
-		log.Debugf("Added global peer: %s", peer.Name)
-	} else {
-		log.Debugf("buildPeerFromData returned nil for key %s", key)
-	}
+		peer := c.buildPeerFromData(peerData, "Global", config, nodeClusterID, ipVersion)
+		if peer != nil {
+			config.Peers = append(config.Peers, *peer)
+			log.Debugf("Added global peer: %s", peer.Name)
+		} else {
+			log.Debugf("buildPeerFromData returned nil for key %s", key)
+		}
 	}
 
 	// Process global local BGP peers
-	for key, value := range kvPairs {
+	for _, value := range kvPairs {
 		var peerData map[string]interface{}
 		if err := json.Unmarshal([]byte(value), &peerData); err != nil {
 			continue
@@ -458,11 +457,11 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 			continue
 		}
 
-	peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
-	if peer != nil {
-		config.Peers = append(config.Peers, *peer)
-		log.Debugf("Added local workload peer: %s", peer.Name)
-	}
+		peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
+		if peer != nil {
+			config.Peers = append(config.Peers, *peer)
+			log.Debugf("Added local workload peer: %s", peer.Name)
+		}
 	}
 
 	return nil
@@ -480,7 +479,7 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 	// Process regular node-specific peers
 	kvPairs, err := c.GetValues([]string{peerKey})
 	if err == nil {
-		for key, value := range kvPairs {
+		for _, value := range kvPairs {
 			var peerData map[string]interface{}
 			if err := json.Unmarshal([]byte(value), &peerData); err != nil {
 				continue
@@ -491,16 +490,16 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 				continue
 			}
 
-		peer := c.buildPeerFromData(peerData, "Node", config, nodeClusterID, ipVersion)
-		if peer != nil {
-			config.Peers = append(config.Peers, *peer)
-		}
+			peer := c.buildPeerFromData(peerData, "Node", config, nodeClusterID, ipVersion)
+			if peer != nil {
+				config.Peers = append(config.Peers, *peer)
+			}
 		}
 	}
 
 	// Process node-specific local BGP peers
 	if err == nil {
-		for key, value := range kvPairs {
+		for _, value := range kvPairs {
 			var peerData map[string]interface{}
 			if err := json.Unmarshal([]byte(value), &peerData); err != nil {
 				continue
@@ -511,10 +510,10 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 				continue
 			}
 
-		peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
-		if peer != nil {
-			config.Peers = append(config.Peers, *peer)
-		}
+			peer := c.buildPeerFromData(peerData, "Local_Workload", config, nodeClusterID, ipVersion)
+			if peer != nil {
+				config.Peers = append(config.Peers, *peer)
+			}
 		}
 	}
 
