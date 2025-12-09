@@ -52,36 +52,36 @@ func TestPolicyManager(t *testing.T) {
 	})
 
 	// assertion for ingress rules
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true, true)).To(Equal([]*hns.ACLPolicy{
-		// policy-pol1 deny rule should be present
+	Expect(ps.GetPolicySetRules([]string{"policy-GlobalNetworkPolicy/pol1"}, true, true)).To(Equal([]*hns.ACLPolicy{
+		// policy-GlobalNetworkPolicy/pol1 deny rule should be present
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-	}), "unexpected rules returned for ingress rules update for policy-pol1")
+	}), "unexpected rules returned for ingress rules update for policy-GlobalNetworkPolicy/pol1")
 
 	// assertion for ingress rules with endOfTierDrop disabled
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true, false)).To(Equal([]*hns.ACLPolicy{
-		// policy-pol1 deny rule should be present
+	Expect(ps.GetPolicySetRules([]string{"policy-GlobalNetworkPolicy/pol1"}, true, false)).To(Equal([]*hns.ACLPolicy{
+		// policy-GlobalNetworkPolicy/pol1 deny rule should be present
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: policysets.ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-	}), "unexpected rules returned for ingress rules update for policy-pol1")
+	}), "unexpected rules returned for ingress rules update for policy-GlobalNetworkPolicy/pol1")
 
 	// assertion for egress rules
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, false, true)).To(Equal([]*hns.ACLPolicy{
-		// policy-pol1 allow rule should be present
+	Expect(ps.GetPolicySetRules([]string{"policy-GlobalNetworkPolicy/pol1"}, false, true)).To(Equal([]*hns.ACLPolicy{
+		// policy-GlobalNetworkPolicy/pol1 allow rule should be present
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-	}), "unexpected rules returned for egress rules update for policy-pol1")
+	}), "unexpected rules returned for egress rules update for policy-GlobalNetworkPolicy/pol1")
 
 	// assertion for egress rules with endOfTierDrop disabled
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, false, false)).To(Equal([]*hns.ACLPolicy{
-		// policy-pol1 allow rule should be present
+	Expect(ps.GetPolicySetRules([]string{"policy-GlobalNetworkPolicy/pol1"}, false, false)).To(Equal([]*hns.ACLPolicy{
+		// policy-GlobalNetworkPolicy/pol1 allow rule should be present
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: policysets.ActionPass, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-	}), "unexpected rules returned for egress rules update for policy-pol1")
+	}), "unexpected rules returned for egress rules update for policy-GlobalNetworkPolicy/pol1")
 
 	// remove policy here
 	policyMgr.OnUpdate(&proto.ActivePolicyRemove{
@@ -89,24 +89,24 @@ func TestPolicyManager(t *testing.T) {
 	})
 
 	// default ingress rule
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"policy-GlobalNetworkPolicy/pol1"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-	}), "unexpected rules returned after ActivePolicyRemove event for policy-pol1")
+	}), "unexpected rules returned after ActivePolicyRemove event for policy-GlobalNetworkPolicy/pol1")
 
 	// default ingress rule with endOfTierDrop disabled
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"policy-GlobalNetworkPolicy/pol1"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		{Type: hns.ACL, Protocol: 256, Action: policysets.ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-	}), "unexpected rules returned after ActivePolicyRemove event for policy-pol1")
+	}), "unexpected rules returned after ActivePolicyRemove event for policy-GlobalNetworkPolicy/pol1")
 
 	// default egress rule
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, false, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"policy-GlobalNetworkPolicy/pol1"}, false, true)).To(Equal([]*hns.ACLPolicy{
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-	}), "unexpected rules returned after ActivePolicyRemove event for policy-pol1")
+	}), "unexpected rules returned after ActivePolicyRemove event for policy-GlobalNetworkPolicy/pol1")
 
 	// default egress rule with endOfTierDrop disabled
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, false, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"policy-GlobalNetworkPolicy/pol1"}, false, false)).To(Equal([]*hns.ACLPolicy{
 		{Type: hns.ACL, Protocol: 256, Action: policysets.ActionPass, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-	}), "unexpected rules returned after ActivePolicyRemove event for policy-pol1")
+	}), "unexpected rules returned after ActivePolicyRemove event for policy-GlobalNetworkPolicy/pol1")
 
 	// Apply profile update
 	policyMgr.OnUpdate(&proto.ActiveProfileUpdate{
