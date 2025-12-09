@@ -593,7 +593,6 @@ func protoPortToHCSPort(port *proto.PortRange) string {
 
 // This function will create chunks of ports/ports range with chunksize
 func SplitPortList(ports []*proto.PortRange, chunkSize int) (splits [][]*proto.PortRange) {
-
 	if len(ports) == 0 {
 		splits = append(splits, []*proto.PortRange{})
 	}
@@ -611,7 +610,6 @@ func SplitPortList(ports []*proto.PortRange, chunkSize int) (splits [][]*proto.P
 
 // This function will create chunks of IP addresses/Cidr with chunksize
 func SplitIPList(ipAddrs []string, chunkSize int) (splits [][]string) {
-
 	if len(ipAddrs) == 0 {
 		splits = append(splits, []string{})
 	}
