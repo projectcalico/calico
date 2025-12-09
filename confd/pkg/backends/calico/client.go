@@ -1817,7 +1817,6 @@ func (c *client) ParseFailed(rawKey string, rawValue string) {
 	log.Errorf("Unable to parse datastore entry Key=%s; Value=%s", rawKey, rawValue)
 }
 
-// GetValues is called from confd to obtain the cached data for the required set of prefixes.
 // GetValue gets a single value from the cache
 func (c *client) GetValue(key string) (string, error) {
 	values, err := c.GetValues([]string{key})
@@ -1830,6 +1829,7 @@ func (c *client) GetValue(key string) (string, error) {
 	return "", fmt.Errorf("key not found: %s", key)
 }
 
+// GetValues is called from confd to obtain the cached data for the required set of prefixes.
 // We simply populate the values from our caches, only returning values which have the
 // requested set of prefixes.
 func (c *client) GetValues(keys []string) (map[string]string, error) {

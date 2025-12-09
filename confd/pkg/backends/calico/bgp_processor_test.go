@@ -1,3 +1,16 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package calico
 
 import (
@@ -349,79 +362,6 @@ func TestTTLSecurityFormatting(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-func TestBGPConfig_JSONSerialization(t *testing.T) {
-	// Test that BirdBGPConfig can be properly serialized and deserialized
-	original := &types.BirdBGPConfig{
-		NodeName:        "test-node",
-		NodeIP:          "10.0.0.1",
-		NodeIPv6:        "fd80::1",
-		AsNumber:        "64512",
-		RouterID:        "192.168.1.1",
-		RouterIDComment: "# Test comment",
-		Peers: []types.BirdBGPPeer{
-			{
-				Name:     "test-peer",
-				IP:       "10.0.0.2",
-				AsNumber: "65000",
-				Type:     "Global",
-			},
-		},
-		Communities: []types.CommunityRule{
-			{
-				CIDR:          "10.0.0.0/8",
-				AddStatements: []string{"bgp_community.add((65000, 100));"},
-			},
-		},
-		Filters:   map[string]string{"test": "filter"},
-		LogLevel:  "info",
-		DebugMode: "all",
-	}
-
-	// This test primarily validates that the struct is well-formed
-	assert.Equal(t, "test-node", original.NodeName)
-	assert.Equal(t, "10.0.0.1", original.NodeIP)
-	assert.Equal(t, "fd80::1", original.NodeIPv6)
-	assert.Len(t, original.Peers, 1)
-	assert.Len(t, original.Communities, 1)
-}
-
-func TestBirdBGPPeer_FieldsPresence(t *testing.T) {
-	// Test that all expected fields can be set
-	peer := types.BirdBGPPeer{
-		Name:            "test-peer",
-		IP:              "10.0.0.5",
-		Port:            "179",
-		AsNumber:        "65000",
-		LocalAsNumber:   "64512",
-		Type:            "Global",
-		ImportFilter:    "accept;",
-		ExportFilter:    "calico_export",
-		Password:        "secret",
-		TTLSecurity:     "on;\n  multihop 1",
-		RouteReflector:  true,
-		RRClusterID:     "192.168.1.1",
-		SourceAddr:      "10.0.0.1",
-		NextHopSelf:     true,
-		NextHopKeep:     false,
-		AddPaths:        "on",
-		Passive:         true,
-		PassiveComment:  " # Auto passive",
-		GracefulRestart: "120",
-		KeepaliveTime:   "60",
-		NumAllowLocalAs: "1",
-	}
-
-	assert.Equal(t, "test-peer", peer.Name)
-	assert.Equal(t, "10.0.0.5", peer.IP)
-	assert.Equal(t, "179", peer.Port)
-	assert.Equal(t, "65000", peer.AsNumber)
-	assert.Equal(t, "64512", peer.LocalAsNumber)
-	assert.True(t, peer.RouteReflector)
-	assert.True(t, peer.NextHopSelf)
-	assert.True(t, peer.Passive)
-	assert.NotEmpty(t, peer.PassiveComment)
 }
 
 func TestCommunityRule_Structure(t *testing.T) {
