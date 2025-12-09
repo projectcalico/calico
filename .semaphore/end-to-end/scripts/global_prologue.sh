@@ -163,9 +163,40 @@ cp ~/secrets/docker_cfg.json "$HOME/.docker/config.json"
 mkdir -p "${BZ_LOGS_DIR}"
 
 cd "$HOME" || exit
+hcp_scripts="echo \"[INFO] Initializing Banzai utilities...\""
+hcp_scripts="$hcp_scripts; git clone git@github.com:tigera/banzai-utils.git \"${HOME}/banzai-utils\""
+hcp_scripts="$hcp_scripts; cp -R \"${HOME}/banzai-utils\"/ocp-hcp/*.sh \"${BZ_GLOBAL_BIN}\""
+if [[ "${HCP_ENABLED}" == "true" ]]; then eval $hcp_scripts; fi
+
 std="echo \"[INFO] Initializing Banzai profile...\""
-std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
+std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets 2>&1 | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
 std="$std; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
-eval "$std"
+
+hcp="unset CLUSTER_NAME; unset DIAGS_ARCHIVE_FILENAME; unset K8S_VERSION"
+hcp="$hcp; echo \"[INFO] starting hcp init...\""
+hcp="$hcp; hcp-init.sh 2>&1 | tee \"${BZ_LOGS_DIR}/initialize.log\""
+hcp="$hcp; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
+
+restore_hcp_hosting="echo \"[INFO] Restoring from ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} cache\""
+restore_hcp_hosting="$restore_hcp_hosting; cache restore ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} |& tee ${BZ_LOGS_DIR}/restore.log"
+
+if [[ "${HCP_ENABLED}" == "true" ]]; then std=$hcp; elif [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then std=$restore_hcp_hosting; fi
+echo "$std"; eval "$std"
+
+restore_hcp_hosting_home="echo \"[INFO] Setting BZ_HOME env var from restored cache\""
+restore_hcp_hosting_home="$restore_hcp_hosting_home; unset BZ_HOME; export BZ_HOME=$(cat ${BZ_LOGS_DIR}/restore.log | grep -oP 'Restored: \K(.*)(?=.)' || echo '')"
+if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then echo "$restore_hcp_hosting_home"; eval "$restore_hcp_hosting_home"; fi
+
+if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then python3 -m pip install -r ${BZ_HOME}/scripts/requirements.txt; export PROVISIONER=aws-openshift; pip3 install --upgrade --user awscli; fi
+export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-"${BZ_HOME}/.local"}
+
+cmd="sudo apt-get install -y putty-tools"
+if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then eval "$cmd"; fi
+
+if [[ "${HCP_STAGE}" == "hosted" ]]; then artifact pull workflow hosting-${HOSTING_CLUSTER}-kubeconfig -f --destination ${BZ_LOCAL_DIR}/hosting-kubeconfig; fi
+
+rm_firmware_cmd="echo \"[INFO] Removing /usr/lib/firmware to free disk space\""
+rm_firmware_cmd="$rm_firmware_cmd; sudo rm -rf /usr/lib/firmware"
+if [[ "${HCP_STAGE}" == "hosted" ]]; then echo "$rm_firmware_cmd"; eval "$rm_firmware_cmd"; fi
 
 echo "[INFO] exiting prologue"
