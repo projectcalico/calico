@@ -260,8 +260,6 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		return nil // No mesh configuration
 	}
 
-	log.Debugf("Mesh config value: %s", meshConfigValue)
-
 	var meshConfig map[string]interface{}
 	if err := json.Unmarshal([]byte(meshConfigValue), &meshConfig); err != nil {
 		log.Debugf("Failed to unmarshal mesh config: %v", err)
@@ -271,7 +269,6 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 	log.Debugf("Parsed mesh config: %+v", meshConfig)
 
 	enabled, _ := meshConfig["enabled"].(bool)
-	log.Debugf("Mesh enabled value: %v", enabled)
 	if !enabled {
 		log.Debug("Node-to-node mesh disabled")
 		return nil

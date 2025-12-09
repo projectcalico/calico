@@ -25,12 +25,12 @@ func TestHashToIPv4(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		result := template.HashToIPv4(tt.nodeName)
-		// Verify it's a valid IPv4 address format
-		assert.Regexp(t, `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`, result)
+			result := template.HashToIPv4(tt.nodeName)
+			// Verify it's a valid IPv4 address format
+			assert.Regexp(t, `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`, result)
 
-		// Verify consistency - same input should produce same output
-		result2 := template.HashToIPv4(tt.nodeName)
+			// Verify consistency - same input should produce same output
+			result2 := template.HashToIPv4(tt.nodeName)
 			assert.Equal(t, result, result2, "Hash should be deterministic")
 		})
 	}
@@ -342,11 +342,11 @@ func TestTTLSecurityFormatting(t *testing.T) {
 			var result string
 			if tt.enabled {
 				result = fmt.Sprintf("on;\n  multihop %.0f", tt.hops)
-		} else {
-			result = "off;\n  multihop"
-		}
+			} else {
+				result = "off;\n  multihop"
+			}
 
-		assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
