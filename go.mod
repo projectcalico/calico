@@ -19,7 +19,7 @@ require (
 	github.com/buger/jsonparser v1.1.1
 	github.com/container-storage-interface/spec v1.9.0
 	github.com/containernetworking/cni v1.3.0
-	github.com/containernetworking/plugins v1.8.0
+	github.com/containernetworking/plugins v1.9.0
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/distribution v2.8.3+incompatible
