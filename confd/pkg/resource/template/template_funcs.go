@@ -1,7 +1,6 @@
 package template
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -46,7 +44,6 @@ func newFuncMap() map[string]interface{} {
 	m["fileExists"] = isFileExist
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
-	m["hashToIPv4"] = hashToIPv4
 	m["bgpFilterFunctionName"] = BGPFilterFunctionName
 	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
 	return m
@@ -410,56 +407,6 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 		lines = append(lines, line)
 	}
 	return lines, nil
-}
-
-// TruncateAndHashName truncates a name to maxLen characters, appending a hash suffix if truncation is needed.
-// The maximum length of a k8s resource (253 bytes) is longer than the maximum length of BIRD symbols (64 chars).
-// This function provides a way to map the k8s resource name to a BIRD symbol name that accounts
-// for the length difference in a way that minimizes the chance of collisions.
-// Exported so it can be reused by other packages that need consistent name truncation.
-func TruncateAndHashName(name string, maxLen int) (string, error) {
-	if len(name) <= maxLen {
-		return name, nil
-	}
-	// SHA256 outputs a hash 64 chars long but we'll use only the first 16
-	hashCharsToUse := 16
-	// Account for underscore we insert between truncated name and hash string
-	hashStrSize := hashCharsToUse + 1
-	if maxLen <= hashStrSize {
-		return "", fmt.Errorf("max truncated string length must be greater than the minimum size of %d",
-			hashStrSize)
-	}
-	hash := sha256.New()
-	_, err := hash.Write([]byte(name))
-	if err != nil {
-		return "", err
-	}
-	truncationLen := maxLen - hashStrSize
-	hashStr := fmt.Sprintf("%X", hash.Sum(nil))
-	truncatedName := fmt.Sprintf("%s_%s", name[:truncationLen], hashStr[:hashCharsToUse])
-	return truncatedName, nil
-}
-
-// hashToIPv4 hashes the given string and
-// formats the resulting 4 bytes as an IPv4 address.
-func hashToIPv4(nodeName string) string {
-	hash := sha256.New()
-	_, err := hash.Write([]byte(nodeName))
-	if err != nil {
-		return ""
-	}
-	hashBytes := hash.Sum(nil)
-	ip := hashBytes[:4]
-	//BGP doesn't allow router IDs in special IP ranges (e.g., 224.x.x.x)
-	ip0Value := int(ip[0])
-	if ip0Value > 223 {
-		ip0Value = ip0Value - 32
-	}
-	routerId := strconv.Itoa(ip0Value) + "." +
-		strconv.Itoa(int(ip[1])) + "." +
-		strconv.Itoa(int(ip[2])) + "." +
-		strconv.Itoa(int(ip[3]))
-	return routerId
 }
 
 // Getenv retrieves the value of the environment variable named by the key.

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
+	"github.com/projectcalico/calico/confd/pkg/resource/template"
 )
 
 func TestHashToIPv4(t *testing.T) {
@@ -24,12 +25,12 @@ func TestHashToIPv4(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := hashToIPv4(tt.nodeName)
+			result := template.HashToIPv4(tt.nodeName)
 			// Verify it's a valid IPv4 address format
 			assert.Regexp(t, `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`, result)
 			
 			// Verify consistency - same input should produce same output
-			result2 := hashToIPv4(tt.nodeName)
+			result2 := template.HashToIPv4(tt.nodeName)
 			assert.Equal(t, result, result2, "Hash should be deterministic")
 		})
 	}
@@ -37,8 +38,8 @@ func TestHashToIPv4(t *testing.T) {
 
 func TestHashToIPv4_Uniqueness(t *testing.T) {
 	// Test that different node names produce different hashes
-	node1Hash := hashToIPv4("node-1")
-	node2Hash := hashToIPv4("node-2")
+	node1Hash := template.HashToIPv4("node-1")
+	node2Hash := template.HashToIPv4("node-2")
 	assert.NotEqual(t, node1Hash, node2Hash, "Different nodes should have different router IDs")
 }
 
@@ -168,7 +169,7 @@ func TestRouterIDGeneration_Hash(t *testing.T) {
 	// Test IPv4 - no comment
 	routerID := os.Getenv("CALICO_ROUTER_ID")
 	if routerID == "hash" {
-		config.RouterID = hashToIPv4(config.NodeName)
+		config.RouterID = template.HashToIPv4(config.NodeName)
 	}
 
 	assert.NotEmpty(t, config.RouterID)
