@@ -590,9 +590,10 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 
 	// Next hop mode
 	if nhMode, ok := raw["next_hop_mode"].(string); ok {
-		if nhMode == "Self" {
+		switch nhMode {
+		case "Self":
 			peer.NextHopSelf = true
-		} else if nhMode == "Keep" {
+		case "Keep":
 			peer.NextHopKeep = true
 		}
 	}

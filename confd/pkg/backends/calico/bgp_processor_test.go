@@ -1392,10 +1392,11 @@ func TestProcessMeshPeers_PassiveMode(t *testing.T) {
 	assert.Len(t, config.Peers, 2)
 
 	for _, peer := range config.Peers {
-		if peer.IP == "10.0.0.2" {
+		switch peer.IP {
+		case "10.0.0.2":
 			// "10.0.0.2" < "10.0.0.5" (string comparison), so should NOT be passive
 			assert.False(t, peer.Passive, "10.0.0.2 < 10.0.0.5 in string comparison")
-		} else if peer.IP == "10.0.0.8" {
+		case "10.0.0.8":
 			// "10.0.0.8" > "10.0.0.5" (string comparison), so should be passive
 			assert.True(t, peer.Passive, "10.0.0.8 > 10.0.0.5 in string comparison")
 			assert.Contains(t, peer.PassiveComment, "Mesh is unidirectional")
