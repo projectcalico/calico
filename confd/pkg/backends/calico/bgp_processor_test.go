@@ -25,12 +25,12 @@ func TestHashToIPv4(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := template.HashToIPv4(tt.nodeName)
-			// Verify it's a valid IPv4 address format
-			assert.Regexp(t, `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`, result)
-			
-			// Verify consistency - same input should produce same output
-			result2 := template.HashToIPv4(tt.nodeName)
+		result := template.HashToIPv4(tt.nodeName)
+		// Verify it's a valid IPv4 address format
+		assert.Regexp(t, `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`, result)
+
+		// Verify consistency - same input should produce same output
+		result2 := template.HashToIPv4(tt.nodeName)
 			assert.Equal(t, result, result2, "Hash should be deterministic")
 		})
 	}
@@ -110,7 +110,7 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 	// Test that IPv4 and IPv6 return appropriate default
 	resultV4 := c.buildImportFilter(nil, 4)
 	resultV6 := c.buildImportFilter(nil, 6)
-	
+
 	// Both should have accept by default
 	assert.Contains(t, resultV4, "accept;")
 	assert.Contains(t, resultV6, "accept;")
@@ -139,7 +139,7 @@ func TestBuildExportFilter_IPv4vsIPv6(t *testing.T) {
 	// Test that both IPv4 and IPv6 work
 	resultV4 := c.buildExportFilter(nil, "65000", "64512", 4)
 	resultV6 := c.buildExportFilter(nil, "65000", "64512", 6)
-	
+
 	// Both should have export filter
 	assert.Contains(t, resultV4, "calico_export_to_bgp_peers")
 	assert.Contains(t, resultV6, "calico_export_to_bgp_peers")
@@ -175,7 +175,7 @@ func TestRouterIDGeneration_Hash(t *testing.T) {
 	assert.NotEmpty(t, config.RouterID)
 	assert.NotEqual(t, "10.0.0.2", config.RouterID)
 	assert.Regexp(t, `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`, config.RouterID)
-	
+
 	// For IPv6, should have comment
 	config.RouterIDComment = ""
 	if routerID == "hash" {
@@ -342,11 +342,11 @@ func TestTTLSecurityFormatting(t *testing.T) {
 			var result string
 			if tt.enabled {
 				result = fmt.Sprintf("on;\n  multihop %.0f", tt.hops)
-			} else {
-				result = "off;\n  multihop"
-			}
-			
-			assert.Equal(t, tt.expected, result)
+		} else {
+			result = "off;\n  multihop"
+		}
+
+		assert.Equal(t, tt.expected, result)
 		})
 	}
 }
