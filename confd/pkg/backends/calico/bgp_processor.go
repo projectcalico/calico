@@ -77,12 +77,6 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	}
 	log.Debugf("Processed community rules (IPv%d): found %d rules", ipVersion, len(config.Communities))
 
-	// Process BGP filters
-	if err := c.processBGPFilters(config, ipVersion); err != nil {
-		log.WithError(err).Warnf("Failed to process BGP filters for IPv%d", ipVersion)
-	}
-	log.Debugf("Processed BGP filters (IPv%d): found %d filters", ipVersion, len(config.Filters))
-
 	// Update appropriate cache
 	if ipVersion == 4 {
 		configCache = &bgpConfigCache{
@@ -582,20 +576,23 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 	}
 
 	// Next hop mode
-	if nhMode, ok := raw["next_hop_mode"].(string); ok && nhMode == "Self" {
-		peer.NextHopSelf = true
-	} else if ok && nhMode == "Keep" {
-		peer.NextHopKeep = true
+	if nhMode, ok := raw["next_hop_mode"].(string); ok {
+		if nhMode == "Self" {
+			peer.NextHopSelf = true
+		} else if nhMode == "Keep" {
+			peer.NextHopKeep = true
+		}
 	}
 	// Legacy keep_next_hop field - only apply for eBGP peers
-	if keepNH, ok := raw["keep_next_hop"].(bool); ok && keepNH {
-		// Only set NextHopKeep if peer AS != effective node AS (eBGP)
-		if peer.AsNumber != effectiveNodeAS {
+	if keepNH, ok := raw["keep_next_hop"].(bool); ok {
+		if keepNH && peer.AsNumber != effectiveNodeAS {
 			peer.NextHopKeep = true
 		}
 	}
 
 	// Route reflector handling
+	// If the peer is eBGP and has a different cluster ID than the current node,
+	// this node is a route reflector and the peer is a route reflector client.
 	if peer.AsNumber == effectiveNodeAS && nodeClusterID != "" {
 		if peerRRClusterID, ok := raw["rr_cluster_id"].(string); ok {
 			if peerRRClusterID != nodeClusterID {
@@ -605,6 +602,9 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 		}
 	}
 
+	// Passive mode handling
+	// If the peer is a mesh, global, or local workload peer and passive is not set explicitly,
+	// set passive to true if the peer IP is lexically greater than the current node IP.
 	if (peer.Type == "mesh" || peer.Type == "global" || peer.Type == "local_workload") && !peer.Passive {
 		if calicoNode, ok := raw["calico_node"].(bool); ok && calicoNode {
 			if peerIP > currentNodeIP {
@@ -796,30 +796,3 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	return nil
 }
 
-// TODO: processBGPFilters processes BGP filter definitions
-func (c *client) processBGPFilters(config *types.BirdBGPConfig, ipVersion int) error {
-	// This would process BGP filter resources from the datastore
-	// For now, we'll include standard filters.
-
-	config.Filters["calico_pools"] = `filter calico_pools {
-  if ( net ~ [ 10.0.0.0/8+, 172.16.0.0/12+, 192.168.0.0/16+ ] ) then {
-    accept;
-  }
-  reject;
-}`
-
-	config.Filters["calico_export"] = `filter calico_export {
-  if source = RTS_DEVICE then accept;
-  reject;
-}`
-
-	config.Filters["all"] = `filter all {
-  accept;
-}`
-
-	config.Filters["none"] = `filter none {
-  reject;
-}`
-
-	return nil
-}
