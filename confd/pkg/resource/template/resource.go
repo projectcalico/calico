@@ -319,12 +319,6 @@ func (t *TemplateResource) check() error {
 	output, err := c.CombinedOutput()
 	if err != nil {
 		log.Errorf("Error from checkcmd %q: %q", cmdBuffer.String(), string(output))
-		// DEBUG: Print the failed config file contents
-		if fileContents, readErr := os.ReadFile(t.StageFile.Name()); readErr == nil {
-			log.Errorf("DEBUG: Failed bird.cfg contents:\n%s", string(fileContents))
-		} else {
-			log.Errorf("DEBUG: Could not read failed config file %s: %v", t.StageFile.Name(), readErr)
-		}
 		return err
 	}
 	log.Debug(fmt.Sprintf("Output from checkcmd: %q", string(output)))
