@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -378,15 +377,882 @@ func TestTTLSecurityFormatting(t *testing.T) {
 	}
 }
 
-func TestCommunityRule_Structure(t *testing.T) {
-	rule := types.CommunityRule{
-		CIDR:          "10.0.0.0/8",
-		AddStatements: []string{"bgp_community.add((65000, 100));"},
+// =============================================================================
+// populateNodeConfig Tests
+// =============================================================================
+
+func TestPopulateNodeConfig_BasicIPv4(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Clear CALICO_ROUTER_ID env var for this test
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
 	}
 
-	assert.Equal(t, "10.0.0.0/8", rule.CIDR)
-	require.Len(t, rule.AddStatements, 1)
-	assert.Contains(t, rule.AddStatements[0], "bgp_community.add")
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "10.0.0.1", config.NodeIP)
+	assert.Equal(t, "10.0.0.1", config.RouterID) // Default router ID is IPv4
+	assert.Equal(t, "64512", config.AsNumber)
+	assert.Empty(t, config.RouterIDComment) // No comment for IPv4
+}
+
+func TestPopulateNodeConfig_BasicIPv6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/test-node/ip_addr_v6": "fd00::1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 6)
+	require.NoError(t, err)
+
+	assert.Equal(t, "10.0.0.1", config.NodeIP)
+	assert.Equal(t, "fd00::1", config.NodeIPv6)
+	assert.Equal(t, "10.0.0.1", config.RouterID) // Router ID is still IPv4
+	assert.Equal(t, "64512", config.AsNumber)
+	// IPv6 should have a comment explaining router ID is IPv4
+	assert.Contains(t, config.RouterIDComment, "IPv4")
+}
+
+func TestPopulateNodeConfig_NodeSpecificAS(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/test-node/as_num":     "65001", // Node-specific AS
+		"/calico/bgp/v1/global/as_num":             "64512", // Global AS (should be ignored)
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Node-specific AS should take precedence
+	assert.Equal(t, "65001", config.AsNumber)
+}
+
+func TestPopulateNodeConfig_RouterIDHash(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node-hash"
+	defer func() { NodeName = originalNodeName }()
+
+	require.NoError(t, os.Setenv("CALICO_ROUTER_ID", "hash"))
+	defer func() { _ = os.Unsetenv("CALICO_ROUTER_ID") }()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node-hash/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":                  "64512",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Router ID should be hash-generated, not the node IP
+	assert.NotEqual(t, "10.0.0.1", config.RouterID)
+	assert.Regexp(t, `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`, config.RouterID)
+	// No comment for IPv4 even with hash
+	assert.Empty(t, config.RouterIDComment)
+}
+
+func TestPopulateNodeConfig_RouterIDHashIPv6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node-hash"
+	defer func() { NodeName = originalNodeName }()
+
+	require.NoError(t, os.Setenv("CALICO_ROUTER_ID", "hash"))
+	defer func() { _ = os.Unsetenv("CALICO_ROUTER_ID") }()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node-hash/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/test-node-hash/ip_addr_v6": "fd00::1",
+		"/calico/bgp/v1/global/as_num":                  "64512",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 6)
+	require.NoError(t, err)
+
+	// Router ID should be hash-generated
+	assert.NotEqual(t, "10.0.0.1", config.RouterID)
+	// IPv6 with hash should have the hash comment
+	assert.Contains(t, config.RouterIDComment, "hash")
+}
+
+func TestPopulateNodeConfig_ExplicitRouterID(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	require.NoError(t, os.Setenv("CALICO_ROUTER_ID", "192.168.1.1"))
+	defer func() { _ = os.Unsetenv("CALICO_ROUTER_ID") }()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Router ID should be the explicit value
+	assert.Equal(t, "192.168.1.1", config.RouterID)
+}
+
+func TestPopulateNodeConfig_LogLevelDebug(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/global/loglevel":           "debug",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "debug", config.LogLevel)
+	assert.Equal(t, "all", config.DebugMode)
+}
+
+func TestPopulateNodeConfig_LogLevelInfo(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/global/loglevel":           "info",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "info", config.LogLevel)
+	assert.Equal(t, "{ states }", config.DebugMode)
+}
+
+func TestPopulateNodeConfig_LogLevelNone(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/global/loglevel":           "none",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "none", config.LogLevel)
+	assert.Empty(t, config.DebugMode) // No debug output for "none"
+}
+
+func TestPopulateNodeConfig_NodeSpecificLogLevel(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/global/loglevel":           "info",  // Global
+		"/calico/bgp/v1/host/test-node/loglevel":   "debug", // Node-specific (should win)
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "debug", config.LogLevel)
+	assert.Equal(t, "all", config.DebugMode)
+}
+
+func TestPopulateNodeConfig_BindModeNodeIP_IPv4(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/global/bind_mode":          "NodeIP",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "10.0.0.1", config.ListenAddress)
+}
+
+func TestPopulateNodeConfig_BindModeNodeIP_IPv6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/test-node/ip_addr_v6": "fd00::1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/global/bind_mode":          "NodeIP",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 6)
+	require.NoError(t, err)
+
+	// IPv6 should use IPv6 address for listen
+	assert.Equal(t, "fd00::1", config.ListenAddress)
+}
+
+func TestPopulateNodeConfig_ListenPort(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/global/listen_port":        "1790",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "1790", config.ListenPort)
+}
+
+func TestPopulateNodeConfig_NodeSpecificListenPort(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4":  "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":              "64512",
+		"/calico/bgp/v1/global/listen_port":         "1790", // Global
+		"/calico/bgp/v1/host/test-node/listen_port": "1791", // Node-specific (should win)
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "1791", config.ListenPort)
+}
+
+func TestPopulateNodeConfig_IgnoredInterfaces_Default(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Default pattern
+	assert.Equal(t, `-"cali*", -"kube-ipvs*", "*"`, config.DirectInterfaces)
+}
+
+func TestPopulateNodeConfig_IgnoredInterfaces_Custom(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/global/ignored_interfaces": "eth0,docker*",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Custom interfaces plus standard exclusions
+	assert.Contains(t, config.DirectInterfaces, `-"eth0"`)
+	assert.Contains(t, config.DirectInterfaces, `-"docker*"`)
+	assert.Contains(t, config.DirectInterfaces, `-"cali*"`)
+	assert.Contains(t, config.DirectInterfaces, `-"kube-ipvs*"`)
+	assert.Contains(t, config.DirectInterfaces, `"*"`)
+}
+
+func TestPopulateNodeConfig_NodeSpecificIgnoredInterfaces(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4":         "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":                     "64512",
+		"/calico/bgp/v1/global/ignored_interfaces":         "global-if", // Global
+		"/calico/bgp/v1/host/test-node/ignored_interfaces": "node-if",   // Node-specific (should win)
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Node-specific interface should be present
+	assert.Contains(t, config.DirectInterfaces, `-"node-if"`)
+	// Global interface should NOT be present
+	assert.NotContains(t, config.DirectInterfaces, `-"global-if"`)
+}
+
+func TestPopulateNodeConfig_NodeSpecificBindMode(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		"/calico/bgp/v1/host/test-node/bind_mode":  "NodeIP", // Node-specific
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	assert.Equal(t, "10.0.0.1", config.ListenAddress)
+}
+
+func TestPopulateNodeConfig_NoBindMode(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No bind_mode set
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// ListenAddress should be empty when bind_mode is not NodeIP
+	assert.Empty(t, config.ListenAddress)
+}
+
+func TestPopulateNodeConfig_DefaultLogLevel(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{
+		NodeName: NodeName,
+	}
+
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Default debug mode when no log level is set
+	assert.Equal(t, "{ states }", config.DebugMode)
+}
+
+// =============================================================================
+// processCommunityRules Tests
+// =============================================================================
+
+func TestProcessCommunityRules_StandardCommunity(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Community advertisements with standard 2-part community
+	advertisements := []map[string]interface{}{
+		{
+			"cidr":        "10.0.0.0/8",
+			"communities": []interface{}{"65000:100"},
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	require.Len(t, config.Communities, 1)
+	assert.Equal(t, "10.0.0.0/8", config.Communities[0].CIDR)
+	require.Len(t, config.Communities[0].AddStatements, 1)
+	assert.Equal(t, "bgp_community.add((65000, 100));", config.Communities[0].AddStatements[0])
+}
+
+func TestProcessCommunityRules_LargeCommunity(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Community advertisements with large 3-part community
+	advertisements := []map[string]interface{}{
+		{
+			"cidr":        "172.16.0.0/12",
+			"communities": []interface{}{"65000:100:200"},
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	require.Len(t, config.Communities, 1)
+	assert.Equal(t, "172.16.0.0/12", config.Communities[0].CIDR)
+	require.Len(t, config.Communities[0].AddStatements, 1)
+	assert.Equal(t, "bgp_large_community.add((65000, 100, 200));", config.Communities[0].AddStatements[0])
+}
+
+func TestProcessCommunityRules_MultipleCommunities(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Multiple communities for a single CIDR
+	advertisements := []map[string]interface{}{
+		{
+			"cidr":        "10.0.0.0/8",
+			"communities": []interface{}{"65000:100", "65000:200", "65001:50:100"},
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	require.Len(t, config.Communities, 1)
+	require.Len(t, config.Communities[0].AddStatements, 3)
+	assert.Equal(t, "bgp_community.add((65000, 100));", config.Communities[0].AddStatements[0])
+	assert.Equal(t, "bgp_community.add((65000, 200));", config.Communities[0].AddStatements[1])
+	assert.Equal(t, "bgp_large_community.add((65001, 50, 100));", config.Communities[0].AddStatements[2])
+}
+
+func TestProcessCommunityRules_MultipleCIDRs(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Multiple advertisements with different CIDRs
+	advertisements := []map[string]interface{}{
+		{
+			"cidr":        "10.0.0.0/8",
+			"communities": []interface{}{"65000:100"},
+		},
+		{
+			"cidr":        "192.168.0.0/16",
+			"communities": []interface{}{"65000:200"},
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	require.Len(t, config.Communities, 2)
+	assert.Equal(t, "10.0.0.0/8", config.Communities[0].CIDR)
+	assert.Equal(t, "192.168.0.0/16", config.Communities[1].CIDR)
+}
+
+func TestProcessCommunityRules_IPv6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// IPv6 prefix advertisement
+	advertisements := []map[string]interface{}{
+		{
+			"cidr":        "fd00::/8",
+			"communities": []interface{}{"65000:100"},
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v6": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 6)
+	require.NoError(t, err)
+
+	require.Len(t, config.Communities, 1)
+	assert.Equal(t, "fd00::/8", config.Communities[0].CIDR)
+}
+
+func TestProcessCommunityRules_NodeSpecific(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Node-specific should take precedence over global
+	nodeAdv := []map[string]interface{}{
+		{
+			"cidr":        "10.0.0.0/8",
+			"communities": []interface{}{"65001:100"}, // Node-specific
+		},
+	}
+	nodeAdvJSON, _ := json.Marshal(nodeAdv)
+
+	globalAdv := []map[string]interface{}{
+		{
+			"cidr":        "172.16.0.0/12",
+			"communities": []interface{}{"65000:200"}, // Global (should be ignored)
+		},
+	}
+	globalAdvJSON, _ := json.Marshal(globalAdv)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/prefix_advertisements/ip_v4": string(nodeAdvJSON),
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4":         string(globalAdvJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	require.Len(t, config.Communities, 1)
+	// Should use node-specific, not global
+	assert.Equal(t, "10.0.0.0/8", config.Communities[0].CIDR)
+	assert.Contains(t, config.Communities[0].AddStatements[0], "65001")
+}
+
+func TestProcessCommunityRules_GlobalFallback(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Only global defined, no node-specific
+	globalAdv := []map[string]interface{}{
+		{
+			"cidr":        "172.16.0.0/12",
+			"communities": []interface{}{"65000:200"},
+		},
+	}
+	globalAdvJSON, _ := json.Marshal(globalAdv)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(globalAdvJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	require.Len(t, config.Communities, 1)
+	assert.Equal(t, "172.16.0.0/12", config.Communities[0].CIDR)
+}
+
+func TestProcessCommunityRules_NoCommunities(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// No prefix_advertisements defined
+	cache := map[string]string{}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	// Should be empty, no error
+	assert.Len(t, config.Communities, 0)
+}
+
+func TestProcessCommunityRules_EmptyCommunities(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Advertisement with empty communities array
+	advertisements := []map[string]interface{}{
+		{
+			"cidr":        "10.0.0.0/8",
+			"communities": []interface{}{},
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	// Should be empty since no add statements were generated
+	assert.Len(t, config.Communities, 0)
+}
+
+func TestProcessCommunityRules_InvalidCommunityFormat(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Community with invalid format (not 2 or 3 parts)
+	advertisements := []map[string]interface{}{
+		{
+			"cidr": "10.0.0.0/8",
+			"communities": []interface{}{
+				"65000",     // Invalid: only 1 part
+				"65000:100", // Valid: 2 parts
+				"a:b:c:d",   // Invalid: 4 parts
+			},
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	// Should only have the valid community
+	require.Len(t, config.Communities, 1)
+	require.Len(t, config.Communities[0].AddStatements, 1)
+	assert.Contains(t, config.Communities[0].AddStatements[0], "65000, 100")
+}
+
+func TestProcessCommunityRules_MissingCIDR(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Advertisement without CIDR field
+	advertisements := []map[string]interface{}{
+		{
+			"communities": []interface{}{"65000:100"},
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	// Should be empty since CIDR is missing
+	assert.Len(t, config.Communities, 0)
+}
+
+func TestProcessCommunityRules_MissingCommunities(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	// Advertisement without communities field
+	advertisements := []map[string]interface{}{
+		{
+			"cidr": "10.0.0.0/8",
+		},
+	}
+	advJSON, _ := json.Marshal(advertisements)
+
+	cache := map[string]string{
+		"/calico/bgp/v1/global/prefix_advertisements/ip_v4": string(advJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+
+	err := c.processCommunityRules(config, 4)
+	require.NoError(t, err)
+
+	// Should be empty since communities are missing
+	assert.Len(t, config.Communities, 0)
 }
 
 // =============================================================================
@@ -406,13 +1272,13 @@ func TestProcessMeshPeers_BasicMesh(t *testing.T) {
 	meshConfigJSON, _ := json.Marshal(meshConfig)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/node_mesh":         string(meshConfigJSON),
-		"/calico/bgp/v1/global/as_num":            "64512",
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":   "10.0.0.1",
-		"/calico/bgp/v1/host/node-2/ip_addr_v4":   "10.0.0.2",
-		"/calico/bgp/v1/host/node-3/ip_addr_v4":   "10.0.0.3",
-		"/calico/bgp/v1/host/node-2/as_num":       "64512",
-		"/calico/bgp/v1/host/node-3/as_num":       "64512",
+		"/calico/bgp/v1/global/node_mesh":       string(meshConfigJSON),
+		"/calico/bgp/v1/global/as_num":          "64512",
+		"/calico/bgp/v1/host/node-1/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/node-2/ip_addr_v4": "10.0.0.2",
+		"/calico/bgp/v1/host/node-3/ip_addr_v4": "10.0.0.3",
+		"/calico/bgp/v1/host/node-2/as_num":     "64512",
+		"/calico/bgp/v1/host/node-3/as_num":     "64512",
 	}
 
 	c := newTestClient(cache, nil)
@@ -451,10 +1317,10 @@ func TestProcessMeshPeers_IPv6(t *testing.T) {
 	meshConfigJSON, _ := json.Marshal(meshConfig)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/node_mesh":         string(meshConfigJSON),
-		"/calico/bgp/v1/global/as_num":            "64512",
-		"/calico/bgp/v1/host/node-1/ip_addr_v6":   "fd00::1",
-		"/calico/bgp/v1/host/node-2/ip_addr_v6":   "fd00::2",
+		"/calico/bgp/v1/global/node_mesh":       string(meshConfigJSON),
+		"/calico/bgp/v1/global/as_num":          "64512",
+		"/calico/bgp/v1/host/node-1/ip_addr_v6": "fd00::1",
+		"/calico/bgp/v1/host/node-2/ip_addr_v6": "fd00::2",
 	}
 
 	c := newTestClient(cache, nil)
@@ -544,11 +1410,11 @@ func TestProcessMeshPeers_SkipRouteReflectorPeers(t *testing.T) {
 	meshConfigJSON, _ := json.Marshal(meshConfig)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/node_mesh":         string(meshConfigJSON),
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":   "10.0.0.1",
-		"/calico/bgp/v1/host/node-2/ip_addr_v4":   "10.0.0.2",
+		"/calico/bgp/v1/global/node_mesh":          string(meshConfigJSON),
+		"/calico/bgp/v1/host/node-1/ip_addr_v4":    "10.0.0.1",
+		"/calico/bgp/v1/host/node-2/ip_addr_v4":    "10.0.0.2",
 		"/calico/bgp/v1/host/node-2/rr_cluster_id": "rr-cluster",
-		"/calico/bgp/v1/host/node-3/ip_addr_v4":   "10.0.0.3",
+		"/calico/bgp/v1/host/node-3/ip_addr_v4":    "10.0.0.3",
 	}
 
 	c := newTestClient(cache, nil)
@@ -580,9 +1446,9 @@ func TestProcessMeshPeers_PassiveMode(t *testing.T) {
 	// because string comparison is lexicographical, not numerical
 	cache := map[string]string{
 		"/calico/bgp/v1/global/node_mesh":       string(meshConfigJSON),
-		"/calico/bgp/v1/host/node-1/ip_addr_v4": "10.0.0.5",  // Our IP
-		"/calico/bgp/v1/host/node-2/ip_addr_v4": "10.0.0.2",  // "10.0.0.2" < "10.0.0.5" (string) - NOT passive
-		"/calico/bgp/v1/host/node-3/ip_addr_v4": "10.0.0.8",  // "10.0.0.8" > "10.0.0.5" (string) - PASSIVE
+		"/calico/bgp/v1/host/node-1/ip_addr_v4": "10.0.0.5", // Our IP
+		"/calico/bgp/v1/host/node-2/ip_addr_v4": "10.0.0.2", // "10.0.0.2" < "10.0.0.5" (string) - NOT passive
+		"/calico/bgp/v1/host/node-3/ip_addr_v4": "10.0.0.8", // "10.0.0.8" > "10.0.0.5" (string) - PASSIVE
 	}
 
 	c := newTestClient(cache, nil)
@@ -654,9 +1520,9 @@ func TestProcessGlobalPeers_BasicPeer(t *testing.T) {
 	peerDataJSON, _ := json.Marshal(peerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num":                     "64512",
-		"/calico/bgp/v1/global/peer_v4/192.168.1.100":      string(peerDataJSON),
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":            "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":                "64512",
+		"/calico/bgp/v1/global/peer_v4/192.168.1.100": string(peerDataJSON),
+		"/calico/bgp/v1/host/node-1/ip_addr_v4":       "10.0.0.1",
 	}
 
 	c := newTestClient(cache, nil)
@@ -786,8 +1652,8 @@ func TestProcessNodePeers_BasicPeer(t *testing.T) {
 	peerDataJSON, _ := json.Marshal(peerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num":                   "64512",
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":          "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":                    "64512",
+		"/calico/bgp/v1/host/node-1/ip_addr_v4":           "10.0.0.1",
 		"/calico/bgp/v1/host/node-1/peer_v4/172.16.0.100": string(peerDataJSON),
 	}
 
@@ -819,9 +1685,9 @@ func TestProcessNodePeers_IPv6Peer(t *testing.T) {
 	peerDataJSON, _ := json.Marshal(peerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num":                  "64512",
-		"/calico/bgp/v1/host/node-1/ip_addr_v6":         "fd00::1",
-		"/calico/bgp/v1/host/node-1/peer_v6/fe80::100":  string(peerDataJSON),
+		"/calico/bgp/v1/global/as_num":                 "64512",
+		"/calico/bgp/v1/host/node-1/ip_addr_v6":        "fd00::1",
+		"/calico/bgp/v1/host/node-1/peer_v6/fe80::100": string(peerDataJSON),
 	}
 
 	c := newTestClient(cache, nil)
@@ -853,9 +1719,9 @@ func TestProcessNodePeers_LocalBGPPeer(t *testing.T) {
 	peerDataJSON, _ := json.Marshal(peerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num":                      "64512",
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":             "10.0.0.1",
-		"/calico/bgp/v1/host/node-1/peer_v4/192.168.1.50":   string(peerDataJSON),
+		"/calico/bgp/v1/global/as_num":                    "64512",
+		"/calico/bgp/v1/host/node-1/ip_addr_v4":           "10.0.0.1",
+		"/calico/bgp/v1/host/node-1/peer_v4/192.168.1.50": string(peerDataJSON),
 	}
 
 	c := newTestClient(cache, nil)
@@ -895,12 +1761,12 @@ func TestProcessPeers_CombinedMeshGlobalNode(t *testing.T) {
 	nodePeerJSON, _ := json.Marshal(nodePeerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/node_mesh":                    string(meshConfigJSON),
-		"/calico/bgp/v1/global/as_num":                       "64512",
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":              "10.0.0.1",
-		"/calico/bgp/v1/host/node-2/ip_addr_v4":              "10.0.0.2",
-		"/calico/bgp/v1/global/peer_v4/192.168.1.100":        string(globalPeerJSON),
-		"/calico/bgp/v1/host/node-1/peer_v4/172.16.0.100":    string(nodePeerJSON),
+		"/calico/bgp/v1/global/node_mesh":                 string(meshConfigJSON),
+		"/calico/bgp/v1/global/as_num":                    "64512",
+		"/calico/bgp/v1/host/node-1/ip_addr_v4":           "10.0.0.1",
+		"/calico/bgp/v1/host/node-2/ip_addr_v4":           "10.0.0.2",
+		"/calico/bgp/v1/global/peer_v4/192.168.1.100":     string(globalPeerJSON),
+		"/calico/bgp/v1/host/node-1/peer_v4/172.16.0.100": string(nodePeerJSON),
 	}
 
 	c := newTestClient(cache, nil)
@@ -933,13 +1799,13 @@ func TestProcessPeers_NextHopModes(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	tests := []struct {
-		name           string
-		nextHopMode    string
-		keepNextHop    bool
-		peerAS         float64
-		nodeAS         string
-		expectSelf     bool
-		expectKeep     bool
+		name        string
+		nextHopMode string
+		keepNextHop bool
+		peerAS      float64
+		nodeAS      string
+		expectSelf  bool
+		expectKeep  bool
 	}{
 		{
 			name:        "NextHopSelf mode",
@@ -1042,7 +1908,6 @@ func TestProcessPeers_RouteReflectorClient(t *testing.T) {
 	assert.Equal(t, "cluster-1", config.Peers[0].RRClusterID)
 }
 
-
 func TestProcessPeers_LocalAS(t *testing.T) {
 	originalNodeName := NodeName
 	NodeName = "node-1"
@@ -1077,43 +1942,6 @@ func TestProcessPeers_LocalAS(t *testing.T) {
 	assert.Equal(t, "2", config.Peers[0].NumAllowLocalAs)
 }
 
-// Test that caches are properly used
-func TestClient_GetValues_UsesBothCaches(t *testing.T) {
-	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num": "64512",
-	}
-	peeringCache := map[string]string{
-		"/calico/bgp/v1/host/node-1/peer_v4/192.168.1.100": `{"ip":"192.168.1.100"}`,
-	}
-
-	c := &client{
-		cache:        cache,
-		peeringCache: peeringCache,
-		// Note: waitForSync is zero-value, so Wait() returns immediately
-	}
-
-	// Test getting from cache
-	values, err := c.GetValues([]string{"/calico/bgp/v1/global"})
-	require.NoError(t, err)
-	assert.Contains(t, values, "/calico/bgp/v1/global/as_num")
-
-	// Test getting from peeringCache
-	values, err = c.GetValues([]string{"/calico/bgp/v1/host"})
-	require.NoError(t, err)
-	assert.Contains(t, values, "/calico/bgp/v1/host/node-1/peer_v4/192.168.1.100")
-}
-
-// Helper to properly set up waitForSync for tests that need it
-func newTestClientWithSync(cache, peeringCache map[string]string) *client {
-	c := &client{
-		cache:        cache,
-		peeringCache: peeringCache,
-		cacheLock:    sync.Mutex{},
-	}
-	// The zero-value sync.WaitGroup has counter 0, so Wait() returns immediately
-	return c
-}
-
 // =============================================================================
 // BGP Filter Tests
 // =============================================================================
@@ -1124,9 +1952,9 @@ func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 		"spec": map[string]interface{}{
 			"importV4": []interface{}{
 				map[string]interface{}{
-					"action": "Accept",
+					"action":        "Accept",
 					"matchOperator": "In",
-					"cidr": "10.0.0.0/8",
+					"cidr":          "10.0.0.0/8",
 				},
 			},
 		},
@@ -1386,10 +2214,10 @@ func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
 	peerDataJSON, _ := json.Marshal(peerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num":                                     "64512",
-		"/calico/bgp/v1/global/peer_v4/192.168.1.100":                      string(peerDataJSON),
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":                            "10.0.0.1",
-		"/calico/resources/v3/projectcalico.org/bgpfilters/test-filter":    string(bgpFilterJSON),
+		"/calico/bgp/v1/global/as_num":                                  "64512",
+		"/calico/bgp/v1/global/peer_v4/192.168.1.100":                   string(peerDataJSON),
+		"/calico/bgp/v1/host/node-1/ip_addr_v4":                         "10.0.0.1",
+		"/calico/resources/v3/projectcalico.org/bgpfilters/test-filter": string(bgpFilterJSON),
 	}
 
 	c := newTestClient(cache, nil)
@@ -1444,10 +2272,10 @@ func TestProcessGlobalPeers_WithBGPFilter_IPv6(t *testing.T) {
 	peerDataJSON, _ := json.Marshal(peerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num":                                          "64512",
-		"/calico/bgp/v1/global/peer_v6/2001:db8::100":                           string(peerDataJSON),
-		"/calico/bgp/v1/host/node-1/ip_addr_v6":                                 "fd00::1",
-		"/calico/resources/v3/projectcalico.org/bgpfilters/ipv6-bgp-filter":     string(bgpFilterJSON),
+		"/calico/bgp/v1/global/as_num":                                      "64512",
+		"/calico/bgp/v1/global/peer_v6/2001:db8::100":                       string(peerDataJSON),
+		"/calico/bgp/v1/host/node-1/ip_addr_v6":                             "fd00::1",
+		"/calico/resources/v3/projectcalico.org/bgpfilters/ipv6-bgp-filter": string(bgpFilterJSON),
 	}
 
 	c := newTestClient(cache, nil)
@@ -1494,9 +2322,9 @@ func TestProcessGlobalPeers_WithLongFilterName(t *testing.T) {
 	peerDataJSON, _ := json.Marshal(peerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num":                           "64512",
-		"/calico/bgp/v1/global/peer_v4/192.168.1.100":            string(peerDataJSON),
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":                  "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":                                        "64512",
+		"/calico/bgp/v1/global/peer_v4/192.168.1.100":                         string(peerDataJSON),
+		"/calico/bgp/v1/host/node-1/ip_addr_v4":                               "10.0.0.1",
 		"/calico/resources/v3/projectcalico.org/bgpfilters/" + longFilterName: string(bgpFilterJSON),
 	}
 
@@ -1549,10 +2377,10 @@ func TestProcessNodePeers_WithBGPFilter(t *testing.T) {
 	peerDataJSON, _ := json.Marshal(peerData)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/as_num":                                           "64512",
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":                                  "10.0.0.1",
-		"/calico/bgp/v1/host/node-1/peer_v4/172.16.0.100":                        string(peerDataJSON),
-		"/calico/resources/v3/projectcalico.org/bgpfilters/node-peer-filter":     string(bgpFilterJSON),
+		"/calico/bgp/v1/global/as_num":                                       "64512",
+		"/calico/bgp/v1/host/node-1/ip_addr_v4":                              "10.0.0.1",
+		"/calico/bgp/v1/host/node-1/peer_v4/172.16.0.100":                    string(peerDataJSON),
+		"/calico/resources/v3/projectcalico.org/bgpfilters/node-peer-filter": string(bgpFilterJSON),
 	}
 
 	c := newTestClient(cache, nil)
@@ -1575,9 +2403,9 @@ func TestProcessNodePeers_WithBGPFilter(t *testing.T) {
 func TestTruncateBGPFilterName(t *testing.T) {
 	// Test the truncation function directly
 	tests := []struct {
-		name         string
-		filterName   string
-		shouldHash   bool
+		name       string
+		filterName string
+		shouldHash bool
 	}{
 		{
 			name:       "Short name - no truncation",
