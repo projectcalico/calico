@@ -809,3 +809,4 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	return nil
 }
 
+

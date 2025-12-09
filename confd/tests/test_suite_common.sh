@@ -798,7 +798,6 @@ test_confd_templates() {
     testdir=$1
     echo "Comparing with templates in $testdir"
     for i in $(seq 1 10); do echo "comparing templates attempt $i" && compare_templates $testdir 0 false && break || sleep 1; done
-    echo "DEBUG: Final compare_templates call with output=1, UPDATE_EXPECTED_DATA=${UPDATE_EXPECTED_DATA}"
     compare_templates $testdir 1 ${UPDATE_EXPECTED_DATA}
 }
 
