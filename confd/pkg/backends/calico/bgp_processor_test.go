@@ -158,8 +158,8 @@ func TestBuildExportFilter_EmptyFilters(t *testing.T) {
 
 func TestRouterIDGeneration_Hash(t *testing.T) {
 	NodeName = "test-node-hash"
-	os.Setenv("CALICO_ROUTER_ID", "hash")
-	defer os.Unsetenv("CALICO_ROUTER_ID")
+	require.NoError(t, os.Setenv("CALICO_ROUTER_ID", "hash"))
+	defer func() { _ = os.Unsetenv("CALICO_ROUTER_ID") }()
 
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
@@ -186,8 +186,8 @@ func TestRouterIDGeneration_Hash(t *testing.T) {
 }
 
 func TestRouterIDGeneration_Explicit(t *testing.T) {
-	os.Setenv("CALICO_ROUTER_ID", "192.168.1.1")
-	defer os.Unsetenv("CALICO_ROUTER_ID")
+	require.NoError(t, os.Setenv("CALICO_ROUTER_ID", "192.168.1.1"))
+	defer func() { _ = os.Unsetenv("CALICO_ROUTER_ID") }()
 
 	config := &types.BirdBGPConfig{
 		NodeIP: "10.0.0.1",
@@ -202,7 +202,7 @@ func TestRouterIDGeneration_Explicit(t *testing.T) {
 }
 
 func TestRouterIDGeneration_FromNodeIP(t *testing.T) {
-	os.Unsetenv("CALICO_ROUTER_ID")
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
 
 	config := &types.BirdBGPConfig{
 		NodeIP: "10.0.0.1",
