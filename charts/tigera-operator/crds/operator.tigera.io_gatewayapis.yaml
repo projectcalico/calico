@@ -5458,5 +5458,8 @@ spec:
                   type: object
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default'
+              rule: self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
       served: true
       storage: true
