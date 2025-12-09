@@ -78,7 +78,7 @@ function copy_run_fv_script_to_windows() {
   # Copy the run-fv script to Windows node
   mkdir -p ./windows
   ${GOMPLATE} --file ./run-fv-cni-plugin.ps1 --out ./windows/run-fv.ps1
-  
+
   # Copy run-fv.ps1 to Windows node using ASO helper
   ${ASO_DIR}/scp-to-windows.sh 0 ./windows/run-fv.ps1 'c:\k\run-fv.ps1'
   echo "Copied run-fv.ps1 to Windows node"
