@@ -13,4 +13,4 @@ third_party/envoy-ratelimit/  @projectcalico/ingress-maintainers
 app-policy/                   @projectcalico/ingress-maintainers
 
 # E2E runs
-.semaphore/end-to-end         @projectcalico/e2e-maintainers
+.semaphore/end-to-end/        @projectcalico/e2e-maintainers
