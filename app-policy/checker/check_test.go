@@ -22,6 +22,7 @@ import (
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"github.com/gogo/googleapis/google/rpc"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/ip"
@@ -66,12 +67,13 @@ func TestEvaluateEndpointWithMatchingPolicy(t *testing.T) {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "tier1",
-				IngressPolicies: []string{"policy1"},
+				IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:   "Deny",
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action: "allow",
@@ -107,12 +109,12 @@ func TestEvaluateEndpointWithNonMatchingPolicyTierDefaultAction(t *testing.T) {
 			tiers: []*proto.TierInfo{
 				{
 					Name:            "tier1",
-					IngressPolicies: []string{"policy1"},
+					IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
 					DefaultAction:   "Deny",
 				},
 				{
 					Name:            "tier2",
-					IngressPolicies: []string{"policy2"},
+					IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					DefaultAction:   "Pass",
 				},
 			},
@@ -125,12 +127,12 @@ func TestEvaluateEndpointWithNonMatchingPolicyTierDefaultAction(t *testing.T) {
 			tiers: []*proto.TierInfo{
 				{
 					Name:            "tier1",
-					IngressPolicies: []string{"policy1"},
+					IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
 					DefaultAction:   "Pass",
 				},
 				{
 					Name:            "tier2",
-					IngressPolicies: []string{"policy2"},
+					IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 					DefaultAction:   "Deny",
 				},
 			},
@@ -144,8 +146,8 @@ func TestEvaluateEndpointWithNonMatchingPolicyTierDefaultAction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := policystore.NewPolicyStore()
 			ep := &proto.WorkloadEndpoint{Tiers: tt.tiers}
-			store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{}
-			store.PolicyByID[types.PolicyID{Tier: "tier2", Name: "policy2"}] = &proto.Policy{}
+			store.PolicyByID[types.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{Tier: "default"}
+			store.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{Tier: "default"}
 
 			flow := &MockFlow{Protocol: 6, DestPort: 443}
 			trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
@@ -197,12 +199,13 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:           "tier1",
-				EgressPolicies: []string{"policy1"},
+				EgressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:  "Deny",
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy1", Tier: "tier1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier:      "tier1",
 		Namespace: "ns1",
 		OutboundRules: []*proto.Rule{
 			{
@@ -379,20 +382,22 @@ func TestCheckNoIngressPolicyRulesInTier(t *testing.T) {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:           "tier1",
-				EgressPolicies: []string{"policy1", "policy2"},
+				EgressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}, {Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:  "Deny",
 			},
 		},
 		ProfileIds: []string{"profile1"},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier1",
 		OutboundRules: []*proto.Rule{
 			{
 				Action: "allow",
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy2"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier1",
 		OutboundRules: []*proto.Rule{
 			{
 				Action: "allow",
@@ -480,12 +485,13 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "tier1",
-				IngressPolicies: []string{"policy1", "policy2"},
+				IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}, {Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:   "Deny",
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "deny",
@@ -493,7 +499,8 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy2"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "allow",
@@ -583,13 +590,14 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "tier1",
-				IngressPolicies: []string{"policy1"},
+				IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:   "Deny",
 			},
 		},
 		ProfileIds: []string{"profile1"},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy1"})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "deny",
@@ -631,14 +639,15 @@ func TestCheckStorePass(t *testing.T) {
 	store.Endpoint = &proto.WorkloadEndpoint{
 		Tiers: []*proto.TierInfo{{
 			Name:            "tier1",
-			IngressPolicies: []string{"policy1", "policy2"},
+			IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}, {Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 			DefaultAction:   "Deny",
 		}},
 		ProfileIds: []string{"profile1"},
 	}
 
 	// Policy1 matches and has action PASS, which means policy2 is not evaluated.
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Kind: v3.KindGlobalNetworkPolicy, Name: "policy1"})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "next-tier",
@@ -646,7 +655,8 @@ func TestCheckStorePass(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy2"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Kind: v3.KindGlobalNetworkPolicy, Name: "policy2"})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "deny",
@@ -689,7 +699,7 @@ func TestCheckStoreInitFails(t *testing.T) {
 	store.Endpoint = &proto.WorkloadEndpoint{
 		Tiers: []*proto.TierInfo{{
 			Name:            "tier1",
-			IngressPolicies: []string{"policy1", "policy2"},
+			IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}, {Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 			DefaultAction:   "Deny",
 		}},
 		ProfileIds: []string{"profile1"},
@@ -717,19 +727,20 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 	store.Endpoint = &proto.WorkloadEndpoint{
 		Tiers: []*proto.TierInfo{{
 			Name:            "tier1",
-			IngressPolicies: []string{"policy1", "policy2"},
+			IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}, {Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 			DefaultAction:   "Deny",
 		}},
 		ProfileIds: []string{"profile1"},
 	}
-	id := types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})
+	id := types.ProtoToPolicyID(&proto.PolicyID{Kind: v3.KindGlobalNetworkPolicy, Name: "policy1"})
 	store.PolicyByID[id] = &proto.Policy{InboundRules: []*proto.Rule{
 		{
 			Action: "allow",
 			HttpMatch: &proto.HTTPMatch{
 				Methods: []string{"GET", "POST"},
 				Paths: []*proto.HTTPMatch_PathMatch{
-					{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}},
+					{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}},
+				},
 			},
 		},
 	}}
@@ -760,22 +771,23 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "tier1",
-				IngressPolicies: []string{"policy1"},
+				IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:   "Deny",
 			},
 			{
 				Name:            "tier2",
-				IngressPolicies: []string{"policy2", "policy3"},
+				IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}, {Name: "policy3", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:   "Pass",
 			},
 			{
 				Name:            "tier3",
-				IngressPolicies: []string{"policy4"},
+				IngressPolicies: []*proto.PolicyID{{Name: "policy4", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:   "Deny",
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Kind: v3.KindGlobalNetworkPolicy, Name: "policy1"})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "next-tier",
@@ -783,7 +795,8 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier2", Name: "policy2"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier2",
 		InboundRules: []*proto.Rule{
 			{
 				Action: "deny",
@@ -793,7 +806,8 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier2", Name: "policy3"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy3", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier2",
 		InboundRules: []*proto.Rule{
 			{
 				Action: "allow",
@@ -803,7 +817,8 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier3", Name: "policy4"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy4", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier3",
 		InboundRules: []*proto.Rule{
 			{
 				Action: "allow",
@@ -853,17 +868,18 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "tier1",
-				IngressPolicies: []string{"policy1", "policy2"},
+				IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}, {Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:   "Deny",
 			},
 			{
 				Name:            "tier2",
-				IngressPolicies: []string{"policy3"},
+				IngressPolicies: []*proto.PolicyID{{Name: "policy3", Kind: v3.KindGlobalNetworkPolicy}},
 				DefaultAction:   "Pass",
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Kind: v3.KindGlobalNetworkPolicy, Name: "policy1"})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "deny",
@@ -871,7 +887,8 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy2"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Kind: v3.KindGlobalNetworkPolicy, Name: "policy2"})] = &proto.Policy{
+		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "next-tier",
@@ -879,7 +896,8 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier2", Name: "policy3"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy3", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
+		Tier: "tier2",
 		InboundRules: []*proto.Rule{
 			{
 				Action: "allow",
@@ -982,32 +1000,6 @@ func TestLookupEndpointKeysFromSrcDst(t *testing.T) {
 		Expect(err).To(BeNil(), fmt.Sprintf("Test case %d", i))
 		Expect(src).To(Equal(test.expectedSrc), fmt.Sprintf("Test case %d", i))
 		Expect(dst).To(Equal(test.expectedDst), fmt.Sprintf("Test case %d", i))
-	}
-}
-
-func TestGetPolicyName(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"default/tier.policy", "policy"},
-		{"default/tier.staged:policy", "staged:policy"},
-		{"tier.globalpolicy", "globalpolicy"},
-		{"tier.staged:globalpolicy", "staged:globalpolicy"},
-		{"default/knp.default.policy", "knp.default.policy"},
-		{"default/staged:knp.default.policy", "staged:knp.default.policy"},
-		{"default/knp.default.staged:policy", "knp.default.staged:policy"},
-		{"kcnp.kube-admin.policy", "kcnp.kube-admin.policy"},
-		{"kcnp.kube-baseline.policy", "kcnp.kube-baseline.policy"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.input, func(t *testing.T) {
-			result := getPolicyName(test.input)
-			if result != test.expected {
-				t.Errorf("expected %s, got %s", test.expected, result)
-			}
-		})
 	}
 }
 
