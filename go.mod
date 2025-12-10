@@ -89,7 +89,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.22
 	go.etcd.io/etcd/client/v3 v3.6.4
 	go.yaml.in/yaml/v3 v3.0.4
-	golang.org/x/crypto v0.43.0
+	golang.org/x/crypto v0.46.0
 	golang.org/x/mod v0.28.0
 	golang.org/x/net v0.46.0
 	golang.org/x/oauth2 v0.32.0
@@ -114,7 +114,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.33.6
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
-	k8s.io/kubernetes v1.33.5
+	k8s.io/kubernetes v1.33.6
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	modernc.org/memory v1.10.0
 	sigs.k8s.io/controller-runtime v0.20.4
