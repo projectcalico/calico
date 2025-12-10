@@ -1212,7 +1212,7 @@ func cleanupAllNetworkSets(clientset *kubernetes.Clientset, client client.Interf
 	}
 	log.WithField("count", len(ns.Items)).Info("networksets present")
 	for _, n := range ns.Items {
-		_, err = client.NetworkSets().Delete(ctx, n.Name, n.Namespace, options.DeleteOptions{})
+		_, err = client.NetworkSets().Delete(ctx, n.Namespace, n.Name, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
 		}

@@ -208,6 +208,11 @@ func (key ResourceKey) String() string {
 	return fmt.Sprintf("%s(%s)", key.Kind, key.Name)
 }
 
+// GetNamespace returns the namespace field of the ResourceKey.
+func (key ResourceKey) GetNamespace() string {
+	return key.Namespace
+}
+
 type ResourceListOptions struct {
 	// The name of the resource.
 	Name string

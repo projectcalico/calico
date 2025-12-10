@@ -104,7 +104,7 @@ func (nc *NetworkSetLookupsCache) RegisterWith(allUpdateDispatcher *dispatcher.D
 }
 
 // OnUpdate is the callback method registered with the AllUpdatesDispatcher for
-// the model.NetworkSet type. This method updates the mapping between networkSets
+// the NetworkSet type. This method updates the mapping between networkSets
 // and the corresponding CIDRs that they contain.
 func (nc *NetworkSetLookupsCache) OnUpdate(nsUpdate api.Update) (_ bool) {
 	switch k := nsUpdate.Key.(type) {
@@ -177,25 +177,40 @@ func (nc *NetworkSetLookupsCache) removeNetworkSet(key model.Key) {
 		nc.ipTree.DeleteKey(oldCIDR, key)
 	}
 	delete(nc.networkSets, key)
+
 	nc.reportNetworksetCacheMetrics()
 }
 
 // GetNetworkSetFromIP finds Longest Prefix Match CIDR from given IP ADDR and return last observed
 // Networkset for that CIDR
 func (nc *NetworkSetLookupsCache) GetNetworkSetFromIP(addr [16]byte) (ed EndpointData, ok bool) {
+	return nc.GetNetworkSetFromIPWithNamespace(addr, "")
+}
+
+// GetNetworkSetFromIPWithNamespace finds NetworkSet for the Given IP with namespace precedence.
+// It prioritizes NetworkSets in the preferredNamespace, falling back to longest prefix match of
+// the global networkSets if none found, then the first lexicographically ordered matching
+// NetworkSet if no other matches are found. If no preferred namespace is provided, it prioritizes
+// global NetworkSets.
+func (nc *NetworkSetLookupsCache) GetNetworkSetFromIPWithNamespace(ipAddr [16]byte, preferredNamespace string) (ed EndpointData, ok bool) {
+	netIP := net.IP(ipAddr[:])
+	addr := ip.FromNetIP(netIP)
+
 	nc.nsMutex.RLock()
 	defer nc.nsMutex.RUnlock()
 
-	// Find the first cidr that contains the ip address to use for the lookup.
-	ipAddr := ip.FromNetIP(net.IP(addr[:]))
-	if key, _ := nc.ipTree.GetLongestPrefixCidr(ipAddr); key != nil {
-		if ns := nc.networkSets[key]; ns != nil {
-			// Found a NetworkSet, so set the return variables.
-			ed = ns
-			ok = true
-		}
+	// Use the namespace isolation lookup from IpTrie for collector use case
+	key, found := nc.ipTree.GetLongestPrefixCidrWithNamespaceIsolation(addr, preferredNamespace)
+	if !found {
+		return nil, false
 	}
-	return
+
+	// Get the NetworkSet data for the key
+	if ns := nc.networkSets[key]; ns != nil {
+		return ns, true
+	}
+
+	return nil, false
 }
 
 func (nc *NetworkSetLookupsCache) DumpNetworksets() string {

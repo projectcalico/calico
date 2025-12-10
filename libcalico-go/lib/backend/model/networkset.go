@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -61,6 +62,17 @@ func (key NetworkSetKey) parseValue(rawData []byte) (any, error) {
 
 func (key NetworkSetKey) String() string {
 	return fmt.Sprintf("NetworkSet(name=%s)", key.Name)
+}
+
+// GetNamespace extracts the namespace from a namespaced NetworkSetKey.
+// NetworkSets with names in the format "namespace/name" are namespaced.
+// Returns empty string for global (non-namespaced) NetworkSets.
+func (key NetworkSetKey) GetNamespace() string {
+	if strings.Contains(key.Name, "/") {
+		parts := strings.SplitN(key.Name, "/", 2)
+		return parts[0]
+	}
+	return ""
 }
 
 type NetworkSetListOptions struct {
