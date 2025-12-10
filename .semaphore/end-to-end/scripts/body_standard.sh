@@ -47,6 +47,13 @@ if [[ -n "$OPERATOR_MIGRATE" ]]; then
   ${HOME}/${SEMAPHORE_GIT_DIR}/.semaphore/end-to-end/scripts/test_scripts/operator_migrate.sh
 fi
 
+# Perform the AKS migration following the instructions here:
+# https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/aks-migrate
+if [[ -n "$DESIRED_POLICY" ]]; then
+  echo "[INFO] starting AKS migration..."
+  bz addons run aks-migrate:setup
+fi
+
 if [[ -n "$UPLEVEL_RELEASE_STREAM" ]]; then
   echo "[INFO] starting bz upgrade..."
   bz upgrade $VERBOSE | tee >(gzip --stdout > ${BZ_LOGS_DIR}/upgrade.log.gz)
