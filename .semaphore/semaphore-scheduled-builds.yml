@@ -25,8 +25,8 @@ global_job_config:
       value: calico-transient-build-artifacts-europe-west3
   prologue:
     commands:
-      - export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
-      - export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache
+      - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
+      - export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache/${CALICO_DIR_NAME}
       - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - |-
@@ -36,7 +36,6 @@ global_job_config:
         fi
       - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" || true
       - gcloud config set project ${GOOGLE_PROJECT} || true
-      - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
       # Try to restore the working copy from the cache, if available. Then,
       # for PRs, also try to restore the build cache.  (We skip this on branch
       # builds to ensure branches build cleanly.)
