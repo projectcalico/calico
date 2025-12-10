@@ -161,6 +161,22 @@ blocks:
               value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
             - name: CLUSTER_MODE
               value: "private"
+
+        - name: AKS migrate from vendored Calico CNI to Calico CNI
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: INSTALLER
+              value: operator
+            - name: USE_VENDORED_CNI  # This sets up the cluster with AKS vendored CNI
+              value: "true"
+            - name: CNI_PLUGIN
+              value: Calico    # This (together with USE_VENDORED_CNI) sets up the cluster with AKS vendored Calico
+            - name: DESIRED_POLICY
+              value: Calico   # This converts the cluster to unmanaged-Calico policy
+
       env_vars:
         - name: K8S_E2E_FLAGS
           value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
