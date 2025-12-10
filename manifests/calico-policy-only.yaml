@@ -1634,6 +1634,14 @@ spec:
                     "LogPrefix is the log prefix that Felix uses when rendering
                     LOG rules. [Default: calico-packet]"
                   type: string
+                logPrefixMetadata:
+                  description:
+                    "LogPrefixMetadata controls whether to include metadata
+                    with LogPrefix. [Default: None]"
+                  enum:
+                    - None
+                    - Policy
+                  type: string
                 logSeverityFile:
                   description:
                     "LogSeverityFile is the log severity above which logs

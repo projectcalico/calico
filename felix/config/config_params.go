@@ -329,6 +329,7 @@ type Config struct {
 	IptablesMangleAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
 	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
 	LogPrefix                   string `config:"string;calico-packet"`
+	LogPrefixMetadata           string `config:"oneof(None,Policy);None"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
