@@ -14,3 +14,4 @@ app-policy/                   @projectcalico/ingress-maintainers
 
 # E2E runs
 .semaphore/end-to-end/        @projectcalico/e2e-maintainers
+e2e/                          @projectcalico/e2e-maintainers
