@@ -56,6 +56,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			ipVersion, RuleOwnerTypePolicy,
 			RuleDirIngress,
 			policyID,
+			policy.Tier,
 			policy.Untracked,
 			commentIngress,
 		),
@@ -68,6 +69,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			ipVersion, RuleOwnerTypePolicy,
 			RuleDirEgress,
 			policyID,
+			policy.Tier,
 			policy.Untracked,
 			commentEgress,
 		),
@@ -76,6 +78,8 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 }
 
 func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+	// Profiles are not related to any tier.
+	tier := ""
 	inbound = &generictables.Chain{
 		Name: ProfileChainName(ProfileInboundPfx, profileID, r.NFTables),
 		Rules: r.ProtoRulesToIptablesRules(
@@ -84,6 +88,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			RuleOwnerTypeProfile,
 			RuleDirIngress,
 			profileID,
+			tier,
 			false,
 			fmt.Sprintf("Profile %s ingress", profileID.Name),
 		),
@@ -95,6 +100,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			ipVersion, RuleOwnerTypeProfile,
 			RuleDirEgress,
 			profileID,
+			tier,
 			false,
 			fmt.Sprintf("Profile %s egress", profileID.Name),
 		),
@@ -108,13 +114,14 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	owner RuleOwnerType,
 	dir RuleDir,
 	id types.IDMaker,
+	tier string,
 	untracked bool,
 	chainComments ...string,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	for ii, protoRule := range protoRules {
 		// TODO (Matt): Need rule hash when that's cleaned up.
-		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, id, untracked)...)
+		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, id, tier, untracked)...)
 	}
 
 	// Strip off any return rules at the end of the chain.  No matter their
@@ -228,6 +235,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	dir RuleDir,
 	idx int,
 	id types.IDMaker,
+	tier string,
 	untracked bool,
 ) []generictables.Rule {
 	ruleCopy := FilterRuleToIPVersion(ipVersion, pRule)
@@ -364,7 +372,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	}
 
 	rs := matchBlockBuilder.Rules
-	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, id, untracked)
+	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, id, tier, untracked)
 	rs = append(rs, rules...)
 	// Render rule annotations as comments on each rule.
 	for i := range rs {
@@ -603,6 +611,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	dir RuleDir,
 	idx int,
 	id types.IDMaker,
+	tier string,
 	untracked bool,
 ) []generictables.Rule {
 	var rules []generictables.Rule
@@ -610,13 +619,9 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
-		logPrefix := r.LogPrefix
-		if logPrefix == "" {
-			logPrefix = "calico-packet"
-		}
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch(),
-			Action: r.Log(logPrefix),
+			Action: r.Log(r.generateLogPrefix(id, tier)),
 		})
 	}
 
@@ -709,6 +714,33 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	}
 
 	return finalRules
+}
+
+func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) string {
+	logPrefix := "calico-packet"
+	if len(r.LogPrefix) != 0 {
+		logPrefix = r.LogPrefix
+	}
+
+	if !strings.Contains(logPrefix, "%") {
+		return logPrefix
+	}
+
+	var kind, name, namespace string
+	switch v := id.(type) {
+	case types.PolicyID:
+		kind = v.Kind
+		name = v.Name
+		namespace = v.Namespace
+	case types.ProfileID:
+		name = v.Name
+	}
+
+	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
+	logPrefix = strings.ReplaceAll(logPrefix, "%p", name)
+	logPrefix = strings.ReplaceAll(logPrefix, "%n", namespace)
+	logPrefix = strings.ReplaceAll(logPrefix, "%t", tier)
+	return logPrefix
 }
 
 func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
