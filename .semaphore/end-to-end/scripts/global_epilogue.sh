@@ -1,9 +1,41 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+delete_artifacts() {
+  echo "[INFO] Deleting artifacts that are already pushed"
+  # Validate variables before destructive commands
+  if [[ -n "${BZ_LOCAL_DIR}" && -n "${DIAGS_ARCHIVE_FILENAME}" ]]; then
+    sudo rm -rf "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" || true
+  else
+    echo "[WARN] BZ_LOCAL_DIR or DIAGS_ARCHIVE_FILENAME is unset or empty, skipping deletion of archive file."
+  fi
+  if [[ -n "${BZ_LOCAL_DIR}" ]]; then
+    sudo rm -rf "${BZ_LOCAL_DIR}/diags" || true
+  else
+    echo "[WARN] BZ_LOCAL_DIR is unset or empty, skipping deletion of diags directory."
+  fi
+  sudo rm -rf ~/.cache/* /var/lib/apt/lists/* || true
+}
+
+delete_calicoctl() {
+  echo "[INFO] Deleting calicoctl"
+  if [[ -n "${BZ_LOGS_DIR}" ]]; then
+    sudo rm -rf "${BZ_LOGS_DIR}/bin/kubectl-calico" || true
+    sudo rm -rf "${BZ_LOGS_DIR}/bin/calico-*" || true
+  else
+    echo "[WARN] BZ_LOGS_DIR is unset or empty, skipping deletion of calicoctl binaries."
+  fi
+}
+
+delete_gcloud() {
+  if [[ ! $PROVISIONER =~ ^gcp-.* ]]; then
+    sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt remove google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin -y && sudo needrestart -r a || true
+  fi
+}
+
 echo "[INFO] starting global_epilogue"
 
-cd "${BZ_HOME}"
+
 if [[ "${BZ_VERBOSE}" == "true" ]]; then
   VERBOSE="--verbose"
 else
@@ -29,44 +61,89 @@ if [[ "$GS_BUCKET" != "" ]]; then
   METADATA=${METADATA}/$(date -d @${SEMAPHORE_PIPELINE_STARTED_AT} -u +%H:%M)
 fi
 
-if [[ "$SEMAPHORE_JOB_RESULT" != "passed" ]] || [[ "$TEST_TYPE" == "ocp-cert" ]]; then
-  echo "[INFO] global_epilogue: capturing diags"
-  bz diags $VERBOSE | tee ${BZ_LOGS_DIR}/diagnostic.log || true
-  artifact push job ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} --destination semaphore/diags.tgz || true
-  if [[ "$GS_BUCKET" != "" ]]; then
-    echo "[INFO] bucket_upload: capturing diags"
-    gsutil cp ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} gs://${GS_BUCKET}/${METADATA}/${DIAGS_ARCHIVE_FILENAME} || true
-  fi
-  rm -rf "${BZ_LOCAL_DIR:?}/${DIAGS_ARCHIVE_FILENAME:?}"
-  rm -rf ${BZ_LOCAL_DIR}/diags
+
+if [[ ${HCP_STAGE:-} != *-hosting* ]]; then
+  echo "[INFO] create report and push test results to Lens"
+  cd "${BZ_HOME}"
+  echo "[INFO] downloading lens uploader script"
+  curl -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+      -H "Accept: application/vnd.github.v3.raw" \
+      -o ./run-lens.sh \
+        https://raw.githubusercontent.com/tigera/banzai-lens/main/uploader/run-lens.sh || true
+  echo "[INFO] running Lens uploader script"
+  chmod +x ./run-lens.sh || true
+  ./run-lens.sh || true
+  docker system prune -f || true
 fi
 
-echo "[INFO] global_epilogue: pushing report artifacts"
-artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
-test-results publish ${REPORT_DIR}/junit.xml --name "$SEMAPHORE_JOB_NAME" || true
-if [[ "$GS_BUCKET" != "" ]]; then
-  echo "[INFO] bucket_upload: pushing report artifacts"
-  gsutil cp ${REPORT_DIR}/junit.xml gs://${GS_BUCKET}/${METADATA}/junit.xml || true
-
-  echo "[INFO] bucket_upload: pushing log artifacts"
-  gsutil cp -r -z ${BZ_LOGS_DIR}/* gs://${GS_BUCKET}/${METADATA}/logs/ || true
-fi
-
-echo "[INFO] create and push test results to Lens"
-echo "[INFO] downloading lens uploader script"
-curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
-     -H "Accept: application/vnd.github.v3.raw" \
-     -o ./run-lens.sh \
-      https://raw.githubusercontent.com/tigera/banzai-lens/main/uploader/run-lens.sh || true
-echo "[INFO] running Lens Uploader"
-chmod +x ./run-lens.sh || true
-./run-lens.sh || true
+echo "[INFO] BZ_HOME=${BZ_HOME}"
 cd "${BZ_HOME}"
 
-echo "[INFO] global_epilogue: destroy"
-bz destroy $VERBOSE | tee >(gzip --stdout > ${BZ_LOGS_DIR}/destroy.log.gz) || true
-echo "[INFO] global_epilogue: pushing log artifacts"
-artifact push job ${BZ_LOGS_DIR} --destination semaphore/logs || true
+if [[ "${HCP_ENABLED}" == "true" ]]; then
+  # if test isn't passed OR if test_type is ocp-certification, capture diags
+  if [[ "$SEMAPHORE_JOB_RESULT" != "passed" || "$TEST_TYPE" == "ocp-cert" ]]; then
+    echo "[INFO] global_epilogue: hcp: capturing diags"
+    hcp-diags.sh |& tee ${BZ_LOGS_DIR}/diagnostic.log || true
+    artifact push job ${BZ_PROFILES_PATH}/.diags --destination semaphore/diags || true
+  fi
+
+  echo "[INFO] global_epilogue: hcp: pushing report artifacts"
+  artifact push job ${BZ_PROFILES_PATH}/.report --destination semaphore/test-results || true
+
+  echo "[INFO] publish new semaphore test results"
+  test-results publish semaphore/test-results/junit.xml || true
+
+  delete_artifacts; delete_calicoctl; delete_gcloud
+
+  echo "[INFO] global_epilogue: hcp destroy"
+  hcp-destroy.sh |& tee ${BZ_LOGS_DIR}/destroy.log || true
+
+  echo "[INFO] global_epilogue: hcp: pushing log artifacts"
+  artifact push job ${BZ_LOGS_DIR} --destination semaphore/logs || true
+else
+  if [[ ${HCP_STAGE:-} != *?-hosting* ]]; then
+
+    if [[ "$SEMAPHORE_JOB_RESULT" != "passed" || "$TEST_TYPE" == "ocp-cert" ]]; then
+      echo "[INFO] global_epilogue: capturing diags"
+      bz diags $VERBOSE |& tee ${BZ_LOGS_DIR}/diagnostic.log || true
+      artifact push job ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} --destination semaphore/diags.tgz || true
+      if [[ "$GS_BUCKET" != "" ]]; then
+        echo "[INFO] bucket_upload: capturing diags"
+        gsutil cp ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} gs://${GS_BUCKET}/${METADATA}/${DIAGS_ARCHIVE_FILENAME} || true
+      fi
+    fi
+
+    delete_artifacts; delete_calicoctl; delete_gcloud
+
+    REPORT_DIR=${REPORT_DIR:-"${BZ_LOCAL_DIR}/report/${TEST_TYPE}"}
+    echo "[INFO] global_epilogue: pushing report artifacts"
+    artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+    cp ${REPORT_DIR}/junit.xml . || true
+
+    echo "[INFO] publish new semaphore test results"
+    test_publish=0
+    test-results publish ${REPORT_DIR}/junit.xml --name "$SEMAPHORE_JOB_NAME" || test_publish=1
+    echo "[INFO] Status of Publishing test results to Semaphore: ${test_publish}"
+  fi
+
+  if [[ "${HCP_STAGE}" == "setup-hosting" ]]; then
+    artifact push workflow ${BZ_LOCAL_DIR}/kubeconfig -f --destination hosting-${HOSTING_CLUSTER}-kubeconfig
+  elif [[ "${HCP_STAGE}" != "hosting" ]]; then
+    echo "[INFO] global_epilogue: destroy"
+    bz destroy $VERBOSE |& tee ${BZ_LOGS_DIR}/destroy.log || true
+  fi
+  echo "[INFO] global_epilogue: pushing log artifacts"
+  artifact push job ${BZ_LOGS_DIR} --destination semaphore/logs || true
+fi
 
 echo "[INFO] global_epilogue: deleting cache"
-cache delete $SEMAPHORE_JOB_ID
+
+if [[ "${HCP_STAGE}" == "destroy-hosting" ]]; then
+  artifact yank workflow hosting-${HOSTING_CLUSTER}-kubeconfig
+  cache delete ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER}
+  cache delete $(basename $PWD)
+elif [[ "${HCP_STAGE}" == "hosting" ]]; then
+  :  # Hosting cluster is persistent and should not be destroyed or have its cache deleted
+elif [[ "${HCP_STAGE}" != "setup-hosting" ]]; then
+  cache delete ${SEMAPHORE_JOB_ID}
+fi
