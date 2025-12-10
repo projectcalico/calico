@@ -338,7 +338,6 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		"Log rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigNormal.FlowLogsEnabled = false
-			rrConfigNormal.LogPrefixMetadata = string(v3.LogPrefixMetadataPolicy)
 			renderer := NewRenderer(rrConfigNormal)
 			logRule := in
 			logRule.Action = "log"
@@ -347,8 +346,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			logPrefix := fmt.Sprintf("calico-packet:%s", fooPolicyID.ID())
-			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
 
 			// Enabling flow log must not have any effect
 			rrConfigNormal.FlowLogsEnabled = true
@@ -366,7 +364,6 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rrConfigNormal.FlowLogsEnabled = false
 			rrConfigPrefix := rrConfigNormal
 			rrConfigPrefix.LogPrefix = "foobar"
-			rrConfigPrefix.LogPrefixMetadata = string(v3.LogPrefixMetadataPolicy)
 			renderer := NewRenderer(rrConfigPrefix)
 			logRule := in
 			logRule.Action = "log"
@@ -375,7 +372,34 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			logPrefix := fmt.Sprintf("%s:%s", rrConfigPrefix.LogPrefix, fooPolicyID.ID())
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: rrConfigPrefix.LogPrefix}))
+
+			// Enabling flow log must not have any effect
+			rrConfigPrefix.FlowLogsEnabled = true
+			renderer = NewRenderer(rrConfigPrefix)
+			rules2 := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, false)
+			Expect(rules2).To(Equal(rules))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Log rules should be correctly rendered with directives in prefix",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			rrConfigPrefix := rrConfigNormal
+			rrConfigPrefix.LogPrefix = "foobar %k %p %n - %n %p %k"
+			renderer := NewRenderer(rrConfigPrefix)
+			logRule := in
+			logRule.Action = "log"
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, false)
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			logPrefix := fmt.Sprintf("foobar %s %s %s - %s %s %s",
+				fooPolicyID.Kind, fooPolicyID.Name, fooPolicyID.Namespace,
+				fooPolicyID.Namespace, fooPolicyID.Name, fooPolicyID.Kind)
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Enabling flow log must not have any effect
@@ -383,6 +407,45 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer = NewRenderer(rrConfigPrefix)
 			rules2 := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, false)
+			Expect(rules2).To(Equal(rules))
+
+			// Should generate expected logPrefix for a Calico NetworkPolicy
+			cnpPolicyID := types.PolicyID{Name: "admin.foo", Kind: v3.KindNetworkPolicy, Namespace: "app"}
+			rrConfigNormal.FlowLogsEnabled = false
+			rrConfigPrefix.LogPrefix = "calico-packet %k:%p:%n"
+			renderer = NewRenderer(rrConfigPrefix)
+			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, cnpPolicyID, false)
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			logPrefix = fmt.Sprintf("calico-packet %s:%s:%s",
+				cnpPolicyID.Kind, cnpPolicyID.Name, cnpPolicyID.Namespace)
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
+
+			// Enabling flow log must not have any effect
+			rrConfigPrefix.FlowLogsEnabled = true
+			renderer = NewRenderer(rrConfigPrefix)
+			rules2 = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, cnpPolicyID, false)
+			Expect(rules2).To(Equal(rules))
+
+			// Should generate expected logPrefix for a Profile
+			profileID := types.ProfileID{Name: "profile1"}
+			rrConfigNormal.FlowLogsEnabled = false
+			rrConfigPrefix.LogPrefix = "calico-packet %p:%k:%n%%y"
+			renderer = NewRenderer(rrConfigPrefix)
+			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, profileID, false)
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			logPrefix = fmt.Sprintf("calico-packet %s:%s:%s%%%%y", profileID.Name, "", "")
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
+
+			// Enabling flow log must not have any effect
+			rrConfigPrefix.FlowLogsEnabled = true
+			renderer = NewRenderer(rrConfigPrefix)
+			rules2 = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, profileID, false)
 			Expect(rules2).To(Equal(rules))
 		},
 		ruleTestData...,

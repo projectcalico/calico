@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"strings"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -714,10 +713,23 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker) string {
 		logPrefix = r.LogPrefix
 	}
 
-	switch r.LogPrefixMetadata {
-	case string(v3.LogPrefixMetadataPolicy):
-		logPrefix = fmt.Sprintf("%s:%s", logPrefix, id.ID())
+	if !strings.Contains(logPrefix, "%") {
+		return logPrefix
 	}
+
+	var kind, name, namespace string
+	switch v := id.(type) {
+	case types.PolicyID:
+		kind = v.Kind
+		name = v.Name
+		namespace = v.Namespace
+	case types.ProfileID:
+		name = v.Name
+	}
+
+	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
+	logPrefix = strings.ReplaceAll(logPrefix, "%p", name)
+	logPrefix = strings.ReplaceAll(logPrefix, "%n", namespace)
 	return logPrefix
 }
 
