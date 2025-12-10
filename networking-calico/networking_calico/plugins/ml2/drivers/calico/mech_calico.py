@@ -329,11 +329,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         mech_driver = self
 
         # Make sure we initialise even if we don't see any API calls.
-        eventlet.spawn_after(STARTUP_DELAY_SECS, self._post_fork_init)
+        eventlet.spawn_after(STARTUP_DELAY_SECS, self._post_fork_init, 
+                             voting=True)
         LOG.info("Created Calico mechanism driver %s", self)
 
     @logging_exceptions(LOG)
-    def _post_fork_init(self):
+    def _post_fork_init(self, voting=False):
         """_post_fork_init
 
         Creates the connection state required for talking to the Neutron DB
@@ -421,14 +422,25 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 state_report_topic = topics.PLUGIN
             self.state_report_rpc = agent_rpc.PluginReportStateAPI(state_report_topic)
 
-            # Elector, for performing leader election.
-            self.elector = Elector(
-                cfg.CONF.calico.elector_name,
-                datamodel_v2.neutron_election_key(calico_config.get_region_string()),
-                old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
-                interval=MASTER_REFRESH_INTERVAL,
-                ttl=MASTER_TIMEOUT,
-            )
+            self.voting = voting
+            if self.voting:
+                # Elector, for performing leader election.
+                self.elector = Elector(
+                    cfg.CONF.calico.elector_name,
+                    datamodel_v2.neutron_election_key(calico_config.get_region_string()),
+                    old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
+                    interval=MASTER_REFRESH_INTERVAL,
+                    ttl=MASTER_TIMEOUT
+                )
+                LOG.info(
+                    "PID %s: Initializing Calico Elector; "
+                    "this process WILL participate in leader election.",
+                    current_pid
+                )
+            else:
+                LOG.info("PID %s: Not a voting participant; "
+                         "skipping elector and leader threads.",
+                         current_pid)
 
             self._my_pid = current_pid
 
