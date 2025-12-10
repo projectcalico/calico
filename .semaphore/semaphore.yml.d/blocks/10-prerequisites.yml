@@ -11,3 +11,18 @@
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
+- name: Store working copy
+  run:
+    when: "branch =~ '.*'"
+  dependencies: []
+  task:
+    env_vars:
+      - name: SKIP_CACHE_RESTORE
+        value: "true"
+    jobs:
+      - name: Save working copy to cache
+        commands:
+          - cd ..
+          - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
+          - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"

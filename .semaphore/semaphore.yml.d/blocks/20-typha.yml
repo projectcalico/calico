@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "typha"
     prologue:
       commands:
         - cd typha
@@ -12,6 +15,9 @@
         commands:
           - export TEST_SUITE_PREFIX="calico/base"
           - ../.semaphore/run-and-monitor make-ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
       - name: "Typha: FV tests on UBI-minimal"
         commands:
           - 'export TEST_SUITE_PREFIX="UBI-minimal"'

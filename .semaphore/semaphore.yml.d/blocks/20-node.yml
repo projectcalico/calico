@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "node"
     agent:
       machine:
         type: f1-standard-4
@@ -15,6 +18,9 @@
       - name: "Node: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
 - name: "Node: multi-arch build"
   run:
     when: "${CHANGE_IN(node)}"
@@ -62,6 +68,9 @@
   dependencies:
     - "Prerequisites"
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "node"
     prologue:
       commands:
         # Set up access to GCP buckets.

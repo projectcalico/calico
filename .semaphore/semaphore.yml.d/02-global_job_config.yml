@@ -1,19 +1,88 @@
 global_job_config:
   secrets:
     - name: docker-hub
+    - name: google-service-account-for-gce
+  env_vars:
+    - name: GOOGLE_PROJECT
+      value: unique-caldron-775
+    - name: GCS_BUILD_CACHE_BUCKET
+      value: calico-transient-build-artifacts-europe-west3
   prologue:
     commands:
-      - export GCS_BUILD_CACHE_BUCKET=calico-transient-build-artifacts-europe-west3
+      - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
+      - export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache/${CALICO_DIR_NAME}
       - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
-      - checkout
-      - export CALICO_DIR="$(pwd)"
-      - export CALICO_DIR_NAME="$(basename "$CALICO_DIR")"
-      - mkdir artifacts
-      # Semaphore is doing shallow clone on a commit without tags.
-      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - if [[ "${SEMAPHORE_BLOCK_NAME}" != "Prerequisites" ]]; then retry git fetch --unshallow; fi
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - |-
+        if [[ $(uname -m) != "x86_64" || -n "$ARCH" ]]; then
+          echo "Non-x86_64 build: $(uname -m) / $ARCH";
+          export BUILD_CACHE_GROUP=$BUILD_CACHE_GROUP-$(uname -m)-$ARCH;
+        fi
+      - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" || true
+      - gcloud config set project ${GOOGLE_PROJECT} || true
+      # Try to restore the working copy from the cache, if available. Then,
+      # for PRs, also try to restore the build cache.  (We skip this on branch
+      # builds to ensure branches build cleanly.)
+      - sudo apt-get install -y zstd || true
+      - restored_wc_cache=false
+      - |-
+        if [[ -n "${SEMAPHORE_GIT_BRANCH}" && -z "$SKIP_CACHE_RESTORE" ]]; then
+          echo "Looking for cached working copy for branch ${SEMAPHORE_GIT_BRANCH}"
+          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd; then
+            echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
+            tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd & tar_pid=$!
+            downloaded_build_cache=false
+            if [[ -n "$BUILD_CACHE_GROUP" && -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
+              if gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd; then
+                echo "Found build cache for group ${BUILD_CACHE_GROUP}"
+                downloaded_build_cache=true
+              fi
+            fi
+            if wait $tar_pid; then
+              restored_wc_cache=true
+            else
+              echo "ERROR: Failed to extract working copy"
+              restored_wc_cache=false
+            fi
+            if ${downloaded_build_cache}; then
+              echo "Extracting build cache"
+              tar --use-compress-program=zstd -xf /tmp/build-cache.tar.zstd -C .
+              rm /tmp/build-cache.tar.zstd
+            fi
+            cd "${CALICO_DIR_NAME}"
+          fi
+        fi || true
+      - |-
+        if [[ ${restored_wc_cache} != true && -z "$SKIP_CHECKOUT" ]]; then
+          echo "No cache restored, doing a fresh checkout..."
+          cd $HOME
+          rm -rf "${CALICO_DIR_NAME}"
+          git clone --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
+          cd "${CALICO_DIR_NAME}" || exit 1
+        fi
+      - |-
+        if [[ -z "$SKIP_CHECKOUT" ]]; then
+          git fetch origin --tags --prune-tags ${SEMAPHORE_GIT_SHA}
+          if [ "$SEMAPHORE_GIT_REF_TYPE" = "branch" ]; then
+            git checkout ${SEMAPHORE_GIT_SHA} -B "${SEMAPHORE_GIT_BRANCH}"
+          else
+            git checkout ${SEMAPHORE_GIT_SHA}
+          fi
+          CALICO_DIR="$(pwd)"
+          export CALICO_DIR
+          mkdir -p artifacts
+        fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
+      - cd $HOME
+      - |-
+        if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -n "$BUILD_CACHE_GROUP" && "$STORE_BUILD_CACHE" = "true" ]]; then
+          echo "On branch, storing build cache group ${BUILD_CACHE_GROUP}"
+          tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
+          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+        fi
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
