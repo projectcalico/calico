@@ -88,9 +88,9 @@
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
-- name: "Felix: Windows FV capz"
+- name: "Felix: Windows FV"
   run:
-    when: "false"
+    when: "false or ${CHANGE_IN(felix,process)}"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -104,18 +104,17 @@
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
         - export AZURE_CLIENT_ID=$AZ_SP_ID
         - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
-        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
-        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
-        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
-        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
+        - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-felix/report
+        - export LOGS_DIR=~/fv.log
+        - export RG_PREFIX=${USER}-win-felix-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
         - cd felix
     epilogue:
       always:
         commands:
-          - artifact push job ${REPORT_DIR} --destination test-results || true
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+          - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
+          - cd ~/calico/process/testing/aso && make dist-clean
     env_vars:
-      - name: FV_PROVISIONER
-        value: "capz"
       - name: FV_TYPE
         value: "calico-felix"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
@@ -123,9 +122,11 @@
       - name: CONTAINERD_VERSION
         value: 1.7.22
     jobs:
-      - name: "Felix: Windows FV - CAPZ"
+      - name: "Felix: Windows FV"
         commands:
-          - ./.semaphore/run-win-fv
+          - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+          - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
+          - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh
 - name: "Felix: iptables tests on Ubuntu 22.04"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
