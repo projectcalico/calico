@@ -169,14 +169,13 @@ func (s *Maps) AddOrReplaceMap(meta MapMetadata, members map[string][]string) {
 			desiredMembers.Delete(k)
 		}
 	})
-	canonMembers.Iter(func(m MapMember) error {
+	for m := range canonMembers.All() {
 		if !desiredMembers.Contains(m) {
 			// Incref any chain referenced by the member.
 			s.maybeIncrefChain(m)
 			desiredMembers.Add(m)
 		}
-		return nil
-	})
+	}
 	s.updateDirtiness(meta.Name)
 }
 
@@ -245,11 +244,10 @@ func (s *Maps) AddMembers(mapName string, newMembers map[string][]string) {
 		return
 	}
 	membersTracker := s.mapNameToMembers[mapName]
-	canonMembers.Iter(func(member MapMember) error {
+	for member := range canonMembers.All() {
 		s.maybeIncrefChain(member)
 		membersTracker.Desired().Add(member)
-		return nil
-	})
+	}
 	s.updateDirtiness(mapName)
 }
 
@@ -266,11 +264,10 @@ func (s *Maps) RemoveMembers(mapName string, removedMembers map[string][]string)
 		return
 	}
 	membersTracker := s.mapNameToMembers[mapName]
-	canonMembers.Iter(func(member MapMember) error {
+	for member := range canonMembers.All() {
 		s.maybeDecrefChain(member)
 		membersTracker.Desired().Delete(member)
-		return nil
-	})
+	}
 	s.updateDirtiness(mapName)
 }
 
@@ -386,10 +383,9 @@ func (s *Maps) LoadDataplaneState() error {
 		memberTracker := s.getOrCreateMemberTracker(mapName)
 		numExtrasExpected := memberTracker.PendingDeletions().Len()
 		err = memberTracker.Dataplane().ReplaceFromIter(func(f func(k MapMember)) error {
-			elemsSet.Iter(func(item MapMember) error {
+			for item := range elemsSet.All() {
 				f(item)
-				return nil
-			})
+			}
 			return nil
 		})
 		if err != nil {
@@ -541,17 +537,15 @@ func (s *Maps) FinishMapUpdates(updates *MapUpdates) {
 	// dataplane should be in sync.
 	for mapName, members := range updates.MapToAddedMembers {
 		setMap(mapName)
-		members.Iter(func(member MapMember) error {
+		for member := range members.All() {
 			s.mapNameToMembers[mapName].Dataplane().Add(member)
-			return nil
-		})
+		}
 	}
 	for mapName, members := range updates.MapToDeletedMembers {
 		setMap(mapName)
-		members.Iter(func(member MapMember) error {
+		for member := range members.All() {
 			s.mapNameToMembers[mapName].Dataplane().Delete(member)
-			return nil
-		})
+		}
 	}
 
 	// We need to clear pending deletions now that we have successfully deleted the maps.
@@ -570,14 +564,13 @@ func (s *Maps) dirtyMaps() []string {
 	var dirtyMaps []string
 
 	// Collect any maps with dirty members that need to be updated based on resync with the dataplane.
-	s.mapsWithDirtyMembers.Iter(func(mapName string) error {
+	for mapName := range s.mapsWithDirtyMembers.All() {
 		if _, ok := s.mapNameToProgrammedMetadata.Desired().Get(mapName); !ok {
 			// Skip deletions and maps that aren't needed due to the filter.
-			return nil
+			continue
 		}
 		dirtyMaps = append(dirtyMaps, mapName)
-		return nil
-	})
+	}
 
 	// Any maps that are marked for deletion should have their members cleared out if there are any.
 	// Because of the potential interdependency between maps and chains, we need to:

@@ -1,6 +1,3 @@
-//go:build fvtests
-// +build fvtests
-
 // Copyright (c) 2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +17,6 @@ package fv_test
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -119,6 +115,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		for ii := range wlHost1 {
 			wIP := fmt.Sprintf("10.65.0.%d", ii)
 			wName := fmt.Sprintf("wl-host1-%d", ii)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[0].Hostname, client)
 			wlHost1[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
 			wlHost1[ii].WorkloadEndpoint.GenerateName = "wl-host1-"
 			wlHost1[ii].ConfigureInInfra(infra)
@@ -128,6 +125,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		for ii := range wlHost2 {
 			wIP := fmt.Sprintf("10.65.1.%d", ii)
 			wName := fmt.Sprintf("wl-host2-%d", ii)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[1].Hostname, client)
 			wlHost2[ii] = workload.Run(tc.Felixes[1], wName, "default", wIP, "8055", "tcp")
 			wlHost2[ii].WorkloadEndpoint.GenerateName = "wl-host2-"
 			wlHost2[ii].ConfigureInInfra(infra)
@@ -219,47 +217,51 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		Eventually(hostEndpointProgrammed, "30s", "1s").Should(BeTrue(),
 			"Expected HostEndpoint iptables rules to appear")
 		if !BPFMode() {
-			rulesProgrammed := func() bool {
+			rulesProgrammed := func() error {
 				out0, err := tc.Felixes[0].ExecOutput("iptables-save", "-t", "filter")
-				Expect(err).NotTo(HaveOccurred())
+				if err != nil {
+					return err
+				}
 				out1, err := tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
-				Expect(err).NotTo(HaveOccurred())
+				if err != nil {
+					return err
+				}
 				if strings.Count(out0, "ARE0|default") == 0 {
-					return false
+					return fmt.Errorf("ARE0|default rule not found on felix 0")
 				}
-				if strings.Count(out1, "default.gnp-1") == 0 {
-					return false
+				if strings.Count(out1, "gnp-1") == 0 {
+					return fmt.Errorf("gnp-1 rule not found on felix 1")
 				}
-				return true
+				return nil
 			}
 			if NFTMode() {
-				rulesProgrammed = func() bool {
+				rulesProgrammed = func() error {
 					out0, err := tc.Felixes[0].ExecOutput("nft", "list", "ruleset")
 					Expect(err).NotTo(HaveOccurred())
 					out1, err := tc.Felixes[1].ExecOutput("nft", "list", "ruleset")
 					Expect(err).NotTo(HaveOccurred())
 					if strings.Count(out0, "ARE0|default") == 0 {
-						return false
+						return fmt.Errorf("ARE0|default rule not found on felix 0")
 					}
-					if strings.Count(out1, "default.gnp-1") == 0 {
-						return false
+					if strings.Count(out1, "gnp-1") == 0 {
+						return fmt.Errorf("gnp-1 rule not found on felix 1")
 					}
-					return true
+					return nil
 				}
 			}
-			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
+			Eventually(rulesProgrammed, "10s", "1s").ShouldNot(HaveOccurred(),
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[1], "eth0", "egress", "default.gnp-1", "allow", false)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[1], "eth0", "egress", "gnp-1", "allow", false)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[1], "eth0", "ingress", "default.gnp-1", "allow", false)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[1], "eth0", "ingress", "gnp-1", "allow", false)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[1], wlHost2[1].InterfaceName, "ingress", "default/default.np-1", "deny", true)
+				return bpfCheckIfNetworkPolicyProgrammed(tc.Felixes[1], wlHost2[1].InterfaceName, "ingress", "default", "default.np-1", "deny", true)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
@@ -473,58 +475,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 	It("should get expected flow logs", func() {
 		checkFlowLogs()
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				for _, felix := range tc.Felixes {
-					felix.Exec("calico-bpf", "ipsets", "dump")
-					felix.Exec("calico-bpf", "routes", "dump")
-					felix.Exec("calico-bpf", "nat", "dump")
-					felix.Exec("calico-bpf", "nat", "aff")
-					felix.Exec("calico-bpf", "conntrack", "dump")
-					felix.Exec("calico-bpf", "arp", "dump")
-					felix.Exec("calico-bpf", "counters", "dump")
-					felix.Exec("calico-bpf", "ifstate", "dump")
-					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
-				}
-				for _, w := range wlHost1 {
-					tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
-				}
-				for _, w := range wlHost1 {
-					tc.Felixes[1].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
-				}
-			}
-		}
-
-		for _, wl := range wlHost1 {
-			wl.Stop()
-		}
-		for _, wl := range wlHost2 {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		for _, felix := range tc.Felixes {
-			if bpfEnabled {
-				felix.Exec("calico-bpf", "connect-time", "clean")
-			}
-			felix.Stop()
-		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
 })
 
 var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
@@ -550,8 +500,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.EnableIPv6 = true
-		opts.IPIPMode = api.IPIPModeNever
-		opts.SimulateBIRDRoutes = true
+		opts.IPIPMode = api.IPIPModeAlways
 		opts.NATOutgoingEnabled = true
 		opts.AutoHEPsEnabled = false
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
@@ -561,33 +510,33 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
-		addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
+		addWorkload := func(hostname string, ii, wi, port int, labels map[string]string) *workload.Workload {
 			if labels == nil {
 				labels = make(map[string]string)
 			}
 
 			wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+			wIPv6 := fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)
 			wName := fmt.Sprintf("w%d%d", ii, wi)
 
+			infrastructure.AssignIP(wName, wIP, hostname, client)
+			infrastructure.AssignIP(wName, wIPv6, hostname, client)
 			w := workload.New(tc.Felixes[ii], wName, "default",
-				wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()))
+				wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(wIPv6))
 
 			labels["name"] = w.Name
 			labels["workload"] = "regular"
-
 			w.WorkloadEndpoint.Labels = labels
-			if run {
-				err := w.Start()
-				Expect(err).NotTo(HaveOccurred())
-				w.ConfigureInInfra(infra)
-			}
+			err := w.Start(infra)
+			Expect(err).NotTo(HaveOccurred())
+			w.ConfigureInInfra(infra)
 			return w
 		}
 
 		for ii := range tc.Felixes {
 			// Two workloads on each host so we can check the same host and other host cases.
-			w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
-			w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
+			w[ii][0] = addWorkload(tc.Felixes[ii].Hostname, ii, 0, 8055, map[string]string{"port": "8055"})
+			w[ii][1] = addWorkload(tc.Felixes[ii].Hostname, ii, 1, 8056, nil)
 		}
 
 		err = infra.AddDefaultDeny()
@@ -645,10 +594,10 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 					out, err = tc.Felixes[0].ExecOutput("iptables-save", "-t", "filter")
 				}
 				Expect(err).NotTo(HaveOccurred())
-				if strings.Count(out, "default.gnp-1") == 0 {
+				if strings.Count(out, "gnp-1") == 0 {
 					return false
 				}
-				if strings.Count(out, "default.gnp-2") == 0 {
+				if strings.Count(out, "gnp-2") == 0 {
 					return false
 				}
 				return true
@@ -657,19 +606,19 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", "default.gnp-1", "allow", true)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", "gnp-1", "allow", true)
 			}, "15s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "ingress", "default.gnp-1", "allow", true)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "ingress", "gnp-1", "allow", true)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "egress", "default.gnp-2", "deny", true)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "egress", "gnp-2", "deny", true)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "ingress", "default.gnp-2", "deny", true)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "ingress", "gnp-2", "deny", true)
 			}, "5s", "200ms").Should(BeTrue())
 		}
 
@@ -679,22 +628,6 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		cc.Expect(connectivity.Some, w[0][0], w[1][0], connectivity.ExpectWithIPVersion(6))
 		cc.Expect(connectivity.None, w[0][1], w[1][0], connectivity.ExpectWithIPVersion(6))
 		cc.CheckConnectivity()
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("ip6tables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "-6", "r")
-				felix.Exec("ip", "a")
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ip", "r")
-			}
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("Should report the ipv6 flow logs", func() {
@@ -745,6 +678,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 		wlHost1 [2]*workload.Workload
 		wlHost2 [2]*workload.Workload
 		cc      *connectivity.Checker
+		client  client.Interface
 	)
 
 	BeforeEach(func() {
@@ -760,7 +694,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 		opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALREPORTER"] = "Enabled"
 
 		numNodes := 2
-		tc, _ = infrastructure.StartNNodeTopology(numNodes, opts, infra)
+		tc, client = infrastructure.StartNNodeTopology(numNodes, opts, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -769,6 +703,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 		for ii := range wlHost1 {
 			wIP := fmt.Sprintf("10.65.0.%d", ii)
 			wName := fmt.Sprintf("wl-host1-%d", ii)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[0].Hostname, client)
 			wlHost1[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
 			wlHost1[ii].WorkloadEndpoint.GenerateName = "wl-host1-"
 			wlHost1[ii].ConfigureInInfra(infra)
@@ -778,6 +713,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 		for ii := range wlHost2 {
 			wIP := fmt.Sprintf("10.65.1.%d", ii)
 			wName := fmt.Sprintf("wl-host2-%d", ii)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[1].Hostname, client)
 			wlHost2[ii] = workload.Run(tc.Felixes[1], wName, "default", wIP, "8055", "tcp")
 			wlHost2[ii].WorkloadEndpoint.GenerateName = "wl-host2-"
 			wlHost2[ii].ConfigureInInfra(infra)
@@ -856,52 +792,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				for _, felix := range tc.Felixes {
-					felix.Exec("calico-bpf", "ipsets", "dump")
-					felix.Exec("calico-bpf", "routes", "dump")
-					felix.Exec("calico-bpf", "nat", "dump")
-					felix.Exec("calico-bpf", "nat", "aff")
-					felix.Exec("calico-bpf", "conntrack", "dump")
-					felix.Exec("calico-bpf", "arp", "dump")
-					felix.Exec("calico-bpf", "counters", "dump")
-					felix.Exec("calico-bpf", "ifstate", "dump")
-					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
-				}
-				for _, w := range wlHost1 {
-					tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
-				}
-				for _, w := range wlHost1 {
-					tc.Felixes[1].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
-				}
-			}
-		}
+		// FIXME
 
-		for _, wl := range wlHost1 {
-			wl.Stop()
-		}
-		for _, wl := range wlHost2 {
-			wl.Stop()
-		}
 		for _, felix := range tc.Felixes {
 			if bpfEnabled {
 				felix.Exec("calico-bpf", "connect-time", "clean")
 			}
-			felix.Stop()
 		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })
 

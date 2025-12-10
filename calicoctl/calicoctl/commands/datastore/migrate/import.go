@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,12 +24,12 @@ import (
 
 	"github.com/docopt/docopt-go"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
@@ -251,7 +251,7 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 						}
 					}
 				case "globalnetworkpolicies":
-					// For globalnetworkpolicies, having K8s admin network policies should not throw an error
+					// For globalnetworkpolicies, having K8s cluster network policies should not throw an error
 					objs, err := meta.ExtractList(resource)
 					if err != nil {
 						return fmt.Errorf("error extracting global network policies for inspection: %s", err)
@@ -263,8 +263,9 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 							return fmt.Errorf("unable to convert Calico global network policy for inspection")
 						}
 
-						// Make sure that the global network policy is a K8s admin network policy
-						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) {
+						// Make sure that the global network policy is a K8s cluster network policy
+						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
+							!strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) {
 							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
 						}
 					}

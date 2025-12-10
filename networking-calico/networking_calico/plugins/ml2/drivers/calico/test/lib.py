@@ -65,6 +65,7 @@ sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
 sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
+sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
 sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
 sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
 sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
@@ -224,6 +225,7 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = Driver
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 from networking_calico import etcdv3
+from networking_calico.plugins.calico.context import SGRUpdateContext
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico import endpoints
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
@@ -249,6 +251,8 @@ keystone_client = mock.Mock()
 keystone_client.projects.list.side_effect = mock_projects_list
 mech_calico.KeystoneClient = mock.Mock()
 mech_calico.KeystoneClient.return_value = keystone_client
+mech_calico.TrackTask = mock.Mock()
+mech_calico.TrackTask.return_value = None
 
 REAL_EVENTLET_SLEEP_TIME = 0.01
 
@@ -704,8 +708,8 @@ class Lib(object):
 
         if type == "rule":
             # Call security_groups_rule_updated with the new or changed ID.
-            mech_calico.security_groups_rule_updated(
-                mock.MagicMock(), mock.MagicMock(), [id]
+            self.driver.security_groups_rule_updated(
+                SGRUpdateContext(mock.MagicMock(), [id])
             )
 
     def get_port_security_group_bindings(self, context, filters):

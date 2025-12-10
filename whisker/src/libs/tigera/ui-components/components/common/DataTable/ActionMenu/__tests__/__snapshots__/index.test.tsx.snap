@@ -3,14 +3,14 @@
 exports[`<ActionMenu/> it renders 1`] = `
 <DocumentFragment>
   <button
-    aria-controls="menu-list-:r1:"
+    aria-controls="menu-list-_r_1_"
     aria-expanded="true"
     aria-haspopup="menu"
     aria-label="="mockAria"
     class="chakra-button chakra-menu__menu-button css-7ljuo"
     data-active=""
     data-testid="action-menu-button"
-    id="menu-button-:r1:"
+    id="menu-button-_r_1_"
     type="button"
   >
     <span
@@ -44,7 +44,7 @@ exports[`<ActionMenu/> it renders 1`] = `
     <div
       aria-orientation="vertical"
       class="chakra-menu__menu-list css-gmuujr"
-      id="menu-list-:r1:"
+      id="menu-list-_r_1_"
       role="menu"
       style="transform-origin: var(--popper-transform-origin); opacity: 0; visibility: hidden; transform: scale(0.8) translateZ(0);"
       tabindex="-1"
@@ -52,7 +52,7 @@ exports[`<ActionMenu/> it renders 1`] = `
       <button
         class="chakra-menu__menuitem css-1igovtx"
         data-index="0"
-        id="menu-list-:r1:-menuitem-:r2:"
+        id="menu-list-_r_1_-menuitem-_r_2_"
         role="menuitem"
         tabindex="-1"
         type="button"

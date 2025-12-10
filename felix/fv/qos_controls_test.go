@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -38,8 +36,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 func init() {
@@ -226,15 +222,12 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 						topt.VXLANMode = apiv3.VXLANModeNever
 						topt.IPIPMode = apiv3.IPIPModeAlways
-						topt.SimulateBIRDRoutes = true
 					case "vxlan":
 						topt.IPIPMode = apiv3.IPIPModeNever
 						topt.VXLANMode = apiv3.VXLANModeAlways
 						topt.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(topt.IPPoolCIDR, topt.IPv6PoolCIDR)
-						topt.SimulateBIRDRoutes = false
 					}
 
-					topt.UseIPPools = true
 					topt.DelayFelixStart = true
 					topt.TriggerDelayedFelixStart = true
 					if BPFMode() {
@@ -252,20 +245,9 @@ var _ = infrastructure.DatastoreDescribe(
 					for ii := range w {
 						wIP := fmt.Sprintf("10.65.%d.2", ii)
 						wName := fmt.Sprintf("w%d", ii)
+						infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
 						w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 						w[ii].ConfigureInInfra(infra)
-						if topt.UseIPPools {
-							// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-							err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-								IP:       cnet.MustParseIP(wIP),
-								HandleID: &w[ii].Name,
-								Attrs: map[string]string{
-									ipam.AttributeNode: tc.Felixes[ii].Hostname,
-								},
-								Hostname: tc.Felixes[ii].Hostname,
-							})
-							Expect(err).NotTo(HaveOccurred())
-						}
 					}
 
 					if BPFMode() {
@@ -279,19 +261,9 @@ var _ = infrastructure.DatastoreDescribe(
 				})
 
 				AfterEach(func() {
-					for _, felix := range tc.Felixes {
-						felix.Exec("ip", "route")
-						if BPFMode() {
-							felix.Exec("calico-bpf", "counters", "dump")
-							felix.Exec("calico-bpf", "ifstate", "dump")
-						}
-					}
-
-					tc.Stop()
-					infra.Stop()
-
 					if cancel != nil {
 						cancel()
+						cancel = nil
 					}
 				})
 
@@ -484,6 +456,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Running iperf2 client on workload 1 with packet rate limit for ingress on workload 0")
 						ingressLimitedPeakrate, err := retryIperf2Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-u", "-l1000", "-b10M", "-t1")
+						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client peakrate with ingress packet rate limit on client (bps): %v", ingressLimitedPeakrate)
 						// Expect the limited peakrate to be below an estimated desired rate (1000 byte packet * 8 bits/byte * (100 packets/s + 200 packet burst) = 2400000bps), with a 20% margin
 						Expect(ingressLimitedPeakrate).To(BeNumerically(">=", 1000*8*100))
@@ -552,6 +525,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Running iperf2 client on workload 1 with packet rate limit for egress on workload 1")
 						egressLimitedPeakrate, err := retryIperf2Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-u", "-l1000", "-b10M", "-t1")
+						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client peakrate with egress packet rate limit on client (bps): %v", egressLimitedPeakrate)
 						// Expect the limited peakrate to be below an estimated desired rate (1000 byte packet * 8 bits/byte * (100 packets/s + 200 packet burst) = 2400000bps), with a 20% margin
 						Expect(egressLimitedPeakrate).To(BeNumerically(">=", 1000*8*100))

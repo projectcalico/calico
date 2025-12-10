@@ -313,10 +313,12 @@ func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *p
 	}
 	return &proto.ActivePolicyUpdate{
 		Id: &proto.PolicyID{
-			Tier: key.Tier,
-			Name: key.Name,
+			Name:      key.Name,
+			Namespace: key.Namespace,
+			Kind:      key.Kind,
 		},
 		Policy: &proto.Policy{
+			Tier:      rules.Tier,
 			Namespace: rules.Namespace,
 			InboundRules: parsedRulesToProtoRules(
 				rules.InboundRules,
@@ -342,16 +344,17 @@ func (buf *EventSequencer) OnPolicyInactive(key model.PolicyKey) {
 }
 
 func (buf *EventSequencer) flushPolicyDeletes() {
-	buf.pendingPolicyDeletes.Iter(func(item model.PolicyKey) error {
+	for item := range buf.pendingPolicyDeletes.All() {
 		buf.Callback(&proto.ActivePolicyRemove{
 			Id: &proto.PolicyID{
-				Tier: item.Tier,
-				Name: item.Name,
+				Name:      item.Name,
+				Namespace: item.Namespace,
+				Kind:      item.Kind,
 			},
 		})
 		buf.sentPolicies.Discard(item)
-		return set.RemoveItem
-	})
+		buf.pendingPolicyDeletes.Discard(item)
+	}
 }
 
 func (buf *EventSequencer) OnProfileActive(key model.ProfileRulesKey, rules *ParsedRules) {
@@ -389,15 +392,15 @@ func (buf *EventSequencer) OnProfileInactive(key model.ProfileRulesKey) {
 }
 
 func (buf *EventSequencer) flushProfileDeletes() {
-	buf.pendingProfileDeletes.Iter(func(item model.ProfileRulesKey) error {
+	for item := range buf.pendingProfileDeletes.All() {
 		buf.Callback(&proto.ActiveProfileRemove{
 			Id: &proto.ProfileID{
 				Name: item.Name,
 			},
 		})
 		buf.sentProfiles.Discard(item)
-		return set.RemoveItem
-	})
+		buf.pendingProfileDeletes.Discard(item)
+	}
 }
 
 func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
@@ -492,7 +495,8 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 	}
 }
 
-func (buf *EventSequencer) OnEndpointTierUpdate(endpointKey model.EndpointKey,
+func (buf *EventSequencer) OnEndpointTierUpdate(
+	endpointKey model.EndpointKey,
 	endpoint model.Endpoint,
 	peerData *EndpointBGPPeer,
 	filteredTiers []TierInfo,
@@ -549,7 +553,7 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 }
 
 func (buf *EventSequencer) flushEndpointTierDeletes() {
-	buf.pendingEndpointDeletes.Iter(func(item model.Key) error {
+	for item := range buf.pendingEndpointDeletes.All() {
 		switch key := item.(type) {
 		case model.WorkloadEndpointKey:
 			buf.Callback(&proto.WorkloadEndpointRemove{
@@ -567,8 +571,8 @@ func (buf *EventSequencer) flushEndpointTierDeletes() {
 			})
 		}
 		buf.sentEndpoints.Discard(item)
-		return set.RemoveItem
-	})
+		buf.pendingEndpointDeletes.Discard(item)
+	}
 }
 
 func (buf *EventSequencer) OnEncapUpdate(encap config.Encapsulation) {
@@ -624,13 +628,13 @@ func (buf *EventSequencer) OnHostIPRemove(hostname string) {
 }
 
 func (buf *EventSequencer) flushHostIPDeletes() {
-	buf.pendingHostIPDeletes.Iter(func(item string) error {
+	for item := range buf.pendingHostIPDeletes.All() {
 		buf.Callback(&proto.HostMetadataRemove{
 			Hostname: item,
 		})
 		buf.sentHostIPs.Discard(item)
-		return set.RemoveItem
-	})
+		buf.pendingHostIPDeletes.Discard(item)
+	}
 }
 
 func (buf *EventSequencer) OnHostIPv6Update(hostname string, ip *net.IP) {
@@ -666,13 +670,13 @@ func (buf *EventSequencer) OnHostIPv6Remove(hostname string) {
 }
 
 func (buf *EventSequencer) flushHostIPv6Deletes() {
-	buf.pendingHostIPv6Deletes.Iter(func(item string) error {
+	for item := range buf.pendingHostIPv6Deletes.All() {
 		buf.Callback(&proto.HostMetadataV6Remove{
 			Hostname: item,
 		})
 		buf.sentHostIPv6s.Discard(item)
-		return set.RemoveItem
-	})
+		buf.pendingHostIPv6Deletes.Discard(item)
+	}
 }
 
 func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string) {
@@ -717,13 +721,13 @@ func (buf *EventSequencer) OnHostMetadataRemove(hostname string) {
 }
 
 func (buf *EventSequencer) flushHostDeletes() {
-	buf.pendingHostMetadataDeletes.Iter(func(item string) error {
+	for item := range buf.pendingHostMetadataDeletes.All() {
 		buf.Callback(&proto.HostMetadataV4V6Remove{
 			Hostname: item,
 		})
 		buf.sentHosts.Discard(item)
-		return set.RemoveItem
-	})
+		buf.pendingHostMetadataDeletes.Discard(item)
+	}
 }
 
 func (buf *EventSequencer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPool) {
@@ -811,17 +815,17 @@ func (buf *EventSequencer) OnIPPoolRemove(key model.IPPoolKey) {
 }
 
 func (buf *EventSequencer) flushIPPoolDeletes() {
-	buf.pendingIPPoolDeletes.Iter(func(key ip.CIDR) error {
+	for key := range buf.pendingIPPoolDeletes.All() {
 		buf.Callback(&proto.IPAMPoolRemove{
 			Id: cidrToIPPoolID(key),
 		})
 		buf.sentIPPools.Discard(key)
-		return set.RemoveItem
-	})
+		buf.pendingIPPoolDeletes.Discard(key)
+	}
 }
 
 func (buf *EventSequencer) flushHostWireguardDeletes() {
-	buf.pendingWireguardDeletes.Iter(func(key string) error {
+	for key := range buf.pendingWireguardDeletes.All() {
 		log.WithField("nodename", key).Debug("Processing pending wireguard delete")
 		if buf.sentWireguard.Contains(key) {
 			log.Debug("Sending IPv4 wireguard endpoint remove")
@@ -837,8 +841,8 @@ func (buf *EventSequencer) flushHostWireguardDeletes() {
 			})
 			buf.sentWireguardV6.Discard(key)
 		}
-		return set.RemoveItem
-	})
+		buf.pendingWireguardDeletes.Discard(key)
+	}
 	log.Debug("Done flushing wireguard removes")
 }
 
@@ -916,7 +920,7 @@ func (buf *EventSequencer) Flush() {
 }
 
 func (buf *EventSequencer) flushRemovedIPSets() {
-	buf.pendingRemovedIPSets.Iter(func(setID string) (err error) {
+	for setID := range buf.pendingRemovedIPSets.All() {
 		log.Debugf("Flushing IP set remove: %v", setID)
 		buf.Callback(&proto.IPSetRemove{
 			Id: setID,
@@ -925,8 +929,7 @@ func (buf *EventSequencer) flushRemovedIPSets() {
 		buf.pendingAddedIPSetMembers.DiscardKey(setID)
 		buf.pendingRemovedIPSets.Discard(setID)
 		buf.sentIPSets.Discard(setID)
-		return
-	})
+	}
 	log.Debugf("Done flushing IP set removes")
 }
 
@@ -975,13 +978,12 @@ func (buf *EventSequencer) OnServiceAccountRemove(id types.ServiceAccountID) {
 
 func (buf *EventSequencer) flushServiceAccounts() {
 	// Order doesn't matter, but send removes first to reduce max occupancy
-	buf.pendingServiceAccountDeletes.Iter(func(id types.ServiceAccountID) error {
+	for id := range buf.pendingServiceAccountDeletes.All() {
 		protoID := types.ServiceAccountIDToProto(id)
 		msg := proto.ServiceAccountRemove{Id: protoID}
 		buf.Callback(&msg)
 		buf.sentServiceAccounts.Discard(id)
-		return nil
-	})
+	}
 	buf.pendingServiceAccountDeletes.Clear()
 	for _, msg := range buf.pendingServiceAccountUpdates {
 		buf.Callback(msg)
@@ -1066,13 +1068,12 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 
 func (buf *EventSequencer) flushNamespaces() {
 	// Order doesn't matter, but send removes first to reduce max occupancy
-	buf.pendingNamespaceDeletes.Iter(func(id types.NamespaceID) error {
+	for id := range buf.pendingNamespaceDeletes.All() {
 		protoID := types.NamespaceIDToProto(id)
 		msg := proto.NamespaceRemove{Id: protoID}
 		buf.Callback(&msg)
 		buf.sentNamespaces.Discard(id)
-		return nil
-	})
+	}
 	buf.pendingNamespaceDeletes.Clear()
 	for _, msg := range buf.pendingNamespaceUpdates {
 		buf.Callback(msg)
@@ -1101,12 +1102,11 @@ func (buf *EventSequencer) OnVTEPRemove(dst string) {
 }
 
 func (buf *EventSequencer) flushVTEPRemoves() {
-	buf.pendingVTEPDeletes.Iter(func(node string) error {
+	for node := range buf.pendingVTEPDeletes.All() {
 		msg := proto.VXLANTunnelEndpointRemove{Node: node}
 		buf.Callback(&msg)
 		buf.sentVTEPs.Discard(node)
-		return nil
-	})
+	}
 	buf.pendingVTEPDeletes.Clear()
 	log.Debug("Done flushing VTEP removes")
 }
@@ -1150,12 +1150,11 @@ func (buf *EventSequencer) flushRouteAdds() {
 }
 
 func (buf *EventSequencer) flushRouteRemoves() {
-	buf.pendingRouteDeletes.Iter(func(id routeID) error {
+	for id := range buf.pendingRouteDeletes.All() {
 		msg := proto.RouteRemove{Dst: id.dst}
 		buf.Callback(&msg)
 		buf.sentRoutes.Discard(id)
-		return nil
-	})
+	}
 	buf.pendingRouteDeletes.Clear()
 	log.Debug("Done flushing route deletes")
 }
@@ -1190,15 +1189,14 @@ func (buf *EventSequencer) OnServiceRemove(update *proto.ServiceRemove) {
 
 func (buf *EventSequencer) flushServices() {
 	// Order doesn't matter, but send removes first to reduce max occupancy
-	buf.pendingServiceDeletes.Iter(func(id serviceID) error {
+	for id := range buf.pendingServiceDeletes.All() {
 		msg := &proto.ServiceRemove{
 			Name:      id.Name,
 			Namespace: id.Namespace,
 		}
 		buf.Callback(msg)
 		buf.sentServices.Discard(id)
-		return nil
-	})
+	}
 	buf.pendingServiceDeletes.Clear()
 	for _, msg := range buf.pendingServiceUpdates {
 		buf.Callback(msg)
@@ -1219,11 +1217,16 @@ func cidrToIPPoolID(cidr ip.CIDR) string {
 }
 
 func addPolicyToTierInfo(pol *PolKV, tierInfo *proto.TierInfo, egressAllowed bool) {
+	id := proto.PolicyID{
+		Name:      pol.Key.Name,
+		Namespace: pol.Key.Namespace,
+		Kind:      pol.Key.Kind,
+	}
 	if pol.GovernsIngress() {
-		tierInfo.IngressPolicies = append(tierInfo.IngressPolicies, pol.Key.Name)
+		tierInfo.IngressPolicies = append(tierInfo.IngressPolicies, &id)
 	}
 	if egressAllowed && pol.GovernsEgress() {
-		tierInfo.EgressPolicies = append(tierInfo.EgressPolicies, pol.Key.Name)
+		tierInfo.EgressPolicies = append(tierInfo.EgressPolicies, &id)
 	}
 }
 

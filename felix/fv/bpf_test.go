@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -21,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"path"
 	"regexp"
@@ -31,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -61,8 +57,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -101,7 +95,7 @@ var (
 // with debug disabled and that can lead to verifier issues.
 var _ = describeBPFTests(withProto("tcp"),
 	withConnTimeLoadBalancingEnabled(),
-	withBPFLogLevel("info"))
+	withBPFLogLevel("off"))
 
 type bpfTestOptions struct {
 	connTimeEnabled bool
@@ -301,15 +295,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
-			infra              infrastructure.DatastoreInfra
-			tc                 infrastructure.TopologyContainers
-			calicoClient       client.Interface
-			cc                 *Checker
-			externalClient     *containers.Container
-			deadWorkload       *workload.Workload
-			options            infrastructure.TopologyOptions
-			numericProto       uint8
-			felixPanicExpected bool
+			infra          infrastructure.DatastoreInfra
+			tc             infrastructure.TopologyContainers
+			calicoClient   client.Interface
+			cc             *Checker
+			externalClient *containers.Container
+			deadWorkload   *workload.Workload
+			options        infrastructure.TopologyOptions
+			numericProto   uint8
 		)
 
 		containerIP := func(c *containers.Container) string {
@@ -340,8 +333,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		}
 
 		BeforeEach(func() {
-			felixPanicExpected = false
-
 			iOpts := []infrastructure.CreateOption{}
 			if testOpts.ipv6 {
 				iOpts = append(iOpts,
@@ -371,15 +362,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
 			options.IPIPMode = api.IPIPModeNever
-			options.SimulateBIRDRoutes = false
 			switch testOpts.tunnel {
 			case "none":
-				// Enable adding simulated routes.
-				options.SimulateBIRDRoutes = true
+				// Felix must program unencap routes.
 			case "ipip":
-				// IPIP is not supported in IPv6. We need to mimic routes in FVs.
+				options.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
 				options.IPIPMode = api.IPIPModeAlways
-				options.SimulateBIRDRoutes = true
+				if testOpts.ipv6 {
+					options.SimulateBIRDRoutes = true
+					options.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
+				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 				options.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
@@ -416,15 +408,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			options.ExtraEnvVars["FELIX_HEALTHENABLED"] = "true"
 			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16,beaf::dead/64"
-			if testOpts.tunnel == "wireguard" {
-				options.ExtraEnvVars["FELIX_BPFREDIRECTTOPEERFROML3DEVICE"] = "true"
-			}
-			if testOpts.tunnel == "ipip" && testOpts.protocol != "udp" {
-				// Some tests run with tcpdump in udp case. We make sure that
-				// the redirection does not affect connectivity, but we exclude
-				// those tests. It is too coarse, but the simplest.
-				options.ExtraEnvVars["FELIX_BPFREDIRECTTOPEERFROML3DEVICE"] = "true"
-			}
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "0.0.0.0"
 			} else {
@@ -432,8 +415,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "::"
 			}
 
-			if false && testOpts.protocol == "tcp" {
-				filters := map[string]string{"all": "tcp"}
+			if testOpts.protocol == "tcp" {
+				filters := map[string]string{"all": "tcp or (udp port 4789)"}
 				tcpResetTimeout := api.BPFConntrackTimeout("5s")
 				felixConfig := api.NewFelixConfiguration()
 				felixConfig.SetName("default")
@@ -462,6 +445,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
 				}
 			}
+			options.ExtraEnvVars["FELIX_BPFMaglevMaxServices"] = "50"
+			options.ExtraEnvVars["FELIX_BPFMaglevMaxEndpointsPerService"] = "20"
 		})
 
 		JustAfterEach(func() {
@@ -474,9 +459,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				)
 
 				if testOpts.ipv6 {
-					currBpfsvcsV6, currBpfepsV6 = dumpNATmapsV6(tc.Felixes)
+					currBpfsvcsV6, currBpfepsV6, _ = dumpNATmapsV6(tc.Felixes)
 				} else {
-					currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
+					currBpfsvcs, currBpfeps, _ = dumpNATmaps(tc.Felixes)
 				}
 
 				for i, felix := range tc.Felixes {
@@ -534,22 +519,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 		})
 
-		AfterEach(func() {
-			log.Info("AfterEach starting")
-			for _, f := range tc.Felixes {
-				if !felixPanicExpected {
-					_ = f.ExecMayFail("calico-bpf", "connect-time", "clean")
-				}
-				f.Stop()
-			}
-			externalClient.Stop()
-			log.Info("AfterEach done")
-		})
-
-		AfterEach(func() {
-			infra.Stop()
-		})
-
 		createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
 			log.WithField("policy", dumpResource(policy)).Info("Creating policy")
 			policy, err := calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
@@ -584,7 +553,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			JustBeforeEach(func() {
 				tc, calicoClient = infrastructure.StartNNodeTopology(1, options, infra)
-
 				hostW = workload.Run(
 					tc.Felixes[0],
 					"host",
@@ -625,16 +593,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				pol = createPolicy(pol)
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-1", "allow", true)
+					return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-1", "allow", true)
+					return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-1", "allow", true)
+					return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-1", "allow", true)
+					return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 			})
 
@@ -643,11 +611,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					BeforeEach(func() {
 						// Disable core dumps, we know we're about to cause a panic.
 						options.FelixCoreDumpsEnabled = false
-						felixPanicExpected = true
 					})
 
 					It("0xffff000 not covering BPF bits should panic", func() {
-						felixPanicExpected = true
+						tc.Felixes[0].PanicExpected = true
 						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask/NftablesMarkMask doesn't cover bits that are used"))
 
 						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
@@ -670,6 +637,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 
 					It("0xfff00000 only covering BPF bits should panic", func() {
+						tc.Felixes[0].PanicExpected = true
 						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*Not enough mark bits available"))
 
 						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
@@ -695,7 +663,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "udp" && !testOpts.ipv6 {
 				It("udp should have connectivity after a service is recreated", func() {
-					clusterIP := "10.101.0.111"
+					clusterIP := "10.101.123.1"
 
 					tcpdump := w[0].AttachTCPDump()
 					tcpdump.SetLogEnabled(true)
@@ -727,7 +695,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Should(BeNumerically("==", 0))
 
 					testSvc := k8sService("svc-no-backends", clusterIP, w[0], 80, 8055, 0, testOpts.protocol)
-					testSvcNamespace := testSvc.ObjectMeta.Namespace
+					testSvcNamespace := testSvc.Namespace
 					k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_, err = k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(),
 						testSvc, metav1.CreateOptions{})
@@ -738,7 +706,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					natK := nat.NewNATKey(net.ParseIP(ip), port, 17)
 
 					Eventually(func() bool {
-						natmaps, _ := dumpNATMapsAny(4, tc.Felixes[0])
+						natmaps, _, _ := dumpNATMapsAny(4, tc.Felixes[0])
 						if _, ok := natmaps[natK]; !ok {
 							return false
 						}
@@ -808,6 +776,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				BeforeEach(func() {
 					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
 				})
+
 				It("should allow traffic from workload to workload and to/from host", func() {
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
@@ -1185,7 +1154,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					}
 
 					Eventually(func(g Gomega) {
-						natmap, natbe := dumpNATMapsAny(family, tc.Felixes[0])
+						natmap, natbe, _ := dumpNATMapsAny(family, tc.Felixes[0])
 						g.Expect(natmap).To(HaveKey(natK))
 						g.Expect(natmap[natK].Count()).To(Equal(uint32(3)))
 						svc := natmap[natK]
@@ -1204,7 +1173,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					Expect(err).NotTo(HaveOccurred())
 
 					Eventually(func(g Gomega) {
-						natmap, natbe := dumpNATMapsAny(family, tc.Felixes[0])
+						natmap, natbe, _ := dumpNATMapsAny(family, tc.Felixes[0])
 						g.Expect(natmap).To(HaveKey(natK))
 						g.Expect(natmap[natK].Count()).To(Equal(uint32(2)))
 						svc := natmap[natK]
@@ -1269,6 +1238,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 				wName := fmt.Sprintf("w%d%d", ii, wi)
 
+				if options.UseIPPools {
+					infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
+				}
 				w := workload.New(tc.Felixes[ii], wName, "default",
 					wIP, strconv.Itoa(port), testOpts.protocol)
 
@@ -1277,23 +1249,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				w.WorkloadEndpoint.Labels = labels
 				if run {
-					err := w.Start()
+					err := w.Start(infra)
 					Expect(err).NotTo(HaveOccurred())
 					w.ConfigureInInfra(infra)
 				}
-				if options.UseIPPools {
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(wIP),
-						HandleID: &w.Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: tc.Felixes[ii].Hostname,
-						},
-						Hostname: tc.Felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
-				}
-
 				return w
 			}
 
@@ -1328,11 +1287,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			// We will use this container to model an external client trying to connect into
 			// workloads on a host.  Create a route in the container for the workload CIDR.
 			// TODO: Copied from another test
-			externalClient = infrastructure.RunExtClientWithOpts("ext-client",
-				infrastructure.ExtClientOpts{
-					IPv6Enabled: testOpts.ipv6,
-				},
-			)
+			externalClient = infrastructure.RunExtClientWithOpts(infra, "ext-client", infrastructure.ExtClientOpts{
+				IPv6Enabled: testOpts.ipv6,
+			})
 			_ = externalClient
 
 			err := infra.AddDefaultDeny()
@@ -1344,15 +1301,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						return healthStatus(containerIP(f.Container), "9099", "readiness")
 					}
 					Eventually(felixReady, "10s", "500ms").Should(BeGood())
-					Eventually(func() int {
-						resp, err := http.Get("http://" + containerIP(f.Container) + ":10256" + "/healthz")
-						if err != nil {
-							log.WithError(err).WithField("resp", resp).Warn("HTTP GET failed")
-							return -1
-						}
-						defer resp.Body.Close()
-						return resp.StatusCode
-					}, "3s", "500ms").Should(BeGood())
 				}
 			}
 		}
@@ -1397,7 +1345,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						wlIP = "dead:beef::1:5"
 					}
 					dpOnlyWorkload := workload.New(tc.Felixes[1], "w-dp", "default", wlIP, "8057", testOpts.protocol)
-					err = dpOnlyWorkload.Start()
+					err = dpOnlyWorkload.Start(infra)
 					Expect(err).NotTo(HaveOccurred())
 					tc.Felixes[1].Exec("ip", "route", "add", dpOnlyWorkload.IP, "dev", dpOnlyWorkload.InterfaceName, "scope", "link")
 
@@ -1655,8 +1603,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pol = createPolicy(pol)
 						})
 
-						bpfWaitForPolicy(tc.Felixes[0], "eth0", "egress", "default.host-0-1")
+						bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
 					})
+
 					It("should handle NAT outgoing", func() {
 						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
@@ -1769,7 +1718,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							clusterIP1 = "dead:beef::abcd:0:0:111"
 						}
 						testSvc := k8sService("svc-no-backends", clusterIP1, w[0][0], 80, 1234, 0, testOpts.protocol)
-						testSvcNamespace := testSvc.ObjectMeta.Namespace
+						testSvcNamespace := testSvc.Namespace
 						testSvc.Spec.Selector = map[string]string{"somelabel": "somevalue"}
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(),
 							testSvc, metav1.CreateOptions{})
@@ -1786,7 +1735,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						Eventually(func() bool {
-							natmaps, _ := dumpNATMapsAny(family, tc.Felixes[0])
+							natmaps, _, _ := dumpNATMapsAny(family, tc.Felixes[0])
 							if _, ok := natmaps[natK]; !ok {
 								return false
 							}
@@ -1922,6 +1871,257 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				}
 
+				Describe("Test advertised IP's with maglev enabled", func() {
+					if testOpts.connTimeEnabled {
+						// FIXME externalClient also does conntime balancing
+						return
+					}
+
+					var (
+						testSvc          *v1.Service
+						testSvcNamespace string
+						port             uint16
+						proto            uint8
+					)
+					if numNodes < 3 {
+						panic("need 3 nodes")
+					}
+
+					tgtPort := 8055
+					externalIP := extIP
+					testSvcName := "test-maglev-service"
+
+					familyInt := 4
+					if family == "ipv6" {
+						familyInt = 6
+					}
+
+					newConntrackKey := func(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, family string) conntrack.KeyInterface {
+						var key conntrack.KeyInterface
+						// cmp := bytes.Compare(srcIP, dstIP)
+						// srcLTDst := cmp < 0 || (cmp == 0 && srcPort < dstPort)
+
+						ipA, ipB := srcIP, dstIP
+						portA, portB := uint16(srcPort), dstPort
+						// if !srcLTDst {
+						// 	ipB, ipA = srcIP, dstIP
+						// 	portB, portA = uint16(srcPort), port
+						// }
+						switch family {
+						case "ipv4":
+							key = conntrack.NewKey(proto, ipA, portA, ipB, portB)
+						case "ipv6":
+							key = conntrack.NewKeyV6(proto, ipA, portA, ipB, portB)
+						}
+						return key
+					}
+					checkConntrackExists := func(f *infrastructure.Felix, ctK conntrack.KeyInterface) (conntrack.ValueInterface, bool) {
+						ctMap := dumpCTMapsAny(familyInt, f)
+						log.Infof("Dumping CT map for felix %s, searching for key: %s", f.Name, ctK.String())
+
+						for k, v := range ctMap {
+							log.Infof("key: %s\n\tval: %s", k.String(), v.String())
+						}
+						v, ok := ctMap[ctK]
+						return v, ok
+					}
+					checkConntrackExistsAnyDirection := func(f *infrastructure.Felix, ipA net.IP, portA uint16, ipB net.IP, portB uint16, family string) (conntrack.ValueInterface, bool) {
+						keyAB := newConntrackKey(ipA, portA, ipB, portB, family)
+						keyBA := newConntrackKey(ipB, portB, ipA, portA, family)
+
+						val, exists := checkConntrackExists(f, keyAB)
+						if !exists {
+							val, exists = checkConntrackExists(f, keyBA)
+						}
+
+						return val, exists
+					}
+					maglevMapAnySearch := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) nat.BackendValueInterface {
+						Expect(family).To(Or(Equal("ipv4"), Equal("ipv6")))
+
+						var v nat.BackendValueInterface
+						var ok bool
+						switch family {
+						case "ipv4":
+							mm := dumpMaglevMap(felix)
+							kp := nat.MaglevBackendKey{}
+							Expect(key).To(BeAssignableToTypeOf(kp))
+							kp, _ = key.(nat.MaglevBackendKey)
+
+							if v, ok = mm[kp]; !ok {
+								return nil
+							}
+
+						case "ipv6":
+							mm := dumpMaglevMapV6(felix)
+							kp := nat.MaglevBackendKeyV6{}
+							Expect(key).To(BeAssignableToTypeOf(kp))
+							kp, _ = key.(nat.MaglevBackendKeyV6)
+
+							if v, ok = mm[kp]; !ok {
+								return nil
+							}
+						}
+						return v
+					}
+					maglevMapAnySearchFunc := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) func() nat.BackendValueInterface {
+						return func() nat.BackendValueInterface {
+							return maglevMapAnySearch(key, family, felix)
+						}
+					}
+
+					BeforeEach(func() {
+						switch testOpts.protocol {
+						case "udp":
+							proto = 17
+						case "tcp":
+							proto = 6
+						case "sctp":
+							proto = 132
+						default:
+							log.WithField("protocol", testOpts.protocol).Panic("unknown test protocol")
+						}
+						log.WithFields(log.Fields{"number": proto, "name": testOpts.protocol}).Info("parsed protocol")
+
+						// Create policy allowing ingress from external client
+						allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
+						allowIngressFromExtClient.Namespace = "fv"
+						allowIngressFromExtClient.Name = "policy-ext-client"
+						allowIngressFromExtClient.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{
+										containerIP(externalClient) + "/" + ipMask(),
+									},
+								},
+							},
+						}
+
+						allowIngressFromExtClientSelector := "all()"
+						allowIngressFromExtClient.Spec.Selector = allowIngressFromExtClientSelector
+						allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
+
+						// Create service with maglev annotation
+						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0,
+							testOpts.protocol, []string{externalIP})
+						testSvc.Annotations = map[string]string{
+							"lb.projectcalico.org/external-traffic-strategy": "maglev",
+						}
+						testSvcNamespace = testSvc.Namespace
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+							"Service endpoint didn't get created. Is controller-manager happy?")
+						Expect(k8sGetEpsForService(k8sClient, testSvc)[0].Endpoints[0].Addresses).Should(HaveLen(1),
+							"Service endpoint didn't have the expected number of addresses.")
+
+						Expect(testSvc.Spec.ExternalIPs).To(HaveLen(1))
+						Expect(testSvc.Spec.ExternalIPs[0]).To(Equal(externalIP))
+						Expect(testSvc.Spec.Ports).To(HaveLen(1))
+						port = uint16(testSvc.Spec.Ports[0].Port)
+
+						conntrackFlushWorkloadEntries(tc.Felixes)
+
+						var testMaglevMapKey nat.MaglevBackendKeyInterface
+						switch family {
+						case "ipv4":
+							testMaglevMapKey = nat.NewMaglevBackendKey(net.ParseIP(clusterIP), port, proto, 0)
+						case "ipv6":
+							testMaglevMapKey = nat.NewMaglevBackendKeyV6(net.ParseIP(clusterIP), port, proto, 0)
+						default:
+							log.Panicf("Unexpected IP family %s", family)
+						}
+
+						log.Info("Waiting for Maglev map to converge...")
+						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[0]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[0])")
+						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[1]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[1])")
+						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[2]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[2])")
+
+						Expect(maglevMapAnySearch(testMaglevMapKey, family, tc.Felixes[1]).Addr().String()).Should(Equal(w[0][0].IP))
+
+						// Configure routes on external client and Felix nodes.
+						// Use Felix[1] as a middlebox initially.
+						ipRoute := []string{"ip"}
+						if testOpts.ipv6 {
+							ipRoute = append(ipRoute, "-6")
+						}
+
+						cmdCleanRt := append(ipRoute, "route", "del", clusterIP)
+						_ = externalClient.ExecMayFail(strings.Join(cmdCleanRt, ""))
+						cmdCleanRt = append(ipRoute, "route", "del", externalIP)
+						_ = externalClient.ExecMayFail(strings.Join(cmdCleanRt, ""))
+
+						cmdCIP := append(ipRoute, "route", "add", clusterIP, "via", felixIP(1))
+						externalClient.Exec(cmdCIP...)
+						cmdEIP := append(ipRoute, "route", "add", externalIP, "via", felixIP(1))
+						externalClient.Exec(cmdEIP...)
+					})
+
+					It("should have connectivity from external client to maglev backend via cluster IP and external IP", func() {
+						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
+						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
+						cc.CheckConnectivity()
+					})
+
+					testFailover := func(serviceIP string) {
+						By("making a connection over a loadbalancer and then switching off routing to it")
+						pc := &PersistentConnection{
+							Runtime:              externalClient,
+							RuntimeName:          externalClient.Name,
+							IP:                   serviceIP,
+							Port:                 int(port),
+							SourcePort:           50000,
+							Protocol:             testOpts.protocol,
+							MonitorConnectivity:  true,
+							ProbeLoopFileTimeout: 15 * time.Second,
+						}
+						err := pc.Start()
+						Expect(err).NotTo(HaveOccurred())
+						defer pc.Stop()
+
+						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", 0), "Connection failed")
+
+						backingPodIPAddr := net.ParseIP(w[0][0].IP)
+						clientIPAddr := net.ParseIP(containerIP(externalClient))
+
+						ctVal, ctExists := checkConntrackExistsAnyDirection(tc.Felixes[1], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
+						Expect(ctExists).To(BeTrue(), "No conntrack (src->dst / dst->src) existed for the connection on Felix[1]")
+						Expect(ctVal.OrigIP().String()).To(Equal(serviceIP), "Unexpected OrigIP on loadbalancer Felix service connection")
+
+						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
+						Expect(ctExists).To(BeFalse(), "Conntrack existed for the connection on Felix[2] before Felix[2] should have handled the connection: %v", ctVal)
+
+						// Traffic is flowing over LB 1. Change ExtClient's serviceIP route to go via LB 2.
+						ipRoute := []string{"ip"}
+						if testOpts.ipv6 {
+							ipRoute = append(ipRoute, "-6")
+						}
+						ipRouteReplace := append(ipRoute, "route", "replace", serviceIP, "via", felixIP(2))
+						externalClient.Exec(ipRouteReplace...)
+
+						lastPongCount := pc.PongCount()
+
+						checkCTExistsFn := func() bool {
+							_, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[2], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
+							return ctExists
+						}
+						Eventually(checkCTExistsFn, "10s").Should(BeTrue(), "Conntrack didn't exist on Felix[2] for failover traffic. Did the failover actually occur?")
+
+						// Check the backing node updated conntrack tun_ip to the new loadbalancer node.
+						ctVal, ctExists = checkConntrackExistsAnyDirection(tc.Felixes[0], clientIPAddr, uint16(pc.SourcePort), backingPodIPAddr, uint16(tgtPort), family)
+						Expect(ctExists).To(BeTrue(), "Conntrack didn't exist on backing Felix[0].")
+						Expect(ctVal.Data().TunIP.String()).To(Equal(felixIP(2)), "Backing node did not update its conntrack tun_ip to the new loadbalancer IP")
+
+						// Connection should persist after the changeover.
+						Eventually(pc.PongCount, "5s", "100ms").Should(BeNumerically(">", lastPongCount), "Connection is no longer ponging after route failover")
+					}
+
+					It("should maintain connections to a cluster IP across loadbalancer failover using maglev", func() { testFailover(clusterIP) })
+					It("should maintain connections to an external IP across loadbalancer failover using maglev", func() { testFailover(externalIP) })
+				})
+
 				Describe("Test Load balancer service with external IP", func() {
 					if testOpts.connTimeEnabled {
 						// FIXME externalClient also does conntime balancing
@@ -1984,7 +2184,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							testOpts.protocol, externalIP, srcIPRange)
 
 						By("Deleting first service")
-						err := k8sClient.CoreV1().Services(testSvc.ObjectMeta.Namespace).Delete(context.Background(), testSvcName, metav1.DeleteOptions{})
+						err := k8sClient.CoreV1().Services(testSvc.Namespace).Delete(context.Background(), testSvcName, metav1.DeleteOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
 						By("Sleeping")
@@ -2057,6 +2257,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						pol = updatePolicy(pol)
 					})
+
 					It("should not have connectivity from external client, and return connection refused", func() {
 						icmpProto := "icmp"
 						if testOpts.ipv6 {
@@ -2066,11 +2267,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						tcpdump := externalClient.AttachTCPDump("any")
 						tcpdump.SetLogEnabled(true)
 						if testOpts.ipv6 {
-							tcpdump.AddMatcher("unreach", regexp.MustCompile("destination unreachable"))
-							tcpdump.AddMatcher("bad csum", regexp.MustCompile("bad icmp6 cksum"))
+							tcpdump.AddMatcher("unreach", regexp.MustCompile(`destination unreachable`))
+							tcpdump.AddMatcher("bad csum", regexp.MustCompile(`bad icmp6 cksum`))
 						} else {
-							tcpdump.AddMatcher("unreach", regexp.MustCompile("port \\d+ unreachable"))
-							tcpdump.AddMatcher("bad csum", regexp.MustCompile("wrong icmp cksum"))
+							tcpdump.AddMatcher("unreach", regexp.MustCompile(`port \d+ unreachable`))
+							tcpdump.AddMatcher("bad csum", regexp.MustCompile(`wrong icmp cksum`))
 						}
 
 						tcpdump.Start("-vv", testOpts.protocol, "port", strconv.Itoa(int(port)), "or", icmpProto)
@@ -2173,11 +2374,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					// Create a service of type clusterIP
 					BeforeEach(func() {
 						testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0, testOpts.protocol)
-						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						testSvcNamespace = testSvc.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
-						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-							"Service endpoints didn't get created? Is controller-manager happy?")
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+							"Service endpoints didn't get created. Is controller-manager happy?")
 						tc.Felixes[1].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 						tc.Felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 					})
@@ -2484,11 +2685,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					BeforeEach(func() {
 						testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0, testOpts.protocol)
-						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						testSvcNamespace = testSvc.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
-						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-							"Service endpoints didn't get created? Is controller-manager happy?")
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+							"Service endpoints didn't get created. Is controller-manager happy?")
 					})
 
 					It("should have connectivity from all workloads via a service to workload 0", func() {
@@ -2560,10 +2761,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					It("should have connectivity from workload via a service IP to a host-process listening on that IP", func() {
 						By("Setting up a dummy service " + excludeSvcIP)
 						svc := k8sService("dummy-service", excludeSvcIP, w[0][0] /* unimportant */, 8066, 8077, 0, testOpts.protocol)
-						svc.ObjectMeta.Annotations = map[string]string{
+						svc.Annotations = map[string]string{
 							proxy.ExcludeServiceAnnotation: "true",
 						}
-						_, err := k8sClient.CoreV1().Services(testSvc.ObjectMeta.Namespace).
+						_, err := k8sClient.CoreV1().Services(testSvc.Namespace).
 							Create(context.Background(), svc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
@@ -2674,7 +2875,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								if time.Since(startTime) > 5*time.Second {
 									Fail("NAT maps failed to converge")
 								}
-								natBeforeUpdate, natBackBeforeUpdate = dumpNATmapsAny(family, tc.Felixes)
+								natBeforeUpdate, natBackBeforeUpdate, _ = dumpNATmapsAny(family, tc.Felixes)
 								for i, m := range natBeforeUpdate {
 									if natV, ok := m[oldK]; !ok {
 										goto retry
@@ -2706,13 +2907,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							svc, err := k8sClient.CoreV1().
 								Services(testSvcNamespace).
 								Get(context.Background(), testSvcName, metav1.GetOptions{})
+							Expect(err).NotTo(HaveOccurred())
 
-							testSvcUpdated.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+							testSvcUpdated.ResourceVersion = svc.ResourceVersion
 
 							_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(context.Background(), testSvcUpdated, metav1.UpdateOptions{})
 							Expect(err).NotTo(HaveOccurred())
-							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-								"Service endpoints didn't get created? Is controller-manager happy?")
+							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+								"Service endpoints didn't get created. Is controller-manager happy?")
 						})
 
 						It("should have connectivity from all workloads via the new port", func() {
@@ -2752,7 +2954,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								natK = nat.NewNATKey(ipv4, portNew, numericProto)
 							}
 
-							natmaps, natbacks := dumpNATmapsAny(family, tc.Felixes)
+							natmaps, natbacks, _ := dumpNATmapsAny(family, tc.Felixes)
 
 							for i := range tc.Felixes {
 								Expect(natmaps[i]).To(HaveKey(natK))
@@ -2794,7 +2996,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							var prevBpfsvcs []map[nat.FrontendKeyInterface]nat.FrontendValue
 
 							Eventually(func() bool {
-								prevBpfsvcs, _ = dumpNATmapsAny(family, tc.Felixes)
+								prevBpfsvcs, _, _ = dumpNATmapsAny(family, tc.Felixes)
 								for _, m := range prevBpfsvcs {
 									if _, ok := m[natK]; !ok {
 										return false
@@ -2807,7 +3009,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Services(testSvcNamespace).
 								Delete(context.Background(), testSvcName, metav1.DeleteOptions{})
 							Expect(err).NotTo(HaveOccurred())
-							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(0))
+							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(0))
 
 							cc.ExpectNone(w[0][1], TargetIP(ip), port)
 							cc.ExpectNone(w[1][0], TargetIP(ip), port)
@@ -2820,7 +3022,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								bckID := natV.ID()
 
 								Eventually(func() bool {
-									svcs, eps := dumpNATMapsAny(family, f)
+									svcs, eps, _ := dumpNATMapsAny(family, f)
 
 									if _, ok := svcs[natK]; ok {
 										return false
@@ -2851,7 +3053,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						BeforeEach(func() {
 							testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, 8055, 0, testOpts.protocol)
-							testSvcNamespace = testSvc.ObjectMeta.Namespace
+							testSvcNamespace = testSvc.Namespace
 							// select all pods with port 8055
 							testSvc.Spec.Selector = map[string]string{"port": "8055"}
 							if setAffinity {
@@ -2859,7 +3061,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}
 							_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 							Expect(err).NotTo(HaveOccurred())
-							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							// We have 3 backends all listening on port 8055.
+							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(3),
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
@@ -2911,7 +3114,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 
 								Eventually(func() bool {
-									m, be := dumpNATMapsAny(family, tc.Felixes[0])
+									m, be, _ := dumpNATMapsAny(family, tc.Felixes[0])
 
 									v, ok := m[natFtKey]
 									if !ok || v.Count() == 0 {
@@ -3034,13 +3237,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						By("Setting up the service", func() {
 							testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, 8055, 0, testOpts.protocol)
-							testSvcNamespace = testSvc.ObjectMeta.Namespace
+							testSvcNamespace = testSvc.Namespace
 							// select all pods with port 8055
 							testSvc.Spec.Selector = map[string]string{"port": "8055"}
 							testSvc.Spec.SessionAffinity = "ClientIP"
 							_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 							Expect(err).NotTo(HaveOccurred())
-							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(3),
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
@@ -3059,7 +3262,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								family = 4
 							}
 							Eventually(func() bool {
-								m, be := dumpNATMapsAny(family, tc.Felixes[0])
+								m, be, _ := dumpNATMapsAny(family, tc.Felixes[0])
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
 									return false
@@ -3135,10 +3338,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						By("Setting up the service", func() {
 							testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, 8055, 0, testOpts.protocol)
-							testSvcNamespace = testSvc.ObjectMeta.Namespace
+							testSvcNamespace = testSvc.Namespace
 							_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 							Expect(err).NotTo(HaveOccurred())
-							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
@@ -3162,7 +3365,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								family = 4
 							}
 							Eventually(func() bool {
-								m, be := dumpNATMapsAny(family, tc.Felixes[1])
+								m, be, _ := dumpNATMapsAny(family, tc.Felixes[1])
 
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
@@ -3240,10 +3443,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							internalLocal := v1.ServiceInternalTrafficPolicyLocal
 							testSvc.Spec.InternalTrafficPolicy = &internalLocal
 						}
-						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						testSvcNamespace = testSvc.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
-						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
 					})
 
@@ -3344,21 +3547,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 
 								for _, felix := range tc.Felixes {
-									fe, _ := dumpNATMapsAny(family, felix)
+									fe, _, _ := dumpNATMapsAny(family, felix)
 									for key := range fe {
 										Expect(key.Addr().String()).To(BeElementOf(ipOK))
 									}
 								}
 
 								// RemoteNodeport on node 0
-								fe, _ := dumpNATMapsAny(family, tc.Felixes[0])
+								fe, _, _ := dumpNATMapsAny(family, tc.Felixes[0])
 								Expect(fe).To(HaveKey(feKey))
 								be := fe[feKey]
 								Expect(be.Count()).To(Equal(uint32(1)))
 								Expect(be.LocalCount()).To(Equal(uint32(1)))
 
 								// RemoteNodeport on node 1
-								fe, _ = dumpNATMapsAny(family, tc.Felixes[1])
+								fe, _, _ = dumpNATMapsAny(family, tc.Felixes[1])
 								Expect(fe).To(HaveKey(feKey))
 								be = fe[feKey]
 								Expect(be.Count()).To(Equal(uint32(1)))
@@ -3758,9 +3961,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					if intLocal {
 						It("workload should have connectivity to self via local and not remote node", func() {
 							w00Expects := []ExpectationOption{ExpectWithPorts(npPort)}
-							hostW0SrcIP := ExpectWithSrcIPs("0.0.0.0")
-
-							hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
+							hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
 							if testOpts.ipv6 {
 								hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
 								switch testOpts.tunnel {
@@ -4123,7 +4324,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											InterfaceName: "eth20",
 											MTU:           1500, // Need to match host MTU or felix will restart.
 										}
-										err := eth20.Start()
+										err := eth20.Start(infra)
 										Expect(err).NotTo(HaveOccurred())
 
 										// assign address to eth20 and add route to the .20 network
@@ -4265,7 +4466,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									remoteWL.IP6 = remoteWLIP
 								}
 
-								err := remoteWL.Start()
+								err := remoteWL.Start(infra)
 								Expect(err).NotTo(HaveOccurred())
 
 								clusterIP := "10.101.0.211"
@@ -4274,10 +4475,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 
 								svcHostNP := k8sService("test-host-np", clusterIP, hostW[0], 81, 8055, int32(hostNP), testOpts.protocol)
-								testSvcNamespace := svcHostNP.ObjectMeta.Namespace
+								testSvcNamespace := svcHostNP.Namespace
 								_, err = k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), svcHostNP, metav1.CreateOptions{})
 								Expect(err).NotTo(HaveOccurred())
-								Eventually(k8sGetEpsForServiceFunc(k8sClient, svcHostNP), "10s").Should(HaveLen(1),
+								Eventually(checkSvcEndpoints(k8sClient, svcHostNP), "10s").Should(Equal(1),
 									"Service endpoints didn't get created? Is controller-manager happy?")
 
 								if testOpts.ipv6 {
@@ -4456,10 +4657,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 						testSvc = k8sService(testSvcName, clusterIP,
 							tgtWorkload, 80, tgtPort, int32(npPort), testOpts.protocol)
-						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						testSvcNamespace = testSvc.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
-						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
 
 						// Sync with all felixes because some fwd tests with "none"
@@ -4480,7 +4681,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									family = 4
 								}
 
-								m, be := dumpNATMapsAny(family, flx)
+								m, be, _ := dumpNATMapsAny(family, flx)
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
 									return false
@@ -4639,7 +4840,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					})
 				})
-
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
@@ -4726,11 +4926,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			It("should have connectivity from host-networked pods via service to host-networked backend", func() {
 				By("Setting up the service")
 				testSvc := k8sService("host-svc", clusterIP, hostW[0], 80, 8055, 0, testOpts.protocol)
-				testSvcNamespace := testSvc.ObjectMeta.Namespace
+				testSvcNamespace := testSvc.Namespace
 				k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+				Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
 					"Service endpoints didn't get created? Is controller-manager happy?")
 
 				By("Testing connectivity")
@@ -4841,6 +5041,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// To mimic 3rd party CNI, we do not install IPPools and set the source to
 				// learn routes to WorkloadIPs as IPAM/CNI is not going to provide either.
 				options.UseIPPools = false
+				options.SimulateBIRDRoutes = true
 				options.ExtraEnvVars["FELIX_ROUTESOURCE"] = "WorkloadIPs"
 				setupCluster()
 			})
@@ -4852,7 +5053,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Skip("NFT does not support third-party rules")
 					}
 
-					c := infrastructure.RunExtClient("ext-workload")
+					c := infrastructure.RunExtClient(infra, "ext-workload")
 					extWorkload = &workload.Workload{
 						C:        c,
 						Name:     "ext-workload",
@@ -4861,7 +5062,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						IP:       containerIP(c),
 					}
 
-					err := extWorkload.Start()
+					err := extWorkload.Start(infra) // FIXME
 					Expect(err).NotTo(HaveOccurred())
 
 					tool := "iptables"
@@ -4924,14 +5125,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				pol.Spec.Selector = "all()"
 
 				pol = createPolicy(pol)
-
 			})
 
 			if testOpts.protocol == "udp" || testOpts.tunnel == "ipip" || testOpts.ipv6 {
 				return
 			}
 			It("should allow traffic from workload to this host device", func() {
-
 				var (
 					test30            *workload.Workload
 					test30IP          string
@@ -4959,7 +5158,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					InterfaceName: "test30",
 					MTU:           1500, // Need to match host MTU or felix will restart.
 				}
-				err := test30.Start()
+				err := test30.Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 				// assign address to test30 and add route to the .30 network
 				if testOpts.ipv6 {
@@ -5142,7 +5341,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							InterfaceName: "eth20",
 							MTU:           1500, // Need to match host MTU or felix will restart.
 						}
-						err := eth20.Start()
+						err := eth20.Start(infra)
 						Expect(err).NotTo(HaveOccurred())
 
 						// assign address to eth20 and add route to the .20 network
@@ -5175,7 +5374,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							InterfaceName: "eth30",
 							MTU:           1500, // Need to match host MTU or felix will restart.
 						}
-						err = eth30.Start()
+						err = eth30.Start(infra)
 						Expect(err).NotTo(HaveOccurred())
 
 						// assign address to eth30 and add route to the .30 network
@@ -5299,14 +5498,16 @@ func typeMetaV1(kind string) metav1.TypeMeta {
 
 func objectMetaV1(name string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
-		Name:      name,
-		Namespace: "default",
+		Name:        name,
+		Namespace:   "default",
+		Annotations: make(map[string]string),
 	}
 }
 
-func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem) {
+func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem, []nat.MaglevMapMem) {
 	bpfsvcs := make([]nat.MapMem, len(felixes))
 	bpfeps := make([]nat.BackendMapMem, len(felixes))
+	bpfcheps := make([]nat.MaglevMapMem, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5316,20 +5517,23 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMa
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i] = dumpNATMaps(felixes[i])
+			bpfsvcs[i], bpfeps[i], bpfcheps[i] = dumpNATMaps(felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps
+	return bpfsvcs, bpfeps, bpfcheps
 }
 
 func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
-	[]map[nat.FrontendKeyInterface]nat.FrontendValue, []map[nat.BackendKey]nat.BackendValueInterface,
+	[]map[nat.FrontendKeyInterface]nat.FrontendValue,
+	[]map[nat.BackendKey]nat.BackendValueInterface,
+	[]map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface,
 ) {
 	bpfsvcs := make([]map[nat.FrontendKeyInterface]nat.FrontendValue, len(felixes))
 	bpfeps := make([]map[nat.BackendKey]nat.BackendValueInterface, len(felixes))
+	bpfcheps := make([]map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5339,18 +5543,19 @@ func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i] = dumpNATMapsAny(family, felixes[i])
+			bpfsvcs[i], bpfeps[i], bpfcheps[i] = dumpNATMapsAny(family, felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps
+	return bpfsvcs, bpfeps, bpfcheps
 }
 
-func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6) {
+func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6, []nat.MaglevMapMemV6) {
 	bpfsvcs := make([]nat.MapMemV6, len(felixes))
 	bpfeps := make([]nat.BackendMapMemV6, len(felixes))
+	cheps := make([]nat.MaglevMapMemV6, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5360,49 +5565,57 @@ func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.Backe
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i] = dumpNATMapsV6(felixes[i])
+			bpfsvcs[i], bpfeps[i], cheps[i] = dumpNATMapsV6(felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps
+	return bpfsvcs, bpfeps, cheps
 }
 
-func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
-	return dumpNATMap(felix), dumpEPMap(felix)
+func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem, nat.MaglevMapMem) {
+	return dumpNATMap(felix), dumpEPMap(felix), dumpMaglevMap(felix)
 }
 
-func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6) {
-	return dumpNATMapV6(felix), dumpEPMapV6(felix)
+func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6, nat.MaglevMapMemV6) {
+	return dumpNATMapV6(felix), dumpEPMapV6(felix), dumpMaglevMapV6(felix)
 }
 
 func dumpNATMapsAny(family int, felix *infrastructure.Felix) (
 	map[nat.FrontendKeyInterface]nat.FrontendValue,
 	map[nat.BackendKey]nat.BackendValueInterface,
+	map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface,
 ) {
 	f := make(map[nat.FrontendKeyInterface]nat.FrontendValue)
 	b := make(map[nat.BackendKey]nat.BackendValueInterface)
+	m := make(map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface)
 
 	if family == 6 {
-		f6, b6 := dumpNATMapsV6(felix)
+		f6, b6, m6 := dumpNATMapsV6(felix)
 		for k, v := range f6 {
 			f[k] = v
 		}
 		for k, v := range b6 {
 			b[k] = v
 		}
+		for k, v := range m6 {
+			m[k] = v
+		}
 	} else {
-		f4, b4 := dumpNATMaps(felix)
+		f4, b4, m4 := dumpNATMaps(felix)
 		for k, v := range f4 {
 			f[k] = v
 		}
 		for k, v := range b4 {
 			b[k] = v
 		}
+		for k, v := range m4 {
+			m[k] = v
+		}
 	}
 
-	return f, b
+	return f, b, m
 }
 
 func dumpCTMapsAny(family int, felix *infrastructure.Felix) map[conntrack.KeyInterface]conntrack.ValueInterface {
@@ -5452,6 +5665,20 @@ func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
 	bm := nat.BackendMap()
 	m := make(nat.BackendMapMem)
 	dumpBPFMap(felix, bm, nat.BackendMapMemIter(m))
+	return m
+}
+
+func dumpMaglevMap(felix *infrastructure.Felix) nat.MaglevMapMem {
+	bm := nat.MaglevMap()
+	m := make(nat.MaglevMapMem)
+	dumpBPFMap(felix, bm, nat.MaglevMapMemIter(m))
+	return m
+}
+
+func dumpMaglevMapV6(felix *infrastructure.Felix) nat.MaglevMapMemV6 {
+	bm := nat.MaglevMapV6()
+	m := make(nat.MaglevMapMemV6)
+	dumpBPFMap(felix, bm, nat.MaglevMapMemV6Iter(m))
 	return m
 }
 
@@ -5610,9 +5837,10 @@ func k8sService(name, clusterIP string, w *workload.Workload, port,
 		svcType = v1.ServiceTypeNodePort
 	}
 
+	meta := objectMetaV1(name)
 	return &v1.Service{
 		TypeMeta:   typeMetaV1("Service"),
-		ObjectMeta: objectMetaV1(name),
+		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
 			ClusterIP: clusterIP,
 			Type:      svcType,
@@ -5699,18 +5927,33 @@ func k8sServiceWithExtIP(name, clusterIP string, w *workload.Workload, port,
 	}
 }
 
-func k8sGetEpsForService(k8s kubernetes.Interface, svc *v1.Service) []v1.EndpointSubset {
-	ep, _ := k8s.CoreV1().
-		Endpoints(svc.ObjectMeta.Namespace).
-		Get(context.Background(), svc.ObjectMeta.Name, metav1.GetOptions{})
-	log.WithField("endpoints",
-		spew.Sprint(ep)).Infof("Got endpoints for %s", svc.ObjectMeta.Name)
-	return ep.Subsets
+func k8sGetEpsForService(k8s kubernetes.Interface, svc *v1.Service) []discovery.EndpointSlice {
+	eps, err := k8s.DiscoveryV1().
+		EndpointSlices(svc.Namespace).
+		List(context.Background(), metav1.ListOptions{
+			LabelSelector: "kubernetes.io/service-name=" + svc.Name,
+		})
+	Expect(err).NotTo(HaveOccurred())
+	return eps.Items
 }
 
-func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() []v1.EndpointSubset {
-	return func() []v1.EndpointSubset {
+func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() []discovery.EndpointSlice {
+	return func() []discovery.EndpointSlice {
 		return k8sGetEpsForService(k8s, svc)
+	}
+}
+
+func checkSvcEndpoints(k8s kubernetes.Interface, svc *v1.Service) func() int {
+	return func() int {
+		epslices := k8sGetEpsForService(k8s, svc)
+		totalEps := 0
+		for _, eps := range epslices {
+			if eps.Endpoints == nil {
+				continue
+			}
+			totalEps += len(eps.Endpoints)
+		}
+		return totalEps
 	}
 }
 
@@ -5718,13 +5961,13 @@ func k8sUpdateService(k8sClient kubernetes.Interface, nameSpace, svcName string,
 	svc, err := k8sClient.CoreV1().
 		Services(nameSpace).
 		Get(context.Background(), svcName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
 	log.WithField("origSvc", svc).Info("Read original service before updating it")
-	newsvc.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+	newsvc.ResourceVersion = svc.ResourceVersion
 	_, err = k8sClient.CoreV1().Services(nameSpace).Update(context.Background(), newsvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	Eventually(k8sGetEpsForServiceFunc(k8sClient, oldsvc), "10s").Should(HaveLen(1),
+	Eventually(checkSvcEndpoints(k8sClient, oldsvc), "10s").Should(Equal(1),
 		"Service endpoints didn't get created? Is controller-manager happy?")
-
 	updatedSvc, err := k8sClient.CoreV1().Services(nameSpace).Get(context.Background(), svcName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	log.WithField("updatedSvc", updatedSvc).Info("Read back updated Service")
@@ -5745,10 +5988,10 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 		testSvc = k8sLBService(name, clusterIP, "nobackend", port, tgtPort, protocol, externalIPs, srcRange)
 		epslen = 0
 	}
-	testSvcNamespace = testSvc.ObjectMeta.Namespace
+	testSvcNamespace = testSvc.Namespace
 	_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
+	Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(epslen),
 		"Service endpoints didn't get created? Is controller-manager happy?")
 	return testSvc
 }
@@ -5915,12 +6158,12 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	return false
 }
 
-func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload, isPolicy bool, ipFamily proto.IPVersion) bool {
+func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool, polType string, ipFamily proto.IPVersion) bool {
 	startStr := ""
 	endStr := ""
-	if isPolicy {
-		startStr = fmt.Sprintf("Start of policy %s", polName)
-		endStr = fmt.Sprintf("End of policy %s", polName)
+	if polType != "" {
+		startStr = fmt.Sprintf("Start of %s %s", polType, polName)
+		endStr = fmt.Sprintf("End of %s %s", polType, polName)
 	}
 	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
 	var policyDbg bpf.PolicyDebugInfo
@@ -5970,15 +6213,20 @@ func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, pol
 }
 
 func bpfCheckIfRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, false, proto.IPVersion_IPV4)
+	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, "", proto.IPVersion_IPV4)
 }
 
-func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, true, proto.IPVersion_IPV4)
+func bpfCheckIfNetworkPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNS, polName, action string, isWorkload bool) bool {
+	namespacedName := fmt.Sprintf("%s/%s", polNS, polName)
+	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, namespacedName, action, isWorkload, "NetworkPolicy", proto.IPVersion_IPV4)
 }
 
-func bpfCheckIfPolicyProgrammedV6(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, true, proto.IPVersion_IPV6)
+func bpfCheckIfGlobalNetworkPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
+	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, "GlobalNetworkPolicy", proto.IPVersion_IPV4)
+}
+
+func bpfCheckIfGlobalNetworkPolicyProgrammedV6(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
+	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, "GlobalNetworkPolicy", proto.IPVersion_IPV6)
 }
 
 func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
@@ -5996,10 +6244,22 @@ func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
 	return out
 }
 
-func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, policy string) string {
-	search := fmt.Sprintf("Start of policy %s", policy)
+// bpfWaitForGlobalNetworkPolicy waits for the given global network policy to appear in BPF policy.
+func bpfWaitForGlobalNetworkPolicy(felix *infrastructure.Felix, iface, hook, policyName string) string {
+	search := fmt.Sprintf("Start of GlobalNetworkPolicy %s", policyName)
+	return bpfWaitForPolicy(felix, iface, hook, search)
+}
+
+// bpfWaitForNetworkPolicy waits for the given network policy in the given namespace to appear in BPF policy.
+func bpfWaitForNetworkPolicy(felix *infrastructure.Felix, iface, hook, ns, policyName string) string {
+	search := fmt.Sprintf("Start of NetworkPolicy %s/%s", ns, policyName)
+	return bpfWaitForPolicy(felix, iface, hook, search)
+}
+
+// bpfWaitForNetworkPolicy waits for the given search string to appear in BPF policy.
+func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, search string) string {
 	out := ""
-	EventuallyWithOffset(1, func() string {
+	EventuallyWithOffset(2, func() string {
 		out = bpfDumpPolicy(felix, iface, hook)
 		return out
 	}, "5s", "200ms").Should(ContainSubstring(search))

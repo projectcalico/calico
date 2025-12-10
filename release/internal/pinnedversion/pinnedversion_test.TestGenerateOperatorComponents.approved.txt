@@ -1,82 +1,59 @@
-title: vX.Y.Z
+title: v3.31.0
+manifest_url: https://test-release.docs.eng.tigera.net
 release_name: test-release
-note: Test note
-full_hash: vX.Y.Z-vA.B.C
+note: test-release - generated at [Date1] using release-v3.31 release branch with release-v1.40 operator branch
+full_hash: v3.31.0-v1.40.0
 tigera-operator:
-  version: vA.B.C
+  version: v1.40.0-v3.31.0
   image: tigera/operator
   registry: docker.io
 components:
+  api:
+    version: v3.31.0
+  apiserver:
+    version: v3.31.0
   calico:
-    version: vX.Y.Z
-    image: calico
-  calico/api:
-    version: vX.Y.Z
-    image: api
-  calico/apiserver:
-    version: vX.Y.Z
-    image: apiserver
-  calico/cni:
-    version: vX.Y.Z
-    image: cni
-  calico/cni-windows:
-    version: vX.Y.Z
-    image: cni-windows
-  calico/csi:
-    version: vX.Y.Z
-    image: csi
-  calico/dikastes:
-    version: vX.Y.Z
-    image: dikastes
-  calico/envoy-gateway:
-    version: vX.Y.Z
-    image: envoy-gateway
-  calico/envoy-proxy:
-    version: vX.Y.Z
-    image: envoy-proxy
-  calico/envoy-ratelimit:
-    version: vX.Y.Z
-    image: envoy-ratelimit
-  calico/goldmane:
-    version: vX.Y.Z
-    image: goldmane
-  calico/guardian:
-    version: vX.Y.Z
-    image: guardian
-  calico/kube-controllers:
-    version: vX.Y.Z
-    image: kube-controllers
-  calico/node:
-    version: vX.Y.Z
-    image: node
-  calico/node-windows:
-    version: vX.Y.Z
-    image: node-windows
-  calico/whisker:
-    version: vX.Y.Z
-    image: whisker
-  calico/whisker-backend:
-    version: vX.Y.Z
-    image: whisker-backend
+    version: v3.31.0
   calicoctl:
-    version: vX.Y.Z
+    version: v3.31.0
     image: ctl
+  cni:
+    version: v3.31.0
+  cni-windows:
+    version: v3.31.0
+  csi:
+    version: v3.31.0
   csi-node-driver-registrar:
-    version: vX.Y.Z
+    version: v3.31.0
     image: node-driver-registrar
-  flannel:
-    version: v0.12.0
-    image: coreos/flannel
-    registry: quay.io
+  dikastes:
+    version: v3.31.0
+  envoy-gateway:
+    version: v3.31.0
+  envoy-proxy:
+    version: v3.31.0
+  envoy-ratelimit:
+    version: v3.31.0
   flexvol:
-    version: vX.Y.Z
+    version: v3.31.0
     image: pod2daemon-flexvol
+  goldmane:
+    version: v3.31.0
+  guardian:
+    version: v3.31.0
   key-cert-provisioner:
-    version: vX.Y.Z
-    image: key-cert-provisioner
+    version: v3.31.0
+  kube-controllers:
+    version: v3.31.0
   networking-calico:
-    version: release-v1.0
-    image: networking-calico
+    version: release-v3.31
+  node:
+    version: v3.31.0
+  node-windows:
+    version: v3.31.0
   typha:
-    version: vX.Y.Z
-    image: typha
+    version: v3.31.0
+  whisker:
+    version: v3.31.0
+  whisker-backend:
+    version: v3.31.0

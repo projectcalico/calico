@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -78,14 +76,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Debug port tests", []apicon
 			Eventually(getFn("debug/pprof/profile?seconds=1")).ShouldNot(HaveOccurred())
 			Expect(get("debug/pprof/heap")).NotTo(HaveOccurred())
 			Expect(get("metrics")).To(HaveOccurred(), "Metrics on the debug port?")
-		})
-
-		AfterEach(func() {
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 	})
 })

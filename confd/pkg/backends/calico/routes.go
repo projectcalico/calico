@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -158,7 +159,6 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) 
 	// construct a dummy svc using the service name from endpointslice to get the key
 	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: svcName, Namespace: ep.Namespace}}
 	key, err := cache.MetaNamespaceKeyFunc(svc)
-
 	if err != nil {
 		log.WithField("ep", ep.Name).WithError(err).Warn("getServiceForEndpoints: error on retrieving key for endpoint, passing")
 		return nil, ""
@@ -479,20 +479,17 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 	// we need to announce single IPs for services of type externalTrafficPolicy Cluster.
 	// There are 2 cases inside this type:
 	// - LoadBalancer with a single IP.
-	// - Any one of externalIPs in service of type LoadBalancer or NodePort with a single IP.
+	// - Any one of the externalIPs are a single IP.
 	if svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster {
 		if svc.Spec.Type == v1.ServiceTypeLoadBalancer && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
 			logc.Debug("Advertising load balancer of type cluster because of single IP definition")
 			return true
 		}
 
-		if svc.Spec.Type == v1.ServiceTypeLoadBalancer || svc.Spec.Type == v1.ServiceTypeNodePort {
-			for _, extIP := range svc.Spec.ExternalIPs {
-				if rg.isSingleExternalIP(extIP) {
-					logc.Debug("Advertising external IP of type cluster because of single IP definition")
-					return true
-				}
-			}
+		// Advertise if there is a fully qualified (i.e., /32 or /128) external IP defined.
+		if slices.ContainsFunc(svc.Spec.ExternalIPs, rg.isSingleExternalIP) {
+			logc.Debug("Advertising external IP of type cluster because of single IP definition")
+			return true
 		}
 	}
 
@@ -503,30 +500,31 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 		return false
 	}
 
-	isIPv6 := func(ip string) bool { return strings.Contains(ip, ":") }
+	// Build a lookup table of IP families supported by the Service.
+	// Example: ["IPv4"], ["IPv6"], or ["IPv4","IPv6"] for dual-stack.
+	svcIPFamilies := make(map[string]struct{})
+	for _, fam := range svc.Spec.IPFamilies {
+		svcIPFamilies[string(fam)] = struct{}{}
+	}
 
-	svcIsIPv6 := isIPv6(svc.Spec.ClusterIP)
-
-	// Endpoint-based advertisement logic for both Cluster and Local services.
-	// For Cluster services: advertise if any endpoints exist (when aggregation is disabled).
-	// For Local services: advertise only if local endpoints exist.
 	for _, ep := range eps {
+		// We only consider EndpointSlices whose addressType matches one of the Service’s families.
+		epFamily := string(ep.AddressType)
+		// Skip EndpointSlices with incompatible address families.
+		if _, ok := svcIPFamilies[epFamily]; !ok {
+			continue
+		}
 		for _, subset := range ep.Endpoints {
 			// not interested in subset.NotReadyAddresses
-			for _, address := range subset.Addresses {
-				if isIPv6(address) != svcIsIPv6 {
-					continue
-				}
-				if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
-					// For Cluster services, advertise if we have any endpoints
-					logc.Debugf("Advertising cluster service")
+			if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
+				// For Cluster services, advertise if we have any endpoints
+				logc.Debugf("Advertising cluster service")
+				return true
+			} else {
+				// For Local services, only advertise if we have local endpoints
+				if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
+					logc.Debugf("Advertising local service")
 					return true
-				} else {
-					// For Local services, only advertise if we have local endpoints
-					if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
-						logc.Debugf("Advertising local service")
-						return true
-					}
 				}
 			}
 		}

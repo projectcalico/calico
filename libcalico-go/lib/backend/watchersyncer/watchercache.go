@@ -298,6 +298,7 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 				wc.resyncBlockedUntil = time.Now().Add(ListRetryInterval)
 				continue
 			}
+			wc.logger.WithField("numKVs", len(l.KVPairs)).Debug("List completed.")
 			wc.lastSuccessfulConnTime = time.Now()
 			wc.markInstalled()
 

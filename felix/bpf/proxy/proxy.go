@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/apis"
 	"k8s.io/kubernetes/pkg/proxy/config"
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
+	"k8s.io/kubernetes/pkg/proxy/runner"
 	"k8s.io/kubernetes/pkg/proxy/util"
-	"k8s.io/kubernetes/pkg/util/async"
 )
 
 // Proxy watches for updates of Services and Endpoints, maintains their mapping
@@ -57,6 +57,7 @@ type Proxy interface {
 type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
+	SetHostIPs([]net.IP)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -96,12 +97,18 @@ type proxy struct {
 	dpSyncer  DPSyncer
 	syncerLck sync.Mutex
 	// executes periodic the dataplane updates
-	runner *async.BoundedFrequencyRunner
+	runner *runner.BoundedFrequencyRunner
 	// ensures that only one invocation runs at any time
 	runnerLck sync.Mutex
 	// sets the minimal distance between to sync to avoid overloading the
 	// dataplane in case of frequent changes
 	minDPSyncPeriod time.Duration
+
+	// The interval that syncing is guaranteed to run even without any other triggers.
+	maxDPSyncPeriod time.Duration
+
+	// The interval to retry syncing.
+	retryDPSyncPeriod time.Duration
 
 	// how often to fully sync with k8s - 0 is never
 	syncPeriod time.Duration
@@ -109,17 +116,11 @@ type proxy struct {
 	// event recorder to update node events
 	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
-	healthzServer   healthcheckIntf
+	healthzServer   Healthcheck
 
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
-}
-
-type healthcheckIntf interface {
-	Health() healthcheck.ProxyHealth
-	QueuedUpdate(v1.IPFamily)
-	Updated(v1.IPFamily)
 }
 
 type stoppableRunner interface {
@@ -147,10 +148,15 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		recorder: new(loggerRecorder),
 
-		minDPSyncPeriod: 30 * time.Second, // XXX revisit the default
+		// TODO: revisit these default values.
+		minDPSyncPeriod:   30 * time.Second,
+		maxDPSyncPeriod:   1 * time.Hour,
+		retryDPSyncPeriod: 1 * time.Hour, // XXX might be infinite?
 
 		stopCh:        make(chan struct{}),
 		healthzServer: new(alwaysHealthy),
+		// N.B. we do not start healthzServer until we have at least some host
+		// IPs. Dataplane implementation of hostports assumes we have a host IP.
 	}
 
 	for _, o := range opts {
@@ -161,12 +167,11 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 	// We need to create the runner first as once we start getting updates, they
 	// will kick it
-	p.runner = async.NewBoundedFrequencyRunner("dp-sync-runner",
-		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
+	p.runner = runner.NewBoundedFrequencyRunner("dp-sync-runner",
+		p.invokeDPSyncer, p.minDPSyncPeriod, p.retryDPSyncPeriod, p.maxDPSyncPeriod)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
 	p.epsChanges = k8sp.NewEndpointsChangeTracker(ipVersion, p.hostname, nil, nil)
 	p.svcChanges = k8sp.NewServiceChangeTracker(ipVersion, makeServiceInfo, nil)
@@ -227,8 +232,7 @@ func (p *proxy) Stop() {
 	p.stopOnce.Do(func() {
 		log.Info("Proxy stopping")
 		// Pass empty update to close all the health checks.
-		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
-		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
+		p.stopSvcHealthServer()
 		p.dpSyncer.Stop()
 		close(p.stopCh)
 		p.stopWg.Wait()
@@ -249,12 +253,15 @@ func (p *proxy) syncDP() {
 }
 
 func (p *proxy) forceSyncDP() {
-	p.invokeDPSyncer()
+	err := p.invokeDPSyncer()
+	if err != nil {
+		log.WithError(err).Error("Failed invoking dataplane syncer")
+	}
 }
 
-func (p *proxy) invokeDPSyncer() {
+func (p *proxy) invokeDPSyncer() error {
 	if !p.isInitialized() {
-		return
+		return fmt.Errorf("proxy is not initialized")
 	}
 
 	p.runnerLck.Lock()
@@ -263,11 +270,13 @@ func (p *proxy) invokeDPSyncer() {
 	_ = p.svcMap.Update(p.svcChanges)
 	_ = p.epsMap.Update(p.epsChanges)
 
-	if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
-		log.WithError(err).Error("Error syncing healthcheck services")
-	}
-	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
-		log.WithError(err).Error("Error syncing healthcheck endpoints")
+	if p.healthzServer != nil && p.svcHealthServer != nil {
+		if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
+			return fmt.Errorf("error syncing healthcheck Services - err: %w", err)
+		}
+		if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
+			return fmt.Errorf("error syncing healthcheck endpoints - err: %w", err)
+		}
 	}
 
 	if p.healthzServer != nil {
@@ -283,14 +292,15 @@ func (p *proxy) invokeDPSyncer() {
 	p.syncerLck.Unlock()
 
 	if err != nil {
-		log.WithError(err).Errorf("applying changes failed")
 		// TODO log the error or panic as the best might be to restart
 		// completely to wipe out the loaded bpf maps
+		return fmt.Errorf("applying changes failed - err: %w", err)
 	}
 
 	if p.healthzServer != nil {
 		p.healthzServer.Updated(p.v1IPFamily())
 	}
+	return nil
 }
 
 func (p *proxy) OnServiceAdd(svc *v1.Service) {
@@ -353,6 +363,34 @@ func (p *proxy) SetSyncer(s DPSyncer) {
 	p.forceSyncDP()
 }
 
+func (p *proxy) stopSvcHealthServer() {
+	if p.svcHealthServer != nil {
+		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
+		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
+	}
+}
+
+func (p *proxy) SetHostIPs(hostIPs []net.IP) {
+	p.runnerLck.Lock()
+	defer p.runnerLck.Unlock()
+
+	p.stopSvcHealthServer()
+
+	ips := make([]string, 0, len(hostIPs))
+	for _, ip := range hostIPs {
+		if ip.To4() != nil && p.ipFamily == 4 {
+			ips = append(ips, ip.String()+"/32")
+		} else if ip.To4() == nil && p.ipFamily != 4 {
+			ips = append(ips, ip.String()+"/128")
+		}
+	}
+
+	npa := util.NewNodePortAddresses(p.v1IPFamily(), ips)
+	log.Infof("NodePortAddresses V%d for health checks: %s", p.ipFamily, npa.String())
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder,
+		npa, p.healthzServer)
+}
+
 func (p *proxy) IPFamily() discovery.AddressType {
 	if p.ipFamily == 4 {
 		return discovery.AddressTypeIPv4
@@ -393,17 +431,24 @@ const (
 	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
-	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
+	ExcludeServiceAnnotation          = "projectcalico.org/natExcludeService"
+	ExternalTrafficStrategyAnnotation = "lb.projectcalico.org/external-traffic-strategy"
+)
+
+var (
+	ExternalTrafficStrategyMaglev = "maglev"
 )
 
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
+	UseMaglev() bool
 }
 
 type servicePortAnnotations struct {
 	reapTerminatingUDP bool
 	excludeService     bool
+	useMaglev          bool
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -412,6 +457,10 @@ func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
 
 func (s *servicePortAnnotations) ExcludeService() bool {
 	return s.excludeService
+}
+
+func (s *servicePortAnnotations) UseMaglev() bool {
+	return s.useMaglev
 }
 
 type servicePort struct {
@@ -435,15 +484,10 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		}
 	}
 
+	if a, ok := s.Annotations[ExternalTrafficStrategyAnnotation]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
+		svc.useMaglev = true
+	}
+
 out:
 	return svc
 }
-
-type alwaysHealthy struct{}
-
-func (a *alwaysHealthy) Health() healthcheck.ProxyHealth {
-	return healthcheck.ProxyHealth{Healthy: true}
-}
-
-func (a *alwaysHealthy) QueuedUpdate(v1.IPFamily) {}
-func (a *alwaysHealthy) Updated(v1.IPFamily)      {}

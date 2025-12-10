@@ -48,20 +48,21 @@ type IPMaps struct {
 	SrMsgMap     maps.Map
 	CtNatsMap    maps.Map
 	CtCleanupMap maps.Map
+	MaglevMap    maps.Map
 }
 
 type CommonMaps struct {
-	StateMap        maps.Map
-	IfStateMap      maps.Map
-	RuleCountersMap maps.Map
-	CountersMap     maps.Map
-	ProgramsMap     maps.Map
-	JumpMap         maps.MapWithDeleteIfExists
-	XDPProgramsMap  maps.Map
-	XDPJumpMap      maps.MapWithDeleteIfExists
-	ProfilingMap    maps.Map
-	CTLBProgramsMap maps.Map
-	QoSMap          maps.MapWithUpdateWithFlags
+	StateMap         maps.Map
+	IfStateMap       maps.Map
+	RuleCountersMap  maps.Map
+	CountersMap      maps.Map
+	ProgramsMaps     []maps.Map
+	JumpMaps         []maps.MapWithDeleteIfExists
+	XDPProgramsMap   maps.Map
+	XDPJumpMap       maps.MapWithDeleteIfExists
+	ProfilingMap     maps.Map
+	CTLBProgramsMaps []maps.Map
+	QoSMap           maps.MapWithUpdateWithFlags
 }
 
 type Maps struct {
@@ -84,19 +85,23 @@ func (m *Maps) Destroy() {
 }
 
 func getCommonMaps() *CommonMaps {
-	return &CommonMaps{
-		StateMap:        state.Map(),
-		IfStateMap:      ifstate.Map(),
-		RuleCountersMap: counters.PolicyMap(),
-		CountersMap:     counters.Map(),
-		ProgramsMap:     hook.NewProgramsMap(),
-		JumpMap:         jump.Map().(maps.MapWithDeleteIfExists),
-		XDPProgramsMap:  hook.NewXDPProgramsMap(),
-		XDPJumpMap:      jump.XDPMap().(maps.MapWithDeleteIfExists),
-		ProfilingMap:    profiling.Map(),
-		CTLBProgramsMap: nat.ProgramsMap(),
-		QoSMap:          qos.Map().(maps.MapWithUpdateWithFlags),
+	commonMaps := &CommonMaps{
+		StateMap:         state.Map(),
+		IfStateMap:       ifstate.Map(),
+		RuleCountersMap:  counters.PolicyMap(),
+		CountersMap:      counters.Map(),
+		ProgramsMaps:     hook.NewProgramsMaps(),
+		XDPProgramsMap:   hook.NewXDPProgramsMap(),
+		XDPJumpMap:       jump.XDPMap().(maps.MapWithDeleteIfExists),
+		ProfilingMap:     profiling.Map(),
+		CTLBProgramsMaps: nat.ProgramsMaps(),
+		QoSMap:           qos.Map().(maps.MapWithUpdateWithFlags),
 	}
+	jumpMaps := jump.Maps()
+	for _, jm := range jumpMaps {
+		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jm.(maps.MapWithDeleteIfExists))
+	}
+	return commonMaps
 }
 
 func getIPMaps(ipFamily int) *IPMaps {
@@ -126,7 +131,7 @@ func getIPMaps(ipFamily int) *IPMaps {
 		CtCleanupMap: getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
 		SrMsgMap:     getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
 		CtNatsMap:    getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
-	}
+		MaglevMap:    getmapWithExistsCheck(nat.MaglevMap, nat.MaglevMapV6)}
 }
 
 func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
@@ -168,19 +173,22 @@ func (m *Maps) slice() []maps.Map {
 }
 
 func (c *CommonMaps) slice() []maps.Map {
-	return []maps.Map{
+	mapslice := []maps.Map{
 		c.StateMap,
 		c.IfStateMap,
 		c.RuleCountersMap,
 		c.CountersMap,
-		c.ProgramsMap,
-		c.JumpMap,
 		c.XDPProgramsMap,
 		c.XDPJumpMap,
 		c.ProfilingMap,
-		c.CTLBProgramsMap,
 		c.QoSMap,
 	}
+	mapslice = append(mapslice, c.ProgramsMaps...)
+	mapslice = append(mapslice, c.CTLBProgramsMaps...)
+	for _, m := range c.JumpMaps {
+		mapslice = append(mapslice, m)
+	}
+	return mapslice
 }
 
 func (i *IPMaps) slice() []maps.Map {
@@ -196,6 +204,7 @@ func (i *IPMaps) slice() []maps.Map {
 		i.CtCleanupMap,
 		i.SrMsgMap,
 		i.CtNatsMap,
+		i.MaglevMap,
 	}
 }
 

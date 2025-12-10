@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -42,8 +43,6 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
-	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
-	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
 	"github.com/projectcalico/calico/node/pkg/health"
@@ -122,13 +121,6 @@ func Run(opts ...RunOpt) {
 		log.Info("Datastore is ready")
 	} else {
 		log.Info("Skipping datastore connection test")
-	}
-
-	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
-		if err := ensureKDDMigrated(cfg, cli); err != nil {
-			log.WithError(err).Errorf("Unable to ensure datastore is migrated.")
-			utils.Terminate()
-		}
 	}
 
 	// Make sure that this host's BlockAffinity resources are upgraded to add
@@ -320,25 +312,27 @@ func MarkNetworkAvailable() error {
 	}
 
 	config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
-	if err != nil {
+	if err == nil {
+		// Create the k8s clientset.
+		config.Timeout = 2 * time.Second
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.WithError(err).Error("Failed to create clientset")
+			return err
+		}
+
+		// All done. Set NetworkUnavailable to false if using Calico for networking.
+		// We do it late in the process to avoid node resource update conflict because setting
+		// node condition will trigger node-controller updating node taints.
+		err = utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
+		if err != nil {
+			log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+			return err
+		}
+	} else if clientcmd.IsEmptyConfig(err) && os.Getenv("DATASTORE_TYPE") != "kubernetes" {
+		log.Info("Kubernetes configuration not detected; skipping NetworkUnavailable condition update")
+	} else {
 		log.WithError(err).Error("Failed to build Kubernetes config")
-		return err
-	}
-	config.Timeout = 2 * time.Second
-
-	// Create the k8s clientset.
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.WithError(err).Error("Failed to create clientset")
-		return err
-	}
-
-	// All done. Set NetworkUnavailable to false if using Calico for networking.
-	// We do it late in the process to avoid node resource update conflict because setting
-	// node condition will trigger node-controller updating node taints.
-	err = utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
-	if err != nil {
-		log.WithError(err).Error("Unable to set NetworkUnavailable to False")
 		return err
 	}
 
@@ -1351,29 +1345,6 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 				log.WithField("DefaultEndpointToHostAction", felixNodeCfg.Spec.DefaultEndpointToHostAction).Debug("Host Felix value already assigned")
 			}
 		}
-	}
-
-	return nil
-}
-
-// ensureKDDMigrated ensures any data migration needed is done.
-func ensureKDDMigrated(cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) error {
-	cv1, err := clients.LoadKDDClientV1FromAPIConfigV3(cfg)
-	if err != nil {
-		return err
-	}
-	m := migrator.New(cv3, cv1, nil)
-	yes, err := m.ShouldMigrate()
-	if err != nil {
-		return err
-	} else if yes {
-		log.Infof("Running migration")
-		if _, err = m.Migrate(); err != nil {
-			return fmt.Errorf("migration failed: %v", err)
-		}
-		log.Infof("Migration successful")
-	} else {
-		log.Debugf("Migration is not needed")
 	}
 
 	return nil

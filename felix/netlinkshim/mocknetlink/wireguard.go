@@ -237,10 +237,9 @@ func (d *MockWireguard) ConfigureDevice(name string, cfg wgtypes.Config) error {
 			}
 
 			var allowedIPStr []string
-			allowedIPs.Iter(func(allowedIP string) error {
+			for allowedIP := range allowedIPs.All() {
 				allowedIPStr = append(allowedIPStr, allowedIP)
-				return nil
-			})
+			}
 			sort.Strings(allowedIPStr)
 
 			peer.AllowedIPs = nil

@@ -168,6 +168,11 @@ func syncDatastore(ctx context.Context, cfg Config, client clientv3.KubeControll
 	// set to the empty state.
 	var currentSet bool
 	var w watch.Interface
+	defer func() {
+		if w != nil {
+			w.Stop()
+		}
+	}()
 
 	env := make(map[string]string)
 	for _, k := range AllEnvs {
@@ -243,7 +248,6 @@ MAINLOOP:
 			time.Sleep(datastoreBackoff)
 			continue MAINLOOP
 		}
-		defer w.Stop()
 		for e := range w.ResultChan() {
 			switch e.Type {
 			case watch.Error:
@@ -345,6 +349,8 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 
 	mergeHealthEnabled(envVars, &status, &rCfg, apiCfg)
 
+	mergeLoadBalancer(&status, &rCfg, apiCfg)
+
 	// Merge prometheus information.
 	if apiCfg.PrometheusMetricsPort != nil {
 		rCfg.PrometheusPort = *apiCfg.PrometheusMetricsPort
@@ -387,14 +393,24 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 		rc.Namespace.NumberOfWorkers = envCfg.ProfileWorkers
 	}
 
-	if rc.LoadBalancer != nil {
+	return rCfg, status
+}
+
+func mergeLoadBalancer(status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
+	if rCfg.Controllers.LoadBalancer != nil {
 		if apiCfg.Controllers.LoadBalancer != nil {
-			rc.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
+			rCfg.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
 			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
 		}
+	} else {
+		// We can enable the LoadBalancer controller as it won't be assigning any IPs if IPPool for LoadBalancer is not set
+		rCfg.Controllers.LoadBalancer = &LoadBalancerControllerConfig{
+			AssignIPs: v3.AllServices,
+		}
+		status.RunningConfig.Controllers.LoadBalancer = &v3.LoadBalancerControllerConfig{
+			AssignIPs: v3.AllServices,
+		}
 	}
-
-	return rCfg, status
 }
 
 func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {

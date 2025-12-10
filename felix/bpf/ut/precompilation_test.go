@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ut
+package ut_test
 
 import (
 	"fmt"
@@ -64,7 +64,8 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 		objects[at.ObjectFile()] = struct{}{}
 	}
 
-	objects["tc_preamble.o"] = struct{}{}
+	objects["tc_preamble_ingress.o"] = struct{}{}
+	objects["tc_preamble_egress.o"] = struct{}{}
 	objects["xdp_preamble.o"] = struct{}{}
 	objects["conntrack_cleanup_debug_co-re_v4.o"] = struct{}{}
 	objects["conntrack_cleanup_debug_co-re_v6.o"] = struct{}{}

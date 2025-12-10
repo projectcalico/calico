@@ -1,5 +1,3 @@
-//go:build fvtests
-
 // Copyright (c) 2017-2018,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +39,7 @@ func MetricsPortReachable(felix *infrastructure.Felix, bpf bool) bool {
 	// Delete existing conntrack state for the metrics port.
 	felix.Exec("conntrack", "-L")
 	felix.Exec("conntrack", "-L", "-p", "tcp", "--dport", metrics.PortString())
-	felix.ExecMayFail("conntrack", "-D", "-p", "tcp", "--orig-port-dst", metrics.PortString())
+	_ = felix.ExecMayFail("conntrack", "-D", "-p", "tcp", "--orig-port-dst", metrics.PortString())
 
 	// Now try to get a metric.
 	m, err := metrics.GetFelixMetric(felix.IP, "felix_active_local_endpoints")
@@ -93,21 +91,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ host-port tests", []apiconf
 		if bpfEnabled {
 			Eventually(tc.Felixes[0].NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
 		}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-			tc.Felixes[0].Exec("ip", "r")
-			tc.Felixes[0].Exec("ip", "a")
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("with no endpoints or policy, port should be reachable", func() {

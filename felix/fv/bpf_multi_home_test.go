@@ -12,25 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
-	"context"
-	"fmt"
 	"regexp"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var (
@@ -41,7 +34,7 @@ func describeBPFMultiHomedTests() bool {
 	if !BPFMode() {
 		return true
 	}
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF multi-homed tests")
+	desc := "_BPF_ _BPF-SAFE_ BPF multi-homed tests"
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
 			infra        infrastructure.DatastoreInfra
@@ -54,45 +47,18 @@ func describeBPFMultiHomedTests() bool {
 		BeforeEach(func() {
 			infra = getInfra()
 			opts := infrastructure.DefaultTopologyOptions()
-			opts.IPIPMode = api.IPIPModeNever
-			opts.SimulateBIRDRoutes = true
 			opts.FelixLogSeverity = "Debug"
 			opts.ExtraEnvVars["FELIX_BPFLogLevel"] = "Debug"
 			tc, calicoClient = infrastructure.StartNNodeTopology(2, opts, infra)
 			Felix = tc.Felixes[0]
 
+			infrastructure.AssignIP("workload", "10.65.0.2", Felix.Hostname, calicoClient)
 			w = workload.New(Felix, "workload", "default", "10.65.0.2", "8055", "tcp")
-			err := w.Start()
+			err := w.Start(infra)
 			Expect(err).NotTo(HaveOccurred())
 			w.ConfigureInInfra(infra)
 
-			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-				IP:       cnet.MustParseIP(w.IP),
-				HandleID: &w.Name,
-				Attrs: map[string]string{
-					ipam.AttributeNode: Felix.Hostname,
-				},
-				Hostname: Felix.Hostname,
-			})
-			Expect(err).NotTo(HaveOccurred())
 			ensureBPFProgramsAttached(tc.Felixes[0])
-		})
-
-		AfterEach(func() {
-			tc.Stop()
-			infra.Stop()
-		})
-
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				Felix.Exec("conntrack", "-L", "-f", "ipv6")
-				Felix.Exec("ip6tables-save", "-c")
-				Felix.Exec("ip", "link")
-				Felix.Exec("ip", "addr")
-				Felix.Exec("ip", "rule")
-				Felix.Exec("ip", "route", "show", "table", "all")
-				Felix.Exec("calico-bpf", "routes", "dump")
-			}
 		})
 
 		It("should allow asymmetric routing", func() {
@@ -111,7 +77,7 @@ func describeBPFMultiHomedTests() bool {
 				InterfaceName: "eth20",
 				MTU:           1500, // Need to match host MTU or felix will restart.
 			}
-			err := eth20.Start()
+			err := eth20.Start(infra)
 			Expect(err).NotTo(HaveOccurred())
 
 			eth30 := &workload.Workload{
@@ -123,7 +89,7 @@ func describeBPFMultiHomedTests() bool {
 				InterfaceName: "eth30",
 				MTU:           1500, // Need to match host MTU or felix will restart.
 			}
-			err = eth30.Start()
+			err = eth30.Start(infra)
 			Expect(err).NotTo(HaveOccurred())
 
 			// assign address to eth20 and add route to the .20 network
@@ -169,15 +135,7 @@ func describeBPFMultiHomedTests() bool {
 			_, err = w.RunCmd("ip", "route", "add", "blackhole", w.IP+"/32")
 			Expect(err).NotTo(HaveOccurred())
 
-			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-				IP:       cnet.MustParseIP("10.65.1.3"),
-				HandleID: &w.Name,
-				Attrs: map[string]string{
-					ipam.AttributeNode: tc.Felixes[1].Hostname,
-				},
-				Hostname: tc.Felixes[1].Hostname,
-			})
-			Expect(err).NotTo(HaveOccurred())
+			infrastructure.AssignIP(w.Name, "10.65.1.3", tc.Felixes[1].Hostname, calicoClient)
 
 			dump20 := Felix.AttachTCPDump("eth20")
 			dump20.SetLogEnabled(true)

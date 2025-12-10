@@ -47,7 +47,22 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #else /* CALI_F_XDP */
 
-#define cali_jump_map map_symbol(cali_progs, 3)
+/*
+ * BPF programs have a type, which depends on where they are attached. 
+ * As of kernel 6.12, jump maps are limited to a single program type and 
+ * it is forbidden to jump from one type of program to a different type of map.
+ * TCX ingress and egress programs have different types, so this means that we need to split the jump maps for the two directions.
+ * Note: in our code, we generally use "ingress" and "egress" to refer to the policy direction, 
+ * relative to the endpoint that is being secured, which means that, for workload endpoints, 
+ * "ingress" policy is implemented in the kernel's "egress" tc(x) program(!). 
+ * To avoid (further) confusion, we call the kernel's directions "to host" (ingress) and "from host" (egress).
+*/
+
+#ifdef CALI_HOOK_INGRESS
+#define cali_jump_map map_symbol(cali_progs_ing, 2)
+#else
+#define cali_jump_map map_symbol(cali_progs_egr, 2)
+#endif
 
 CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
@@ -71,6 +86,7 @@ enum cali_jump_index {
 	PROG_INDEX_ICMP_INNER_NAT,
 	PROG_INDEX_NEW_FLOW,
 	PROG_INDEX_IP_FRAG,
+	PROG_INDEX_MAGLEV,
 
 	PROG_INDEX_MAIN_DEBUG,
 	PROG_INDEX_POLICY_DEBUG,
@@ -81,6 +97,7 @@ enum cali_jump_index {
 	PROG_INDEX_ICMP_INNER_NAT_DEBUG,
 	PROG_INDEX_NEW_FLOW_DEBUG,
 	PROG_INDEX_IP_FRAG_DEBUG,
+	PROG_INDEX_MAGLEV_DEBUG,
 };
 
 #if CALI_F_XDP
@@ -96,7 +113,11 @@ CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 2400, 0)
 	bpf_tail_call((ctx)->xdp, &cali_jump_prog_map, (ctx)->xdp_globals->jumps[PROG_INDEX_POLICY])
 #else /* CALI_F_XDP */
 
-#define cali_jump_prog_map map_symbol(cali_jump, 3)
+#ifdef CALI_HOOK_INGRESS
+#define cali_jump_prog_map map_symbol(cali_jump_ing, 2)
+#else
+#define cali_jump_prog_map map_symbol(cali_jump_egr, 2)
+#endif
 
 CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 240000, 0)
 

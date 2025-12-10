@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -42,7 +43,6 @@ func main() {
                  name.
     label        Add or update labels of resources.
     validate     Validate a resource by file, directory or stdin without applying it.
-    convert      Convert config files between different API versions.
     ipam         IP address management.
     node         Calico node management.
     version      Display the version of this binary.
@@ -67,7 +67,7 @@ Description:
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
-	var parser = &docopt.Parser{
+	parser := &docopt.Parser{
 		HelpHandler:   docopt.PrintHelpOnly,
 		OptionsFirst:  true,
 		SkipHelpFlags: false,
@@ -125,8 +125,6 @@ Description:
 			err = commands.Label(args)
 		case "validate":
 			err = commands.Validate(args)
-		case "convert":
-			err = commands.Convert(args)
 		case "version":
 			err = commands.Version(args)
 		case "node":
@@ -142,8 +140,26 @@ Description:
 		}
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
+			fmt.Fprintf(os.Stderr, "%s\n", massageError(err))
 			os.Exit(1)
 		}
 	}
+}
+
+// massageError takes the given error and tries to clean up its message for
+// display.  In particular, it removes confusing prefixes about JSON and
+// tweaks the unknown field error to be more verbose.
+func massageError(err error) string {
+	msg := err.Error()
+
+	// Our YAML processing functions have intermediate steps that use JSON
+	// so the errors end up confusingly highlighting problems with JSON.
+	msg = strings.TrimPrefix(msg, "error unmarshaling JSON: while decoding JSON: json: ")
+
+	unknownFiledRegexp := regexp.MustCompile(`unknown field "([^"]+)"`)
+	if m := unknownFiledRegexp.FindStringSubmatch(msg); m != nil {
+		msg = "field in document is not recognized or is in the wrong location: " + m[1]
+	}
+
+	return msg
 }

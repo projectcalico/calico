@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -63,20 +61,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 	BeforeEach(func() {
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		tc, client = infrastructure.StartNNodeTopology(1, opts, infra)
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
 
 		infra.AddDefaultAllow()
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		for _, wl := range w {
-			wl.Stop()
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("should copy data from old map to new map", func() {
@@ -203,17 +190,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		for _, wl := range w {
-			wl.Stop()
-		}
-		tc.Stop()
-		infra.Stop()
-	})
-
 	It("should resize ct map when it is full", func() {
 		// make sure that connctivity is already established
 		cc := &connectivity.Checker{}
@@ -241,7 +217,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		dstIP := net.IPv4(121, 121, 121, 121)
 
 		val := formatBytesWithPrefix(conntrack.NewValueNormal(now, 0, leg, leg).AsBytes())
-		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(".*Overriding bpfMapSizeConntrack \\(10000\\) with map size growth \\(20000\\)"))
+		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(`.*Overriding bpfMapSizeConntrack \(10000\) with map size growth \(20000\)`))
 
 		line := ""
 		// Program 10k tcp ct entries into map. This is done in batches of 2k.

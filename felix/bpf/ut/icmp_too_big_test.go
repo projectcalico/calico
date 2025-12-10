@@ -20,9 +20,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 	"github.com/google/netstack/tcpip/header"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -269,7 +269,7 @@ func TestICMPTooBigNATNodePort(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack4.FlagNATNPFwd | conntrack4.FlagClusterExternal))
+	Expect(v.Flags()).To(Equal(conntrack4.FlagNATNPFwd | conntrack4.FlagSetDSCP))
 
 	_, _, _, _, pkt2Bytes, err := testPacket(4, nil, &origIPHeader, udpDefault, make([]byte, 1600))
 	Expect(err).NotTo(HaveOccurred())

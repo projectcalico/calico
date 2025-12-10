@@ -235,14 +235,14 @@ func TestDSCPv6_WEP(t *testing.T) {
 
 	for _, tc := range []dscpTestCase{
 		// Dest outside cluster.
-		{"calico_from_workload_ep", 0, srcIPv6, externalAddr, resTC_ACT_UNSPEC, 16, 16},
+		{"calico_from_workload_ep", 0, srcIPv6, externalAddr, resTC_ACT_REDIRECT, 16, 16},
 		{"calico_to_workload_ep", tcdefs.MarkSeen, srcIPv6, externalAddr, resTC_ACT_UNSPEC, 20, -1},
 
 		// Src outside cluster.
 		{"calico_to_workload_ep", tcdefs.MarkSeen, externalAddr, dstIPv6, resTC_ACT_UNSPEC, 20, -1},
 
 		// Src and dest both inside cluster.
-		{"calico_from_workload_ep", 0, srcIPv6, dstIPv6, resTC_ACT_UNSPEC, 16, -1},
+		{"calico_from_workload_ep", 0, srcIPv6, dstIPv6, resTC_ACT_REDIRECT, 16, -1},
 	} {
 		skbMark = tc.expectedSKBMark
 		runBpfTest(t, tc.progName, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {

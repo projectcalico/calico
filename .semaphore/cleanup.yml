@@ -1,5 +1,5 @@
 version: v1.0
-name: Felix
+name: Clean up cloud resources
 agent:
   machine:
     type: f1-standard-2
@@ -23,8 +23,7 @@ blocks:
       jobs:
         - name: Clean up GCE instances
           commands:
-            - cd felix
-            - ./.semaphore/clean-up-vms ${VM_PREFIX}
+            - ./.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
 
@@ -43,7 +42,9 @@ blocks:
         - name: Clean up windows cni resources
           commands:
             - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
-            - ./delete-az-rg.sh ${RG_PREFIX}-overlay-rg
-            - ./delete-az-rg.sh ${RG_PREFIX}-l2bridge-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-overlay-rg
+            - cd ~/calico/process/testing/aso && make dist-clean
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-l2bridge-rg
+            - cd ~/calico/process/testing/aso && make dist-clean
       secrets:
         - name: banzai-secrets

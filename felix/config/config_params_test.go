@@ -70,7 +70,6 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"VXLANEnabled":                       "VXLANEnabled",
 		"IpInIpMtu":                          "IPIPMTU",
 		"Ipv6Support":                        "IPv6Support",
-		"IptablesLockTimeoutSecs":            "IptablesLockTimeout",
 		"IptablesLockProbeIntervalMillis":    "IptablesLockProbeInterval",
 		"IptablesPostWriteCheckIntervalSecs": "IptablesPostWriteCheckInterval",
 		"NetlinkTimeoutSecs":                 "NetlinkTimeout",
@@ -290,10 +289,6 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("IptablesPostWriteCheckIntervalSecs", "IptablesPostWriteCheckIntervalSecs",
 		"1.5", 1500*time.Millisecond),
-	Entry("IptablesLockFilePath", "IptablesLockFilePath",
-		"/host/run/xtables.lock", "/host/run/xtables.lock"),
-	Entry("IptablesLockTimeoutSecs", "IptablesLockTimeoutSecs",
-		"123", 123*time.Second),
 	Entry("IptablesLockProbeIntervalMillis", "IptablesLockProbeIntervalMillis",
 		"123", 123*time.Millisecond),
 	Entry("IptablesLockProbeIntervalMillis garbage", "IptablesLockProbeIntervalMillis",
@@ -775,6 +770,12 @@ var _ = DescribeTable("Config validation",
 	// exceeds max allowed number of individual tables
 	Entry("excessive RouteTableRanges", map[string]string{
 		"RouteTableRanges": "1-100000000",
+	}, false),
+	Entry("excessive RouteTableRanges off-by-one", map[string]string{
+		"RouteTableRanges": "1-65535,99999-99999",
+	}, false),
+	Entry("RouteTableRanges 32-bit wrap-around", map[string]string{
+		"RouteTableRanges": "1-65535,1-2147483647",
 	}, false),
 	Entry("invalid RouteTableRanges", map[string]string{
 		"RouteTableRanges": "abcde",

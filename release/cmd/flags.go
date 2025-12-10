@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
@@ -81,15 +82,17 @@ var (
 		Sources: cli.EnvVars("DEV_TAG_SUFFIX"),
 		Value:   "0.dev",
 	}
-	publishBranchFlag = &cli.BoolFlag{
+	gitPublishFlag = &cli.BoolFlag{
 		Name:    "git-publish",
-		Aliases: []string{"publish-branch"},
-		Usage:   "Push branch git. If false, all changes are local.",
+		Aliases: []string{"publish-git"},
+		Usage:   "Push git changes to remote. If false, all changes are local.",
+		Sources: cli.EnvVars("PUBLISH_GIT"),
 		Value:   true,
 	}
 	newBranchFlag = &cli.StringFlag{
-		Name:  "branch-stream",
-		Usage: fmt.Sprintf("The new major and minor versions for the branch to create e.g. vX.Y to create a <release-branch-prefix>-vX.Y branch e.g. v1.37 for %s-v1.37 branch", releaseBranchPrefixFlag.Value),
+		Name:    "branch-stream",
+		Sources: cli.EnvVars("RELEASE_BRANCH_STREAM"),
+		Usage:   fmt.Sprintf("The new major and minor versions for the branch to create e.g. vX.Y to create a <release-branch-prefix>-vX.Y branch e.g. v1.37 for %s-v1.37 branch", releaseBranchPrefixFlag.Value),
 	}
 	baseBranchFlag = &cli.StringFlag{
 		Name:    "base-branch",
@@ -133,7 +136,7 @@ var (
 		Value:   archOptions,
 		Action: func(_ context.Context, c *cli.Command, values []string) error {
 			for _, arch := range values {
-				if !utils.Contains(archOptions, arch) {
+				if !slices.Contains(archOptions, arch) {
 					return fmt.Errorf("invalid architecture %s", arch)
 				}
 			}
@@ -147,7 +150,7 @@ var (
 		Sources: cli.EnvVars("BUILD_CONTAINER_IMAGES"), // avoid BUILD_IMAGES as it is already used by the build system (lib.Makefile).
 		Value:   true,
 	}
-	buildHashreleaseImageFlag = &cli.BoolFlag{
+	buildHashreleaseImagesFlag = &cli.BoolFlag{
 		Name:    buildImagesFlag.Name,
 		Usage:   buildImagesFlag.Usage,
 		Sources: buildImagesFlag.Sources,
@@ -160,7 +163,7 @@ var (
 		Sources: cli.EnvVars("PUBLISH_IMAGES"),
 		Value:   true,
 	}
-	publishHashreleaseImageFlag = &cli.BoolFlag{
+	publishHashreleaseImagesFlag = &cli.BoolFlag{
 		Name:    publishImagesFlag.Name,
 		Usage:   publishImagesFlag.Usage,
 		Sources: publishImagesFlag.Sources,
@@ -172,6 +175,24 @@ var (
 		Usage:   "Archive images in the release tarball",
 		Sources: cli.EnvVars("ARCHIVE_IMAGES"),
 		Value:   true,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if b && !c.Bool(buildImagesFlag.Name) {
+				return fmt.Errorf("cannot archive images without building them; set --%s to 'true'", buildImagesFlag.Name)
+			}
+			return nil
+		},
+	}
+	archiveHashreleaseImagesFlag = &cli.BoolFlag{
+		Name:    archiveImagesFlag.Name,
+		Usage:   archiveImagesFlag.Usage,
+		Sources: archiveImagesFlag.Sources,
+		Value:   false,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if b && !c.Bool(buildHashreleaseImagesFlag.Name) {
+				return fmt.Errorf("cannot archive images without building them; set --%s to 'true'", buildHashreleaseImagesFlag.Name)
+			}
+			return nil
+		},
 	}
 )
 
@@ -345,14 +366,19 @@ var (
 		Sources: cli.EnvVars("IMAGE_SCANNER_SELECT"),
 		Value:   "all",
 	}
-	skipImageScanFlag = &cli.BoolFlag{
-		Name:    "skip-image-scan",
+	skipImageScanFlagName = "skip-image-scan"
+	skipImageScanFlag     = &cli.BoolFlag{
+		Name:    skipImageScanFlagName,
 		Usage:   "Skip sending the image to the image scan service",
 		Sources: cli.EnvVars("SKIP_IMAGE_SCAN"),
 		Value:   false,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if !b && (c.String(imageScannerAPIFlag.Name) == "" || c.String(imageScannerTokenFlag.Name) == "") {
-				return fmt.Errorf("image scanner configuration is required, ensure %s and %s flags are set", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name)
+			logrus.WithField(skipImageScanFlagName, b).Info("Image scanning configuration")
+			if !b && !imageScanningAPIConfig(c).Valid() {
+				if !c.Bool(ciFlag.Name) {
+					logrus.Warn("Image scanning configuration is incomplete")
+				}
+				return fmt.Errorf("invalid configuration for image scanning. Either set --%s and --%s or set --%s to 'true'", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name, skipImageScanFlagName)
 			}
 			return nil
 		},
@@ -379,14 +405,16 @@ var (
 var (
 	// Publishing flags.
 	publishGitTagFlag = &cli.BoolFlag{
-		Name:  "publish-git-tag",
-		Usage: "Push the git tag to the remote",
-		Value: true,
+		Name:    "publish-git-tag",
+		Usage:   "Push the git tag to the remote",
+		Sources: cli.EnvVars("PUBLISH_GIT_TAG"),
+		Value:   true,
 	}
 	publishGitHubReleaseFlag = &cli.BoolFlag{
-		Name:  "publish-github-release",
-		Usage: "Publish the release to GitHub",
-		Value: true,
+		Name:    "publish-github-release",
+		Usage:   "Publish the release to GitHub",
+		Sources: cli.EnvVars("PUBLISH_GITHUB_RELEASE"),
+		Value:   true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if b && c.String(githubTokenFlag.Name) == "" {
 				return fmt.Errorf("GitHub token is required to publish release")
@@ -412,22 +440,18 @@ var (
 	}
 
 	// Hashrelease server configuration flags.
-	hashreleaseServerFlags = []cli.Flag{hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag}
+	hashreleaseServerFlags = []cli.Flag{hashreleaseServerBucketFlag}
 	publishHashreleaseFlag = &cli.BoolFlag{
-		Name:  "publish-to-hashrelease-server",
-		Usage: "Publish the hashrelease to the hashrelease server",
-		Value: true,
+		Name:    "publish-to-hashrelease-server",
+		Usage:   "Publish the hashrelease to the hashrelease server",
+		Sources: cli.EnvVars("PUBLISH_TO_HASHRELEASE_SERVER"),
+		Value:   true,
 	}
 	latestFlag = &cli.BoolFlag{
 		Name:    "latest",
 		Usage:   "Publish the hashrelease as the latest hashrelease",
 		Sources: cli.EnvVars("LATEST"),
 		Value:   true,
-	}
-	hashreleaseServerCredentialsFlag = &cli.StringFlag{
-		Name:    "hashrelease-server-credentials",
-		Usage:   "The absolute path to the credentials file for the hashrelease server",
-		Sources: cli.EnvVars("HASHRELEASE_SERVER_CREDENTIALS"),
 	}
 	hashreleaseServerBucketFlag = &cli.StringFlag{
 		Name:    "hashrelease-server-bucket",
