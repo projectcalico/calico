@@ -73,14 +73,10 @@ function upload_calico_images(){
 
 function start_test_infra(){
   ${KUBECTL} --kubeconfig="${KUBECONFIG}" create ns demo
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" apply -f "${SCRIPT_DIR}/infra/porter.yaml"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" apply -f "${SCRIPT_DIR}/infra/nginx.yaml"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" apply -f "${SCRIPT_DIR}/infra/client.yaml"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" apply -f "${SCRIPT_DIR}/infra/ingress.yaml"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" apply -f "${SCRIPT_DIR}/infra/egress.yaml"
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" apply -f "${SCRIPT_DIR}/infra/"
 
   #Wait for porter pod to be running on windows node
-  for i in $(seq 1 60); do
+  for i in $(seq 1 40); do
     if [[ $(${KUBECTL} --kubeconfig="${KUBECONFIG}" -n demo get pods porter --no-headers -o custom-columns=NAMESPACE:metadata.namespace,POD:metadata.name,PodIP:status.podIP,READY-true:status.containerStatuses[*].ready | awk -v OFS='\t\t' '{print $4}') = "true" ]] ; then
       echo "Porter is ready after $i tries"
       return
