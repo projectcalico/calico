@@ -64,7 +64,7 @@ fi
 
 if [[ ${HCP_STAGE:-} != *-hosting* ]]; then
   echo "[INFO] create report and push test results to Lens"
-  cd ./scripts
+  cd "${BZ_HOME}"
   echo "[INFO] downloading lens uploader script"
   curl -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
       -H "Accept: application/vnd.github.v3.raw" \
