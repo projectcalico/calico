@@ -17,7 +17,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-: ${KUBE_VERSION:=v1.31.0}
+: "${KINDEST_NODE_VERSION:=v1.31.0}"
 CRD_PATTERN="resources.azure.com/*;containerservice.azure.com/*;compute.azure.com/*;network.azure.com/*"
 
 # Utilities
@@ -28,7 +28,7 @@ CRD_PATTERN="resources.azure.com/*;containerservice.azure.com/*;compute.azure.co
 : ${HELM:=./bin/helm}
 
 # Create management cluster
-${KIND} create cluster --image kindest/node:${KUBE_VERSION} --name kind
+${KIND} create cluster --image kindest/node:${KINDEST_NODE_VERSION} --name kind
 ${KUBECTL} wait node kind-control-plane --for=condition=ready --timeout=90s
 
 # Install cert-manager
@@ -36,7 +36,7 @@ echo; echo "Wait for cert manager to be installed ..."
 ${KUBECTL} apply -f https://github.com/jetstack/cert-manager/releases/download/v1.14.1/cert-manager.yaml
 ${CMCTL} check api --wait=2m
 
-echo; echo "Installing ASO ..."
+echo; echo "Installing ASO..."
 
 ${HELM} repo add aso2 https://raw.githubusercontent.com/Azure/azure-service-operator/main/v2/charts
 ${HELM} upgrade --install aso2 aso2/azure-service-operator \
@@ -45,6 +45,6 @@ ${HELM} upgrade --install aso2 aso2/azure-service-operator \
     --set crdPattern=${CRD_PATTERN}
 
 # Wait for ASO deployments
-echo "Wait for ASO controller manager to be ready (up to 2m) ..."
-${KUBECTL} wait --for=condition=available --timeout=2m -n azureserviceoperator-system deployment azureserviceoperator-controller-manager
+echo "Wait for ASO controller manager to be ready (up to 5m) ..."
+${KUBECTL} wait --for=condition=available --timeout=5m -n azureserviceoperator-system deployment azureserviceoperator-controller-manager
 echo "ASO installed and the controller manager is ready."

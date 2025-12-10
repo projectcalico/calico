@@ -22,7 +22,7 @@ uninstall-aso: $(BINDIR)/kind $(BINDIR)/kubectl
 ifeq (,$(wildcard $(ASO_INSTALLED_MARKER)))
 	@echo "ASO ready marker '$(ASO_INSTALLED_MARKER)' does not exist, doing nothing"
 else
-	@echo "Azure resources for cluster $(CLUSTER_NAME_CAPZ) will now be deleted, this can take up to 20 minutes"
+	@echo "ASO kind cluster will now be deleted"
 	-$(BINDIR)/kind delete cluster --name kind
 	-rm -f kubeconfig
 	-rm -f $(ASO_INSTALLED_MARKER)
@@ -31,7 +31,7 @@ endif
 ###############################################################################
 # Azure resource management
 ###############################################################################
-# VMSS is azure VirtualMachineScaleSet. 
+# VMSS is azure VirtualMachineScaleSet.
 # Current two VMSSes will be created (vmss-linux and vmss-windows)
 # In this Makefile, we use the term "vmss" to represent all azure resources created by the process.
 VMSS_MARKER:=.vmss-created
@@ -113,7 +113,10 @@ clean: delete-vmss uninstall-aso
 	-rm -rf ./report
 	-rm -f .sshkey .sshkey.pub
 	-rm -f $(HELPERS)
-	-rm -f bin/*
+	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml
+	-rm -rf infra/manifests/
+	-rm -rf windows/kubeadm/
+	-rm -f windows/config
 
 .PHONY: dist-clean
 dist-clean: clean

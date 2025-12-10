@@ -4,39 +4,46 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "felix"
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
-        - cache restore go-mod-cache
         - gcloud config set project unique-caldron-775
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
     secrets:
       - name: google-service-account-for-gce
     jobs:
-      - name: "Felix: Build and run UT, k8sfv"
+      - name: "Felix: Build and cache FV prerequisites"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
         execution_time_limit:
-          minutes: 60
+          minutes: 20
         commands:
           - make build image fv-prereqs
           - ./.semaphore/cache-test-artifacts
+      - name: "Felix: UT"
+        execution_time_limit:
+          minutes: 30
+        commands:
           - ../.semaphore/run-and-monitor ut.log make ut
+      - name: "Felix: k8sfv"
+        execution_time_limit:
+          minutes: 15
+        commands:
           - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
           - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
       - name: "Felix: Static checks"
         execution_time_limit:
-          minutes: 60
+          minutes: 15
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
     epilogue:
       always:
         commands:
-          - 'test-results compile --name "Felix: FV" ./report/*k8sfv*.xml ./report/k8sfv_sem.json || true'
-          - rm -f ./report/*k8sfv*.xml
-          - 'test-results compile --name "Felix: UT" ./report/*.xml ./report/ut_sem.json || true'
-          - test-results combine report/*_sem.json report/report.json
-          - artifact push job report/report.json -d test-results/junit.json || true
-          - artifact push workflow report/report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
+          - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
 - name: "Felix: multi-arch build"
   run:
     when: "${CHANGE_IN(felix)}"
@@ -46,8 +53,6 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
-        - cache restore go-mod-cache
     jobs:
       - name: "Felix: build multi-arch binaries"
         matrix:
@@ -71,8 +76,6 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
-        - cache restore go-mod-cache
     jobs:
       - name: "Felix: build arm64 binaries"
         commands:
@@ -83,14 +86,17 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "felix"
     jobs:
       - name: "Felix: Build Windows binaries"
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
-- name: "Felix: Windows FV capz"
+- name: "Felix: Windows FV"
   run:
-    when: "false"
+    when: "false or ${CHANGE_IN(felix,non-go:/process/testing/aso,non-go:/process/testing/utils,non-go:/process/testing/winfv-felix)}"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -104,18 +110,19 @@
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
         - export AZURE_CLIENT_ID=$AZ_SP_ID
         - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
-        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
-        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
-        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
-        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
+        - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-felix/report
+        - export LOGS_DIR=~/fv.log
+        - export RG_PREFIX=${USER}-win-felix-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
         - cd felix
     epilogue:
       always:
         commands:
-          - artifact push job ${REPORT_DIR} --destination test-results || true
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+          - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
+          - cd ~/calico/process/testing/aso && make dist-clean
     env_vars:
-      - name: FV_PROVISIONER
-        value: "capz"
+      - name: BUILD_CACHE_GROUP
+        value: "felix"
       - name: FV_TYPE
         value: "calico-felix"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
@@ -123,9 +130,11 @@
       - name: CONTAINERD_VERSION
         value: 1.7.22
     jobs:
-      - name: "Felix: Windows FV - CAPZ"
+      - name: "Felix: Windows FV"
         commands:
-          - ./.semaphore/run-win-fv
+          - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+          - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
+          - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh
 - name: "Felix: iptables tests on Ubuntu 22.04"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
