@@ -223,7 +223,9 @@ type Filters struct {
 	Protocols        FilterMatches[string] `json:"protocols,omitempty"`
 	DestPorts        FilterMatches[int64]  `json:"dest_ports,omitempty"`
 	Actions          Actions               `json:"actions,omitempty"`
+	PendingActions   Actions               `json:"pending_actions,omitempty"`
 	Policies         []PolicyMatch         `json:"policies,omitempty"`
+	Reporter         Reporter              `json:"reporter,omitempty"`
 }
 
 type PolicyMatch struct {
