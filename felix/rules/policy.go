@@ -610,13 +610,9 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
-		logPrefix := r.LogPrefix
-		if logPrefix == "" {
-			logPrefix = "calico-packet"
-		}
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch(),
-			Action: r.Log(logPrefix),
+			Action: r.Log(r.generateLogPrefix(id)),
 		})
 	}
 
@@ -709,6 +705,32 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	}
 
 	return finalRules
+}
+
+func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker) string {
+	logPrefix := "calico-packet"
+	if len(r.LogPrefix) != 0 {
+		logPrefix = r.LogPrefix
+	}
+
+	if !strings.Contains(logPrefix, "%") {
+		return logPrefix
+	}
+
+	var kind, name, namespace string
+	switch v := id.(type) {
+	case types.PolicyID:
+		kind = v.Kind
+		name = v.Name
+		namespace = v.Namespace
+	case types.ProfileID:
+		name = v.Name
+	}
+
+	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
+	logPrefix = strings.ReplaceAll(logPrefix, "%p", name)
+	logPrefix = strings.ReplaceAll(logPrefix, "%n", namespace)
+	return logPrefix
 }
 
 func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
