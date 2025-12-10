@@ -281,7 +281,6 @@ func StartDataplaneDriver(
 				RouteSource:                 configParams.RouteSource,
 
 				LogPrefix:            configParams.LogPrefix,
-				LogPrefixMetadata:    configParams.LogPrefixMetadata,
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 				FilterAllowAction:    configParams.FilterAllowAction(),
 				MangleAllowAction:    configParams.MangleAllowAction(),

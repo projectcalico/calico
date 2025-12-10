@@ -138,14 +138,6 @@ const (
 	FlowLogsPolicyEvaluationModeContinuous FlowLogsPolicyEvaluationModeType = "Continuous"
 )
 
-// +kubebuilder:validation:Enum=None;Policy
-type LogPrefixMetadataType string
-
-const (
-	LogPrefixMetadataNone   LogPrefixMetadataType = "None"
-	LogPrefixMetadataPolicy LogPrefixMetadataType = "Policy"
-)
-
 // +kubebuilder:validation:Enum=IPPoolsOnly;IPPoolsAndHostIPs
 type NATOutgoingExclusionsType string
 
@@ -327,9 +319,6 @@ type FelixConfigurationSpec struct {
 	// with an iptables "DROP" action. If you want to use "REJECT" action instead you can configure it in here.
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
 	IptablesFilterDenyAction string `json:"iptablesFilterDenyAction,omitempty" validate:"omitempty,dropReject"`
-
-	// LogPrefixMetadata controls whether to include metadata with LogPrefix. [Default: None]
-	LogPrefixMetadata LogPrefixMetadataType `json:"logPrefixMetadata,omitempty"`
 
 	// LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]
 	LogPrefix string `json:"logPrefix,omitempty"`
