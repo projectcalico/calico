@@ -3,15 +3,28 @@ set -eo pipefail
 
 delete_artifacts() {
   echo "[INFO] Deleting artifacts that are already pushed"
-  sudo rm -rf ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} || true
-  sudo rm -rf ${BZ_LOCAL_DIR}/diags || true
+  # Validate variables before destructive commands
+  if [[ -n "${BZ_LOCAL_DIR}" && -n "${DIAGS_ARCHIVE_FILENAME}" ]]; then
+    sudo rm -rf "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" || true
+  else
+    echo "[WARN] BZ_LOCAL_DIR or DIAGS_ARCHIVE_FILENAME is unset or empty, skipping deletion of archive file."
+  fi
+  if [[ -n "${BZ_LOCAL_DIR}" ]]; then
+    sudo rm -rf "${BZ_LOCAL_DIR}/diags" || true
+  else
+    echo "[WARN] BZ_LOCAL_DIR is unset or empty, skipping deletion of diags directory."
+  fi
   sudo rm -rf ~/.cache/* /var/lib/apt/lists/* || true
 }
 
 delete_calicoctl() {
   echo "[INFO] Deleting calicoctl"
-  sudo rm -rf ${BZ_LOGS_DIR}/bin/kubectl-calico || true
-  sudo rm -rf ${BZ_LOGS_DIR}/bin/calico-* || true
+  if [[ -n "${BZ_LOGS_DIR}" ]]; then
+    sudo rm -rf ${BZ_LOGS_DIR}/bin/kubectl-calico || true
+    sudo rm -rf ${BZ_LOGS_DIR}/bin/calico-* || true
+  else
+    echo "[WARN] BZ_LOGS_DIR is unset or empty, skipping deletion of calicoctl"
+  fi
 }
 
 delete_gcloud() {
@@ -130,7 +143,7 @@ if [[ "${HCP_STAGE}" == "destroy-hosting" ]]; then
   cache delete ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER}
   cache delete $(basename $PWD)
 elif [[ "${HCP_STAGE}" == "hosting" ]]; then
-  :
+  : # Hosting cluster is persistent and should not be destroyed or have its cache deleted
 elif [[ "${HCP_STAGE}" != "setup-hosting" ]]; then
   cache delete ${SEMAPHORE_JOB_ID}
 fi

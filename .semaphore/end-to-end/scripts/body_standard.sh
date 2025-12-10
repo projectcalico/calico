@@ -29,6 +29,7 @@ else
 
   cd "${BZ_HOME}"
   if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then
+    # Skip provisioning for hosting stages as cluster already exists
     :
   else
     echo "[INFO] starting bz provision..."
@@ -78,7 +79,7 @@ else
     echo "[INFO] starting bz upgrade..."
     bz upgrade $VERBOSE |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/upgrade.log.gz)
   fi
-  if [[ ${MCM_STAGE:-} != *?-mgmt* ]] && [[ ${HCP_STAGE:-} != *?-hosting* ]]; then
+  if [[ ${MCM_STAGE:-} != *-mgmt* ]] && [[ ${HCP_STAGE:-} != *-hosting* ]]; then
     echo "[INFO] Test logs will be available here after the run: ${SEMAPHORE_ORGANIZATION_URL}/artifacts/jobs/${SEMAPHORE_JOB_ID}?path=semaphore%2Flogs"
     echo "[INFO] Alternatively, you can view logs while job is running using 'sem attach ${SEMAPHORE_JOB_ID}' and then 'tail -f ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log'"
 
