@@ -62,3 +62,5 @@ if ( $LastExitCode -ne 0 ){
     cp c:\CalicoWindows\logs\*.log c:\k\report
   }
 }
+
+echo "All done" > c:\k\report\done-marker
