@@ -717,6 +717,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 }
 
 // generateLogPrefix returns a log prefix string with known specifiers replaced by their corresponding values.
+// If no known specifiers are present, the log prefix is returned as-is.
 // Supported specifiers in the log prefix format string:
 //
 //	%t - Tier name
@@ -724,8 +725,6 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 //	%p - Policy or profile name:
 //	     - namespace/name for namespaced kinds.
 //	     - name for non namespaced kinds.
-//
-// If no placeholders are present, the log prefix is returned as-is.
 func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) string {
 	logPrefix := "calico-packet"
 	if len(r.LogPrefix) != 0 {
@@ -753,8 +752,7 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 
 	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
 	logPrefix = strings.ReplaceAll(logPrefix, "%p", name)
-	logPrefix = strings.ReplaceAll(logPrefix, "%t", tier)
-	return logPrefix
+	return strings.ReplaceAll(logPrefix, "%t", tier)
 }
 
 func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
