@@ -2,6 +2,7 @@
 .sshkey
 .sshkey.pub
 .vmss-created
+cert-manager.yaml
 connect.txt
 infra/manifests/
 kubeconfig
