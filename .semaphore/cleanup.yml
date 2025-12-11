@@ -34,11 +34,17 @@ blocks:
         commands:
           - checkout
           - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
-          - cd process/testing/util
+          - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
+          - export AZURE_TENANT_ID=$AZ_TENANT_ID
+          - export AZURE_CLIENT_ID=$AZ_SP_ID
+          - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
       jobs:
         - name: Clean up windows felix resources
           commands:
-            - ./delete-az-rg.sh ${USER}-capz-win-felix-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
+            - export RG_PREFIX=${USER}-win-felix-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
+            - export BACKEND=overlay
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+            - cd ~/calico/process/testing/aso && make dist-clean
         - name: Clean up windows cni resources
           commands:
             - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
