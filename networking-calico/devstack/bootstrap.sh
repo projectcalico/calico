@@ -80,6 +80,8 @@ sudo pip list || true
 #
 # ------------------------------------------------------------------------------
 
+# Trigger CI
+
 # Handle branch name transition from "stable/yoga" to "unmaintained/yoga".  The DevStack repo
 # internally still uses "stable/yoga" for all its defaults even though all the actual branch names
 # have changed to "unmaintained/yoga".
@@ -193,6 +195,7 @@ sudo tools/create-stack-user.sh
 cd ..
 sudo mkdir -p /opt/stack
 sudo mv devstack /opt/stack
+sudo chmod +x /opt/stack
 sudo chown -R stack:stack /opt/stack
 ls -ld /home/
 ls -la /home/
