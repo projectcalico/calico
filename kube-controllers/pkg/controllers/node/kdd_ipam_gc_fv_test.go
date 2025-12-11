@@ -160,7 +160,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		})
 
 		// Start the controller.
-		controller = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		controller = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
@@ -693,7 +693,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		})
 
 		// Start the controller.
-		controller = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		controller = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
