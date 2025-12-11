@@ -16,6 +16,10 @@
         - cd node
     jobs:
       - name: "Node: CI"
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
         env_vars:

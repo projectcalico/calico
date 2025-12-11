@@ -9,6 +9,10 @@
         os_image: ubuntu2204
     jobs:
       - name: Pre-flight checks
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
         commands:
           - make ci-preflight-checks
 - name: Store working copy
