@@ -1633,7 +1633,11 @@ spec:
                 logPrefix:
                   description:
                     "LogPrefix is the log prefix that Felix uses when rendering
-                    LOG rules. [Default: calico-packet]"
+                    LOG rules. It is possible to use the following specifiers\nto include
+                    extra information in the log prefix.\n\t%t - Tier name\n\t%k - Kind
+                    (short names)\n\t%p - Policy or profile name:\n\t     - namespace/name
+                    for namespaced kinds.\n\t     - name for non namespaced kinds.\n[Default:
+                    calico-packet]"
                   type: string
                 logSeverityFile:
                   description:
