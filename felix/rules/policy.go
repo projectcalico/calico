@@ -716,6 +716,15 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	return finalRules
 }
 
+// generateLogPrefix returns a log prefix string with placeholders replaced by their corresponding values.
+//
+// Supported placeholders in the log prefix format string:
+//   %k - Kind (e.g., "K8sNetworkPolicy", "K8sGlobalNetworkPolicy", etc.)
+//   %p - Policy or profile name
+//   %n - Namespace (for policies that are namespaced)
+//   %t - Tier name
+//
+// If no placeholders are present, the log prefix is returned as-is.
 func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) string {
 	logPrefix := "calico-packet"
 	if len(r.LogPrefix) != 0 {
