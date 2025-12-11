@@ -113,7 +113,7 @@ clean: delete-vmss uninstall-aso
 	-rm -rf ./report
 	-rm -f .sshkey .sshkey.pub
 	-rm -f $(HELPERS)
-	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml
+	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml cert-manager.yaml
 	-rm -rf infra/manifests/
 	-rm -rf windows/kubeadm/
 	-rm -f windows/config
