@@ -2644,7 +2644,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"logPrefix": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers to include extra information in the log prefix.\n\t%t - Tier name\n\t%k - Kind (short names)\n\t%p - Policy or profile name:\n\t     - namespace/name for namespaced kinds.\n\t     - name for non namespaced kinds.\n[Default: calico-packet]",
+							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers to include extra information in the log prefix. %t: Tier name %k: Kind (short names) %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds) [Default: calico-packet]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

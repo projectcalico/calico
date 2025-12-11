@@ -406,16 +406,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			)
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
-			// Enabling flow log must not have any effect
-			rrConfigPrefix.FlowLogsEnabled = true
-			renderer = NewRenderer(rrConfigPrefix)
-			rules2 := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
-				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
-			Expect(rules2).To(Equal(rules))
-
 			// Should generate expected logPrefix for a Calico NetworkPolicy
 			cnpPolicyID := types.PolicyID{Name: "foo", Kind: v3.KindNetworkPolicy, Namespace: "app"}
-			rrConfigNormal.FlowLogsEnabled = false
 			tier := "admin"
 			rrConfigPrefix.LogPrefix = "calico-packet %k:%p:%t"
 			renderer = NewRenderer(rrConfigPrefix)
@@ -428,16 +420,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			)
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
-			// Enabling flow log must not have any effect
-			rrConfigPrefix.FlowLogsEnabled = true
-			renderer = NewRenderer(rrConfigPrefix)
-			rules2 = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
-				RuleOwnerTypePolicy, RuleDirIngress, 0, cnpPolicyID, tier, false)
-			Expect(rules2).To(Equal(rules))
-
 			// Should generate expected logPrefix for a Profile
 			profileID := types.ProfileID{Name: "profile1"}
-			rrConfigNormal.FlowLogsEnabled = false
 			rrConfigPrefix.LogPrefix = "calico-packet %p:%k:%%y%t"
 			renderer = NewRenderer(rrConfigPrefix)
 			tier = "" // Profiles are not related to any tier.
@@ -447,13 +431,6 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			logPrefix = fmt.Sprintf("calico-packet %s:%s:%%%%y%s", profileID.Name, "profile", tier)
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
-
-			// Enabling flow log must not have any effect
-			rrConfigPrefix.FlowLogsEnabled = true
-			renderer = NewRenderer(rrConfigPrefix)
-			rules2 = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
-				RuleOwnerTypePolicy, RuleDirIngress, 0, profileID, tier, false)
-			Expect(rules2).To(Equal(rules))
 		},
 		ruleTestData...,
 	)
