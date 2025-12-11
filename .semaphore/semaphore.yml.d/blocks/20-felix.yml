@@ -16,6 +16,10 @@
       - name: google-service-account-for-gce
     jobs:
       - name: "Felix: Build and cache FV prerequisites"
+        priority:
+        # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
         env_vars:
           - name: STORE_BUILD_CACHE
             value: "true"
@@ -25,17 +29,29 @@
           - make build image fv-prereqs
           - ./.semaphore/cache-test-artifacts
       - name: "Felix: UT"
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
         execution_time_limit:
           minutes: 30
         commands:
           - ../.semaphore/run-and-monitor ut.log make ut
       - name: "Felix: k8sfv"
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
         execution_time_limit:
           minutes: 15
         commands:
           - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
           - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
       - name: "Felix: Static checks"
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
         execution_time_limit:
           minutes: 15
         commands:
@@ -132,6 +148,7 @@
     jobs:
       - name: "Felix: Windows FV"
         commands:
+          - export BACKEND=overlay
           - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
           - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
           - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh

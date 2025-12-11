@@ -38,8 +38,12 @@ make install-calico
 popd
 
 # Setup and run FV test
+EXIT_CODE=0
 pushd "${SCRIPT_DIR}"
-FV_TYPE=${FV_TYPE} ./setup-fv.sh | tee setupfv.log
+FV_TYPE=${FV_TYPE} ./setup-fv.sh | tee setupfv.log; pstat=${PIPESTATUS[0]}
+if [[ $pstat != 0 ]]; then
+    EXIT_CODE=$pstat
+fi
 
 # Copy report directory from windows node.
 rm -r ./report || true
@@ -70,3 +74,10 @@ fi
 
 popd
 echo "Windows Felix FV test completed."
+
+# Search for error code file
+if [ -f ./report/error-codes ] || [ "$EXIT_CODE" != 0 ];
+then
+    echo "Windows FV returned error(s)."
+    exit 1
+fi
