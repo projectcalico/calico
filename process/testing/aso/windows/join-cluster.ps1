@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$JoinArgs,
-    
+
     [string]$WindowsEip = ""
 )
 

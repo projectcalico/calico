@@ -26,7 +26,7 @@ export LINUX_NODE_COUNT="${LINUX_NODE_COUNT:=3}"
 export WINDOWS_NODE_COUNT="${WINDOWS_NODE_COUNT:=2}"
 
 # Verbose mode - set to "true" to see all command output, "false" to suppress output
-export VERBOSE="${VERBOSE:="false"}"
+export VERBOSE="${VERBOSE:="true"}"
 
 export KUBE_VERSION="${KUBE_VERSION:="v1.33.6"}"
 
