@@ -107,7 +107,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 		bc = calicoClient.(accessor).Backend()
 
 		// In KDD mode, we only support the node controller right now.
-		policyController = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		policyController = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
@@ -453,7 +453,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
 
 		// Run the controller.
-		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
+		policyController = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
