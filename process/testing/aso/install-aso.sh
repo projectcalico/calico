@@ -33,7 +33,8 @@ ${KUBECTL} wait node kind-control-plane --for=condition=ready --timeout=90s
 
 # Install cert-manager
 echo; echo "Wait for cert manager to be installed ..."
-${KUBECTL} apply -f https://github.com/jetstack/cert-manager/releases/download/v1.14.1/cert-manager.yaml
+curl -sSf -L --retry 5 https://github.com/jetstack/cert-manager/releases/download/v1.14.1/cert-manager.yaml -o cert-manager.yaml
+${KUBECTL} apply -f ./cert-manager.yaml
 ${CMCTL} check api --wait=2m
 
 echo; echo "Installing ASO..."
