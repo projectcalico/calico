@@ -716,13 +716,14 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	return finalRules
 }
 
-// generateLogPrefix returns a log prefix string with placeholders replaced by their corresponding values.
+// generateLogPrefix returns a log prefix string with known specifiers replaced by their corresponding values.
+// Supported specifiers in the log prefix format string:
 //
-// Supported placeholders in the log prefix format string:
-//   %k - Kind (e.g., "K8sNetworkPolicy", "K8sGlobalNetworkPolicy", etc.)
-//   %p - Policy or profile name
-//   %n - Namespace (for policies that are namespaced)
-//   %t - Tier name
+//	%t - Tier name
+//	%k - Kind (short names like gnp for GlobalNetworkPolicies)
+//	%p - Policy or profile name:
+//	     - namespace/name for namespaced kinds.
+//	     - name for non namespaced kinds.
 //
 // If no placeholders are present, the log prefix is returned as-is.
 func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) string {
@@ -738,7 +739,7 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 	var kind, name, namespace string
 	switch v := id.(type) {
 	case types.PolicyID:
-		kind = v.Kind
+		kind = v.KindShortName()
 		name = v.Name
 		namespace = v.Namespace
 	case types.ProfileID:
@@ -746,9 +747,12 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 		name = v.Name
 	}
 
+	if len(namespace) != 0 {
+		name = fmt.Sprintf("%s/%s", namespace, name)
+	}
+
 	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
 	logPrefix = strings.ReplaceAll(logPrefix, "%p", name)
-	logPrefix = strings.ReplaceAll(logPrefix, "%n", namespace)
 	logPrefix = strings.ReplaceAll(logPrefix, "%t", tier)
 	return logPrefix
 }
