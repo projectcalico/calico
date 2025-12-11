@@ -204,6 +204,11 @@ ls -la /home/semaphore/calico
 # "semaphore" group.
 sudo adduser stack semaphore
 
+# Guarantee that the stack user will be able to make a Git clone of /home/semaphore/calico.  Since
+# we started using partial cloning, *.promisor files under /home/semaphore/calico/.git/objects/pack
+# naturally have permissions -rw-------, which means that stack won't be able to read them.
+sudo chmod -R g+r /home/semaphore/calico
+
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
 ls -la /home/semaphore/calico
