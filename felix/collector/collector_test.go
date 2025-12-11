@@ -613,6 +613,180 @@ var _ = Describe("NFLOG Datasource", func() {
 			})
 		})
 	})
+
+	// Tests for deleted endpoints - RuleHits should be skipped
+	Describe("NFLOG with deleted endpoints", func() {
+		// Test data for endpoints marked for deletion
+		var c *collector
+		var lm *calc.LookupsCache
+		var nflogReader *NFLogReader
+
+		conf := &Config{
+			AgeTimeout:            time.Duration(10) * time.Second,
+			InitialReportingDelay: time.Duration(5) * time.Second,
+			ExportingInterval:     time.Duration(1) * time.Second,
+			FlowLogsFlushInterval: time.Duration(100) * time.Second,
+			DisplayDebugTraceLogs: true,
+		}
+
+		BeforeEach(func() {
+			epMap := map[[16]byte]calc.EndpointData{
+				localIp1:  localEd1,
+				localIp2:  localEd2,
+				remoteIp1: remoteEd1,
+			}
+			nflogMap := map[[64]byte]*calc.RuleID{}
+
+			for _, rid := range []*calc.RuleID{defTierPolicy1AllowEgressRuleID, defTierPolicy1AllowIngressRuleID, defTierPolicy2DenyIngressRuleID, defTierPolicy2DenyEgressRuleID} {
+				nflogMap[policyIDStrToRuleIDParts(rid)] = rid
+			}
+
+			lm = newMockLookupsCache(epMap, nflogMap, nil, nil)
+			nflogReader = NewNFLogReader(lm, 0, 0, 0, false)
+			Expect(nflogReader.Start()).NotTo(HaveOccurred())
+			c = newCollector(lm, conf).(*collector)
+			c.SetPacketInfoReader(nflogReader)
+			c.SetConntrackInfoReader(dummyConntrackInfoReader{})
+			go func() {
+				Expect(c.Start()).NotTo(HaveOccurred())
+			}()
+		})
+
+		AfterEach(func() {
+			nflogReader.Stop()
+		})
+
+		Describe("Test source endpoint marked for deletion", func() {
+			It("should skip RuleHits processing when source endpoint is marked for deletion", func() {
+				// Set up normal endpoint map
+				epMap := map[[16]byte]calc.EndpointData{
+					localIp1:  localEd1, // src endpoint to be marked for deletion
+					localIp2:  localEd2, // normal dest endpoint
+					remoteIp1: remoteEd1,
+				}
+				nflogMap := map[[64]byte]*calc.RuleID{}
+
+				for _, rid := range []*calc.RuleID{defTierPolicy1AllowEgressRuleID, defTierPolicy1AllowIngressRuleID, defTierPolicy2DenyIngressRuleID, defTierPolicy2DenyEgressRuleID} {
+					nflogMap[policyIDStrToRuleIDParts(rid)] = rid
+				}
+
+				// Update the lookups cache with endpoint map
+				lm.SetMockData(epMap, nflogMap, nil, nil)
+
+				// Mark the source endpoint for deletion
+				lm.MarkEndpointDeleted(localEd1)
+
+				t := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
+
+				// Send NFLOG packet - this should create the tuple but skip RuleHits processing
+				nflogReader.IngressC <- localPktIngress
+				Eventually(c.epStats).Should(HaveKey(*t))
+
+				data := c.epStats[*t]
+				// Verify that RuleHits were not processed (Path should be empty)
+				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when source endpoint is marked for deletion")
+				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when source endpoint is marked for deletion")
+			})
+		})
+
+		Describe("Test destination endpoint marked for deletion", func() {
+			It("should skip RuleHits processing when destination endpoint is marked for deletion", func() {
+				// Set up normal endpoint map
+				epMap := map[[16]byte]calc.EndpointData{
+					localIp1:  localEd1, // normal src endpoint
+					localIp2:  localEd2, // dest endpoint to be marked for deletion
+					remoteIp1: remoteEd1,
+				}
+				nflogMap := map[[64]byte]*calc.RuleID{}
+
+				for _, rid := range []*calc.RuleID{defTierPolicy1AllowEgressRuleID, defTierPolicy1AllowIngressRuleID, defTierPolicy2DenyIngressRuleID, defTierPolicy2DenyEgressRuleID} {
+					nflogMap[policyIDStrToRuleIDParts(rid)] = rid
+				}
+
+				// Update the lookups cache with endpoint map
+				lm.SetMockData(epMap, nflogMap, nil, nil)
+
+				// Mark the destination endpoint for deletion
+				lm.MarkEndpointDeleted(localEd2)
+
+				t := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
+
+				// Send NFLOG packet - this should create the tuple but skip RuleHits processing
+				nflogReader.IngressC <- localPktIngress
+				Eventually(c.epStats).Should(HaveKey(*t))
+
+				data := c.epStats[*t]
+				// Verify that RuleHits were not processed (Path should be empty)
+				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when destination endpoint is marked for deletion")
+				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when destination endpoint is marked for deletion")
+			})
+		})
+
+		Describe("Test remote source endpoint marked for deletion", func() {
+			It("should skip RuleHits processing when remote source endpoint is marked for deletion", func() {
+				// Set up normal endpoint map
+				epMap := map[[16]byte]calc.EndpointData{
+					localIp1:  localEd1,
+					localIp2:  localEd2,
+					remoteIp1: remoteEd1, // remote src endpoint to be marked for deletion
+				}
+				nflogMap := map[[64]byte]*calc.RuleID{}
+
+				for _, rid := range []*calc.RuleID{defTierPolicy1AllowEgressRuleID, defTierPolicy1AllowIngressRuleID, defTierPolicy2DenyIngressRuleID, defTierPolicy2DenyEgressRuleID} {
+					nflogMap[policyIDStrToRuleIDParts(rid)] = rid
+				}
+
+				// Update the lookups cache with endpoint map
+				lm.SetMockData(epMap, nflogMap, nil, nil)
+
+				// Mark the remote source endpoint for deletion
+				lm.MarkEndpointDeleted(remoteEd1)
+
+				t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
+
+				// Send NFLOG packet - this should create the tuple but skip RuleHits processing
+				nflogReader.IngressC <- ingressPktAllow
+				Eventually(c.epStats).Should(HaveKey(*t))
+
+				data := c.epStats[*t]
+				// Verify that RuleHits were not processed (Path should be empty)
+				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when remote source endpoint is marked for deletion")
+				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when remote source endpoint is marked for deletion")
+			})
+		})
+
+		// Test to ensure normal functionality is not broken
+		Describe("Test normal RuleHits processing with active endpoints", func() {
+			It("should process RuleHits when endpoints are NOT marked for deletion", func() {
+				// Use normal endpoints (not marked for deletion) by resetting to default state
+				epMap := map[[16]byte]calc.EndpointData{
+					localIp1:  localEd1,
+					localIp2:  localEd2,
+					remoteIp1: remoteEd1,
+				}
+				nflogMap := map[[64]byte]*calc.RuleID{}
+
+				for _, rid := range []*calc.RuleID{defTierPolicy1AllowEgressRuleID, defTierPolicy1AllowIngressRuleID, defTierPolicy2DenyIngressRuleID, defTierPolicy2DenyEgressRuleID} {
+					nflogMap[policyIDStrToRuleIDParts(rid)] = rid
+				}
+
+				// Update the lookups cache with normal (active) endpoint map
+				lm.SetMockData(epMap, nflogMap, nil, nil)
+
+				t := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
+
+				// Send NFLOG packet - this should create the tuple AND process RuleHits
+				nflogReader.IngressC <- localPktIngress
+				Eventually(c.epStats).Should(HaveKey(*t))
+
+				data := c.epStats[*t]
+				// Verify that RuleHits were processed (Path should NOT be empty)
+				Eventually(func() int {
+					return len(data.IngressRuleTrace.Path())
+				}, "500ms", "50ms").Should(BeNumerically(">", 0), "IngressRuleTrace Path should NOT be empty when endpoints are active")
+			})
+		})
+	})
 })
 
 // Entry remoteIp1:srcPort -> localIp1:dstPort

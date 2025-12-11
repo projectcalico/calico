@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/local"
@@ -797,6 +798,255 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 		for _, felix := range tc.Felixes {
 			if bpfEnabled {
 				felix.Exec("calico-bpf", "connect-time", "clean")
+			}
+		}
+	})
+})
+
+var _ = infrastructure.DatastoreDescribe("flow log with deleted service pod test", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	const (
+		wepPort = 8055
+		svcPort = 8066
+	)
+	wepPortStr := fmt.Sprintf("%d", wepPort)
+	svcPortStr := fmt.Sprintf("%d", svcPort)
+	clusterIP := "10.101.0.10"
+
+	var (
+		infra        infrastructure.DatastoreInfra
+		opts         infrastructure.TopologyOptions
+		tc           infrastructure.TopologyContainers
+		client       client.Interface
+		ep1_1, ep2_1 *workload.Workload
+		cc           *connectivity.Checker
+	)
+
+	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+
+	BeforeEach(func() {
+		infra = getInfra()
+		opts = infrastructure.DefaultTopologyOptions()
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+		opts.IPIPMode = api.IPIPModeNever
+		opts.NATOutgoingEnabled = true
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "25"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSENABLEHOSTENDPOINT"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFILEINCLUDELABELS"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFILEINCLUDEPOLICIES"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFILEENABLED"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFILEINCLUDESERVICE"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
+
+		// Start felix instances.
+		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
+
+		if bpfEnabled {
+			ensureBPFProgramsAttached(tc.Felixes[0])
+			ensureBPFProgramsAttached(tc.Felixes[1])
+		}
+
+		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
+		infra.AddDefaultAllow()
+
+		// Create workload on host 1.
+		infrastructure.AssignIP("ep1-1", "10.65.0.0", tc.Felixes[0].Hostname, client)
+		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
+		ep1_1.ConfigureInInfra(infra)
+
+		infrastructure.AssignIP("ep2-1", "10.65.1.0", tc.Felixes[1].Hostname, client)
+		ep2_1 = workload.Run(tc.Felixes[1], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
+		ep2_1.ConfigureInInfra(infra)
+
+		ensureRoutesProgrammed(tc.Felixes)
+
+		// Create a service that maps to ep2_1. Rather than checking connectivity to the endpoint we'll go via
+		// the service to test the destination service name handling.
+		svcName := "test-service"
+		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+		tSvc := k8sService(svcName, clusterIP, ep2_1, svcPort, wepPort, 0, "tcp")
+		tSvcNamespace := tSvc.Namespace
+		_, err := k8sClient.CoreV1().Services(tSvcNamespace).Create(context.Background(), tSvc, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wait for the endpoints to be updated and for the address to be ready.
+		Expect(ep2_1.IP).NotTo(Equal(""))
+		getEpsFunc := k8sGetEpsForServiceFunc(k8sClient, tSvc)
+		epCorrectFn := func() error {
+			eps := getEpsFunc()
+			if len(eps) != 1 {
+				return fmt.Errorf("Wrong number of endpointslices: %#v", eps)
+			}
+			if len(eps[0].Endpoints) != 1 {
+				return fmt.Errorf("Wrong number of endpoints: %#v", eps[0])
+			}
+			endpoints := eps[0].Endpoints
+			addrs := endpoints[0].Addresses
+			if len(addrs) != 1 {
+				return fmt.Errorf("Wrong number of addresses: %#v", eps[0])
+			}
+			if addrs[0] != ep2_1.IP {
+				return fmt.Errorf("Unexpected IP: %s != %s", addrs[0], ep2_1.IP)
+			}
+			ports := eps[0].Ports
+			if len(ports) != 1 {
+				return fmt.Errorf("Wrong number of ports: %#v", eps[0])
+			}
+			if *ports[0].Port != int32(wepPort) {
+				return fmt.Errorf("Wrong port %d != svcPort", *ports[0].Port)
+			}
+			return nil
+		}
+		Eventually(epCorrectFn, "10s").ShouldNot(HaveOccurred())
+
+		// Create a policy that allows ep1-1 to communicate with test-service using label matching
+		gnpServiceAllow := api.NewGlobalNetworkPolicy()
+		gnpServiceAllow.Name = "ep1-1-allow-test-service"
+		gnpServiceAllow.Spec.Order = &float2_0
+		gnpServiceAllow.Spec.Tier = "default"
+		gnpServiceAllow.Spec.Selector = ep1_1.NameSelector()
+		gnpServiceAllow.Spec.Types = []api.PolicyType{api.PolicyTypeEgress}
+		gnpServiceAllow.Spec.Egress = []api.Rule{
+			{
+				Action: api.Allow,
+				Destination: api.EntityRule{
+					Services: &api.ServiceMatch{
+						Namespace: "default",
+						Name:      svcName,
+					},
+				},
+			},
+		}
+		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, gnpServiceAllow, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		if !bpfEnabled {
+			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
+			Eventually(getRuleFunc(tc.Felixes[0], "APE0|default.ep1-1-allow-test-service"), "10s", "1s").ShouldNot(HaveOccurred())
+		} else {
+			checkNat := func() bool {
+				for _, f := range tc.Felixes {
+					if !f.BPFNATHasBackendForService(clusterIP, svcPort, 6, ep2_1.IP, wepPort) {
+						return false
+					}
+				}
+				return true
+			}
+
+			Eventually(checkNat, "10s", "1s").Should(BeTrue(), "Expected NAT to be programmed")
+
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"egress", "default.ep1-1-allow-test-service")
+		}
+
+		if !bpfEnabled {
+			// Mimic the kube-proxy service iptable clusterIP rule.
+			for _, f := range tc.Felixes {
+				f.Exec("iptables", "-t", "nat", "-A", "PREROUTING",
+					"-p", "tcp",
+					"-d", clusterIP,
+					"-m", "tcp", "--dport", svcPortStr,
+					"-j", "DNAT", "--to-destination",
+					ep2_1.IP+":"+wepPortStr)
+			}
+		}
+	})
+
+	It("should get expected flow logs", func() {
+		// Describe the connectivity that we now expect.
+		// For ep1_1 -> ep2_1 we use the service cluster IP to test service info in the flow log
+		cc = &connectivity.Checker{}
+		cc.ExpectSome(ep1_1, connectivity.TargetIP(clusterIP), uint16(svcPort)) // allowed by np1-1
+
+		// Do 3 rounds of connectivity checking.
+		cc.CheckConnectivity()
+		cc.CheckConnectivity()
+		cc.CheckConnectivity()
+
+		flowlogs.WaitForConntrackScan(bpfEnabled)
+
+		// Verify we have allowed flow logs before deleting the backing pod
+		Eventually(func() error {
+			flows, err := tc.Felixes[0].FlowLogs()
+			if err != nil {
+				return err
+			}
+			foundAllowed := false
+			for _, fl := range flows {
+				if fl.Action == "allow" && fl.DstService.PortNum == int(svcPort) {
+					foundAllowed = true
+					break
+				}
+			}
+			if !foundAllowed {
+				return fmt.Errorf("no allowed flow log found for service port %d", svcPort)
+			}
+			return nil
+		}, "20s", "1s").ShouldNot(HaveOccurred())
+
+		// Verify that the workload endpoint for ep2_1 exists
+		Eventually(func() error {
+			wlList, _ := client.WorkloadEndpoints().List(utils.Ctx, options.ListOptions{})
+			for _, wl := range wlList.Items {
+				if strings.Contains(wl.Name, "ep2--1") {
+					return nil
+				}
+			}
+			return fmt.Errorf("workload endpoint default/%s still exists", ep2_1.Name)
+		}, "10s", "1s").ShouldNot(HaveOccurred())
+
+		// Delete the backing pod (ep2_1) to test flow logs when service has no endpoints
+		ep2_1.RemoveFromInfra(infra)
+
+		// Wait a moment for the endpoint deletion to propagate
+		Eventually(func() error {
+			wlList, _ := client.WorkloadEndpoints().List(utils.Ctx, options.ListOptions{})
+			for _, wl := range wlList.Items {
+				if strings.Contains(wl.Name, "ep2--1") {
+					return fmt.Errorf("workload endpoint default/%s still exists", ep2_1.Name)
+				}
+			}
+			return nil
+		}, "10s", "1s").ShouldNot(HaveOccurred())
+
+		// Now expect connectivity to fail since there's no backing pod
+		cc = &connectivity.Checker{}
+		cc.ExpectNone(ep1_1, connectivity.TargetIP(clusterIP), uint16(svcPort))
+
+		// Do more rounds of connectivity checking - these should fail
+		cc.CheckConnectivity()
+		cc.CheckConnectivity()
+		cc.CheckConnectivity()
+
+		flowlogs.WaitForConntrackScan(bpfEnabled)
+
+		// Verify we get denied or failed flow logs after deleting the backing pod
+		Consistently(func() error {
+			var flows []flowlog.FlowLog
+			var err error
+			if flows, err = tc.Felixes[0].FlowLogs(); err != nil {
+				return err
+			}
+			for _, fl := range flows {
+				// After pod deletion, should not see denied flows for the service port
+				if fl.DstService.PortNum == int(svcPort) && fl.Action == "deny" {
+					return fmt.Errorf("found denied flow log for service port %d", svcPort)
+				}
+			}
+			return nil
+		}, "1m", "1s").ShouldNot(HaveOccurred())
+
+		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
+		// to expire quickly.
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-F")
+		}
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			if bpfEnabled {
+				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
 			}
 		}
 	})
