@@ -314,7 +314,7 @@ COMPILE_DEPS=set -e; rm -f $@; \
 
 ifneq ($(MAKECMDGOALS),clean)
   ifneq ($(MAKECMDGOALS), libbpf)
-    include $(shell ls *.d)
+    include $(shell ls | grep '\.d$$' || true)
   endif
 endif
 
