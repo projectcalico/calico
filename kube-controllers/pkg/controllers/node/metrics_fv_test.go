@@ -152,7 +152,7 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the node controller, which exports the metrics under test.
-		kubeControllers = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		kubeControllers = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)

@@ -13,10 +13,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	liberr "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -65,7 +65,8 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 	// Read the namespace from the service account file to determine the namespace we're running in.
 	namespace, err := os.ReadFile(winutils.GetHostPath("/var/run/secrets/kubernetes.io/serviceaccount/namespace"))
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to read service account namespace file")
+		logrus.WithError(err).Warn("Failed to read service account namespace file, defaulting to 'calico-system'")
+		namespace = []byte("calico-system")
 	}
 
 	c := &policyMigrator{
@@ -79,6 +80,7 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 		updates:       make(chan []bapi.Update, utils.BatchUpdateSize),
 		statusUpdates: make(chan bapi.SyncStatus),
 		namespace:     string(namespace),
+		skipRollout:   os.Getenv("FV_TEST") == "true",
 	}
 	c.syncer = watchersyncer.New(cli.(accessor).Backend(), resourceTypes, c)
 
@@ -104,6 +106,9 @@ type policyMigrator struct {
 
 	// Configuration.
 	namespace string
+
+	// For FV testing - allows skipping the calico-node rollout wait.
+	skipRollout bool
 }
 
 func (c *policyMigrator) OnStatusUpdated(status bapi.SyncStatus) {
@@ -235,7 +240,7 @@ func (c *policyMigrator) processPendingWork() error {
 
 		logCtx.WithFields(logrus.Fields{
 			"v1Name": k.Name,
-		}).Info("Migrating policy to new name")
+		}).Debug("Migrating policy to new name")
 
 		// Create a new Policy object with the correct v3 name.
 		newPolicy := p.DeepCopyObject()
@@ -244,23 +249,35 @@ func (c *policyMigrator) processPendingWork() error {
 
 		// Create the new policy in the datastore.
 		_, err := c.bc.Create(c.ctx, &model.KVPair{Key: newKey, Value: newPolicy})
-		if err != nil && !errors.IsAlreadyExists(err) {
-			// If the error is AlreadyExists, it means we already fixed this policy in a previous run, so we can safely ignore it.
-			// For other errors, log them and continue on to the next piece of work.
-			logCtx.Errorf("Error creating new policy %s: %v", newKey, err)
-			continue
+		if err != nil {
+			if _, ok := err.(liberr.ErrorResourceAlreadyExists); !ok {
+				// If the error is AlreadyExists, it means we already fixed this policy in a previous run, so we can safely ignore it.
+				// For other errors, log them and continue on to the next piece of work.
+				logCtx.Errorf("Error creating new policy %s: %v", newKey, err)
+				continue
+			}
+			logCtx.Infof("New policy %s already exists, carry on", newKey)
 		}
 
 		// Delete the old policy from the datastore.
 		_, err = c.bc.DeleteKVP(c.ctx, kvp)
-		if err != nil && !errors.IsNotFound(err) {
-			// If the error is NotFound, it means the old policy was already deleted, so we can safely ignore it.
-			// For other errors, log them and continue on to the next piece of work.
-			logCtx.Errorf("Error deleting old policy %s: %v", k, err)
-			continue
+		if err != nil {
+			if _, ok := err.(liberr.ErrorResourceDoesNotExist); !ok {
+				// If the error is NotFound, it means the old policy was already deleted, so we can safely ignore it.
+				// For other errors, log them and continue on to the next piece of work.
+				logCtx.Errorf("Error deleting old policy %s: %v", k, err)
+				continue
+			}
+			logCtx.Infof("Old policy %s already deleted, carry on", k)
 		}
 
 		// Successfully migrated this policy, remove from pending work.
+		logrus.WithFields(logrus.Fields{
+			"namespace": p.GetNamespace(),
+			"newName":   p.GetName(),
+			"oldName":   k.Name,
+			"kind":      p.GetObjectKind().GroupVersionKind().Kind,
+		}).Info("Successfully migrated storage name for policy")
 		c.pendingWork.Discard(key)
 	}
 	return nil
@@ -268,6 +285,12 @@ func (c *policyMigrator) processPendingWork() error {
 
 // waitForCalicoNodeRollout waits for all calico-node pods to be running the version that supports the new policy names.
 func (c *policyMigrator) waitForCalicoNodeRollout() error {
+	if c.skipRollout {
+		// This is useful for FV tests that don't run calico-node.
+		logrus.Info("Skipping calico-node rollout wait as per configuration")
+		return nil
+	}
+
 	for {
 		select {
 		case <-c.ctx.Done():
