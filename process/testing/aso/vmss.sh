@@ -364,7 +364,6 @@ EOF
   for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
     cat << EOF >> ${ASO_DIR}/connect.txt
 -------------Connect to Windows Node ${i}-------------
-RDP://${WINDOWS_EIPS[$((i-1))]} user: winfv password:$WIN_PASSWORD
 ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${WINDOWS_EIPS[$((i-1))]} powershell
 PIP: ${WINDOWS_PIPS[$((i-1))]}
 EIP: ${WINDOWS_EIPS[$((i-1))]}
