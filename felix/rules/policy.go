@@ -742,6 +742,7 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 		name = v.Name
 		namespace = v.Namespace
 	case types.ProfileID:
+		kind = "profile"
 		name = v.Name
 	}
 
