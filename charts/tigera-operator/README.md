@@ -118,6 +118,10 @@ installation:
   # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
   imagePullSecrets: []
 
+  # Disable CSI driver. Default: /var/lib/kubelet
+  kubeletVolumePluginPath: "None"
+
+
 # Configures general installation parameters for Calico. Schema is based
 # on the operator.tigera.io/Installation API documented
 # here: https://docs.tigera.io/calico/latest/reference/installation/api#operator.tigera.io/v1.APIServerSpec
@@ -165,9 +169,6 @@ tigeraOperator:
   registry: quay.io
 calicoctl:
   image: quay.io/calico/ctl
-
-# Configuration for the Calico CSI plugin - setting to None will disable the plugin, default: /var/lib/kubelet
-kubeletVolumePluginPath: None   
 
 # Optionally configure the host and port used to access the Kubernetes API server.
 kubernetesServiceEndpoint:
