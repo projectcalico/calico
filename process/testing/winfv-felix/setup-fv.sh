@@ -72,6 +72,10 @@ function upload_calico_images(){
 }
 
 function start_test_infra(){
+  # Enable felix debug logging, wait for felixconfiguration to exist first
+  timeout --foreground 180 bash -c "while ! ${KUBECTL} --kubeconfig=${KUBECONFIG} wait felixconfiguration default --for=jsonpath='{.spec}' --timeout=30s; do sleep 5; done"
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" patch felixconfiguration default --type merge --patch='{"spec":{"logSeverityScreen":"Debug"}}'
+
   ${KUBECTL} --kubeconfig="${KUBECONFIG}" create ns demo
   ${KUBECTL} --kubeconfig="${KUBECONFIG}" apply -f "${SCRIPT_DIR}/infra/"
 
@@ -93,8 +97,20 @@ function run_windows_fv(){
   echo
 }
 
+function get_logs(){
+  # Get logs from windows pod
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c uninstall-calico > ./report/win-uninstall-calico.log
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c install-cni > ./report/win-install-cni.log
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c node > ./report/win-node.log
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c felix > ./report/win-felix.log
+
+  # Get logs from linux pod
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node -c calico-node > ./report/linux-calico-node.log
+}
+
 # Main execution
 upload_fv_scripts
 upload_calico_images
 start_test_infra
 run_windows_fv
+get_logs
