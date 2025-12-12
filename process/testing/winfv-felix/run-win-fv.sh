@@ -72,12 +72,12 @@ then
     exit 1
 fi
 
-popd
-echo "Windows Felix FV test completed."
-
 # Search for error code file
 if [ -f ./report/error-codes ] || [ "$EXIT_CODE" != 0 ];
 then
     echo "Windows FV returned error(s)."
     exit 1
 fi
+
+popd
+echo "Windows Felix FV test completed."
