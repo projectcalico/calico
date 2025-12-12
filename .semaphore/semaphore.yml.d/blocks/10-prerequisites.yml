@@ -65,7 +65,7 @@
           - make -C networking-calico fmtpy
           - make -C networking-calico flake8
           - make check-dirty
-- name: Check language
+- name: Check language/Dockerfiles
   run:
     when: >-
       ${FORCE_RUN} or
@@ -73,19 +73,10 @@
   dependencies: []
   task:
     jobs:
-      - name: Check language
+      - name: Check language/Dockerfiles
         commands:
+          # Both of these are very quick grep checks so we combine them into one job.
           - make check-language
-- name: Check Dockerfiles
-  run:
-    when: >-
-      ${FORCE_RUN} or
-      change_in(['*Dockerfile*', '/hack/check-dockerfiles.sh', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
-  dependencies: []
-  task:
-    jobs:
-      - name: Check Dockerfiles
-        commands:
           - make check-dockerfiles
 - name: Check protobufs
   run:
@@ -141,8 +132,7 @@
     - Check SemaphoreCI files
     - Check YAML files
     - Check Go
-    - Check language
-    - Check Dockerfiles
+    - Check language/Dockerfiles
     - Check protobufs
     - Manifests and API docs
     - Store working copy
