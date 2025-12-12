@@ -90,14 +90,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
-		apply := func() error {
-			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
-			if err != nil {
-				return fmt.Errorf("%s: %s", err, out)
-			}
-			return nil
-		}
-		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+		testutils.ApplyCRDs(apiserver)
 
 		// Make a Calico client and backend client.
 		type accessor interface {

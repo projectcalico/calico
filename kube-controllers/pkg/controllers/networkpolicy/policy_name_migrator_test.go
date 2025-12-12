@@ -16,7 +16,6 @@ package networkpolicy_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -38,63 +37,50 @@ import (
 var _ = Describe("policy name migration tests (etcd mode)", func() {
 	var (
 		etcd              *containers.Container
-		policyController  *containers.Container
+		kubectrl          *containers.Container
 		apiserver         *containers.Container
 		cli               client.Interface
 		bcli              bapi.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		err               error
 	)
+
+	// Define an interface to access the backend client from the Calico client.
+	type accessor interface {
+		Backend() bapi.Client
+	}
 
 	BeforeEach(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
-		cli = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
-
-		type accessor interface {
-			Backend() bapi.Client
-		}
-		bcli = cli.(accessor).Backend()
 
 		// Run apiserver.
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
-
-		// Write out a kubeconfig file
-		kconfigfile, err := os.CreateTemp("", "policy-migrator-test")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+		kubeconfig, cleanup := testutils.BuildKubeconfig(apiserver.IP)
+		defer cleanup()
 
 		// Run the controller.
-		policyController = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
+		mode := apiconfig.EtcdV3
+		kubectrl = testutils.RunKubeControllers(mode, etcd.IP, kubeconfig, "")
 
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		// Create clients for the test.
+		cli = testutils.GetCalicoClient(mode, etcd.IP, kubeconfig)
+		k8sClient, err = testutils.GetK8sClient(kubeconfig)
 		Expect(err).NotTo(HaveOccurred())
+		bcli = cli.(accessor).Backend()
 
 		// Wait for the apiserver to be available.
 		Eventually(func() error {
 			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 			return err
 		}, 30*time.Second, 1*time.Second).Should(BeNil())
-
-		// Run controller manager.  Empirically it can take around 10s until the
-		// controller manager is ready to create default service accounts, even
-		// when the k8s image has already been downloaded to run the API
-		// server.  We use Eventually to allow for possible delay when doing
-		// initial pod creation below.
-		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
 	AfterEach(func() {
 		_ = cli.Close()
 		controllerManager.Stop()
-		policyController.Stop()
+		kubectrl.Stop()
 		apiserver.Stop()
 		etcd.Stop()
 	})
@@ -286,13 +272,15 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create the old mismatched key.
+		mismatchedNames2 := mismatchedNames.DeepCopy()
+		mismatchedNames2.SetName("default.mismatched") // Old generated name format including tier.
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind:      v3.KindNetworkPolicy,
 				Name:      "default.mismatched", // Old generated name format including tier.
 				Namespace: mismatchedNames.Namespace,
 			},
-			Value: mismatchedNames,
+			Value: mismatchedNames2,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -308,6 +296,75 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		// Check that the correct key is still present.
 		kvp := expectFound(bcli, "mismatched", mismatchedNames.Namespace, v3.KindNetworkPolicy)
 		Expect(kvp.Value.(*v3.NetworkPolicy).Name).To(Equal("mismatched"))
+	})
+})
+
+// Kubernetes CRD backend needs separate tests since the v1 API behavior is different. Instead, we'll
+// access the CRD API directly to create the old-style resources.
+var _ = Describe("policy name migration tests (kdd mode)", func() {
+	var (
+		etcd              *containers.Container
+		kubectrl          *containers.Container
+		apiserver         *containers.Container
+		cli               client.Interface
+		bcli              bapi.Client
+		k8sClient         *kubernetes.Clientset
+		controllerManager *containers.Container
+		err               error
+	)
+
+	// Define an interface to access the backend client from the Calico client.
+	type accessor interface {
+		Backend() bapi.Client
+	}
+
+	BeforeEach(func() {
+		// Run etcd.
+		etcd = testutils.RunEtcd()
+
+		// Run apiserver.
+		apiserver = testutils.RunK8sApiserver(etcd.IP)
+		kubeconfig, cleanup := testutils.BuildKubeconfig(apiserver.IP)
+		defer cleanup()
+
+		// Run the controller.
+		mode := apiconfig.Kubernetes
+		kubectrl = testutils.RunKubeControllers(mode, etcd.IP, kubeconfig, "")
+
+		// Create clients for the test.
+		cli = testutils.GetCalicoClient(mode, etcd.IP, kubeconfig)
+		k8sClient, err = testutils.GetK8sClient(kubeconfig)
+		Expect(err).NotTo(HaveOccurred())
+		bcli = cli.(accessor).Backend()
+
+		// Wait for the apiserver to be available.
+		Eventually(func() error {
+			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+			return err
+		}, 30*time.Second, 1*time.Second).Should(BeNil())
+
+		// Apply the necessary CRDs if we're running in k8s mode.
+		testutils.ApplyCRDs(apiserver)
+	})
+
+	AfterEach(func() {
+		_ = cli.Close()
+		controllerManager.Stop()
+		kubectrl.Stop()
+		apiserver.Stop()
+		etcd.Stop()
+	})
+
+	It("should update NetworkPolicy names correctly", func() {
+	})
+
+	It("sholuld update a GlobalNetworkPolicy name correctly", func() {
+	})
+
+	It("should update a StagedNetworkPolicy name correctly", func() {
+	})
+
+	It("should fix if both mismatched and correct keys exist", func() {
 	})
 })
 

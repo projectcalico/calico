@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -44,6 +43,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		err               error
 	)
 
 	BeforeEach(func() {
@@ -54,21 +54,13 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 		// Run apiserver.
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
-		// Write out a kubeconfig file
-		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+		kconfigfile, cleanup := testutils.BuildKubeconfig(apiserver.IP)
+		defer cleanup()
 
 		// Run the controller.
-		policyController = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
+		policyController = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -183,19 +175,12 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+		kconfigfile, cleanup := testutils.BuildKubeconfig(apiserver.IP)
+		defer cleanup()
 
 		// Create some clients.
-		client := testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
-		k8sClient, err := testutils.GetK8sClient(kconfigfile.Name())
+		client := testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
+		k8sClient, err := testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -206,15 +191,7 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
-		apply := func() error {
-			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
-			if err != nil {
-				return fmt.Errorf("%s: %s", err, out)
-			}
-			return nil
-		}
-		By("Applying CRDs")
-		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+		testutils.ApplyCRDs(apiserver)
 
 		// Enable metrics and pprof ports for these tests.
 		Eventually(func() error {
@@ -230,7 +207,7 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 
 		// Run the controller. We don't need to run any controllers for these tests, but
 		// we do need to run something, so just run the node controller.
-		kubectrls = testutils.RunKubeControllers(apiconfig.Kubernetes, etcd.IP, kconfigfile.Name(), "node")
+		kubectrls = testutils.RunKubeControllers(apiconfig.Kubernetes, etcd.IP, kconfigfile, "node")
 	})
 
 	AfterEach(func() {
@@ -275,6 +252,7 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		err               error
 	)
 
 	BeforeEach(func() {
@@ -285,17 +263,11 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		var err error
-		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		kconfigfile, cleanup := testutils.BuildKubeconfig(apiserver.IP)
+		defer cleanup()
 
 		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 		// Wait for the apiserver to be available.
 		Eventually(func() error {
@@ -309,19 +281,12 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
-		apply := func() error {
-			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
-			if err != nil {
-				return fmt.Errorf("%s: %s", err, out)
-			}
-			return nil
-		}
-		By("Applying CRDs")
-		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
-		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
+		testutils.ApplyCRDs(apiserver)
+
+		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
 
 		// In KDD mode, we only support the node controller right now.
-		policyController = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		policyController = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile, "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
