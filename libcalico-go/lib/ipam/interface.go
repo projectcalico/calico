@@ -43,9 +43,11 @@ type Interface interface {
 	// so that they are available to be used in another assignment.
 	ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]cnet.IP, []ReleaseOptions, error)
 
-	// GetAssignmentAttributes returns the attributes stored with the given IP address
-	// upon assignment, as well as the handle used for assignment (if any).
-	GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (map[string]string, *string, error)
+	// GetAssignmentAttributes returns the AllocationAttribute for the given IP address,
+	// which includes the handle ID, ActiveOwnerAttrs, and AlternateOwnerAttrs.
+	// This provides an atomic snapshot of all allocation attributes for the IP.
+	// Returns nil if the IP is not assigned.
+	GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error)
 
 	// IPsByHandle returns a list of all IP addresses that have been
 	// assigned using the provided handle.
@@ -109,4 +111,18 @@ type Interface interface {
 	// UpgradeHost checks the resources related to the given node and, if it
 	// finds any that are in older formats, upgrades them.  It is idempotent.
 	UpgradeHost(ctx context.Context, nodeName string) error
+
+	// SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
+	//
+	// Parameters:
+	//   - updates: Specifies the attribute values to set. See OwnerAttributeUpdates for details.
+	//   - preconditions: Optional verification of expected owners before setting attributes.
+	//     If nil, no verification is performed.
+	//
+	// Use cases:
+	//   - Set AlternateOwnerAttrs only: updates.AlternateOwnerAttrs=<target pod attrs>
+	//   - Clear ActiveOwnerAttrs: updates.ClearActiveOwner=true
+	//   - Swap attributes: updates.ActiveOwnerAttrs=<current alternate>, updates.AlternateOwnerAttrs=<current active>
+	//   - Set both: updates.ActiveOwnerAttrs=<new active>, updates.AlternateOwnerAttrs=<new alternate>
+	SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *OwnerAttributeUpdates, preconditions *OwnerAttributePreconditions) error
 }

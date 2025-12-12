@@ -40,6 +40,7 @@ type Dataplane interface {
 		routes []*net.IPNet,
 		endpoint *internalapi.WorkloadEndpoint,
 		annotations map[string]string,
+		skipHostSideRoutes bool,
 	) (hostVethName, contVethMAC string, err error)
 
 	CleanUpNamespace(args *skel.CmdArgs) error

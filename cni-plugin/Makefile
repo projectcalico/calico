@@ -201,11 +201,33 @@ build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 ###############################################################################
 # Unit Tests
 ###############################################################################
+
 fv:
 	@echo "No FV tests for CNI plugin"
 
+
+## Install KubeVirt CRDs for testing (without operator/controllers)
+.PHONY: install-kubevirt-crds
+install-kubevirt-crds:
+	@echo "Installing KubeVirt CRDs for testing..."
+	@while ! docker exec calico-local-apiserver kubectl \
+		apply -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml; \
+		do echo "Waiting to install KubeVirt CRDs..."; \
+		sleep 1; \
+		done
+	@echo "KubeVirt CRDs installed successfully"
+
+## Remove KubeVirt CRDs
+.PHONY: remove-kubevirt-crds
+remove-kubevirt-crds:
+	@echo "Removing KubeVirt CRDs..."
+	@docker exec calico-local-apiserver kubectl \
+		delete -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml 2>/dev/null || \
+		echo "KubeVirt CRDs already removed or not present"
+
+
 ## Run the unit tests.
-ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico install-kubevirt-crds
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
