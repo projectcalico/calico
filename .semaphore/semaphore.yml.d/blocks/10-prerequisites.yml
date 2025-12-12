@@ -1,20 +1,114 @@
-- name: Prerequisites
+- name: Check SemaphoreCI files
   run:
-    when: "${FORCE_RUN} or change_in(['/'], {pipeline_file: 'track'})"
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
   dependencies: []
   task:
+    jobs:
+      - name: Check semaphore files
+        commands:
+          - make gen-semaphore-yaml
+          - make check-dirty
+- name: Check YAML files
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['/**/*.yml', '/**/*.yaml', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check YAML files
+        commands:
+          - make yaml-lint
+- name: Check Go
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['go.mod', 'go.sum', '**/*.go', '**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "preflight-go-checks"
     agent:
       machine:
-        type: f1-standard-2
+        type: f1-standard-4
         os_image: ubuntu2204
     jobs:
-      - name: Pre-flight checks
-        priority:
-          # This job is on the critical path so we increase its priority.
-          - value: 51
-            when: "pull_request =~ '.+'"
+      - name: Check Go files
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
         commands:
-          - make ci-preflight-checks
+          - make check-go-mod
+          - make verify-go-mods
+          - make gen-deps-files
+          - make go-vet
+          - >-
+            if [ -n "$SEMAPHORE_GIT_PR_NUMBER" ]; then
+              make fix-changed
+            else
+              make fix-all
+            fi
+          - make check-dirty
+- name: Check Python
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check Python files
+        commands:
+          - make -C networking-calico fmtpy
+          - make -C networking-calico flake8
+          - make check-dirty
+- name: Check language/Dockerfiles
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['**/*'], {pipeline_file: 'track', exclude: ['libbpf', '.[a-z]*']})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check language/Dockerfiles
+        commands:
+          # Both of these are very quick grep checks so we combine them into one job.
+          - make check-language
+          - make check-dockerfiles
+- name: Check protobufs
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['**/*.pb.go', '**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check protobufs
+        commands:
+          - make protobuf fix-changed
+          - make check-dirty
+- name: Manifests and API docs
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+  dependencies: []
+  task:
+    jobs:
+      - name: Check manifests and API docs
+        commands:
+          - make -C lib gen-files
+          - make -C api gen-files
+          - make -C libcalico-go gen-files
+          - make -C felix gen-files
+          - make -C goldmane gen-files
+          - make gen-manifests
+          - make fix-changed
+          - make check-ocp-no-crds
+          - make check-dirty
 - name: Store working copy
   run:
     when: "branch =~ '.*'"
@@ -30,3 +124,21 @@
           - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
           - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+- name: Prerequisites
+  skip:
+    # Always skip, this is a dummy job used to group prerequisite checks.
+    when: "true"
+  dependencies:
+    - Check SemaphoreCI files
+    - Check YAML files
+    - Check Go
+    - Check Python
+    - Check language/Dockerfiles
+    - Check protobufs
+    - Manifests and API docs
+    - Store working copy
+  task:
+    jobs:
+      - name: Pre-flight checks
+        commands:
+          - "true"
