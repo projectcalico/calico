@@ -36,6 +36,10 @@ FelixHostname=hostname
 LogSeverityScreen=INFO
 LogSeveritySys=DEBUG`
 
+const confEmptyString = `[default]
+EndpointStatusPathPrefix=
+`
+
 var _ = DescribeTable("File parameter parsing",
 	func(fileContent string, expected map[string]string) {
 		actual, err := config.LoadConfigFileData([]byte(fileContent))
@@ -53,6 +57,9 @@ var _ = DescribeTable("File parameter parsing",
 		"FelixHostname":     "hostname",
 		"LogSeverityScreen": "INFO",
 		"LogSeveritySys":    "DEBUG",
+	}),
+	Entry("Setting empty string", confEmptyString, map[string]string{
+		"EndpointStatusPathPrefix": "",
 	}),
 )
 
