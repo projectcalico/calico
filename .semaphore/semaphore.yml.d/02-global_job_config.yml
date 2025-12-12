@@ -7,6 +7,8 @@ global_job_config:
       value: unique-caldron-775
     - name: GCS_BUILD_CACHE_BUCKET
       value: calico-transient-build-artifacts-europe-west3
+    - name: BUILDKIT_PROGRESS
+      value: plain
   prologue:
     commands:
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
