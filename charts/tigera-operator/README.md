@@ -106,7 +106,7 @@ imagePullSecrets: {}
 
 # Configures general installation parameters for Calico. Schema is based
 # on the operator.tigera.io/Installation API documented
-# here: https://docs.tigera.io/calico/latest/reference/installation/api#operator.tigera.io/v1.InstallationSpec
+# here: https://docs.tigera.io/calico/latest/reference/installation/api#installationspec
 installation:
   enabled: true
   kubernetesProvider: ""
