@@ -67,7 +67,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
 
 		// Run the controller.
-		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
+		policyController = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
