@@ -21,8 +21,7 @@ run_batch() {
       make
         --directory=${CALICO_DIR_NAME}/felix
         FOCUS="${UT_FOCUS}"
-        ut-bpf
-        check-wireguard
+        ut-bpf-no-prereqs
     )
   else # Numbered FV batch.
     cmd=(
@@ -34,6 +33,7 @@ run_batch() {
           GINKGO_FOCUS="${FV_FOCUS}"
           FV_NUM_BATCHES="$num_fv_batches"
           FV_BATCHES_TO_RUN="$batch"
+          check-wireguard
           "$FV_NO_PREREQ_TARGET"
     )
   fi
@@ -65,7 +65,7 @@ run_batch() {
   #   a retry loop.
   # - nohup swallows the return code of the process so we use a 'bash -c'
   #   wrapper to capture it in a file.
-  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c '$cmd_quot > test.log; echo \$? > test.rc' < /dev/null >& /dev/null & while [ ! -e test.log ]; do sleep 1; done"
+  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c 'echo \$\$ > test.pid; $cmd_quot > test.log; echo \$? > test.rc' < /dev/null >& /dev/null & while [ ! -e test.log ]; do sleep 1; done"
   echo "RUNNER: Started batch '$batch' on VM '$vm_name', monitoring log..." >> "$log_file"
 
   # Subshell to limit scope of trap.
@@ -87,9 +87,14 @@ run_batch() {
 
     num_fails=0
     while true; do
-      rc=$(VM_NAME="$vm_name" ${remote_exec} 'while [ ! -f test.rc ]; do sleep 1; done; cat test.rc' || echo "ssh error $?")
+      rc=$(VM_NAME="$vm_name" ${remote_exec} "$CALICO_DIR_NAME/felix/.semaphore/wait-for-test-completion" || echo "ssh error $?")
       # Verify that we got a number; if not, probably an ssh error or similar.
       if grep -q '^[0-9]\+$' <<< "$rc"; then
+        if [ "$rc" -eq 66 ]; then
+          echo "RUNNER: WARNING: Batch '$batch' on VM '$vm_name' stopped without outputting its RC file (possible VM crash/reboot?)." >> "$log_file"
+          echo "RUNNER: Fetching serial console output for debugging:" >> "$log_file"
+          gcloud compute instances get-serial-port-output "$vm_name" --zone=${ZONE} --port=1 >> "$log_file"
+        fi
         echo "RUNNER: Batch '$batch' on VM '$vm_name' completed with rc=$rc" >> "$log_file"
         exit "$rc"
       else

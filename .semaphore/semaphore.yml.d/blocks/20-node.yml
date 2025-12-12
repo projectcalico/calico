@@ -102,6 +102,6 @@
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
           - '../.semaphore/vms/publish-reports "Node: KinD STs"'
-          - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
+          - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
