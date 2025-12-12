@@ -234,7 +234,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						applyNode(bc, kc, testhost, nil)
 						defer deleteNode(bc, kc, testhost)
 
-						ia, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+						ia, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -322,7 +322,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer GinkgoRecover()
 						defer wg.Done()
 
-						ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+						ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -742,7 +742,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			}
 
 			By("attempting to claim the block on multiple hosts at the same time", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -772,7 +772,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to claim another address", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -825,14 +825,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			var theIP string
 			By("claiming a block on one host", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(ia.IPs)).To(Equal(1))
 				theIP = ia.IPs[0].IP.String()
 			})
 
 			By("trying to claim the block on another host while it is non-empty", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 				Expect(err).NotTo(HaveOccurred(), "expected no error when pool full")
 				Expect(ia.IPs).To(HaveLen(0), "shouldn't get any IPs returned")
 			})
@@ -845,7 +845,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("trying to claim the block on another host now that it is empty (but still recently claimed)", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 				Expect(err).NotTo(HaveOccurred(), "expected no error when pool full")
 				Expect(ia.IPs).To(HaveLen(0), "shouldn't get any IPs returned")
 			})
@@ -853,7 +853,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			By("artificially aging the block", ageTheBlock)
 
 			By("trying to claim the block on another host now that it is empty and old enough to be reclaimed", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 				Expect(err).NotTo(HaveOccurred(), "allocation should succeed via block reclaim")
 				Expect(len(ia.IPs)).To(Equal(1))
 			})
@@ -884,7 +884,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			var theIP string
 			By("claiming a block on one host", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(ia.IPs)).To(Equal(1))
 				theIP = ia.IPs[0].IP.String()
@@ -904,7 +904,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				fc.deleteKVPFuncs["default"] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 					return nil, errors.New("expected error")
 				}
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(ia.IPs)).To(Equal(0), "expected no IPs returned due to failure to free affinity")
 				fc.deleteKVPFuncs["default"] = f
@@ -917,7 +917,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					cancel()
 					return nil, subCtx.Err()
 				}
-				ia, err := ic.autoAssign(subCtx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(subCtx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 				Expect(err).To(Equal(subCtx.Err()))
 				Expect(len(ia.IPs)).To(Equal(0), "expected no IPs returned due to context failure")
 			})
@@ -1236,8 +1236,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			Expect(b.Allocations[2]).To(BeNil())
 			Expect(*b.Allocations[3]).To(Equal(0))
 			// Attributes[0] should be the reservation attribute.
-			Expect(*b.Attributes[0].AttrPrimary).To(Equal("test-handle"))
-			Expect(b.Attributes[0].AttrSecondary["note"]).To(Equal("ipam ut"))
+			Expect(*b.Attributes[0].HandleID).To(Equal("test-handle"))
+			Expect(b.Attributes[0].ActiveOwnerAttrs["note"]).To(Equal("ipam ut"))
 		})
 
 		It("should allocate one ip", func() {
@@ -1247,7 +1247,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				blockReaderWriter: rw,
 				reservations:      &fakeReservations{},
 			}
-			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel, nil)
+			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel, nil, 0)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(len(ia.IPs)).To(Equal(1))
 			Expect(ia.IPs[0].String()).To(Equal("10.0.0.2/30"))

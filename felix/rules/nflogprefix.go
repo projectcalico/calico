@@ -4,7 +4,7 @@ package rules
 import (
 	"fmt"
 
-	"github.com/projectcalico/calico/felix/hashutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	"github.com/projectcalico/calico/felix/types"
 )
 
@@ -99,7 +99,7 @@ func maybeHash(prefix string) string {
 	if len(prefix) >= NFLOGPrefixMaxLengthWoTerm {
 		fixedPrefix := prefix[:hashedPrefixPrefixLen]
 		fixedSuffix := prefix[len(prefix)-hashedPrefixSuffixLen:]
-		hash := hashutils.GetLengthLimitedID("", prefix, hashLen)
+		hash := hash.GetLengthLimitedID("", prefix, hashLen)
 		prefix = fixedPrefix + hash + "_" + fixedSuffix
 	}
 	return prefix

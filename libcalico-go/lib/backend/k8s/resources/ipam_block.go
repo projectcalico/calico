@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -213,8 +213,8 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 		attrs := []model.AllocationAttribute{}
 		for _, a := range ab.Spec.Attributes {
 			attrs = append(attrs, model.AllocationAttribute{
-				AttrPrimary:   a.AttrPrimary,
-				AttrSecondary: a.AttrSecondary,
+				HandleID:         a.AttrPrimary,
+				ActiveOwnerAttrs: a.AttrSecondary,
 			})
 		}
 
@@ -249,8 +249,9 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 		attrs := []model.AllocationAttribute{}
 		for _, a := range ab.Spec.Attributes {
 			attrs = append(attrs, model.AllocationAttribute{
-				AttrPrimary:   a.AttrPrimary,
-				AttrSecondary: a.AttrSecondary,
+				HandleID:            a.HandleID,
+				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
+				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
 			})
 		}
 
@@ -286,8 +287,8 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		attrs := []v3.AllocationAttribute{}
 		for _, a := range ab.Attributes {
 			attrs = append(attrs, v3.AllocationAttribute{
-				AttrPrimary:   a.AttrPrimary,
-				AttrSecondary: a.AttrSecondary,
+				AttrPrimary:   a.HandleID,
+				AttrSecondary: a.ActiveOwnerAttrs,
 			})
 		}
 
@@ -330,8 +331,9 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		attrs := []libapiv3.AllocationAttribute{}
 		for _, a := range ab.Attributes {
 			attrs = append(attrs, libapiv3.AllocationAttribute{
-				AttrPrimary:   a.AttrPrimary,
-				AttrSecondary: a.AttrSecondary,
+				HandleID:            a.HandleID,
+				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
+				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
 			})
 		}
 

@@ -54,4 +54,8 @@ type IPAMConfig struct {
 	StrictAffinity     bool `json:"strict_affinity,omitempty"`
 	AutoAllocateBlocks bool `json:"auto_allocate_blocks,omitempty"`
 	MaxBlocksPerHost   int  `json:"maxBlocksPerHost,omitempty"`
+	// KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
+	// maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction).
+	// Valid values: "Enabled", "Disabled". Default: "Enabled" if not specified.
+	KubeVirtVMAddressPersistence *string `json:"kubeVirtVMAddressPersistence,omitempty"`
 }
