@@ -922,7 +922,7 @@ var _ = infrastructure.DatastoreDescribe("flow log with deleted service pod test
 
 		if !bpfEnabled {
 			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			Eventually(getRuleFunc(tc.Felixes[0], "APE0|default.ep1-1-allow-test-service"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "APE0|gnp/ep1-1-allow-test-service"), "10s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			checkNat := func() bool {
 				for _, f := range tc.Felixes {
@@ -935,8 +935,7 @@ var _ = infrastructure.DatastoreDescribe("flow log with deleted service pod test
 
 			Eventually(checkNat, "10s", "1s").Should(BeTrue(), "Expected NAT to be programmed")
 
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
-				"egress", "default.ep1-1-allow-test-service")
+			bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "ep1-1-allow-test-service")
 		}
 
 		if !bpfEnabled {
