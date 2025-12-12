@@ -50,6 +50,7 @@ if [ "${Q_AGENT}" = calico-felix ]; then
 [global]
 DatastoreType = etcdv3
 EtcdEndpoints = http://${SERVICE_HOST}:${ETCD_PORT}
+EndpointStatusPathPrefix = none
 EOF
                     if [ "${ENABLE_DEBUG_LOG_LEVEL}" = True ]; then
                         sudo sh -c "cat >> /etc/calico/felix.cfg" << EOF
