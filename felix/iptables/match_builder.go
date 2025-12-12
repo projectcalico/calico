@@ -325,8 +325,8 @@ func (m matchCriteria) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCrite
 	return append(m, fmt.Sprintf("-m icmp6 ! --icmpv6-type %d/%d", t, c))
 }
 
-func (m matchCriteria) Limit(r, b uint32) generictables.MatchCriteria {
-	if r == 0 {
+func (m matchCriteria) Limit(r string, b uint32) generictables.MatchCriteria {
+	if len(r) == 0 {
 		return m
 	}
 	if b == 0 {

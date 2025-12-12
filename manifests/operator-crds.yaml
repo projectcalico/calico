@@ -1630,6 +1630,9 @@ spec:
                   type: string
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default' or 'tigera-secure'
+              rule: self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
       served: true
       storage: true
       subresources:
@@ -7096,6 +7099,9 @@ spec:
                   type: object
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default'
+              rule: self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
       served: true
       storage: true
 ---
@@ -8613,6 +8619,9 @@ spec:
                   type: array
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default'
+              rule: self.metadata.name == 'default'
       served: true
       storage: true
       subresources:
@@ -26524,6 +26533,11 @@ spec:
                   type: string
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default', 'tigera-secure', or 'overlay'
+              rule:
+                self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
+                || self.metadata.name == 'overlay'
       served: true
       storage: true
       subresources:
@@ -26879,6 +26893,9 @@ spec:
                   type: array
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default' or 'tigera-secure'
+              rule: self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
       served: true
       storage: true
       subresources:
@@ -28523,6 +28540,9 @@ spec:
                   type: array
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default'
+              rule: self.metadata.name == 'default'
       served: true
       storage: true
       subresources:
@@ -30045,11 +30065,17 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                logActionBurst:
+                  description:
+                    "LogActionBurst sets the burst of hitting a Log action.
+                    [Default: 5]"
+                  type: integer
                 logActionRate:
                   description:
-                    "LogActionRate sets the rate of hitting a Log action.
-                    [Default: nil (unset)]"
-                  type: integer
+                    'LogActionRate sets the rate of hitting a Log action.
+                    [Default: ""]'
+                  pattern: ^([0-9]+(\\.[0-9]+)?(second|minute|hour|day))*$
+                  type: string
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.

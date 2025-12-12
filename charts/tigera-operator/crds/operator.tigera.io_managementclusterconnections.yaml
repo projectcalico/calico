@@ -347,6 +347,9 @@ spec:
                   type: array
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default' or 'tigera-secure'
+              rule: self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
       served: true
       storage: true
       subresources:

@@ -1229,8 +1229,8 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
-	if in.LogActionRate != nil {
-		in, out := &in.LogActionRate, &out.LogActionRate
+	if in.LogActionBurst != nil {
+		in, out := &in.LogActionBurst, &out.LogActionBurst
 		*out = new(int)
 		**out = **in
 	}
