@@ -112,7 +112,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			Selector: "all()",
 			Ingress:  []v3.Rule{{}},
 		}
-		bcli.Create(context.Background(), &model.KVPair{
+		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind:      v3.KindNetworkPolicy,
 				Name:      "default.mismatched", // Old generated name format including tier.
@@ -120,6 +120,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			},
 			Value: mismatchedNames,
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Create a policy that was created in a non-default tier, and that
 		// has a name that matches between the v3 API and backend.
@@ -131,7 +132,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			Selector: "all()",
 			Ingress:  []v3.Rule{{}},
 		}
-		bcli.Create(context.Background(), &model.KVPair{
+		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind:      v3.KindNetworkPolicy,
 				Name:      matchingWithPrefix.Name, // Name matches between v3 and backend.
@@ -139,6 +140,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			},
 			Value: matchingWithPrefix,
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Create a policy that was created without a tier prefix in the v3 API, and
 		// whose backend representation also does not include the tier prefix.
@@ -150,7 +152,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			Selector: "all()",
 			Ingress:  []v3.Rule{{}},
 		}
-		bcli.Create(context.Background(), &model.KVPair{
+		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind:      v3.KindNetworkPolicy,
 				Name:      matchingNoPrefix.Name, // Name matches between v3 and backend.
@@ -158,6 +160,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			},
 			Value: matchingNoPrefix,
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Check that all policies are accessible via the v3 API with the correct v3 API names.
 		for _, np := range []*v3.NetworkPolicy{mismatchedNames, matchingWithPrefix, matchingNoPrefix} {
@@ -195,13 +198,14 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			Selector: "all()",
 			Ingress:  []v3.Rule{{}},
 		}
-		bcli.Create(context.Background(), &model.KVPair{
+		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind: v3.KindGlobalNetworkPolicy,
 				Name: "default.mismatched", // Old generated name format including tier.
 			},
 			Value: mismatchedNames,
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Check that the policy is accessible via the v3 API with the correct v3 API name.
 		Eventually(func() error {
@@ -231,7 +235,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			Selector: "all()",
 			Ingress:  []v3.Rule{{}},
 		}
-		bcli.Create(context.Background(), &model.KVPair{
+		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind:      v3.KindStagedNetworkPolicy,
 				Name:      "default.mismatched", // Old generated name format including tier.
@@ -239,6 +243,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			},
 			Value: mismatchedNames,
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Check that the policy is accessible via the v3 API with the correct v3 API name.
 		Eventually(func() error {
@@ -270,7 +275,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		}
 
 		// Create the correct key.
-		bcli.Create(context.Background(), &model.KVPair{
+		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind:      v3.KindNetworkPolicy,
 				Name:      "mismatched", // Correct name.
@@ -278,9 +283,10 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			},
 			Value: mismatchedNames,
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Create the old mismatched key.
-		bcli.Create(context.Background(), &model.KVPair{
+		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind:      v3.KindNetworkPolicy,
 				Name:      "default.mismatched", // Old generated name format including tier.
@@ -288,6 +294,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 			},
 			Value: mismatchedNames,
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Check that the policy is accessible via the v3 API with the correct v3 API name.
 		Eventually(func() error {

@@ -143,18 +143,17 @@ func (c *policyMigrator) Run(stop chan struct{}) {
 }
 
 // run is the main loop for the controller, processing updates and status changes and triggering work.
-func (c *policyMigrator) run(stop chan struct{}) error {
+func (c *policyMigrator) run(stop chan struct{}) {
 	// Wait for calico-node rollout to complete before starting migration.
 	err := c.waitForCalicoNodeRollout()
 	if err != nil {
 		logrus.Errorf("Error waiting for calico-node rollout: %v", err)
-		return err
 	}
 
 	for {
 		select {
 		case <-stop:
-			return nil
+			return
 		case status := <-c.statusUpdates:
 			c.status = status
 			logrus.Infof("Syncer status updated: %s", status.String())
