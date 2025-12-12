@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"runtime"
 	"strconv"
@@ -478,7 +479,7 @@ kind: Config
 clusters:
 - name: local
   cluster:
-    server: __KUBERNETES_SERVICE_PROTOCOL__://[__KUBERNETES_SERVICE_HOST__]:__KUBERNETES_SERVICE_PORT__
+    server: __KUBERNETES_SERVICE_PROTOCOL__://__KUBERNETES_HOST_PORT__
     __TLS_CFG__
 users:
 - name: calico
@@ -502,8 +503,7 @@ current-context: calico-context`
 	}
 	data = strings.Replace(data, "TOKEN", tu.Token, 1)
 	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"))
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""))
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""))
+	data = strings.ReplaceAll(data, "__KUBERNETES_HOST_PORT__", net.JoinHostPort(getEnv("KUBERNETES_SERVICE_HOST", ""), getEnv("KUBERNETES_SERVICE_PORT", "")))
 
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 	if skipTLSVerify == "true" {
