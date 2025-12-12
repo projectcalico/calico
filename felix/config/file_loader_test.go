@@ -37,7 +37,7 @@ LogSeverityScreen=INFO
 LogSeveritySys=DEBUG`
 
 const confEmptyString = `[default]
-EndpointStatusPathPrefix=
+EndpointStatusPathPrefix=none
 `
 
 var _ = DescribeTable("File parameter parsing",
