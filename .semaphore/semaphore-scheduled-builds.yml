@@ -571,7 +571,7 @@ blocks:
           execution_time_limit:
             minutes: 20
           commands:
-            - make build image fv-prereqs
+            - make build image ut-bpf-prereqs fv-prereqs
             - ./.semaphore/cache-test-artifacts
         - name: "Felix: UT"
           priority:
@@ -1074,7 +1074,7 @@ blocks:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
             - '../.semaphore/vms/publish-reports "Node: KinD STs"'
-            - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
+            - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
   - name: pod2daemon
