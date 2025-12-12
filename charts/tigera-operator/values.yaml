@@ -51,7 +51,7 @@ installation:
     # Enable HostPorts (default: Enabled)
     hostPorts: "Enabled"
 
-    # Custom MTU (default: auto-detected based on node interface (1450))
+    # Default: auto-detected based on node interface (typically around 1450)
     # mtu: 1450
 
     ipPools:
@@ -61,6 +61,7 @@ installation:
         nodeSelector: "all()"
         blockSize: 26
 
+  # Number of replicas for Typha/Control Plane (default: 2)
   controlPlaneReplicas: 2
 
   controlPlaneNodeSelector: {}
