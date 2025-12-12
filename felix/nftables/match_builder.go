@@ -534,6 +534,17 @@ func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 	return m
 }
 
+func (m nftMatch) Limit(r, b uint32) generictables.MatchCriteria {
+	if r != 0 {
+		if b > 0 {
+			m.clauses = append(m.clauses, fmt.Sprintf("limit rate %d/minute burst %d", r, b))
+		} else {
+			m.clauses = append(m.clauses, fmt.Sprintf("limit rate %d/minute", r))
+		}
+	}
+	return m
+}
+
 func (m nftMatch) InInterfaceVMAP(name string) generictables.MatchCriteria {
 	m.clauses = append(m.clauses, fmt.Sprintf("iifname vmap @<LAYER>-%s", LegalizeSetName(name)))
 	return m
