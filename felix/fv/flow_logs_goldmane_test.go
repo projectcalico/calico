@@ -935,8 +935,7 @@ var _ = infrastructure.DatastoreDescribe("flow log with deleted service pod test
 
 			Eventually(checkNat, "10s", "1s").Should(BeTrue(), "Expected NAT to be programmed")
 
-			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
-				"egress", "GlobalNetworkPolicy ep1-1-allow-test-service")
+			bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "ep1-1-allow-test-service")
 		}
 
 		if !bpfEnabled {
