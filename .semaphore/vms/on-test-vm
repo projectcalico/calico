@@ -15,4 +15,9 @@
 #
 
 vm_ip=$(gcloud compute instances describe ${VM_NAME} --zone=${ZONE} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
-exec ssh "ubuntu@${vm_ip}" -n -A -o ServerAliveInterval=10 "$@"
+exec ssh "ubuntu@${vm_ip}" -n -A \
+  -o ServerAliveInterval=10 \
+  -o StrictHostKeyChecking=yes \
+  -o BatchMode=yes \
+  -o UpdateHostKeys=no \
+  "$@"
