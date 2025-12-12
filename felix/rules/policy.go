@@ -737,13 +737,15 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 
 	var kind, name, namespace string
 	switch v := id.(type) {
-	case types.PolicyID:
+	case *types.PolicyID:
 		kind = v.KindShortName()
 		name = v.Name
 		namespace = v.Namespace
-	case types.ProfileID:
+	case *types.ProfileID:
 		kind = "profile"
 		name = v.Name
+	default:
+		logrus.Warnf("Unrecognized resource type %T when generating log preix", id)
 	}
 
 	if len(namespace) != 0 {

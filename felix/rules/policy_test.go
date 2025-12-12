@@ -205,7 +205,7 @@ var filteredRuleTestData = []TableEntry{
 }
 
 var (
-	fooPolicyID = types.PolicyID{Name: "default.foo", Kind: v3.KindGlobalNetworkPolicy}
+	fooPolicyID = &types.PolicyID{Name: "default.foo", Kind: v3.KindGlobalNetworkPolicy}
 	defaultTier = "default"
 )
 
@@ -407,7 +407,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Should generate expected logPrefix for a Calico NetworkPolicy
-			cnpPolicyID := types.PolicyID{Name: "foo", Kind: v3.KindNetworkPolicy, Namespace: "app"}
+			cnpPolicyID := &types.PolicyID{Name: "foo", Kind: v3.KindNetworkPolicy, Namespace: "app"}
 			tier := "admin"
 			rrConfigPrefix.LogPrefix = "calico-packet %k:%p:%t"
 			renderer = NewRenderer(rrConfigPrefix)
@@ -421,7 +421,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Should generate expected logPrefix for a Profile
-			profileID := types.ProfileID{Name: "profile1"}
+			profileID := &types.ProfileID{Name: "profile1"}
 			rrConfigPrefix.LogPrefix = "calico-packet %p:%k:%%y%t"
 			renderer = NewRenderer(rrConfigPrefix)
 			tier = "" // Profiles are not related to any tier.
