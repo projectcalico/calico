@@ -15,19 +15,24 @@ package networkpolicy_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -272,15 +277,13 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create the old mismatched key.
-		mismatchedNames2 := mismatchedNames.DeepCopy()
-		mismatchedNames2.SetName("default.mismatched") // Old generated name format including tier.
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
 				Kind:      v3.KindNetworkPolicy,
 				Name:      "default.mismatched", // Old generated name format including tier.
 				Namespace: mismatchedNames.Namespace,
 			},
-			Value: mismatchedNames2,
+			Value: mismatchedNames,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -296,75 +299,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		// Check that the correct key is still present.
 		kvp := expectFound(bcli, "mismatched", mismatchedNames.Namespace, v3.KindNetworkPolicy)
 		Expect(kvp.Value.(*v3.NetworkPolicy).Name).To(Equal("mismatched"))
-	})
-})
-
-// Kubernetes CRD backend needs separate tests since the v1 API behavior is different. Instead, we'll
-// access the CRD API directly to create the old-style resources.
-var _ = Describe("policy name migration tests (kdd mode)", func() {
-	var (
-		etcd              *containers.Container
-		kubectrl          *containers.Container
-		apiserver         *containers.Container
-		cli               client.Interface
-		bcli              bapi.Client
-		k8sClient         *kubernetes.Clientset
-		controllerManager *containers.Container
-		err               error
-	)
-
-	// Define an interface to access the backend client from the Calico client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
-
-	BeforeEach(func() {
-		// Run etcd.
-		etcd = testutils.RunEtcd()
-
-		// Run apiserver.
-		apiserver = testutils.RunK8sApiserver(etcd.IP)
-		kubeconfig, cleanup := testutils.BuildKubeconfig(apiserver.IP)
-		defer cleanup()
-
-		// Run the controller.
-		mode := apiconfig.Kubernetes
-		kubectrl = testutils.RunKubeControllers(mode, etcd.IP, kubeconfig, "")
-
-		// Create clients for the test.
-		cli = testutils.GetCalicoClient(mode, etcd.IP, kubeconfig)
-		k8sClient, err = testutils.GetK8sClient(kubeconfig)
-		Expect(err).NotTo(HaveOccurred())
-		bcli = cli.(accessor).Backend()
-
-		// Wait for the apiserver to be available.
-		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
-			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
-
-		// Apply the necessary CRDs if we're running in k8s mode.
-		testutils.ApplyCRDs(apiserver)
-	})
-
-	AfterEach(func() {
-		_ = cli.Close()
-		controllerManager.Stop()
-		kubectrl.Stop()
-		apiserver.Stop()
-		etcd.Stop()
-	})
-
-	It("should update NetworkPolicy names correctly", func() {
-	})
-
-	It("sholuld update a GlobalNetworkPolicy name correctly", func() {
-	})
-
-	It("should update a StagedNetworkPolicy name correctly", func() {
-	})
-
-	It("should fix if both mismatched and correct keys exist", func() {
 	})
 })
 
@@ -398,3 +332,228 @@ func expectNotFound(bcli bapi.Client, name, ns, kind string) {
 		return fmt.Errorf("expected not to find old key for mismatched policy")
 	}, 5*time.Second, 1*time.Second).Should(BeNil())
 }
+
+// Kubernetes CRD backend needs separate tests since the v1 API behavior is different such that it does not allow us
+// to write objects with mismatched v3 and v1 names. Instead, we'll access the CRD API directly to create the mismatched
+// objects.
+var _ = Describe("policy name migration tests (kdd mode)", func() {
+	var (
+		etcd              *containers.Container
+		kubectrl          *containers.Container
+		apiserver         *containers.Container
+		k8sClient         *kubernetes.Clientset
+		crdClient         ctrlclient.Client
+		controllerManager *containers.Container
+		err               error
+	)
+
+	BeforeEach(func() {
+		// Run etcd.
+		etcd = testutils.RunEtcd()
+
+		// Run apiserver.
+		apiserver = testutils.RunK8sApiserver(etcd.IP)
+		kubeconfig, cleanup := testutils.BuildKubeconfig(apiserver.IP)
+		defer cleanup()
+
+		// Run the controller.
+		mode := apiconfig.Kubernetes
+		kubectrl = testutils.RunKubeControllers(mode, etcd.IP, kubeconfig, "")
+
+		// Create clients for the test.
+		k8sClient, err = testutils.GetK8sClient(kubeconfig)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Register Calico CRD types with the scheme.
+		scheme.AddCalicoResourcesToGlobalScheme()
+
+		// Create a client for interacting with CRDs directly.
+		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		Expect(err).NotTo(HaveOccurred())
+		crdClient, err = ctrlclient.New(config, ctrlclient.Options{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wait for the apiserver to be available.
+		Eventually(func() error {
+			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+			return err
+		}, 30*time.Second, 1*time.Second).Should(BeNil())
+
+		// Apply the necessary CRDs if we're running in k8s mode.
+		testutils.ApplyCRDs(apiserver)
+	})
+
+	AfterEach(func() {
+		controllerManager.Stop()
+		kubectrl.Stop()
+		apiserver.Stop()
+		etcd.Stop()
+	})
+
+	It("should update NetworkPolicy names correctly", func() {
+		// Create a CRD NetworkPolicy that was created without a tier prefix in the v3 API, but
+		// whose backend representation includes the tier prefix.
+		mismatchedNames := &v3.NetworkPolicy{}
+		mismatchedNames.Name = "default.mismatched"
+		mismatchedNames.Namespace = "default"
+		mismatchedNames.Spec = v3.NetworkPolicySpec{
+			Tier:     "default",
+			Selector: "all()",
+			Ingress:  []v3.Rule{{}},
+		}
+
+		// Set the annotation to indicate the v3 API name.
+		v3meta := &metav1.ObjectMeta{}
+		v3meta.Name = "mismatched" // Name was created without tier.
+		v3metaBytes, err := json.Marshal(v3meta)
+		Expect(err).NotTo(HaveOccurred())
+		mismatchedNames.Annotations = map[string]string{"projectcalico.org/metadata": string(v3metaBytes)}
+
+		err = crdClient.Create(context.Background(), mismatchedNames)
+		Expect(err).NotTo(HaveOccurred())
+
+		// We should see the CRD re-written with the correct name.
+		Eventually(func() error {
+			np := &v3.NetworkPolicy{}
+			err := crdClient.Get(context.Background(), ctrlclient.ObjectKey{
+				Namespace: "default",
+				Name:      "mismatched",
+			}, np)
+			return err
+		}, 5*time.Second, 1*time.Second).Should(BeNil(), "NetworkPolicy was not accessible via CRD API with correct name")
+
+		// Check that the old mismatched key is no longer present in the backend.
+		Eventually(func() error {
+			np := &v3.NetworkPolicy{}
+			err := crdClient.Get(context.Background(), ctrlclient.ObjectKey{
+				Namespace: "default",
+				Name:      "default.mismatched",
+			}, np)
+			if err != nil {
+				if kerrors.IsNotFound(err) {
+					return nil
+				}
+				return err
+			}
+			return fmt.Errorf("expected not to find old key for mismatched policy")
+		}, 5*time.Second, 1*time.Second).Should(BeNil(), "expected not to find old key for mismatched policy")
+	})
+
+	It("sholuld update a GlobalNetworkPolicy name correctly", func() {
+		// Same test, but for GNP.
+		mismatchedNames := &v3.GlobalNetworkPolicy{}
+		mismatchedNames.Name = "default.mismatched"
+		mismatchedNames.Spec = v3.GlobalNetworkPolicySpec{
+			Tier:     "default",
+			Selector: "all()",
+			Ingress:  []v3.Rule{{}},
+		}
+
+		// Set the annotation to indicate the v3 API name.
+		v3meta := &metav1.ObjectMeta{}
+		v3meta.Name = "mismatched" // Name was created without tier.
+		v3metaBytes, err := json.Marshal(v3meta)
+		Expect(err).NotTo(HaveOccurred())
+		mismatchedNames.Annotations = map[string]string{"projectcalico.org/metadata": string(v3metaBytes)}
+
+		err = crdClient.Create(context.Background(), mismatchedNames)
+		Expect(err).NotTo(HaveOccurred())
+
+		// We should see the CRD re-written with the correct name.
+		Eventually(func() error {
+			gnp := &v3.GlobalNetworkPolicy{}
+			err := crdClient.Get(context.Background(), ctrlclient.ObjectKey{
+				Name: "mismatched",
+			}, gnp)
+			return err
+		}, 5*time.Second, 1*time.Second).Should(BeNil(), "GlobalNetworkPolicy was not accessible via CRD API with correct name")
+	})
+
+	It("should update a StagedNetworkPolicy name correctly", func() {
+		// Same test, but for SNP.
+		mismatchedNames := &v3.StagedNetworkPolicy{}
+		mismatchedNames.Name = "default.mismatched"
+		mismatchedNames.Namespace = "default"
+		mismatchedNames.Spec = v3.StagedNetworkPolicySpec{
+			Tier:     "default",
+			Selector: "all()",
+			Ingress:  []v3.Rule{{}},
+		}
+
+		// Set the annotation to indicate the v3 API name.
+		v3meta := &metav1.ObjectMeta{}
+		v3meta.Name = "mismatched" // Name was created without tier.
+		v3metaBytes, err := json.Marshal(v3meta)
+		Expect(err).NotTo(HaveOccurred())
+		mismatchedNames.Annotations = map[string]string{"projectcalico.org/metadata": string(v3metaBytes)}
+
+		err = crdClient.Create(context.Background(), mismatchedNames)
+		Expect(err).NotTo(HaveOccurred())
+
+		// We should see the CRD re-written with the correct name.
+		Eventually(func() error {
+			snp := &v3.StagedNetworkPolicy{}
+			err := crdClient.Get(context.Background(), ctrlclient.ObjectKey{
+				Namespace: "default",
+				Name:      "mismatched",
+			}, snp)
+			return err
+		}, 5*time.Second, 1*time.Second).Should(BeNil(), "StagedNetworkPolicy was not accessible via CRD API with correct name")
+	})
+
+	It("should fix if both mismatched and correct keys exist", func() {
+		// Create two CRDs - one with the correct name and one with the old mismatched name.
+		matchingNames := &v3.NetworkPolicy{}
+		matchingNames.Name = "policy-name" // Correct name, i.e., "already migrated".
+		matchingNames.Namespace = "default"
+		matchingNames.Spec = v3.NetworkPolicySpec{
+			Tier:     "default",
+			Selector: "all()",
+			Ingress:  []v3.Rule{{}},
+		}
+		v3meta := &metav1.ObjectMeta{}
+		v3meta.Name = "policy-name" // Name matches underlying CRD.
+		v3metaBytes, err := json.Marshal(v3meta)
+		Expect(err).NotTo(HaveOccurred())
+		matchingNames.Annotations = map[string]string{"projectcalico.org/metadata": string(v3metaBytes)}
+
+		err = crdClient.Create(context.Background(), matchingNames)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create the same object, but this time with the old mismatched name in the CRD name.
+		mismatchedNames := &v3.NetworkPolicy{}
+		mismatchedNames.Name = "default.mismatched"
+		mismatchedNames.Namespace = "default"
+		mismatchedNames.Spec = matchingNames.Spec
+		mismatchedNames.Annotations = matchingNames.Annotations
+
+		err = crdClient.Create(context.Background(), mismatchedNames)
+		Expect(err).NotTo(HaveOccurred())
+
+		// We should see the incorrect CRD removed, leaving only the correctly named one.
+		Eventually(func() error {
+			np := &v3.NetworkPolicy{}
+			err := crdClient.Get(context.Background(), ctrlclient.ObjectKey{
+				Namespace: "default",
+				Name:      "default.mismatched",
+			}, np)
+			if err != nil {
+				if kerrors.IsNotFound(err) {
+					return nil
+				}
+				return err
+			}
+			return fmt.Errorf("expected not to find old key for mismatched policy")
+		}, 5*time.Second, 1*time.Second).Should(BeNil(), "expected not to find old key for mismatched policy")
+
+		// Check that the correct key is still present.
+		Eventually(func() error {
+			np := &v3.NetworkPolicy{}
+			err := crdClient.Get(context.Background(), ctrlclient.ObjectKey{
+				Namespace: "default",
+				Name:      "policy-name",
+			}, np)
+			return err
+		}, 5*time.Second, 1*time.Second).Should(BeNil(), "NetworkPolicy was not accessible via CRD API with correct name")
+	})
+})
