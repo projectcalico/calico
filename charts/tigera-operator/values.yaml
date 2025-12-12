@@ -29,37 +29,33 @@ installation:
   # Valid options: EKS, GKE, AKS, RKE2, OpenShift, DockerEnterprise, TKG, Kind.
   # If empty the operator will attempt to automatically determine the current provider.
   kubernetesProvider: ""
-  # Calico variant: "Calico" (default) or "TigeraSecureEnterprise"
-  variant: "Calico"
 
-  # --- CNI Configuration ---
   cni:
-    # "Calico" (default), "NonPrivileged", "AmazonVPC", "GKE", "AzureVNET", "HostLocal"
+    # "Calico" (default), "AmazonVPC", "GKE", "AzureVNET", "HostLocal"
     type: "Calico"
     ipam:
       # "Calico" (default), "HostLocal", "AmazonVPC", "AzureVNET"
       type: "Calico"
 
-  # --- Networking & Dataplane ---
-  calicoNetwork:
-    # "Enabled" (default) or "Disabled"
-    bgp: "Enabled"
-
-    # One of: Iptables, BPF, VPP, Nftables
-    linuxDataplane: "Iptables"
-
-    # Enable HostPorts (default: Enabled)
-    hostPorts: "Enabled"
-
-    # Default: auto-detected based on node interface (typically around 1450)
-    # mtu: 1450
-
-    ipPools:
-      - cidr: "192.168.0.0/16"
-        encapsulation: "IPIP" # IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None
-        natOutgoing: "Enabled"
-        nodeSelector: "all()"
-        blockSize: 26
+  # calicoNetwork:
+  #   # "Enabled" (default) or "Disabled"
+  #   bgp: "Enabled"
+  #
+  #   # One of: Iptables, BPF, VPP, Nftables
+  #   linuxDataplane: "Iptables"
+  #
+  #   # Enable HostPorts (default: Enabled)
+  #   hostPorts: "Enabled"
+  #
+  #   # Default: auto-detected based on node interface (typically around 1450)
+  #   mtu: 1450
+  #
+  #   ipPools:
+  #     - cidr: "192.168.0.0/16"
+  #       encapsulation: "IPIP" # IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None
+  #       natOutgoing: "Enabled"
+  #       nodeSelector: "all()"
+  #       blockSize: 26
 
   # Number of replicas for Typha/Control Plane (default: 2)
   controlPlaneReplicas: 2
