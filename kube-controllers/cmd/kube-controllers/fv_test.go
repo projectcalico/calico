@@ -66,7 +66,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
 
 		// Run the controller.
-		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
+		policyController = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
@@ -230,7 +230,7 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 
 		// Run the controller. We don't need to run any controllers for these tests, but
 		// we do need to run something, so just run the node controller.
-		kubectrls = testutils.RunPolicyController(apiconfig.Kubernetes, etcd.IP, kconfigfile.Name(), "node")
+		kubectrls = testutils.RunKubeControllers(apiconfig.Kubernetes, etcd.IP, kconfigfile.Name(), "node")
 	})
 
 	AfterEach(func() {
@@ -321,7 +321,7 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
 
 		// In KDD mode, we only support the node controller right now.
-		policyController = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		policyController = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
