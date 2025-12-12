@@ -26,7 +26,7 @@
         execution_time_limit:
           minutes: 20
         commands:
-          - make build image fv-prereqs
+          - make build image ut-bpf-prereqs fv-prereqs
           - ./.semaphore/cache-test-artifacts
       - name: "Felix: UT"
         priority:
