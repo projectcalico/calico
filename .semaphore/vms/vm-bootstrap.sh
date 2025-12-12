@@ -77,6 +77,13 @@ cat >> /tmp/daemon.json << EOF
 }
 EOF
 
+# The IPIP module is loaded on demand, but pre-loading it prevents flakes in
+# the first test that needs it.
+modprobe ipip
+
+# FIXME some tests rely on this
+sysctl -w net.ipv4.conf.all.rp_filter=2
+
 mv /tmp/daemon.json /etc/docker/daemon.json
 systemctl restart docker
 touch /var/run/startup-script-complete
