@@ -37,6 +37,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/pointer"
 	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
@@ -801,7 +802,37 @@ func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, options a
 			Operation:  "Watch",
 		}
 	}
+	if options.Revision == "0" {
+		// If the revision is 0, it means this watch is WatchList.
+		options.SendInitialEvents = pointer.Bool(true)
+		options.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
+	}
 	return client.Watch(ctx, l, options)
+}
+
+// ListAndWatch implements the list-and-watch pattern for Kubernetes resources.
+// This method handles k8s-specific logic including:
+// - CRD installation detection and retry logic
+// - Bookmark event handling
+// - WatchList support with fallback to List+Watch
+// - Error handling for k8s-specific errors (NotFound, ResourceExpired, etc.)
+// - Connection failure detection and recovery
+func (c *KubeClient) ListAndWatch(ctx context.Context, l model.ListInterface, handler api.EventHandler) error {
+	log.Debugf("Performing 'ListAndWatch' for %+v %v", l, reflect.TypeOf(l))
+
+	// Get the resource client
+	client := c.getResourceClientFromList(l)
+	if client == nil {
+		log.Debug("ListAndWatch operation not supported for this resource type")
+		return cerrors.ErrorOperationNotSupported{
+			Identifier: l,
+			Operation:  "ListAndWatch",
+		}
+	}
+
+	// Create a list-watcher that handles k8s-specific logic
+	lw := NewListWatcher(client, l, handler)
+	return lw.RunLoopWithBackend(ctx, lw)
 }
 
 func (c *KubeClient) getReadyStatus(ctx context.Context, k model.ReadyFlagKey, revision string) (*model.KVPair, error) {
