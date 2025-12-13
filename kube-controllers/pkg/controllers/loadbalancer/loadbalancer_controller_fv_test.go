@@ -17,7 +17,6 @@ package loadbalancer
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -160,19 +159,13 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := os.CreateTemp("", "ginkgo-loadbalancercontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
+		defer cancel()
 
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+		loadbalancercontroller = testutils.RunLoadBalancerController(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
-		loadbalancercontroller = testutils.RunLoadBalancerController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
-
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		var err error
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
