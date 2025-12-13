@@ -56,6 +56,7 @@ ls -ltr ./report
 mkdir -p /home/semaphore/fv.log
 cp setupfv.log /home/semaphore/fv.log/ || true
 cp ./report/*.log /home/semaphore/fv.log/ || true
+cp ./pod-logs/*.log /home/semaphore/fv.log/ || true
 
 # Print relevant snippets from logs
 log_regexps='(?<!Decode)Failure|SUCCESS|FV-TEST-START'
