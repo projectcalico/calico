@@ -81,22 +81,30 @@ int calico_tc_main(struct __sk_buff *skb)
 			/* If we are on vxlan and we do not have the key set, we cannot short-cirquit */
 			!(CALI_F_TUNNEL &&
 			 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
-		if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
-			/* This generates a bit more richer output for logging */
-			DECLARE_TC_CTX(_ctx,
-				.skb = skb,
-				.fwd = {
-					.res = TC_ACT_UNSPEC,
-					.reason = CALI_REASON_UNKNOWN,
-				},
-				.ipheader_len = IP_SIZE,
-			);
-			struct cali_tc_ctx *ctx = &_ctx;
+		/* This generates a bit more richer output for logging */
+		DECLARE_TC_CTX(_ctx,
+			.skb = skb,
+			.fwd = {
+				.res = TC_ACT_UNSPEC,
+				.reason = CALI_REASON_UNKNOWN,
+			},
+			.ipheader_len = IP_SIZE,
+		);
+		struct cali_tc_ctx *ctx = &_ctx;
 
-			CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
-			parse_packet_ip(ctx);
-			CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
+		CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
+		parse_packet_ip(ctx);
+#ifndef IPVER6
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+			deny_reason(ctx, CALI_REASON_SHORT);
+			CALI_DEBUG("Too short");
+			return TC_ACT_SHOT;
 		}
+		if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_first_frag(ip_hdr(ctx))) {
+			frags4_record_ct(ctx);
+		}
+#endif
+		CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
 		return TC_ACT_UNSPEC;
 	}
 
@@ -218,6 +226,11 @@ int calico_tc_main(struct __sk_buff *skb)
 		 * and forward it. forward_or_drop() will set the key.
 		 */
 		tc_state_fill_from_iphdr(ctx);
+#ifndef IPVER6
+		if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_first_frag(ip_hdr(ctx))) {
+			frags4_record_ct(ctx);
+		}
+#endif
 		goto allow;
 	}
 
