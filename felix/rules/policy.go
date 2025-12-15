@@ -722,7 +722,8 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 //
 //	%t - Tier name
 //	%k - Kind (short names like gnp for GlobalNetworkPolicies)
-//	%p - Policy or profile name:
+//	%n - Policy or profile name.
+//	%p - Policy or profile name including namespace:
 //	     - namespace/name for namespaced kinds.
 //	     - name for non namespaced kinds.
 func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) string {
@@ -742,18 +743,21 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 		name = v.Name
 		namespace = v.Namespace
 	case *types.ProfileID:
-		kind = "profile"
+		kind = "pro"
 		name = v.Name
 	default:
-		logrus.Warnf("Unrecognized resource type %T when generating log preix", id)
+		kind = "unknown"
+		name = "unknown"
 	}
 
+	namespacedName := name
 	if len(namespace) != 0 {
-		name = fmt.Sprintf("%s/%s", namespace, name)
+		namespacedName = fmt.Sprintf("%s/%s", namespace, name)
 	}
 
 	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
-	logPrefix = strings.ReplaceAll(logPrefix, "%p", name)
+	logPrefix = strings.ReplaceAll(logPrefix, "%p", namespacedName)
+	logPrefix = strings.ReplaceAll(logPrefix, "%n", name)
 	return strings.ReplaceAll(logPrefix, "%t", tier)
 }
 

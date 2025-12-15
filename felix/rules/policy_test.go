@@ -392,7 +392,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigNormal.FlowLogsEnabled = false
 			rrConfigPrefix := rrConfigNormal
-			rrConfigPrefix.LogPrefix = "foobar %t %k %p - %p %k %t"
+			rrConfigPrefix.LogPrefix = "foobar %t %k %p %n - %n %p %k %t"
 			renderer := NewRenderer(rrConfigPrefix)
 			logRule := in
 			logRule.Action = "log"
@@ -400,36 +400,37 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			logPrefix := fmt.Sprintf("foobar %s %s %s - %s %s %s",
-				defaultTier, fooPolicyID.KindShortName(), fooPolicyID.Name,
-				fooPolicyID.Name, fooPolicyID.KindShortName(), defaultTier,
+			logPrefix := fmt.Sprintf("foobar %s %s %s %s - %s %s %s %s",
+				defaultTier, fooPolicyID.KindShortName(), fooPolicyID.Name, fooPolicyID.Name,
+				fooPolicyID.Name, fooPolicyID.Name, fooPolicyID.KindShortName(), defaultTier,
 			)
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Should generate expected logPrefix for a Calico NetworkPolicy
 			cnpPolicyID := &types.PolicyID{Name: "foo", Kind: v3.KindNetworkPolicy, Namespace: "app"}
 			tier := "admin"
-			rrConfigPrefix.LogPrefix = "calico-packet %k:%p:%t"
+			rrConfigPrefix.LogPrefix = "calico-packet %k:%p:%t:%n"
 			renderer = NewRenderer(rrConfigPrefix)
 			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, cnpPolicyID, tier, false)
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			logPrefix = fmt.Sprintf("calico-packet %s:%s:%s",
-				cnpPolicyID.KindShortName(), fmt.Sprintf("%s/%s", cnpPolicyID.Namespace, cnpPolicyID.Name), tier,
+			logPrefix = fmt.Sprintf("calico-packet %s:%s:%s:%s",
+				cnpPolicyID.KindShortName(), fmt.Sprintf("%s/%s", cnpPolicyID.Namespace, cnpPolicyID.Name),
+				tier, cnpPolicyID.Name,
 			)
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 
 			// Should generate expected logPrefix for a Profile
 			profileID := &types.ProfileID{Name: "profile1"}
-			rrConfigPrefix.LogPrefix = "calico-packet %p:%k:%%y%t"
+			rrConfigPrefix.LogPrefix = "calico-packet %p:%k:%%y%t%%n"
 			renderer = NewRenderer(rrConfigPrefix)
 			tier = "" // Profiles are not related to any tier.
 			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, profileID, tier, false)
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			logPrefix = fmt.Sprintf("calico-packet %s:%s:%%%%y%s", profileID.Name, "profile", tier)
+			logPrefix = fmt.Sprintf("calico-packet %s:%s:%%%%y%s%%%s", profileID.Name, "pro", tier, "profile1")
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: logPrefix}))
 		},
 		ruleTestData...,
