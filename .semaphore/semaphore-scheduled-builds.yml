@@ -23,6 +23,8 @@ global_job_config:
       value: unique-caldron-775
     - name: GCS_BUILD_CACHE_BUCKET
       value: calico-transient-build-artifacts-europe-west3
+    - name: BUILDKIT_PROGRESS
+      value: plain
   prologue:
     commands:
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
@@ -221,23 +223,117 @@ blocks:
         - name: Check images availability
           commands:
             - make check-images-availability
-  - name: Prerequisites
+  - name: Check SemaphoreCI files
     run:
-      when: "true or change_in(['/'], {pipeline_file: 'track'})"
+      when: >-
+        true or
+        change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
     dependencies: []
     task:
+      jobs:
+        - name: Check semaphore files
+          commands:
+            - make gen-semaphore-yaml
+            - make check-dirty
+  - name: Check YAML files
+    run:
+      when: >-
+        true or
+        change_in(['/**/*.yml', '/**/*.yaml', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
+    dependencies: []
+    task:
+      jobs:
+        - name: Check YAML files
+          commands:
+            - make yaml-lint
+  - name: Check Go
+    run:
+      when: >-
+        true or
+        change_in(['go.mod', 'go.sum', '**/*.go', '**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+    dependencies: []
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "preflight-go-checks"
       agent:
         machine:
-          type: f1-standard-2
+          type: f1-standard-4
           os_image: ubuntu2204
       jobs:
-        - name: Pre-flight checks
-          priority:
-            # This job is on the critical path so we increase its priority.
-            - value: 51
-              when: "pull_request =~ '.+'"
+        - name: Check Go files
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
           commands:
-            - make ci-preflight-checks
+            - make check-go-mod
+            - make verify-go-mods
+            - make gen-deps-files
+            - make go-vet
+            - >-
+              if [ -n "$SEMAPHORE_GIT_PR_NUMBER" ]; then
+                make fix-changed
+              else
+                make fix-all
+              fi
+            - make check-dirty
+  - name: Check Python
+    run:
+      when: >-
+        true or
+        change_in(['networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+    dependencies: []
+    task:
+      jobs:
+        - name: Check Python files
+          commands:
+            - make -C networking-calico fmtpy
+            - make -C networking-calico flake8
+            - make check-dirty
+  - name: Check language/Dockerfiles
+    run:
+      when: >-
+        true or
+        change_in(['**/*'], {pipeline_file: 'track', exclude: ['libbpf', '.[a-z]*']})
+    dependencies: []
+    task:
+      jobs:
+        - name: Check language/Dockerfiles
+          commands:
+            # Both of these are very quick grep checks so we combine them into one job.
+            - make check-language
+            - make check-dockerfiles
+  - name: Check protobufs
+    run:
+      when: >-
+        true or
+        change_in(['**/*.pb.go', '**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+    dependencies: []
+    task:
+      jobs:
+        - name: Check protobufs
+          commands:
+            - make protobuf fix-changed
+            - make check-dirty
+  - name: Manifests and API docs
+    run:
+      when: >-
+        true or
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+    dependencies: []
+    task:
+      jobs:
+        - name: Check manifests and API docs
+          commands:
+            - make -C lib gen-files
+            - make -C api gen-files
+            - make -C libcalico-go gen-files
+            - make -C felix gen-files
+            - make -C goldmane gen-files
+            - make gen-manifests
+            - make fix-changed
+            - make check-ocp-no-crds
+            - make check-dirty
   - name: Store working copy
     run:
       when: "branch =~ '.*'"
@@ -253,6 +349,24 @@ blocks:
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
             - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+  - name: Prerequisites
+    skip:
+      # Always skip, this is a dummy job used to group prerequisite checks.
+      when: "true"
+    dependencies:
+      - Check SemaphoreCI files
+      - Check YAML files
+      - Check Go
+      - Check Python
+      - Check language/Dockerfiles
+      - Check protobufs
+      - Manifests and API docs
+      - Store working copy
+    task:
+      jobs:
+        - name: Pre-flight checks
+          commands:
+            - "true"
   - name: API
     run:
       when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -571,7 +685,7 @@ blocks:
           execution_time_limit:
             minutes: 20
           commands:
-            - make build image fv-prereqs
+            - make build image ut-bpf-prereqs fv-prereqs
             - ./.semaphore/cache-test-artifacts
         - name: "Felix: UT"
           priority:
@@ -706,7 +820,7 @@ blocks:
       jobs:
         - name: "Felix: iptables tests on Ubuntu 22.04"
           execution_time_limit:
-            minutes: 180
+            minutes: 60
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "22.04-ipt"
@@ -730,7 +844,7 @@ blocks:
       jobs:
         - name: "Felix: nftables tests on Ubuntu 22.04"
           execution_time_limit:
-            minutes: 180
+            minutes: 60
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "22.04-nft"
@@ -754,7 +868,7 @@ blocks:
       jobs:
         - name: "Felix: BPF tests on Ubuntu 24.04"
           execution_time_limit:
-            minutes: 180
+            minutes: 60
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "bpf-24.04-ipt-with-ut"
@@ -778,7 +892,7 @@ blocks:
       jobs:
         - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
           execution_time_limit:
-            minutes: 180
+            minutes: 60
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "bpf-22.04-nft-with-ut"
@@ -806,7 +920,7 @@ blocks:
       jobs:
         - name: "Felix: BPF program-loading check on 25.04"
           execution_time_limit:
-            minutes: 60
+            minutes: 30
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "bpf-25.04-nft-no-fv-with-ut"
@@ -833,7 +947,7 @@ blocks:
       jobs:
         - name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2"
           execution_time_limit:
-            minutes: 180
+            minutes: 60
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "bpf-25.04-nft-with-ut-jitharden"
@@ -1074,7 +1188,7 @@ blocks:
           commands:
             - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
             - '../.semaphore/vms/publish-reports "Node: KinD STs"'
-            - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
+            - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
   - name: pod2daemon
@@ -1248,7 +1362,7 @@ blocks:
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
             - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-            - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
+            - TEMPEST=true OPENSTACK_RELEASE=yoga ./devstack/bootstrap.sh
       epilogue:
         on_fail:
           commands:
@@ -1286,7 +1400,7 @@ blocks:
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
             - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-            - TEMPEST=true DEVSTACK_BRANCH=unmaintained/2024.1 ./devstack/bootstrap.sh
+            - TEMPEST=true OPENSTACK_RELEASE=caracal ./devstack/bootstrap.sh
       epilogue:
         always:
           commands:

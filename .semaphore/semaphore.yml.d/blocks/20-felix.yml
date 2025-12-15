@@ -26,7 +26,7 @@
         execution_time_limit:
           minutes: 20
         commands:
-          - make build image fv-prereqs
+          - make build image ut-bpf-prereqs fv-prereqs
           - ./.semaphore/cache-test-artifacts
       - name: "Felix: UT"
         priority:
@@ -161,7 +161,7 @@
     jobs:
       - name: "Felix: iptables tests on Ubuntu 22.04"
         execution_time_limit:
-          minutes: 180
+          minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
             value: "22.04-ipt"
@@ -185,7 +185,7 @@
     jobs:
       - name: "Felix: nftables tests on Ubuntu 22.04"
         execution_time_limit:
-          minutes: 180
+          minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
             value: "22.04-nft"
@@ -209,7 +209,7 @@
     jobs:
       - name: "Felix: BPF tests on Ubuntu 24.04"
         execution_time_limit:
-          minutes: 180
+          minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
             value: "bpf-24.04-ipt-with-ut"
@@ -233,7 +233,7 @@
     jobs:
       - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
         execution_time_limit:
-          minutes: 180
+          minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
             value: "bpf-22.04-nft-with-ut"
@@ -261,7 +261,7 @@
     jobs:
       - name: "Felix: BPF program-loading check on 25.04"
         execution_time_limit:
-          minutes: 60
+          minutes: 30
         env_vars:
           - name: FELIX_TEST_GROUP
             value: "bpf-25.04-nft-no-fv-with-ut"
@@ -288,7 +288,7 @@
     jobs:
       - name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2"
         execution_time_limit:
-          minutes: 180
+          minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
             value: "bpf-25.04-nft-with-ut-jitharden"
