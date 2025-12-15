@@ -525,7 +525,7 @@ func TestFilter(t *testing.T) {
 			check: func(flows []*proto.FlowResult) error {
 				for _, fl := range flows {
 					if fl.Flow.Key.Action != proto.Action_Deny {
-						return fmt.Errorf("Expected flow with Allow action")
+						return fmt.Errorf("Expected flow with Deny action")
 					}
 				}
 
@@ -577,7 +577,7 @@ func TestFilter(t *testing.T) {
 						}
 					}
 					if !hasPendingDeny {
-						return fmt.Errorf("Expected at least one pending policy with Allow action")
+						return fmt.Errorf("Expected at least one pending policy with Deny action")
 					}
 				}
 
