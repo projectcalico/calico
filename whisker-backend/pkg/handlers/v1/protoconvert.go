@@ -84,7 +84,9 @@ func toProtoFilter(filters whiskerv1.Filters) *proto.Filter {
 		Protocols:        toProtoStringMatches(filters.Protocols, nil),
 		DestPorts:        toProtoPorts(filters.DestPorts),
 		Actions:          filters.Actions.AsProtos(),
+		PendingActions:   filters.PendingActions.AsProtos(),
 		Policies:         toProtoPolicyMatch(filters.Policies),
+		Reporter:         filters.Reporter.AsProto(),
 	}
 }
 
