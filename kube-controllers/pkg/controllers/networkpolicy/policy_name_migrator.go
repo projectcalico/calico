@@ -16,7 +16,6 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	liberr "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -40,25 +39,7 @@ import (
 //  3. For each mismatched policy:
 //     a. Create a new policy entry in the datastore with the correct v3 name.
 //     b. Delete the old policy entry with the v1 name.
-//
-// This controller runs until all existing policies have been successfully migrated.
-func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli clientv3.Interface) controller.Controller {
-	// Kinds to register with on the syncer API.
-	resourceTypes := []watchersyncer.ResourceType{
-		{
-			ListInterface: model.ResourceListOptions{Kind: v3.KindNetworkPolicy},
-		},
-		{
-			ListInterface: model.ResourceListOptions{Kind: v3.KindGlobalNetworkPolicy},
-		},
-		{
-			ListInterface: model.ResourceListOptions{Kind: v3.KindStagedNetworkPolicy},
-		},
-		{
-			ListInterface: model.ResourceListOptions{Kind: v3.KindStagedGlobalNetworkPolicy},
-		},
-	}
-
+func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli clientv3.Interface, feed *utils.DataFeed) controller.Controller {
 	type accessor interface {
 		Backend() bapi.Client
 	}
@@ -78,12 +59,12 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 		doWork:        make(chan struct{}, 1),
 		pendingWork:   set.New[model.ResourceKey](),
 		kvps:          make(map[model.ResourceKey]*model.KVPair),
-		updates:       make(chan []bapi.Update, utils.BatchUpdateSize),
+		updates:       make(chan bapi.Update, utils.BatchUpdateSize),
 		statusUpdates: make(chan bapi.SyncStatus),
 		namespace:     string(namespace),
 		skipRollout:   os.Getenv("FV_TEST") == "true",
 	}
-	c.syncer = watchersyncer.New(cli.(accessor).Backend(), resourceTypes, c)
+	c.RegisterWith(feed)
 
 	return c
 }
@@ -102,7 +83,7 @@ type policyMigrator struct {
 
 	// Channels
 	doWork        chan struct{}
-	updates       chan []bapi.Update
+	updates       chan bapi.Update
 	statusUpdates chan bapi.SyncStatus
 
 	// Configuration.
@@ -112,12 +93,31 @@ type policyMigrator struct {
 	skipRollout bool
 }
 
-func (c *policyMigrator) OnStatusUpdated(status bapi.SyncStatus) {
+func (c *policyMigrator) RegisterWith(f *utils.DataFeed) {
+	// Register for updates for NetworkPolicy and GlobalNetworkPolicy.
+	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
+
+	// Register for sync status updates.
+	f.RegisterForSyncStatus(c.onStatusUpdate)
+}
+
+func (c *policyMigrator) onStatusUpdate(status bapi.SyncStatus) {
 	c.statusUpdates <- status
 }
 
-func (c *policyMigrator) OnUpdates(updates []bapi.Update) {
-	c.updates <- updates
+func (c *policyMigrator) onUpdate(update bapi.Update) {
+	switch update.Key.(type) {
+	case model.ResourceKey:
+		switch update.KVPair.Key.(model.ResourceKey).Kind {
+		case v3.KindNetworkPolicy,
+			v3.KindGlobalNetworkPolicy,
+			v3.KindStagedNetworkPolicy,
+			v3.KindStagedGlobalNetworkPolicy:
+			// We care about these kinds.
+			// Send the update to the processing channel.
+			c.updates <- update
+		}
+	}
 }
 
 func (c *policyMigrator) kick() {
@@ -162,6 +162,10 @@ func (c *policyMigrator) run(stop chan struct{}) {
 			logEntry := logrus.WithFields(logrus.Fields{"controller": "PolicyMigrator"})
 			utils.ProcessBatch(c.updates, updates, c.processUpdates, logEntry)
 			c.kick()
+		case <-time.After(5 * time.Minute):
+			// Periodic kick to reprocess pending work. This handles any missed updates or transient errors.
+			// Ideally, we'd requeue errors immediately, but this is a safety net.
+			c.kick()
 		case <-c.doWork:
 			err := c.processPendingWork()
 			if err != nil {
@@ -172,39 +176,37 @@ func (c *policyMigrator) run(stop chan struct{}) {
 }
 
 // processUpdates processes incoming updates from the syncer and updates internal state.
-func (c *policyMigrator) processUpdates(updates []bapi.Update) {
+func (c *policyMigrator) processUpdates(update bapi.Update) {
 	// Store updates.
-	for _, update := range updates {
-		kvp := update.KVPair
-		key, ok := kvp.Key.(model.ResourceKey)
-		if !ok {
-			logrus.Errorf("Received unexpected key type: %T", kvp.Key)
-			continue
-		}
+	kvp := update.KVPair
+	key, ok := kvp.Key.(model.ResourceKey)
+	if !ok {
+		logrus.Errorf("Received unexpected key type: %T", kvp.Key)
+		return
+	}
 
-		logCtx := logrus.WithFields(logrus.Fields{
-			"key":  key,
-			"type": update.UpdateType.String(),
-		})
-		logCtx.Debug("Received policy update")
+	logCtx := logrus.WithFields(logrus.Fields{
+		"key":  key,
+		"type": update.UpdateType.String(),
+	})
+	logCtx.Debug("Received policy update")
 
-		if kvp.Value == nil {
-			// Deletion - remove from state.
-			delete(c.kvps, kvp.Key.(model.ResourceKey))
-			c.pendingWork.Discard(key)
-		} else {
-			// Addition or update - store in state.
-			c.kvps[key] = &kvp
+	if kvp.Value == nil {
+		// Deletion - remove from state.
+		delete(c.kvps, kvp.Key.(model.ResourceKey))
+		c.pendingWork.Discard(key)
+	} else {
+		// Addition or update - store in state.
+		c.kvps[key] = &kvp
 
-			// If the policy needs migration, add to pending work.
-			if p, ok := kvp.Value.(client.Object); ok {
-				if needsMigration(p, key) {
-					logCtx.Debug("Stored policy for potential migration check")
-					c.pendingWork.Add(key)
-				} else {
-					logCtx.Debug("Policy does not need migration, skipping")
-					c.pendingWork.Discard(key)
-				}
+		// If the policy needs migration, add to pending work.
+		if p, ok := kvp.Value.(client.Object); ok {
+			if needsMigration(p, key) {
+				logCtx.Debug("Stored policy for potential migration check")
+				c.pendingWork.Add(key)
+			} else {
+				logCtx.Debug("Policy does not need migration, skipping")
+				c.pendingWork.Discard(key)
 			}
 		}
 	}
@@ -235,6 +237,7 @@ func (c *policyMigrator) processPendingWork() error {
 		// object name. If they differ, we need to correct the underlying datastore entry to align with the v3 naming.
 		if !needsMigration(p, k) {
 			logCtx.Debug("No migration needed")
+			c.pendingWork.Discard(key)
 			continue
 		}
 

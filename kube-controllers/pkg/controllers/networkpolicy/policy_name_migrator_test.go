@@ -177,7 +177,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		Expect(kvp.Value.(*v3.NetworkPolicy).Name).To(Equal(matchingNoPrefix.Name))
 	})
 
-	It("sholuld update a GlobalNetworkPolicy name correctly", func() {
+	It("should update a GlobalNetworkPolicy name correctly", func() {
 		var err error
 
 		// Create a GlobalNetworkPolicy that was created without a tier prefix in the v3 API, but
@@ -249,6 +249,42 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 
 		// Check that the old mismatched key is no longer present in the backend.
 		expectNotFound(bcli, "default.mismatched", mismatchedNames.Namespace, v3.KindStagedNetworkPolicy)
+	})
+
+	It("should update a StagedGlobalNetworkPolicy name correctly", func() {
+		var err error
+
+		// Create a StagedGlobalNetworkPolicy that was created without a tier prefix in the v3 API, but
+		// whose backend representation includes the tier prefix.
+		mismatchedNames := v3.NewStagedGlobalNetworkPolicy()
+		mismatchedNames.Name = "mismatched"
+		mismatchedNames.Spec = v3.StagedGlobalNetworkPolicySpec{
+			Tier:     "default",
+			Selector: "all()",
+			Ingress:  []v3.Rule{{}},
+		}
+		_, err = bcli.Create(context.Background(), &model.KVPair{
+			Key: model.ResourceKey{
+				Kind: v3.KindStagedGlobalNetworkPolicy,
+				Name: "default.mismatched", // Old generated name format including tier.
+			},
+			Value: mismatchedNames,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check that the policy is accessible via the v3 API with the correct v3 API name.
+		Eventually(func() error {
+			_, err = cli.StagedGlobalNetworkPolicies().Get(context.Background(), mismatchedNames.Name, options.GetOptions{})
+			return err
+		}, 5*time.Second, 1*time.Second).Should(BeNil(), "StagedGlobalNetworkPolicy was not accessible via v3 API: %s", mismatchedNames.Name)
+
+		// Check that the v1 backend representation for the mismatched policy has been updated to match
+		// the v3 API name.
+		kvp := expectFound(bcli, "mismatched", "", v3.KindStagedGlobalNetworkPolicy)
+		Expect(kvp.Value.(*v3.StagedGlobalNetworkPolicy).Name).To(Equal("mismatched"))
+
+		// Check that the old mismatched key is no longer present in the backend.
+		expectNotFound(bcli, "default.mismatched", "", v3.KindStagedGlobalNetworkPolicy)
 	})
 
 	It("should fix if both mismatched and correct keys exist", func() {
@@ -439,7 +475,7 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		}, 5*time.Second, 1*time.Second).Should(BeNil(), "expected not to find old key for mismatched policy")
 	})
 
-	It("sholuld update a GlobalNetworkPolicy name correctly", func() {
+	It("should update a GlobalNetworkPolicy name correctly", func() {
 		// Same test, but for GNP.
 		mismatchedNames := &v3.GlobalNetworkPolicy{}
 		mismatchedNames.Name = "default.mismatched"
@@ -499,6 +535,36 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 			}, snp)
 			return err
 		}, 5*time.Second, 1*time.Second).Should(BeNil(), "StagedNetworkPolicy was not accessible via CRD API with correct name")
+	})
+
+	It("should update a StagedGlobalNetworkPolicy name correctly", func() {
+		// Same test, but for SGNP.
+		mismatchedNames := &v3.StagedGlobalNetworkPolicy{}
+		mismatchedNames.Name = "default.mismatched"
+		mismatchedNames.Spec = v3.StagedGlobalNetworkPolicySpec{
+			Tier:     "default",
+			Selector: "all()",
+			Ingress:  []v3.Rule{{}},
+		}
+
+		// Set the annotation to indicate the v3 API name.
+		v3meta := &metav1.ObjectMeta{}
+		v3meta.Name = "mismatched" // Name was created without tier.
+		v3metaBytes, err := json.Marshal(v3meta)
+		Expect(err).NotTo(HaveOccurred())
+		mismatchedNames.Annotations = map[string]string{"projectcalico.org/metadata": string(v3metaBytes)}
+
+		err = crdClient.Create(context.Background(), mismatchedNames)
+		Expect(err).NotTo(HaveOccurred())
+
+		// We should see the CRD re-written with the correct name.
+		Eventually(func() error {
+			sgnp := &v3.StagedGlobalNetworkPolicy{}
+			err := crdClient.Get(context.Background(), ctrlclient.ObjectKey{
+				Name: "mismatched",
+			}, sgnp)
+			return err
+		}, 5*time.Second, 1*time.Second).Should(BeNil(), "StagedGlobalNetworkPolicy was not accessible via CRD API with correct name")
 	})
 
 	It("should fix if both mismatched and correct keys exist", func() {
