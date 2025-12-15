@@ -320,7 +320,13 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
 	IptablesFilterDenyAction string `json:"iptablesFilterDenyAction,omitempty" validate:"omitempty,dropReject"`
 
-	// LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]
+	// LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers
+	// to include extra information in the log prefix.
+	// - %t: Tier name.
+	// - %k: Kind (short names).
+	// - %n: Policy or profile name.
+	// - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
+	// [Default: calico-packet]
 	LogPrefix string `json:"logPrefix,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
