@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
@@ -667,7 +668,6 @@ func TestFilter(t *testing.T) {
 				fl.Key.DestName = fmt.Sprintf("dest-%d", i)
 				fl.Key.DestNamespace = fmt.Sprintf("dest-ns-%d", i)
 				fl.Key.Proto = "tcp"
-				fl.Key.DestPort = int64(i)
 				fl.Key.DestPort = int64(i)
 				fl.Key.Reporter = proto.Reporter_Src
 				fl.Key.Action = proto.Action_Allow

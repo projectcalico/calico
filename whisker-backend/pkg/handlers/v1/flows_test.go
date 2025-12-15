@@ -16,7 +16,6 @@ package v1_test
 
 import (
 	"context"
-	"github.com/projectcalico/calico/lib/std/ptr"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -31,6 +30,7 @@ import (
 	protomock "github.com/projectcalico/calico/goldmane/proto/mocks"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
+	"github.com/projectcalico/calico/lib/std/ptr"
 	"github.com/projectcalico/calico/lib/std/time"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	hdlrv1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
