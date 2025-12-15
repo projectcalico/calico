@@ -53,11 +53,16 @@ sudo pip list || true
 #     For a single node Calico/DevStack cluster, the environment should leave
 #     SERVICE_HOST unset.
 #
+# OPENSTACK_RELEASE
+#
+#     The OpenStack release to test with, e.g. "yoga" or "caracal".  This is
+#     used to calculate the value of DEVSTACK_BRANCH when not already set.
+#
 # DEVSTACK_BRANCH
 #
-#     By default this script uses the master branch of devstack.  To use a
-#     different branch, set the DEVSTACK_BRANCH environment variable before
-#     running this script; for example:
+#     By default this script uses the appropriate DevStack branch for
+#     OPENSTACK_RELEASE.  To use a different branch, set the DEVSTACK_BRANCH
+#     environment variable before running this script; for example:
 #
 #         export DEVSTACK_BRANCH=stable/liberty
 #
@@ -80,27 +85,18 @@ sudo pip list || true
 #
 # ------------------------------------------------------------------------------
 
-# Handle branch name transition from "stable/yoga" to "unmaintained/yoga".  The DevStack repo
-# internally still uses "stable/yoga" for all its defaults even though all the actual branch names
-# have changed to "unmaintained/yoga".
-if [ "${DEVSTACK_BRANCH}" = unmaintained/yoga ]; then
-    export CINDER_BRANCH=unmaintained/yoga
-    export GLANCE_BRANCH=unmaintained/yoga
-    export KEYSTONE_BRANCH=unmaintained/yoga
-    export NEUTRON_BRANCH=unmaintained/yoga
-    export NOVA_BRANCH=unmaintained/yoga
-    export PLACEMENT_BRANCH=unmaintained/yoga
-    export REQUIREMENTS_BRANCH=unmaintained/yoga
+if [ -z "${DEVSTACK_BRANCH}" ]; then
+    DEVSTACK_BRANCH=$(./infer-openstack-branch.sh ${OPENSTACK_RELEASE} devstack)
 fi
 
 # Set correct constraints for Tempest to use.  We need to do this because we're pinning to a
 # different version of Tempest than the version that DevStack would naturally use.
 case "${DEVSTACK_BRANCH}" in
-    unmaintained/yoga )
+    */yoga )
         export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
         ;;
-    unmaintained/2024.1 )             # Caracal
-        export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/unmaintained/2024.1/upper-constraints.txt
+    * )
+        export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/${DEVSTACK_BRANCH}/upper-constraints.txt
         ;;
 esac
 
