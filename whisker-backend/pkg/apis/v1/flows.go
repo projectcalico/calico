@@ -102,6 +102,7 @@ const (
 )
 
 type Actions []Action
+type PendingActions []Action
 
 func (p Action) String() string                { return proto.Action(p).String() }
 func (p Action) MarshalJSON() ([]byte, error)  { return marshalToBytes(p) }
@@ -109,6 +110,14 @@ func (p *Action) UnmarshalJSON(b []byte) error { return unmarshalProtoEnum(&p, b
 func (p Action) AsProto() proto.Action         { return proto.Action(p) }
 
 func (a Actions) AsProtos() []proto.Action {
+	var protos []proto.Action
+	for _, a1 := range a {
+		protos = append(protos, a1.AsProto())
+	}
+	return protos
+}
+
+func (a PendingActions) AsProtos() []proto.Action {
 	var protos []proto.Action
 	for _, a1 := range a {
 		protos = append(protos, a1.AsProto())
@@ -149,6 +158,11 @@ func (p *MatchType) UnmarshalJSON(b []byte) error {
 func (p MatchType) AsProto() proto.MatchType { return proto.MatchType(p) }
 
 type Reporter proto.Reporter
+
+const (
+	ReporterSrc = Reporter(proto.Reporter_Src)
+	ReporterDst = Reporter(proto.Reporter_Dst)
+)
 
 func (p Reporter) String() string               { return proto.Reporter(p).String() }
 func (p Reporter) MarshalJSON() ([]byte, error) { return marshalToBytes(p) }
@@ -223,7 +237,9 @@ type Filters struct {
 	Protocols        FilterMatches[string] `json:"protocols,omitempty"`
 	DestPorts        FilterMatches[int64]  `json:"dest_ports,omitempty"`
 	Actions          Actions               `json:"actions,omitempty"`
+	PendingActions   PendingActions        `json:"pending_actions,omitempty"`
 	Policies         []PolicyMatch         `json:"policies,omitempty"`
+	Reporter         Reporter              `json:"reporter,omitempty"`
 }
 
 type PolicyMatch struct {
