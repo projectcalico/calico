@@ -152,7 +152,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			Skip("Skipping for BPF dataplane.")
 		}
 
-		detecIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
+		detectIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
 			binary := "iptables-save"
 			if ipVersion == 6 {
 				binary = "ip6tables-save"
@@ -192,8 +192,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			detectNftablesRule(tc.Felixes[0], 4)
 			detectNftablesRule(tc.Felixes[0], 6)
 		} else {
-			detecIptablesRule(tc.Felixes[0], 4)
-			detecIptablesRule(tc.Felixes[0], 6)
+			detectIptablesRule(tc.Felixes[0], 4)
+			detectIptablesRule(tc.Felixes[0], 6)
 		}
 	})
 
