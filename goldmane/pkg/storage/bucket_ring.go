@@ -190,6 +190,8 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 		policyTrace := types.FlowLogPolicyToProto(key.Policies())
 		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
 			for _, p := range policyList {
+				// Skip Profiles in hints, as these aren't a real kind in Kubernetes clusters - these are
+				// logically equivalent to "default allow" or "no policies matched".
 				if p.Kind == proto.PolicyKind_Profile {
 					continue
 				}

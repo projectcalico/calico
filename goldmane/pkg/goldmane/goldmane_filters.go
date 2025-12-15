@@ -16,9 +16,11 @@ package goldmane
 
 import (
 	"fmt"
+
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/sirupsen/logrus"
 )
 
 // listRequest is an internal helper used to synchronously request matching flows from the aggregator.

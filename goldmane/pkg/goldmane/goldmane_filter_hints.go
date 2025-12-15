@@ -15,8 +15,9 @@
 package goldmane
 
 import (
-	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 // filterHintsRequest is an internal helper used to synchronously request filter hints from the aggregator.

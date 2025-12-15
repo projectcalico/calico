@@ -203,7 +203,7 @@ message Filter {
   // Policies matches on policy fields. Combined using logical OR.
   repeated PolicyMatch policies = 8;
 
-  // Reporter filters on the reporter field. Combined using logical OR.
+  // Reporter filters on the reporter field.
   Reporter reporter = 9;
 
   // Pending/Staged Actions filters on the action field. Combined using logical OR.
