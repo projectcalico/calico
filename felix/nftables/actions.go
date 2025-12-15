@@ -263,7 +263,7 @@ type LogAction struct {
 }
 
 func (g LogAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf(`log prefix %s level info`, g.Prefix)
+	return fmt.Sprintf(`log prefix "%s " level info`, g.Prefix)
 }
 
 func (g LogAction) String() string {
