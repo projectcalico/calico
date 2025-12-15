@@ -250,7 +250,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['go.mod', 'go.sum', '**/*.go', '**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['go.mod', 'go.sum', '/**/*.go', '**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       env_vars:
