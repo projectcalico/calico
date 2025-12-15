@@ -71,7 +71,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		// Explicitly configure the MTU.
 		felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
 		felixConfig.Name = "default"
-		felixConfig.Spec.LogPrefix = "randome log prefix 123"
+		felixConfig.Spec.LogPrefix = "random prefix prefix 987"
 		_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -92,7 +92,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		Expect(err).NotTo(HaveOccurred())
 
 		expectedPattern := felixConfig.Spec.LogPrefix
-		detecIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
+		detectIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
 			binary := "iptables-save"
 			if ipVersion == 6 {
 				binary = "ip6tables-save"
@@ -122,8 +122,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 			detectNftablesRule(tc.Felixes[0], 4)
 			detectNftablesRule(tc.Felixes[0], 6)
 		} else {
-			detecIptablesRule(tc.Felixes[0], 4)
-			detecIptablesRule(tc.Felixes[0], 6)
+			detectIptablesRule(tc.Felixes[0], 4)
+			detectIptablesRule(tc.Felixes[0], 6)
 		}
 	})
 })
