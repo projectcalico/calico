@@ -545,6 +545,7 @@ func (f *Felix) FlowLogsFromLocalSocket() ([]flowlog.FlowLog, error) {
 	if len(flows) == 0 {
 		return nil, fmt.Errorf("no flow log received yet")
 	}
+
 	var flogs []flowlog.FlowLog
 	for _, f := range flows {
 		flogs = append(flogs, goldmane.ConvertGoldmaneToFlowlog(types.FlowToProto(f)))
@@ -664,7 +665,7 @@ func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress stri
 
 func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string, family int) (contiguous, total int) {
 	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress, family)
-	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
+	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx, ingressOrEgress)
 }
 
 func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string, family int) int {
@@ -684,20 +685,25 @@ func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string, family
 	return entryPointIdx
 }
 
-func (f *Felix) BPFNumPolProgramsTotalByEntryPointFn(entryPointIdx int) func() (total int) {
+func (f *Felix) BPFNumPolProgramsTotalByEntryPointFn(entryPointIdx int, ingressOrEgress string) func() (total int) {
 	return func() (total int) {
-		_, total = f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
+		_, total = f.BPFNumPolProgramsByEntryPoint(entryPointIdx, ingressOrEgress)
 		return
 	}
 }
 
-func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int) (contiguous, total int) {
+func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int, ingressOrEgress string) (contiguous, total int) {
 	gapSeen := false
+	jmpMapName := jump.EgressMapParameters.VersionedName()
+	if ingressOrEgress == "egress" {
+		jmpMapName = jump.IngressMapParameters.VersionedName()
+	}
+	pinnedMap := "/sys/fs/bpf/tc/globals/" + jmpMapName
 	for i := 0; i < jump.MaxSubPrograms; i++ {
 		k := polprog.SubProgramJumpIdx(entryPointIdx, i, jump.TCMaxEntryPoints)
 		out, err := f.ExecOutput(
 			"bpftool", "map", "lookup",
-			"pinned", "/sys/fs/bpf/tc/globals/cali_jump3",
+			"pinned", pinnedMap,
 			"key",
 			fmt.Sprintf("%d", k&0xff),
 			fmt.Sprintf("%d", (k>>8)&0xff),

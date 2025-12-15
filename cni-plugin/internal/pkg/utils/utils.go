@@ -27,12 +27,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/DeRuina/timberjack"
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
@@ -202,8 +202,10 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cni
 // and is the logical counterpart to AddIPAM.
 func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
 	logger.Info("Calico CNI releasing IP address")
-	logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
-		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
+	logger.WithFields(logrus.Fields{
+		"paths": os.Getenv("CNI_PATH"),
+		"type":  conf.IPAM.Type,
+	}).Debug("Looking for IPAM plugin in paths")
 
 	var ae *azure.AzureEndpoint
 	switch conf.IPAM.Type {
@@ -219,8 +221,10 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 			return err
 		}
 
-		logger.WithFields(logrus.Fields{"podCidrv4": dummyPodCidrv4,
-			"podCidrv6": dummyPodCidrv6}).Info("Using dummy podCidrs to release the IPs")
+		logger.WithFields(logrus.Fields{
+			"podCidrv4": dummyPodCidrv4,
+			"podCidrv6": dummyPodCidrv6,
+		}).Info("Using dummy podCidrs to release the IPs")
 		getDummyPodCIDR := func() (string, string, error) {
 			return dummyPodCidrv4, dummyPodCidrv6, nil
 		}
@@ -413,7 +417,6 @@ func UpdateHostLocalIPAMDataForWindows(subnet string, ipamData map[string]interf
 }
 
 func getIPRanges(ip net.IP, ipnet *net.IPNet) (string, string) {
-
 	ip = ip.To4()
 	// Mask the address
 	ip.Mask(ipnet.Mask)
@@ -442,7 +445,6 @@ func validateStartRange(startRange net.IP, expStartRange net.IP) (net.IP, error)
 		return expStartRange, nil
 	}
 	return startRange, nil
-
 }
 
 func validateEndRange(endRange net.IP, expEndRange net.IP) (net.IP, error) {
@@ -485,7 +487,6 @@ func validateRangeOrSetDefault(rangeData string, expRange string, ipnet *net.IPN
 	}
 	// return default range
 	return expRangeIP.String(), nil
-
 }
 
 // ValidateNetworkName checks that the network name meets felix's expectations
@@ -748,17 +749,19 @@ func ConfigureLogging(conf types.NetConf) {
 	// Set the log output to write to a log file if specified.
 	if conf.LogFilePath != "" {
 		// Create the path for the log file if it does not exist
-		err := os.MkdirAll(filepath.Dir(conf.LogFilePath), 0755)
+		err := os.MkdirAll(filepath.Dir(conf.LogFilePath), 0o755)
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(conf.LogFilePath))
 		}
 
 		// Create file logger with log file rotation.
-		fileLogger := &lumberjack.Logger{
-			Filename:   conf.LogFilePath,
-			MaxSize:    100,
-			MaxAge:     30,
-			MaxBackups: 10,
+		fileLogger := &timberjack.Logger{
+			Filename:    conf.LogFilePath,
+			FileMode:    0o644,
+			Compression: "zstd",
+			MaxSize:     100,
+			MaxAge:      30,
+			MaxBackups:  10,
 		}
 
 		// Set the max size if exists. Defaults to 100 MB.

@@ -50,6 +50,10 @@ func (key BGPNodeKey) valueType() (reflect.Type, error) {
 	return typeBGPNode, nil
 }
 
+func (key BGPNodeKey) parseValue(data []byte) (any, error) {
+	return parseJSONPointer[BGPNode](key, data)
+}
+
 func (key BGPNodeKey) String() string {
 	return fmt.Sprintf("BGPNodeKey(host=%s)", key.Host)
 }

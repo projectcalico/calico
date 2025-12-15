@@ -940,7 +940,7 @@ func (t *NftablesTable) applyUpdates() error {
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
 	// Writing a forward reference ensures that the chain exists and that it is empty.
-	t.dirtyChains.Iter(func(chainName string) error {
+	for chainName := range t.dirtyChains.All() {
 		t.logCxt.WithField("chainName", chainName).Debug("Checking dirty chain")
 		if _, present := t.desiredStateOfChain(chainName); !present {
 			// About to delete this chain, flush it first to sever dependencies.
@@ -955,12 +955,11 @@ func (t *NftablesTable) applyUpdates() error {
 			}).Debug("Adding chain")
 			tx.Add(&knftables.Chain{Name: chainName})
 		}
-		return nil
-	})
+	}
 
 	// Make a second pass over the dirty chains.  This time, we write out the rule changes.
 	newHashes := map[string][]string{}
-	t.dirtyChains.Iter(func(chainName string) error {
+	for chainName := range t.dirtyChains.All() {
 		if chain, ok := t.desiredStateOfChain(chainName); ok {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
@@ -1017,8 +1016,7 @@ func (t *NftablesTable) applyUpdates() error {
 				}
 			}
 		}
-		return nil // Delay clearing the set until we've programmed nftables.
-	})
+	}
 
 	// Make a copy of our full rules map and keep track of all changes made while processing dirtyBaseChains.
 	// When we've successfully updated nftables, we'll update our cache of chainToFullRules with this map.
@@ -1029,7 +1027,7 @@ func (t *NftablesTable) applyUpdates() error {
 	}
 
 	// Now calculate nftables updates for our inserted and appended rules, which are used to hook top-level chains.
-	t.dirtyBaseChains.Iter(func(chainName string) error {
+	for chainName := range t.dirtyBaseChains.All() {
 		previousHashes := t.chainToDataplaneHashes[chainName]
 		newRules := newChainToFullRules[chainName]
 
@@ -1038,7 +1036,7 @@ func (t *NftablesTable) applyUpdates() error {
 
 		if reflect.DeepEqual(newChainHashes, previousHashes) {
 			// Chain is in sync, skip to next one.
-			return nil
+			continue
 		}
 
 		// For simplicity, if we've discovered that we're out-of-sync, remove all our
@@ -1075,9 +1073,8 @@ func (t *NftablesTable) applyUpdates() error {
 
 		newHashes[chainName] = newChainHashes
 		newChainToFullRules[chainName] = newRules
-
-		return nil // Delay clearing the set until we've programmed nftables.
-	})
+		// We don't delete the items from the set until after programming succeeds.
+	}
 
 	// Now that chains + rules are added, we can add map elements. We do this afterwards in case
 	// they reference chains that we've just added.
@@ -1088,7 +1085,7 @@ func (t *NftablesTable) applyUpdates() error {
 	// Do deletions at the end.  This ensures that we don't try to delete any chains that
 	// are still referenced (because we'll have removed the references in the modify pass
 	// above).
-	t.dirtyChains.Iter(func(chainName string) error {
+	for chainName := range t.dirtyChains.All() {
 		if _, ok := t.desiredStateOfChain(chainName); !ok {
 			// Chain deletion
 			t.logCxt.WithFields(logrus.Fields{
@@ -1097,8 +1094,7 @@ func (t *NftablesTable) applyUpdates() error {
 			tx.Delete(&knftables.Chain{Name: chainName})
 			newHashes[chainName] = nil
 		}
-		return nil // Delay clearing the set until we've programmed nftables.
-	})
+	}
 
 	// Delete any maps that may have been referenced by rules above.
 	for _, m := range mapUpdates.MapsToDelete {

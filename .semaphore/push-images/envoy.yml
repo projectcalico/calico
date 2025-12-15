@@ -26,7 +26,7 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
 
 blocks:
-  - name: Publish envoy images
+  - name: Publish envoy images and multi-arch manifests
     dependencies: []
     skip:
       when: "branch !~ '.+'"
@@ -34,18 +34,6 @@ blocks:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-gateway   cd CONFIRM=true; fi
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-proxy     cd CONFIRM=true; fi
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-ratelimit cd CONFIRM=true; fi
-  - name: Publish envoy multi-arch manifests
-    dependencies:
-      - Publish envoy images
-    skip:
-      when: "branch !~ '.+'"
-    task:
-      jobs:
-        - name: Linux multi-arch manifests
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-gateway   push-manifests-with-tag CONFIRM=true; fi
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-proxy     push-manifests-with-tag CONFIRM=true; fi
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-ratelimit push-manifests-with-tag CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-gateway   cd push-manifests-with-tag CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-proxy     cd push-manifests-with-tag CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/envoy-ratelimit cd push-manifests-with-tag CONFIRM=true; fi

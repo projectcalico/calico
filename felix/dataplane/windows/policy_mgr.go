@@ -39,25 +39,25 @@ func newPolicyManager(policysets policysets.PolicySetsDataplane) *policyManager 
 func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
-		if model.PolicyIsStaged(msg.Id.Name) {
+		if model.KindIsStaged(msg.Id.Kind) {
 			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
 			return
 		}
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyUpdate")
-		m.policysetsDataplane.AddOrReplacePolicySet(policysets.PolicyNamePrefix+msg.Id.Name, msg.Policy)
+		m.policysetsDataplane.AddOrReplacePolicySet(policyIDToString(policysets.PolicyNamePrefix, msg.Id), msg.Policy)
 	case *proto.ActivePolicyRemove:
-		if model.PolicyIsStaged(msg.Id.Name) {
+		if model.KindIsStaged(msg.Id.Kind) {
 			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyRemove with staged policy")
 			return
 		}
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyRemove")
-		m.policysetsDataplane.RemovePolicySet(policysets.PolicyNamePrefix + msg.Id.Name)
+		m.policysetsDataplane.RemovePolicySet(policyIDToString(policysets.PolicyNamePrefix, msg.Id))
 	case *proto.ActiveProfileUpdate:
 		log.WithField("profileId", msg.Id).Info("Processing ActiveProfileUpdate")
-		m.policysetsDataplane.AddOrReplacePolicySet(policysets.ProfileNamePrefix+msg.Id.Name, msg.Profile)
+		m.policysetsDataplane.AddOrReplacePolicySet(profileIDToString(policysets.ProfileNamePrefix, msg.Id.Name), msg.Profile)
 	case *proto.ActiveProfileRemove:
 		log.WithField("profileId", msg.Id).Info("Processing ActiveProfileRemove")
-		m.policysetsDataplane.RemovePolicySet(policysets.ProfileNamePrefix + msg.Id.Name)
+		m.policysetsDataplane.RemovePolicySet(profileIDToString(policysets.ProfileNamePrefix, msg.Id.Name))
 	}
 }
 

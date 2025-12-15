@@ -308,13 +308,13 @@ func (arc *ActiveRulesCalculator) OnStatusUpdate(status api.SyncStatus) {
 		if arc.missingProfiles.Len() > 0 {
 			// Log out any profiles that were missing during the resync.  We defer
 			// this until now because we may hear about profiles or endpoints first.
-			arc.missingProfiles.Iter(func(profileID string) error {
+			for profileID := range arc.missingProfiles.All() {
 				log.WithField("profileID", profileID).Warning(
 					"End of resync: local endpoints refer to missing " +
 						"or invalid profile, profile's rules replaced " +
 						"with drop rules.")
-				return set.RemoveItem
-			})
+				arc.missingProfiles.Discard(profileID)
+			}
 		}
 	}
 }
@@ -353,6 +353,7 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 	polKey := selID.(model.PolicyKey)
 	policyWasActive := arc.policyIDToEndpointKeys.ContainsKey(polKey)
 	arc.policyIDToEndpointKeys.Put(selID, labelId)
+
 	if !policyWasActive {
 		// Policy wasn't active before, tell the listener.  The policy
 		// must be in allPolicies because we can only match on a policy
@@ -364,6 +365,7 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 		}
 		arc.sendPolicyUpdate(polKey, policy)
 	}
+
 	if labelId, ok := labelId.(model.EndpointKey); ok {
 		for _, l := range arc.PolicyMatchListeners {
 			l.OnPolicyMatch(polKey, labelId)
@@ -388,12 +390,10 @@ func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
 	}
 }
 
-var (
-	DummyDropRules = model.ProfileRules{
-		InboundRules:  []model.Rule{{Action: "deny"}},
-		OutboundRules: []model.Rule{{Action: "deny"}},
-	}
-)
+var DummyDropRules = model.ProfileRules{
+	InboundRules:  []model.Rule{{Action: "deny"}},
+	OutboundRules: []model.Rule{{Action: "deny"}},
+}
 
 func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string, rules *model.ProfileRules) {
 	active := arc.profileIDToEndpointKeys.ContainsKey(profileID)

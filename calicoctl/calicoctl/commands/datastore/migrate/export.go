@@ -236,7 +236,7 @@ Description:
 				results.Resources[i] = resource
 			}
 
-			// Skip exporting Kubernetes admin network policies.
+			// Skip exporting Kubernetes cluster network policies.
 			if r == "globalnetworkpolicies" {
 				objs, err := meta.ExtractList(resource)
 				if err != nil {
@@ -249,8 +249,8 @@ Description:
 					if !ok {
 						return fmt.Errorf("unable to convert Calico global network policy for inspection")
 					}
-					if strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) ||
-						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sBaselineAdminNetworkPolicyNamePrefix) {
+					if strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
+						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) {
 						continue
 					}
 					filtered = append(filtered, obj)
@@ -259,7 +259,7 @@ Description:
 
 				err = meta.SetList(resource, filtered)
 				if err != nil {
-					return fmt.Errorf("unable to remove Kubernetes admin network policies for export: %s", err)
+					return fmt.Errorf("unable to remove Kubernetes cluster network policies for export: %s", err)
 				}
 				results.Resources[i] = resource
 			}

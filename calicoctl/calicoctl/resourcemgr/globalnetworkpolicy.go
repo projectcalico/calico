@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,33 +43,33 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsANP(r) {
+			if policyIsK8sCNP(r) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "create or apply",
 					Identifier: resource,
-					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
+					Reason:     "kubernetes cluster network policies must be managed through the kubernetes API",
 				}
 			}
 			return client.GlobalNetworkPolicies().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsANP(r) {
+			if policyIsK8sCNP(r) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "create or apply",
 					Identifier: resource,
-					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
+					Reason:     "kubernetes cluster network policies must be managed through the kubernetes API",
 				}
 			}
 			return client.GlobalNetworkPolicies().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsANP(r) {
+			if policyIsK8sCNP(r) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "create or apply",
 					Identifier: resource,
-					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
+					Reason:     "kubernetes cluster network policies must be managed through the kubernetes API",
 				}
 			}
 			return client.GlobalNetworkPolicies().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
@@ -85,9 +85,9 @@ func init() {
 	)
 }
 
-func policyIsANP(r *api.GlobalNetworkPolicy) bool {
-	return strings.HasPrefix(r.Name, names.K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(r.Name, names.K8sBaselineAdminNetworkPolicyNamePrefix)
+func policyIsK8sCNP(r *api.GlobalNetworkPolicy) bool {
+	return strings.HasPrefix(r.Name, names.K8sCNPAdminTierNamePrefix) ||
+		strings.HasPrefix(r.Name, names.K8sCNPBaselineTierNamePrefix)
 }
 
 // newGlobalNetworkPolicyList creates a new (zeroed) GlobalNetworkPolicyList struct with the TypeMetadata initialised to the current

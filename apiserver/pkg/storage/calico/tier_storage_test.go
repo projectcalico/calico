@@ -522,20 +522,25 @@ func TestTierList(t *testing.T) {
 	}
 
 	opts := storage.GetOptions{IgnoreNotFound: false}
+
+	tierPath := func(name string) string {
+		return fmt.Sprintf("projectcalico.org/tiers/%s", name)
+	}
+
+	kubeAdminTier := makeTier(names.KubeAdminTierName, "", v3.KubeAdminTierOrder)
+	err := store.Get(ctx, tierPath(names.KubeAdminTierName), opts, kubeAdminTier)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
 	defaultTier := makeTier(names.DefaultTierName, "", v3.DefaultTierOrder)
-	err := store.Get(ctx, "projectcalico.org/tiers/default", opts, defaultTier)
+	err = store.Get(ctx, tierPath(names.DefaultTierName), opts, defaultTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	anpTier := makeTier(names.AdminNetworkPolicyTierName, "", v3.AdminNetworkPolicyTierOrder)
-	err = store.Get(ctx, "projectcalico.org/tiers/adminnetworkpolicy", opts, anpTier)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-
-	banpTier := makeTier(names.BaselineAdminNetworkPolicyTierName, "", v3.BaselineAdminNetworkPolicyTierOrder)
-	err = store.Get(ctx, "projectcalico.org/tiers/baselineadminnetworkpolicy", opts, banpTier)
+	kubeBaselineTier := makeTier(names.KubeBaselineTierName, "", v3.KubeBaselineTierOrder)
+	err = store.Get(ctx, tierPath(names.KubeBaselineTierName), opts, kubeBaselineTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -559,7 +564,7 @@ func TestTierList(t *testing.T) {
 			},
 		},
 		// Tiers are returned in name order.
-		expectedOut: []*v3.Tier{anpTier, preset[1].storedObj, banpTier, defaultTier},
+		expectedOut: []*v3.Tier{preset[1].storedObj, defaultTier, kubeAdminTier, kubeBaselineTier},
 	}}
 
 	for i, tt := range tests {

@@ -79,6 +79,17 @@ func (lc *LookupsCache) GetNetworkSet(addr [16]byte) (EndpointData, bool) {
 	return lc.nsCache.GetNetworkSetFromIP(addr)
 }
 
+// IsEndpointDeleted returns whether the given endpoint is marked for deletion.
+func (lc *LookupsCache) IsEndpointDeleted(ep EndpointData) bool {
+	return lc.epCache.IsEndpointDeleted(ep)
+}
+
+// MarkEndpointDeleted marks an endpoint as deleted for testing purposes.
+// This should not be called from any mainline code.
+func (lc *LookupsCache) MarkEndpointDeleted(ep EndpointData) {
+	lc.epCache.MarkEndpointForDeletion(ep)
+}
+
 // GetRuleIDFromNFLOGPrefix returns the RuleID associated with the supplied NFLOG prefix.
 func (lc *LookupsCache) GetRuleIDFromNFLOGPrefix(prefix [64]byte) *RuleID {
 	return lc.polCache.GetRuleIDFromNFLOGPrefix(prefix)

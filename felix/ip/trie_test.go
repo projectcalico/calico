@@ -438,7 +438,7 @@ var _ = Describe("CIDRTrie tests", func() {
 						update(c)
 					}
 					var expSlice []string
-					expected.Iter(func(cidr string) error {
+					for cidr := range expected.All() {
 						expSlice = append(expSlice, cidr)
 
 						path := lookup(cidr)
@@ -446,9 +446,7 @@ var _ = Describe("CIDRTrie tests", func() {
 							Expect(expected.Contains(c)).To(BeTrue(), fmt.Sprintf(
 								"Trie returned a path (%v) including a CIDR that wasn't supposed to be in the trie (%v)", path, c))
 						}
-
-						return nil
-					})
+					}
 					Expect(contents()).To(ConsistOf(expSlice),
 						fmt.Sprintf("Trie had incorrect contents with this sequence of CIDRs: %s", cidrs))
 				}

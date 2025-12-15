@@ -40,7 +40,6 @@ from keystoneauth1.identity import v3
 
 from keystoneclient.v3.client import Client as KeystoneClient
 
-import neutron.plugins.ml2.rpc as rpc
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
 from neutron.objects import ports as ports_object
@@ -1007,7 +1006,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.endpoint_syncer.delete_endpoint(port)
 
     @requires_state
-    def send_sg_updates(self, sgids, context):
+    def security_groups_rule_updated(self, context):
         """Called whenever security group rules or membership change.
 
         When a security group rule is added, we need to do the following steps:
@@ -1015,10 +1014,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         1. Reread the security rules from the Neutron DB.
         2. Write the updated policy to etcd.
         """
-        TrackTask("SEND_SG_UPDATES")
-        LOG.info("Updating security group IDs %s", sgids)
-        with self._txn_from_context(context, tag="sg-update"):
-            self.policy_syncer.write_sgs_to_etcd(sgids, context)
+        TrackTask("SECURITY_GROUPS_RULE_UPDATED")
+        LOG.info("SECURITY_GROUPS_RULE_UPDATED: %s", context)
+        with self._txn_from_context(context.plugin_context, tag="sg-update"):
+            self.policy_syncer.write_sgs_to_etcd(context.sgids, context.plugin_context)
 
     @contextlib.contextmanager
     def _txn_from_context(self, context, tag="<unset>"):
@@ -1293,24 +1292,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 else:
                     # Short sleep to avoid a tight loop.
                     eventlet.sleep(1)
-
-
-# This section monkeypatches the AgentNotifierApi.security_groups_rule_updated
-# method to ensure that the Calico driver gets told about security group
-# updates at all times. This is a deeply unpleasant hack. Please, do as I say,
-# not as I do.
-#
-# For more info, please see issues #635 and #641.
-original_sgr_updated = rpc.AgentNotifierApi.security_groups_rule_updated
-
-
-def security_groups_rule_updated(self, context, sgids):
-    LOG.info("security_groups_rule_updated: %s %s" % (context, sgids))
-    mech_driver.send_sg_updates(sgids, context)
-    original_sgr_updated(self, context, sgids)
-
-
-rpc.AgentNotifierApi.security_groups_rule_updated = security_groups_rule_updated
 
 
 def port_status_change(port, original):

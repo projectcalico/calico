@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,10 @@ import (
 )
 
 // This file contains shared test infrastructure for testing the ipsets package.
+
+const (
+	supportedMockRevision = 5
+)
 
 var (
 	errTransientFailure = errors.New("simulated transient failure")
@@ -454,6 +458,7 @@ type setMetadata struct {
 	Name     string
 	Family   IPFamily
 	Type     IPSetType
+	Revision int
 	MaxSize  int
 	RangeMin int
 	RangeMax int
@@ -726,18 +731,26 @@ func (c *listCmd) main() {
 		result = fmt.Errorf("ipset %v does not exists", c.SetName)
 		return
 	}
-	writef("Name: %s\n", c.SetName)
 	meta, ok := c.Dataplane.IPSetMetadata[c.SetName]
 	if !ok {
 		// Default metadata for IP sets created by tests.
 		meta = setMetadata{
-			Name:    v4MainIPSetName,
-			Family:  IPFamilyV4,
-			Type:    IPSetTypeHashIP,
-			MaxSize: 1234,
+			Name:     v4MainIPSetName,
+			Family:   IPFamilyV4,
+			Type:     IPSetTypeHashIP,
+			Revision: supportedMockRevision,
+			MaxSize:  1234,
 		}
 	}
+
+	if meta.Revision > supportedMockRevision {
+		result = fmt.Errorf("revision %v not supported", meta.Revision)
+		return
+	}
+
+	writef("Name: %s\n", c.SetName)
 	writef("Type: %s\n", meta.Type)
+	writef("Revision: %d\n", meta.Revision)
 	switch meta.Type {
 	case IPSetTypeBitmapPort:
 		writef("Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
@@ -748,8 +761,7 @@ func (c *listCmd) main() {
 	}
 	writef("Field: foobar\n") // Dummy field, should get ignored.
 	writef("Members:\n")
-	members.Iter(func(member string) error {
+	for member := range members.All() {
 		writef("%s\n", member)
-		return nil
-	})
+	}
 }

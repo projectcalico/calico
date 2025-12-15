@@ -53,6 +53,10 @@ func (key IPAMHandleKey) valueType() (reflect.Type, error) {
 	return typeHandle, nil
 }
 
+func (key IPAMHandleKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[IPAMHandle](key, rawData)
+}
+
 func (key IPAMHandleKey) String() string {
 	return fmt.Sprintf("IPAMHandleKey(id=%s)", key.HandleID)
 }

@@ -1,4 +1,4 @@
-- name: release tooling
+- name: Release tooling
   run:
     when: "${CHANGE_IN(release)}"
   execution_time_limit:
@@ -10,11 +10,11 @@
       commands:
         - cd release
     jobs:
-      - name: ci
+      - name: "Release tooling: CI"
         commands:
           - ../.semaphore/run-and-monitor release-ci.log make ci
-          - test-results publish --name "release-tool-ut-tests" ./report/*.xml || true
-      - name: build binary
+          - 'test-results publish --name "Release tool: UT" ./report/*.xml || true'
+      - name: "Release tooling: build"
         commands:
           - ../.semaphore/run-and-monitor release-build.log make build
           - cache store release-${SEMAPHORE_GIT_SHA} bin
