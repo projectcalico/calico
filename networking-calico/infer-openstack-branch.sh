@@ -21,12 +21,12 @@ case "${RELEASE}" in
         ;;
 esac
 
-if [ `git ls-remote -h https://github.com/openstack/${REPO} refs/heads/stable/${FORMAL_RELEASE} | wc -l` = 1 ]; then
+if [ $(git ls-remote -h https://github.com/openstack/${REPO} refs/heads/stable/${FORMAL_RELEASE} | wc -l) = 1 ]; then
     echo stable/${FORMAL_RELEASE}
     exit 0
 fi
 
-if [ `git ls-remote -h https://github.com/openstack/${REPO} refs/heads/unmaintained/${FORMAL_RELEASE} | wc -l` = 1 ]; then
+if [ $(git ls-remote -h https://github.com/openstack/${REPO} refs/heads/unmaintained/${FORMAL_RELEASE} | wc -l) = 1 ]; then
     echo unmaintained/${FORMAL_RELEASE}
     exit 0
 fi

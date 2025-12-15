@@ -86,7 +86,7 @@ sudo pip list || true
 # ------------------------------------------------------------------------------
 
 if [ -z "${DEVSTACK_BRANCH}" ]; then
-    DEVSTACK_BRANCH=`./infer-openstack-branch.sh ${OPENSTACK_RELEASE} devstack`
+    DEVSTACK_BRANCH=$(./infer-openstack-branch.sh ${OPENSTACK_RELEASE} devstack)
 fi
 
 # Set correct constraints for Tempest to use.  We need to do this because we're pinning to a
