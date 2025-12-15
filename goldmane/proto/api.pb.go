@@ -1161,7 +1161,7 @@ type Filter struct {
 	Actions []Action `protobuf:"varint,7,rep,packed,name=actions,proto3,enum=goldmane.Action" json:"actions,omitempty"`
 	// Policies matches on policy fields. Combined using logical OR.
 	Policies []*PolicyMatch `protobuf:"bytes,8,rep,name=policies,proto3" json:"policies,omitempty"`
-	// Reporter filters on the reporter field. Combined using logical OR.
+	// Reporter filters on the reporter field.
 	Reporter Reporter `protobuf:"varint,9,opt,name=reporter,proto3,enum=goldmane.Reporter" json:"reporter,omitempty"`
 	// Pending/Staged Actions filters on the action field. Combined using logical OR.
 	PendingActions []Action `protobuf:"varint,10,rep,packed,name=pending_actions,json=pendingActions,proto3,enum=goldmane.Action" json:"pending_actions,omitempty"`
