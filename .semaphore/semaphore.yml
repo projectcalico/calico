@@ -1362,7 +1362,7 @@ blocks:
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
             - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-            - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
+            - TEMPEST=true OPENSTACK_RELEASE=yoga ./devstack/bootstrap.sh
       epilogue:
         on_fail:
           commands:
@@ -1400,7 +1400,7 @@ blocks:
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
             - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-            - TEMPEST=true DEVSTACK_BRANCH=unmaintained/2024.1 ./devstack/bootstrap.sh
+            - TEMPEST=true OPENSTACK_RELEASE=caracal ./devstack/bootstrap.sh
       epilogue:
         always:
           commands:
