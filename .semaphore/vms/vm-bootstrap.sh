@@ -89,4 +89,15 @@ sysctl -w net.ipv4.conf.all.rp_filter=2
 
 mv /tmp/daemon.json /etc/docker/daemon.json
 systemctl restart docker
+
+set +x
+DOCKERHUB_USERNAME=__DOCKERHUB_USERNAME__
+DOCKERHUB_PASSWORD=$(gcloud secrets versions access latest --project=unique-caldron-775 --secret=ci-dockerhub-password)
+echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+set -x
+
+gcloud storage cp '__GCS_WORKFLOW_DIR__/__COMPONENT__/fv-artifacts/*' /tmp
+tar -xzf /tmp/working-copy.tgz
+__CALICO_DIR_NAME__/__COMPONENT__/.semaphore/load-test-artifacts
+
 touch /var/run/startup-script-complete
