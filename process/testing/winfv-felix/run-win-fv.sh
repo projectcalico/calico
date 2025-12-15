@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is entry point for Windows CNI-Plugin FV test.
+# This is the entry point for Windows Felix FV test.
 
 set -e
 set -x
@@ -25,10 +25,7 @@ export UTILS_DIR="${SCRIPT_DIR}/../util"
 
 . ${UTILS_DIR}/utils.sh
 
-: ${BACKEND:?Error: BACKEND is not set}
-
-# Copy Windows executables to ASO directory.
-cp ${REPO_DIR}/cni-plugin/bin/windows/*.exe ${ASO_DIR}/windows
+: "${FV_TYPE:?Error: FV_TYPE is not set}"
 
 # Create cluster with one Linux node and one Windows node.
 export LINUX_NODE_COUNT=1
@@ -37,11 +34,16 @@ export WINDOWS_NODE_COUNT=1
 # Create kubeadm cluster
 pushd "${ASO_DIR}"
 make setup-kubeadm
+make install-calico
 popd
 
 # Setup and run FV test
+EXIT_CODE=0
 pushd "${SCRIPT_DIR}"
-BACKEND=${BACKEND} ./setup-fv.sh | tee setupfv.log
+FV_TYPE=${FV_TYPE} ./setup-fv.sh | tee setupfv.log; pstat=${PIPESTATUS[0]}
+if [[ $pstat != 0 ]]; then
+    EXIT_CODE=$pstat
+fi
 
 # Copy report directory from windows node.
 rm -r ./report || true
@@ -54,6 +56,7 @@ ls -ltr ./report
 mkdir -p /home/semaphore/fv.log
 cp setupfv.log /home/semaphore/fv.log/ || true
 cp ./report/*.log /home/semaphore/fv.log/ || true
+cp ./pod-logs/*.log /home/semaphore/fv.log/ || true
 
 # Print relevant snippets from logs
 log_regexps='(?<!Decode)Failure|SUCCESS|FV-TEST-START'
@@ -70,5 +73,12 @@ then
     exit 1
 fi
 
+# Search for error code file
+if [ -f ./report/error-codes ] || [ "$EXIT_CODE" != 0 ];
+then
+    echo "Windows FV returned error(s)."
+    exit 1
+fi
+
 popd
-echo "Windows CNI-Plugin FV test completed."
+echo "Windows Felix FV test completed."

@@ -16,6 +16,10 @@
         - cd node
     jobs:
       - name: "Node: CI"
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
         env_vars:
@@ -98,6 +102,6 @@
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
           - '../.semaphore/vms/publish-reports "Node: KinD STs"'
-          - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
+          - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
