@@ -116,7 +116,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		))
 
 		outStr := out
-		Expect(outStr).To(ContainSubstring("Start of rule action:\"allow\""))
+		Expect(outStr).To(ContainSubstring("Start of rule policy-tcp action:\"allow\""))
 		Expect(outStr).To(ContainSubstring("IPSets src_ip_set_ids:"))
 		re := regexp.MustCompile("0x[0-9a-fA-F]+")
 		ipSetFound := false
@@ -162,7 +162,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		}, "5s", "200ms").Should(ContainSubstring("Start of GlobalNetworkPolicy policy-tcp"))
 
 		outStr = string(out)
-		Expect(outStr).To(ContainSubstring("Start of rule action:\"deny\""))
+		Expect(outStr).To(ContainSubstring("Start of rule policy-tcp action:\"deny\""))
 		ipSetFound = false
 		for _, tmp := range strings.Split(outStr, "\n") {
 			if strings.Contains(tmp, "IPSets not_dst_ip_set_ids:") {

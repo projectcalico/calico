@@ -6165,7 +6165,7 @@ func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, pol
 		startStr = fmt.Sprintf("Start of %s %s", polType, polName)
 		endStr = fmt.Sprintf("End of %s %s", polType, polName)
 	}
-	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
+	actionStr := fmt.Sprintf("Start of rule %s action:\"%s\"", polName, action)
 	var policyDbg bpf.PolicyDebugInfo
 	out, err := felix.ExecOutput("cat", bpf.PolicyDebugJSONFileName(iface, hook, ipFamily))
 	if err != nil {
