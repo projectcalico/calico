@@ -86,6 +86,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationStatus": schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig":       schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.MigrationControllerConfig":          schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NamespaceControllerConfig":          schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicy":                      schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicyList":                  schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref),
@@ -2227,11 +2228,17 @@ func schema_pkg_apis_projectcalico_v3_ControllersConfig(ref common.ReferenceCall
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig"),
 						},
 					},
+					"policyMigration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Migration enables and configures the policy migration controller. Enabled by default, set to nil to disable.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.MigrationControllerConfig"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NamespaceControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NodeControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.MigrationControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NamespaceControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NodeControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig"},
 	}
 }
 
@@ -5010,6 +5017,25 @@ func schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref common.Re
 					"assignIPs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "AssignIPs controls which LoadBalancer Service gets IP assigned from Calico IPAM.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"enabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PolicyNameMigrator enables or disables the Policy Name Migrator, which migrates old-style Calico backend policy names to use v3 style names.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
