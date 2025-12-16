@@ -87,6 +87,17 @@ type ControllersConfig struct {
 
 	// LoadBalancer enables and configures the LoadBalancer controller. Enabled by default, set to nil to disable.
 	LoadBalancer *LoadBalancerControllerConfig `json:"loadBalancer,omitempty"`
+
+	// Migration enables and configures migration controllers.
+	Migration *MigrationControllerConfig `json:"policyMigration,omitempty"`
+}
+
+type MigrationControllerConfig struct {
+	// PolicyNameMigrator enables or disables the Policy Name Migrator, which migrates
+	// old-style Calico backend policy names to use v3 style names.
+	// +kubebuilder:default=Enabled
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	PolicyNameMigrator string `json:"enabled,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 }
 
 // NodeControllerConfig configures the node controller, which automatically cleans up configuration

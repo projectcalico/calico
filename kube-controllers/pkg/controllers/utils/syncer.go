@@ -92,6 +92,13 @@ type DataFeed struct {
 }
 
 func (d *DataFeed) Start() {
+	// We can skip this if there are no registrations.
+	if len(d.registrations) == 0 && len(d.statusRegistrations) == 0 {
+		logrus.Info("No registrations for data feed, skipping start")
+		return
+	}
+
+	logrus.Info("Starting syncer")
 	d.syncer.Start()
 }
 
