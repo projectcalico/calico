@@ -72,13 +72,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		// Explicitly configure the MTU.
 		felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
 		felixConfig.Name = "default"
-		felixConfig.Spec.LogPrefix = "random prefix prefix 987"
+		felixConfig.Spec.LogPrefix = "axby9 %n %t %k %p"
 		_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// gnp2-4 egress(N1-1) ingress(N1-1)
 		gnp := api.NewGlobalNetworkPolicy()
-		gnp.Name = "default.ep2-4"
+		gnp.Name = "ep2-4"
 		gnp.Spec.Order = &float1_0
 		gnp.Spec.Tier = "default"
 		gnp.Spec.Selector = ep1_1.NameSelector()
@@ -92,7 +92,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, gnp, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		expectedPattern := felixConfig.Spec.LogPrefix
+		expectedPattern := "axby9 ep2-4 default gnp ep2-4"
 		detectIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
 			binary := "iptables-save"
 			if ipVersion == 6 {
