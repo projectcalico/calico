@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"regexp"
 	"time"
 
@@ -63,7 +62,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 		bc                  backend.Client
 		k8sClient           *kubernetes.Clientset
 		controllerManager   *containers.Container
-		kconfigfile         *os.File
+		kconfigfile         string
 		err                 error
 		flannelCluster      *testutils.FlannelCluster
 	)
@@ -80,7 +79,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 		// (container.Run returns after 'docker ps' shows the container, the polling interval is 1 second.)
 		// Add 60 seconds delay before main thread exits, this is to make sure controller is still running
 		// after test case completed and stopped by AfterEach.
-		migrationController = testutils.RunFlannelMigrationController(kconfigfile.Name(), controllerNodeName, flannelSubnetEnv, 3, 60)
+		migrationController = testutils.RunFlannelMigrationController(kconfigfile, controllerNodeName, flannelSubnetEnv, 3, 60)
 	}
 
 	stopController := func() {
@@ -94,18 +93,11 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 		// Run apiserver.
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
-		// Write out a kubeconfig file
-		kconfigfile, err = os.CreateTemp("", "ginkgo-migrationcontroller")
-		Expect(err).NotTo(HaveOccurred())
+		var cancel func()
+		kconfigfile, cancel = testutils.BuildKubeconfig(apiserver.IP)
+		defer cancel()
 
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
-
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -116,20 +108,13 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
-		apply := func() error {
-			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
-			if err != nil {
-				return fmt.Errorf("%s: %s", err, out)
-			}
-			return nil
-		}
-		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+		testutils.ApplyCRDs(apiserver)
 
 		// Make a Calico client and backend client.
 		type accessor interface {
 			Backend() backend.Client
 		}
-		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
+		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
 		bc = calicoClient.(accessor).Backend()
 
 		// Run controller manager.
@@ -152,7 +137,6 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 	AfterEach(func() {
 		_ = calicoClient.Close()
 		flannelCluster.Reset()
-		_ = os.Remove(kconfigfile.Name())
 		controllerManager.Stop()
 		apiserver.Stop()
 		etcd.Stop()
