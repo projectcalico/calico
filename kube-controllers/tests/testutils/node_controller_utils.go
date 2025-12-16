@@ -51,6 +51,7 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
+		"-e", "FV_TEST=true", // Indicate that this is an FV test run, enabling some test hooks.
 		"-e", "SYNC_NODE_LABELS=true",
 		"-e", "LOG_LEVEL=debug",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
