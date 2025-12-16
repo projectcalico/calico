@@ -901,6 +901,7 @@ spec:
                     - %n: Policy or profile name.
                     - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
                     [Default: calico-packet]
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
                   type: string
                 logSeverityFile:
                   description:
