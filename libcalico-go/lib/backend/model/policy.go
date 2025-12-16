@@ -46,6 +46,12 @@ type PolicyKey struct {
 	Name      string `json:"-" validate:"required,name"`
 	Namespace string `json:"-" validate:"omitempty,name"`
 	Kind      string `json:"-" validate:"omitempty,name"`
+
+	// Tier is not part of the etcd key, but is included here as a private field to enable compatibility
+	// with older versions of Typha. Older Typha versions included the tier in the key name but not the value,
+	// so we need to capture it here when parsing legacy keys and use it when building the Value (which is where
+	// newer Calico versions expect to find it).
+	tier string `json:"-" validate:"-"`
 }
 
 func (key PolicyKey) defaultPath() (string, error) {
@@ -77,7 +83,17 @@ func (key PolicyKey) valueType() (reflect.Type, error) {
 }
 
 func (key PolicyKey) parseValue(rawData []byte) (any, error) {
-	return parseJSONPointer[Policy](key, rawData)
+	v, err := parseJSONPointer[Policy](key, rawData)
+	if err != nil {
+		return nil, err
+	}
+	if key.tier != "" {
+		// For backwards compatibility with older Typha versions, set the tier from the key.
+		// Newer versions will have the tier set in the value already, but older versions of Calico
+		// used the Tier field in the key only.
+		v.Tier = key.tier
+	}
+	return v, nil
 }
 
 func (key PolicyKey) String() string {
@@ -137,7 +153,7 @@ func (p Policy) String() string {
 // hints of the kind that can be used to reconstruct the full key.
 //
 // Legacy policy keys will be sent by Typha versions prior to v3.32.0.
-func parseLegacyPolicyName(name string) PolicyKey {
+func parseLegacyPolicyName(tier, name string) PolicyKey {
 	// First, split based on "/" to see if we have a namespace.
 	parts := strings.SplitN(name, "/", 2)
 	if len(parts) == 2 {
@@ -166,6 +182,7 @@ func parseLegacyPolicyName(name string) PolicyKey {
 			Name:      policyName,
 			Namespace: namespace,
 			Kind:      kind,
+			tier:      tier,
 		}
 	}
 
@@ -185,5 +202,6 @@ func parseLegacyPolicyName(name string) PolicyKey {
 	return PolicyKey{
 		Name: policyName,
 		Kind: kind,
+		tier: tier,
 	}
 }
