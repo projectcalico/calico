@@ -2883,6 +2883,15 @@ spec:
                         reconcilerPeriod:
                           type: string
                       type: object
+                    policyMigration:
+                      properties:
+                        enabled:
+                          default: Enabled
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
+                      type: object
                     serviceAccount:
                       properties:
                         reconcilerPeriod:
@@ -2968,6 +2977,15 @@ spec:
                         policy:
                           properties:
                             reconcilerPeriod:
+                              type: string
+                          type: object
+                        policyMigration:
+                          properties:
+                            enabled:
+                              default: Enabled
+                              enum:
+                                - Enabled
+                                - Disabled
                               type: string
                           type: object
                         serviceAccount:

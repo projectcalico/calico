@@ -31,8 +31,10 @@ const (
 	Etcdv3 = "etcdv3"
 )
 
-type UpdateHandler func(bapi.Update)
-type StatusHandler func(bapi.SyncStatus)
+type (
+	UpdateHandler func(bapi.Update)
+	StatusHandler func(bapi.SyncStatus)
+)
 
 func NewDataFeed(c client.Interface, dataStore string) *DataFeed {
 	// Kinds to register with on the syncer API.
@@ -52,13 +54,27 @@ func NewDataFeed(c client.Interface, dataStore string) *DataFeed {
 		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
 		},
+
+		// Network policy types
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
+		},
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy},
+		},
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindStagedNetworkPolicy},
+		},
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindStagedGlobalNetworkPolicy},
+		},
 	}
 	type accessor interface {
 		Backend() bapi.Client
 	}
 
 	d := &DataFeed{
-		registrations:       map[interface{}][]UpdateHandler{},
+		registrations:       map[any][]UpdateHandler{},
 		statusRegistrations: []StatusHandler{},
 		dataStore:           dataStore,
 	}
@@ -70,12 +86,19 @@ type DataFeed struct {
 	syncer bapi.Syncer
 
 	// Registrations
-	registrations       map[interface{}][]UpdateHandler
+	registrations       map[any][]UpdateHandler
 	statusRegistrations []StatusHandler
 	dataStore           string
 }
 
 func (d *DataFeed) Start() {
+	// We can skip this if there are no registrations.
+	if len(d.registrations) == 0 && len(d.statusRegistrations) == 0 {
+		logrus.Info("No registrations for data feed, skipping start")
+		return
+	}
+
+	logrus.Info("Starting syncer")
 	d.syncer.Start()
 }
 
