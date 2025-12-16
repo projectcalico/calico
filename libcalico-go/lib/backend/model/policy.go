@@ -46,6 +46,11 @@ type PolicyKey struct {
 	Name      string `json:"-" validate:"required,name"`
 	Namespace string `json:"-" validate:"omitempty,name"`
 	Kind      string `json:"-" validate:"omitempty,name"`
+
+	// Tier is not part of the etcd key, but is included here for backwards compatbility
+	// with older versions of Typha, as we need to be able to move the tier value from the key
+	// to the value when reading from an old Typha.
+	tier string `json:"-" validate:"-"`
 }
 
 func (key PolicyKey) defaultPath() (string, error) {
@@ -77,7 +82,17 @@ func (key PolicyKey) valueType() (reflect.Type, error) {
 }
 
 func (key PolicyKey) parseValue(rawData []byte) (any, error) {
-	return parseJSONPointer[Policy](key, rawData)
+	v, err := parseJSONPointer[Policy](key, rawData)
+	if err != nil {
+		return nil, err
+	}
+	if v.Tier == "" {
+		// For backwards compatibility with older Typha versions, set the tier from the key.
+		// Newer versions will have the tier set in the value already, but older versions of Calico
+		// used the Tier field in the key only.
+		v.Tier = key.tier
+	}
+	return v, nil
 }
 
 func (key PolicyKey) String() string {
@@ -138,6 +153,8 @@ func (p Policy) String() string {
 //
 // Legacy policy keys will be sent by Typha versions prior to v3.32.0.
 func parseLegacyPolicyName(name string) PolicyKey {
+	tier := "default"
+
 	// First, split based on "/" to see if we have a namespace.
 	parts := strings.SplitN(name, "/", 2)
 	if len(parts) == 2 {
@@ -166,6 +183,7 @@ func parseLegacyPolicyName(name string) PolicyKey {
 			Name:      policyName,
 			Namespace: namespace,
 			Kind:      kind,
+			tier:      tier,
 		}
 	}
 
@@ -178,12 +196,17 @@ func parseLegacyPolicyName(name string) PolicyKey {
 	if strings.HasPrefix(policyName, "staged:") {
 		kind = apiv3.KindStagedGlobalNetworkPolicy
 		policyName = strings.TrimPrefix(policyName, "staged:")
+		tier = strings.Split(policyName, ".")[0]
 	} else if strings.HasPrefix(policyName, "kcnp.") {
 		kind = KindKubernetesClusterNetworkPolicy
 		policyName = strings.TrimPrefix(policyName, "kcnp.")
+		tier = strings.Split(policyName, ".")[0]
+	} else {
+		tier = strings.Split(policyName, ".")[0]
 	}
 	return PolicyKey{
 		Name: policyName,
 		Kind: kind,
+		tier: tier,
 	}
 }
