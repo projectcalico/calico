@@ -43,6 +43,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
 		kconfigFile       string
+		cleanupKubeconfig func()
 	)
 
 	const kNodeName = "k8snodename"
@@ -57,8 +58,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file we can mount into the container.
-		kconfigFile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		kconfigFile, cleanupKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		// Build a client we can use for the test.
 		var err error
@@ -99,6 +99,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		nodeController.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		cleanupKubeconfig()
 	})
 
 	// This test makes sure our IPAM garbage collection properly handles when the Kubernetes node name
