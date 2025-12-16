@@ -4172,6 +4172,14 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 	ipFamily proto.IPVersion,
 	opts ...polprog.Option,
 ) ([]asm.Insns, error) {
+	logCtx := logrus.WithFields(logrus.Fields{
+		"iface":    ap.IfaceName(),
+		"hook":     hk,
+		"progName": progName,
+		"mapIndex": polJumpMapIdx,
+		"ipFamily": ipFamily,
+	})
+	logCtx.Debug("Updating policy program...")
 	if m.bpfPolicyDebugEnabled {
 		opts = append(opts, polprog.WithPolicyDebugEnabled())
 	}
@@ -4229,7 +4237,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 					if tmp < int32(tstride) {
 						tstride = int(tmp)
 					}
-					logrus.Debugf("Reducing trampoline stride to %d and retrying", tstride)
+					logCtx.Debugf("Reducing trampoline stride to %d and retrying", tstride)
 					continue
 				} else {
 					return nil, fmt.Errorf("reducing trampoline stride below 1000 not practical")
@@ -4244,7 +4252,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 
 	for tstride < tstrideOrig {
 		if m.policyTrampolineStride.CompareAndSwap(int32(tstrideOrig), int32(tstride)) {
-			logrus.Warnf("Reducing policy program trampoline stride to %d", tstride)
+			logCtx.Warnf("Reducing policy program trampoline stride to %d", tstride)
 		} else {
 			tstrideOrig = int(m.policyTrampolineStride.Load())
 		}
@@ -4254,14 +4262,14 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 		for _, progFD := range progFDs {
 			// Once we've put the programs in the map, we don't need their FDs.
 			if err := progFD.Close(); err != nil {
-				logrus.WithError(err).Panic("Failed to close program FD.")
+				logCtx.WithError(err).Panic("Failed to close program FD.")
 			}
 		}
 	}()
 
 	for i, progFD := range progFDs {
 		subProgIdx := polprog.SubProgramJumpIdx(polJumpMapIdx, i, stride)
-		logrus.Debugf("Putting sub-program %d at position %d", i, subProgIdx)
+		logCtx.Debugf("Putting sub-program %d at position %d in map %s", i, subProgIdx, polProgsMap.GetName())
 		if err := polProgsMap.Update(jump.Key(subProgIdx), jump.Value(progFD.FD())); err != nil {
 			return nil, fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", hk, subProgIdx, progFD, err)
 		}
@@ -4272,7 +4280,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 			if os.IsNotExist(err) {
 				break
 			}
-			logrus.WithError(err).Warn("Unexpected error while trying to clean up old policy programs.")
+			logCtx.WithError(err).Warn("Unexpected error while trying to clean up old policy programs.")
 		}
 	}
 
