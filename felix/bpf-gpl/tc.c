@@ -125,7 +125,7 @@ int calico_tc_main(struct __sk_buff *skb)
 			CALI_DEBUG("Too short");
 			return TC_ACT_SHOT;
 		}
-		if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_first_frag(ip_hdr(ctx))) {
+		if (ip_is_first_frag(ip_hdr(ctx))) {
 			frags4_record_ct(ctx);
 		}
 #endif
