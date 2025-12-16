@@ -41,7 +41,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 		c                 client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
-		kconfigFile       *os.File
+		kconfigFile       string
 	)
 
 	BeforeEach(func() {
@@ -54,16 +54,11 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigFile, err = os.CreateTemp("", "ginkgo-nodecontroller")
-		Expect(err).NotTo(HaveOccurred())
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigFile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		var cleanup func()
+		kconfigFile, cleanup = testutils.BuildKubeconfig(apiserver.IP)
+		defer cleanup()
 
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigFile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
-
-		k8sClient, err = testutils.GetK8sClient(kconfigFile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigFile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -82,7 +77,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 
 	AfterEach(func() {
 		_ = c.Close()
-		_ = os.Remove(kconfigFile.Name())
+		_ = os.Remove(kconfigFile)
 		controllerManager.Stop()
 		uut.Stop()
 		apiserver.Stop()
@@ -91,7 +86,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 
 	Context("with no KubeControllersConfig at start of day", func() {
 		BeforeEach(func() {
-			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), nil)
+			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile, nil)
 		})
 
 		It("should create default config", func() {
@@ -176,7 +171,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			_, err := c.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
-			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), nil)
+			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile, nil)
 		})
 
 		It("should set status matching config with defaults for unset values", func() {
@@ -212,7 +207,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			_, err := c.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
-			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), map[string]string{
+			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile, map[string]string{
 				"ENABLED_CONTROLLERS": "node",
 			})
 		})
