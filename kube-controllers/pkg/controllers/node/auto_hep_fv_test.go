@@ -16,7 +16,6 @@ package node_test
 
 import (
 	"context"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -42,7 +41,8 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		c                 client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
-		kconfigFile       *os.File
+		kconfigFile       string
+		removeKubeconfig  func()
 	)
 
 	const kNodeName = "k8snodename"
@@ -119,16 +119,9 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigFile, err = os.CreateTemp("", "ginkgo-nodecontroller")
-		Expect(err).NotTo(HaveOccurred())
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigFile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		kconfigFile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigFile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
-
-		k8sClient, err = testutils.GetK8sClient(kconfigFile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigFile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -147,11 +140,11 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 
 	AfterEach(func() {
 		_ = c.Close()
-		_ = os.Remove(kconfigFile.Name())
 		controllerManager.Stop()
 		nodeController.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
 	})
 
 	It("should create and sync hostendpoints for Calico nodes", func() {
@@ -159,7 +152,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Run controller with auto HEP enabled
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Create a kubernetes node with some labels.
 		kn := &v1.Node{
@@ -310,7 +303,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Run controller with auto HEP enabled
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		labels := map[string]string{"calico-label": "calico-value", "calico-label2": "value2"}
 
@@ -390,7 +383,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Run the controller now.
 		_, err = c.KubeControllersConfiguration().Create(context.Background(), autoHepEnabledKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect the node label to sync.
 		expectedNodeLabels := map[string]string{"auto": "hep"}
@@ -424,7 +417,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should delete hostendpoints when AUTO_HOST_ENDPOINTS is disabled", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepEnabledKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Create a kubernetes node with some labels.
 		kn := &v1.Node{
@@ -468,7 +461,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		kcc.Spec.Controllers.Node.HostEndpoint.AutoCreate = api.Disabled
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect the hostendpoint for the node to be deleted.
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedHepName) },
@@ -478,7 +471,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should delete default and keep template hostendpoints when createDefaultHostEndpoints is disabled", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
 		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
@@ -514,7 +507,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		kcc.Spec.Controllers.Node.HostEndpoint.CreateDefaultHostEndpoint = api.DefaultHostEndpointsDisabled
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect the default hostendpoint for the node to be deleted.
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedDefaultHepName) },
@@ -529,7 +522,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should update host endpoint labels when node labels are updated", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
 		cn, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
@@ -588,7 +581,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should update host endpoint name when template name is updated", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
 		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
@@ -630,7 +623,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect default hostendpoint to be unchanged
 		Eventually(func() error {
@@ -647,7 +640,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should update template hostendpoints when template is updated", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		node1Name := "node1"
 		node2Name := "node2"
@@ -727,7 +720,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect the default hostendpoints to be present
 		Eventually(func() error {
@@ -772,7 +765,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		kcc.Spec.Controllers.Node.HostEndpoint.AutoCreate = api.Disabled
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect default hostendpoints to be deleted
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedDefaultHepName1) },
@@ -790,7 +783,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should sync auto host endpoint if it has been updated by something other than kube controller", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
 		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
@@ -865,7 +858,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should omit invalid node IP from generated autohep", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		cn := libapi.NewNode()
 		cn.Name = "node"
@@ -893,7 +886,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should properly hash hostendpoint name", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
 		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
@@ -924,7 +917,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect template hostendpoint to have new hashed name
 		expectedTemplateHepName = "2vhzifmgzoee1hgruafve8iewjr1cabezq3o51myej0-auto-hep"
@@ -936,7 +929,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	It("should create valid hep for template with interfacePattern", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepInterfaceTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		cn := libapi.NewNode()
 		cn.Name = "node"
@@ -989,7 +982,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect the eth0 host endpoint to be unchanged
 		Eventually(func() error {
@@ -1027,7 +1020,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		expectedTemplateIPs = []string{"172.16.1.1", "5.5.5.5"}
 		Eventually(func() error {
@@ -1057,7 +1050,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Expect the eth0 host endpoint to be deleted
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName) },
