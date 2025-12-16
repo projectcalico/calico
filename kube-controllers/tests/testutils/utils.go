@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -58,7 +59,7 @@ contexts:
     user: calico
 current-context: test-context`
 
-func BuildKubeconfig(apiserverIP string) string {
+func BuildKubeconfig(apiserverIP string) (string, func()) {
 	// Load contents of test cert / key and fill them into the kubeconfig.
 	adminCertBytes, err := os.ReadFile(os.Getenv("CERTS_PATH") + "/admin.pem")
 	Expect(err).NotTo(HaveOccurred())
@@ -68,8 +69,38 @@ func BuildKubeconfig(apiserverIP string) string {
 	Expect(err).NotTo(HaveOccurred())
 	encodedAdminKey := base64.StdEncoding.EncodeToString(adminKeyBytes)
 
-	// Put it all together.
-	return fmt.Sprintf(kubeconfigTemplate, apiserverIP, encodedAdminCert, encodedAdminKey)
+	// Put it all together, and write it to a temp file.
+	data := fmt.Sprintf(kubeconfigTemplate, apiserverIP, encodedAdminCert, encodedAdminKey)
+
+	// Create a temp file to hold the kubeconfig.
+	f, err := os.CreateTemp("", "kube-ctrls-test")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	defer func() { Expect(f.Close()).To(Succeed()) }()
+
+	// Write the kubeconfig data to the file.
+	_, err = f.Write([]byte(data))
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	// Make the kubeconfig readable by the container.
+	Expect(f.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+
+	// Return the name of the kubeconfig file and a cleanup function.
+	return f.Name(), func() {
+		Expect(os.Remove(f.Name())).To(Succeed())
+	}
+}
+
+func ApplyCRDs(apiserver *containers.Container) {
+	// Apply the necessary CRDs. There can sometimes be a delay between starting
+	// the API server and when CRDs are apply-able, so retry here.
+	apply := func() error {
+		out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
+		if err != nil {
+			return fmt.Errorf("%s: %s", err, out)
+		}
+		return nil
+	}
+	EventuallyWithOffset(1, apply, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 }
 
 func RunK8sApiserver(etcdIp string) *containers.Container {
@@ -168,18 +199,17 @@ func GetK8sClient(kubeconfig string) (*kubernetes.Clientset, error) {
 }
 
 func Stop(c *containers.Container) {
-	var args = []string{"stop", c.Name}
+	args := []string{"stop", c.Name}
 	log.WithField("container", c.Name).Info("Stopping container")
 	cmd := exec.Command("docker", args...)
 	err := cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 	out, _ := cmd.CombinedOutput()
 	log.Info(out)
-
 }
 
 func Start(c *containers.Container) {
-	var args = []string{"start", c.Name}
+	args := []string{"start", c.Name}
 	log.WithField("container", c.Name).Info("Starting container")
 	cmd := exec.Command("docker", args...)
 	err := cmd.Run()

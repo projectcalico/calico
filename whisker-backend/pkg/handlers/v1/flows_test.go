@@ -207,6 +207,8 @@ func TestWatchFlowsParameterConversion(t *testing.T) {
 					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
 					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
 					Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
+					PendingActions:   whiskerv1.PendingActions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
+					Reporter:         whiskerv1.ReporterSrc,
 					Policies: []whiskerv1.PolicyMatch{{
 						Kind:      whiskerv1.PolicyKindCalicoNetworkPolicy,
 						Tier:      whiskerv1.NewFilterMatch("default-tier", whiskerv1.MatchTypeExact),
@@ -226,6 +228,8 @@ func TestWatchFlowsParameterConversion(t *testing.T) {
 					Protocols:        []*proto.StringMatch{{Value: "tcp"}},
 					DestPorts:        []*proto.PortMatch{{Port: 6060}},
 					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
+					PendingActions:   []proto.Action{proto.Action_Pass, proto.Action_Allow},
+					Reporter:         proto.Reporter_Src,
 					Policies: []*proto.PolicyMatch{{
 						Kind:      proto.PolicyKind_CalicoNetworkPolicy,
 						Tier:      "default-tier",
@@ -281,6 +285,12 @@ func TestListFlowsParameterConversion(t *testing.T) {
 				},
 				StartTimeGte: now.Unix(),
 				Filters: whiskerv1.Filters{
+					Policies: []whiskerv1.PolicyMatch{{
+						Kind:      whiskerv1.PolicyKindCalicoNetworkPolicy,
+						Tier:      whiskerv1.NewFilterMatch("default-tier", whiskerv1.MatchTypeExact),
+						Name:      whiskerv1.NewFilterMatch("name", whiskerv1.MatchTypeExact),
+						Namespace: whiskerv1.NewFilterMatch("namespace", whiskerv1.MatchTypeExact),
+					}},
 					SourceNamespaces: []whiskerv1.FilterMatch[string]{{V: "src-ns"}},
 					SourceNames:      []whiskerv1.FilterMatch[string]{{V: "src-name"}},
 					DestNamespaces:   []whiskerv1.FilterMatch[string]{{V: "dst-ns"}},
@@ -288,6 +298,8 @@ func TestListFlowsParameterConversion(t *testing.T) {
 					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
 					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
 					Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
+					PendingActions:   whiskerv1.PendingActions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
+					Reporter:         whiskerv1.ReporterSrc,
 				},
 			},
 			expected: &proto.FlowListRequest{
@@ -298,6 +310,12 @@ func TestListFlowsParameterConversion(t *testing.T) {
 				},
 				StartTimeGte: now.Unix(),
 				Filter: &proto.Filter{
+					Policies: []*proto.PolicyMatch{{
+						Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+						Tier:      "default-tier",
+						Name:      "name",
+						Namespace: "namespace",
+					}},
 					SourceNamespaces: []*proto.StringMatch{{Value: "src-ns"}},
 					SourceNames:      []*proto.StringMatch{{Value: "src-name"}},
 					DestNamespaces:   []*proto.StringMatch{{Value: "dst-ns"}},
@@ -305,6 +323,8 @@ func TestListFlowsParameterConversion(t *testing.T) {
 					Protocols:        []*proto.StringMatch{{Value: "tcp"}},
 					DestPorts:        []*proto.PortMatch{{Port: 6060}},
 					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
+					PendingActions:   []proto.Action{proto.Action_Pass, proto.Action_Allow},
+					Reporter:         proto.Reporter_Src,
 				},
 			},
 			configureFlowsCli: func(fsCli *climocks.FlowsClient) {

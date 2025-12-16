@@ -36,6 +36,7 @@ func RunLoadBalancerController(datastoreType apiconfig.DatastoreType, etcdIP, kc
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
+		"-e", "FV_TEST=true", // Indicate that this is an FV test run, enabling some test hooks.
 		"-e", "LOG_LEVEL=debug",
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),

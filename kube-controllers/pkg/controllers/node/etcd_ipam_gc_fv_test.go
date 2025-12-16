@@ -16,7 +16,6 @@ package node_test
 
 import (
 	"context"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -43,7 +42,8 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		c                 client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
-		kconfigFile       *os.File
+		kconfigFile       string
+		cleanupKubeconfig func()
 	)
 
 	const kNodeName = "k8snodename"
@@ -58,18 +58,11 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file we can mount into the container.
-		var err error
-		kconfigFile, err = os.CreateTemp("", "ginkgo-nodecontroller")
-		Expect(err).NotTo(HaveOccurred())
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigFile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigFile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+		kconfigFile, cleanupKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		// Build a client we can use for the test.
-		k8sClient, err = testutils.GetK8sClient(kconfigFile.Name())
+		var err error
+		k8sClient, err = testutils.GetK8sClient(kconfigFile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -102,18 +95,18 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		_ = c.Close()
-		_ = os.Remove(kconfigFile.Name())
 		controllerManager.Stop()
 		nodeController.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		cleanupKubeconfig()
 	})
 
 	// This test makes sure our IPAM garbage collection properly handles when the Kubernetes node name
 	// does not match the Calico node name in etcd.
 	It("should properly garbage collect IP addresses for mismatched node names", func() {
 		// Run controller.
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Create a kubernetes node.
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: kNodeName}}
@@ -161,7 +154,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 
 	It("should never garbage collect IP addresses that do not belong to Kubernetes pods", func() {
 		// Run controller.
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Use the same name for k8s and Calico node.
 		commonNodeName := "common-node-name"
@@ -228,7 +221,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 
 	It("should garbage collect IP addresses if there is no Calico node, even if there happens to be a Kubernetes node", func() {
 		// Run controller.
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Create a kubernetes node.
 		commonNodeName := "common-node-name"
@@ -260,7 +253,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 
 	It("should garbage collect IP addresses if there is no Calico node AND no Kubernetes node", func() {
 		// Run controller.
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
 		// Allocate an IP address on a node that doesn't exist.
 		commonNodeName := "common-node-name"
