@@ -753,8 +753,8 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 		name = "unknown"
 	}
 
-	return logPrefixRE.ReplaceAllStringFunc(logPrefix, func(match string) string {
-		switch match {
+	return logPrefixRE.ReplaceAllStringFunc(logPrefix, func(specifier string) string {
+		switch specifier {
 		case "%k":
 			return kind
 		case "%p":
@@ -767,7 +767,7 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 		case "%t":
 			return tier
 		default:
-			return ""
+			return specifier
 		}
 	})
 }
