@@ -12,9 +12,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
-vm_ip=$(gcloud compute instances describe ${VM_NAME} --zone=${ZONE} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+set -e
+
+if [ -z "${VM_NAME}" ]; then
+  echo "VM_NAME is not set' it should be set to the name of the test VM"
+  exit 1
+fi
+if [ -z "${ZONE}" ]; then
+  echo "ZONE is not set; it should be set to the GCP zone of the test VM"
+  exit 1
+fi
+
+# Note: configure-test-vm also writes this cache file, which helps to improve
+# speed and reduce calls to the gcloud API.
+ip_cache_file="/tmp/vm_ip_${VM_NAME}_${ZONE}"
+if [ -e "$ip_cache_file" ]; then
+  vm_ip=$(cat "$ip_cache_file")
+else
+  vm_ip=$(gcloud compute instances describe "${VM_NAME}" --zone="${ZONE}" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+  echo "$vm_ip" > "$ip_cache_file"
+fi
+
 exec ssh "ubuntu@${vm_ip}" -n -A \
   -o ServerAliveInterval=10 \
   -o StrictHostKeyChecking=yes \
