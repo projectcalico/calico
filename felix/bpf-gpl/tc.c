@@ -77,7 +77,7 @@ int calico_tc_main(struct __sk_buff *skb)
 
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
-	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS &&
+	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
 			/* If we are on vxlan and we do not have the key set, we cannot short-cirquit */
 			!(CALI_F_TUNNEL &&
 			 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
@@ -207,7 +207,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		goto finalize;
 	}
 
-	if (CALI_F_VXLAN && CALI_F_TO_HEP
+	if (CALI_F_TUNNEL && CALI_F_TO_HEP
 			&& skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS)) {
 		/* In case we are on VXLAN device, CALI_SKB_MARK_BYPASS is set we only got
 		 * here because CALI_SKB_MARK_TUNNEL_KEY_SET wasn't set. This happens when
