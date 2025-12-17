@@ -1618,6 +1618,17 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                logActionBurst:
+                  description:
+                    "LogActionBurst sets the burst of hitting a Log action.
+                    [Default: 5]"
+                  type: integer
+                logActionRate:
+                  description:
+                    'LogActionRate sets the rate of hitting a Log action.
+                    [Default: ""]'
+                  pattern: ^([0-9]+(\\.[0-9]+)?(second|minute|hour|day))*$
+                  type: string
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.

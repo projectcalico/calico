@@ -112,4 +112,8 @@ var _ = DescribeTable("MatchBuilder",
 	// IPVS.
 	Entry("IPVSConnection", Match().IPVSConnection(), "-m ipvs --ipvs"),
 	Entry("NotIPVSConnection", Match().NotIPVSConnection(), "-m ipvs ! --ipvs"),
+	// Limits.
+	Entry("Limit with no rate", Match().Limit(0, 5), ""),
+	Entry("Limit with rate", Match().Limit(10, 0), "-m limit --limit 10/minute"),
+	Entry("Limit with rate and burst", Match().Limit(10, 5), "-m limit --limit 10/minute --limit-burst 5"),
 )
