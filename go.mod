@@ -371,8 +371,8 @@ require (
 )
 
 require (
-	github.com/miekg/dns v1.1.62 // indirect
-	sigs.k8s.io/gateway-api v1.2.0
+	github.com/miekg/dns v1.1.65 // indirect
+	sigs.k8s.io/gateway-api v1.3.0
 )
 
 replace (

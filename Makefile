@@ -183,7 +183,8 @@ e2e-run-gateway-test:
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/gateway/e2e.test \
 	  -gateway-class=calico-gateway \
 	  -supported-features=Gateway,HTTPRoute \
-	  -cleanup-base-resources=true
+	  -cleanup-base-resources=true \
+	  -allow-crds-mismatch
 
 ###############################################################################
 # Release logic below

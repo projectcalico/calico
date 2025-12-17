@@ -17,14 +17,18 @@ limitations under the License.
 package conformance_test
 
 import (
+	"io/fs"
 	"testing"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	"sigs.k8s.io/gateway-api/conformance"
 	"sigs.k8s.io/gateway-api/conformance/tests"
 	"sigs.k8s.io/gateway-api/conformance/utils/flags"
 	"sigs.k8s.io/gateway-api/conformance/utils/suite"
@@ -35,7 +39,17 @@ func TestConformance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error loading Kubernetes config: %v", err)
 	}
-	c, err := client.New(cfg, client.Options{})
+
+	// Register schemes
+	s := scheme.Scheme
+	if err := apiextensionsv1.AddToScheme(s); err != nil {
+		t.Fatalf("error adding apiextensions to scheme: %v", err)
+	}
+	if err := gatewayv1.Install(s); err != nil {
+		t.Fatalf("error installing Gateway API scheme: %v", err)
+	}
+
+	c, err := client.New(cfg, client.Options{Scheme: s})
 	if err != nil {
 		t.Fatalf("Error initializing Kubernetes client: %v", err)
 	}
@@ -47,11 +61,6 @@ func TestConformance(t *testing.T) {
 	clientset, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
 		t.Fatalf("error when creating Kubernetes ClientSet: %v", err)
-	}
-
-	err = gatewayv1.Install(c.Scheme())
-	if err != nil {
-		t.Fatalf("error when installing Gateway API scheme: %v", err)
 	}
 
 	supportedFeatures := suite.ParseSupportedFeatures(*flags.SupportedFeatures)
@@ -69,7 +78,9 @@ func TestConformance(t *testing.T) {
 		*flags.SupportedFeatures,
 		*flags.ExemptFeatures)
 
-	cSuite, err := suite.NewConformanceTestSuite(suite.ConformanceOptions{
+	// Use embedded Gateway API manifests for conformance testing
+	// These include base manifests (namespaces, Gateways, backend services) and test-specific manifests
+	opts := suite.ConformanceOptions{
 		Client:                     c,
 		Clientset:                  clientset,
 		RestConfig:                 cfg,
@@ -79,7 +90,12 @@ func TestConformance(t *testing.T) {
 		SupportedFeatures:          supportedFeatures,
 		ExemptFeatures:             exemptFeatures,
 		EnableAllSupportedFeatures: *flags.EnableAllSupportedFeatures,
-	})
+		SkipTests:                  []string{},
+		BaseManifests:              "base/manifests.yaml",
+		ManifestFS:                 []fs.FS{conformance.Manifests},
+	}
+
+	cSuite, err := suite.NewConformanceTestSuite(opts)
 	if err != nil {
 		t.Fatalf("error creating conformance test suite: %v", err)
 	}
