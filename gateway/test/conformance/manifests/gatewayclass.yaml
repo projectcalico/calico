@@ -1,7 +1,0 @@
-apiVersion: gateway.networking.k8s.io/v1
-kind: GatewayClass
-metadata:
-  name: calico-gateway
-spec:
-  controllerName: gateway.envoyproxy.io/gatewayclass-controller
-  description: Calico Gateway API implementation using Envoy Gateway

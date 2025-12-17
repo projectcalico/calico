@@ -4,7 +4,7 @@ metadata:
   name: gateway-conformance-default
   namespace: gateway-conformance-infra
 spec:
-  gatewayClassName: calico-gateway
+  gatewayClassName: tigera-gateway-class
   listeners:
   - name: http
     protocol: HTTP

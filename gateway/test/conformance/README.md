@@ -4,11 +4,11 @@ This directory contains Gateway API conformance tests for Calico.
 
 ## Overview
 
-These tests verify that Calico's Gateway API implementation (using Envoy Gateway) conforms to the official Kubernetes Gateway API specification.
+These tests verify that Calico's Gateway API implementation (using Tigera's hardened Envoy Gateway distribution) conforms to the official Kubernetes Gateway API specification.
 
 ## Test Structure
 
-- `manifests/` - Gateway API resource definitions (GatewayClass, Gateway)
+- `manifests/` - Gateway API resource definitions (GatewayAPI operator resource, Gateway)
 - Test binary: `e2e/bin/gateway/e2e.test`
 
 ## Running Tests
@@ -29,16 +29,16 @@ make -C e2e build
 # 2. Create kind cluster and deploy Calico (~5-10 minutes)
 make -C node kind-k8st-setup
 
-# 3. Deploy Envoy Gateway
+# 3. Enable Tigera Gateway API support
 export KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml
-kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.5.6/install.yaml
-kubectl wait --timeout=5m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
+kubectl apply -f gateway/test/conformance/manifests/gatewayapi.yaml
+kubectl wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
 
 # 4. Create test infrastructure namespace
 kubectl create namespace gateway-conformance-infra
 
-# 5. Apply Gateway API resources
-kubectl apply -f gateway/test/conformance/manifests/
+# 5. Apply Gateway API test resources
+kubectl apply -f gateway/test/conformance/manifests/gateway.yaml
 
 # 6. Wait for Gateway to be ready
 kubectl wait --timeout=5m -n gateway-conformance-infra gateway/gateway-conformance-default --for=condition=Programmed

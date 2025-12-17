@@ -986,13 +986,13 @@ blocks:
             - make -C e2e build
             # Create kind cluster and deploy Calico
             - make -C node kind-k8st-setup
-            # Deploy Envoy Gateway
-            - KUBECONFIG=${KIND_KUBECONFIG} kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.5.6/install.yaml
-            - KUBECONFIG=${KIND_KUBECONFIG} kubectl wait --timeout=5m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
+            # Enable Tigera Gateway API support
+            - KUBECONFIG=${KIND_KUBECONFIG} kubectl apply -f gateway/test/conformance/manifests/gatewayapi.yaml
+            - KUBECONFIG=${KIND_KUBECONFIG} kubectl wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
             # Create test infrastructure namespace
             - KUBECONFIG=${KIND_KUBECONFIG} kubectl create namespace gateway-conformance-infra || true
-            # Apply Gateway API resources
-            - KUBECONFIG=${KIND_KUBECONFIG} kubectl apply -f gateway/test/conformance/manifests/
+            # Apply Gateway API test resources
+            - KUBECONFIG=${KIND_KUBECONFIG} kubectl apply -f gateway/test/conformance/manifests/gateway.yaml
             # Wait for Gateway readiness
             - KUBECONFIG=${KIND_KUBECONFIG} kubectl wait --timeout=5m -n gateway-conformance-infra gateway/gateway-conformance-default --for=condition=Programmed || true
             # Run conformance tests

@@ -181,7 +181,7 @@ e2e-run-cnp-test:
 ## Run the Gateway API conformance tests against a pre-existing kind cluster.
 e2e-run-gateway-test:
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/gateway/e2e.test \
-	  -gateway-class=calico-gateway \
+	  -gateway-class=tigera-gateway-class \
 	  -supported-features=Gateway,HTTPRoute \
 	  -cleanup-base-resources=true \
 	  -allow-crds-mismatch
