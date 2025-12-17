@@ -25,8 +25,10 @@ if [ "${Q_AGENT}" = calico-felix ]; then
                     sudo apt-add-repository -y ppa:project-calico/master
                     REPOS_UPDATED=False
 
-                    # Also add BIRD project PPA as a package source.
-                    LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo add-apt-repository -y ppa:cz.nic-labs/bird
+                    if [ "${CALICO_BGP_MODE}" = bird ]; then
+                        # Also add BIRD project PPA as a package source.
+                        LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo add-apt-repository -y ppa:cz.nic-labs/bird
+                    fi
 
                     # If running with OpenStack Yoga, update rtslib-fb to v2.1.76, specifically to
                     # pick up https://github.com/open-iscsi/rtslib-fb/pull/183, in order to support
@@ -69,8 +71,10 @@ if [ "${Q_AGENT}" = calico-felix ]; then
                     # Install ipset.
                     install_package ipset
 
-                    # Install BIRD.
-                    install_package bird
+                    if [ "${CALICO_BGP_MODE}" = bird ]; then
+                        # Install BIRD.
+                        install_package bird
+                    fi
 
                     # Install the Calico agent.
                     sudo mkdir -p /etc/calico
@@ -78,6 +82,7 @@ if [ "${Q_AGENT}" = calico-felix ]; then
 [global]
 DatastoreType = etcdv3
 EtcdEndpoints = http://${SERVICE_HOST}:${ETCD_PORT}
+EndpointStatusPathPrefix = none
 EOF
                     if [ "${ENABLE_DEBUG_LOG_LEVEL}" = True ]; then
                         sudo sh -c "cat >> /etc/calico/felix.cfg" << EOF
@@ -166,8 +171,9 @@ EOF
                     # maintain BIRD config for the cluster.
                     export ETCDCTL_API=3
                     export ETCDCTL_ENDPOINTS=http://$SERVICE_HOST:$ETCD_PORT
-                    run_process calico-bird \
-                      "${DEST}/calico/devstack/auto-bird-conf.sh ${HOST_IP} ${ETCD_BIN_DIR}/etcdctl"
+                    if [ "${CALICO_BGP_MODE}" = bird ]; then
+                        run_process calico-bird "${DEST}/calico/devstack/auto-bird-conf.sh ${HOST_IP} ${ETCD_BIN_DIR}/etcdctl"
+                    fi
 
                     # Run the Calico DHCP agent.
                     sudo mkdir /var/log/neutron || true

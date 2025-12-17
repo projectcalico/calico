@@ -1,0 +1,112 @@
+{{- $count := conv.ToInt .Env.WINDOWS_NODE_COUNT -}}
+{{- range $i := seq 0 (sub $count 1) -}}
+{{- $nodeNum := add $i 1 -}}
+{{- $nodeName := printf "vm-windows-%d" $nodeNum -}}
+{{- $nicName := printf "nic-windows-%d" $nodeNum -}}
+{{- $pipName := printf "pip-windows-%d" $nodeNum -}}
+{{- $extOpenSSHName := printf "vm-windows-%d-openssh" $nodeNum -}}
+{{- $extCustomName := printf "vm-windows-%d-customextension" $nodeNum -}}
+{{- $computerName := printf "winfv-win-%d" $nodeNum }}
+---
+apiVersion: compute.azure.com/v1api20220301
+kind: VirtualMachine
+metadata:
+  name: {{$nodeName}}
+  namespace: winfv
+spec:
+  location: {{$.Env.AZURE_LOCATION}}
+  owner:
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
+  hardwareProfile:
+    vmSize: Standard_D4s_v3
+  networkProfile:
+    networkInterfaces:
+      - reference:
+          group: network.azure.com
+          kind: NetworkInterface
+          name: {{$nicName}}
+  osProfile:
+    computerName: {{$computerName}}
+    adminUsername: winfv
+    adminPassword:
+      key: password
+      name: winfv-secret-windows
+  storageProfile:
+    imageReference:
+      publisher: MicrosoftWindowsServer
+      offer: WindowsServer
+      sku: {{$.Env.AZURE_WINDOWS_IMAGE_SKU}}
+      version: {{$.Env.AZURE_WINDOWS_IMAGE_VERSION}}
+    osDisk:
+      createOption: FromImage
+      managedDisk:
+        storageAccountType: Premium_LRS
+---
+apiVersion: network.azure.com/v1api20240301
+kind: NetworkInterface
+metadata:
+  name: {{$nicName}}
+  namespace: winfv
+spec:
+  location: {{$.Env.AZURE_LOCATION}}
+  owner:
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
+  networkSecurityGroup:
+    reference:
+      group: network.azure.com
+      kind: NetworkSecurityGroup
+      name: winfv-sg
+  ipConfigurations:
+    - name: ipconfig-windows-{{$nodeNum}}
+      subnet:
+        reference:
+          group: network.azure.com
+          kind: VirtualNetworksSubnet
+          name: subnet-winfv
+      publicIPAddress:
+        reference:
+          group: network.azure.com
+          kind: PublicIPAddress
+          name: {{$pipName}}
+---
+apiVersion: network.azure.com/v1api20240301
+kind: PublicIPAddress
+metadata:
+  name: {{$pipName}}
+  namespace: winfv
+spec:
+  location: {{$.Env.AZURE_LOCATION}}
+  owner:
+    name: {{$.Env.AZURE_RESOURCE_GROUP}}
+  publicIPAllocationMethod: Static
+  sku:
+    name: Standard
+---
+apiVersion: compute.azure.com/v1api20220301
+kind: VirtualMachinesExtension
+metadata:
+  name: {{$extOpenSSHName}}
+  namespace: winfv
+spec:
+  location: {{$.Env.AZURE_LOCATION}}
+  owner:
+    name: {{$nodeName}}
+  publisher: Microsoft.Azure.OpenSSH
+  type: WindowsOpenSSH
+  typeHandlerVersion: "3.0"
+---
+apiVersion: compute.azure.com/v1api20220301
+kind: VirtualMachinesExtension
+metadata:
+  name: {{$extCustomName}}
+  namespace: winfv
+spec:
+  location: {{$.Env.AZURE_LOCATION}}
+  owner:
+    name: {{$nodeName}}
+  publisher: Microsoft.Compute
+  type: CustomScriptExtension
+  typeHandlerVersion: "1.9"
+  settings:
+    commandToExecute: powershell -command "New-Item -ItemType Directory -Path C:\k -Force; echo \"{{$.Env.PUBLIC_KEY}}\" | Add-Content 'C:\ProgramData\ssh\administrators_authorized_keys' -Encoding UTF8;icacls.exe 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F'"
+{{- end}}

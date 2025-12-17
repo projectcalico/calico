@@ -179,6 +179,13 @@ type Policy struct {
 	Rules     []Rule
 }
 
+func (r Policy) NamespacedName() string {
+	if r.Namespace != "" {
+		return fmt.Sprintf("%s/%s", r.Namespace, r.Name)
+	}
+	return r.Name
+}
+
 type Tier struct {
 	Name      string
 	EndRuleID RuleMatchID
@@ -535,8 +542,8 @@ func (p *Builder) writeProfiles(profiles []Policy, noProfileMatchID uint64, allo
 
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
 	for ruleIdx, rule := range policy.Rules {
-		log.Debugf("Start of rule %d", ruleIdx)
-		p.b.AddCommentF("Start of rule %s", rule)
+		log.Debugf("Start of %s rule %d", policy.NamespacedName(), ruleIdx)
+		p.b.AddCommentF("Start of rule %s %s", policy.NamespacedName(), rule)
 		ipsets := p.printIPSetIDs(rule)
 		if ipsets != "" {
 			p.b.AddCommentF("IPSets %s", p.printIPSetIDs(rule))
@@ -544,8 +551,8 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		p.b.AddCommentF("Rule MatchID: %d", rule.MatchID)
 		action := strings.ToLower(rule.Action)
 		p.writeRule(rule, actionLabels[action], destLeg)
-		log.Debugf("End of rule %d", ruleIdx)
-		p.b.AddCommentF("End of rule %s", rule.RuleId)
+		log.Debugf("End of rule %s %d", policy.NamespacedName(), ruleIdx)
+		p.b.AddCommentF("End of rule %s %s", policy.NamespacedName(), rule.RuleId)
 	}
 }
 

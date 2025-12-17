@@ -1630,6 +1630,9 @@ spec:
                   type: string
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default' or 'tigera-secure'
+              rule: self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
       served: true
       storage: true
       subresources:
@@ -7096,6 +7099,9 @@ spec:
                   type: object
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default'
+              rule: self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
       served: true
       storage: true
 ---
@@ -8613,6 +8619,9 @@ spec:
                   type: array
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default'
+              rule: self.metadata.name == 'default'
       served: true
       storage: true
       subresources:
@@ -26524,6 +26533,11 @@ spec:
                   type: string
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default', 'tigera-secure', or 'overlay'
+              rule:
+                self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
+                || self.metadata.name == 'overlay'
       served: true
       storage: true
       subresources:
@@ -26879,6 +26893,9 @@ spec:
                   type: array
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default' or 'tigera-secure'
+              rule: self.metadata.name == 'default' || self.metadata.name == 'tigera-secure'
       served: true
       storage: true
       subresources:
@@ -28523,6 +28540,9 @@ spec:
                   type: array
               type: object
           type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'default'
+              rule: self.metadata.name == 'default'
       served: true
       storage: true
       subresources:
@@ -30057,9 +30077,15 @@ spec:
                     none to disable file logging. [Default: /var/log/calico/felix.log]"
                   type: string
                 logPrefix:
-                  description:
-                    "LogPrefix is the log prefix that Felix uses when rendering
-                    LOG rules. [Default: calico-packet]"
+                  description: |-
+                    LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers
+                    to include extra information in the log prefix.
+                    - %t: Tier name.
+                    - %k: Kind (short names).
+                    - %n: Policy or profile name.
+                    - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
+                    [Default: calico-packet]
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
                   type: string
                 logSeverityFile:
                   description:
@@ -30840,6 +30866,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
@@ -31319,6 +31346,15 @@ spec:
                         reconcilerPeriod:
                           type: string
                       type: object
+                    policyMigration:
+                      properties:
+                        enabled:
+                          default: Enabled
+                          enum:
+                            - Disabled
+                            - Enabled
+                          type: string
+                      type: object
                     serviceAccount:
                       properties:
                         reconcilerPeriod:
@@ -31404,6 +31440,15 @@ spec:
                         policy:
                           properties:
                             reconcilerPeriod:
+                              type: string
+                          type: object
+                        policyMigration:
+                          properties:
+                            enabled:
+                              default: Enabled
+                              enum:
+                                - Disabled
+                                - Enabled
                               type: string
                           type: object
                         serviceAccount:
@@ -31792,6 +31837,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
@@ -32206,6 +32252,7 @@ spec:
                 stagedAction:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
@@ -32822,6 +32869,7 @@ spec:
                 stagedAction:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
