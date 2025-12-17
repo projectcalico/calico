@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package model_test
+package model
 
 import (
 	"reflect"
@@ -24,7 +24,6 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
-	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -419,11 +418,12 @@ var _ = DescribeTable(
 
 	Entry(
 		"Legacy NetworkPolicy",
-		"/calico/v1/policy/tier/default/policy/ns%2fname",
+		"/calico/v1/policy/tier/mytier/policy/ns%2fname",
 		PolicyKey{
 			Kind:      "NetworkPolicy",
 			Namespace: "ns",
 			Name:      "name",
+			tier:      "mytier",
 		},
 		false,
 	),
@@ -433,6 +433,7 @@ var _ = DescribeTable(
 		PolicyKey{
 			Kind: "GlobalNetworkPolicy",
 			Name: "name",
+			tier: "default",
 		},
 		false,
 	),
@@ -443,6 +444,7 @@ var _ = DescribeTable(
 			Kind:      "StagedNetworkPolicy",
 			Namespace: "ns",
 			Name:      "name",
+			tier:      "default",
 		},
 		false,
 	),
@@ -452,15 +454,17 @@ var _ = DescribeTable(
 		PolicyKey{
 			Kind: "StagedGlobalNetworkPolicy",
 			Name: "name",
+			tier: "default",
 		},
 		false,
 	),
 	Entry(
 		"Legacy ClusterNetworkPolicy",
-		"/calico/v1/policy/tier/default/policy/kcnp.kube-admin.name",
+		"/calico/v1/policy/tier/kube-admin/policy/kcnp.kube-admin.name",
 		PolicyKey{
 			Kind: "KubernetesClusterNetworkPolicy",
 			Name: "kube-admin.name",
+			tier: "kube-admin",
 		},
 		false,
 	),
@@ -471,6 +475,7 @@ var _ = DescribeTable(
 			Kind:      "KubernetesNetworkPolicy",
 			Namespace: "ns",
 			Name:      "name",
+			tier:      "default",
 		},
 		false,
 	),
@@ -481,6 +486,7 @@ var _ = DescribeTable(
 			Kind:      "StagedKubernetesNetworkPolicy",
 			Namespace: "ns",
 			Name:      "name",
+			tier:      "default",
 		},
 		false,
 	),
