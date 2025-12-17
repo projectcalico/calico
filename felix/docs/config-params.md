@@ -431,7 +431,7 @@ to include extra information in the log prefix.
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | `calico-packet` |
 | `FelixConfiguration` field | `logPrefix` (YAML) `LogPrefix` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-zA-Z0-9%: /_-])*$</code>. |
 | Default value (YAML) | `calico-packet` |
 
 ### `LogSeverityFile` (config file) / `logSeverityFile` (YAML)
