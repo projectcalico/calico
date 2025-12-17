@@ -1431,9 +1431,6 @@ func (m *bpfEndpointManager) interfaceByIndex(ifindex int) (*net.Interface, erro
 }
 
 func (m *bpfEndpointManager) syncIfStateMap() {
-	tcSeenIndexes := set.New[int]()
-	xdpSeenIndexes := set.New[int]()
-
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
@@ -1497,19 +1494,11 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 					if idx < 0 {
 						return
 					}
-					var seenIndexes set.Set[int]
-					if h == hook.XDP {
-						seenIndexes = xdpSeenIndexes
-					} else {
-						seenIndexes = tcSeenIndexes
-					}
 					if err := m.jumpMapAllocs[h].Assign(idx, netiface.Name); err != nil {
 						// Conflict with another program; need to alloc a new index.
 						logrus.WithError(err).Error("Start of day resync found invalid jump map index, " +
 							"allocate a fresh one.")
 						idx = -1
-					} else {
-						seenIndexes.Add(idx)
 					}
 					indexMap[h] = idx
 				}
