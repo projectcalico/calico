@@ -8,6 +8,13 @@ gcloud config set project unique-caldron-775
 export COMPONENT=felix
 export ZONE=europe-west3-c
 
+# 4 vCPUs seems to be the minimum for stable tests.  8 vCPUs doesn't seem to
+# help performance very much.
+#
+# With each FV batch being quite small, the tests don't use that much RAM, so
+# we can use a high-CPU machine type to save costs.
+export VM_MACHINE_TYPE=n4-highcpu-4
+
 export NUM_FV_BATCHES=8
 
 JOB_TAG=""
