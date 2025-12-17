@@ -339,7 +339,7 @@ message Rule {
 
   RuleMetadata metadata = 123;
 
-  // Changed to config option.
+  // Changed to FelixConfig option.
   reserved 200;
   reserved "log_prefix";
 
