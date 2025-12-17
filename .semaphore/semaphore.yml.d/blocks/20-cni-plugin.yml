@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "cni-plugin"
     prologue:
       commands:
         - cd cni-plugin
@@ -11,12 +14,15 @@
       - name: "CNI Plugin: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
       - name: "CNI Plugin: build windows images"
         commands:
           - ../.semaphore/run-and-monitor ci.log make image-windows
 - name: "CNI Plugin: Windows"
   run:
-    when: "false or ${CHANGE_IN(cni-plugin,process)}"
+    when: "false or ${CHANGE_IN(cni-plugin,non-go:/process/testing/aso,non-go:/process/testing/utils,non-go:/process/testing/winfv-cni-plugin)}"
   dependencies:
     - Prerequisites
   task:
@@ -40,8 +46,10 @@
         commands:
           - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
           - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
-          - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
+          - cd ~/calico/process/testing/aso && make dist-clean
     env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "cni-plugin"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
       - name: AZURE_LOCATION
@@ -56,7 +64,7 @@
           - export BACKEND=overlay
           - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
           - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
-          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
       - name: "CNI Plugin: Windows Containerd FV - l2bridge"
         execution_time_limit:
           minutes: 60
@@ -64,4 +72,4 @@
           - export BACKEND=l2bridge
           - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
           - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
-          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh

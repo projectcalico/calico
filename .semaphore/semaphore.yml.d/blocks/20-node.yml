@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "node"
     agent:
       machine:
         type: f1-standard-4
@@ -13,8 +16,15 @@
         - cd node
     jobs:
       - name: "Node: CI"
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
 - name: "Node: multi-arch build"
   run:
     when: "${CHANGE_IN(node)}"
@@ -62,6 +72,9 @@
   dependencies:
     - "Prerequisites"
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "node"
     prologue:
       commands:
         # Set up access to GCP buckets.
@@ -89,6 +102,6 @@
         commands:
           - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
           - '../.semaphore/vms/publish-reports "Node: KinD STs"'
-          - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
+          - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce

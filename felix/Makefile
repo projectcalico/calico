@@ -189,47 +189,45 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix-changed
 
-BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o common_map_stub_ing.o)
-
-# Generated map stub .c files are in the bpf-gpl/ dir, not bpf-gpl/bin
-BPF_GPL_MAP_STUB_C_FILES := $(BPF_GPL_MAP_STUB_O_FILES:bpf-gpl/bin/%.o=bpf-gpl/%.c)
-
-# Generated map stub .c files are in the bpf-gpl/ dir from this Makefile's perspective,
-# but in the root dir from bpf-gpl/Makefile's perspective.
-$(BPF_GPL_MAP_STUB_C_FILES):
-	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/ $(patsubst bpf-gpl/%,%,$@)"
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble_ingress.o bpf-gpl/bin/tc_preamble_egress.o \
 		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default_ingress.o  bpf-gpl/bin/policy_default_egress.o \
 		 bpf-gpl/bin/tcx_test.o
+BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o common_map_stub_ing.o)
 BPF_GPL_O_FILES+=$(BPF_GPL_MAP_STUB_O_FILES)
 
-# There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
+# There's a one-to-one mapping from UT C files to objects and the same for the apache programs.
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
 BPF_APACHE_C_FILES:=$(wildcard bpf-apache/*.c)
 BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
 
-ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
+# The BPF programs that we actually ship (in the bin/bpf/ dir).
+PROD_BPF_APACHE_PROGS=$(addprefix bin/bpf/, $(notdir $(BPF_APACHE_O_FILES)))
+PROD_BPF_GPL_PROGS=$(addprefix bin/bpf/, $(notdir $(BPF_GPL_O_FILES)))
+PROD_BPF_PROGS=$(PROD_BPF_APACHE_PROGS) $(PROD_BPF_GPL_PROGS)
 
 .PHONY: build-bpf clean-bpf
-build-bpf: $(ALL_BPF_PROGS)
+build-bpf: $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
 
-# Mainly defer to the BPF Makefiles but try to guess a superset of the dependencies
-# to avoid unnecessary rebuilds. Note '&:' means "run this target once to produce
-# all target files".
-$(ALL_BPF_PROGS) &: $(shell find bpf-gpl bpf-apache -name '*.[ch]') bpf-gpl/Makefile bpf-apache/Makefile
-	$(MAKE) register ARCH=$(ARCH)
-	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-apache all && \
-	                          make -j 16 -C bpf-gpl all ut-objs map-objs"
+$(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	rm -rf bin/bpf
 	mkdir -p bin/bpf
-	touch -c $(ALL_BPF_PROGS)
-	cp $(ALL_BPF_PROGS) bin/bpf
+	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
+
+$(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
+	$(MAKE) register ARCH=$(ARCH)
+	$(DOCKER_GO_BUILD) make -j 16 -C bpf-apache all
+	touch -c $@
+
+$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
+	$(MAKE) register ARCH=$(ARCH)
+	$(DOCKER_GO_BUILD) make -j 16 -C bpf-gpl all ut-objs map-objs
+	touch -c $@
 
 clean-bpf:
-	rm -f bpf-gpl/*.d bpf-apache/*.d
+	rm -rf bpf-gpl/*.d bpf-apache/*.d bin/bpf
 	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
 	                          make -j -C bpf-gpl clean"
 
@@ -283,8 +281,11 @@ $(FELIX_CONTAINER_CREATED): register \
 
 UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 
+# The old XDP tests rely on the Apache BPF programs being built.  The UTs that
+# rely on the GPL BPF programs are skipped by this target; they run under the
+# ut-bpf target, which requires root privileges.
 .PHONY: ut
-ut combined.coverprofile: $(SRC_FILES)  $(LIBBPF_A) build-bpf
+ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_RUN) -e $(ACK_GINKGO) $(CALICO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
@@ -531,12 +532,12 @@ release-build: .release-$(VERSION).created
 # Developer helper scripts (not used by build or test)
 ###############################################################################
 .PHONY: ut-no-cover
-ut-no-cover: $(SRC_FILES)
+ut-no-cover: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs without coverage.
 	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: ut-watch
-ut-watch: $(SRC_FILES)
+ut-watch: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Watching go UTs for changes...
 	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
@@ -553,8 +554,14 @@ bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ut -c -gcflags="-N -l" -o $@
 
+.PHONY: ut-bpf-prereqs
+ut-bpf-prereqs: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+
 .PHONY: ut-bpf
-ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+ut-bpf: ut-bpf-prereqs
+	$(MAKE) ut-bpf-no-prereqs
+
+ut-bpf-no-prereqs:
 	mkdir -p report
 	$(DOCKER_RUN) \
 		--privileged \

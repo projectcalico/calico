@@ -155,6 +155,8 @@ enum FilterType {
   FilterTypeSourceNamespace = 4;
   FilterTypePolicyTier = 5;
   FilterTypePolicyName = 6;
+  FilterTypePolicyKind = 7;
+  FilterTypePolicyNamespace = 8;
 }
 
 // FlowResult wraps a Flow object with additional metadata.
@@ -200,6 +202,12 @@ message Filter {
 
   // Policies matches on policy fields. Combined using logical OR.
   repeated PolicyMatch policies = 8;
+
+  // Reporter filters on the reporter field.
+  Reporter reporter = 9;
+
+  // Pending/Staged Actions filters on the action field. Combined using logical OR.
+  repeated Action pending_actions = 10;
 }
 
 enum MatchType {

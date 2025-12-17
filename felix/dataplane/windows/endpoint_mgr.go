@@ -593,22 +593,29 @@ func (m *endpointManager) getHnsEndpointId(ip string) (string, error) {
 // profileIDsToStrings converts a list of profile names to their string representation with prefix.
 func profileIDsToStrings(prefix string, in []string) (out []string) {
 	for _, s := range in {
-		out = append(out, prefix+s)
+		out = append(out, profileIDToString(prefix, s))
 	}
 	return
+}
+
+func profileIDToString(prefix string, name string) string {
+	return fmt.Sprintf("%s%s", prefix, name)
 }
 
 // policyIDsToStrings converts a list of PolicyID to their string representation with prefix.
 func policyIDsToStrings(prefix string, in []*proto.PolicyID) []string {
 	var out []string
 	for _, id := range in {
-		if id.Namespace != "" {
-			out = append(out, fmt.Sprintf("%s%s/%s/%s", prefix, id.Kind, id.Namespace, id.Name))
-		} else {
-			out = append(out, fmt.Sprintf("%s%s/%s", prefix, id.Kind, id.Name))
-		}
+		out = append(out, policyIDToString(prefix, id))
 	}
 	return out
+}
+
+func policyIDToString(prefix string, id *proto.PolicyID) string {
+	if id.Namespace != "" {
+		return fmt.Sprintf("%s%s/%s/%s", prefix, id.Kind, id.Namespace, id.Name)
+	}
+	return fmt.Sprintf("%s%s/%s", prefix, id.Kind, id.Name)
 }
 
 // loopPollingForInterfaceAddrs periodically checks the IP addresses on the host and sends updates on the channel
