@@ -97,8 +97,6 @@ type EndpointData interface {
 type endpointData interface {
 	EndpointData
 	allIPs() [][16]byte
-	isMarkedToBeDeleted() bool
-	setMarkedToBeDeleted(b bool)
 }
 
 type MatchData struct {
@@ -151,6 +149,9 @@ type EndpointLookupsCache struct {
 
 	endpointDeletionTimers map[model.Key]*time.Timer
 
+	// Map to track which endpoints are marked for deletion
+	markedForDeletion map[model.EndpointKey]bool
+
 	// Node relationship data.
 	// TODO(rlb): We should just treat this as an endpoint
 	nodes         map[string]v3.NodeSpec
@@ -175,6 +176,7 @@ func NewEndpointLookupsCache(opts ...EndpointLookupsCacheOption) *EndpointLookup
 		remoteEndpointData: map[model.EndpointKey]*RemoteEndpointData{},
 
 		endpointDeletionTimers: map[model.Key]*time.Timer{},
+		markedForDeletion:      map[model.EndpointKey]bool{},
 		nodeIPToNames:          make(map[[16]byte][]string),
 		nodes:                  make(map[string]v3.NodeSpec),
 		deletionDelay:          endpointDataDeletionDelay,
@@ -297,13 +299,12 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 
 func CalculateCommonEndpointData(key model.EndpointKey, ep model.Endpoint) CommonEndpointData {
 	generateName, ips := extractEndpointInfo(ep)
-	commonData := CommonEndpointData{
+	return CommonEndpointData{
 		key:          key,
 		labels:       ep.GetLabels(),
 		generateName: generateName,
 		ips:          ips,
 	}
-	return commonData
 }
 
 func extractEndpointInfo(ep model.Endpoint) (string, [][16]byte) {
@@ -396,24 +397,26 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.EndpointKey, incom
 	// any IP that shouldn't be discarded.
 	ipsToUpdate := set.New[[16]byte]()
 	for _, ip := range ipsOfIncomingEndpoint {
-		// If this is an already existing IP, then remove it,
+		// If this is an already existing IP, then remove it
 		if ipsToRemove.Contains(ip) {
 			ipsToRemove.Discard(ip)
 		}
 
-		// capture all incoming IPs as both new and existing ip mappins
+		// capture all incoming IPs as both new and existing ip mappings
 		// need to be updated with incoming endpoint data
 		ipsToUpdate.Add(ip)
 	}
 
 	// update endpoint data lookup by key
 
-	// if there was a previous endpoint with the same key to be deleted,
+	// If there was a previous endpoint with the same key to be deleted,
 	// stop the deletion timer and let the entries be updated with incomingEndpointData
 	deletionTimer, isEndpointSetToBePrevDeleted := ec.endpointDeletionTimers[key]
 	if endpointAlreadyExists && isEndpointSetToBePrevDeleted {
 		deletionTimer.Stop()
 		delete(ec.endpointDeletionTimers, key)
+		// Remove deletion marking since we're updating the endpoint
+		delete(ec.markedForDeletion, key)
 	}
 
 	ec.storeEndpoint(key, incomingEndpointData)
@@ -490,7 +493,7 @@ func (ec *EndpointLookupsCache) updateIPToEndpointMapping(ip [16]byte, incomingE
 	isExistingEp := false
 	i := 0
 	for i < len(existingEpDataForIp) {
-		if existingEpDataForIp[i].isMarkedToBeDeleted() {
+		if epKey, ok := existingEpDataForIp[i].Key().(model.EndpointKey); ok && ec.markedForDeletion[epKey] {
 			existingEpDataForIp = removeEndpointDataFromSlice(existingEpDataForIp, i)
 			continue
 		}
@@ -520,14 +523,14 @@ func removeEndpointDataFromSlice(s []endpointData, i int) []endpointData {
 // removeEndpointWithDelay marks all EndpointData referenced by the
 // (key model.Key) and delegates the removeEndpoint to another
 // goroutine that will be called after endpointDataTTLAfterMarkedAsRemoved
-// has passed.  ipToEndpointDeletionTimers is used to track the all the timers
+// has passed. ipToEndpointDeletionTimers is used to track all the timers
 // created for tentatively deleted endpoints as they are accessed by add/update
 // operations.
 func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.EndpointKey) {
 	ec.epMutex.Lock()
 	defer ec.epMutex.Unlock()
 
-	ed, endpointExists := ec.lookupEndpoint(key)
+	_, endpointExists := ec.lookupEndpoint(key)
 	if !endpointExists {
 		// for performance improvement - as time.AfterFunc creates a go routine
 		return
@@ -539,13 +542,13 @@ func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.EndpointKey) {
 	}
 
 	// mark the endpoint to be deleted and attach a timer to delegate the actual deletion
-	ed.setMarkedToBeDeleted(true)
+	ec.markedForDeletion[key] = true
 
 	endpointDeletionTimer := time.AfterFunc(ec.deletionDelay, func() { ec.removeEndpoint(key) })
 	ec.endpointDeletionTimers[key] = endpointDeletionTimer
 }
 
-// removeEndpoint removes all EndpointData markedToBeDeleted from the slice
+// removeEndpoint removes all EndpointData that were previously marked for deletion
 // captures all IPs and removes all correspondoing IP to EndpointData mapping as well.
 func (ec *EndpointLookupsCache) removeEndpoint(key model.EndpointKey) {
 	ec.epMutex.Lock()
@@ -559,7 +562,7 @@ func (ec *EndpointLookupsCache) removeEndpoint(key model.EndpointKey) {
 
 	// If the endpoint has not been marked for deletion ignore it as it may have been
 	// updated before the deletion timer has been triggered.
-	if !currentEndpointData.isMarkedToBeDeleted() {
+	if !ec.markedForDeletion[key] {
 		return
 	}
 
@@ -572,6 +575,7 @@ func (ec *EndpointLookupsCache) removeEndpoint(key model.EndpointKey) {
 	delete(ec.localEndpointData, key)
 	delete(ec.remoteEndpointData, key)
 	delete(ec.endpointDeletionTimers, key)
+	delete(ec.markedForDeletion, key)
 	ec.reportEndpointCacheMetrics()
 }
 
@@ -637,13 +641,34 @@ func (ec *EndpointLookupsCache) GetAllEndpointData() []EndpointData {
 	defer ec.epMutex.RUnlock()
 
 	allEds := []EndpointData{}
-	for _, ed := range ec.allEndpoints() {
-		if ed.isMarkedToBeDeleted() {
+	for key, ed := range ec.allEndpoints() {
+		if ec.markedForDeletion[key] {
 			continue
 		}
 		allEds = append(allEds, ed)
 	}
 	return allEds
+}
+
+// IsEndpointDeleted returns whether the given endpoint is marked for deletion.
+func (ec *EndpointLookupsCache) IsEndpointDeleted(ep EndpointData) bool {
+	ec.epMutex.RLock()
+	defer ec.epMutex.RUnlock()
+
+	if key, ok := ep.Key().(model.EndpointKey); ok {
+		return ec.markedForDeletion[key]
+	}
+	return false
+}
+
+// MarkEndpointForDeletion marks the given endpoint for deletion.
+func (ec *EndpointLookupsCache) MarkEndpointForDeletion(ep EndpointData) {
+	ec.epMutex.Lock()
+	defer ec.epMutex.Unlock()
+
+	if key, ok := ep.Key().(model.EndpointKey); ok {
+		ec.markedForDeletion[key] = true
+	}
 }
 
 // reportEndpointCacheMetrics reports endpoint cache performance metrics to prometheus
@@ -745,7 +770,7 @@ func (ec *EndpointLookupsCache) DumpEndpoints() string {
 		ips := set.New[[16]byte]()
 
 		deleted := "deleted"
-		if !endpointData.isMarkedToBeDeleted() {
+		if !ec.markedForDeletion[key] {
 			ips.AddAll(endpointData.allIPs())
 			deleted = ""
 		}
@@ -846,10 +871,6 @@ type CommonEndpointData struct {
 	// contents of the GenerateName field from the WorkloadEndpoint, which is
 	// used by the collector for determining the aggregation name.
 	generateName string
-
-	// used for deleting an EndpointData, to delegate the actual
-	// deletion endpointDataDeletionDelay later
-	markedToBeDeleted bool
 }
 
 func (e *CommonEndpointData) Key() model.Key {
@@ -875,14 +896,6 @@ func (e *CommonEndpointData) Labels() uniquelabels.Map {
 
 func (e *CommonEndpointData) GenerateName() string {
 	return e.generateName
-}
-
-func (e *CommonEndpointData) isMarkedToBeDeleted() bool {
-	return e.markedToBeDeleted
-}
-
-func (e *CommonEndpointData) setMarkedToBeDeleted(b bool) {
-	e.markedToBeDeleted = b
 }
 
 // LocalEndpointData is the cache entry struct for local endpoints.  We store

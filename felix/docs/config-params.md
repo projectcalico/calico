@@ -444,7 +444,12 @@ The full path to the Felix log. Set to none to disable file logging.
 
 ### `LogPrefix` (config file) / `logPrefix` (YAML)
 
-The log prefix that Felix uses when rendering LOG rules.
+The log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers
+to include extra information in the log prefix.
+- %t: Tier name.
+- %k: Kind (short names).
+- %n: Policy or profile name.
+- %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
 
 | Detail |   |
 | --- | --- |
@@ -452,7 +457,7 @@ The log prefix that Felix uses when rendering LOG rules.
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | `calico-packet` |
 | `FelixConfiguration` field | `logPrefix` (YAML) `LogPrefix` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-zA-Z0-9%: /_-])*$</code>. |
 | Default value (YAML) | `calico-packet` |
 
 ### `LogSeverityFile` (config file) / `logSeverityFile` (YAML)

@@ -21,7 +21,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+<<<<<<< HEAD
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+=======
+>>>>>>> open-source/master
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -44,6 +47,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 	)
 
 	BeforeEach(func() {
+<<<<<<< HEAD
 		iOpts := []infrastructure.CreateOption{}
 		infra = getInfra(iOpts...)
 
@@ -51,6 +55,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		options.IPIPMode = apiv3.IPIPModeNever
 		options.EnableIPv6 = true
 		options.BPFEnableIPv6 = true
+=======
+		infra = getInfra()
+
+		options := infrastructure.DefaultTopologyOptions()
+		options.IPIPMode = api.IPIPModeNever
+>>>>>>> open-source/master
 		tc, client = infrastructure.StartSingleNodeTopology(options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -68,6 +78,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		}
 	})
 
+<<<<<<< HEAD
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
@@ -95,6 +106,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 	})
 
 	It("pepper should have expected restriction on the rule jumping to DSCP chain static rules", func() {
+=======
+	It("LOG action rule should reflect logPrefix correctly", func() {
+>>>>>>> open-source/master
 		if BPFMode() {
 			Skip("Skipping for BPF dataplane.")
 		}
@@ -102,14 +116,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		// Explicitly configure the MTU.
 		felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
 		felixConfig.Name = "default"
+<<<<<<< HEAD
 		rate := 20
 		felixConfig.Spec.LogActionRate = &rate
+=======
+		felixConfig.Spec.LogPrefix = "aXy9%n%%t %k %p"
+>>>>>>> open-source/master
 		_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// gnp2-4 egress(N1-1) ingress(N1-1)
 		gnp := api.NewGlobalNetworkPolicy()
+<<<<<<< HEAD
 		gnp.Name = "default.ep2-4"
+=======
+		gnp.Name = "ep2-4"
+>>>>>>> open-source/master
 		gnp.Spec.Order = &float1_0
 		gnp.Spec.Tier = "default"
 		gnp.Spec.Selector = ep1_1.NameSelector()
@@ -123,19 +145,32 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, gnp, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
+<<<<<<< HEAD
 		detecIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
+=======
+		expectedPattern := "aXy9ep2-4%default gnp ep2-4: "
+		detectIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
+>>>>>>> open-source/master
 			binary := "iptables-save"
 			if ipVersion == 6 {
 				binary = "ip6tables-save"
 			}
+<<<<<<< HEAD
 			// -m limit --limit 20/min ... -j LOG --log-prefix "calico-packet: " --log-level 5
 			expectedRule := "-m limit --limit 20/min"
+=======
+>>>>>>> open-source/master
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "filter")
 				return output
 			}
+<<<<<<< HEAD
 			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
 			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
+=======
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedPattern))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedPattern))
+>>>>>>> open-source/master
 		}
 
 		detectNftablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
@@ -143,23 +178,36 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 			if ipVersion == 6 {
 				ipFamily = "ip6"
 			}
+<<<<<<< HEAD
 			// limit rate 20/minute ... log prefix "calico-packet" level info ... GlobalNetworkPolicy default.ep2-4 ingress"
 			// TODO (mazdak): also check for LOG action and calico-packet
 			pattern := "limit rate 20/minute"
+=======
+>>>>>>> open-source/master
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "table", ipFamily, "calico")
 				return output
 			}
+<<<<<<< HEAD
 			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
 			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
+=======
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(expectedPattern))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(expectedPattern))
+>>>>>>> open-source/master
 		}
 
 		if NFTMode() {
 			detectNftablesRule(tc.Felixes[0], 4)
 			detectNftablesRule(tc.Felixes[0], 6)
 		} else {
+<<<<<<< HEAD
 			detecIptablesRule(tc.Felixes[0], 4)
 			detecIptablesRule(tc.Felixes[0], 6)
+=======
+			detectIptablesRule(tc.Felixes[0], 4)
+			detectIptablesRule(tc.Felixes[0], 6)
+>>>>>>> open-source/master
 		}
 	})
 })
