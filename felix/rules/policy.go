@@ -16,6 +16,7 @@ package rules
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -717,6 +718,8 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	return finalRules
 }
 
+var logPrefixRE = regexp.MustCompile("%[tknp]")
+
 // generateLogPrefix returns a log prefix string with known specifiers replaced by their corresponding values.
 // If no known specifiers are present, the log prefix is returned as-is.
 // Supported specifiers in the log prefix format string:
@@ -749,15 +752,23 @@ func (r *DefaultRuleRenderer) generateLogPrefix(name, tier, namespace string) st
 		}
 	}
 
-	namespacedName := strippedName
-	if len(namespace) != 0 {
-		namespacedName = fmt.Sprintf("%s/%s", namespace, strippedName)
-	}
-
-	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
-	logPrefix = strings.ReplaceAll(logPrefix, "%p", namespacedName)
-	logPrefix = strings.ReplaceAll(logPrefix, "%n", strippedName)
-	return strings.ReplaceAll(logPrefix, "%t", tier)
+	return logPrefixRE.ReplaceAllStringFunc(logPrefix, func(specifier string) string {
+		switch specifier {
+		case "%k":
+			return kind
+		case "%p":
+			if len(namespace) != 0 {
+				return fmt.Sprintf("%s/%s", namespace, strippedName)
+			}
+			return strippedName
+		case "%n":
+			return strippedName
+		case "%t":
+			return tier
+		default:
+			return specifier
+		}
+	})
 }
 
 func policyNameToKindShortName(name, tier, namespace string) string {
