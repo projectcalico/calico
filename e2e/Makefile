@@ -4,7 +4,7 @@ PACKAGE_NAME=github.com/projectcalico/calico/e2e
 include ../lib.Makefile
 
 SRC_FILES=$(shell find pkg cmd -name '*.go')
-build: bin/k8s/e2e.test bin/clusternetworkpolicy/e2e.test $(SRC_FILES)
+build: bin/k8s/e2e.test bin/clusternetworkpolicy/e2e.test bin/gateway/e2e.test $(SRC_FILES)
 bin/k8s/e2e.test: $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/k8s -c -o $@
@@ -12,6 +12,10 @@ bin/k8s/e2e.test: $(SRC_FILES)
 bin/clusternetworkpolicy/e2e.test: $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
+
+bin/gateway/e2e.test: $(SRC_FILES)
+	mkdir -p bin/gateway
+	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/gateway -c -o $@
 
 ###############################################################################
 # test images
