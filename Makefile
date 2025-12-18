@@ -181,6 +181,14 @@ e2e-run-cnp-test:
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
+## Run the Gateway API conformance tests against a pre-existing kind cluster.
+e2e-run-gateway-test:
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/gateway/e2e.test \
+	  -gateway-class=tigera-gateway-class \
+	  -supported-features=Gateway,HTTPRoute \
+	  -cleanup-base-resources=true \
+	  -allow-crds-mismatch
+
 ###############################################################################
 # Release logic below
 ###############################################################################
