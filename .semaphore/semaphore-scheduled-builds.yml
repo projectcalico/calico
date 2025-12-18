@@ -967,6 +967,43 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+  - name: "E2E tests: Gateway API Conformance"
+    run:
+      when: "true or change_in(['/gateway', '/e2e/cmd/gateway', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd e2e
+      jobs:
+        - name: "Gateway API: Conformance Tests"
+          commands:
+            - cd ..
+            # Build test binaries
+            - make -C e2e build
+            # Create kind cluster and deploy Calico
+            - make -C node kind-k8st-setup
+            # Enable Tigera Gateway API support
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl apply -f gateway/test/conformance/manifests/gatewayapi.yaml
+            # Wait for Gateway API CRDs to be installed by the operator
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --for condition=established --timeout=5m crd/gatewayclasses.gateway.networking.k8s.io
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
+            # Create test infrastructure namespace
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl create namespace gateway-conformance-infra || true
+            # Apply Gateway API test resources
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl apply -f gateway/test/conformance/manifests/gateway.yaml
+            # Wait for Gateway readiness
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --timeout=5m -n gateway-conformance-infra gateway/gateway-conformance-default --for=condition=Programmed || true
+            # Run conformance tests
+            - ../.semaphore/run-and-monitor gateway-conformance.log make e2e-run-gateway-test
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+            - 'artifact push job ./report/ --destination semaphore/gateway-conformance-reports || true'
   - name: Goldmane
     run:
       when: "true"
