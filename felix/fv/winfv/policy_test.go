@@ -26,6 +26,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/fv/winfv"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -197,14 +198,15 @@ var _ = Describe("Windows policy test", func() {
 			kubectlExecWithErrors(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 
 			// Create a policy allowing to the nginx-b service.
-			client := newClient()
+			client, err := winfv.NewClient()
+			Expect(err).NotTo(HaveOccurred())
 
 			By("creating tier1 and a network policy in it")
 			tier1 := v3.NewTier()
 			tier1.Name = "tier1"
 			order := float64(10)
 			tier1.Spec.Order = &order
-			_, err := client.Tiers().Create(context.Background(), tier1, options.SetOptions{})
+			_, err = client.Tiers().Create(context.Background(), tier1, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				_, err = client.Tiers().Delete(context.Background(), tier1.Name, options.DeleteOptions{})
