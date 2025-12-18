@@ -5,8 +5,9 @@
 
 ARG CALICO_BASE
 ARG UBI_IMAGE
+ARG TARGETPLATFORM
 
-FROM ${UBI_IMAGE} AS ubi
+FROM --platform=${TARGETPLATFORM} ${UBI_IMAGE} AS ubi
 
 RUN microdnf upgrade -y && \
   microdnf install -y iptables nftables
