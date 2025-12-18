@@ -8,10 +8,19 @@ FROM istio/proxyv2:${ISTIO_VERSION} AS proxyv2
 
 FROM registry.access.redhat.com/ubi10/ubi:latest AS ubi
 
+# pilot agent generates config files in /etc/istio/proxy (envoy-rev.json etc)
+RUN mkdir -p /rootfs/etc/istio/proxy && chown 10001:10001 /rootfs/etc/istio/proxy
 FROM scratch AS source
 
+ARG TARGETARCH
+
+COPY --from=ubi /rootfs /
+
 # Copy the envoy binary built from upstream vendor
-COPY --from=proxyv2 /usr/local/bin/envoy /usr/bin/envoy
+# pilot-agent expects the envoy binary to be located at /usr/local/bin/envoy as it is hardcoded in the source code
+COPY --from=proxyv2 /usr/local/bin/envoy /usr/local/bin/envoy
+COPY bin/pilot-agent-${TARGETARCH} /usr/bin/pilot-agent
+COPY istio/tools/packaging/common/envoy_bootstrap.json /var/lib/istio/envoy/envoy_bootstrap_tmpl.json
 
 COPY --from=ubi /lib64/libdl.so.2 /lib64/libdl.so.2
 COPY --from=ubi /lib64/libm.so.6 /lib64/libm.so.6
@@ -47,4 +56,4 @@ USER 10001:10001
 # Envoy default ports for Istio
 EXPOSE 15000 15001 15006 15020 15021 15090
 
-ENTRYPOINT ["/usr/bin/envoy"]
+ENTRYPOINT ["/usr/bin/pilot-agent"]

@@ -44,20 +44,24 @@ $(ISTIO_DOWNLOADED):
 # Build
 ###############################################################################
 .PHONY: build
-build: bin/pilot-discovery-$(ARCH) bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH)
+build: bin/pilot-discovery-$(ARCH) bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) bin/pilot-agent-$(ARCH)
 
 bin/install-cni-$(ARCH): BUILD_TAGS=agent,disable_pgv,grpcnotrace,retrynotrace
 bin/istio-cni-$(ARCH): BUILD_TAGS=agent,disable_pgv,grpcnotrace,retrynotrace
+bin/pilot-agent-$(ARCH): BUILD_TAGS=agent,disable_pgv,grpcnotrace,retrynotrace
 bin/pilot-discovery-$(ARCH): BUILD_TAGS=disable_pgv,vtprotobuf
-
-bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
-	$(call build_binary_dir,istio,./pilot/cmd/pilot-discovery,../$@)
 
 bin/install-cni-$(ARCH): $(ISTIO_DOWNLOADED)
 	$(call build_binary_dir,istio,./cni/cmd/install-cni,../$@)
 
 bin/istio-cni-$(ARCH): $(ISTIO_DOWNLOADED)
 	$(call build_binary_dir,istio,./cni/cmd/istio-cni,../$@)
+
+bin/pilot-agent-$(ARCH): $(ISTIO_DOWNLOADED)
+	$(call build_binary_dir,istio,./pilot/cmd/pilot-agent,../$@)
+
+bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
+	$(call build_binary_dir,istio,./pilot/cmd/pilot-discovery,../$@)
 
 ###############################################################################
 # Image
@@ -96,7 +100,7 @@ $(ISTIO_PILOT_IMAGE_CREATED): Dockerfile-pilot bin/pilot-discovery-$(ARCH) bin/L
 
 # istio-proxyv2 image
 $(ISTIO_PROXYV2_IMAGE): $(ISTIO_PROXYV2_IMAGE_CREATED)
-$(ISTIO_PROXYV2_IMAGE_CREATED): Dockerfile-proxyv2 bin/LICENSE
+$(ISTIO_PROXYV2_IMAGE_CREATED): Dockerfile-proxyv2 bin/pilot-agent-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD_THIRD_PARTY) --build-arg ISTIO_VERSION=$(ISTIO_VERSION) -t $(ISTIO_PROXYV2_IMAGE):latest-$(ARCH) -f Dockerfile-proxyv2 .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_PROXYV2_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
