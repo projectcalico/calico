@@ -26,8 +26,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/felix/fv/winfv"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -119,31 +118,6 @@ func kubectlExecWithErrors(command string) {
 	log.Infof("Error: %s", err)
 }
 
-func newClient() clientv3.Interface {
-	cfg := apiconfig.NewCalicoAPIConfig()
-	cfg.Spec.DatastoreType = apiconfig.Kubernetes
-	cfg.Spec.Kubeconfig = `c:\k\config`
-	client, err := clientv3.New(*cfg)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	mustInitDatastore(client)
-	return client
-}
-
-func mustInitDatastore(client clientv3.Interface) {
-	Eventually(func() error {
-		log.Info("Initializing the datastore...")
-		ctx, cancelFun := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancelFun()
-		err := client.EnsureInitialized(
-			ctx,
-			"v3.0.0-test",
-			"felix-fv",
-		)
-		log.WithError(err).Info("EnsureInitialized result")
-		return err
-	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
-}
-
 // These Windows policy FV tests rely on a 2 node cluster (1 Linux and 1 Windows) provisioned using internal tooling.
 // The test infra setup creates some pods:
 // - "client" and "clientB" are busybox pods
@@ -197,14 +171,15 @@ var _ = Describe("Windows policy test", func() {
 			kubectlExecWithErrors(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 
 			// Create a policy allowing to the nginx-b service.
-			client := newClient()
+			client, err := winfv.NewClient()
+			Expect(err).NotTo(HaveOccurred())
 
 			By("creating tier1 and a network policy in it")
 			tier1 := v3.NewTier()
 			tier1.Name = "tier1"
 			order := float64(10)
 			tier1.Spec.Order = &order
-			_, err := client.Tiers().Create(context.Background(), tier1, options.SetOptions{})
+			_, err = client.Tiers().Create(context.Background(), tier1, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				_, err = client.Tiers().Delete(context.Background(), tier1.Name, options.DeleteOptions{})
