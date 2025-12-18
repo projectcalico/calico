@@ -1,5 +1,6 @@
 .istio-cni.created-*
 .istio-pilot.created-*
+.istio-proxyv2.created-*
 .istio-ztunnel.created-*
 .istio.downloaded
 .release-*

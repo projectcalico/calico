@@ -9,12 +9,13 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/istio
 # Image names matching the prior tigera/istio repository convention
 ISTIO_CNI_IMAGE ?= istio-install-cni
 ISTIO_PILOT_IMAGE ?= istio-pilot
+ISTIO_PROXYV2_IMAGE ?= istio-proxyv2
 ISTIO_ZTUNNEL_IMAGE ?= istio-ztunnel
 
-BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_ZTUNNEL_IMAGE)
+BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_PROXYV2_IMAGE) $(ISTIO_ZTUNNEL_IMAGE)
 
 # Upstream version (configurable)
-ISTIO_VERSION ?= 1.27.3
+ISTIO_VERSION ?= 1.27.4
 ISTIO_ZTUNNEL_VERSION ?= $(shell grep -E '^ZTUNNEL_VERSION[[:space:]]*=' $(REPO_ROOT)/third_party/istio-ztunnel/Makefile | cut -d '=' -f2 | tr -d ' ')
 
 ##############################################################################
@@ -58,7 +59,11 @@ bin/install-cni-$(ARCH): $(ISTIO_DOWNLOADED)
 ###############################################################################
 ISTIO_CNI_IMAGE_CREATED = .istio-cni.created-$(ARCH)
 ISTIO_PILOT_IMAGE_CREATED = .istio-pilot.created-$(ARCH)
+ISTIO_PROXYV2_IMAGE_CREATED = .istio-proxyv2.created-$(ARCH)
 ISTIO_ZTUNNEL_IMAGE_CREATED = .istio-ztunnel.created-$(ARCH)
+
+bin/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md $@
 
 # Build images for all architectures
 .PHONY: image-all
@@ -72,21 +77,28 @@ image: $(BUILD_IMAGES)
 
 # istio-install-cni image
 $(ISTIO_CNI_IMAGE): $(ISTIO_CNI_IMAGE_CREATED)
-$(ISTIO_CNI_IMAGE_CREATED): Dockerfile-cni bin/install-cni-$(ARCH)
-	$(DOCKER_BUILD) -t $(ISTIO_CNI_IMAGE):latest-$(ARCH) -f Dockerfile-cni .
+$(ISTIO_CNI_IMAGE_CREATED): Dockerfile-install-cni bin/install-cni-$(ARCH) bin/LICENSE
+	$(DOCKER_BUILD) -t $(ISTIO_CNI_IMAGE):latest-$(ARCH) -f Dockerfile-install-cni .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_CNI_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # istio-pilot image
 $(ISTIO_PILOT_IMAGE): $(ISTIO_PILOT_IMAGE_CREATED)
-$(ISTIO_PILOT_IMAGE_CREATED): Dockerfile-pilot bin/pilot-discovery-$(ARCH)
+$(ISTIO_PILOT_IMAGE_CREATED): Dockerfile-pilot bin/pilot-discovery-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) -t $(ISTIO_PILOT_IMAGE):latest-$(ARCH) -f Dockerfile-pilot .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_PILOT_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
+# istio-proxyv2 image
+$(ISTIO_PROXYV2_IMAGE): $(ISTIO_PROXYV2_IMAGE_CREATED)
+$(ISTIO_PROXYV2_IMAGE_CREATED): Dockerfile-proxyv2 bin/LICENSE
+	$(DOCKER_BUILD_THIRD_PARTY) --build-arg ISTIO_VERSION=$(ISTIO_VERSION) -t $(ISTIO_PROXYV2_IMAGE):latest-$(ARCH) -f Dockerfile-proxyv2 .
+	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_PROXYV2_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
+	touch $@
+
 # istio-ztunnel image
 $(ISTIO_ZTUNNEL_IMAGE): $(ISTIO_ZTUNNEL_IMAGE_CREATED)
-$(ISTIO_ZTUNNEL_IMAGE_CREATED): Dockerfile-ztunnel
+$(ISTIO_ZTUNNEL_IMAGE_CREATED): Dockerfile-ztunnel bin/LICENSE
 	$(DOCKER_BUILD_THIRD_PARTY) --build-arg ISTIO_ZTUNNEL_VERSION=$(ISTIO_ZTUNNEL_VERSION) -t $(ISTIO_ZTUNNEL_IMAGE):latest-$(ARCH) -f Dockerfile-ztunnel .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_ZTUNNEL_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
@@ -98,7 +110,7 @@ $(ISTIO_ZTUNNEL_IMAGE_CREATED): Dockerfile-ztunnel
 clean:
 	rm -fr bin/ istio/
 	rm -f $(ISTIO_DOWNLOADED)
-	rm -f $(ISTIO_CNI_IMAGE_CREATED) $(ISTIO_PILOT_IMAGE_CREATED) $(ISTIO_ZTUNNEL_IMAGE_CREATED)
+	rm -f $(ISTIO_CNI_IMAGE_CREATED) $(ISTIO_PILOT_IMAGE_CREATED) $(ISTIO_PROXYV2_IMAGE_CREATED) $(ISTIO_ZTUNNEL_IMAGE_CREATED)
 	rm -f .release-*
 	-docker image rm -f $$(docker images $(ISTIO_CNI_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(ISTIO_PILOT_IMAGE) -a -q)
@@ -111,13 +123,7 @@ clean:
 ci: clean image
 
 .PHONY: cd
-cd: image var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
-	$(MAKE) retag-build-images-with-registries push-images-to-registries \
-		IMAGETAG=$(LATEST_IMAGE_TAG) EXCLUDEARCH="$(EXCLUDEARCH)" VALIDARCHES=$(ARCH)
-
-.PHONY: push-manifest
-push-manifest:
-	$(MAKE) push-manifests IMAGETAG=$(LATEST_IMAGE_TAG)
+cd: image-all cd-common
 
 ###############################################################################
 # Release

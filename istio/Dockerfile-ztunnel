@@ -16,10 +16,11 @@ FROM ${UBI_IMAGE} AS ubi
 FROM scratch AS source
 
 COPY --from=ztunnel /usr/bin/ztunnel /usr/bin/ztunnel
-COPY --from=ztunnel /LICENSE /LICENSE
 
 COPY --from=ubi /lib64/libgcc_s.so.1 /lib64/libgcc_s.so.1
 COPY --from=ubi /lib64/libm.so.6 /lib64/libm.so.6
+
+COPY bin/LICENSE /LICENSE
 
 FROM ${CALICO_BASE}
 
@@ -44,7 +45,6 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 
-# Run as non-root user
 USER 10001:10001
 
 # Ztunnel default ports
