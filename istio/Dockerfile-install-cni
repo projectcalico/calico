@@ -4,6 +4,12 @@
 # The binary is built separately using the Makefile, which compiles istio with Calico patches applied.
 
 ARG CALICO_BASE
+ARG UBI_IMAGE
+
+FROM ${UBI_IMAGE} AS ubi
+
+RUN microdnf upgrade -y && \
+  microdnf install -y iptables nftables
 
 FROM scratch AS source
 
@@ -11,6 +17,18 @@ ARG TARGETARCH
 
 COPY bin/install-cni-${TARGETARCH} /usr/bin/install-cni
 COPY bin/LICENSE /LICENSE
+
+COPY --from=ubi /usr/sbin/ip* /usr/sbin/
+COPY --from=ubi /usr/lib64/libxtables* /usr/lib64/
+COPY --from=ubi /usr/sbin/nft /usr/sbin/nft
+COPY --from=ubi /usr/lib64/xtables /usr/lib64/xtables
+COPY --from=ubi /usr/libexec/arptables-* /usr/libexec/
+COPY --from=ubi /usr/sbin/arptables* /usr/sbin/
+COPY --from=ubi /usr/sbin/ebtables* /usr/sbin/
+COPY --from=ubi /usr/sbin/xtables* /usr/sbin/
+COPY --from=ubi /lib64/libmnl.so.0 /lib64/libmnl.so.0
+COPY --from=ubi /lib64/libnftnl.so.11 /lib64/libnftnl.so.11
+COPY --from=ubi /lib64/libm.so.6 /lib64/libm.so.6
 
 FROM ${CALICO_BASE}
 
