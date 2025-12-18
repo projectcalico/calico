@@ -1,0 +1,43 @@
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+#
+# This Dockerfile packages the istio install-cni binary built from source into a minimal container.
+# The binary is built separately using the Makefile, which compiles istio with Calico patches applied.
+
+ARG CALICO_BASE
+
+FROM scratch AS source
+
+ARG TARGETARCH
+
+# Copy the install-cni binary built from patched source
+COPY bin/install-cni-${TARGETARCH} /usr/bin/install-cni
+# Copy license from source
+COPY istio/LICENSE /LICENSE
+
+FROM ${CALICO_BASE}
+
+ARG GIT_VERSION=unknown
+
+# These labels are required for OCP Certification
+LABEL description="This image contains a build of Istio's CNI component from github.com/istio/istio with Calico patches applied"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Istio CNI"
+LABEL release="1"
+LABEL summary="Istio CNI is the CNI plugin for Calico's integration with Istio ambient mesh"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
+LABEL org.opencontainers.image.description="This image contains a build of Istio's CNI component from github.com/istio/istio with Calico patches applied"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Istio CNI is the CNI plugin for Calico's integration with Istio ambient mesh"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+COPY --from=source / /
+
+# Run as non-root user
+USER 10001:10001
+
+ENTRYPOINT ["/usr/bin/install-cni"]
