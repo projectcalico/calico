@@ -411,7 +411,7 @@ where N is a number and unit is one of: second, minute, hour, or day. For exampl
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `logActionRate` (YAML) `LogActionRate` (Go API) |
-| `FelixConfiguration` schema | String matching the regular expression <code>^([0-9]+/(second\|minute\|hour\|day))$</code>. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^(([0-9]+/(second\|minute\|hour\|day)))?$</code>. |
 | Default value (YAML) | none |
 
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)

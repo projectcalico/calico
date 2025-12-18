@@ -624,11 +624,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		// This rule should log (and possibly do something else too).
 		logMatch := r.NewMatch()
 		if len(r.LogActionRate) != 0 && logActionRateRE.MatchString(r.LogActionRate) {
-			var logActionBurst uint32
-			if r.LogActionBurst > 0 {
-				logActionBurst = uint32(r.LogActionBurst)
-			}
-			logMatch = logMatch.Limit(r.LogActionRate, logActionBurst)
+			logMatch = logMatch.Limit(r.LogActionRate, uint32(r.LogActionBurst))
 		}
 		rules = append(rules, generictables.Rule{
 			Match:  logMatch,

@@ -333,10 +333,11 @@ type FelixConfigurationSpec struct {
 	// LogActionRate sets the rate of hitting a Log action. The value must be in the format "N/unit",
 	// where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
 	// [Default: ""]
-	// +kubebuilder:validation:Pattern=`^([0-9]+/(second|minute|hour|day))$`
+	// +kubebuilder:validation:Pattern=`^(([0-9]+/(second|minute|hour|day)))?$`
 	LogActionRate string `json:"logActionRate,omitempty"`
 
 	// LogActionBurst sets the burst of hitting a Log action when LogActionRate is enabled. [Default: 5]
+	// +kubebuilder:validation:XValidation:rule="self >= 0", message="logActionBurst must be a positive integer"
 	LogActionBurst *int `json:"logActionBurst,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
