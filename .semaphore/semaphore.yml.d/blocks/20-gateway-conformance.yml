@@ -19,8 +19,10 @@
           - make -C node kind-k8st-setup
           # Enable Tigera Gateway API support
           - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl apply -f gateway/test/conformance/manifests/gatewayapi.yaml
-          # Wait for Gateway API CRDs to be installed by the operator
-          - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --for condition=established --timeout=5m crd/gatewayclasses.gateway.networking.k8s.io
+          # Wait for Gateway API CRDs to be installed by the operator (poll until CRD exists)
+          - until KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl get crd gatewayclasses.gateway.networking.k8s.io 2>/dev/null; do echo "Waiting for Gateway API CRDs..."; sleep 2; done
+          # Wait for CRD to be established and ready
+          - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --for=condition=Established --timeout=60s crd/gatewayclasses.gateway.networking.k8s.io
           - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
           # Create test infrastructure namespace
           - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl create namespace gateway-conformance-infra || true
