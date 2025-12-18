@@ -35,10 +35,10 @@
     .PARAMETER ExternalNetAdapter
         Specify a specific network adapter to bind to a DHCP network
 
-    .PARAMETER Force 
+    .PARAMETER Force
         If a restart is required, forces an immediate restart.
-        
-    .PARAMETER HyperV 
+
+    .PARAMETER HyperV
         If passed, prepare the machine for Hyper-V containers
 
     .PARAMETER NoRestart
@@ -252,7 +252,7 @@ New-ContainerTransparentNetwork
     }
 
     Write-Output "Creating container network (Transparent)..."
-    
+
     # Download and Install powershell module HNS-Network
     $containerdPath='C:\Program Files\containerd\cni\bin\'
     if (-not (Test-Path $containerdPath)){
@@ -278,7 +278,7 @@ Install-ContainerDHost
         {
             Write-Output "Enabling Hyper-V containers by default for Client SKU"
             $HyperV = $true
-        }    
+        }
     }
     #
     # Validate required Windows features
@@ -338,7 +338,7 @@ Install-ContainerDHost
             else
             {
                 Write-Output "Networking is already configured.  Confirming configuration..."
-                
+
                 $transparentNetwork = $networks |Where-Object { $_.Mode -eq "Transparent" }
 
                 if ($null -eq $transparentNetwork)
@@ -402,16 +402,16 @@ Copy-File
     param(
         [string]
         $SourcePath,
-        
+
         [string]
         $DestinationPath
     )
-    
+
     if ($SourcePath -eq $DestinationPath)
     {
         return
     }
-          
+
     if (Test-Path $SourcePath)
     {
         Copy-Item -Path $SourcePath -Destination $DestinationPath
@@ -423,7 +423,7 @@ Copy-File
             $handler = New-Object System.Net.Http.HttpClientHandler
             $client = New-Object System.Net.Http.HttpClient($handler)
             $client.Timeout = New-Object System.TimeSpan(0, 30, 0)
-            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new() 
+            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new()
             $responseMsg = $client.GetAsync([System.Uri]::new($SourcePath), $cancelTokenSource.Token)
             $responseMsg.Wait()
 
@@ -439,9 +439,9 @@ Copy-File
                     if ($null -ne $copyStreamOp.Exception)
                     {
                         throw $copyStreamOp.Exception
-                    }      
+                    }
                 }
-            }  
+            }
         }
         elseif ($PSVersionTable.PSVersion.Major -ge 5)
         {
@@ -456,7 +456,7 @@ Copy-File
         {
             $webClient = New-Object System.Net.WebClient
             $webClient.DownloadFile($SourcePath, $DestinationPath)
-        } 
+        }
     }
     else
     {
@@ -465,16 +465,16 @@ Copy-File
 }
 
 
-function 
+function
 Test-Admin()
 {
     # Get the ID and security principal of the current user account
     $myWindowsID=[System.Security.Principal.WindowsIdentity]::GetCurrent()
     $myWindowsPrincipal=new-object System.Security.Principal.WindowsPrincipal($myWindowsID)
-  
+
     # Get the security principal for the Administrator role
     $adminRole=[System.Security.Principal.WindowsBuiltInRole]::Administrator
-  
+
     # Check to see if we are currently running "as Administrator"
     if ($myWindowsPrincipal.IsInRole($adminRole))
     {
@@ -487,31 +487,31 @@ Test-Admin()
         # We are not running "as Administrator"
         # Exit from the current, unelevated, process
         #
-        throw "You must run this script as administrator"   
+        throw "You must run this script as administrator"
     }
 }
 
 
-function 
+function
 Test-Client()
 {
     return (-not ((Get-Command Get-WindowsFeature -ErrorAction SilentlyContinue) -or (Test-Nano)))
 }
 
 
-function 
+function
 Test-Nano()
 {
     $EditionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID').EditionId
 
-    return (($EditionId -eq "ServerStandardNano") -or 
-            ($EditionId -eq "ServerDataCenterNano") -or 
-            ($EditionId -eq "NanoServer") -or 
+    return (($EditionId -eq "ServerStandardNano") -or
+            ($EditionId -eq "ServerDataCenterNano") -or
+            ($EditionId -eq "NanoServer") -or
             ($EditionId -eq "ServerTuva"))
 }
 
 
-function 
+function
 Wait-Network()
 {
     $connectedAdapter = Get-NetAdapter | Where-Object ConnectorPresent
@@ -520,7 +520,7 @@ Wait-Network()
     {
         throw "No connected network"
     }
-       
+
     $startTime = Get-Date
     $timeElapsed = $(Get-Date) - $startTime
 
@@ -543,7 +543,7 @@ Wait-Network()
 }
 
 
-function 
+function
 Install-Containerd()
 {
     [CmdletBinding()]
@@ -639,25 +639,25 @@ Install-Containerd()
     }
 
     Write-Output "The following images are present on this machine:"
-    
+
     nerdctl images -a | Write-Output
 }
 
-function 
+function
 Start-Containerd()
 {
     Start-Service -Name $global:ContainerdServiceName
 }
 
 
-function 
+function
 Stop-Containerd()
 {
     Stop-Service -Name $global:ContainerdServiceName
 }
 
 function
-Remove-Containerd() 
+Remove-Containerd()
 {
     Stop-Containerd
     (Get-WmiObject -Class Win32_Service -Filter "Name='containerd'").delete()
@@ -665,7 +665,7 @@ Remove-Containerd()
     Remove-Item -r -Force "$Env:ProgramFiles\nerdctl"
 }
 
-function 
+function
 Test-Containerd()
 {
     $service = Get-Service -Name $global:ContainerdServiceName -ErrorAction SilentlyContinue
@@ -674,7 +674,7 @@ Test-Containerd()
 }
 
 
-function 
+function
 Wait-Containerd()
 {
     Write-Output "Waiting for Containerd daemon..."
@@ -694,14 +694,14 @@ Wait-Containerd()
 
             $containerdReady = $true
         }
-        catch 
+        catch
         {
             $timeElapsed = $(Get-Date) - $startTime
 
             if ($($timeElapsed).TotalMinutes -ge 1)
             {
                 throw "Containerd Daemon did not start successfully within 1 minute."
-            } 
+            }
 
             # Swallow error and try again
             Start-Sleep -sec 1
@@ -739,7 +739,7 @@ try
 
     Write-Output "All done."
 }
-catch 
+catch
 {
     Write-Error $_
 }
