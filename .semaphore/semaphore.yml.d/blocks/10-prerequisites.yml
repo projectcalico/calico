@@ -25,7 +25,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['go.mod', 'go.sum', '/**/*.go', '**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     env_vars:
@@ -56,7 +56,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     jobs:
@@ -69,7 +69,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['**/*'], {pipeline_file: 'track', exclude: ['libbpf', '.[a-z]*']})
+      change_in(['/**/*'], {pipeline_file: 'track', exclude: ['libbpf', '.[a-z]*']})
   dependencies: []
   task:
     jobs:
@@ -82,7 +82,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['**/*.pb.go', '**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     jobs:
