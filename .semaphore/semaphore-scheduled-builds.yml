@@ -987,14 +987,14 @@ blocks:
             # Create kind cluster and deploy Calico
             - make -C node kind-k8st-setup
             # Enable Tigera Gateway API support
-            - KUBECONFIG=${KIND_KUBECONFIG} kubectl apply -f gateway/test/conformance/manifests/gatewayapi.yaml
-            - KUBECONFIG=${KIND_KUBECONFIG} kubectl wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl apply -f gateway/test/conformance/manifests/gatewayapi.yaml
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
             # Create test infrastructure namespace
-            - KUBECONFIG=${KIND_KUBECONFIG} kubectl create namespace gateway-conformance-infra || true
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl create namespace gateway-conformance-infra || true
             # Apply Gateway API test resources
-            - KUBECONFIG=${KIND_KUBECONFIG} kubectl apply -f gateway/test/conformance/manifests/gateway.yaml
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl apply -f gateway/test/conformance/manifests/gateway.yaml
             # Wait for Gateway readiness
-            - KUBECONFIG=${KIND_KUBECONFIG} kubectl wait --timeout=5m -n gateway-conformance-infra gateway/gateway-conformance-default --for=condition=Programmed || true
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --timeout=5m -n gateway-conformance-infra gateway/gateway-conformance-default --for=condition=Programmed || true
             # Run conformance tests
             - ../.semaphore/run-and-monitor gateway-conformance.log make e2e-run-gateway-test
       epilogue:
