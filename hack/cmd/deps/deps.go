@@ -61,6 +61,8 @@ that node depends on felix/bpf-*.
 	os.Exit(1)
 }
 
+const mainBranchName = "master"
+
 var (
 	pretty   = flag.Bool("pretty", false, "Pretty-print the output (only applies to sem-change-in).")
 	logLevel = flag.String("loglevel", "warn", "Logrus log level (debug, info, warn, error, fatal, panic).")
@@ -537,7 +539,10 @@ type templateData struct {
 func generateSemaphoreYamls() {
 	logrus.Info("Generating semaphore YAML pipeline files")
 	semaphoreDir := ".semaphore"
-	defaultBranchStanza := calculateBranchStanza(semaphoreDir)
+	defaultBranchStanza, err := calculateBranchStanza(semaphoreDir)
+	if err != nil {
+		logrus.Fatalf("Failed to calculate default branch stanza: %v", err)
+	}
 	logrus.Infof("Using default branch stanza: %q", defaultBranchStanza)
 
 	// Validate change_in lines in template blocks include pipeline_file stanza.
@@ -763,42 +768,72 @@ func validateChangeInClauses(semaphoreDir string) error {
 	return nil
 }
 
-func calculateBranchStanza(semaphoreDir string) string {
-	// Determine current branch.
-	current := os.Getenv("DEFAULT_BRANCH_OVERRIDE")
-	if current == "" {
-		current = os.Getenv("SEMAPHORE_GIT_BRANCH")
+func calculateBranchStanza(semaphoreDir string) (string, error) {
+	branch, err := calculateDefaultBranch(semaphoreDir)
+	if err != nil {
+		return "", err
 	}
-	if current == "" {
-		// Fallback to git.
-		out, err := exec.Command("git", "branch", "--show-current").Output()
-		if err == nil {
-			current = strings.TrimSpace(string(out))
-		}
+	if branch == mainBranchName {
+		// Default, so no need to specify.
+		return "", nil
 	}
-	if current == "" {
-		current = "master"
-	} // final fallback
+	return fmt.Sprintf(", default_branch: '%s'", branch), nil
+}
 
-	releaseBranchRegexp := regexp.MustCompile(`release(-calient)?-v`)
-	if releaseBranchRegexp.MatchString(current) {
-		return fmt.Sprintf(", default_branch: '%s'", current)
-	}
-	if current == "master" {
-		return ""
+func calculateDefaultBranch(semaphoreDir string) (string, error) {
+	if branch := os.Getenv("DEFAULT_BRANCH_OVERRIDE"); branch != "" {
+		// Manual override.
+		logrus.Infof("Using DEFAULT_BRANCH_OVERRIDE for default branch: %s", branch)
+		return branch, nil
 	}
 
-	// Try to detect from existing semaphore.yml
+	if branch := os.Getenv("SEMAPHORE_GIT_BRANCH"); branch != "" {
+		// In CI, this env var is set either to the current branch, if we're
+		// building on a branch, or to the target branch if we're building
+		// a PR.
+		logrus.Infof("Using SEMAPHORE_GIT_BRANCH for default branch: %s", branch)
+		return branch, nil
+	}
+
+	// Fallback to git.
+	out, err := exec.Command("git", "branch", "--show-current").Output()
+	if err != nil {
+		return "", fmt.Errorf("git branch --show-current failed: %w", err)
+	}
+	branch := strings.TrimSpace(string(out))
+
+	if branch == mainBranchName {
+		logrus.Info("On master branch, using that for default branch.")
+		return branch, nil
+	}
+
+	// Check for release branch.
+	releaseBranchPrefix := os.Getenv("RELEASE_BRANCH_PREFIX")
+	if releaseBranchPrefix == "" {
+		return "", fmt.Errorf("RELEASE_BRANCH_PREFIX not set")
+	}
+	releaseBranchRegexp := regexp.MustCompile(`^` + regexp.QuoteMeta(releaseBranchPrefix) + `-v[\d.-]+$`)
+	if s := releaseBranchRegexp.FindString(branch); s != "" {
+		// Explicitly on a release branch, so use that.
+		logrus.Infof("On release branch %s, using that for default branch.", s)
+		return s, nil
+	}
+
+	// If we're not on a release branch, this is likely to be a PR build,
+	// and the semaphore.yml should have inherited the default from whichever
+	// branch it was based on.  Check there.
+	logrus.Infof("Branch %q is not a release branch, checking semaphore.yml for default branch.", branch)
 	detected, err := detectExistingDefaultBranch(filepath.Join(semaphoreDir, "semaphore.yml"))
 	if err != nil {
-		logrus.Warnf("Failed to detect existing default branch: %v", err)
+		return "", fmt.Errorf("detect release branch from semaphore yaml: %w", err)
 	}
 	if detected != "" {
-		logrus.Warnf("Currently on a non-master, non-release branch. This branch appears to be a branch of %s; using that as default branch.", detected)
-		return fmt.Sprintf(", default_branch: '%s'", detected)
+		logrus.Infof("Found default branch %s in semaphore.yml, using it for default branch.", detected)
+		return detected, nil
 	}
-	logrus.Warn("Currently on a non-master, non-release branch. Appears to be a branch of master; not specifying default branch.")
-	return ""
+
+	logrus.Info("Found no default branch in semaphore.yml, assuming master.")
+	return mainBranchName, nil
 }
 
 func detectExistingDefaultBranch(path string) (string, error) {
