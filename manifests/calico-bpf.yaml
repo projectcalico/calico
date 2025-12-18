@@ -1614,9 +1614,11 @@ spec:
                     when LogActionRate is enabled. [Default: 5]"
                   type: integer
                 logActionRate:
-                  description:
-                    'LogActionRate sets the rate of hitting a Log action.
-                    [Default: "" (disabled)]'
+                  description: |-
+                    LogActionRate sets the rate of hitting a Log action. The value must be in the format "N/unit",
+                    where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+                    [Default: ""]
+                  pattern: ^([0-9]+/(second|minute|hour|day))$
                   type: string
                 logDebugFilenameRegex:
                   description: |-

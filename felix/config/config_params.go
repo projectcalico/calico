@@ -330,7 +330,7 @@ type Config struct {
 	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
 	LogPrefix                   string `config:"string;calico-packet"`
 	LogActionRate               string `config:"string;"`
-	LogActionBurst              int    `config:"int;5"`
+	LogActionBurst              int    `config:"int(0,);5"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
