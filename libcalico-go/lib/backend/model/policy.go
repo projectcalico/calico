@@ -137,7 +137,7 @@ func (p Policy) String() string {
 // hints of the kind that can be used to reconstruct the full key.
 //
 // Legacy policy keys will be sent by Typha versions prior to v3.32.0.
-func parseLegacyPolicyName(name string) PolicyKey {
+func parseLegacyPolicyName(tier, name string) LegacyPolicyKey {
 	// First, split based on "/" to see if we have a namespace.
 	parts := strings.SplitN(name, "/", 2)
 	if len(parts) == 2 {
@@ -162,10 +162,13 @@ func parseLegacyPolicyName(name string) PolicyKey {
 			policyName = strings.TrimPrefix(policyName, "staged:")
 		}
 
-		return PolicyKey{
-			Name:      policyName,
-			Namespace: namespace,
-			Kind:      kind,
+		return LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Name:      policyName,
+				Namespace: namespace,
+				Kind:      kind,
+			},
+			Tier: tier,
 		}
 	}
 
@@ -182,8 +185,62 @@ func parseLegacyPolicyName(name string) PolicyKey {
 		kind = KindKubernetesClusterNetworkPolicy
 		policyName = strings.TrimPrefix(policyName, "kcnp.")
 	}
+	return LegacyPolicyKey{
+		PolicyKey: PolicyKey{
+			Name: policyName,
+			Kind: kind,
+		},
+		Tier: tier,
+	}
+}
+
+// LegacyPolicyKey represents a Policy key sent to us by an older version of Typha that still includes the
+// tier in the key name. It wraps a modern PolicyKey and adds the tier so that we can reconstruct the full Policy object
+// when parsing the value.
+type LegacyPolicyKey struct {
+	// Wraps a PolicyKey with additional information needed to handle legacy keys.
+	PolicyKey
+
+	// Tier is not part of the etcd key, but is included here to enable compatibility
+	// with older versions of Typha. Older Typha versions included the tier in the key name but not the value,
+	// so we need to capture it here when parsing legacy keys and use it when building the Value (which is where
+	// newer Calico versions expect to find it).
+	Tier string `json:"-" validate:"-"`
+}
+
+func (l LegacyPolicyKey) defaultPath() (string, error) {
+	panic("LegacyPolicyKey should not be used except to generate a modern PolicyKey")
+}
+
+func (l LegacyPolicyKey) defaultDeletePath() (string, error) {
+	panic("LegacyPolicyKey should not be used except to generate a modern PolicyKey")
+}
+
+func (l LegacyPolicyKey) defaultDeleteParentPaths() ([]string, error) {
+	panic("LegacyPolicyKey should not be used except to generate a modern PolicyKey")
+}
+
+func (l LegacyPolicyKey) valueType() (reflect.Type, error) {
+	return typePolicy, nil
+}
+
+func (l LegacyPolicyKey) parseValue(data []byte) (any, error) {
+	p, err := l.PolicyKey.parseValue(data)
+	if err != nil {
+		return nil, err
+	}
+	p.(*Policy).Tier = l.Tier
+	return p, nil
+}
+
+func (l LegacyPolicyKey) String() string {
+	return fmt.Sprintf("LegacyPolicy(Name=%s, Namespace=%s, Kind=%s, Tier=%s)", l.Name, l.Namespace, l.Kind, l.Tier)
+}
+
+func (key LegacyPolicyKey) Upgrade() Key {
 	return PolicyKey{
-		Name: policyName,
-		Kind: kind,
+		Name:      key.Name,
+		Namespace: key.Namespace,
+		Kind:      key.Kind,
 	}
 }

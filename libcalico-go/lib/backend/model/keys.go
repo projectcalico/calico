@@ -48,6 +48,12 @@ var (
 	rawIPType     = reflect.TypeOf(rawIP{})
 )
 
+// LegacyKey is an interface implemented by keys that carry old information but
+// that can be upgraded to a modern Key before use.
+type LegacyKey interface {
+	Upgrade() Key
+}
+
 // Key represents a parsed datastore key.
 type Key interface {
 	// defaultPath() returns a common path representation of the object used by
@@ -346,7 +352,7 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					if len(parts) != 7 {
 						return nil
 					}
-					return parseLegacyPolicyName(unescapeName(parts[6]))
+					return parseLegacyPolicyName(unescapeName(parts[4]), unescapeName(parts[6]))
 				}
 			case "profile":
 				pk := unescapeName(parts[4])
