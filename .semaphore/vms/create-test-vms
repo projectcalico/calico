@@ -44,7 +44,7 @@ done
 gcloud --quiet compute instances bulk create \
        --predefined-names="$names" \
        --zone=${zone} \
-       --machine-type=n4-standard-4 \
+       --machine-type=e2-standard-4 \
        --image-family=${IMAGE_FAMILY} \
        --image-project=ubuntu-os-cloud \
        --boot-disk-size=$disk_size \
