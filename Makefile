@@ -182,6 +182,41 @@ e2e-run-cnp-test:
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
 ## Run the Gateway API conformance tests against a pre-existing kind cluster.
+# Setup Gateway images and operator for KIND cluster
+# This target prepares the KIND cluster for Gateway API conformance testing by:
+# 1. Building Gateway images from current commit
+# 2. Loading images into KIND
+# 3. Scaling operator back up (kind-k8st-setup scales it to 0)
+# 4. Applying GatewayAPI resource and waiting for readiness
+.PHONY: e2e-gateway-setup
+e2e-gateway-setup:
+	@echo "Building Gateway images..."
+	$(MAKE) -C third_party/envoy-gateway image
+	$(MAKE) -C third_party/envoy-proxy image
+	$(MAKE) -C third_party/envoy-ratelimit image
+	@echo "Loading Gateway images into KIND cluster..."
+	kind load docker-image envoy-gateway:latest-$(ARCH) --name kind
+	kind load docker-image envoy-proxy:latest-$(ARCH) --name kind
+	kind load docker-image envoy-ratelimit:latest-$(ARCH) --name kind
+	@echo "Scaling tigera-operator back up..."
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl scale deployment -n tigera-operator tigera-operator --replicas=1
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl wait --for=condition=Available --timeout=60s deployment/tigera-operator -n tigera-operator
+	@echo "Applying GatewayAPI resource..."
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl apply -f gateway/test/conformance/manifests/gatewayapi.yaml
+	@echo "Waiting for Gateway API CRDs..."
+	@until KUBECONFIG=$(KIND_KUBECONFIG) kubectl get crd gatewayclasses.gateway.networking.k8s.io 2>/dev/null; do \
+		echo "  Waiting for CRDs to be installed..."; \
+		sleep 2; \
+	done
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl wait --for=condition=Established --timeout=60s crd/gatewayclasses.gateway.networking.k8s.io
+	@echo "Waiting for GatewayClass to be accepted..."
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
+	@echo "Creating test infrastructure..."
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl create namespace gateway-conformance-infra || true
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl apply -f gateway/test/conformance/manifests/gateway.yaml
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl wait --timeout=5m -n gateway-conformance-infra gateway/gateway-conformance-default --for=condition=Programmed || true
+	@echo "Gateway API setup complete!"
+
 e2e-run-gateway-test:
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/gateway/e2e.test \
 	  -gateway-class=tigera-gateway-class \
