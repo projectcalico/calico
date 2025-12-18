@@ -602,6 +602,8 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 	return
 }
 
+var logActionRateRE = regexp.MustCompile(`^([0-9]+/(second|minute|hour|day))$`)
+
 // CombineMatchAndActionsForProtoRule takes in the proto.Rule along with the match (and some other parameters) and
 // returns as set of rules. The actions that are needed are calculated from the proto.Rule and the parameters, then
 // the match given and actions calculated are combined into the returned set of rules.
@@ -620,8 +622,12 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
+		logMatch := r.NewMatch()
+		if len(r.LogActionRate) != 0 && logActionRateRE.MatchString(r.LogActionRate) {
+			logMatch = logMatch.Limit(r.LogActionRate, uint32(r.LogActionBurst))
+		}
 		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch(),
+			Match:  logMatch,
 			Action: r.Log(r.generateLogPrefix(id, tier)),
 		})
 	}
