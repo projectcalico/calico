@@ -110,6 +110,7 @@ get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERA
 gen-semaphore-yaml:
 	$(DOCKER_GO_BUILD) sh -c "DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
 	                          SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
+	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
 	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
 
 GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
