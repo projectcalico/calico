@@ -5,31 +5,72 @@
 
 ARG CALICO_BASE
 ARG UBI_IMAGE
-ARG TARGETPLATFORM
 
-FROM --platform=${TARGETPLATFORM} ${UBI_IMAGE} AS ubi
+FROM ${UBI_IMAGE} AS ubi
 
 RUN microdnf upgrade -y && \
   microdnf install -y iptables nftables
+
+# Create symlinks to xtables-nft-multi
+RUN set -eux; \
+    mkdir -p /rootfs/usr/sbin && cd /rootfs/usr/sbin; \
+    for link in \
+      arptables \
+      arptables-nft \
+      arptables-nft-restore \
+      arptables-nft-save \
+      arptables-restore \
+      arptables-save \
+      ebtables \
+      ebtables-nft \
+      ebtables-nft-restore \
+      ebtables-nft-save \
+      ebtables-restore \
+      ebtables-save \
+      ebtables-translate \
+      ip6tables \
+      ip6tables-nft \
+      ip6tables-nft-restore \
+      ip6tables-nft-save \
+      ip6tables-restore \
+      ip6tables-restore-translate \
+      ip6tables-save \
+      ip6tables-translate \
+      iptables \
+      iptables-nft \
+      iptables-nft-restore \
+      iptables-nft-save \
+      iptables-restore \
+      iptables-restore-translate \
+      iptables-save \
+      iptables-translate \
+      xtables-monitor; \
+    do \
+      ln -sf xtables-nft-multi "$link"; \
+    done
 
 FROM scratch AS source
 
 ARG TARGETARCH
 
+COPY --from=ubi /rootfs /
+
+COPY --from=ubi /usr/sbin/nft /usr/sbin/nft
+COPY --from=ubi /usr/sbin/xtables-nft-multi /usr/sbin/xtables-nft-multi
+
+COPY --from=ubi /lib64/libgmp.so.10 /lib64/libgmp.so.10
+COPY --from=ubi /lib64/libjansson.so.4 /lib64/libjansson.so.4
+COPY --from=ubi /lib64/libmnl.so.0 /lib64/libmnl.so.0
+COPY --from=ubi /lib64/libnftables.so.1 /lib64/libnftables.so.1
+COPY --from=ubi /lib64/libnftnl.so.11 /lib64/libnftnl.so.11
+COPY --from=ubi /lib64/libreadline.so.8 /lib64/libreadline.so.8
+COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
+COPY --from=ubi /lib64/libxtables.so.12 /lib64/libxtables.so.12
+
+COPY --from=ubi /lib64/xtables/ /lib64/xtables/
+
 COPY bin/install-cni-${TARGETARCH} /usr/bin/install-cni
 COPY bin/LICENSE /LICENSE
-
-COPY --from=ubi /usr/sbin/ip* /usr/sbin/
-COPY --from=ubi /usr/lib64/libxtables* /usr/lib64/
-COPY --from=ubi /usr/sbin/nft /usr/sbin/nft
-COPY --from=ubi /usr/lib64/xtables /usr/lib64/xtables
-COPY --from=ubi /usr/libexec/arptables-* /usr/libexec/
-COPY --from=ubi /usr/sbin/arptables* /usr/sbin/
-COPY --from=ubi /usr/sbin/ebtables* /usr/sbin/
-COPY --from=ubi /usr/sbin/xtables* /usr/sbin/
-COPY --from=ubi /lib64/libmnl.so.0 /lib64/libmnl.so.0
-COPY --from=ubi /lib64/libnftnl.so.11 /lib64/libnftnl.so.11
-COPY --from=ubi /lib64/libm.so.6 /lib64/libm.so.6
 
 FROM ${CALICO_BASE}
 
