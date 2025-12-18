@@ -38,6 +38,9 @@
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
+          # The BIRD config in our DevStack setup is thoroughly broken and generates loads of errors
+          # in the log.  But we don't need it for a single node setup anyway, so let's disable it.
+          - export CALICO_BGP_MODE=none
           - TEMPEST=true OPENSTACK_RELEASE=yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:
@@ -77,6 +80,9 @@
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
+          # The BIRD config in our DevStack setup is thoroughly broken and generates loads of errors
+          # in the log.  But we don't need it for a single node setup anyway, so let's disable it.
+          - export CALICO_BGP_MODE=none
           - TEMPEST=true OPENSTACK_RELEASE=caracal ./devstack/bootstrap.sh
     epilogue:
       always:
