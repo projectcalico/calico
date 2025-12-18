@@ -15,7 +15,7 @@ ISTIO_ZTUNNEL_IMAGE ?= istio-ztunnel
 BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_PROXYV2_IMAGE) $(ISTIO_ZTUNNEL_IMAGE)
 
 # Upstream version (configurable)
-ISTIO_VERSION ?= 1.27.4
+ISTIO_VERSION ?= 1.28.1
 ISTIO_ZTUNNEL_VERSION ?= $(shell grep -E '^ZTUNNEL_VERSION[[:space:]]*=' $(REPO_ROOT)/third_party/istio-ztunnel/Makefile | cut -d '=' -f2 | tr -d ' ')
 
 ##############################################################################
@@ -36,7 +36,8 @@ init-source: $(ISTIO_DOWNLOADED)
 $(ISTIO_DOWNLOADED):
 	mkdir -p istio
 	curl -sfL https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz | tar xz --strip-components=1 -C istio
-	patch -d istio -p1 < patches/0001-dscp-magic-mark-for-transparent-policies.patch
+	patch -d istio -p1 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
+	patch -d istio -p1 < patches/0002-chore-deps-update-golang.org-x-crypto-and-quic-go.patch
 	touch $@
 
 ###############################################################################
