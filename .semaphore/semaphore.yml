@@ -1161,6 +1161,10 @@ blocks:
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "node"
+        - name: CI_GROUP_LABEL
+          value: "node"
+        - name: CI_JOB_LABEL
+          value: "kind-cluster-tests"
       prologue:
         commands:
           # Set up access to GCP buckets.
