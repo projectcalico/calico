@@ -102,13 +102,13 @@ function get_logs(){
   mkdir -p ./pod-logs
 
   # Get logs from windows pod
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c uninstall-calico > ./pod-logs/win-uninstall-calico.log || echo "Failed to get logs for win-uninstall-calico"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c install-cni > ./pod-logs/win-install-cni.log || echo "Failed to get logs for win-install-cni"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c node > ./pod-logs/win-node.log || echo "Failed to get logs for win-node"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c felix > ./pod-logs/win-felix.log || echo "Failed to get logs for win-felix"
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c uninstall-calico --tail=-1 > ./pod-logs/win-uninstall-calico.log || echo "Failed to get logs for win-uninstall-calico"
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c install-cni --tail=-1 > ./pod-logs/win-install-cni.log || echo "Failed to get logs for win-install-cni"
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c node --tail=-1 > ./pod-logs/win-node.log || echo "Failed to get logs for win-node"
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c felix --tail=-1 > ./pod-logs/win-felix.log || echo "Failed to get logs for win-felix"
 
   # Get logs from linux pod
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node -c calico-node > ./pod-logs/linux-calico-node.log || echo "Failed to get logs for linux-calico-node"
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node -c calico-node --tail=-1 > ./pod-logs/linux-calico-node.log || echo "Failed to get logs for linux-calico-node"
 }
 
 # Main execution
