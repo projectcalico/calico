@@ -982,10 +982,21 @@ blocks:
         - name: "Gateway API: Conformance Tests"
           commands:
             - cd ..
+            # Build Gateway images with current commit
+            - make -C third_party/envoy-gateway image
+            - make -C third_party/envoy-proxy image
+            - make -C third_party/envoy-ratelimit image
             # Build test binaries
             - make -C e2e build
             # Create kind cluster and deploy Calico
             - make -C node kind-k8st-setup
+            # Load Gateway images into KIND cluster
+            - kind load docker-image envoy-gateway:latest-amd64 --name kind
+            - kind load docker-image envoy-proxy:latest-amd64 --name kind
+            - kind load docker-image envoy-ratelimit:latest-amd64 --name kind
+            # Scale operator back up to process GatewayAPI resource
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl scale deployment -n tigera-operator tigera-operator --replicas=1
+            - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl wait --for=condition=Available --timeout=60s deployment/tigera-operator -n tigera-operator
             # Enable Tigera Gateway API support
             - KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml kubectl apply -f gateway/test/conformance/manifests/gatewayapi.yaml
             # Wait for Gateway API CRDs to be installed by the operator (poll until CRD exists)
