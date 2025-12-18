@@ -48,7 +48,7 @@
         commands:
           - make -C third_party/istio-ztunnel push-manifest CONFIRM=true
 
-- name: istio
+- name: Istio
   run:
     when: "${CHANGE_IN(istio)}"
   dependencies:
@@ -61,10 +61,10 @@
         - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
         - cd istio
     jobs:
-      - name: "istio: CI"
+      - name: "Istio: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: Build binary
+      - name: "Istio: build arm64"
         matrix:
           - env_var: ARCH
             values:

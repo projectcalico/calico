@@ -1,0 +1,50 @@
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+ARG CALICO_BASE_UBI10
+ARG ISTIO_VERSION
+ARG UBI_IMAGE
+
+FROM istio/proxyv2:${ISTIO_VERSION} AS proxyv2
+
+FROM registry.access.redhat.com/ubi10/ubi:latest AS ubi
+
+FROM scratch AS source
+
+# Copy the envoy binary built from upstream vendor
+COPY --from=proxyv2 /usr/local/bin/envoy /usr/bin/envoy
+
+COPY --from=ubi /lib64/libdl.so.2 /lib64/libdl.so.2
+COPY --from=ubi /lib64/libm.so.6 /lib64/libm.so.6
+COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
+
+COPY bin/LICENSE /LICENSE
+
+FROM ${CALICO_BASE_UBI10}
+
+ARG GIT_VERSION=unknown
+
+# OCP Certification labels
+LABEL description="Istio proxyv2 (Envoy) component from github.com/istio/proxy with Calico patches"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Istio Proxyv2"
+LABEL release="1"
+LABEL summary="Envoy-based proxy component for Calico's Istio service mesh integration"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
+LABEL org.opencontainers.image.description="Istio proxyv2 (Envoy) from github.com/istio/proxy with Calico patches"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Envoy-based proxy for Calico's Istio integration"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+COPY --from=source / /
+
+USER 10001:10001
+
+# Envoy default ports for Istio
+EXPOSE 15000 15001 15006 15020 15021 15090
+
+ENTRYPOINT ["/usr/bin/envoy"]

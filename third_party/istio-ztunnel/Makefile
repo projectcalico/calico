@@ -9,7 +9,7 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/istio-ztunnel
 ZTUNNEL_IMAGE ?= istio-ztunnel
 BUILD_IMAGES ?= $(ZTUNNEL_IMAGE)
 
-ZTUNNEL_VERSION = 1.27.3
+ZTUNNEL_VERSION = 1.27.4
 
 # required for ci/cd
 DEV_REGISTRIES = $(THIRD_PARTY_REGISTRY)
