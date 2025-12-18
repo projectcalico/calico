@@ -389,7 +389,7 @@ subcomponents, see Felix's logs.
 
 ### `LogActionBurst` (config file) / `logActionBurst` (YAML)
 
-Sets the burst of hitting a Log action.
+Sets the burst of hitting a Log action when LogActionRate is enabled.
 
 | Detail |   |
 | --- | --- |
@@ -410,7 +410,7 @@ Sets the rate of hitting a Log action.
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `logActionRate` (YAML) `LogActionRate` (Go API) |
-| `FelixConfiguration` schema | String matching the regular expression <code>^([0-9]+(\\.[0-9]+)?(second\|minute\|hour\|day))*$</code>. |
+| `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)

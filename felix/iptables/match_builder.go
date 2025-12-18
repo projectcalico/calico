@@ -325,14 +325,12 @@ func (m matchCriteria) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCrite
 	return append(m, fmt.Sprintf("-m icmp6 ! --icmpv6-type %d/%d", t, c))
 }
 
-func (m matchCriteria) Limit(r string, b uint32) generictables.MatchCriteria {
-	if len(r) == 0 {
-		return m
+// The expected rate must be a digit with /second, /minute, /hour, or /day suffix.
+func (m matchCriteria) Limit(rate string, burst uint32) generictables.MatchCriteria {
+	if burst == 0 {
+		return append(m, fmt.Sprintf("-m limit --limit %s", rate))
 	}
-	if b == 0 {
-		return append(m, fmt.Sprintf("-m limit --limit %d/minute", r))
-	}
-	return append(m, fmt.Sprintf("-m limit --limit %d/minute --limit-burst %d", r, b))
+	return append(m, fmt.Sprintf("-m limit --limit %s --limit-burst %d", rate, burst))
 }
 
 func (m matchCriteria) InInterfaceVMAP(mapname string) generictables.MatchCriteria {

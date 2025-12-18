@@ -1620,14 +1620,13 @@ spec:
                   type: array
                 logActionBurst:
                   description:
-                    "LogActionBurst sets the burst of hitting a Log action.
-                    [Default: 5]"
+                    "LogActionBurst sets the burst of hitting a Log action
+                    when LogActionRate is enabled. [Default: 5]"
                   type: integer
                 logActionRate:
                   description:
                     'LogActionRate sets the rate of hitting a Log action.
-                    [Default: ""]'
-                  pattern: ^([0-9]+(\\.[0-9]+)?(second|minute|hour|day))*$
+                    [Default: "" (disabled)]'
                   type: string
                 logDebugFilenameRegex:
                   description: |-

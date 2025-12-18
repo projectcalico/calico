@@ -129,9 +129,8 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotICMPV6TypeAndCode", nftables.Match().NotICMPV6TypeAndCode(123, 5), "icmpv6 type != 123 code != 5"),
 
 	// Limits.
-	Entry("Limit with no rate", nftables.Match().Limit(0, 5), ""),
-	Entry("Limit with rate", nftables.Match().Limit(10, 0), "limit rate 10/minute"),
-	Entry("Limit with rate and burst", nftables.Match().Limit(10, 5), "limit rate 10/minute burst 5"),
+	Entry("Limit with rate", nftables.Match().Limit("10/minute", 0), "limit rate 10/minute"),
+	Entry("Limit with rate and burst", nftables.Match().Limit("20/hour", 10), "limit rate 20/hour burst 10 packets"),
 
 	// VMAPs
 	Entry("InInterfaceVMAP", nftables.Match().InInterfaceVMAP("vmap1234").(nftables.NFTMatchCriteria).SetLayer("filter"), "iifname vmap @filter-vmap1234"),
