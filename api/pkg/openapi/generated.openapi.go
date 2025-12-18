@@ -2656,6 +2656,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"logActionRate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogActionRate sets the rate of hitting a Log action. [Default: \"\" (disabled)]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"logActionBurst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogActionBurst sets the burst of hitting a Log action when LogActionRate is enabled. [Default: 5]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"logFilePath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]",
