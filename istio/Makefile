@@ -114,6 +114,7 @@ clean:
 	rm -f .release-*
 	-docker image rm -f $$(docker images $(ISTIO_CNI_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(ISTIO_PILOT_IMAGE) -a -q)
+	-docker image rm -f $$(docker images $(ISTIO_PROXYV2_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(ISTIO_ZTUNNEL_IMAGE) -a -q)
 
 ###############################################################################
