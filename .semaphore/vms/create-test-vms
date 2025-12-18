@@ -40,6 +40,28 @@ for batch in "${batches[@]}"; do
   fi
 done
 
+# Labels for the GCP instances.  These can only contain alphanumerics,
+# dashes, underscores (so we can't just default to the semaphore job name).
+# Sanitize the branch name to be compatible with GCP label requirements.
+branch_label="${SEMAPHORE_GIT_BRANCH:-unknown}"
+branch_label="$(echo "$branch_label" | tr '[:upper:]' '[:lower:]')"
+branch_label="$(echo "$branch_label" | sed 's/[^a-z0-9_-]/-/g')"
+labels="ci-runner=true"
+labels+=",ci-job-type=${CI_JOB_TYPE_LABEL:-${SEMAPHORE_GIT_REF_TYPE:-unknown}}"
+labels+=",ci-group=${CI_GROUP_LABEL:-unknown}"
+labels+=",ci-job=${CI_JOB_LABEL:-unknown}"
+labels+=",ci-is-rerun=${SEMAPHORE_PIPELINE_RERUN:-false}"
+labels+=",ci-branch=${branch_label}"
+labels+=",ci-project=${CALICO_DIR_NAME}"
+if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+  labels+=",ci-pr-number=${SEMAPHORE_GIT_PR_NUMBER}"
+fi
+if [ "${SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE}" = "true" ]; then
+  labels+=",ci-scheduled=true"
+else
+  labels+=",ci-scheduled=false"
+fi
+
 # Do a bulk create; this is faster and it saves API quota.
 gcloud --quiet compute instances bulk create \
        --predefined-names="$names" \
@@ -51,6 +73,7 @@ gcloud --quiet compute instances bulk create \
        --boot-disk-type=hyperdisk-balanced \
        --max-run-duration="${MAX_RUN_DURATION}" \
        --instance-termination-action=DELETE \
+       --labels="${labels}" \
        --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
        --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
 
