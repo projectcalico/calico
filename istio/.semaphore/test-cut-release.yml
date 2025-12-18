@@ -1,0 +1,42 @@
+version: v1.0
+name: Test Cut Release - Istio
+
+execution_time_limit:
+  minutes: 60
+
+agent:
+  machine:
+    type: f1-standard-4
+    os_image: ubuntu2204
+
+global_job_config:
+  prologue:
+    commands:
+      # Correct permissions since they are too open by default:
+      - chmod 0600 ~/.keys/*
+      # Add the key to the ssh agent:
+      - ssh-add ~/.keys/*
+      - checkout
+      - retry git fetch --unshallow
+      - cd istio
+
+blocks:
+  - name: "Test Cut Release - Istio"
+    task:
+      secrets:
+        - name: marvin-github-ssh-private-key
+        - name: marvin-release-cutting-credentials
+      prologue:
+        commands:
+          # Login to gcr in order to push images to gcr.
+          - docker login --username marvin@tigera.io -u _json_key -p "$(cat ~/secrets/marvin-gcr-credentials.json)" https://gcr.io
+          # Login to quay in order to push images to quay.
+          - echo $MARVIN_QUAY_TOKEN | docker login --username $MARVIN_QUAY_USERNAME https://quay.io --password-stdin
+      jobs:
+        - name: Test Cut Release - Istio
+          env_vars:
+            - name: DEV_REGISTRIES
+              value: gcr.io/unique-caldron-775/cnx/tigera
+          commands:
+            - make git-config CONFIRM=true
+            - make cut-release DRYRUN=true
