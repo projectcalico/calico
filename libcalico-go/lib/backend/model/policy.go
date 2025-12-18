@@ -221,7 +221,7 @@ func (l LegacyPolicyKey) defaultDeleteParentPaths() ([]string, error) {
 }
 
 func (l LegacyPolicyKey) valueType() (reflect.Type, error) {
-	panic("LegacyPolicyKey should not be used except to generate a modern PolicyKey")
+	return typePolicy, nil
 }
 
 func (l LegacyPolicyKey) parseValue(data []byte) (any, error) {
@@ -234,7 +234,7 @@ func (l LegacyPolicyKey) parseValue(data []byte) (any, error) {
 }
 
 func (l LegacyPolicyKey) String() string {
-	panic("LegacyPolicyKey should not be used except to generate a modern PolicyKey")
+	return fmt.Sprintf("LegacyPolicy(Name=%s, Namespace=%s, Kind=%s, Tier=%s)", l.Name, l.Namespace, l.Kind, l.Tier)
 }
 
 func (key LegacyPolicyKey) Upgrade() Key {
