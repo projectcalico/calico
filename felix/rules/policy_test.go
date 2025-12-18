@@ -448,7 +448,6 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			logRule.Action = "log"
 			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
-			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(ContainSubstring(expMatch))
 			logRateLimitMatch := fmt.Sprintf("-m limit --limit %s", rrConfigPrefix.LogActionRate)
@@ -460,7 +459,6 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer = NewRenderer(rrConfigPrefix)
 			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
-			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(ContainSubstring(expMatch))
 			logRateLimitMatch = fmt.Sprintf("-m limit --limit %s --limit-burst %d",

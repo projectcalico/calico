@@ -337,7 +337,7 @@ type FelixConfigurationSpec struct {
 	LogActionRate string `json:"logActionRate,omitempty"`
 
 	// LogActionBurst sets the burst of hitting a Log action when LogActionRate is enabled. [Default: 5]
-	// +kubebuilder:validation:XValidation:rule="self >= 0", message="logActionBurst must be a positive integer"
+	// +kubebuilder:validation:XValidation:rule="self >= 0", message="logActionBurst must be a non-negative integer"
 	LogActionBurst *int `json:"logActionBurst,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]

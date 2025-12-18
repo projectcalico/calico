@@ -1609,7 +1609,7 @@ spec:
                     when LogActionRate is enabled. [Default: 5]"
                   type: integer
                   x-kubernetes-validations:
-                    - message: logActionBurst must be a positive integer
+                    - message: logActionBurst must be a non-negative integer
                       rule: self >= 0
                 logActionRate:
                   description: |-
