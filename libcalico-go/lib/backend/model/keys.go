@@ -48,6 +48,12 @@ var (
 	rawIPType     = reflect.TypeOf(rawIP{})
 )
 
+// LegacyKey is an interface implemented by keys that carry old information but
+// that can be upgraded to a modern Key before use.
+type LegacyKey interface {
+	Upgrade() Key
+}
+
 // Key represents a parsed datastore key.
 type Key interface {
 	// defaultPath() returns a common path representation of the object used by

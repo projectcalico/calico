@@ -155,7 +155,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 			},
 		}},
 	},
-		cmp.AllowUnexported(PolKV{}, model.PolicyKey{}),
+		cmp.AllowUnexported(PolKV{}),
 		cmp.Comparer(func(a, b uniquelabels.Map) bool { return a.Equals(b) }),
 	); d != "" {
 		t.Error("Incorrect update:", d)

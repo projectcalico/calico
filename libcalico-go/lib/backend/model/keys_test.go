@@ -413,80 +413,106 @@ var _ = DescribeTable(
 			Expect(key).To(BeNil())
 		} else {
 			Expect(key).To(Equal(expected))
+			upg := expected.(LegacyPolicyKey).Upgrade()
+			Expect(upg).To(Equal(PolicyKey{
+				Kind:      expected.(LegacyPolicyKey).Kind,
+				Namespace: expected.(LegacyPolicyKey).Namespace,
+				Name:      expected.(LegacyPolicyKey).Name,
+			}))
+
+			val, err := key.parseValue([]byte(`{"spec":{}}`))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(val).To(Equal(&Policy{
+				Tier: expected.(LegacyPolicyKey).Tier,
+			}))
 		}
 	},
 
 	Entry(
 		"Legacy NetworkPolicy",
 		"/calico/v1/policy/tier/mytier/policy/ns%2fname",
-		PolicyKey{
-			Kind:      "NetworkPolicy",
-			Namespace: "ns",
-			Name:      "name",
-			tier:      "mytier",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind:      "NetworkPolicy",
+				Namespace: "ns",
+				Name:      "name",
+			},
+			Tier: "mytier",
 		},
 		false,
 	),
 	Entry(
 		"Legacy GlobalNetworkPolicy",
 		"/calico/v1/policy/tier/default/policy/name",
-		PolicyKey{
-			Kind: "GlobalNetworkPolicy",
-			Name: "name",
-			tier: "default",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind: "GlobalNetworkPolicy",
+				Name: "name",
+			},
+			Tier: "default",
 		},
 		false,
 	),
 	Entry(
 		"Legacy StagedNetworkPolicy",
 		"/calico/v1/policy/tier/default/policy/ns%2fstaged:name",
-		PolicyKey{
-			Kind:      "StagedNetworkPolicy",
-			Namespace: "ns",
-			Name:      "name",
-			tier:      "default",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind:      "StagedNetworkPolicy",
+				Namespace: "ns",
+				Name:      "name",
+			},
+			Tier: "default",
 		},
 		false,
 	),
 	Entry(
 		"Legacy StagedGlobalNetworkPolicy",
 		"/calico/v1/policy/tier/default/policy/staged:name",
-		PolicyKey{
-			Kind: "StagedGlobalNetworkPolicy",
-			Name: "name",
-			tier: "default",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind: "StagedGlobalNetworkPolicy",
+				Name: "name",
+			},
+			Tier: "default",
 		},
 		false,
 	),
 	Entry(
 		"Legacy ClusterNetworkPolicy",
 		"/calico/v1/policy/tier/kube-admin/policy/kcnp.kube-admin.name",
-		PolicyKey{
-			Kind: "KubernetesClusterNetworkPolicy",
-			Name: "kube-admin.name",
-			tier: "kube-admin",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind: "KubernetesClusterNetworkPolicy",
+				Name: "kube-admin.name",
+			},
+			Tier: "kube-admin",
 		},
 		false,
 	),
 	Entry(
 		"Legacy KubernetesNetworkPolicy",
 		"/calico/v1/policy/tier/default/policy/ns%2fknp.default.name",
-		PolicyKey{
-			Kind:      "KubernetesNetworkPolicy",
-			Namespace: "ns",
-			Name:      "name",
-			tier:      "default",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind:      "KubernetesNetworkPolicy",
+				Namespace: "ns",
+				Name:      "name",
+			},
+			Tier: "default",
 		},
 		false,
 	),
 	Entry(
 		"Legacy StagedKubernetesNetworkPolicy",
 		"/calico/v1/policy/tier/default/policy/ns%2fstaged:knp.default.name",
-		PolicyKey{
-			Kind:      "StagedKubernetesNetworkPolicy",
-			Namespace: "ns",
-			Name:      "name",
-			tier:      "default",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind:      "StagedKubernetesNetworkPolicy",
+				Namespace: "ns",
+				Name:      "name",
+			},
+			Tier: "default",
 		},
 		false,
 	),
