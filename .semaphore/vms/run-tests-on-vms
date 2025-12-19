@@ -27,6 +27,8 @@ zone=${ZONE:-europe-west3-c}
 : "${MAX_RUN_DURATION:=4h}"
 disk_size=${VM_DISK_SIZE:-20GB}
 
+source "$my_dir/ssh-options"
+
 # shellcheck source=../../felix/.semaphore/batches.sh
 source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
 
@@ -146,12 +148,13 @@ for i in "${!batches[@]}"; do
       echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $log_file."
     fi
 
-    if "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts"; then
+    collect_log_file="$artifacts_dir/collect-artifacts-$batch.log"
+    if "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
       echo "$prefix Remote artifact collection SUCCEEDED"
     else
       echo "$prefix Remote artifact collection FAILED"
     fi
-    if scp -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}"; then
+    if scp "${SSH_OPTIONS[@]}" -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" >& "$collect_log_file"; then
       echo "$prefix Artifact retrieval SUCCEEDED"
     else
       echo "$prefix Artifact retrieval FAILED"
