@@ -1094,7 +1094,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         On a fixed interval, requests etcd compaction to prevent unbounded disk usage
         growth.  Only the master node performs compaction.
         """
-        TrackTask("COMPACTION")
         try:
             LOG.info("Periodic compaction thread started")
             while self._epoch == launch_epoch:
