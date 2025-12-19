@@ -39,16 +39,22 @@ type EtcdDatastoreInfra struct {
 
 	Endpoint    string
 	BadEndpoint string
+
+	bpfLogByteLimit int
 }
 
 func createEtcdDatastoreInfra(opts ...CreateOption) DatastoreInfra {
-	infra, err := GetEtcdDatastoreInfra()
+	infra, err := GetEtcdDatastoreInfra(opts...)
 	Expect(err).NotTo(HaveOccurred())
 	return infra
 }
 
-func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
+func GetEtcdDatastoreInfra(opts ...CreateOption) (*EtcdDatastoreInfra, error) {
 	eds := &EtcdDatastoreInfra{}
+
+	for _, opt := range opts {
+		opt(eds)
+	}
 
 	// Start etcd.
 	eds.etcdContainer = RunEtcd()
@@ -58,13 +64,17 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		eds.bpfLog = RunBPFLog()
+		eds.bpfLog = RunBPFLog(eds, eds.bpfLogByteLimit)
 	}
 
 	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.etcdContainer.IP)
 	eds.BadEndpoint = fmt.Sprintf("https://%s:1234", eds.etcdContainer.IP)
 
 	return eds, nil
+}
+
+func (eds *EtcdDatastoreInfra) setBPFLogByteLimit(limit int) {
+	eds.bpfLogByteLimit = limit
 }
 
 func (eds *EtcdDatastoreInfra) GetDockerArgs() []string {

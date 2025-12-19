@@ -76,6 +76,8 @@ type K8sDatastoreInfra struct {
 	serviceClusterIPRange string
 	apiServerBindIP       string
 	ipMask                string
+
+	bpfLogByteLimit int
 }
 
 var (
@@ -193,18 +195,29 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 	return K8sInfra[index], err
 }
 
+func (kds *K8sDatastoreInfra) setBPFLogByteLimit(limit int) {
+	kds.bpfLogByteLimit = limit
+}
+
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
-		kds.bpfLog = RunBPFLog()
+<<<<<<< HEAD
+		kds.bpfLog = RunBPFLog(kds, kds.bpfLogByteLimit)
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
 
-func RunBPFLog() *containers.Container {
+const DefaultBPFLogByteLimit = 64 * 1024 * 1024
+
+func RunBPFLog(_ interface{}, byteLimit int) *containers.Container {
+	if byteLimit == 0 {
+		byteLimit = DefaultBPFLogByteLimit
+	}
 	return containers.Run("bpf-log",
 		containers.RunOpts{
 			AutoRemove:       true,
 			IgnoreEmptyLines: true,
+			LogLimitBytes:    byteLimit,
 		}, "--privileged",
 		utils.Config.FelixImage, "/usr/bin/bpftool", "prog", "tracelog")
 }
