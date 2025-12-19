@@ -5,10 +5,10 @@
     - Prerequisites
   task:
     secrets:
-      - name: google-service-account-for-gcr
+      - name: quay-tigeradev-hashrelease
     prologue:
       commands:
-        - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
     jobs:
       - name: Linux amd64
         commands:
@@ -23,10 +23,10 @@
       machine:
         type: s1-aws-arm64-2
     secrets:
-      - name: google-service-account-for-gcr
+      - name: quay-tigeradev-hashrelease
     prologue:
       commands:
-        - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
     jobs:
       - name: Linux arm64
         commands:
@@ -39,10 +39,10 @@
     - Publish istio-ztunnel images - native arm64 runner
   task:
     secrets:
-      - name: google-service-account-for-gcr
+      - name: quay-tigeradev-hashrelease
     prologue:
       commands:
-        - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
     jobs:
       - name: Linux multi-arch manifests
         commands:

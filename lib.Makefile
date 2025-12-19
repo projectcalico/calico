@@ -105,7 +105,7 @@ MANIFEST_REGISTRIES         ?= $(DEV_REGISTRIES)
 
 # Third-party registry for pre-built components (e.g., istio-ztunnel)
 # These can be overridden for enterprise builds that use private registries
-THIRD_PARTY_REGISTRY ?= calico
+THIRD_PARTY_REGISTRY ?= quay.io/calico
 THIRD_PARTY_RELEASE_BRANCH ?= $(if $(SEMAPHORE_GIT_BRANCH),$(SEMAPHORE_GIT_BRANCH),master)
 
 PUSH_MANIFEST_IMAGES := $(foreach registry,$(MANIFEST_REGISTRIES),$(foreach image,$(BUILD_IMAGES),$(call filter-registry,$(registry))$(image)))
