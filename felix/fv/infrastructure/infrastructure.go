@@ -21,6 +21,7 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/workload"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -68,6 +69,8 @@ type DatastoreInfra interface {
 	// which the tunnel is created). needBGP is used (only in etcd) to
 	// add a NodeBGPSpec if true or otherwise not.
 	AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *net.IPNet, idx int, needBGP bool)
+
+	CreateWorkload(felix *Felix, name, addr string, opts ...workload.Opt) *workload.Workload
 	// AddWorkload will take the appropriate steps to create a workload in the
 	// datastore with the passed in wep values. If this succeeds then the
 	// *libapi.WorkloadEndpoint will be returned, otherwise an error will be
