@@ -61,7 +61,6 @@
     jobs:
       - name: "Unit and FV tests (tox) on Caracal"
         commands:
-          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
           - ../.semaphore/run-and-monitor tox.log make tox-caracal
       - name: "Mainline ST (DevStack + Tempest) on Caracal"
         commands:
@@ -72,11 +71,11 @@
           - sudo apt-get remove -y python3-wrapt || true
           - git checkout -b devstack-test
           - export LIBVIRT_TYPE=qemu
-          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/unmaintained/2024.1/upper-constraints.txt
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-          - TEMPEST=true DEVSTACK_BRANCH=stable/2024.1 ./devstack/bootstrap.sh
+          - TEMPEST=true DEVSTACK_BRANCH=unmaintained/2024.1 ./devstack/bootstrap.sh
     epilogue:
       always:
         commands:
