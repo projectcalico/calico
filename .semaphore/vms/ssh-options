@@ -1,0 +1,7 @@
+SSH_OPTIONS=(
+  -o ServerAliveInterval=10
+  -o StrictHostKeyChecking=yes
+  -o BatchMode=yes
+  -o UpdateHostKeys=no
+)
+export SSH_OPTIONS

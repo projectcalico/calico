@@ -17,10 +17,6 @@ set -e
 
 my_dir="$(dirname "$0")"
 vm_ip="$("$my_dir/vm-ip")"
+source "$my_dir/ssh-options"
 
-exec ssh "ubuntu@${vm_ip}" -n -A \
-  -o ServerAliveInterval=10 \
-  -o StrictHostKeyChecking=yes \
-  -o BatchMode=yes \
-  -o UpdateHostKeys=no \
-  "$@"
+exec ssh "ubuntu@${vm_ip}" -n -A "${SSH_OPTIONS[@]}" "$@"
