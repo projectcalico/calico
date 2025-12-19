@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
+	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -602,8 +603,6 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 	return
 }
 
-var logActionRateRE = regexp.MustCompile(`^([0-9]+/(second|minute|hour|day))$`)
-
 // CombineMatchAndActionsForProtoRule takes in the proto.Rule along with the match (and some other parameters) and
 // returns as set of rules. The actions that are needed are calculated from the proto.Rule and the parameters, then
 // the match given and actions calculated are combined into the returned set of rules.
@@ -623,8 +622,8 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
 		logMatch := r.NewMatch()
-		if len(r.LogActionRate) != 0 && logActionRateRE.MatchString(r.LogActionRate) {
-			logMatch = logMatch.Limit(r.LogActionRate, uint32(r.LogActionBurst))
+		if len(r.LogActionRateLimit) != 0 && config.LogActionRateRegexp.MatchString(r.LogActionRateLimit) {
+			logMatch = logMatch.Limit(r.LogActionRateLimit, uint32(r.LogActionRateLimitBurst))
 		}
 		rules = append(rules, generictables.Rule{
 			Match:  logMatch,

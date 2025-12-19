@@ -387,32 +387,32 @@ subcomponents, see Felix's logs.
 
 ## <a id="process-logging">Process: Logging
 
-### `LogActionBurst` (config file) / `logActionBurst` (YAML)
-
-Sets the burst of hitting a Log action when LogActionRate is enabled.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_LogActionBurst` |
-| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
-| Default value (above encoding) | `5` |
-| `FelixConfiguration` field | `logActionBurst` (YAML) `LogActionBurst` (Go API) |
-| `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
-| Default value (YAML) | `5` |
-
-### `LogActionRate` (config file) / `logActionRate` (YAML)
+### `LogActionRateLimit` (config file) / `logActionRateLimit` (YAML)
 
 Sets the rate of hitting a Log action. The value must be in the format "N/unit",
 where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_LogActionRate` |
-| Encoding (env var/config file) | String |
+| Environment variable | `FELIX_LogActionRateLimit` |
+| Encoding (env var/config file) | String matching regex <code>^(\d+/(second\|minute\|hour\|day))?$</code> |
 | Default value (above encoding) | none |
-| `FelixConfiguration` field | `logActionRate` (YAML) `LogActionRate` (Go API) |
-| `FelixConfiguration` schema | String matching the regular expression <code>^(([0-9]+/(second\|minute\|hour\|day)))?$</code>. |
+| `FelixConfiguration` field | `logActionRateLimit` (YAML) `LogActionRateLimit` (Go API) |
+| `FelixConfiguration` schema | String matching the regular expression <code>^\d+/(?:second\|minute\|hour\|day)$</code>. |
 | Default value (YAML) | none |
+
+### `LogActionRateLimitBurst` (config file) / `logActionRateLimitBurst` (YAML)
+
+Sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogActionRateLimitBurst` |
+| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
+| Default value (above encoding) | `5` |
+| `FelixConfiguration` field | `logActionRateLimitBurst` (YAML) `LogActionRateLimitBurst` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
+| Default value (YAML) | `5` |
 
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
 

@@ -280,9 +280,9 @@ func StartDataplaneDriver(
 				WireguardEncryptHostTraffic: configParams.WireguardHostEncryptionEnabled,
 				RouteSource:                 configParams.RouteSource,
 
-				LogPrefix:      configParams.LogPrefix,
-				LogActionRate:  configParams.LogActionRate,
-				LogActionBurst: configParams.LogActionBurst,
+				LogPrefix:               configParams.LogPrefix,
+				LogActionRateLimit:      configParams.LogActionRateLimit,
+				LogActionRateLimitBurst: configParams.LogActionRateLimitBurst,
 
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 				FilterAllowAction:    configParams.FilterAllowAction(),

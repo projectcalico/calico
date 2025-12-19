@@ -441,7 +441,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigNormal.FlowLogsEnabled = false
 			rrConfigPrefix := rrConfigNormal
-			rrConfigPrefix.LogActionRate = "50/minute"
+			rrConfigPrefix.LogActionRateLimit = "50/minute"
 			rrConfigPrefix.LogPrefix = "foobar"
 			renderer := NewRenderer(rrConfigPrefix)
 			logRule := in
@@ -450,19 +450,19 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(ContainSubstring(expMatch))
-			logRateLimitMatch := fmt.Sprintf("-m limit --limit %s", rrConfigPrefix.LogActionRate)
+			logRateLimitMatch := fmt.Sprintf("-m limit --limit %s", rrConfigPrefix.LogActionRateLimit)
 			Expect(rules[0].Match.Render()).To(ContainSubstring(logRateLimitMatch))
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: rrConfigPrefix.LogPrefix}))
 
 			// With both rate and burst.
-			rrConfigPrefix.LogActionBurst = 90
+			rrConfigPrefix.LogActionRateLimitBurst = 90
 			renderer = NewRenderer(rrConfigPrefix)
 			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(ContainSubstring(expMatch))
 			logRateLimitMatch = fmt.Sprintf("-m limit --limit %s --limit-burst %d",
-				rrConfigPrefix.LogActionRate, rrConfigPrefix.LogActionBurst)
+				rrConfigPrefix.LogActionRateLimit, rrConfigPrefix.LogActionRateLimitBurst)
 			Expect(rules[0].Match.Render()).To(ContainSubstring(logRateLimitMatch))
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: rrConfigPrefix.LogPrefix}))
 

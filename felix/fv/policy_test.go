@@ -75,9 +75,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
 		felixConfig.Name = "default"
 		felixConfig.Spec.LogPrefix = "aXy9%n%%t %k %p"
-		logActionBurst := 20
-		felixConfig.Spec.LogActionBurst = &logActionBurst
-		felixConfig.Spec.LogActionRate = "100/hour"
+		LogActionRateLimitBurst := 20
+		felixConfig.Spec.LogActionRateLimitBurst = &LogActionRateLimitBurst
+		felixConfig.Spec.LogActionRateLimit = "100/hour"
 		_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -103,7 +103,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 			if ipVersion == 6 {
 				binary = "ip6tables-save"
 			}
-			logLimitPattern := fmt.Sprintf("-m limit --limit %s --limit-burst %d", felixConfig.Spec.LogActionRate, logActionBurst)
+			logLimitPattern := fmt.Sprintf("-m limit --limit %s --limit-burst %d",
+				felixConfig.Spec.LogActionRateLimit, LogActionRateLimitBurst,
+			)
 			getRules := func() bool {
 				output, err := felix.ExecOutput(binary, "-t", "filter")
 				Expect(err).NotTo(HaveOccurred())
@@ -118,7 +120,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 			if ipVersion == 6 {
 				ipFamily = "ip6"
 			}
-			logLimitPattern := fmt.Sprintf("limit rate %s burst %d packets", felixConfig.Spec.LogActionRate, logActionBurst)
+			logLimitPattern := fmt.Sprintf("limit rate %s burst %d packets",
+				felixConfig.Spec.LogActionRateLimit, LogActionRateLimitBurst,
+			)
 			getRules := func() bool {
 				output, err := felix.ExecOutput("nft", "list", "table", ipFamily, "calico")
 				Expect(err).NotTo(HaveOccurred())

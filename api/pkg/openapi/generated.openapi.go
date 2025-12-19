@@ -2656,16 +2656,16 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"logActionRate": {
+					"logActionRateLimit": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogActionRate sets the rate of hitting a Log action. The value must be in the format \"N/unit\", where N is a number and unit is one of: second, minute, hour, or day. For example: \"10/second\" or \"100/hour\". [Default: \"\"]",
+							Description: "LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format \"N/unit\", where N is a number and unit is one of: second, minute, hour, or day. For example: \"10/second\" or \"100/hour\". [Default: \"\"]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"logActionBurst": {
+					"logActionRateLimitBurst": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogActionBurst sets the burst of hitting a Log action when LogActionRate is enabled. [Default: 5]",
+							Description: "LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled. [Default: 5]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
