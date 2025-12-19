@@ -104,16 +104,10 @@ DEV_REGISTRY ?= $(firstword $(DEV_REGISTRIES))
 MANIFEST_REGISTRIES         ?= $(DEV_REGISTRIES)
 
 # Third-party registry for pre-built components (e.g., istio-ztunnel)
-THIRD_PARTY_REGISTRY_CI=gcr.io/unique-caldron-775/third-party-ci
-THIRD_PARTY_REGISTRY_CD=gcr.io/unique-caldron-775/cnx/tigera/third-party
+# For OSS, use the same registry as other images (calico/)
+# Enterprise overrides this to use private GCR for caching
+THIRD_PARTY_REGISTRY ?= $(DEV_REGISTRY)
 THIRD_PARTY_RELEASE_BRANCH ?= $(if $(SEMAPHORE_GIT_BRANCH),$(SEMAPHORE_GIT_BRANCH),master)
-ifeq ($(SEMAPHORE_GIT_REF_TYPE), branch)
-    THIRD_PARTY_REGISTRY?=$(THIRD_PARTY_REGISTRY_CD)
-else ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
-    THIRD_PARTY_REGISTRY?=$(THIRD_PARTY_REGISTRY_CI)
-else
-    THIRD_PARTY_REGISTRY?=gcr.io/tigera-dev/third-party-ci
-endif
 
 PUSH_MANIFEST_IMAGES := $(foreach registry,$(MANIFEST_REGISTRIES),$(foreach image,$(BUILD_IMAGES),$(call filter-registry,$(registry))$(image)))
 
