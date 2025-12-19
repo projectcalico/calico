@@ -1,0 +1,73 @@
+- name: Publish tigera/istio-ztunnel images
+  run:
+    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'${DEFAULT_BRANCH}})"
+  dependencies:
+    - Prerequisites
+  task:
+    secrets:
+      - name: quay-tigeradev-hashrelease
+    prologue:
+      commands:
+        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+    jobs:
+      - name: Linux amd64
+        commands:
+          - make -C third_party/istio-ztunnel cd ARCHES=amd64 CONFIRM=true
+- name: Publish tigera/istio-ztunnel images - native arm64 runner
+  run:
+    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'${DEFAULT_BRANCH}})"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    secrets:
+      - name: quay-tigeradev-hashrelease
+    prologue:
+      commands:
+        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+    jobs:
+      - name: Linux arm64
+        commands:
+          - make -C third_party/istio-ztunnel cd ARCHES=arm64 CONFIRM=true
+- name: Publish tigera/istio-ztunnel multi-arch manifests
+  run:
+    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'${DEFAULT_BRANCH}})"
+  dependencies:
+    - Publish tigera/istio-ztunnel images
+    - Publish tigera/istio-ztunnel images - native arm64 runner
+  task:
+    secrets:
+      - name: quay-tigeradev-hashrelease
+    prologue:
+      commands:
+        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+    jobs:
+      - name: Linux multi-arch manifests
+        commands:
+          - make -C third_party/istio-ztunnel push-manifest CONFIRM=true
+
+- name: Istio
+  run:
+    when: "${CHANGE_IN(istio)}"
+  dependencies:
+    - Publish tigera/istio-ztunnel multi-arch manifests
+  task:
+    secrets:
+      - name: quay-tigeradev-hashrelease
+    prologue:
+      commands:
+        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+        - cd istio
+    jobs:
+      - name: "Istio: CI"
+        commands:
+          - ../.semaphore/run-and-monitor ci.log make ci
+      - name: "Istio: build arm64"
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+        commands:
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
