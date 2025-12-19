@@ -68,6 +68,8 @@ if [[ $FELIX_TEST_GROUP =~ jitharden ]]; then
   TEST_REPORT_NAME+="/jitharden=2"
 fi
 export JOB_TAG
+export CI_GROUP_LABEL="felix-fv"
+export CI_JOB_LABEL="${JOB_TAG}"
 export TEST_REPORT_NAME
 
 # Calculate short IDs for use in VM names (which are limited to 63 chars).
