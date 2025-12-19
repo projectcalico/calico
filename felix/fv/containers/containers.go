@@ -64,6 +64,7 @@ type Container struct {
 	logFinished      sync.WaitGroup
 	dropAllLogs      bool
 	ignoreEmptyLines bool
+	logLimitBytes    int
 }
 
 type watch struct {
@@ -193,6 +194,7 @@ type RunOpts struct {
 	SameNamespace    *Container
 	StopTimeoutSecs  int
 	StopSignal       string
+	LogLimitBytes    int
 }
 
 func NextContainerIndex() int {
@@ -215,6 +217,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	c = &Container{
 		Name:             name,
 		ignoreEmptyLines: opts.IgnoreEmptyLines,
+		logLimitBytes:    opts.LogLimitBytes,
 	}
 
 	// Prep command to run the container.
@@ -258,6 +261,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
+
 	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
 	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
 
@@ -383,6 +387,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log (close).")
 	}()
 
+	bytesSeen := 0
 	for scanner.Scan() {
 		line := scanner.Text()
 		if extraWriter != nil {
@@ -400,6 +405,19 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		c.mutex.Lock()
 		droppingLogs := c.dropAllLogs
 		c.mutex.Unlock()
+
+		// Or because we hit the limit.
+		wasDropping := c.logLimitBytes > 0 && bytesSeen > c.logLimitBytes
+		bytesSeen += len(line)
+		nowDropping := c.logLimitBytes > 0 && bytesSeen > c.logLimitBytes
+		if nowDropping {
+			if !wasDropping {
+				// We just hit the limit.
+				fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, "...truncated...")
+			}
+			droppingLogs = true
+		}
+
 		if !droppingLogs {
 			fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, line)
 		}
