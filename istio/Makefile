@@ -72,6 +72,7 @@ ISTIO_PROXYV2_IMAGE_CREATED = .istio-proxyv2.created-$(ARCH)
 ISTIO_ZTUNNEL_IMAGE_CREATED = .istio-ztunnel.created-$(ARCH)
 
 bin/LICENSE: ../LICENSE.md
+	mkdir -p bin
 	cp ../LICENSE.md $@
 
 # Build images for all architectures
