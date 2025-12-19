@@ -103,6 +103,11 @@ DEV_REGISTRY ?= $(firstword $(DEV_REGISTRIES))
 # remove from the list to push to manifest any registries that do not support multi-arch
 MANIFEST_REGISTRIES         ?= $(DEV_REGISTRIES)
 
+# Third-party registry for pre-built components (e.g., istio-ztunnel)
+# These can be overridden for enterprise builds that use private registries
+THIRD_PARTY_REGISTRY ?= calico
+THIRD_PARTY_RELEASE_BRANCH ?= $(if $(SEMAPHORE_GIT_BRANCH),$(SEMAPHORE_GIT_BRANCH),master)
+
 PUSH_MANIFEST_IMAGES := $(foreach registry,$(MANIFEST_REGISTRIES),$(foreach image,$(BUILD_IMAGES),$(call filter-registry,$(registry))$(image)))
 
 # location of docker credentials to push manifests
@@ -183,6 +188,15 @@ define build_binary
 		-e CGO_ENABLED=0 \
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+endef
+
+# For binaries built from a subdirectory (e.g., istio).
+# Args: (1) directory, (2) package path, (3) output path
+define build_binary_dir
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -C $(1) -o $(3) $(if $(BUILD_TAGS),-tags $(BUILD_TAGS)) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(2)'
 endef
 
 # For windows builds that do not require cgo.
@@ -294,6 +308,9 @@ else
 CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
 endif
 
+# UBI10-based calico base image (for components like istio-proxyv2)
+CALICO_BASE_UBI10 ?= calico/base:$(CALICO_BASE_UBI10_VER)
+
 ifndef NO_DOCKER_PULL
 DOCKER_PULL = --pull
 else
@@ -305,7 +322,13 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
 	--build-arg UBI_IMAGE=$(UBI_IMAGE) \
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
+	--build-arg CALICO_BASE_UBI10=$(CALICO_BASE_UBI10) \
 	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+
+# DOCKER_BUILD_THIRD_PARTY is for third-party images that may need additional args
+DOCKER_BUILD_THIRD_PARTY = $(DOCKER_BUILD) \
+	--build-arg THIRD_PARTY_REGISTRY=$(THIRD_PARTY_REGISTRY) \
+	--build-arg THIRD_PARTY_RELEASE_BRANCH=$(THIRD_PARTY_RELEASE_BRANCH)
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
