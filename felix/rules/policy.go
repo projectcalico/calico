@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
+	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -620,8 +621,12 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
+		logMatch := r.NewMatch()
+		if len(r.LogActionRateLimit) != 0 && config.LogActionRateRegexp.MatchString(r.LogActionRateLimit) {
+			logMatch = logMatch.Limit(r.LogActionRateLimit, uint32(r.LogActionRateLimitBurst))
+		}
 		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch(),
+			Match:  logMatch,
 			Action: r.Log(r.generateLogPrefix(id, tier)),
 		})
 	}
