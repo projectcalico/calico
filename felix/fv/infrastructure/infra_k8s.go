@@ -201,7 +201,6 @@ func (kds *K8sDatastoreInfra) setBPFLogByteLimit(limit int) {
 
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
-<<<<<<< HEAD
 		kds.bpfLog = RunBPFLog(kds, kds.bpfLogByteLimit)
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
