@@ -841,9 +841,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-						toWlRulesOpts := commonRuleBuilderOpts
-						toWlRules := newRuleBuilder(toWlRulesOpts...).build()
-
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
 						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
 							withAllowVXLAN(),
@@ -889,9 +887,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							nil,
 						)
 
-						toWlRulesOpts := commonRuleBuilderOpts
-						toWlRules := newRuleBuilder(toWlRulesOpts...).build()
-
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
 						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
 							withAllowIPIP(),
@@ -924,9 +920,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-						toWlRulesOpts := commonRuleBuilderOpts
-						toWlRules := newRuleBuilder(toWlRulesOpts...).build()
-
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
 						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
 							withAllowIPIP(),
