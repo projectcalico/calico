@@ -122,8 +122,16 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				VXLANVNI:                4096,
 			}
 
-			var renderer RuleRenderer
-			var epMarkMapper EndpointMarkMapper
+			var (
+				renderer              RuleRenderer
+				epMarkMapper          EndpointMarkMapper
+				commonRuleBuilderOpts = []ruleBuilderOpt{
+					withFlowLogs(flowLogsEnabled),
+					withDropActionOverride(dropActionOverride),
+					withDenyAction(denyAction, denyActionString),
+					withVXLANPort(VXLANPort),
+				}
+			)
 
 			Context("with normal config", func() {
 				BeforeEach(func() {
@@ -133,21 +141,11 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a minimal workload endpoint", func() {
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-					).build()
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
+					toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -173,12 +171,10 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a disabled workload endpoint", func() {
-					rules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withDenyAction(denyAction),
-						withFlowLogs(flowLogsEnabled),
+					opts := append(commonRuleBuilderOpts,
 						withDisabledEndpoint(),
-					).build()
+					)
+					rules := newRuleBuilder(opts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -204,26 +200,18 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a fully-loaded workload endpoint", func() {
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -295,26 +283,18 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						Selector: "someLabel == 'bar'",
 					}
 
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicyGroups(polGrpInABC, polGrpInEF),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicyGroups(polGrpOutAB, polGrpOutDE),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -354,26 +334,18 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicies("staged:ai", gnpBI),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicies(gnpAE, "staged:be"),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -411,26 +383,18 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicies("staged:ai", "staged:bi"),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicies("staged:ae", "staged:be"),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -483,26 +447,18 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						},
 						Selector: "all()",
 					}
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicyGroups(polGrpIngress),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicyGroups(polGrpEgress),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -537,28 +493,20 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 
 				It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
 					// Suffixes for policy IDs "ai" and "bi".
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 						withTierPassAction(),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
 						withTierPassAction(),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -624,47 +572,35 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						[]string{"prof1", "prof2"},
 					)
 
-					toHostRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toHostOpts := append(commonRuleBuilderOpts,
+						withEgress(),
 						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
-						withEgress(),
-					).build()
+					)
+					toHostRules := newRuleBuilder(toHostOpts...).build()
 
-					fromHostRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromHostOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
-					).build()
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 
-					toHostFWRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toHostFWOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpAFE, gnpBFE),
 						withForwardPolicies(),
 						withEgress(),
 						forHostEndpoint(),
-					).build()
+					)
+					toHostFWRules := newRuleBuilder(toHostFWOpts...).build()
 
-					fromHostFWRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromHostFWOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpAFI, gnpBFI),
 						withForwardPolicies(),
 						forHostEndpoint(),
-					).build()
+					)
+					fromHostFWRules := newRuleBuilder(fromHostFWOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -692,26 +628,20 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render host endpoint raw chains with untracked policies", func() {
-					toHostRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toHostOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
 						withEgress(),
-					).build()
+					)
+					toHostRules := newRuleBuilder(toHostOpts...).build()
 
-					fromHostRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromHostOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
-					).build()
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 
 					expected := []*generictables.Chain{
 						{
@@ -733,15 +663,12 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-					fromHostRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromHostOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
-					).build()
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 					expected := []*generictables.Chain{
 						{
 							Name:  "cali-fh-eth0",
@@ -759,24 +686,16 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a workload endpoint with packet rate limiting QoSControls", func() {
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withQoSPacketRate(2000, 4000),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
 						withQoSPacketRate(1000, 2000),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := []*generictables.Chain{
 						{
@@ -807,24 +726,16 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a workload endpoint with connection limiting QoSControls", func() {
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withQoSMaxConnections(20),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
 						withQoSMaxConnections(10),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -861,24 +772,16 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render a minimal workload endpoint", func() {
-					toWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withInvalidCTStateDisabled(),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withInvalidCTStateDisabled(),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+						withInvalidCTStateDisabled(),
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -905,16 +808,13 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				})
 
 				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-					fromHostRules := newRuleBuilder(
-						withDropActionOverride(dropActionOverride),
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromHostOpts := append(commonRuleBuilderOpts,
 						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
 						withInvalidCTStateDisabled(),
-					).build()
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 
 					expected := []*generictables.Chain{
 						{
@@ -941,21 +841,12 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-						toWlRules := newRuleBuilder(
-							withDropActionOverride(dropActionOverride),
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-						).build()
-
-						fromWlRules := newRuleBuilder(
-							withDropActionOverride(dropActionOverride),
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-							withDropIPIP(),
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
+						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
-						).build()
+							withAllowVXLAN(),
+						)
+						fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 							{
@@ -996,21 +887,12 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							nil,
 						)
 
-						toWlRules := newRuleBuilder(
-							withDropActionOverride(dropActionOverride),
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-						).build()
-
-						fromWlRules := newRuleBuilder(
-							withDropActionOverride(dropActionOverride),
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-							withDropVXLAN(VXLANPort),
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
+						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
-						).build()
+							withAllowIPIP(),
+						)
+						fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 							{
@@ -1038,20 +920,13 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-						toWlRules := newRuleBuilder(
-							withDropActionOverride(dropActionOverride),
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-						).build()
-
-						fromWlRules := newRuleBuilder(
-							withDropActionOverride(dropActionOverride),
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
+						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
-						).build()
+							withAllowIPIP(),
+							withAllowVXLAN(),
+						)
+						fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 							{
@@ -1506,28 +1381,28 @@ func withEgress() ruleBuilderOpt {
 	}
 }
 
-func withDenyAction(action generictables.Action) ruleBuilderOpt {
+func withDenyAction(action generictables.Action, actionStr string) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.denyAction = action
-	}
-}
-
-func withDenyActionString(actionStr string) ruleBuilderOpt {
-	return func(r *ruleBuilder) {
 		r.denyActionString = actionStr
 	}
 }
 
-func withDropIPIP() ruleBuilderOpt {
+func withAllowIPIP() ruleBuilderOpt {
 	return func(r *ruleBuilder) {
-		r.dropIPIP = true
+		r.dropIPIP = false
 	}
 }
 
-func withDropVXLAN(vxlanPort int) ruleBuilderOpt {
+func withAllowVXLAN() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.dropVXLAN = false
+	}
+}
+
+func withVXLANPort(vxlanPort int) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.vxlanPort = vxlanPort
-		r.dropVXLAN = true
 	}
 }
 
@@ -1614,6 +1489,9 @@ func withDropActionOverride(action string) ruleBuilderOpt {
 func forHostEndpoint() ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.forHostEndpoint = true
+		// IPIP and VXLAN must be allowed to/from a host.
+		r.dropIPIP = false
+		r.dropVXLAN = false
 	}
 }
 
@@ -1652,7 +1530,10 @@ type ruleBuilder struct {
 }
 
 func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
-	b := &ruleBuilder{}
+	b := &ruleBuilder{
+		dropIPIP:  true,
+		dropVXLAN: true,
+	}
 	for _, o := range opts {
 		o(b)
 	}
@@ -1695,12 +1576,12 @@ func (b *ruleBuilder) build() []generictables.Rule {
 	rules = append(rules, clearMarkRule(0x18, ""))
 
 	// Drop VXLAN traffic originating from workloads, if not allowed.
-	if b.dropVXLAN {
+	if b.dropVXLAN && b.direction == "egress" {
 		rules = append(rules, b.dropVXLANTunnel())
 	}
 
 	// Drop IPIP traffic originating from workloads, if not allowed.
-	if b.dropIPIP {
+	if b.dropIPIP && b.direction == "egress" {
 		rules = append(rules, b.dropIPIPTunnel())
 	}
 
