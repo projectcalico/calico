@@ -534,6 +534,16 @@ func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 	return m
 }
 
+// The expected rate must be a digit with /second, /minute, /hour, or /day suffix.
+func (m nftMatch) Limit(rate string, burst uint32) generictables.MatchCriteria {
+	if burst > 0 {
+		m.clauses = append(m.clauses, fmt.Sprintf("limit rate %s burst %d packets", rate, burst))
+	} else {
+		m.clauses = append(m.clauses, fmt.Sprintf("limit rate %s", rate))
+	}
+	return m
+}
+
 func (m nftMatch) InInterfaceVMAP(name string) generictables.MatchCriteria {
 	m.clauses = append(m.clauses, fmt.Sprintf("iifname vmap @<LAYER>-%s", LegalizeSetName(name)))
 	return m
