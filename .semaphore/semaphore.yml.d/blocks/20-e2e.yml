@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "e2e-tests"
     agent:
       machine:
         type: f1-standard-4
@@ -12,3 +15,6 @@
       - name: "E2E tests: Conformance"
         commands:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"

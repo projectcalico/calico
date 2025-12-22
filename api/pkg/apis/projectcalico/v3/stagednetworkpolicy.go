@@ -46,6 +46,7 @@ type StagedNetworkPolicySpec struct {
 	// security policies within the tier, the "default" tier is created automatically if it
 	// does not exist, this means for deployments requiring only a single Tier, the tier name
 	// may be omitted on all policy management requests.
+	// +kubebuilder:default=default
 	Tier string `json:"tier,omitempty" validate:"omitempty,name"`
 	// Order is an optional field that specifies the order in which the policy is applied.
 	// Policies with higher "order" are applied after those with lower

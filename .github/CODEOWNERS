@@ -11,3 +11,7 @@ third_party/envoy-ratelimit/  @projectcalico/ingress-maintainers
 
 # Application Layer Policy (Dikastes, L7 policy enforcement with Envoy/Istio)
 app-policy/                   @projectcalico/ingress-maintainers
+
+# E2E runs
+.semaphore/end-to-end/        @projectcalico/e2e-maintainers
+e2e/                          @projectcalico/e2e-maintainers

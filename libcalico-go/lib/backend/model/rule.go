@@ -84,8 +84,6 @@ type Rule struct {
 	// These fields allow us to pass through application layer selectors from the V3 datamodel.
 	HTTPMatch *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
 
-	LogPrefix string `json:"log_prefix,omitempty" validate:"omitempty"`
-
 	Metadata *RuleMetadata `json:"metadata,omitempty" validate:"omitempty"`
 }
 

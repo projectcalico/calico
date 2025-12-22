@@ -65,7 +65,11 @@ fi
 retry apt-get update -y
 retry apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin containerd.io make iproute2 wireguard
 usermod -a -G docker ubuntu
+
+# The IPIP module is loaded on demand, but pre-loading it prevents flakes in
+# the first test that needs it.
 modprobe ipip
+
 if [ -s /etc/docker/daemon.json ] ; then
   cat /etc/docker/daemon.json | sed "\$d" | sed "\$s/\$/,/" > /tmp/daemon.json
 else
@@ -76,6 +80,12 @@ cat >> /tmp/daemon.json << EOF
   "fixed-cidr-v6": "2001:db8:1::/64"
 }
 EOF
+
+
+# FIXME some tests rely on this.  Tests used to run on SempahoreCI, which uses
+# loose by default, but GCP defaults to strict mode, which breaks some tests.
+# Fixing the dependency on loose is tracked by https://tigera.atlassian.net/browse/CORE-12146
+sysctl -w net.ipv4.conf.all.rp_filter=2
 
 mv /tmp/daemon.json /etc/docker/daemon.json
 systemctl restart docker

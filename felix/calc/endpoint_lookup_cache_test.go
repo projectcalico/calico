@@ -17,6 +17,7 @@ package calc_test
 import (
 	"net"
 	"regexp"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -29,6 +30,7 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 const (
@@ -617,6 +619,70 @@ var _ = Describe("EndpointLookupCache tests: Node lookup", func() {
 		})
 	})
 })
+
+func TestIsEndpointDeleted(t *testing.T) {
+	// Create a cache with a short deletion delay for testing
+	cache := NewEndpointLookupsCache(WithDeletionDelay(50 * time.Millisecond))
+
+	// Create a test endpoint key
+	key := model.WorkloadEndpointKey{
+		Hostname:       "test-node",
+		OrchestratorID: "cni",
+		WorkloadID:     "test-workload",
+		EndpointID:     "eth0",
+	}
+
+	// Create endpoint data using the same pattern as existing tests
+	ip := net.ParseIP("10.0.0.1")
+	cidr := net.IPNet{
+		IP:   ip,
+		Mask: net.CIDRMask(32, 32),
+	}
+
+	endpoint := &model.WorkloadEndpoint{
+		State:      "active",
+		Name:       "test-endpoint",
+		ProfileIDs: []string{"test-profile"},
+		IPv4Nets:   []cnet.IPNet{{IPNet: cidr}},
+	}
+
+	// Add the endpoint to the cache using the correct API pattern
+	ed := cache.CreateLocalEndpointData(key, endpoint, newTierInfoSlice())
+	cache.OnUpdate(api.Update{
+		UpdateType: api.UpdateTypeKVNew,
+		KVPair: model.KVPair{
+			Key:   key,
+			Value: endpoint,
+		},
+	})
+
+	// Check if the endpoint is deleted (should be false)
+	if cache.IsEndpointDeleted(ed) {
+		t.Error("Expected endpoint to not be deleted before deletion")
+	}
+
+	// Remove the endpoint (this should mark it for deletion)
+	cache.OnUpdate(api.Update{
+		UpdateType: api.UpdateTypeKVDeleted,
+		KVPair: model.KVPair{
+			Key:   key,
+			Value: nil,
+		},
+	})
+
+	// Check if the endpoint is now marked as deleted (should be true)
+	if !cache.IsEndpointDeleted(ed) {
+		t.Error("Expected endpoint to be marked as deleted after deletion")
+	}
+
+	// Wait for the deletion delay to pass
+	time.Sleep(100 * time.Millisecond)
+
+	// Check if the endpoint is still marked as deleted (should be false as it's been cleaned up)
+	if cache.IsEndpointDeleted(ed) {
+		t.Error("Expected endpoint to not be marked as deleted after cleanup")
+	}
+}
 
 func newTierInfoSlice() []TierInfo {
 	return nil
