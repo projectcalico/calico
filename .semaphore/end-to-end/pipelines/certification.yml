@@ -7,7 +7,7 @@ name: banzai-calico Openshift Certification
 
 agent:
   machine:
-    type: f1-standard-2
+    type: c1-standard-1
     os_image: ubuntu2204
 
 execution_time_limit:
@@ -31,34 +31,85 @@ global_job_config:
       value: "ocp-cert"
     - name: STERN_CHECK
       value: "DISABLED"
+    - name: PROVISIONER
+      value: aws-openshift
+    - name: INSTALLER
+      value: operator
+    - name: DATAPLANE
+      value: "CalicoIptables"
 
 blocks:
-  - name: Openshift OCP
+  - name: Standalone cluster tests
     dependencies: []
     task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
       jobs:
-        - name: CNI & Virtualization tests
+        - name: Standalone cluster tests (cert)
           execution_time_limit:
             hours: 6
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: OPENSHIFT_VERSION
-              values:
-                - "4.16.38"
-                - "4.17.25"
-                - "4.18.9"
+              values: ["4.20.1", "4.19.17", "4.18.27"]
           env_vars:
-            - name: USE_HASH_RELEASE
-              value: "false"
-            - name: PROVISIONER
-              value: aws-openshift
-            - name: INSTALLER
-              value: operator
+            - name: OPENSHIFT_CLUSTER_TYPE
+              value: "Standalone"
+            - name: TEST_TYPE
+              value: "ocp-cert"
             - name: ENABLE_OCP_VIRT
               value: "true"
-            - name: DATAPLANE
-              value: "CalicoIptables"
+
+  - name: HCP setup hosting
+    dependencies: []
+    task:
+      jobs:
+        # only define one provisioner per job. if you wish to create multiple hosting clusters,
+        # use separate jobs per hosting cluster and update the `HOSTING_CLUSTER` value in hosted block
+        # do not forget to add the `HOSTING_CLUSTER` value to the "teardown hosting" block
+        - name: HCP setup hosting
+          execution_time_limit:
+            hours: 3
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: OPENSHIFT_VERSION
+              value: "4.20.1"
+            - name: OPENSHIFT_CLUSTER_TYPE
+              value: "HCP-hosting"
+            - name: HOSTING_CLUSTER
+              value: "hcp-shared-hosting"
+            - name: HCP_STAGE
+              value: "setup-hosting"
+
+  - name: HCP hosted setup and tests
+    dependencies: ["HCP setup hosting"]
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      jobs:
+        - name: HCP tests - hosted (cert)
+          execution_time_limit:
+            hours: 6
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: OPENSHIFT_VERSION
+              values: ["4.20.1", "4.19.17", "4.18.27"]
+          env_vars:
+            - name: HCP_STAGE
+              value: "hosted"
+            - name: OPENSHIFT_CLUSTER_TYPE
+              value: "HCP-hosted"
+            - name: HOSTING_CLUSTER
+              value: "hcp-shared-hosting"
+            - name: TEST_TYPE
+              value: "ocp-cert"
 
 promotions:
   - name: Cleanup jobs
@@ -68,7 +119,25 @@ promotions:
 
 after_pipeline:
   task:
+    secrets:
+      - name: banzai-secrets
     jobs:
       - name: Reports
         commands:
           - test-results gen-pipeline-report --force
+      - name: Destroy Hosting Clusters
+        execution_time_limit:
+          hours: 3
+        commands:
+          - checkout
+          - source ~/calico/.semaphore/end-to-end/scripts/global_prologue.sh
+          - unset CLUSTER_NAME
+          - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+        env_vars:
+          - name: HCP_STAGE
+            value: "destroy-hosting"
+        matrix:
+          - env_var: HOSTING_CLUSTER
+            values:
+              - "hcp-shared-hosting"
