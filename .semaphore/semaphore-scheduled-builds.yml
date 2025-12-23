@@ -381,16 +381,11 @@ blocks:
     dependencies:
       - Prerequisites
     task:
-      secrets:
-        - name: docker
-        - name: quay-robot-calico+semaphoreci
       env_vars:
         - name: DEV_REGISTRIES
-          value: quay.io/calico docker.io/calico
+          value: docker.io/calico
       prologue:
         commands:
-          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux amd64
@@ -406,16 +401,11 @@ blocks:
       agent:
         machine:
           type: s1-aws-arm64-2
-      secrets:
-        - name: docker
-        - name: quay-robot-calico+semaphoreci
       env_vars:
         - name: DEV_REGISTRIES
-          value: quay.io/calico docker.io/calico
+          value: docker.io/calico
       prologue:
         commands:
-          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux arm64
@@ -429,16 +419,11 @@ blocks:
       - Publish tigera/istio-ztunnel images
       - Publish tigera/istio-ztunnel images - native arm64 runner
     task:
-      secrets:
-        - name: docker
-        - name: quay-robot-calico+semaphoreci
       env_vars:
         - name: DEV_REGISTRIES
-          value: quay.io/calico docker.io/calico
+          value: docker.io/calico
       prologue:
         commands:
-          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux multi-arch manifests
