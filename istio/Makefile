@@ -107,9 +107,10 @@ $(ISTIO_PROXYV2_IMAGE_CREATED): Dockerfile-proxyv2 bin/pilot-agent-$(ARCH) bin/L
 	touch $@
 
 # istio-ztunnel image
+# Pulls the ztunnel binary from calico/istio-ztunnel:$(BRANCH_NAME) which is built by third_party/istio-ztunnel
 $(ISTIO_ZTUNNEL_IMAGE): $(ISTIO_ZTUNNEL_IMAGE_CREATED)
 $(ISTIO_ZTUNNEL_IMAGE_CREATED): Dockerfile-ztunnel bin/LICENSE
-	$(DOCKER_BUILD_THIRD_PARTY) --build-arg ISTIO_ZTUNNEL_VERSION=$(ISTIO_ZTUNNEL_VERSION) -t $(ISTIO_ZTUNNEL_IMAGE):latest-$(ARCH) -f Dockerfile-ztunnel .
+	$(DOCKER_BUILD) --build-arg ISTIO_ZTUNNEL_VERSION=$(ISTIO_ZTUNNEL_VERSION) --build-arg BRANCH_NAME=$(BRANCH_NAME) -t $(ISTIO_ZTUNNEL_IMAGE):latest-$(ARCH) -f Dockerfile-ztunnel .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_ZTUNNEL_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

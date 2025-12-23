@@ -4,15 +4,17 @@
   dependencies:
     - Prerequisites
   task:
-    secrets:
-      - name: google-service-account-for-gcr
+    env_vars:
+      - name: DEV_REGISTRIES
+        value: docker.io/calico
     prologue:
       commands:
-        - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
     jobs:
       - name: Linux amd64
         commands:
-          - make -C third_party/istio-ztunnel cd ARCHES=amd64 CONFIRM=true
+          - make -C third_party/istio-ztunnel ci ARCHES=amd64
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd ARCHES=amd64 CONFIRM=true; fi
 - name: Publish tigera/istio-ztunnel images - native arm64 runner
   run:
     when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'${DEFAULT_BRANCH}})"
@@ -22,15 +24,17 @@
     agent:
       machine:
         type: s1-aws-arm64-2
-    secrets:
-      - name: google-service-account-for-gcr
+    env_vars:
+      - name: DEV_REGISTRIES
+        value: docker.io/calico
     prologue:
       commands:
-        - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
     jobs:
       - name: Linux arm64
         commands:
-          - make -C third_party/istio-ztunnel cd ARCHES=arm64 CONFIRM=true
+          - make -C third_party/istio-ztunnel ci ARCHES=arm64
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd ARCHES=arm64 CONFIRM=true; fi
 - name: Publish tigera/istio-ztunnel multi-arch manifests
   run:
     when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'${DEFAULT_BRANCH}})"
@@ -38,15 +42,16 @@
     - Publish tigera/istio-ztunnel images
     - Publish tigera/istio-ztunnel images - native arm64 runner
   task:
-    secrets:
-      - name: google-service-account-for-gcr
+    env_vars:
+      - name: DEV_REGISTRIES
+        value: docker.io/calico
     prologue:
       commands:
-        - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
     jobs:
       - name: Linux multi-arch manifests
         commands:
-          - make -C third_party/istio-ztunnel push-manifest CONFIRM=true
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel push-manifest CONFIRM=true; fi
 
 - name: Istio
   run:
@@ -54,20 +59,30 @@
   dependencies:
     - Publish tigera/istio-ztunnel multi-arch manifests
   task:
-    secrets:
-      - name: google-service-account-for-gcr
     prologue:
       commands:
-        - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
         - cd istio
     jobs:
       - name: "Istio: CI"
         commands:
-          - ../.semaphore/run-and-monitor ci.log make ci
+          # On PRs, skip istio-ztunnel since the image isn't pushed to registry yet
+          - |
+            if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+              ../.semaphore/run-and-monitor ci.log make ci BUILD_IMAGES="istio-install-cni istio-pilot istio-proxyv2"
+            else
+              ../.semaphore/run-and-monitor ci.log make ci
+            fi
       - name: "Istio: build arm64"
         matrix:
           - env_var: ARCH
             values:
               - arm64
         commands:
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+          # On PRs, skip istio-ztunnel since the image isn't pushed to registry yet
+          - |
+            if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+              ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH BUILD_IMAGES="istio-install-cni istio-pilot istio-proxyv2"
+            else
+              ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+            fi

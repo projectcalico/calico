@@ -11,11 +11,6 @@ BUILD_IMAGES ?= $(ZTUNNEL_IMAGE)
 
 ZTUNNEL_VERSION = 1.28.1
 
-# required for ci/cd
-DEV_REGISTRIES = $(THIRD_PARTY_REGISTRY)
-BRANCH_NAME = v$(ZTUNNEL_VERSION)-$(THIRD_PARTY_RELEASE_BRANCH)
-LATEST_IMAGE_TAG = $(BRANCH_NAME)
-
 ##############################################################################
 # Include lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since

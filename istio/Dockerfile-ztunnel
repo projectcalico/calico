@@ -1,15 +1,16 @@
 # Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 # This Dockerfile packages the ztunnel binary built from source into a minimal container.
-# The binary is built separately using the Makefile, which compiles ztunnel with Calico patches applied.
+# The binary is built separately by third_party/istio-ztunnel and pushed to calico/istio-ztunnel.
+# On branch builds (non-PRs), the image is pushed with tag $BRANCH_NAME.
 
 ARG CALICO_BASE
 ARG ISTIO_ZTUNNEL_VERSION
-ARG THIRD_PARTY_REGISTRY
-ARG THIRD_PARTY_RELEASE_BRANCH
+ARG BRANCH_NAME
 ARG UBI_IMAGE
 
-FROM ${THIRD_PARTY_REGISTRY}/istio-ztunnel:v${ISTIO_ZTUNNEL_VERSION}-${THIRD_PARTY_RELEASE_BRANCH} AS ztunnel
+# Pull the ztunnel binary from the calico/istio-ztunnel image built by third_party/istio-ztunnel
+FROM calico/istio-ztunnel:${BRANCH_NAME} AS ztunnel
 
 FROM ${UBI_IMAGE} AS ubi
 
