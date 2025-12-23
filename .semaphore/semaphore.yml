@@ -382,7 +382,7 @@ blocks:
       - Prerequisites
     task:
       secrets:
-        - name: docker-hub
+        - name: docker
         - name: quay-robot-calico+semaphoreci
       env_vars:
         - name: DEV_REGISTRIES
@@ -407,7 +407,7 @@ blocks:
         machine:
           type: s1-aws-arm64-2
       secrets:
-        - name: docker-hub
+        - name: docker
         - name: quay-robot-calico+semaphoreci
       env_vars:
         - name: DEV_REGISTRIES
@@ -430,7 +430,7 @@ blocks:
       - Publish tigera/istio-ztunnel images - native arm64 runner
     task:
       secrets:
-        - name: docker-hub
+        - name: docker
         - name: quay-robot-calico+semaphoreci
       env_vars:
         - name: DEV_REGISTRIES
