@@ -1,0 +1,88 @@
+- name: Publish tigera/istio-ztunnel images
+  run:
+    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'${DEFAULT_BRANCH}})"
+  dependencies:
+    - Prerequisites
+  task:
+    env_vars:
+      - name: DEV_REGISTRIES
+        value: docker.io/calico
+    prologue:
+      commands:
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+    jobs:
+      - name: Linux amd64
+        commands:
+          - make -C third_party/istio-ztunnel ci ARCHES=amd64
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd ARCHES=amd64 CONFIRM=true; fi
+- name: Publish tigera/istio-ztunnel images - native arm64 runner
+  run:
+    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'${DEFAULT_BRANCH}})"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    env_vars:
+      - name: DEV_REGISTRIES
+        value: docker.io/calico
+    prologue:
+      commands:
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+    jobs:
+      - name: Linux arm64
+        commands:
+          - make -C third_party/istio-ztunnel ci ARCHES=arm64
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd ARCHES=arm64 CONFIRM=true; fi
+- name: Publish tigera/istio-ztunnel multi-arch manifests
+  run:
+    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'${DEFAULT_BRANCH}})"
+  dependencies:
+    - Publish tigera/istio-ztunnel images
+    - Publish tigera/istio-ztunnel images - native arm64 runner
+  task:
+    env_vars:
+      - name: DEV_REGISTRIES
+        value: docker.io/calico
+    prologue:
+      commands:
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+    jobs:
+      - name: Linux multi-arch manifests
+        commands:
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel push-manifest CONFIRM=true; fi
+
+- name: Istio
+  run:
+    when: "${CHANGE_IN(istio)}"
+  dependencies:
+    - Publish tigera/istio-ztunnel multi-arch manifests
+  task:
+    prologue:
+      commands:
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - cd istio
+    jobs:
+      - name: "Istio: CI"
+        commands:
+          # On PRs, skip istio-ztunnel since the image isn't pushed to registry yet
+          - |
+            if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+              ../.semaphore/run-and-monitor ci.log make ci BUILD_IMAGES="istio-install-cni istio-pilot istio-proxyv2"
+            else
+              ../.semaphore/run-and-monitor ci.log make ci
+            fi
+      - name: "Istio: build arm64"
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+        commands:
+          # On PRs, skip istio-ztunnel since the image isn't pushed to registry yet
+          - |
+            if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+              ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH BUILD_IMAGES="istio-install-cni istio-pilot istio-proxyv2"
+            else
+              ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+            fi
