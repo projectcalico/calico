@@ -12,7 +12,10 @@ import (
 func Test_hashToIPv4_invalid_range(t *testing.T) {
 	expectedRouterId := "207.94.5.27"
 	nodeName := "Testrobin123"
-	actualRouterId := HashToIPv4(nodeName) //invalid router_id 239.94.5.27
+	actualRouterId, err := HashToIPv4(nodeName) //invalid router_id 239.94.5.27
+	if err != nil {
+		t.Fatalf(`HashToIPv4(%s) returned unexpected error: %v`, nodeName, err)
+	}
 	if expectedRouterId != actualRouterId {
 		t.Errorf(`HashToIPv4(%s) = %s, want %s`, nodeName, actualRouterId, expectedRouterId)
 	}
@@ -21,7 +24,10 @@ func Test_hashToIPv4_invalid_range(t *testing.T) {
 func Test_hashToIPv4_valid_range(t *testing.T) {
 	expectedRouterId := "109.174.215.226"
 	nodeName := "nodeTest"
-	actualRouterId := HashToIPv4(nodeName) //invalid router_id 239.94.5.27
+	actualRouterId, err := HashToIPv4(nodeName) //invalid router_id 239.94.5.27
+	if err != nil {
+		t.Fatalf(`HashToIPv4(%s) returned unexpected error: %v`, nodeName, err)
+	}
 	if expectedRouterId != actualRouterId {
 		t.Errorf(`HashToIPv4(%s) = %s, want %s`, nodeName, actualRouterId, expectedRouterId)
 	}
@@ -188,14 +194,20 @@ func Test_BGPFilterBIRDFuncs(t *testing.T) {
 func Test_ValidateHashToIpv4Method(t *testing.T) {
 	expectedRouterId := "207.94.5.27"
 	nodeName := "Testrobin123"
-	actualRouterId := HashToIPv4(nodeName)
+	actualRouterId, err := HashToIPv4(nodeName)
+	if err != nil {
+		t.Fatalf("HashToIPv4(%s) returned unexpected error: %v", nodeName, err)
+	}
 	if expectedRouterId != actualRouterId {
 		t.Errorf("Expected %s to equal %s", expectedRouterId, actualRouterId)
 	}
 
 	expectedRouterId = "109.174.215.226"
 	nodeName = "nodeTest"
-	actualRouterId = HashToIPv4(nodeName)
+	actualRouterId, err = HashToIPv4(nodeName)
+	if err != nil {
+		t.Fatalf("HashToIPv4(%s) returned unexpected error: %v", nodeName, err)
+	}
 	if expectedRouterId != actualRouterId {
 		t.Errorf("Expected %s to equal %s", expectedRouterId, actualRouterId)
 	}

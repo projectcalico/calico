@@ -14,13 +14,9 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
-	"github.com/projectcalico/calico/confd/pkg/backends/types"
+	"github.com/projectcalico/calico/confd/pkg/backends"
 )
-
-var title = cases.Title(language.English)
 
 func newFuncMap() map[string]interface{} {
 	m := make(map[string]interface{})
@@ -35,7 +31,6 @@ func newFuncMap() map[string]interface{} {
 	m["datetime"] = time.Now
 	m["toUpper"] = strings.ToUpper
 	m["toLower"] = strings.ToLower
-	m["title"] = title.String
 	m["contains"] = strings.Contains
 	m["replace"] = strings.Replace
 	m["hasSuffix"] = strings.HasSuffix
@@ -44,7 +39,6 @@ func newFuncMap() map[string]interface{} {
 	m["fileExists"] = isFileExist
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
-	m["bgpFilterFunctionName"] = BGPFilterFunctionName
 	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
 	return m
 }
@@ -56,11 +50,11 @@ func addFuncs(out, in map[string]interface{}) {
 }
 
 // addCalicoFuncs adds Calico-specific template functions
-func addCalicoFuncs(funcMap map[string]interface{}, storeClient interface{}) {
+func addCalicoFuncs(funcMap map[string]interface{}) {
 	// Add getBGPConfig function that takes the ipVersion and client as parameters
 	funcMap["getBGPConfig"] = func(ipVersion int, client interface{}) (interface{}, error) {
-		if calicoClient, ok := client.(types.BirdBGPConfigProvider); ok {
-			config, err := calicoClient.GetBirdBGPConfig(ipVersion)
+		if storeClient, ok := client.(backends.StoreClient); ok {
+			config, err := storeClient.GetBirdBGPConfig(ipVersion)
 			if err != nil {
 				// Return error to fail template execution and prevent broken config
 				return nil, err

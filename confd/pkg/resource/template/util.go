@@ -118,11 +118,11 @@ func TruncateAndHashName(name string, maxLen int) (string, error) {
 }
 
 // HashToIPv4 hashes the given string and formats the resulting 4 bytes as an IPv4 address.
-func HashToIPv4(nodeName string) string {
+func HashToIPv4(nodeName string) (string, error) {
 	hash := sha256.New()
 	_, err := hash.Write([]byte(nodeName))
 	if err != nil {
-		return ""
+		return "", err
 	}
 	hashBytes := hash.Sum(nil)
 	ip := hashBytes[:4]
@@ -135,5 +135,5 @@ func HashToIPv4(nodeName string) string {
 		strconv.Itoa(int(ip[1])) + "." +
 		strconv.Itoa(int(ip[2])) + "." +
 		strconv.Itoa(int(ip[3]))
-	return routerId
+	return routerId, nil
 }

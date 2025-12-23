@@ -22,12 +22,6 @@ router id {{$config.RouterID}};{{if $config.RouterIDComment}}  {{$config.RouterI
 listen bgp{{if $config.ListenAddress}} address {{$config.ListenAddress}}{{end}}{{if $config.ListenPort}} port {{$config.ListenPort}}{{end}};
 {{- end}}
 
-{{- define "LOGGING"}}
-{{- if .DebugMode}}
-  debug {{.DebugMode}};
-{{- end}}
-{{- end}}
-
 # Configure synchronization between routing tables and kernel.
 protocol kernel {
   learn;             # Learn all alien routes from the kernel
@@ -46,12 +40,16 @@ protocol kernel {
 
 # Watch interface up/down events.
 protocol device {
-{{- template "LOGGING" $config}}
+{{- if $config.DebugMode}}
+  debug {{$config.DebugMode}};
+{{- end}}
   scan time 2;    # Scan interfaces every 2 seconds
 }
 
 protocol direct {
-{{- template "LOGGING" $config}}
+{{- if $config.DebugMode}}
+  debug {{$config.DebugMode}};
+{{- end}}
   interface {{$config.DirectInterfaces}};{{if eq $config.DirectInterfaces `-"cali*", -"kube-ipvs*", "*"`}} # Exclude cali* and kube-ipvs* but
                                           # include everything else.  In
                                           # IPVS-mode, kube-proxy creates a
@@ -66,9 +64,11 @@ protocol direct {
 {{if eq "" ($config.NodeIPv6)}}# IPv6 disabled on this node.
 {{else}}# Template for all BGP clients
 template bgp bgp_template {
-{{- template "LOGGING" $config}}
+{{- if $config.DebugMode}}
+  debug {{$config.DebugMode}};
+{{- end}}
   description "Connection to BGP peer";
-  local as {{$config.AsNumber}};
+  local as {{$config.ASNumber}};
   gateway recursive; # This should be the default, but just in case.
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
@@ -92,10 +92,10 @@ protocol bgp {{.Name}} from bgp_template {
 {{- else if .TTLSecurity}}
   ttl security {{.TTLSecurity}};
 {{- end}}
-{{- if .LocalAsNumber}}
-  local as {{.LocalAsNumber}};
+{{- if .LocalASNumber}}
+  local as {{.LocalASNumber}};
 {{- end}}
-  neighbor {{.IP}}{{if .Port}} port {{.Port}}{{end}} as {{.AsNumber}};
+  neighbor {{.IP}}{{if .Port}} port {{.Port}}{{end}} as {{.ASNumber}};
 {{- if .SourceAddr}}
   source address {{.SourceAddr}};  # The local address we use for the TCP connection
 {{- end}}
