@@ -382,15 +382,21 @@ blocks:
       - Prerequisites
     task:
       secrets:
-        - name: google-service-account-for-gcr
+        - name: docker-hub
+        - name: quay-robot-calico+semaphoreci
+      env_vars:
+        - name: DEV_REGISTRIES
+          value: quay.io/calico docker.io/calico
       prologue:
         commands:
-          - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux amd64
           commands:
-            - make -C third_party/istio-ztunnel cd ARCHES=amd64 CONFIRM=true
+            - make -C third_party/istio-ztunnel ci ARCHES=amd64
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd ARCHES=amd64 CONFIRM=true; fi
   - name: Publish tigera/istio-ztunnel images - native arm64 runner
     run:
       when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'})"
@@ -401,15 +407,21 @@ blocks:
         machine:
           type: s1-aws-arm64-2
       secrets:
-        - name: google-service-account-for-gcr
+        - name: docker-hub
+        - name: quay-robot-calico+semaphoreci
+      env_vars:
+        - name: DEV_REGISTRIES
+          value: quay.io/calico docker.io/calico
       prologue:
         commands:
-          - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux arm64
           commands:
-            - make -C third_party/istio-ztunnel cd ARCHES=arm64 CONFIRM=true
+            - make -C third_party/istio-ztunnel ci ARCHES=arm64
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd ARCHES=arm64 CONFIRM=true; fi
   - name: Publish tigera/istio-ztunnel multi-arch manifests
     run:
       when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE'], pipeline_file: 'ignore'})"
@@ -418,15 +430,20 @@ blocks:
       - Publish tigera/istio-ztunnel images - native arm64 runner
     task:
       secrets:
-        - name: google-service-account-for-gcr
+        - name: docker-hub
+        - name: quay-robot-calico+semaphoreci
+      env_vars:
+        - name: DEV_REGISTRIES
+          value: quay.io/calico docker.io/calico
       prologue:
         commands:
-          - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - make -C third_party/istio-ztunnel push-manifest CONFIRM=true
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel push-manifest CONFIRM=true; fi
   - name: Istio
     run:
       when: "change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml','/.semaphore/semaphore.yml.d/02-global_job_config.yml','/.semaphore/semaphore.yml.d/03-promotions.yml','/.semaphore/semaphore.yml.d/09-blocks.yml','/.semaphore/semaphore.yml.d/99-after_pipeline.yml','/.semaphore/semaphore.yml.d/blocks/20-istio.yml','/hack/test/certs/','/istio/**','/lib.Makefile','/metadata.mk'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md']})"
