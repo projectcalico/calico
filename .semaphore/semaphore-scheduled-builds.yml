@@ -442,14 +442,26 @@ blocks:
       jobs:
         - name: "Istio: CI"
           commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
+            # On PRs, skip istio-ztunnel since the image isn't pushed to registry yet
+            - |
+              if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+                ../.semaphore/run-and-monitor ci.log make ci BUILD_IMAGES="istio-install-cni istio-pilot istio-proxyv2"
+              else
+                ../.semaphore/run-and-monitor ci.log make ci
+              fi
         - name: "Istio: build arm64"
           matrix:
             - env_var: ARCH
               values:
                 - arm64
           commands:
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+            # On PRs, skip istio-ztunnel since the image isn't pushed to registry yet
+            - |
+              if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+                ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH BUILD_IMAGES="istio-install-cni istio-pilot istio-proxyv2"
+              else
+                ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+              fi
   - name: Release tooling
     run:
       when: "true"
