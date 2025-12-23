@@ -138,6 +138,8 @@ endif
 GO_BUILD_IMAGE ?= calico/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
+RUST_BUILD_IMAGE ?= calico/rust-build
+CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
 # We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
@@ -181,6 +183,15 @@ define build_binary
 		-e CGO_ENABLED=0 \
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+endef
+
+# For binaries built from a subdirectory (e.g., istio).
+# Args: (1) directory, (2) package path, (3) output path
+define build_binary_dir
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -C $(1) -o $(3) $(if $(BUILD_TAGS),-tags $(BUILD_TAGS)) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(2)'
 endef
 
 # For windows builds that do not require cgo.
@@ -291,6 +302,7 @@ CALICO_BASE ?= $(UBI_IMAGE)
 else
 CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
 endif
+CALICO_BASE_UBI10 ?= calico/base:$(CALICO_BASE_UBI10_VER)
 
 ifndef NO_DOCKER_PULL
 DOCKER_PULL = --pull
@@ -303,7 +315,13 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
 	--build-arg UBI_IMAGE=$(UBI_IMAGE) \
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
+	--build-arg CALICO_BASE_UBI10=$(CALICO_BASE_UBI10) \
 	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+
+# DOCKER_BUILD_THIRD_PARTY extends DOCKER_BUILD with third-party registry args.
+DOCKER_BUILD_THIRD_PARTY = $(DOCKER_BUILD) \
+	--build-arg THIRD_PARTY_REGISTRY=$(THIRD_PARTY_REGISTRY) \
+	--build-arg THIRD_PARTY_RELEASE_BRANCH=$(THIRD_PARTY_RELEASE_BRANCH)
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -324,6 +342,15 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+
+DOCKER_RUST_BUILD := mkdir -p bin && \
+	docker run --rm \
+		--init \
+		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
+		$(EXTRA_DOCKER_ARGS) \
+		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
+		-w /rust/src/$(PACKAGE_NAME) \
+		$(CALICO_RUST_BUILD)
 
 # A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
 .PHONY: force-rebuild
@@ -943,6 +970,26 @@ retag-build-image-arch-with-registry-%: var-require-all-REGISTRY-BUILD_IMAGE-IMA
 		$(NOECHO) $(NOOP)\
 	)
 
+# retag-third-party-images-with-registries retags the third-party images specified by THIRD_PARTY_IMAGES and VALIDARCHES with
+# the registries specified by DEV_REGISTRIES.
+retag-third-party-images-with-registries: $(addprefix retag-third-party-images-with-registry-,$(call escapefs,$(DEV_REGISTRIES)))
+
+# retag-third-party-images-with-registry-% retags the third-party images specified by THIRD_PARTY_IMAGES and VALIDARCHES with
+# the registry specified by $*.
+retag-third-party-images-with-registry-%:
+	$(MAKE) $(addprefix retag-third-party-image-with-registry-,$(call escapefs,$(THIRD_PARTY_IMAGES))) REGISTRY=$(call unescapefs,$*)
+
+# retag-third-party-image-with-registry-% retag the third-party arch images specified by $* and VALIDARCHES with the
+# registry specified by REGISTRY.
+retag-third-party-image-with-registry-%: var-require-all-REGISTRY-THIRD_PARTY_IMAGES
+	$(MAKE) $(addprefix retag-third-party-image-arch-with-registry-,$(VALIDARCHES)) THIRD_PARTY_IMAGE=$(call unescapefs,$*)
+
+# retag-third-party-image-arch-with-registry-% retags the third-party image specified by $* and THIRD_PARTY_IMAGE with the
+# registry specified by REGISTRY.
+retag-third-party-image-arch-with-registry-%: var-require-all-REGISTRY-THIRD_PARTY_IMAGE-IMAGETAG
+	docker pull $(THIRD_PARTY_REGISTRY)/$(THIRD_PARTY_IMAGE):$(LATEST_IMAGE_TAG)-$*
+	docker tag $(THIRD_PARTY_REGISTRY)/$(THIRD_PARTY_IMAGE):$(LATEST_IMAGE_TAG)-$* $(call filter-registry,$(REGISTRY))$(THIRD_PARTY_IMAGE):$(IMAGETAG)-$*
+
 # push-images-to-registries pushes the build / arch images specified by BUILD_IMAGES and VALIDARCHES to the registries
 # specified by DEV_REGISTRY.
 push-images-to-registries: $(addprefix push-images-to-registry-,$(call escapefs,$(DEV_REGISTRIES)))
@@ -991,11 +1038,17 @@ push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANC
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(GIT_VERSION) EXCLUDEARCH="$(EXCLUDEARCH)"
 
-# cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGE,
-# and BRANCH_NAME env variables to figure out what to tag and where to push it to.
+# cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGES,
+# and BRANCH_NAME env variables to figure out what to tag and where to push them to.
 cd-common: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
 	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12) EXCLUDEARCH="$(EXCLUDEARCH)"
+
+# cd-common tags and pushes third-party images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGES, THIRD_PARTY_IMAGES,
+# and BRANCH_NAME env variables to figure out what to tag and where to push them to.
+cd-third-party-common: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
+	$(MAKE) retag-third-party-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) retag-third-party-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(GIT_VERSION) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 ###############################################################################
 # Release targets and helpers

@@ -1,0 +1,124 @@
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+#
+# This Dockerfile packages the istio install-cni binary built from source into a minimal container.
+# The binary is built separately using the Makefile, which compiles istio with Calico patches applied.
+
+ARG CALICO_BASE
+
+FROM almalinux:9 AS almalinux
+
+RUN dnf upgrade -y && dnf install -y epel-release
+
+RUN dnf install -y \
+  iptables-legacy \
+  iptables-nft \
+  nftables
+
+# Create symlinks to xtables-legacy-multi
+RUN set -eux; \
+    mkdir -p /rootfs/usr/sbin && cd /rootfs/usr/sbin; \
+    for link in \
+      ip6tables-legacy \
+      ip6tables-legacy-restore \
+      ip6tables-legacy-save \
+      iptables-legacy \
+      iptables-legacy-restore \
+      iptables-legacy-save; \
+    do \
+      ln -sf xtables-legacy-multi "$link"; \
+    done
+
+# Create symlinks to xtables-nft-multi
+RUN set -eux; \
+    mkdir -p /rootfs/usr/sbin && cd /rootfs/usr/sbin; \
+    for link in \
+      arptables \
+      arptables-nft \
+      arptables-nft-restore \
+      arptables-nft-save \
+      arptables-restore \
+      arptables-save \
+      ebtables \
+      ebtables-nft \
+      ebtables-nft-restore \
+      ebtables-nft-save \
+      ebtables-restore \
+      ebtables-save \
+      ebtables-translate \
+      ip6tables \
+      ip6tables-nft \
+      ip6tables-nft-restore \
+      ip6tables-nft-save \
+      ip6tables-restore \
+      ip6tables-restore-translate \
+      ip6tables-save \
+      ip6tables-translate \
+      iptables \
+      iptables-nft \
+      iptables-nft-restore \
+      iptables-nft-save \
+      iptables-restore \
+      iptables-restore-translate \
+      iptables-save \
+      iptables-translate \
+      xtables-monitor; \
+    do \
+      ln -sf xtables-nft-multi "$link"; \
+    done
+
+# create the /run directory
+RUN mkdir -p /rootfs/run && chown 10001:10001 /rootfs/run
+
+FROM scratch AS source
+
+ARG TARGETARCH
+
+COPY --from=almalinux /rootfs /
+
+COPY --from=almalinux /usr/sbin/nft /usr/sbin/nft
+COPY --from=almalinux /usr/sbin/xtables-legacy-multi /usr/sbin/xtables-legacy-multi
+COPY --from=almalinux /usr/sbin/xtables-nft-multi /usr/sbin/xtables-nft-multi
+
+COPY --from=almalinux /lib64/libgmp.so.10 /lib64/libgmp.so.10
+COPY --from=almalinux /lib64/libip4tc.so.2 /lib64/libip4tc.so.2
+COPY --from=almalinux /lib64/libip6tc.so.2 /lib64/libip6tc.so.2
+COPY --from=almalinux /lib64/libjansson.so.4 /lib64/libjansson.so.4
+COPY --from=almalinux /lib64/libmnl.so.0 /lib64/libmnl.so.0
+COPY --from=almalinux /lib64/libnftables.so.1 /lib64/libnftables.so.1
+COPY --from=almalinux /lib64/libnftnl.so.11 /lib64/libnftnl.so.11
+COPY --from=almalinux /lib64/libreadline.so.8 /lib64/libreadline.so.8
+COPY --from=almalinux /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
+COPY --from=almalinux /lib64/libxtables.so.12 /lib64/libxtables.so.12
+
+# xtables extension libraries - copy to /usr/lib64/xtables where iptables expects them
+COPY --from=almalinux /usr/lib64/xtables/ /usr/lib64/xtables/
+
+COPY bin/install-cni-${TARGETARCH} /usr/bin/install-cni
+COPY bin/istio-cni-${TARGETARCH} /opt/cni/bin/istio-cni
+COPY bin/LICENSE /LICENSE
+
+FROM ${CALICO_BASE}
+
+ARG GIT_VERSION=unknown
+
+LABEL description="This image contains a build of Istio's CNI component from github.com/istio/istio with Calico patches applied"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Istio CNI"
+LABEL release="1"
+LABEL summary="Istio CNI is the CNI plugin for Calico's integration with Istio ambient mesh"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
+LABEL org.opencontainers.image.description="This image contains a build of Istio's CNI component from github.com/istio/istio with Calico patches applied"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Istio CNI is the CNI plugin for Calico's integration with Istio ambient mesh"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+COPY --from=source / /
+
+USER 10001:10001
+
+ENTRYPOINT ["/usr/bin/install-cni"]
