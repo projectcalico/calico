@@ -1698,7 +1698,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 				})
 
-				_ = !testOpts.ipv6 && !testOpts.dsr &&
+				_ = !testOpts.ipv6 && !testOpts.dsr && testOpts.protocol == "udp" && testOpts.udpUnConnected && !testOpts.connTimeEnabled &&
 					It("should handle fragmented UDP", func() {
 						if testOpts.tunnel == "vxlan" && !utils.UbuntuReleaseGreater("22.04") {
 							Skip("Ubuntu too old to handle frag on vxlan dev properly")
@@ -1731,16 +1731,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						time.Sleep(time.Second)
 
 						// Send a packet with large payload without the DNF flag
+						// 16,000 bytes is the typical limit on the size of a
+						// single skb, which in turn is the limit on the size
+						// that a BPF program can grow a packet.
 						_, err := w[1][0].RunCmd("pktgen", w[1][0].IP, w[0][0].IP, "udp",
-							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=1600", "--udp-sock")
+							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=16000", "--udp-sock")
 						Expect(err).NotTo(HaveOccurred())
 
 						// We should see two fragments on the host interface
-						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(2))
-						// We should see a reassembled packet at the destination workload.
-						// If ebpf program did not reassemble the packet, we would still
-						// see two fragments!
-						Eventually(func() int { return tcpdump0.MatchCount("udp-pod-frags") }).Should(Equal(2))
+						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(12))
+						// We should see the fragments reach the workload.  We reassemble them in the middle but they
+						// get fragmented again.
+						Eventually(func() int { return tcpdump0.MatchCount("udp-pod-frags") }).Should(Equal(12))
 					})
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&

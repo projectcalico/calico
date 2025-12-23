@@ -19,6 +19,10 @@ struct frags4_key {
 	__u16 offset;
 };
 
+// BPF imposes a 16,000 byte limit on growing the packet; we want enough
+// fragments to cover that, but not enough to upset the verifier by making our
+// loop too long.
+#define MAX_FRAGS 16
 #define MAX_FRAG 1504 /* requires multiple of 8 */
 
 struct frags4_value {
@@ -109,7 +113,7 @@ static CALI_BPF_INLINE bool frags4_try_assemble(struct cali_tc_ctx *ctx)
 
 	int i, tot_len = 0;
 
-	for (i = 0; i < 10; i++) {
+	for (i = 0; i < MAX_FRAGS; i++) {
 		struct frags4_value *v = cali_v4_frags_lookup_elem(&k);
 
 		if (!v) {
@@ -146,7 +150,7 @@ assemble:
 		.iphdr_off = off,
 	};
 
-	bpf_loop(10, frag_to_skb, &f2sctx, 0);
+	bpf_loop(MAX_FRAGS, frag_to_skb, &f2sctx, 0);
 
 	if (parse_packet_ip(ctx) != PARSING_OK) {
 		goto out;
@@ -202,8 +206,7 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
 		.id = ip_hdr(ctx)->id,
-		.offset = 8 * bpf_ntohs(ip_hdr(ctx)->frag_off) & 0x1fff,
-
+		.offset = 8 * (bpf_ntohs(ip_hdr(ctx)->frag_off) & 0x1fff),
 	};
 
 	int i;
