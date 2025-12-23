@@ -386,6 +386,7 @@ blocks:
       prologue:
         commands:
           - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux amd64
           commands:
@@ -404,6 +405,7 @@ blocks:
       prologue:
         commands:
           - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux arm64
           commands:
@@ -420,6 +422,7 @@ blocks:
       prologue:
         commands:
           - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux multi-arch manifests
           commands:
