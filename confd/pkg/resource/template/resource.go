@@ -87,7 +87,7 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	addFuncs(tr.funcMap, tr.store.FuncMap)
 
 	// Add Calico-specific functions.
-	addCalicoFuncs(tr.funcMap, config.StoreClient)
+	addCalicoFuncs(tr.funcMap)
 
 	if runtime.GOOS == "windows" {
 		// On Windows HPC containers, $PATH does not contain the directory with 'powershell.exe'. Add it so that the powershell command works.

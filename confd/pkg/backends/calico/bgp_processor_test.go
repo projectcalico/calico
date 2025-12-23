@@ -123,7 +123,9 @@ func TestRouterIDGeneration_Hash(t *testing.T) {
 	// Test IPv4 - no comment
 	routerID := os.Getenv("CALICO_ROUTER_ID")
 	if routerID == "hash" {
-		config.RouterID = template.HashToIPv4(config.NodeName)
+		hashedID, err := template.HashToIPv4(config.NodeName)
+		require.NoError(t, err)
+		config.RouterID = hashedID
 	}
 
 	assert.NotEmpty(t, config.RouterID)
@@ -332,7 +334,7 @@ func TestPopulateNodeConfig_BasicIPv4(t *testing.T) {
 
 	assert.Equal(t, "10.0.0.1", config.NodeIP)
 	assert.Equal(t, "10.0.0.1", config.RouterID) // Default router ID is IPv4
-	assert.Equal(t, "64512", config.AsNumber)
+	assert.Equal(t, "64512", config.ASNumber)
 	assert.Empty(t, config.RouterIDComment) // No comment for IPv4
 }
 
@@ -360,7 +362,7 @@ func TestPopulateNodeConfig_BasicIPv6(t *testing.T) {
 	assert.Equal(t, "10.0.0.1", config.NodeIP)
 	assert.Equal(t, "fd00::1", config.NodeIPv6)
 	assert.Equal(t, "10.0.0.1", config.RouterID) // Router ID is still IPv4
-	assert.Equal(t, "64512", config.AsNumber)
+	assert.Equal(t, "64512", config.ASNumber)
 	// IPv6 should have a comment explaining router ID is IPv4
 	assert.Contains(t, config.RouterIDComment, "IPv4")
 }
@@ -387,7 +389,7 @@ func TestPopulateNodeConfig_NodeSpecificAS(t *testing.T) {
 	require.NoError(t, err)
 
 	// Node-specific AS should take precedence
-	assert.Equal(t, "65001", config.AsNumber)
+	assert.Equal(t, "65001", config.ASNumber)
 }
 
 func TestPopulateNodeConfig_RouterIDHash(t *testing.T) {
@@ -1213,7 +1215,7 @@ func TestProcessMeshPeers_BasicMesh(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processMeshPeers(config, "", 4)
@@ -1255,7 +1257,7 @@ func TestProcessMeshPeers_IPv6(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIPv6: "fd00::1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processMeshPeers(config, "", 6)
@@ -1287,7 +1289,7 @@ func TestProcessMeshPeers_MeshDisabled(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processMeshPeers(config, "", 4)
@@ -1317,7 +1319,7 @@ func TestProcessMeshPeers_RouteReflector(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	// Node is a route reflector - should skip mesh
@@ -1349,7 +1351,7 @@ func TestProcessMeshPeers_SkipRouteReflectorPeers(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processMeshPeers(config, "", 4)
@@ -1383,7 +1385,7 @@ func TestProcessMeshPeers_PassiveMode(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.5",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processMeshPeers(config, "", 4)
@@ -1426,7 +1428,7 @@ func TestProcessMeshPeers_WithPasswordAndRestartTime(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processMeshPeers(config, "", 4)
@@ -1458,7 +1460,7 @@ func TestProcessGlobalPeers_BasicPeer(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processGlobalPeers(config, "", 4)
@@ -1466,7 +1468,7 @@ func TestProcessGlobalPeers_BasicPeer(t *testing.T) {
 
 	require.Len(t, config.Peers, 1)
 	assert.Equal(t, "192.168.1.100", config.Peers[0].IP)
-	assert.Equal(t, "65000", config.Peers[0].AsNumber)
+	assert.Equal(t, "65000", config.Peers[0].ASNumber)
 	assert.Contains(t, config.Peers[0].Name, "Global_")
 }
 
@@ -1492,7 +1494,7 @@ func TestProcessGlobalPeers_IPv6Peer(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIPv6: "fd00::1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processGlobalPeers(config, "", 6)
@@ -1526,7 +1528,7 @@ func TestProcessGlobalPeers_WithPassword(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processGlobalPeers(config, "", 4)
@@ -1558,7 +1560,7 @@ func TestProcessGlobalPeers_WithTTLSecurity(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processGlobalPeers(config, "", 4)
@@ -1590,7 +1592,7 @@ func TestProcessNodePeers_BasicPeer(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processNodePeers(config, "", 4)
@@ -1598,7 +1600,7 @@ func TestProcessNodePeers_BasicPeer(t *testing.T) {
 
 	require.Len(t, config.Peers, 1)
 	assert.Equal(t, "172.16.0.100", config.Peers[0].IP)
-	assert.Equal(t, "65001", config.Peers[0].AsNumber)
+	assert.Equal(t, "65001", config.Peers[0].ASNumber)
 	assert.Contains(t, config.Peers[0].Name, "Node_")
 }
 
@@ -1623,7 +1625,7 @@ func TestProcessNodePeers_IPv6Peer(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIPv6: "fd00::1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processNodePeers(config, "", 6)
@@ -1657,7 +1659,7 @@ func TestProcessNodePeers_LocalBGPPeer(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processNodePeers(config, "", 4)
@@ -1702,7 +1704,7 @@ func TestProcessPeers_CombinedMeshGlobalNode(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	// Process all peer types
@@ -1790,7 +1792,7 @@ func TestProcessPeers_NextHopModes(t *testing.T) {
 
 			config := &types.BirdBGPConfig{
 				NodeIP:   "10.0.0.1",
-				AsNumber: tt.nodeAS,
+				ASNumber: tt.nodeAS,
 			}
 
 			err := c.processGlobalPeers(config, "", 4)
@@ -1825,7 +1827,7 @@ func TestProcessPeers_RouteReflectorClient(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	// Process with this node having a cluster ID (making it a route reflector)
@@ -1860,14 +1862,14 @@ func TestProcessPeers_LocalAS(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processGlobalPeers(config, "", 4)
 	require.NoError(t, err)
 
 	require.Len(t, config.Peers, 1)
-	assert.Equal(t, "64000", config.Peers[0].LocalAsNumber)
+	assert.Equal(t, "64000", config.Peers[0].LocalASNumber)
 	assert.Equal(t, "2", config.Peers[0].NumAllowLocalAs)
 }
 
@@ -2153,7 +2155,7 @@ func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processGlobalPeers(config, "", 4)
@@ -2211,7 +2213,7 @@ func TestProcessGlobalPeers_WithBGPFilter_IPv6(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIPv6: "fd00::1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processGlobalPeers(config, "", 6)
@@ -2261,7 +2263,7 @@ func TestProcessGlobalPeers_WithLongFilterName(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processGlobalPeers(config, "", 4)
@@ -2316,7 +2318,7 @@ func TestProcessNodePeers_WithBGPFilter(t *testing.T) {
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
-		AsNumber: "64512",
+		ASNumber: "64512",
 	}
 
 	err := c.processNodePeers(config, "", 4)
