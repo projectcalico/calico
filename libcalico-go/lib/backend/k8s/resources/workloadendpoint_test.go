@@ -367,8 +367,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Name:      wepName,
 					Namespace: "testNamespace",
 					Labels: map[string]string{
-						apiv3.LabelNamespace:    "testNamespace",
-						apiv3.LabelOrchestrator: "k8s",
+						apiv3.LabelNamespace:     "testNamespace",
+						apiv3.LabelOrchestrator:  "k8s",
+						"projectcalico.org/kind": libapiv3.KindWorkloadEndpoint,
 					},
 				},
 				Spec: libapiv3.WorkloadEndpointSpec{
@@ -415,8 +416,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 								Name:      "test--node-k8s-simplePod-eth0",
 								Namespace: "testNamespace",
 								Labels: map[string]string{
-									apiv3.LabelNamespace:    "testNamespace",
-									apiv3.LabelOrchestrator: "k8s",
+									apiv3.LabelNamespace:     "testNamespace",
+									apiv3.LabelOrchestrator:  "k8s",
+									"projectcalico.org/kind": libapiv3.KindWorkloadEndpoint,
 								},
 							},
 							Spec: libapiv3.WorkloadEndpointSpec{
@@ -483,8 +485,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 								Name:      "test--node-k8s-simplePod-eth0",
 								Namespace: "testNamespace",
 								Labels: map[string]string{
-									apiv3.LabelNamespace:    "testNamespace",
-									apiv3.LabelOrchestrator: "k8s",
+									apiv3.LabelNamespace:     "testNamespace",
+									apiv3.LabelOrchestrator:  "k8s",
+									"projectcalico.org/kind": libapiv3.KindWorkloadEndpoint,
 								},
 							},
 							Spec: libapiv3.WorkloadEndpointSpec{
@@ -576,8 +579,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 								Name:      "test--node-k8s-simplePod-eth0",
 								Namespace: "testNamespace",
 								Labels: map[string]string{
-									apiv3.LabelNamespace:    "testNamespace",
-									apiv3.LabelOrchestrator: "k8s",
+									apiv3.LabelNamespace:     "testNamespace",
+									apiv3.LabelOrchestrator:  "k8s",
+									"projectcalico.org/kind": libapiv3.KindWorkloadEndpoint,
 								},
 							},
 							Spec: libapiv3.WorkloadEndpointSpec{
@@ -599,8 +603,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 								Name:      "test--node-k8s-simplePod2-eth0",
 								Namespace: "testNamespace",
 								Labels: map[string]string{
-									apiv3.LabelNamespace:    "testNamespace",
-									apiv3.LabelOrchestrator: "k8s",
+									apiv3.LabelNamespace:     "testNamespace",
+									apiv3.LabelOrchestrator:  "k8s",
+									"projectcalico.org/kind": libapiv3.KindWorkloadEndpoint,
 								},
 							},
 							Spec: libapiv3.WorkloadEndpointSpec{
@@ -643,8 +648,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 						Name:      "test--node-k8s-simplePod-eth0",
 						Namespace: "testNamespace",
 						Labels: map[string]string{
-							apiv3.LabelNamespace:    "testNamespace",
-							apiv3.LabelOrchestrator: "k8s",
+							apiv3.LabelNamespace:     "testNamespace",
+							apiv3.LabelOrchestrator:  "k8s",
+							"projectcalico.org/kind": libapiv3.KindWorkloadEndpoint,
 						},
 					},
 					Spec: libapiv3.WorkloadEndpointSpec{
@@ -708,8 +714,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 							Name:      "test--node-k8s-termPod-eth0",
 							Namespace: "testNamespace",
 							Labels: map[string]string{
-								apiv3.LabelNamespace:    "testNamespace",
-								apiv3.LabelOrchestrator: "k8s",
+								apiv3.LabelNamespace:     "testNamespace",
+								apiv3.LabelOrchestrator:  "k8s",
+								"projectcalico.org/kind": libapiv3.KindWorkloadEndpoint,
 							},
 						},
 						Spec: libapiv3.WorkloadEndpointSpec{
@@ -731,8 +738,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 							Name:      "test--node-k8s-termPod2-eth0",
 							Namespace: "testNamespace",
 							Labels: map[string]string{
-								apiv3.LabelNamespace:    "testNamespace",
-								apiv3.LabelOrchestrator: "k8s",
+								apiv3.LabelNamespace:     "testNamespace",
+								apiv3.LabelOrchestrator:  "k8s",
+								"projectcalico.org/kind": libapiv3.KindWorkloadEndpoint,
 							},
 						},
 						Spec: libapiv3.WorkloadEndpointSpec{
