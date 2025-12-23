@@ -59,11 +59,9 @@
   dependencies:
     - Publish tigera/istio-ztunnel multi-arch manifests
   task:
-    secrets:
-      - name: google-service-account-for-gcr
     prologue:
       commands:
-        - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
         - cd istio
     jobs:
       - name: "Istio: CI"
