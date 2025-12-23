@@ -35,30 +35,25 @@ type bgpConfigCache struct {
 	revision uint64
 }
 
-var (
-	configCache   *bgpConfigCache
-	configCacheV6 *bgpConfigCache
-)
+// configCache is indexed by IP version (4 or 6)
+var configCache map[int]*bgpConfigCache
+
+func init() {
+	configCache = make(map[int]*bgpConfigCache)
+}
 
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
 // ipVersion should be 4 for IPv4 or 6 for IPv6
 func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
-	// Use separate caches for IPv4 and IPv6
+	logc := log.WithField("ipVersion", ipVersion)
 	currentRevision := c.GetCurrentRevision()
 
-	if ipVersion == 4 && configCache != nil &&
-		configCache.revision == currentRevision {
-		log.Debug("BGP config cache hit (IPv4), returning cached configuration")
-		return configCache.config, nil
+	if cached, ok := configCache[ipVersion]; ok && cached.revision == currentRevision {
+		logc.Debug("BGP config cache hit, returning cached configuration")
+		return cached.config, nil
 	}
 
-	if ipVersion == 6 && configCacheV6 != nil &&
-		configCacheV6.revision == currentRevision {
-		log.Debug("BGP config cache hit (IPv6), returning cached configuration")
-		return configCacheV6.config, nil
-	}
-
-	log.Debugf("BGP config cache miss or expired, processing new configuration for IPv%d", ipVersion)
+	logc.Debug("BGP config cache miss or expired, processing new configuration")
 
 	config := &types.BirdBGPConfig{
 		NodeName:    NodeName,
@@ -69,15 +64,17 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 
 	// Get basic node configuration
 	if err := c.populateNodeConfig(config, ipVersion); err != nil {
-		log.WithError(err).Warn("Failed to populate node configuration")
+		logc.WithError(err).Warn("Failed to populate node configuration")
+		return nil, err
 	}
-	log.Debugf("Populated node configuration (IPv%d): node=%s, ip=%s, ipv6=%s, as=%s", ipVersion, config.NodeName, config.NodeIP, config.NodeIPv6, config.ASNumber)
+	logc.Debugf("Populated node configuration: node=%s, ip=%s, ipv6=%s, as=%s", config.NodeName, config.NodeIP, config.NodeIPv6, config.ASNumber)
 
 	// Process all peer types
 	if err := c.processPeers(config, ipVersion); err != nil {
-		log.WithError(err).Warnf("Failed to process BGP peers for IPv%d", ipVersion)
+		logc.WithError(err).Warn("Failed to process BGP peers")
+		return nil, err
 	}
-	log.Debugf("Processed BGP peers (IPv%d): found %d peers", ipVersion, len(config.Peers))
+	logc.Debugf("Processed BGP peers: found %d peers", len(config.Peers))
 
 	// Sort peers by name for consistent output ordering
 	sort.Slice(config.Peers, func(i, j int) bool {
@@ -86,37 +83,32 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 
 	// Process community rules
 	if err := c.processCommunityRules(config, ipVersion); err != nil {
-		log.WithError(err).Warnf("Failed to process community rules for IPv%d", ipVersion)
+		logc.WithError(err).Warn("Failed to process community rules")
+		return nil, err
 	}
-	log.Debugf("Processed community rules (IPv%d): found %d rules", ipVersion, len(config.Communities))
+	logc.Debugf("Processed community rules: found %d rules", len(config.Communities))
 
-	// Update appropriate cache
-	if ipVersion == 4 {
-		configCache = &bgpConfigCache{
-			config:   config,
-			revision: currentRevision,
-		}
-		log.Debug("Updated BGP config cache for IPv4")
-	} else {
-		configCacheV6 = &bgpConfigCache{
-			config:   config,
-			revision: currentRevision,
-		}
-		log.Debug("Updated BGP config cache for IPv6")
+	// Update cache
+	configCache[ipVersion] = &bgpConfigCache{
+		config:   config,
+		revision: currentRevision,
 	}
+	logc.Debug("Updated BGP config cache")
 
 	return config, nil
 }
 
 // populateNodeConfig fills in basic node configuration
 func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) error {
+	logc := log.WithField("ipVersion", ipVersion)
+
 	// Get node IPv4 address
 	nodeIPv4Key := fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v4", NodeName)
 	if nodeIP, err := c.GetValue(nodeIPv4Key); err == nil {
 		config.NodeIP = nodeIP
 		config.RouterID = nodeIP // Default router ID to IPv4 address
 	} else {
-		log.WithError(err).Warnf("Failed to get node IPv4 address from %s", nodeIPv4Key)
+		logc.WithError(err).Warnf("Failed to get node IPv4 address from %s", nodeIPv4Key)
 	}
 
 	// Get node IPv6 address
@@ -124,7 +116,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	if nodeIPv6, err := c.GetValue(nodeIPv6Key); err == nil {
 		config.NodeIPv6 = nodeIPv6
 	} else {
-		log.WithError(err).Debugf("Failed to get node IPv6 address from %s", nodeIPv6Key)
+		logc.WithError(err).Debugf("Failed to get node IPv6 address from %s", nodeIPv6Key)
 	}
 
 	// Get AS number (try node-specific first, then global)
@@ -134,7 +126,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	} else if globalAS, err := c.GetValue("/calico/bgp/v1/global/as_num"); err == nil {
 		config.ASNumber = globalAS
 	} else {
-		log.Warnf("Failed to get AS number from node-specific (%s) or global key", nodeASKey)
+		logc.Warnf("Failed to get AS number from node-specific (%s) or global key", nodeASKey)
 	}
 
 	// Get logging configuration
@@ -236,22 +228,27 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 
 // processPeers processes all BGP peers (mesh, global, and node-specific)
 func (c *client) processPeers(config *types.BirdBGPConfig, ipVersion int) error {
+	logc := log.WithField("ipVersion", ipVersion)
+
 	// Get node's route reflector cluster ID
 	nodeClusterID, _ := c.GetValue(fmt.Sprintf("/calico/bgp/v1/host/%s/rr_cluster_id", NodeName))
 
 	// Process node-to-node mesh peers
 	if err := c.processMeshPeers(config, nodeClusterID, ipVersion); err != nil {
-		log.WithError(err).Warnf("Failed to process mesh peers for IPv%d", ipVersion)
+		logc.WithError(err).Warn("Failed to process mesh peers")
+		return err
 	}
 
 	// Process global peers (both regular and local BGP peers)
 	if err := c.processGlobalPeers(config, nodeClusterID, ipVersion); err != nil {
-		log.WithError(err).Warnf("Failed to process global peers for IPv%d", ipVersion)
+		logc.WithError(err).Warn("Failed to process global peers")
+		return err
 	}
 
 	// Process node-specific peers (both regular and local BGP peers)
 	if err := c.processNodePeers(config, nodeClusterID, ipVersion); err != nil {
-		log.WithError(err).Warnf("Failed to process node-specific peers for IPv%d", ipVersion)
+		logc.WithError(err).Warn("Failed to process node-specific peers")
+		return err
 	}
 
 	return nil
@@ -259,9 +256,11 @@ func (c *client) processPeers(config *types.BirdBGPConfig, ipVersion int) error 
 
 // processMeshPeers processes node-to-node mesh BGP peers
 func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
+	logc := log.WithField("ipVersion", ipVersion)
+
 	// If this node is a route reflector, skip mesh processing
 	if nodeClusterID != "" {
-		log.Infof("Node %s is a route reflector with cluster ID %s, skipping mesh", NodeName, nodeClusterID)
+		logc.Infof("Node %s is a route reflector with cluster ID %s, skipping mesh", NodeName, nodeClusterID)
 		return nil
 	}
 
@@ -273,15 +272,15 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 
 	var meshConfig map[string]interface{}
 	if err := json.Unmarshal([]byte(meshConfigValue), &meshConfig); err != nil {
-		log.Debugf("Failed to unmarshal mesh config: %v", err)
+		logc.WithError(err).Debug("Failed to unmarshal mesh config")
 		return err
 	}
 
-	log.Debugf("Parsed mesh config: %+v", meshConfig)
+	logc.Debugf("Parsed mesh config: %+v", meshConfig)
 
 	enabled, _ := meshConfig["enabled"].(bool)
 	if !enabled {
-		log.Debug("Node-to-node mesh disabled")
+		logc.Debug("Node-to-node mesh disabled")
 		return nil
 	}
 
@@ -333,7 +332,7 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		peerClusterIDKey := fmt.Sprintf("/calico/bgp/v1/host/%s/rr_cluster_id", host)
 		peerClusterID, _ := c.GetValue(peerClusterIDKey)
 		if peerClusterID != "" {
-			log.Debugf("Skipping %s as it is a route reflector", peerIP)
+			logc.Debugf("Skipping peer %s as it is a route reflector", peerIP)
 			continue
 		}
 
@@ -389,6 +388,8 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 
 // processGlobalPeers processes global BGP peers (both regular and local)
 func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
+	logc := log.WithField("ipVersion", ipVersion)
+
 	// Determine peer path based on IP version
 	peerPath := "/calico/bgp/v1/global/peer_v4"
 	if ipVersion == 6 {
@@ -398,17 +399,17 @@ func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID s
 	// Process regular global peers
 	kvPairs, err := c.GetValues([]string{peerPath})
 	if err != nil {
-		log.WithError(err).Debugf("No global IPv%d peers found or error retrieving them", ipVersion)
+		logc.WithError(err).Debug("No global peers found or error retrieving them")
 		return nil
 	}
 
-	log.Debugf("Found %d global IPv%d peer entries", len(kvPairs), ipVersion)
+	logc.Debugf("Found %d global peer entries", len(kvPairs))
 
 	for key, value := range kvPairs {
-		log.Debugf("Processing global peer key: %s", key)
+		logc.Debugf("Processing global peer key: %s", key)
 		var peerData map[string]interface{}
 		if err := json.Unmarshal([]byte(value), &peerData); err != nil {
-			log.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
+			logc.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
 			continue
 		}
 
@@ -504,9 +505,11 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 
 // buildPeerFromData constructs a BirdBGPPeer from raw peer data
 func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) *types.BirdBGPPeer {
+	logc := log.WithField("ipVersion", ipVersion)
+
 	peerIP, ok := raw["ip"].(string)
 	if !ok || peerIP == "" {
-		log.Debugf("buildPeerFromData: no IP found in peer data, ok=%v, peerIP=%s", ok, peerIP)
+		logc.Debugf("buildPeerFromData: no IP found in peer data, ok=%v, peerIP=%s", ok, peerIP)
 		return nil
 	}
 
@@ -516,11 +519,11 @@ func (c *client) buildPeerFromData(raw map[string]interface{}, prefix string, co
 		currentNodeIP = config.NodeIPv6
 	}
 	if peerIP == currentNodeIP {
-		log.Debugf("buildPeerFromData: skipping ourselves (peerIP=%s, currentNodeIP=%s)", peerIP, currentNodeIP)
+		logc.Debugf("buildPeerFromData: skipping ourselves (peerIP=%s, currentNodeIP=%s)", peerIP, currentNodeIP)
 		return nil
 	}
 
-	log.Debugf("buildPeerFromData: building peer for IP=%s, prefix=%s", peerIP, prefix)
+	logc.Debugf("buildPeerFromData: building peer for IP=%s, prefix=%s", peerIP, prefix)
 
 	// Generate peer name based on IP version
 	var peerName string
@@ -740,6 +743,8 @@ func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS st
 
 // processCommunityRules processes BGP community advertisements
 func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion int) error {
+	logc := log.WithField("ipVersion", ipVersion)
+
 	// Determine path suffix based on IP version
 	ipSuffix := "ip_v4"
 	if ipVersion == 6 {
@@ -769,7 +774,7 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	for _, value := range kvPairs {
 		var advertisements []map[string]interface{}
 		if err := json.Unmarshal([]byte(value), &advertisements); err != nil {
-			log.WithError(err).Warn("Failed to parse community advertisements")
+			logc.WithError(err).Warn("Failed to parse community advertisements")
 			continue
 		}
 
