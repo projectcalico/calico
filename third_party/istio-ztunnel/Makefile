@@ -6,7 +6,7 @@ include ../../metadata.mk
 
 PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/istio-ztunnel
 
-ZTUNNEL_IMAGE ?= istio-ztunnel
+ZTUNNEL_IMAGE ?= istio-ztunnel-base
 BUILD_IMAGES ?= $(ZTUNNEL_IMAGE)
 
 ZTUNNEL_VERSION = 1.28.1

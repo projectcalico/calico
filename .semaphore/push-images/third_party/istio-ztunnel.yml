@@ -11,7 +11,7 @@ execution_time_limit:
 global_job_config:
   env_vars:
     - name: DEV_REGISTRIES
-      value: gcr.io/unique-caldron-775/cnx/tigera quay.io/tigeradev
+      value: docker.io/calico
   secrets:
     - name: docker-hub
     - name: google-service-account-for-gcr

@@ -9,8 +9,8 @@ ARG ISTIO_ZTUNNEL_VERSION
 ARG BRANCH_NAME
 ARG UBI_IMAGE
 
-# Pull the ztunnel binary from the calico/istio-ztunnel image built by third_party/istio-ztunnel
-FROM calico/istio-ztunnel:${BRANCH_NAME} AS ztunnel
+# Pull the ztunnel binary from the calico/istio-ztunnel-base image built by third_party/istio-ztunnel
+FROM calico/istio-ztunnel-base:${BRANCH_NAME} AS ztunnel
 
 FROM ${UBI_IMAGE} AS ubi
 

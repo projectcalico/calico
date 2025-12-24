@@ -168,7 +168,7 @@ promotions:
   - name: Push istio images
     pipeline_file: push-images/istio.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push key-cert-provisioner images
     pipeline_file: push-images/key-cert-provisioner.yml
     auto_promote:
@@ -212,7 +212,7 @@ promotions:
   - name: Push third-party istio-ztunnel images
     pipeline_file: push-images/third_party/istio-ztunnel.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
