@@ -1,0 +1,45 @@
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+#
+# This Dockerfile packages the istio pilot-discovery binary built from source into a minimal container.
+# The binary is built separately using the Makefile, which compiles istio with Calico patches applied.
+
+ARG CALICO_BASE
+
+FROM scratch AS source
+
+ARG TARGETARCH
+
+COPY bin/pilot-discovery-${TARGETARCH} /usr/bin/pilot-discovery
+COPY bin/LICENSE /LICENSE
+
+FROM ${CALICO_BASE}
+
+ARG GIT_VERSION=unknown
+
+LABEL description="This image contains a build of Istio's pilot-discovery component from github.com/istio/istio with Calico patches applied"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Istio Pilot"
+LABEL release="1"
+LABEL summary="Istio Pilot is the control plane component for Calico's integration with Istio service mesh"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
+LABEL org.opencontainers.image.description="This image contains a build of Istio's pilot-discovery component from github.com/istio/istio with Calico patches applied"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Istio Pilot is the control plane component for Calico's integration with Istio service mesh"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+COPY --from=source / /
+
+USER 10001:10001
+
+# Pilot default ports
+# 15010: gRPC XDS
+# 15017: Webhook server
+# 8080: HTTP debug/monitoring
+EXPOSE 15010 15017 8080
+
+ENTRYPOINT ["/usr/bin/pilot-discovery"]
