@@ -193,14 +193,26 @@ e2e-gateway-setup:
 	@echo "Scaling tigera-operator back up..."
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) scale deployment -n tigera-operator tigera-operator --replicas=1
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --for=condition=Available --timeout=60s deployment/tigera-operator -n tigera-operator
+	@echo "Verifying envoy images are loaded in KIND..."
+	@docker exec kind-control-plane crictl images | grep -E "envoy-gateway|envoy-proxy|envoy-ratelimit" || echo "WARNING: Envoy images not found in KIND node"
 	@echo "Applying GatewayAPI resource..."
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f gateway/test/conformance/manifests/gatewayapi.yaml
+	@echo "Checking GatewayAPI resource status..."
+	@sleep 5
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get gatewayapi -o yaml || true
 	@echo "Waiting for Gateway API CRDs..."
 	@until KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get crd gatewayclasses.gateway.networking.k8s.io 2>/dev/null; do \
 		echo "  Waiting for CRDs to be installed..."; \
 		sleep 2; \
 	done
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --for=condition=Established --timeout=60s crd/gatewayclasses.gateway.networking.k8s.io
+	@echo "Waiting for GatewayClass to be created by operator..."
+	@until KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get gatewayclass/tigera-gateway-class 2>/dev/null; do \
+		echo "  Waiting for GatewayClass tigera-gateway-class to be created..."; \
+		echo "  Checking operator logs for issues..."; \
+		KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) logs -n tigera-operator -l k8s-app=tigera-operator --tail=20 | grep -i "gateway\|error" || true; \
+		sleep 5; \
+	done
 	@echo "Waiting for GatewayClass to be accepted..."
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
 	@echo "Creating test infrastructure..."
