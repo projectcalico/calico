@@ -108,34 +108,24 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 		return fmt.Errorf("failed to get node IPv4 address from %s: %w", nodeIPv4Key, err)
 	}
 
-	// Get node IPv6 address
+	// Get node IPv6 address (optional - not all nodes have IPv6)
 	nodeIPv6Key := fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v6", NodeName)
 	if nodeIPv6, err := c.GetValue(nodeIPv6Key); err == nil {
 		config.NodeIPv6 = nodeIPv6
-	} else {
-		return fmt.Errorf("failed to get node IPv6 address from %s: %w", nodeIPv6Key, err)
 	}
 
-	// Get AS number (try node-specific first, then global)
-	nodeASKey := fmt.Sprintf("/calico/bgp/v1/host/%s/as_num", NodeName)
-	if asNum, err := c.GetValue(nodeASKey); err == nil {
-		config.ASNumber = asNum
-	} else if globalAS, err := c.GetValue("/calico/bgp/v1/global/as_num"); err == nil {
-		config.ASNumber = globalAS
-	} else {
-		return fmt.Errorf("failed to get AS number from node-specific (%s) or global key: %w", nodeASKey, err)
+	// Get AS number (try node-specific first, then global). Return error if both fail.
+	asNum, err := c.getNodeOrGlobalValue(NodeName, "as_num")
+	if err != nil {
+		return fmt.Errorf("failed to get AS number: %w", err)
 	}
+	config.ASNumber = asNum
 
-	// Get logging configuration
-	var logLevel string
-	nodeLogKey := fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", NodeName)
-	if level, err := c.GetValue(nodeLogKey); err == nil {
-		logLevel = level
-	} else if globalLog, err := c.GetValue("/calico/bgp/v1/global/loglevel"); err == nil {
-		logLevel = globalLog
+	// Get logging configuration. If not found, logLevel will be empty string (uses default).
+	logLevel, err := c.getNodeOrGlobalValue(NodeName, "loglevel")
+	if err == nil {
+		config.LogLevel = logLevel
 	}
-
-	config.LogLevel = logLevel
 
 	// Compute debug mode based on log level.
 	switch logLevel {
@@ -170,17 +160,10 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 		}
 	}
 
-	// Process bind mode and listen address (matching song-original.cfg.template)
-	var bindMode string
-	bindModeKey := fmt.Sprintf("/calico/bgp/v1/host/%s/bind_mode", NodeName)
-	if mode, err := c.GetValue(bindModeKey); err == nil {
-		bindMode = mode
-	} else if globalMode, err := c.GetValue("/calico/bgp/v1/global/bind_mode"); err == nil {
-		bindMode = globalMode
-	}
-
+	// Process bind mode and listen address
+	bindMode, err := c.getNodeOrGlobalValue(NodeName, "bind_mode")
 	// Set listen address if bind mode is NodeIP and we have a node IP
-	if bindMode == "NodeIP" {
+	if err == nil && bindMode == "NodeIP" {
 		if ipVersion == 6 && config.NodeIPv6 != "" {
 			config.ListenAddress = config.NodeIPv6
 		} else if ipVersion == 4 && config.NodeIP != "" {
@@ -189,24 +172,16 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Process listen port (node-specific takes precedence over global)
-	listenPortKey := fmt.Sprintf("/calico/bgp/v1/host/%s/listen_port", NodeName)
-	if port, err := c.GetValue(listenPortKey); err == nil {
+	port, err := c.getNodeOrGlobalValue(NodeName, "listen_port")
+	if err == nil {
 		config.ListenPort = port
-	} else if globalPort, err := c.GetValue("/calico/bgp/v1/global/listen_port"); err == nil {
-		config.ListenPort = globalPort
 	}
 
 	// Process ignored interfaces and build complete interface string
-	var ignoredInterfaces string
-	nodeIgnoredKey := fmt.Sprintf("/calico/bgp/v1/host/%s/ignored_interfaces", NodeName)
-	if ifaces, err := c.GetValue(nodeIgnoredKey); err == nil {
-		ignoredInterfaces = ifaces
-	} else if globalIfaces, err := c.GetValue("/calico/bgp/v1/global/ignored_interfaces"); err == nil {
-		ignoredInterfaces = globalIfaces
-	}
+	ignoredInterfaces, err := c.getNodeOrGlobalValue(NodeName, "ignored_interfaces")
 
 	// Build the complete interface pattern string
-	if ignoredInterfaces != "" {
+	if err == nil && ignoredInterfaces != "" {
 		// Parse comma-separated list and build pattern
 		ifaceList := strings.Split(ignoredInterfaces, ",")
 		var patterns []string
@@ -732,6 +707,17 @@ func (c *client) buildExportFilter(raw map[string]interface{}, peerAS, nodeAS st
 	filterLines = append(filterLines, "reject;")
 
 	return strings.Join(filterLines, "\n    ")
+}
+
+// getNodeOrGlobalValue attempts to get a value from a node-specific key first,
+// then falls back to the global key. Returns the value and any error.
+func (c *client) getNodeOrGlobalValue(nodeName, keySuffix string) (string, error) {
+	nodeKey := fmt.Sprintf("/calico/bgp/v1/host/%s/%s", nodeName, keySuffix)
+	if val, err := c.GetValue(nodeKey); err == nil {
+		return val, nil
+	}
+	globalKey := fmt.Sprintf("/calico/bgp/v1/global/%s", keySuffix)
+	return c.GetValue(globalKey)
 }
 
 // processCommunityRules processes BGP community advertisements
