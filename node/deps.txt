@@ -42,7 +42,7 @@ github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 github.com/go-ini/ini v1.67.0
 github.com/go-logr/logr v1.4.3
 github.com/go-openapi/jsonpointer v0.21.0
-github.com/go-openapi/jsonreference v0.20.2
+github.com/go-openapi/jsonreference v0.21.0
 github.com/go-openapi/swag v0.23.0
 github.com/go-playground/locales v0.14.1
 github.com/go-playground/universal-translator v0.18.1
