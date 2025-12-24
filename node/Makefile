@@ -305,7 +305,10 @@ K8ST_IMAGE_TARS=calico-node.tar \
 	operator.tar \
 	whisker.tar \
 	whisker-backend.tar \
-	goldmane.tar
+	goldmane.tar \
+	envoy-gateway.tar \
+	envoy-proxy.tar \
+	envoy-ratelimit.tar
 
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
@@ -425,6 +428,21 @@ whisker-backend.tar: ../go.mod $(shell find ../whisker-backend -name '*.go')
 	make -C ../whisker-backend image
 	docker tag calico/whisker-backend:latest-$(ARCH) calico/whisker-backend:$(TEST_BUILD_TAG)
 	docker save --output $@ calico/whisker-backend:$(TEST_BUILD_TAG)
+
+envoy-gateway.tar: $(shell find ../third_party/envoy-gateway -name 'Makefile' -o -name 'Dockerfile' -o -name '*.patch')
+	make -C ../third_party/envoy-gateway image
+	docker tag envoy-gateway:latest-$(ARCH) calico/envoy-gateway:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/envoy-gateway:$(TEST_BUILD_TAG)
+
+envoy-proxy.tar: $(shell find ../third_party/envoy-proxy -name 'Makefile' -o -name 'Dockerfile')
+	make -C ../third_party/envoy-proxy image
+	docker tag envoy-proxy:latest-$(ARCH) calico/envoy-proxy:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/envoy-proxy:$(TEST_BUILD_TAG)
+
+envoy-ratelimit.tar: $(shell find ../third_party/envoy-ratelimit -name 'Makefile' -o -name 'Dockerfile')
+	make -C ../third_party/envoy-ratelimit image
+	docker tag envoy-ratelimit:latest-$(ARCH) calico/envoy-ratelimit:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/envoy-ratelimit:$(TEST_BUILD_TAG)
 
 load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# Load the latest tar files onto the currently running kind cluster.
