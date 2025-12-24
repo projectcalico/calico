@@ -16,6 +16,9 @@ images=(
     goldmane
     whisker
     whisker-backend
+    envoy-gateway
+    envoy-proxy
+    envoy-ratelimit
 )
 
 for image in "${images[@]}"; do

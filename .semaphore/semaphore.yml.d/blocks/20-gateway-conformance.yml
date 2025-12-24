@@ -1,6 +1,6 @@
 - name: "E2E tests: Gateway API Conformance"
   run:
-    when: "${FORCE_RUN} or change_in(['/gateway', '/e2e/cmd/gateway', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/gateway', '/e2e/cmd/gateway', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 30
   dependencies:
@@ -15,9 +15,9 @@
           - cd ..
           # Build test binaries
           - make -C e2e build
-          # Create kind cluster and deploy Calico
+          # Create kind cluster and deploy Calico (includes building and loading all images including envoy-*)
           - make -C node kind-k8st-setup
-          # Setup Gateway images and operator
+          # Setup Gateway API resources and wait for readiness
           - make e2e-gateway-setup
           # Run conformance tests
           - ../.semaphore/run-and-monitor gateway-conformance.log make e2e-run-gateway-test

@@ -367,9 +367,81 @@ blocks:
         - name: Pre-flight checks
           commands:
             - "true"
+  - name: Envoy Gateway
+    run:
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/envoy-gateway
+      jobs:
+        - name: "Envoy Gateway: CI"
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "Envoy Gateway: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+  - name: Envoy Proxy
+    run:
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/envoy-proxy
+      jobs:
+        - name: "Envoy Proxy: CI"
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "Envoy Proxy: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+  - name: "Envoy Ratelimit"
+    run:
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/envoy-ratelimit
+      jobs:
+        - name: "Envoy Ratelimit: CI"
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "Envoy Ratelimit: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "E2E tests: Gateway API Conformance"
     run:
-      when: "true or change_in(['/gateway', '/e2e/cmd/gateway', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/gateway', '/e2e/cmd/gateway', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -384,9 +456,9 @@ blocks:
             - cd ..
             # Build test binaries
             - make -C e2e build
-            # Create kind cluster and deploy Calico
+            # Create kind cluster and deploy Calico (includes building and loading all images including envoy-*)
             - make -C node kind-k8st-setup
-            # Setup Gateway images and operator
+            # Setup Gateway API resources and wait for readiness
             - make e2e-gateway-setup
             # Run conformance tests
             - ../.semaphore/run-and-monitor gateway-conformance.log make e2e-run-gateway-test

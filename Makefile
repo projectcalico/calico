@@ -182,22 +182,14 @@ e2e-run-cnp-test:
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
 ## Run the Gateway API conformance tests against a pre-existing kind cluster.
-# Setup Gateway images and operator for KIND cluster
+# Setup Gateway API for KIND cluster
 # This target prepares the KIND cluster for Gateway API conformance testing by:
-# 1. Building Gateway images from current commit
-# 2. Loading images into KIND
-# 3. Scaling operator back up (kind-k8st-setup scales it to 0)
-# 4. Applying GatewayAPI resource and waiting for readiness
+# 1. Scaling operator back up (kind-k8st-setup scales it to 0)
+# 2. Applying GatewayAPI resource and waiting for readiness
+# Note: Gateway images (envoy-gateway, envoy-proxy, envoy-ratelimit) are already
+# loaded by kind-k8st-setup as part of K8ST_IMAGE_TARS.
 .PHONY: e2e-gateway-setup
 e2e-gateway-setup:
-	@echo "Building Gateway images..."
-	$(MAKE) -C third_party/envoy-gateway image
-	$(MAKE) -C third_party/envoy-proxy image
-	$(MAKE) -C third_party/envoy-ratelimit image
-	@echo "Loading Gateway images into KIND cluster..."
-	$(KIND) load docker-image envoy-gateway:latest-$(ARCH) --name kind
-	$(KIND) load docker-image envoy-proxy:latest-$(ARCH) --name kind
-	$(KIND) load docker-image envoy-ratelimit:latest-$(ARCH) --name kind
 	@echo "Scaling tigera-operator back up..."
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) scale deployment -n tigera-operator tigera-operator --replicas=1
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --for=condition=Available --timeout=60s deployment/tigera-operator -n tigera-operator
