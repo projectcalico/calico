@@ -100,15 +100,12 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 
 // populateNodeConfig fills in basic node configuration
 func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) error {
-	logc := log.WithField("ipVersion", ipVersion)
-
 	// Get node IPv4 address
 	nodeIPv4Key := fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v4", NodeName)
 	if nodeIP, err := c.GetValue(nodeIPv4Key); err == nil {
 		config.NodeIP = nodeIP
-		config.RouterID = nodeIP // Default router ID to IPv4 address
 	} else {
-		logc.WithError(err).Warnf("Failed to get node IPv4 address from %s", nodeIPv4Key)
+		return fmt.Errorf("failed to get node IPv4 address from %s: %w", nodeIPv4Key, err)
 	}
 
 	// Get node IPv6 address
@@ -116,7 +113,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	if nodeIPv6, err := c.GetValue(nodeIPv6Key); err == nil {
 		config.NodeIPv6 = nodeIPv6
 	} else {
-		logc.WithError(err).Debugf("Failed to get node IPv6 address from %s", nodeIPv6Key)
+		return fmt.Errorf("failed to get node IPv6 address from %s: %w", nodeIPv6Key, err)
 	}
 
 	// Get AS number (try node-specific first, then global)
@@ -126,7 +123,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	} else if globalAS, err := c.GetValue("/calico/bgp/v1/global/as_num"); err == nil {
 		config.ASNumber = globalAS
 	} else {
-		logc.Warnf("Failed to get AS number from node-specific (%s) or global key", nodeASKey)
+		return fmt.Errorf("failed to get AS number from node-specific (%s) or global key: %w", nodeASKey, err)
 	}
 
 	// Get logging configuration
@@ -140,13 +137,13 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 
 	config.LogLevel = logLevel
 
-	// Compute debug mode based on log level. If logLevel == "none", DebugMode stays empty (no debug output).
-	if logLevel == "debug" {
+	// Compute debug mode based on log level.
+	if logLevel == "none" {
+		// DebugMode stays empty (no debug output)
+	} else if logLevel == "debug" {
 		config.DebugMode = "all"
-	} else if logLevel != "none" && logLevel != "" {
-		config.DebugMode = "{ states }"
-	} else if logLevel == "" {
-		// Default behavior when no log level is set
+	} else {
+		// Default behavior for empty string or any other log level
 		config.DebugMode = "{ states }"
 	}
 
@@ -165,7 +162,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 		if routerID != "" {
 			config.RouterID = routerID
 		} else if config.NodeIP != "" {
-			config.RouterID = config.NodeIP
+			config.RouterID = config.NodeIP // Default router ID to IPv4 address
 		}
 		if ipVersion == 6 {
 			config.RouterIDComment = "# Use IPv4 address since router id is 4 octets, even in MP-BGP"
@@ -228,27 +225,22 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 
 // processPeers processes all BGP peers (mesh, global, and node-specific)
 func (c *client) processPeers(config *types.BirdBGPConfig, ipVersion int) error {
-	logc := log.WithField("ipVersion", ipVersion)
-
 	// Get node's route reflector cluster ID
 	nodeClusterID, _ := c.GetValue(fmt.Sprintf("/calico/bgp/v1/host/%s/rr_cluster_id", NodeName))
 
 	// Process node-to-node mesh peers
 	if err := c.processMeshPeers(config, nodeClusterID, ipVersion); err != nil {
-		logc.WithError(err).Warn("Failed to process mesh peers")
-		return err
+		return fmt.Errorf("failed to process mesh peers: %w", err)
 	}
 
 	// Process global peers (both regular and local BGP peers)
 	if err := c.processGlobalPeers(config, nodeClusterID, ipVersion); err != nil {
-		logc.WithError(err).Warn("Failed to process global peers")
-		return err
+		return fmt.Errorf("failed to process global peers: %w", err)
 	}
 
 	// Process node-specific peers (both regular and local BGP peers)
 	if err := c.processNodePeers(config, nodeClusterID, ipVersion); err != nil {
-		logc.WithError(err).Warn("Failed to process node-specific peers")
-		return err
+		return fmt.Errorf("failed to process node-specific peers: %w", err)
 	}
 
 	return nil
