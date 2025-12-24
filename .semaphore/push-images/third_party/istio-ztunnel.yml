@@ -1,0 +1,48 @@
+version: v1.0
+name: Publish third-party istio-ztunnel images
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  minutes: 60
+
+global_job_config:
+  env_vars:
+    - name: DEV_REGISTRIES
+      value: docker.io/calico
+  secrets:
+    - name: docker-hub
+    - name: google-service-account-for-gcr
+    - name: quay-tigeradev-hashrelease
+  prologue:
+    commands:
+      - checkout
+      # Semaphore is doing shallow clone on a commit without tags.
+      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
+      - retry git fetch --unshallow
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+      - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+      - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+
+blocks:
+  - name: Publish istio-ztunnel images and multi-arch manifests
+    dependencies: []
+    skip:
+      when: "branch !~ '.+'"
+    task:
+      jobs:
+        - name: Linux multi-arch
+          env_vars:
+            - name: THIRD_PARTY_IMAGES
+              value: istio-ztunnel
+            - name: BUILD_IMAGES
+              value: istio-ztunnel
+          commands:
+            - |
+              if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+                make -C third_party/istio-ztunnel cd-third-party-common CONFIRM=true;
+                make push-manifests-with-tag CONFIRM=true;
+              fi
