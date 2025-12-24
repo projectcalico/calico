@@ -447,6 +447,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "node"
       prologue:
         commands:
           - cd e2e
