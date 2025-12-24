@@ -51,10 +51,7 @@ func TestBuildImportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array - should return default accept
-	peerData := map[string]interface{}{
-		"filters": []interface{}{},
-	}
-	result := c.buildImportFilter(peerData, 4)
+	result := c.buildImportFilter([]string{}, 4)
 	assert.Contains(t, result, "accept;")
 }
 
@@ -103,10 +100,7 @@ func TestBuildExportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array
-	peerData := map[string]interface{}{
-		"filters": []interface{}{},
-	}
-	result := c.buildExportFilter(peerData, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{}, "65000", "64512", 4)
 	assert.Contains(t, result, "calico_export_to_bgp_peers")
 }
 
@@ -1446,7 +1440,7 @@ func TestProcessGlobalPeers_BasicPeer(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":     "192.168.1.100",
-		"as_num": float64(65000), // JSON numbers are float64
+		"as_num": "65000",
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
 
@@ -1479,7 +1473,7 @@ func TestProcessGlobalPeers_IPv6Peer(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":          "2001:db8::100",
-		"as_num":      float64(65000),
+		"as_num":      "65000",
 		"source_addr": "UseNodeIP", // Required to set SourceAddr
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -1513,7 +1507,7 @@ func TestProcessGlobalPeers_WithPassword(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":       "192.168.1.100",
-		"as_num":   float64(65000),
+		"as_num":   "65000",
 		"password": "bgp-secret",
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -1545,7 +1539,7 @@ func TestProcessGlobalPeers_WithTTLSecurity(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":           "192.168.1.100",
-		"as_num":       float64(65000),
+		"as_num":       "65000",
 		"ttl_security": float64(64),
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -1578,7 +1572,7 @@ func TestProcessNodePeers_BasicPeer(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":     "172.16.0.100",
-		"as_num": float64(65001),
+		"as_num": "65001",
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
 
@@ -1611,7 +1605,7 @@ func TestProcessNodePeers_IPv6Peer(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":     "fe80::100",
-		"as_num": float64(65001),
+		"as_num": "65001",
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
 
@@ -1644,7 +1638,7 @@ func TestProcessNodePeers_LocalBGPPeer(t *testing.T) {
 	// Local BGP peers use the regular peer_v4 path with local_bgp_peer: true
 	peerData := map[string]interface{}{
 		"ip":             "192.168.1.50", // Local workload IP
-		"as_num":         float64(64512),
+		"as_num":         "64512",
 		"local_bgp_peer": true, // This marks it as a local BGP peer
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -1681,13 +1675,13 @@ func TestProcessPeers_CombinedMeshGlobalNode(t *testing.T) {
 
 	globalPeerData := map[string]interface{}{
 		"ip":     "192.168.1.100",
-		"as_num": float64(65000),
+		"as_num": "65000",
 	}
 	globalPeerJSON, _ := json.Marshal(globalPeerData)
 
 	nodePeerData := map[string]interface{}{
 		"ip":     "172.16.0.100",
-		"as_num": float64(65001),
+		"as_num": "65001",
 	}
 	nodePeerJSON, _ := json.Marshal(nodePeerData)
 
@@ -1733,7 +1727,7 @@ func TestProcessPeers_NextHopModes(t *testing.T) {
 		name        string
 		nextHopMode string
 		keepNextHop bool
-		peerAS      float64
+		peerAS      string
 		nodeAS      string
 		expectSelf  bool
 		expectKeep  bool
@@ -1741,28 +1735,28 @@ func TestProcessPeers_NextHopModes(t *testing.T) {
 		{
 			name:        "NextHopSelf mode",
 			nextHopMode: "Self",
-			peerAS:      65000,
+			peerAS:      "65000",
 			nodeAS:      "64512",
 			expectSelf:  true,
 		},
 		{
 			name:        "NextHopKeep mode",
 			nextHopMode: "Keep",
-			peerAS:      65000,
+			peerAS:      "65000",
 			nodeAS:      "64512",
 			expectKeep:  true,
 		},
 		{
 			name:        "Legacy keep_next_hop for eBGP",
 			keepNextHop: true,
-			peerAS:      65000,
+			peerAS:      "65000",
 			nodeAS:      "64512",
 			expectKeep:  true,
 		},
 		{
 			name:        "Legacy keep_next_hop ignored for iBGP",
 			keepNextHop: true,
-			peerAS:      64512,
+			peerAS:      "64512",
 			nodeAS:      "64512",
 			expectKeep:  false, // Should be ignored for iBGP
 		},
@@ -1812,7 +1806,7 @@ func TestProcessPeers_RouteReflectorClient(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":            "192.168.1.100",
-		"as_num":        float64(64512), // Same AS for iBGP
+		"as_num":        "64512", // Same AS for iBGP
 		"rr_cluster_id": "cluster-2",    // Different cluster ID
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -1846,8 +1840,8 @@ func TestProcessPeers_LocalAS(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":                 "192.168.1.100",
-		"as_num":             float64(65000),
-		"local_as_num":       float64(64000),
+		"as_num":             "65000",
+		"local_as_num":       "64000",
 		"num_allow_local_as": float64(2), // Correct field name
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -1898,11 +1892,7 @@ func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	peerData := map[string]interface{}{
-		"filters": []interface{}{"my-filter"},
-	}
-
-	result := c.buildImportFilter(peerData, 4)
+	result := c.buildImportFilter([]string{"my-filter"}, 4)
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-filter_importFilterV4'();")
@@ -1936,11 +1926,7 @@ func TestBuildImportFilter_WithMultipleBGPFilters(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	peerData := map[string]interface{}{
-		"filters": []interface{}{"filter1", "filter2"},
-	}
-
-	result := c.buildImportFilter(peerData, 4)
+	result := c.buildImportFilter([]string{"filter1", "filter2"}, 4)
 
 	// Should include both filter function calls
 	assert.Contains(t, result, "'bgp_filter1_importFilterV4'();")
@@ -1966,11 +1952,7 @@ func TestBuildImportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	peerData := map[string]interface{}{
-		"filters": []interface{}{"ipv6-filter"},
-	}
-
-	result := c.buildImportFilter(peerData, 6)
+	result := c.buildImportFilter([]string{"ipv6-filter"}, 6)
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-filter_importFilterV6'();")
@@ -1993,11 +1975,7 @@ func TestBuildImportFilter_FilterWithNoImportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	peerData := map[string]interface{}{
-		"filters": []interface{}{"export-only"},
-	}
-
-	result := c.buildImportFilter(peerData, 4)
+	result := c.buildImportFilter([]string{"export-only"}, 4)
 
 	// Should NOT include the filter call since there are no import rules
 	assert.NotContains(t, result, "'bgp_export-only_importFilterV4'();")
@@ -2012,11 +1990,7 @@ func TestBuildImportFilter_FilterNotFound(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	peerData := map[string]interface{}{
-		"filters": []interface{}{"nonexistent-filter"},
-	}
-
-	result := c.buildImportFilter(peerData, 4)
+	result := c.buildImportFilter([]string{"nonexistent-filter"}, 4)
 
 	// Should NOT include the filter call since filter doesn't exist
 	assert.NotContains(t, result, "'bgp_nonexistent-filter_importFilterV4'();")
@@ -2043,11 +2017,7 @@ func TestBuildExportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	peerData := map[string]interface{}{
-		"filters": []interface{}{"my-export-filter"},
-	}
-
-	result := c.buildExportFilter(peerData, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"my-export-filter"}, "65000", "64512", 4)
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-export-filter_exportFilterV4'();")
@@ -2074,11 +2044,7 @@ func TestBuildExportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	peerData := map[string]interface{}{
-		"filters": []interface{}{"ipv6-export"},
-	}
-
-	result := c.buildExportFilter(peerData, "65000", "64512", 6)
+	result := c.buildExportFilter([]string{"ipv6-export"}, "65000", "64512", 6)
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-export_exportFilterV6'();")
@@ -2101,11 +2067,7 @@ func TestBuildExportFilter_FilterWithNoExportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	peerData := map[string]interface{}{
-		"filters": []interface{}{"import-only"},
-	}
-
-	result := c.buildExportFilter(peerData, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"import-only"}, "65000", "64512", 4)
 
 	// Should NOT include the filter call since there are no export rules
 	assert.NotContains(t, result, "'bgp_import-only_exportFilterV4'();")
@@ -2139,7 +2101,7 @@ func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":      "192.168.1.100",
-		"as_num":  float64(65000),
+		"as_num":  "65000",
 		"filters": []interface{}{"test-filter"},
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -2197,7 +2159,7 @@ func TestProcessGlobalPeers_WithBGPFilter_IPv6(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":      "2001:db8::100",
-		"as_num":  float64(65000),
+		"as_num":  "65000",
 		"filters": []interface{}{"ipv6-bgp-filter"},
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -2247,7 +2209,7 @@ func TestProcessGlobalPeers_WithLongFilterName(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":      "192.168.1.100",
-		"as_num":  float64(65000),
+		"as_num":  "65000",
 		"filters": []interface{}{longFilterName},
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
@@ -2302,7 +2264,7 @@ func TestProcessNodePeers_WithBGPFilter(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":      "172.16.0.100",
-		"as_num":  float64(65001),
+		"as_num":  "65001",
 		"filters": []interface{}{"node-peer-filter"},
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
