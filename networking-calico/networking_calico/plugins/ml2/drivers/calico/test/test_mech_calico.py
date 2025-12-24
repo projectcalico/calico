@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025 Tigera, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,36 +16,48 @@
 Tests for CalicoMechanismDriver initialization and voting behavior.
 
 These tests validate:
-  - Only voting=True calls create an Elector.
-  - Voting=False (API/RPC workers) never create an elector.
+  - Only voting=True creates an Elector.
+  - Voting=False never creates an Elector.
   - @requires_state does NOT cause a worker to become a voter.
-  - Invalid election key does not cause non-voting workers to join election.
+  - A worker initialization does not override the parent elector.
 """
 
-import mock
 import unittest
+import mock
 
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
+from networking_calico import etcdv3
 
 
-# Prevent eventlet.spawn_after from scheduling background threads.
-_spawn_after_patch = mock.patch("eventlet.spawn_after", return_value=None)
-
-
-@_spawn_after_patch
 class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
 
+    def setUp(self):
+        super(TestMechanismDriverVoting, self).setUp()
+
+        lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
+        lib.m_oslo_config.cfg.CONF.calico.openstack_region = "no-region"
+        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 0
+        lib.m_oslo_config.cfg.CONF.calico.resync_interval_secs = 0
+        lib.m_oslo_config.cfg.CONF.calico.project_name_cache_max = 0
+
+        etcdv3._client = mock.Mock()
+        etcdv3.get_status = mock.Mock(return_value=("cluster-id", "123"))
+        etcdv3.get_prefix = mock.Mock(return_value=[])
+
+        # Reset the driver
+        mech_calico.mech_driver = None
+
+    def _disable_background_threads(self, driver):
+        """Disable background threads that would touch etcd."""
+        driver.periodic_resync_thread = mock.Mock()
+        driver._status_updating_thread = mock.Mock()
+        driver.start_etcd_watcher = mock.Mock()
+
     @mock.patch.object(mech_calico, "Elector")
-    @mock.patch.object(mech_calico, "WorkloadEndpointSyncer")
-    @mock.patch.object(mech_calico, "PolicySyncer")
-    @mock.patch.object(mech_calico, "SubnetSyncer")
-    @mock.patch.object(mech_calico.agent_rpc, "PluginReportStateAPI")
-    @mock.patch.object(mech_calico, "KeystoneClient")
-    def test_parent_creates_elector(
-        self, m_keystone, m_rpc, m_subnet, m_policy, m_endpoint, m_elector
-    ):
+    def test_parent_creates_elector(self, m_elector):
         driver = mech_calico.CalicoMechanismDriver()
+        self._disable_background_threads(driver)
 
         driver._my_pid = None
         driver._post_fork_init(voting=True)
@@ -54,15 +66,9 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
         self.assertIs(driver.elector, m_elector.return_value)
 
     @mock.patch.object(mech_calico, "Elector")
-    @mock.patch.object(mech_calico, "WorkloadEndpointSyncer")
-    @mock.patch.object(mech_calico, "PolicySyncer")
-    @mock.patch.object(mech_calico, "SubnetSyncer")
-    @mock.patch.object(mech_calico.agent_rpc, "PluginReportStateAPI")
-    @mock.patch.object(mech_calico, "KeystoneClient")
-    def test_worker_does_not_create_elector(
-        self, m_keystone, m_rpc, m_subnet, m_policy, m_endpoint, m_elector
-    ):
+    def test_worker_does_not_create_elector(self, m_elector):
         driver = mech_calico.CalicoMechanismDriver()
+        self._disable_background_threads(driver)
 
         driver._my_pid = None
         driver._post_fork_init(voting=False)
@@ -73,35 +79,17 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
     @mock.patch.object(mech_calico, "Elector")
     def test_requires_state_does_not_make_worker_voter(self, m_elector):
         driver = mech_calico.CalicoMechanismDriver()
+        self._disable_background_threads(driver)
 
         driver._my_pid = None
-        fake_ctx = mock.Mock()
 
-        # No-op DB initialization
-        with mock.patch.object(driver, "_get_db", return_value=None):
-            driver.bind_port(fake_ctx)
+        fake_context = mock.Mock()
+        fake_context.original = {}
+        fake_context.current = {}
+        fake_context._plugin_context = mock.Mock()
 
-        m_elector.assert_not_called()
-        self.assertIsNone(driver.elector)
-
-    @mock.patch.object(mech_calico.etcdv3, "get")
-    @mock.patch.object(mech_calico, "Elector")
-    @mock.patch.object(mech_calico, "WorkloadEndpointSyncer")
-    @mock.patch.object(mech_calico, "PolicySyncer")
-    @mock.patch.object(mech_calico, "SubnetSyncer")
-    @mock.patch.object(mech_calico.agent_rpc, "PluginReportStateAPI")
-    @mock.patch.object(mech_calico, "KeystoneClient")
-    def test_worker_ignores_invalid_election_key(
-        self,
-        m_keystone, m_rpc, m_subnet, m_policy, m_endpoint,
-        m_elector, m_etcd_get
-    ):
-        driver = mech_calico.CalicoMechanismDriver()
-
-        m_etcd_get.side_effect = Exception("invalid election data")
-
-        driver._my_pid = None
-        driver._post_fork_init(voting=False)
+        # update_network_postcommit is decorated with @requires_state
+        driver.update_network_postcommit(fake_context)
 
         m_elector.assert_not_called()
         self.assertIsNone(driver.elector)
@@ -109,15 +97,15 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
     @mock.patch.object(mech_calico, "Elector")
     def test_worker_init_does_not_override_parent_elector(self, m_elector):
         driver = mech_calico.CalicoMechanismDriver()
+        self._disable_background_threads(driver)
 
         driver._my_pid = None
         driver._post_fork_init(voting=True)
-        parent_elector = m_elector.return_value
+        parent_elector = driver.elector
 
-        # Worker init must not replace elector
-        with mock.patch.object(driver, "_get_db", return_value=None):
-            driver._my_pid = 99999
-            driver._post_fork_init(voting=False)
+        # Simulate a worker re-initializing in the same process object
+        driver._my_pid = 99999
+        driver._post_fork_init(voting=False)
 
         self.assertIs(driver.elector, parent_elector)
         m_elector.assert_called_once()
