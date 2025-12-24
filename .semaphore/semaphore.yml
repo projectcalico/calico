@@ -384,8 +384,11 @@ blocks:
       env_vars:
         - name: DEV_REGISTRIES
           value: docker.io/calico
+      secrets:
+        - name: docker-hub
       prologue:
         commands:
+          - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Linux amd64
