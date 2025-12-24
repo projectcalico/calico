@@ -138,11 +138,12 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	config.LogLevel = logLevel
 
 	// Compute debug mode based on log level.
-	if logLevel == "none" {
+	switch logLevel {
+	case "none":
 		// DebugMode stays empty (no debug output)
-	} else if logLevel == "debug" {
+	case "debug":
 		config.DebugMode = "all"
-	} else {
+	default:
 		// Default behavior for empty string or any other log level
 		config.DebugMode = "{ states }"
 	}
