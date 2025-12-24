@@ -181,6 +181,41 @@ e2e-run-cnp-test:
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
+## Run the Gateway API conformance tests against a pre-existing kind cluster.
+# Setup Gateway API for KIND cluster
+# This target prepares the KIND cluster for Gateway API conformance testing by:
+# 1. Scaling operator back up (kind-k8st-setup scales it to 0)
+# 2. Applying GatewayAPI resource and waiting for readiness
+# Note: Gateway images (envoy-gateway, envoy-proxy, envoy-ratelimit) are already
+# loaded by kind-k8st-setup as part of K8ST_IMAGE_TARS.
+.PHONY: e2e-gateway-setup
+e2e-gateway-setup:
+	@echo "Scaling tigera-operator back up..."
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) scale deployment -n tigera-operator tigera-operator --replicas=1
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --for=condition=Available --timeout=60s deployment/tigera-operator -n tigera-operator
+	@echo "Applying GatewayAPI resource..."
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f gateway/test/conformance/manifests/gatewayapi.yaml
+	@echo "Waiting for Gateway API CRDs..."
+	@until KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get crd gatewayclasses.gateway.networking.k8s.io 2>/dev/null; do \
+		echo "  Waiting for CRDs to be installed..."; \
+		sleep 2; \
+	done
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --for=condition=Established --timeout=60s crd/gatewayclasses.gateway.networking.k8s.io
+	@echo "Waiting for GatewayClass to be accepted..."
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --timeout=5m gatewayclass/tigera-gateway-class --for=condition=Accepted
+	@echo "Creating test infrastructure..."
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create namespace gateway-conformance-infra || true
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f gateway/test/conformance/manifests/gateway.yaml
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --timeout=5m -n gateway-conformance-infra gateway/gateway-conformance-default --for=condition=Programmed || true
+	@echo "Gateway API setup complete!"
+
+e2e-run-gateway-test:
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/gateway/e2e.test \
+	  -gateway-class=tigera-gateway-class \
+	  -supported-features=Gateway,HTTPRoute \
+	  -cleanup-base-resources=true \
+	  -allow-crds-mismatch
+
 ###############################################################################
 # Release logic below
 ###############################################################################
