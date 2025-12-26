@@ -22,7 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	v3 "github.com/projectcalico/calico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 )
