@@ -22,6 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/calico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 )
@@ -636,13 +637,12 @@ func (c *client) buildImportFilter(filters []string, ipVersion int) string {
 	for _, filterName := range filters {
 		filterKey := fmt.Sprintf("/calico/resources/v3/projectcalico.org/bgpfilters/%s", filterName)
 		if filterValue, err := c.GetValue(filterKey); err == nil {
-			var filterSpec map[string]interface{}
-			if json.Unmarshal([]byte(filterValue), &filterSpec) == nil {
-				if spec, ok := filterSpec["spec"].(map[string]interface{}); ok {
-					if importRules, ok := spec[importField].([]interface{}); ok && len(importRules) > 0 {
-						truncatedName := truncateBGPFilterName(filterName)
-						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'();", truncatedName, filterSuffix))
-					}
+			var filter v3.BGPFilter
+			if json.Unmarshal([]byte(filterValue), &filter) == nil {
+				// Check if import rules exist based on IP version
+				if (ipVersion == 4 && len(filter.Spec.ImportV4) > 0) || (ipVersion == 6 && len(filter.Spec.ImportV6) > 0) {
+					truncatedName := truncateBGPFilterName(filterName)
+					filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'();", truncatedName, filterSuffix))
 				}
 			}
 		}
@@ -668,13 +668,12 @@ func (c *client) buildExportFilter(filters []string, peerAS, nodeAS string, ipVe
 	for _, filterName := range filters {
 		filterKey := fmt.Sprintf("/calico/resources/v3/projectcalico.org/bgpfilters/%s", filterName)
 		if filterValue, err := c.GetValue(filterKey); err == nil {
-			var filterSpec map[string]interface{}
-			if json.Unmarshal([]byte(filterValue), &filterSpec) == nil {
-				if spec, ok := filterSpec["spec"].(map[string]interface{}); ok {
-					if exportRules, ok := spec[exportField].([]interface{}); ok && len(exportRules) > 0 {
-						truncatedName := truncateBGPFilterName(filterName)
-						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'();", truncatedName, filterSuffix))
-					}
+			var filter v3.BGPFilter
+			if json.Unmarshal([]byte(filterValue), &filter) == nil {
+				// Check if export rules exist based on IP version
+				if (ipVersion == 4 && len(filter.Spec.ExportV4) > 0) || (ipVersion == 6 && len(filter.Spec.ExportV6) > 0) {
+					truncatedName := truncateBGPFilterName(filterName)
+					filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'();", truncatedName, filterSuffix))
 				}
 			}
 		}
@@ -730,41 +729,29 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	}
 
 	for _, value := range kvPairs {
-		var advertisements []map[string]interface{}
+		var advertisements []v3.PrefixAdvertisement
 		if err := json.Unmarshal([]byte(value), &advertisements); err != nil {
 			logc.WithError(err).Warn("Failed to parse community advertisements")
 			continue
 		}
 
 		for _, adv := range advertisements {
-			cidr, ok := adv["cidr"].(string)
-			if !ok {
-				continue
-			}
-
-			communities, ok := adv["communities"].([]interface{})
-			if !ok {
-				continue
-			}
-
 			rule := types.CommunityRule{
-				CIDR:          cidr,
-				AddStatements: make([]string, 0, len(communities)),
+				CIDR:          adv.CIDR,
+				AddStatements: make([]string, 0, len(adv.Communities)),
 			}
 
 			// Pre-format BIRD community add statements
-			for _, comm := range communities {
-				if commStr, ok := comm.(string); ok {
-					parts := strings.Split(commStr, ":")
-					if len(parts) == 2 {
-						// Standard community
-						rule.AddStatements = append(rule.AddStatements,
-							fmt.Sprintf("bgp_community.add((%s, %s));", parts[0], parts[1]))
-					} else if len(parts) == 3 {
-						// Large community
-						rule.AddStatements = append(rule.AddStatements,
-							fmt.Sprintf("bgp_large_community.add((%s, %s, %s));", parts[0], parts[1], parts[2]))
-					}
+			for _, commStr := range adv.Communities {
+				parts := strings.Split(commStr, ":")
+				if len(parts) == 2 {
+					// Standard community
+					rule.AddStatements = append(rule.AddStatements,
+						fmt.Sprintf("bgp_community.add((%s, %s));", parts[0], parts[1]))
+				} else if len(parts) == 3 {
+					// Large community
+					rule.AddStatements = append(rule.AddStatements,
+						fmt.Sprintf("bgp_large_community.add((%s, %s, %s));", parts[0], parts[1], parts[2]))
 				}
 			}
 
