@@ -1806,8 +1806,8 @@ func TestProcessPeers_RouteReflectorClient(t *testing.T) {
 
 	peerData := map[string]interface{}{
 		"ip":            "192.168.1.100",
-		"as_num":        "64512", // Same AS for iBGP
-		"rr_cluster_id": "cluster-2",    // Different cluster ID
+		"as_num":        "64512",     // Same AS for iBGP
+		"rr_cluster_id": "cluster-2", // Different cluster ID
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
 

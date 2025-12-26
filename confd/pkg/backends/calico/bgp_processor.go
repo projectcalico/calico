@@ -275,20 +275,21 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		return err
 	}
 
-	// Extract unique hosts from the keys
-	hostsMap := make(map[string]bool)
-	for key := range hostIPsMap {
+	// Extract unique hosts and their IPs from the keys
+	hostsMap := make(map[string]string)
+	for key, value := range hostIPsMap {
 		// Keys are like /calico/bgp/v1/host/<hostname>/ip_addr_v4
-		parts := strings.Split(key, "/")
-		if len(parts) >= 6 {
-			hostsMap[parts[5]] = true
+		// Only process keys that match the current IP version suffix
+		if strings.HasSuffix(key, ipAddrSuffix) {
+			parts := strings.Split(key, "/")
+			if len(parts) >= 6 {
+				hostsMap[parts[5]] = value
+			}
 		}
 	}
 
-	for host := range hostsMap {
-		peerIPKey := fmt.Sprintf("/calico/bgp/v1/host/%s/%s", host, ipAddrSuffix)
-		peerIP, err := c.GetValue(peerIPKey)
-		if err != nil || peerIP == "" {
+	for host, peerIP := range hostsMap {
+		if peerIP == "" {
 			continue
 		}
 
