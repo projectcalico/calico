@@ -570,10 +570,11 @@ func (c *client) buildPeerFromData(peer *bgpPeer, prefix string, config *types.B
 	}
 
 	// Route reflector handling
-	// If the peer is iBGP and has a different cluster ID than the current node,
-	// this node is a route reflector and the peer is a route reflector client.
+	// If this node is a route reflector (has a cluster ID) and the peer is iBGP
+	// and the peer does not have a cluster ID (or has a different one),
+	// then the peer is a route reflector client.
 	if result.ASNumber == effectiveNodeAS && nodeClusterID != "" {
-		if peer.RRClusterID != "" && peer.RRClusterID != nodeClusterID {
+		if peer.RRClusterID == "" || peer.RRClusterID != nodeClusterID {
 			result.RouteReflector = true
 			result.RRClusterID = nodeClusterID
 		}
