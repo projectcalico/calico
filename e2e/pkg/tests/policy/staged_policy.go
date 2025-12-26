@@ -128,7 +128,7 @@ var _ = describe.CalicoDescribe(
 					verifyFlowCount(url, 2)
 					verifyFlowContainsStagedPolicy(
 						url,
-						stagedKubernetesNetworkPolicy.Name,
+						fmt.Sprintf("default.%s", stagedKubernetesNetworkPolicy.Name), // Name is prefixed with tier name 'default'.
 						"default",
 						whiskerv1.PolicyKindStagedKubernetesNetworkPolicy,
 						whiskerv1.Action(0), // Action is empty for StagedKubernetesNetworkPolicy
