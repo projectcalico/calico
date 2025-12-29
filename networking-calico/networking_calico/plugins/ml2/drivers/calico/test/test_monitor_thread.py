@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 networking_calico.plugins.ml2.drivers.calico.test.test_monitor_thread
-~~~~~~~~~~~
+~~~~~~~~~~
 
 Unit tests for the thread that monitors the periodic resync thread.
 """
@@ -56,13 +56,13 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.sleep_patcher.stop()
         super(TestResyncMonitorThread, self).tearDown()
 
-    def increment_epoch(self, curr_epoch):
-        return lambda _: setattr(self.driver, "_epoch", curr_epoch + 1)
+    def simulate_epoch_progression(self, init_epoch):
+        return lambda _: setattr(self.driver, "_epoch", init_epoch + 1)
 
     def test_monitor_does_nothing_when_not_master(self):
         """Test that a driver that is not master does not monitor."""
         self.driver.elector.master.return_value = False
-        self.mock_sleep.side_effect = self.increment_epoch(INITIAL_EPOCH)
+        self.mock_sleep.side_effect = self.simulate_epoch_progression(INITIAL_EPOCH)
 
         self.driver.resync_monitor_thread(INITIAL_EPOCH)
 
@@ -75,7 +75,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.driver.elector.master.return_value = True
         fake_resync_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
         self.driver.last_resync_time = fake_resync_time
-        self.mock_sleep.side_effect = self.increment_epoch(INITIAL_EPOCH)
+        self.mock_sleep.side_effect = self.simulate_epoch_progression(INITIAL_EPOCH)
 
         self.driver.resync_monitor_thread(INITIAL_EPOCH)
 
@@ -89,7 +89,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         """If interval is below max, no error should be logged."""
         lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
-        self.mock_sleep.side_effect = self.increment_epoch(INITIAL_EPOCH)
+        self.mock_sleep.side_effect = self.simulate_epoch_progression(INITIAL_EPOCH)
 
         self.driver.resync_monitor_thread(INITIAL_EPOCH)
 
@@ -117,7 +117,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.driver.last_resync_time = fake_resync_time_time
         curr_epoch = INITIAL_EPOCH
 
-        self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
+        self.mock_sleep.side_effect = self.simulate_epoch_progression(curr_epoch)
         self.driver.resync_monitor_thread(curr_epoch)
         curr_epoch += 1
 
@@ -128,11 +128,11 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         )
 
         # Resync
-        self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
+        self.mock_sleep.side_effect = self.simulate_epoch_progression(curr_epoch)
         self.driver.periodic_resync_thread(curr_epoch)
         curr_epoch += 1
 
-        self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
+        self.mock_sleep.side_effect = self.simulate_epoch_progression(curr_epoch)
         self.driver.resync_monitor_thread(curr_epoch)
 
         self.log_error.assert_called_once()
@@ -147,7 +147,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.driver.last_resync_time = fake_resync_time_time
 
         curr_epoch = INITIAL_EPOCH
-        self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
+        self.mock_sleep.side_effect = self.simulate_epoch_progression(curr_epoch)
         self.driver.resync_monitor_thread(INITIAL_EPOCH)
         curr_epoch += 1
 
@@ -157,7 +157,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
             self.log_error.call_args[0][0],
         )
 
-        self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
+        self.mock_sleep.side_effect = self.simulate_epoch_progression(curr_epoch)
         self.driver.resync_monitor_thread(curr_epoch)
 
         self.assertEqual(self.log_error.call_count, 2)
