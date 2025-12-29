@@ -1183,8 +1183,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                         # mark this resync as finished.
                         self.last_resync_time = datetime.now()
-                        LOG.info("The periodic resync finished after"
-                                f" {self.last_resync_time - start_time}")
+                        LOG.info(
+                            "The periodic resync finished after"
+                            f" {self.last_resync_time - start_time}"
+                        )
                     except Exception:
                         LOG.exception("Error in periodic resync thread.")
 
