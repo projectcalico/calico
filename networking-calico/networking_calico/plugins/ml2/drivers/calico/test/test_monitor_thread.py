@@ -51,10 +51,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.driver.policy_syncer = mock.Mock()
         self.driver.endpoint_syncer = mock.Mock()
         self.driver.provide_felix_config = mock.Mock()
-        self.compaction_patcher = mock.patch(
-            "networking_calico.plugins.ml2.drivers"
-            ".calico.mech_calico.check_request_etcd_compaction"
-        )
+
 
     def tearDown(self):
         self.sleep_patcher.stop()
@@ -127,8 +124,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
 
         # Resync
         self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
-        with self.compaction_patcher:
-            self.driver.periodic_resync_thread(curr_epoch)
+        self.driver.periodic_resync_thread(curr_epoch)
         curr_epoch += 1
 
         self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
