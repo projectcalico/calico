@@ -329,7 +329,7 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 			peerName = fmt.Sprintf("Mesh_%s", strings.ReplaceAll(peerIP, ":", "_"))
 		}
 
-		// Mesh peers have same AS, so use true for calico_export_to_bgp_peers
+		// Mesh peers are iBGP (same AS), so pass true (peer has same AS) to calico_export_to_bgp_peers
 		exportFilter := "calico_export_to_bgp_peers(true);\n    reject;"
 
 		peer := types.BirdBGPPeer{
@@ -625,11 +625,9 @@ func truncateBGPFilterName(name string) string {
 func (c *client) buildImportFilter(filters []string, ipVersion int) string {
 	var filterLines []string
 
-	// Determine which import field to check based on IP version
-	importField := "importV4"
+	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
 	if ipVersion == 6 {
-		importField = "importV6"
 		filterSuffix = "V6"
 	}
 
@@ -656,11 +654,9 @@ func (c *client) buildImportFilter(filters []string, ipVersion int) string {
 func (c *client) buildExportFilter(filters []string, peerAS, nodeAS string, ipVersion int) string {
 	var filterLines []string
 
-	// Determine which export field to check based on IP version
-	exportField := "exportV4"
+	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
 	if ipVersion == 6 {
-		exportField = "exportV6"
 		filterSuffix = "V6"
 	}
 
