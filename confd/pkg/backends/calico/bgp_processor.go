@@ -20,9 +20,9 @@ import (
 	"sort"
 	"strings"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 )
@@ -359,115 +359,69 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 
 // processGlobalPeers processes global BGP peers (remote and local)
 func (c *client) processGlobalPeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
-	logc := log.WithField("ipVersion", ipVersion)
-
-	// Determine peer path based on IP version
 	peerPath := "/calico/bgp/v1/global/peer_v4"
 	if ipVersion == 6 {
 		peerPath = "/calico/bgp/v1/global/peer_v6"
 	}
+	return c.processPeersFromPath(peerPath, "Global", config, nodeClusterID, ipVersion)
+}
 
-	// Process remote global peers
+// processNodePeers processes node-specific BGP peers (both remote and local)
+func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
+	peerPath := fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v4", NodeName)
+	if ipVersion == 6 {
+		peerPath = fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v6", NodeName)
+	}
+	return c.processPeersFromPath(peerPath, "Node", config, nodeClusterID, ipVersion)
+}
+
+// processPeersFromPath is a helper that processes both remote and local BGP peers from a given datastore path
+func (c *client) processPeersFromPath(peerPath, peerType string, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
+	logc := log.WithFields(map[string]interface{}{
+		"ipVersion": ipVersion,
+		"peerType":  peerType,
+		"path":      peerPath,
+	})
+
 	kvPairs, err := c.GetValues([]string{peerPath})
 	if err != nil {
-		logc.WithError(err).Debug("No global peers found or error retrieving them")
+		logc.WithError(err).Debug("No peers found or error retrieving them")
 		return nil
 	}
 
-	logc.Debugf("Found %d global peer entries", len(kvPairs))
+	logc.Debugf("Found %d peer entries", len(kvPairs))
 
+	// Unmarshal all peers once and separate into remote and local
+	var remotePeers, localPeers []bgpPeer
 	for key, value := range kvPairs {
-		logc.Debugf("Processing global peer key: %s", key)
 		var peerData bgpPeer
 		if err := json.Unmarshal([]byte(value), &peerData); err != nil {
 			logc.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
 			continue
 		}
 
-		// Skip local BGP peers in this pass
 		if peerData.LocalBGPPeer {
-			log.Debugf("Skipping local BGP peer at %s", key)
-			continue
-		}
-
-		peer := c.buildPeerFromData(&peerData, "Global", config, nodeClusterID, ipVersion)
-		if peer != nil {
-			config.Peers = append(config.Peers, *peer)
-			log.Debugf("Added global peer: %s", peer.Name)
+			localPeers = append(localPeers, peerData)
 		} else {
-			log.Debugf("buildPeerFromData returned nil for key %s", key)
+			remotePeers = append(remotePeers, peerData)
 		}
 	}
 
-	// Process global local BGP peers
-	for _, value := range kvPairs {
-		var peerData bgpPeer
-		if err := json.Unmarshal([]byte(value), &peerData); err != nil {
-			continue
+	// Process remote peers first
+	for _, peerData := range remotePeers {
+		peer := c.buildPeerFromData(&peerData, peerType, config, nodeClusterID, ipVersion)
+		if peer != nil {
+			config.Peers = append(config.Peers, *peer)
+			logc.Debugf("Added %s peer: %s", peerType, peer.Name)
 		}
+	}
 
-		// Only process local BGP peers in this pass
-		if !peerData.LocalBGPPeer {
-			continue
-		}
-
+	// Then process local BGP peers
+	for _, peerData := range localPeers {
 		peer := c.buildPeerFromData(&peerData, "Local_Workload", config, nodeClusterID, ipVersion)
 		if peer != nil {
 			config.Peers = append(config.Peers, *peer)
-			log.Debugf("Added local workload peer: %s", peer.Name)
-		}
-	}
-
-	return nil
-}
-
-// processNodePeers processes node-specific BGP peers (both remote and local)
-func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
-	// Determine peer path based on IP version
-	peerSuffix := "peer_v4"
-	if ipVersion == 6 {
-		peerSuffix = "peer_v6"
-	}
-	peerKey := fmt.Sprintf("/calico/bgp/v1/host/%s/%s", NodeName, peerSuffix)
-
-	// Process remote node-specific peers
-	kvPairs, err := c.GetValues([]string{peerKey})
-	if err == nil {
-		for _, value := range kvPairs {
-			var peerData bgpPeer
-			if err := json.Unmarshal([]byte(value), &peerData); err != nil {
-				continue
-			}
-
-			// Skip local BGP peers in this pass
-			if peerData.LocalBGPPeer {
-				continue
-			}
-
-			peer := c.buildPeerFromData(&peerData, "Node", config, nodeClusterID, ipVersion)
-			if peer != nil {
-				config.Peers = append(config.Peers, *peer)
-			}
-		}
-	}
-
-	// Process node-specific local BGP peers
-	if err == nil {
-		for _, value := range kvPairs {
-			var peerData bgpPeer
-			if err := json.Unmarshal([]byte(value), &peerData); err != nil {
-				continue
-			}
-
-			// Only process local BGP peers in this pass
-			if !peerData.LocalBGPPeer {
-				continue
-			}
-
-			peer := c.buildPeerFromData(&peerData, "Local_Workload", config, nodeClusterID, ipVersion)
-			if peer != nil {
-				config.Peers = append(config.Peers, *peer)
-			}
+			logc.Debugf("Added Local_Workload peer: %s", peer.Name)
 		}
 	}
 
