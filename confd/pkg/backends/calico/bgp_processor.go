@@ -686,6 +686,11 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 		}
 
 		for _, adv := range advertisements {
+			// Skip advertisements without a CIDR
+			if adv.CIDR == "" {
+				continue
+			}
+
 			rule := types.CommunityRule{
 				CIDR:          adv.CIDR,
 				AddStatements: make([]string, 0, len(adv.Communities)),
