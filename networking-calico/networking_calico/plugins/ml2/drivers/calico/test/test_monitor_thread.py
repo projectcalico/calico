@@ -52,7 +52,6 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.driver.endpoint_syncer = mock.Mock()
         self.driver.provide_felix_config = mock.Mock()
 
-
     def tearDown(self):
         self.sleep_patcher.stop()
         super(TestResyncMonitorThread, self).tearDown()
@@ -81,8 +80,10 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.driver.resync_monitor_thread(INITIAL_EPOCH)
 
         self.log_error.assert_called_once()
-        self.assertIn("The time since the last resync completion has surpassed",
-                      self.log_error.call_args[0][0])
+        self.assertIn(
+            "The time since the last resync completion has surpassed",
+            self.log_error.call_args[0][0],
+        )
 
     def test_monitor_no_error_if_interval_under_max(self):
         """If interval is below max, no error should be logged."""
@@ -110,7 +111,9 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         """Test that resync resets current interval duration to below max."""
         lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
-        fake_resync_time_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
+        fake_resync_time_time = datetime.now() - timedelta(
+            seconds=TEST_MAX_INTERVAL + 1
+        )
         self.driver.last_resync_time = fake_resync_time_time
         curr_epoch = INITIAL_EPOCH
 
@@ -119,8 +122,10 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         curr_epoch += 1
 
         self.log_error.assert_called_once()
-        self.assertIn("The time since the last resync completion has surpassed",
-                      self.log_error.call_args[0][0])
+        self.assertIn(
+            "The time since the last resync completion has surpassed",
+            self.log_error.call_args[0][0],
+        )
 
         # Resync
         self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
@@ -133,10 +138,12 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.log_error.assert_called_once()
 
     def test_errors_continue_to_log(self):
-        """Test that errors contine logging if resync does not occur."""
+        """Test that errors continue logging if resync does not occur."""
         lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
-        fake_resync_time_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
+        fake_resync_time_time = datetime.now() - timedelta(
+            seconds=TEST_MAX_INTERVAL + 1
+        )
         self.driver.last_resync_time = fake_resync_time_time
 
         curr_epoch = INITIAL_EPOCH
@@ -145,13 +152,16 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         curr_epoch += 1
 
         self.log_error.assert_called_once()
-        self.assertIn("The time since the last resync completion has surpassed",
-                      self.log_error.call_args[0][0])
+        self.assertIn(
+            "The time since the last resync completion has surpassed",
+            self.log_error.call_args[0][0],
+        )
 
         self.mock_sleep.side_effect = self.increment_epoch(curr_epoch)
         self.driver.resync_monitor_thread(curr_epoch)
 
         self.assertEqual(self.log_error.call_count, 2)
-        self.assertIn("The time since the last resync completion has surpassed",
-                      self.log_error.call_args[0][0])
-
+        self.assertIn(
+            "The time since the last resync completion has surpassed",
+            self.log_error.call_args[0][0],
+        )
