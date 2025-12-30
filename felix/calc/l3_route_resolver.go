@@ -153,9 +153,9 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 		addrs[a] = struct{}{}
 	}
 
-	// Clean up empty (uninitialized) addresses
+	// Clean up empty (uninitialized) or nil addresses
 	for a := range addrs {
-		if a == emptyV4Addr || a == emptyV6Addr {
+		if a == nil || a == emptyV4Addr || a == emptyV6Addr {
 			delete(addrs, a)
 		}
 	}
