@@ -104,6 +104,13 @@ func WithPublishImages(publish bool) Option {
 	}
 }
 
+func WithPublishCharts(publish bool) Option {
+	return func(r *CalicoManager) error {
+		r.publishCharts = publish
+		return nil
+	}
+}
+
 func WithPublishGitTag(publish bool) Option {
 	return func(r *CalicoManager) error {
 		r.publishTag = publish
@@ -135,6 +142,13 @@ func WithBuildImages(buildImages bool) Option {
 func WithImageRegistries(registries []string) Option {
 	return func(r *CalicoManager) error {
 		r.imageRegistries = registries
+		return nil
+	}
+}
+
+func WithHelmRegistries(registries []string) Option {
+	return func(r *CalicoManager) error {
+		r.helmRegistries = registries
 		return nil
 	}
 }

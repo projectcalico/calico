@@ -51,6 +51,9 @@ var (
 		"cni-plugin",
 	}
 
+	// Names of helm charts.
+	helmCharts = utils.HelmCharts
+
 	metadataFileName = "metadata.yaml"
 )
 
@@ -63,10 +66,12 @@ func NewManager(opts ...Option) *CalicoManager {
 		validateBranch:    true,
 		buildImages:       true,
 		publishImages:     true,
+		publishCharts:     true,
 		archiveImages:     true,
 		publishTag:        true,
 		publishGithub:     true,
 		imageRegistries:   defaultRegistries,
+		helmRegistries:    registry.DefaultHelmRegistries,
 		operatorRegistry:  operator.DefaultRegistry,
 		operatorImage:     operator.DefaultImage,
 		operatorGithubOrg: operator.DefaultOrg,
@@ -149,11 +154,15 @@ type CalicoManager struct {
 
 	// Fine-tuning configuration for publishing.
 	publishImages bool
+	publishCharts bool
 	publishTag    bool
 	publishGithub bool
 
 	// imageRegistries is the list of imageRegistries to which we should publish images.
 	imageRegistries []string
+
+	// helmRegistries is the list of OCI-based registries to which we should publish charts.
+	helmRegistries []string
 
 	// githubOrg is the GitHub organization to which we should publish releases.
 	githubOrg string
@@ -545,6 +554,11 @@ func (r *CalicoManager) PublishRelease() error {
 			// Error is logged and ignored as a failure from ISS should not halt the release process.
 			logrus.WithError(err).Error("Failed to scan images")
 		}
+	}
+
+	// Publish helm charts.
+	if err := r.publishHelmCharts(); err != nil {
+		return fmt.Errorf("failed to publish helm charts: %s", err)
 	}
 
 	if r.isHashRelease {
@@ -1075,7 +1089,7 @@ Attached to this release are the following artifacts:
 
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
-- {helm_chart}: Calico Helm v3 chart.
+- {helm_chart}: Calico Helm 3 chart (also hosted at oci://{helm_registry}/tigera-operator).
 - ocp.tgz: Manifest bundle for OpenShift.
 
 Additional links:
@@ -1094,6 +1108,7 @@ Additional links:
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
 		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", r.calicoVersion),
+		"{helm_registry}", r.helmRegistries[0],
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -1168,6 +1183,49 @@ func (r *CalicoManager) publishContainerImages() error {
 				break
 			}
 		}
+	}
+	return nil
+}
+
+func (r *CalicoManager) publishHelmCharts() error {
+	if !r.publishCharts {
+		logrus.Info("Skipping publishing helm charts")
+		return nil
+	}
+	for _, chart := range helmCharts {
+		for _, reg := range r.helmRegistries {
+			if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion())), reg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (r *CalicoManager) publishHelmChart(chart, registry string) error {
+	// We allow for a certain number of retries when publishing each chart to a registry, since
+	// network flakes can occasionally result in images failing to push.
+	maxRetries := 1
+	attempt := 0
+	args := []string{"push", chart, registry}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		args = append(args, "--debug")
+	}
+	for {
+		out, err := r.runner.RunInDir(r.repoRoot, "./bin/helm", args, nil)
+		if err != nil {
+			if attempt < maxRetries {
+				logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
+				attempt++
+				continue
+			}
+			logrus.Error(out)
+			return fmt.Errorf("publish %s to %s: %s", chart, registry, err)
+		}
+
+		// Success - move on to the next.
+		logrus.Info(out)
+		break
 	}
 	return nil
 }

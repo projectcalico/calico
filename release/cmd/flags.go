@@ -126,6 +126,11 @@ var (
 		Usage:   "Override default registries for the release. Repeat for multiple registries.",
 		Sources: cli.EnvVars("REGISTRIES"), // avoid DEV_REGISTRIES as it is already used by the build system (lib.Makefile).
 	}
+	helmRegistryFlag = &cli.StringSliceFlag{
+		Name:    "helm-registry",
+		Usage:   "Override default OCI-based helm chart registries for the release. Repeat for multiple registries.",
+		Sources: cli.EnvVars("HELM_REGISTRIES"),
+	}
 
 	archOptions = []string{"amd64", "arm64", "ppc64le", "s390x"}
 	archFlag    = &cli.StringSliceFlag{
@@ -168,6 +173,12 @@ var (
 		Usage:   publishImagesFlag.Usage,
 		Sources: publishImagesFlag.Sources,
 		Value:   false,
+	}
+	publishChartsFlag = &cli.BoolFlag{
+		Name:    "publish-charts",
+		Usage:   "Publish Helm charts to the registry",
+		Sources: cli.EnvVars("PUBLISH_CHARTS"),
+		Value:   true,
 	}
 
 	archiveImagesFlag = &cli.BoolFlag{

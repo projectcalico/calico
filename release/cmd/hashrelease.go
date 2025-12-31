@@ -249,6 +249,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithHashrelease(*hashrel, *serverCfg),
 					calico.WithPublishImages(c.Bool(publishHashreleaseImagesFlag.Name)),
+					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
 					calico.WithPublishHashrelease(c.Bool(publishHashreleaseFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
@@ -264,6 +265,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return fmt.Errorf("failed to retrieve images for hashrelease: %w", err)
 				}
 				opts = append(opts, calico.WithComponents(components))
+				if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
+					opts = append(opts, calico.WithHelmRegistries(reg))
+				}
 				r := calico.NewManager(opts...)
 				if err := r.PublishRelease(); err != nil {
 					return err
@@ -349,7 +353,9 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 func hashreleasePublishFlags() []cli.Flag {
 	f := append(gitFlags,
 		registryFlag,
+		helmRegistryFlag,
 		publishHashreleaseImagesFlag,
+		publishChartsFlag,
 		archFlag,
 		publishHashreleaseFlag,
 		latestFlag,

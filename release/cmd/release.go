@@ -151,6 +151,9 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
+				if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
+					opts = append(opts, calico.WithHelmRegistries(reg))
+				}
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},

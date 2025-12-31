@@ -52,6 +52,10 @@ const (
 	TigeraOrg = "tigera"
 )
 
+var HelmCharts = []string{
+	"tigera-operator",
+}
+
 var once sync.Once
 
 var (
