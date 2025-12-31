@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -42,7 +43,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -246,26 +246,7 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 						}
 
 						// Make sure that the network policy is a K8s network policy
-						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
-							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
-						}
-					}
-				case "globalnetworkpolicies":
-					// For globalnetworkpolicies, having K8s cluster network policies should not throw an error
-					objs, err := meta.ExtractList(resource)
-					if err != nil {
-						return fmt.Errorf("error extracting global network policies for inspection: %s", err)
-					}
-
-					for _, obj := range objs {
-						metaObj, ok := obj.(v1.ObjectMetaAccessor)
-						if !ok {
-							return fmt.Errorf("unable to convert Calico global network policy for inspection")
-						}
-
-						// Make sure that the global network policy is a K8s cluster network policy
-						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
-							!strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) {
+						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), converter.KubernetesNetworkPolicyEtcdPrefix) {
 							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
 						}
 					}
