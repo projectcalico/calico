@@ -437,6 +437,46 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
+		"Log rules should be correctly rendered with rate limits",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			rrConfigPrefix := rrConfigNormal
+			rrConfigPrefix.LogActionRateLimit = "50/minute"
+			rrConfigPrefix.LogPrefix = "foobar"
+			renderer := NewRenderer(rrConfigPrefix)
+			logRule := in
+			logRule.Action = "log"
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(ContainSubstring(expMatch))
+			logRateLimitMatch := fmt.Sprintf("-m limit --limit %s", rrConfigPrefix.LogActionRateLimit)
+			Expect(rules[0].Match.Render()).To(ContainSubstring(logRateLimitMatch))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: rrConfigPrefix.LogPrefix}))
+
+			// With both rate and burst.
+			rrConfigPrefix.LogActionRateLimitBurst = 90
+			renderer = NewRenderer(rrConfigPrefix)
+			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(ContainSubstring(expMatch))
+			logRateLimitMatch = fmt.Sprintf("-m limit --limit %s --limit-burst %d",
+				rrConfigPrefix.LogActionRateLimit, rrConfigPrefix.LogActionRateLimitBurst)
+			Expect(rules[0].Match.Render()).To(ContainSubstring(logRateLimitMatch))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: rrConfigPrefix.LogPrefix}))
+
+			// Enabling flow log must not have any effect
+			rrConfigPrefix.FlowLogsEnabled = true
+			renderer = NewRenderer(rrConfigPrefix)
+			rules2 := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+			Expect(rules2).To(Equal(rules))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
 		"Deny (DROP) rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigNormal.FlowLogsEnabled = false
