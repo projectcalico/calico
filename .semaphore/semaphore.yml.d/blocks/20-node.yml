@@ -94,7 +94,6 @@
         - export VM_DISK_SIZE=80GB
         - mkdir artifacts
         - ./.semaphore/cache-test-artifacts
-        - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
       - name: "Node: kind-cluster tests"
         execution_time_limit:
@@ -104,7 +103,6 @@
     epilogue:
       always:
         commands:
-          - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
           - '../.semaphore/vms/publish-reports "Node: KinD STs"'
           - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
     secrets:
