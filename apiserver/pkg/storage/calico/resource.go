@@ -20,7 +20,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	k8swatch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/storage"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/features"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -243,6 +246,12 @@ func checkPreconditions(key string, preconditions *storage.Preconditions, out ru
 // and send it in an "ADDED" event, before watch starts.
 func (rs *resourceStore) Watch(ctx context.Context, key string, opts storage.ListOptions) (k8swatch.Interface, error) {
 	logrus.Tracef("Watch called with key: %v on resource %v\n", key, rs.resourceName)
+
+	// Return error to force k8s-client to fall back to LIST/WATCH as long as calico-apiserver does not support the WatchList feature gate
+	if !utilfeature.DefaultMutableFeatureGate.Enabled(features.WatchList) && opts.SendInitialEvents != nil && *opts.SendInitialEvents {
+		return nil, aapierrors.NewBadRequest("WatchList feature with sendInitialEvents=true is not supported, client should fallback to LIST/WATCH")
+	}
+
 	ns, name, err := NamespaceAndNameFromKey(key, rs.isNamespaced)
 	if err != nil {
 		return nil, err
@@ -259,6 +268,12 @@ func (rs *resourceStore) Watch(ctx context.Context, key string, opts storage.Lis
 // and send them in "ADDED" events, before watch starts.
 func (rs *resourceStore) WatchList(ctx context.Context, key string, opts storage.ListOptions) (k8swatch.Interface, error) {
 	logrus.Tracef("WatchList called with key: %v on resource %v\n", key, rs.resourceName)
+
+	// Return error to force k8s-client to fall back to LIST/WATCH as long as calico-apiserver does not support the WatchList feature gate
+	if !utilfeature.DefaultMutableFeatureGate.Enabled(features.WatchList) && opts.SendInitialEvents != nil && *opts.SendInitialEvents {
+		return nil, aapierrors.NewBadRequest("WatchList feature with sendInitialEvents=true is not supported, client should fall back to LIST/WATCH")
+	}
+
 	ns, name, err := NamespaceAndNameFromKey(key, rs.isNamespaced)
 	if err != nil {
 		return nil, err
