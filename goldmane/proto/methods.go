@@ -21,8 +21,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // NewFlow returns a new proto.Flow object with all fields initialized and non-nil.
@@ -38,7 +36,7 @@ func NewFlow() *Flow {
 // TODO: This is a temporary solution - we should be pushing the structured PolicyHit representation
 // further down the stack, rather than converting between string / struct.
 func (h *PolicyHit) ToString() (string, error) {
-	// Format is: "<policy index>|<tier>|<namePart>|<action>|<rule index>"
+	// Format is: "<policy index>|<tier>|<kind>:[<ns>/]<name>|<action>|<rule index>"
 	tmpl := "%d|%s|%s|%s|%d"
 
 	if err := h.Validate(); err != nil {
@@ -82,6 +80,14 @@ func (h *PolicyHit) Validate() error {
 		if h.Namespace != "" {
 			return fmt.Errorf("unexpected namespace for global policy")
 		}
+	case PolicyKind_CalicoNetworkPolicy,
+		PolicyKind_NetworkPolicy,
+		PolicyKind_StagedKubernetesNetworkPolicy,
+		PolicyKind_StagedNetworkPolicy:
+		// Namespaced policies - require a namespace.
+		if h.Namespace == "" {
+			return fmt.Errorf("missing namespace for namespaced policy")
+		}
 	case PolicyKind_EndOfTier:
 		if h.Trigger == nil {
 			return fmt.Errorf("EndOfTier hit missing trigger")
@@ -107,27 +113,21 @@ func makeNamePart(h *PolicyHit) (string, error) {
 	var namePart string
 	switch h.Kind {
 	case PolicyKind_GlobalNetworkPolicy:
-		namePart = h.Name
+		namePart = fmt.Sprintf("gnp:%s", h.Name)
 	case PolicyKind_CalicoNetworkPolicy:
-		namePart = fmt.Sprintf("%s/%s", h.Namespace, h.Name)
+		namePart = fmt.Sprintf("np:%s/%s", h.Namespace, h.Name)
 	case PolicyKind_NetworkPolicy:
-		namePart = fmt.Sprintf("%s/knp.default.%s", h.Namespace, h.Name)
+		namePart = fmt.Sprintf("knp:%s/%s", h.Namespace, h.Name)
 	case PolicyKind_StagedKubernetesNetworkPolicy:
-		namePart = fmt.Sprintf("%s/staged:knp.default.%s", h.Namespace, h.Name)
+		namePart = fmt.Sprintf("sknp:%s/%s", h.Namespace, h.Name)
 	case PolicyKind_StagedGlobalNetworkPolicy:
-		namePart = fmt.Sprintf("%s.staged:%s", h.Tier, h.Name)
+		namePart = fmt.Sprintf("sgnp:%s", h.Name)
 	case PolicyKind_StagedNetworkPolicy:
-		namePart = fmt.Sprintf("%s/%s.staged:%s", h.Namespace, h.Tier, h.Name)
+		namePart = fmt.Sprintf("snp:%s/%s", h.Namespace, h.Name)
 	case PolicyKind_ClusterNetworkPolicy:
-		if h.Tier == names.KubeAdminTierName {
-			namePart = names.K8sCNPAdminTierNamePrefix + h.Name
-		} else {
-			namePart = names.K8sCNPBaselineTierNamePrefix + h.Name
-		}
+		namePart = fmt.Sprintf("kcnp:%s", h.Name)
 	case PolicyKind_Profile:
-		// Profile names are __PROFILE__.name. The name part may include indicators of the kind of
-		// profile - e.g., __PROFILE__.kns.default, __PROFILE__.ksa.svcacct.
-		namePart = fmt.Sprintf("__PROFILE__.%s", h.Name)
+		namePart = fmt.Sprintf("pro:%s", h.Name)
 	default:
 		logrus.WithFields(h.fields()).Error("Unexpected policy kind")
 		return "", fmt.Errorf("unexpected policy kind: %v", h.Kind)
@@ -175,61 +175,39 @@ func HitFromString(s string) (*PolicyHit, error) {
 	var kind PolicyKind
 	var name string
 	var ns string
-	nameParts := strings.Split(namePart, "/")
+
+	// Parse the name part to determine the kind.
+	switch strings.Split(namePart, ":")[0] {
+	case "gnp":
+		kind = PolicyKind_GlobalNetworkPolicy
+	case "snp":
+		kind = PolicyKind_StagedNetworkPolicy
+	case "np":
+		kind = PolicyKind_CalicoNetworkPolicy
+	case "knp":
+		kind = PolicyKind_NetworkPolicy
+	case "sknp":
+		kind = PolicyKind_StagedKubernetesNetworkPolicy
+	case "sgnp":
+		kind = PolicyKind_StagedGlobalNetworkPolicy
+	case "kcnp":
+		kind = PolicyKind_ClusterNetworkPolicy
+	case "pro":
+		kind = PolicyKind_Profile
+	default:
+		return nil, fmt.Errorf("unexpected policy kind in name part: %s", namePart)
+	}
+
+	// Determine the name and namespace (if applicable).
+	namespacedName := strings.SplitN(namePart, ":", 2)[1]
+	nameParts := strings.Split(namespacedName, "/")
 	if len(nameParts) == 1 {
 		// No namespace, must be a global policy.
-		// Name format is "(staged:)name".
-		n := nameParts[0]
-
-		if strings.Contains(n, "staged:") {
-			// StagedGlobalNetworkPolicy.
-			// Take form of "tier.staged:name", so we can trim the entire prefix off.
-			kind = PolicyKind_StagedGlobalNetworkPolicy
-			n = strings.Split(n, "staged:")[1]
-		} else if strings.HasPrefix(n, names.K8sCNPAdminTierNamePrefix) {
-			kind = PolicyKind_ClusterNetworkPolicy
-			n = strings.TrimPrefix(n, names.K8sCNPAdminTierNamePrefix)
-		} else if strings.HasPrefix(n, names.K8sCNPBaselineTierNamePrefix) {
-			kind = PolicyKind_ClusterNetworkPolicy
-			n = strings.TrimPrefix(n, names.K8sCNPBaselineTierNamePrefix)
-		} else if strings.HasPrefix(n, "__PROFILE__.") {
-			kind = PolicyKind_Profile
-			n = strings.TrimPrefix(n, "__PROFILE__.")
-		} else {
-			kind = PolicyKind_GlobalNetworkPolicy
-		}
-
-		// Assign the name after processing prefixes.
-		name = n
+		name = nameParts[0]
 	} else if len(nameParts) == 2 {
 		// Namespaced.
-		// Name format for Calico policies is "(staged:)name".
-		// Name format for K8s policies is "(staged:)knp.default.name".
-		n := nameParts[1]
 		ns = nameParts[0]
-		if strings.HasPrefix(n, "staged:knp.default.") {
-			// StagedKubernetesNetworkPolicy.
-			kind = PolicyKind_StagedKubernetesNetworkPolicy
-			n = strings.TrimPrefix(n, "staged:knp.default.")
-		} else if strings.HasPrefix(n, "knp.default.") {
-			// KubernetesNetworkPolicy.
-			kind = PolicyKind_NetworkPolicy
-			n = strings.TrimPrefix(n, "knp.default.")
-		} else {
-			// This is either a Calico NetworkPolicy or Calico StagedNetworkPolicy.
-			if strings.Contains(n, "staged:") {
-				// Calico StagedNetworkPolicy.
-				// Take form of "tier.staged:name", so we can trim the entire prefix off.
-				kind = PolicyKind_StagedNetworkPolicy
-				n = strings.Split(n, "staged:")[1]
-			} else {
-				// Calico NetworkPolicy.
-				kind = PolicyKind_CalicoNetworkPolicy
-			}
-		}
-
-		// Assign the name after processing prefixes.
-		name = n
+		name = nameParts[1]
 	}
 
 	// Verify the name is valid.
