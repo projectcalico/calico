@@ -25,7 +25,7 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import re
 import threading
@@ -1125,14 +1125,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 if self.elector.master():
                     LOG.info("I am master: monitoring periodic resync")
 
-                    time_delta = datetime.now() - self.last_resync_time
+                    curr_time = datetime.now()
+                    time_delta = curr_time - self.last_resync_time
                     if time_delta.seconds > cfg.CONF.calico.resync_max_interval_secs:
                         LOG.error(
                             "The time since the last resync completion has surpassed"
                             f" {cfg.CONF.calico.resync_max_interval_secs} seconds"
                         )
 
-                    eventlet.sleep(cfg.CONF.calico.resync_max_interval_secs / 5)
+                    deadline = self.last_resync_time + timedelta(
+                        seconds=cfg.CONF.calico.resync_max_interval_secs
+                    )
+                    time_left = (deadline - curr_time).seconds
+                    polling_rate = cfg.CONF.calico.resync_max_interval_secs / 5
+                    sleep_time = time_left if deadline > curr_time else polling_rate
+                    eventlet.sleep(sleep_time)
                 else:
                     LOG.debug("I am not master")
                     eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
