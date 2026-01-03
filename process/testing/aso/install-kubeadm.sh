@@ -57,7 +57,7 @@ function copy_scripts_to_linux_nodes() {
 
     echo "Copying scripts to Linux node ${node_num} (${linux_eip})..."
     scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ./linux/*.sh winfv@${linux_eip}:~/ || {
+      ./linux/*.sh aso@${linux_eip}:~/ || {
       echo "ERROR: Failed to copy scripts to Linux node ${node_num}"
       return 1
     }
@@ -84,7 +84,7 @@ function copy_scripts_to_windows_nodes() {
 
     echo "Copying scripts to Windows node ${node_num} (${windows_eip})..."
     scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ./windows/*.ps1 winfv@${windows_eip}:c:\\k\\ || {
+      ./windows/*.ps1 aso@${windows_eip}:c:\\k\\ || {
       echo "ERROR: Failed to copy scripts to Windows node ${node_num}"
       return 1
     }
@@ -147,7 +147,7 @@ function setup_kubeadm_cluster() {
   # Copy kubeconfig to local directory
   echo "Copying kubeconfig from master node..."
   scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    winfv@${LINUX_EIP}:/home/winfv/.kube/config ./kubeconfig
+    aso@${LINUX_EIP}:/home/aso/.kube/config ./kubeconfig
 
   # Fix the API server address in kubeconfig - replace internal IP with external IP
   echo "Updating API server address in kubeconfig to use external IP ${LINUX_EIP}..."
@@ -240,7 +240,7 @@ function join_windows_worker_node() {
   echo "Joining Windows Node ${display_name} (${windows_eip})"
   echo "====================================="
 
-  local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${windows_eip} powershell"
+  local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@${windows_eip} powershell"
 
   # Install kubeadm on Windows node
   echo "Installing kubeadm on Windows node ${display_name}..."
@@ -264,11 +264,11 @@ function copy_files_from_linux() {
   mkdir -p ./windows/kubeadm
 
   # Copy kubeconfig
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${LINUX_EIP}:/home/winfv/.kube/config ./windows/kubeadm/config
+  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no aso@${LINUX_EIP}:/home/aso/.kube/config ./windows/kubeadm/config
 
   # Copy Kubernetes PKI certificates (needed for authentication)
   ${MASTER_CONNECT_COMMAND} "sudo cp /etc/kubernetes/pki/ca.crt /tmp/ca.crt && sudo chmod 644 /tmp/ca.crt"
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${LINUX_EIP}:/tmp/ca.crt ./windows/kubeadm/
+  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no aso@${LINUX_EIP}:/tmp/ca.crt ./windows/kubeadm/
 
   echo "Kubernetes certificates copied successfully"
 }
@@ -301,7 +301,7 @@ function prepare_windows_node() {
   echo "====================================="
 
   # Create SSH connect command
-  local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${windows_eip} powershell"
+  local windows_connect_command="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@${windows_eip} powershell"
 
   # Create c:\k directory on Windows node if it doesn't exist
   echo "Creating c:\\k directory..."
@@ -309,7 +309,7 @@ function prepare_windows_node() {
 
   # Copy windows directory contents to c:\k\
   echo "Copying Windows files to node..."
-  scp -r -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* winfv@${windows_eip}:c:\\k\\
+  scp -r -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* aso@${windows_eip}:c:\\k\\
 
   # Enable containers feature (requires reboot)
   echo "Enabling Windows Containers feature..."
