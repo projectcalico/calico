@@ -51,8 +51,8 @@ if ! grep -q "SystemdCgroup = true" /etc/containerd/config.toml; then
 
   echo "Enabling SystemdCgroup in containerd config"
   # Enable systemd cgroup driver (required for Kubernetes)
-  sed -i "s/SystemdCgroup = false/SystemdCgroup = true/g" /etc/containerd/config.toml
-  systemctl restart containerd
+  sudo sed -i "s/SystemdCgroup = false/SystemdCgroup = true/g" /etc/containerd/config.toml
+  sudo systemctl restart containerd
 fi
 
 # Ensure containerd is running
