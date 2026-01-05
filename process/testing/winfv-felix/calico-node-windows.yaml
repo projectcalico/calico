@@ -27,6 +27,8 @@ spec:
         - command:
             - $env:CONTAINER_SANDBOX_MOUNT_POINT/opt/cni/bin/install.exe
           env:
+            - name: CNI_PLUGIN_TYPE
+              value: Calico
             - name: CNI_BIN_DIR
               value: /host/opt/cni/bin
             - name: CNI_CONF_NAME

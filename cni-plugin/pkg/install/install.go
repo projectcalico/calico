@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -64,10 +65,8 @@ type config struct {
 }
 
 func (c config) skipBinary(binary string) bool {
-	for _, name := range c.SkipCNIBinaries {
-		if name == binary {
-			return true
-		}
+	if slices.Contains(c.SkipCNIBinaries, binary) {
+		return true
 	}
 	return false
 }
