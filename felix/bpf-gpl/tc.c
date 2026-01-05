@@ -104,29 +104,27 @@ int calico_tc_main(struct __sk_buff *skb)
 #endif
 			CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
 			return TC_ACT_UNSPEC;
-		} else {
-			/* If we are on tunnel and we do not have the key set, we cannot short-cirquit */
-			if (!(CALI_F_TUNNEL &&
+		/* If we are on tunnel and we do not have the key set, we cannot short-circuit */
+		} else if (!(CALI_F_TUNNEL &&
 				 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
+			/* This generates a bit more richer output for logging */
+			if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 				/* This generates a bit more richer output for logging */
-				if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
-					/* This generates a bit more richer output for logging */
-					DECLARE_TC_CTX(_ctx,
-						.skb = skb,
-						.fwd = {
-							.res = TC_ACT_UNSPEC,
-							.reason = CALI_REASON_UNKNOWN,
-						},
-						.ipheader_len = IP_SIZE,
-					);
-					struct cali_tc_ctx *ctx = &_ctx;
+				DECLARE_TC_CTX(_ctx,
+					.skb = skb,
+					.fwd = {
+						.res = TC_ACT_UNSPEC,
+						.reason = CALI_REASON_UNKNOWN,
+					},
+					.ipheader_len = IP_SIZE,
+				);
+				struct cali_tc_ctx *ctx = &_ctx;
 
-					CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
-					parse_packet_ip(ctx);
-					CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
-				}
-				return TC_ACT_UNSPEC;
+				CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
+				parse_packet_ip(ctx);
+				CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
 			}
+			return TC_ACT_UNSPEC;
 		}
 	}
 
