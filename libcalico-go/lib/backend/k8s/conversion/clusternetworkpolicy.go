@@ -35,10 +35,7 @@ import (
 // K8sClusterNetworkPolicyToCalico converts a k8s ClusterNetworkPolicy to a model.KVPair.
 func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName, tier := k8sClusterNetPolNameAndTier(kcnp)
-	if policyName == "" {
-		return nil, fmt.Errorf("Invalid cluster network policy tier %v", kcnp.Spec.Tier)
-	}
+	tier := clusterNetworkPolicyTier(kcnp)
 
 	order := float64(kcnp.Spec.Priority)
 	errorTracker := cerrors.ErrorClusterNetworkPolicyConversion{PolicyName: kcnp.Name}
@@ -99,7 +96,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 
 	gnp := apiv3.NewGlobalNetworkPolicy()
 	gnp.ObjectMeta = metav1.ObjectMeta{
-		Name:              policyName,
+		Name:              kcnp.Name,
 		CreationTimestamp: kcnp.CreationTimestamp,
 		UID:               uid,
 		ResourceVersion:   kcnp.ResourceVersion,
@@ -117,7 +114,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 	// Build the KVPair.
 	kvp := &model.KVPair{
 		Key: model.ResourceKey{
-			Name: policyName,
+			Name: kcnp.Name,
 			Kind: apiv3.KindGlobalNetworkPolicy,
 		},
 		Value:    gnp,
@@ -141,14 +138,14 @@ func clusterNetPolicyTypes(ingressRules []apiv3.Rule, egressRules []apiv3.Rule) 
 	return policyTypes
 }
 
-func k8sClusterNetPolNameAndTier(kcnp *clusternetpol.ClusterNetworkPolicy) (string, string) {
+func clusterNetworkPolicyTier(kcnp *clusternetpol.ClusterNetworkPolicy) string {
 	switch kcnp.Spec.Tier {
 	case clusternetpol.AdminTier:
-		return names.K8sCNPAdminTierNamePrefix + kcnp.Name, names.KubeAdminTierName
+		return names.KubeAdminTierName
 	case clusternetpol.BaselineTier:
-		return names.K8sCNPBaselineTierNamePrefix + kcnp.Name, names.KubeBaselineTierName
+		return names.KubeBaselineTierName
 	default:
-		return "", ""
+		return ""
 	}
 }
 
