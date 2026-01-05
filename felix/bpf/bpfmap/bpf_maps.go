@@ -157,6 +157,9 @@ func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
 
 	mps := ret.slice()
 	for i, bpfMap := range mps {
+		if bpfMap == nil {
+			continue
+		}
 		err := bpfMap.EnsureExists()
 		if err != nil {
 			for j := 0; j < i; j++ {
@@ -217,6 +220,8 @@ func (i *IPMaps) slice() []maps.Map {
 		i.SrMsgMap,
 		i.CtNatsMap,
 		i.MaglevMap,
+		i.IPFragMap,
+		i.IPFragFwdMap,
 	}
 }
 
