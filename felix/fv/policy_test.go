@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,7 +77,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		felixConfig.Spec.LogPrefix = "aXy9%n%%t %k %p"
 		LogActionRateLimitBurst := 20
 		felixConfig.Spec.LogActionRateLimitBurst = &LogActionRateLimitBurst
-		felixConfig.Spec.LogActionRateLimit = "100/hour"
+		logActionRateLimit := "100/hour"
+		felixConfig.Spec.LogActionRateLimit = &logActionRateLimit
 		_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -104,7 +105,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 				binary = "ip6tables-save"
 			}
 			logLimitPattern := fmt.Sprintf("-m limit --limit %s --limit-burst %d",
-				felixConfig.Spec.LogActionRateLimit, LogActionRateLimitBurst,
+				logActionRateLimit, LogActionRateLimitBurst,
 			)
 			getRules := func() bool {
 				output, err := felix.ExecOutput(binary, "-t", "filter")
@@ -121,7 +122,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 				ipFamily = "ip6"
 			}
 			logLimitPattern := fmt.Sprintf("limit rate %s burst %d packets",
-				felixConfig.Spec.LogActionRateLimit, LogActionRateLimitBurst,
+				logActionRateLimit, LogActionRateLimitBurst,
 			)
 			getRules := func() bool {
 				output, err := felix.ExecOutput("nft", "list", "table", ipFamily, "calico")

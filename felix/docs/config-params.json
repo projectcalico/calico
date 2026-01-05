@@ -733,8 +733,8 @@
           "NameEnvVar": "FELIX_LogActionRateLimit",
           "NameYAML": "logActionRateLimit",
           "NameGoAPI": "LogActionRateLimit",
-          "StringSchema": "String matching regex `^(\\d+/(second|minute|hour|day))?$`",
-          "StringSchemaHTML": "String matching regex <code>^(\\d+/(second|minute|hour|day))?$</code>",
+          "StringSchema": "String matching regex `^(\\d+/(?:second|minute|hour|day))?$`",
+          "StringSchemaHTML": "String matching regex <code>^(\\d+/(?:second|minute|hour|day))?$</code>",
           "StringDefault": "",
           "ParsedDefault": "",
           "ParsedDefaultJSON": "\"\"",
@@ -750,7 +750,7 @@
           "Description": "Sets the rate of hitting a Log action. The value must be in the format \"N/unit\",\nwhere N is a number and unit is one of: second, minute, hour, or day. For example: \"10/second\" or \"100/hour\".",
           "DescriptionHTML": "<p>Sets the rate of hitting a Log action. The value must be in the format \"N/unit\",\nwhere N is a number and unit is one of: second, minute, hour, or day. For example: \"10/second\" or \"100/hour\".</p>",
           "UserEditable": true,
-          "GoType": "string"
+          "GoType": "*string"
         },
         {
           "Group": "Process: Logging",

@@ -55,7 +55,7 @@ var (
 	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	HostAddressRegexp   = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
-	LogActionRateRegexp = regexp.MustCompile(`^(\d+/(second|minute|hour|day))?$`)
+	LogActionRateRegexp = regexp.MustCompile(`^(\d+/(?:second|minute|hour|day))?$`)
 )
 
 // Source of a config value.  Values from higher-numbered sources override
