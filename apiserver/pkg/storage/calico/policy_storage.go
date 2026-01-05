@@ -5,7 +5,6 @@ package calico
 import (
 	"context"
 	"reflect"
-	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,8 +13,6 @@ import (
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
@@ -26,25 +23,11 @@ func NewNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, factory
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*v3.NetworkPolicy)
-		if strings.HasPrefix(res.Name, names.K8sNetworkPolicyNamePrefix) {
-			return nil, cerrors.ErrorOperationNotSupported{
-				Operation:  "create or apply",
-				Identifier: obj,
-				Reason:     "kubernetes network policies must be managed through the kubernetes API",
-			}
-		}
 		return c.NetworkPolicies().Create(ctx, res, oso)
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*v3.NetworkPolicy)
-		if strings.HasPrefix(res.Name, names.K8sNetworkPolicyNamePrefix) {
-			return nil, cerrors.ErrorOperationNotSupported{
-				Operation:  "update or apply",
-				Identifier: obj,
-				Reason:     "kubernetes network policies must be managed through the kubernetes API",
-			}
-		}
 		return c.NetworkPolicies().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
@@ -53,13 +36,6 @@ func NewNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, factory
 	}
 	deleteFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
 		odo := opts.(options.DeleteOptions)
-		if strings.HasPrefix(name, names.K8sNetworkPolicyNamePrefix) {
-			return nil, cerrors.ErrorOperationNotSupported{
-				Operation:  "delete",
-				Identifier: name,
-				Reason:     "kubernetes network policies must be managed through the kubernetes API",
-			}
-		}
 		return c.NetworkPolicies().Delete(ctx, ns, name, odo)
 	}
 	listFn := func(ctx context.Context, c clientv3.Interface, opts clientOpts) (resourceListObject, error) {

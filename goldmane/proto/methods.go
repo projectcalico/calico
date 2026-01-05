@@ -19,9 +19,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/projectcalico/calico/felix/types"
 	"github.com/sirupsen/logrus"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
+
+	"github.com/projectcalico/calico/felix/types"
 )
 
 // NewFlow returns a new proto.Flow object with all fields initialized and non-nil.

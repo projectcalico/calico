@@ -34,9 +34,9 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 var title = cases.Title(language.English)
@@ -224,7 +224,7 @@ Description:
 					if !ok {
 						return fmt.Errorf("unable to convert Calico network policy for inspection")
 					}
-					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
+					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), converter.KubernetesNetworkPolicyEtcdPrefix) {
 						filtered = append(filtered, obj)
 					}
 				}
@@ -232,34 +232,6 @@ Description:
 				err = meta.SetList(resource, filtered)
 				if err != nil {
 					return fmt.Errorf("unable to remove Kubernetes network policies for export: %s", err)
-				}
-				results.Resources[i] = resource
-			}
-
-			// Skip exporting Kubernetes cluster network policies.
-			if r == "globalnetworkpolicies" {
-				objs, err := meta.ExtractList(resource)
-				if err != nil {
-					return fmt.Errorf("error extracting global network policies for inspection before exporting: %s", err)
-				}
-
-				filtered := []runtime.Object{}
-				for _, obj := range objs {
-					metaObj, ok := obj.(v1.ObjectMetaAccessor)
-					if !ok {
-						return fmt.Errorf("unable to convert Calico global network policy for inspection")
-					}
-					if strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
-						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) {
-						continue
-					}
-					filtered = append(filtered, obj)
-
-				}
-
-				err = meta.SetList(resource, filtered)
-				if err != nil {
-					return fmt.Errorf("unable to remove Kubernetes cluster network policies for export: %s", err)
 				}
 				results.Resources[i] = resource
 			}
