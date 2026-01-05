@@ -5,6 +5,8 @@ spec:
         - args:
             - $env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/felix-service.ps1
           env:
+            - name: CNI_PLUGIN_TYPE
+              value: Calico
             - name: FELIX_HEALTHENABLED
               value: "true"
           image: docker.io/library/node-windows:latest
@@ -13,6 +15,8 @@ spec:
         - args:
             - $env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/node-service.ps1
           env:
+            - name: CNI_PLUGIN_TYPE
+              value: Calico
             - name: FELIX_HEALTHENABLED
               value: "true"
           image: docker.io/library/node-windows:latest
@@ -27,6 +31,8 @@ spec:
         - command:
             - $env:CONTAINER_SANDBOX_MOUNT_POINT/opt/cni/bin/install.exe
           env:
+            - name: CNI_PLUGIN_TYPE
+              value: Calico
             - name: CNI_BIN_DIR
               value: /host/opt/cni/bin
             - name: CNI_CONF_NAME
