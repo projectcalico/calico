@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,75 @@ set -m
 
 my_dir="$(dirname $0)"
 repo_dir="$my_dir/../.."
+vm_name_prefix=$1
+artifacts_dir="$repo_dir/artifacts"
+zone=${ZONE:-europe-west3-c}
+: "${IMAGE_FAMILY:=ubuntu-minimal-2204-lts}"
+: "${MAX_RUN_DURATION:=4h}"
+disk_size=${VM_DISK_SIZE:-20GB}
+
+source "$my_dir/ssh-options"
 
 # shellcheck source=../../felix/.semaphore/batches.sh
 source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
+
+###### Create the test VMs ######
+
+names=""
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  if [ -n "$names" ]; then
+    names="$names,$vm_name"
+  else
+    names="$vm_name"
+  fi
+done
+
+# Labels for the GCP instances.  These can only contain alphanumerics,
+# dashes, underscores (so we can't just default to the semaphore job name).
+# Sanitize the branch name to be compatible with GCP label requirements.
+branch_label="${SEMAPHORE_GIT_BRANCH:-unknown}"
+branch_label="$(echo "$branch_label" | tr '[:upper:]' '[:lower:]')"
+branch_label="${branch_label//[^a-z0-9_-]/-}"
+labels="ci-runner=true"
+labels+=",ci-job-type=${CI_JOB_TYPE_LABEL:-${SEMAPHORE_GIT_REF_TYPE:-unknown}}"
+labels+=",ci-group=${CI_GROUP_LABEL:-unknown}"
+labels+=",ci-job=${CI_JOB_LABEL:-unknown}"
+labels+=",ci-is-rerun=${SEMAPHORE_PIPELINE_RERUN:-false}"
+labels+=",ci-branch=${branch_label}"
+labels+=",ci-project=${CALICO_DIR_NAME}"
+if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+  labels+=",ci-pr-number=${SEMAPHORE_GIT_PR_NUMBER}"
+fi
+if [ -n "${SEMAPHORE_WORKFLOW_ID}" ]; then
+  labels+=",ci-workflow-id=${SEMAPHORE_WORKFLOW_ID}"
+fi
+if [ -n "${SEMAPHORE_JOB_ID}" ]; then
+  labels+=",ci-job-id=${SEMAPHORE_JOB_ID}"
+fi
+if [ "${SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE}" = "true" ]; then
+  labels+=",ci-scheduled=true"
+else
+  labels+=",ci-scheduled=false"
+fi
+
+# Do a bulk create; this is faster and it saves API quota.
+echo "Creating test VMs in bulk..."
+gcloud --quiet compute instances bulk create \
+       --predefined-names="$names" \
+       --zone=${zone} \
+       --machine-type=n4-standard-4 \
+       --image-family=${IMAGE_FAMILY} \
+       --image-project=ubuntu-os-cloud \
+       --boot-disk-size=$disk_size \
+       --boot-disk-type=hyperdisk-balanced \
+       --max-run-duration="${MAX_RUN_DURATION}" \
+       --instance-termination-action=DELETE \
+       --labels="${labels}" \
+       --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
+       --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
+
+###### Configure VMs, run tests and shut them down ######
 
 log_monitor_regexps=(
   "(?<!Decode)Failure"
@@ -51,43 +117,82 @@ for r in "${log_monitor_regexps[@]}"; do
 done
 monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 
-vm_name_prefix=$1
-artifacts_dir="$repo_dir/artifacts"
-
-echo
-echo "===== Starting tests ====="
-echo
-
-pids=()
+test_pid=()
 monitor_pids=()
 log_files=()
+
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
+  vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
   log_file="$artifacts_dir/test-$batch.log"
+  ssh_cmd=( env "VM_NAME=$vm_name" "ZONE=$zone" "$my_dir/on-test-vm" )
+  prefix="[batch=${batch}]"
   touch "$log_file"
 
-  (run_batch "$my_dir/on-test-vm" $batch $vm_name $log_file) &
+  # Run the configuration, test, and, teardown in a subshell so we can
+  # background it.
+  (
+    set +e
+
+    conf_log_file="$artifacts_dir/configure-vm-$batch.log"
+    echo "$prefix Configuring test VM $vm_name. Redirecting log to $conf_log_file."
+    if "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
+      echo "$prefix Configuration of VM $vm_name SUCCEEDED."
+    else
+      echo "$prefix Configuration of VM $vm_name FAILED.  Log file will be uploaded as artifact $conf_log_file. "
+      exit 1
+    fi
+
+    echo "$prefix Test batch $batch STARTING (sending logs to $log_file)..."
+    run_batch "$my_dir/on-test-vm" "$batch" "$vm_name" "$log_file"
+    rc=$?
+    if [ $rc = 0 ]; then
+      echo "$prefix Test batch $batch SUCCEEDED."
+    else
+      echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $log_file."
+    fi
+
+    collect_log_file="$artifacts_dir/collect-artifacts-$batch.log"
+    if "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
+      echo "$prefix Remote artifact collection SUCCEEDED"
+    else
+      echo "$prefix Remote artifact collection FAILED"
+    fi
+    if scp "${SSH_OPTIONS[@]}" -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" >> "$collect_log_file" 2>&1; then
+      echo "$prefix Artifact retrieval SUCCEEDED"
+    else
+      echo "$prefix Artifact retrieval FAILED"
+    fi
+
+    echo "$prefix Deleting test VM $vm_name"
+    if gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
+      echo "$prefix Deletion of test VM $vm_name SUCCEEDED"
+    else
+      echo "$prefix Deletion of test VM $vm_name FAILED, will retry at end of job. "
+    fi
+    exit $rc
+  ) &
   pid=$!
 
-  log_files+=( $log_file )
-  pids+=( $pid )
+  log_files+=( "$log_file" )
+  test_pid+=( "$pid" )
 
-  prefix="[batch=${batch}]"
-  echo "$prefix Started test batch in background with PID=$pid; monitoring its log ($log_file)."
   (
     # Redirect tail's stdin from /dev/null to prevent waiting
     # forever on reads in semaphore CI
-    tail -F $log_file < /dev/null | \
+    tail -F "$log_file" < /dev/null | \
       grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
       sed 's/.*/'"${prefix}"' &/' | \
       grep --perl --line-buffered -v '^\[batch=[^\]]+\]\s+$';
   ) &
   mon_pid=$!
-  monitor_pids+=( $mon_pid )
+  monitor_pids+=( "$mon_pid" )
 done
 
 final_result=0
 
+# Give the batches time to emit their start-up logs.
+sleep 5
 echo
 echo "===== Waiting for background test runners to finish ===="
 echo
@@ -95,14 +200,11 @@ echo
 summary=()
 for i in "${!batches[@]}"; do
   batch=${batches[$i]}
-  pid=${pids[$i]}
-  echo "Waiting for test batch $batch to finish (PID=$pid)..."
+  pid=${test_pid[$i]}
   if wait "$pid"; then
     summary+=( "Test batch $batch SUCCEEDED" )
-    echo "===== Test batch $batch SUCCEEDED (PID=$pid).  Log file will be uploaded as artifact ${log_files[$i]}. ====="
   else
     summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact ${log_files[$i]}" )
-    echo "===== Test batch $batch FAILED (PID=$pid).  Log file will be uploaded as artifact ${log_files[$i]}. ====="
     final_result=1
   fi
 done
@@ -111,7 +213,7 @@ echo
 echo "===== Shutting down test monitors ====="
 for pid in "${monitor_pids[@]}"; do
   # Note: negative PID to kill the entire process group.
-  kill -TERM -$pid || true
+  kill -TERM "-$pid" || true
 done
 
 echo "===== Results summary ====="
