@@ -45,7 +45,7 @@ done
 # Sanitize the branch name to be compatible with GCP label requirements.
 branch_label="${SEMAPHORE_GIT_BRANCH:-unknown}"
 branch_label="$(echo "$branch_label" | tr '[:upper:]' '[:lower:]')"
-branch_label="$(echo "$branch_label" | sed 's/[^a-z0-9_-]/-/g')"
+branch_label="${branch_label//[^a-z0-9_-]/-}"
 labels="ci-runner=true"
 labels+=",ci-job-type=${CI_JOB_TYPE_LABEL:-${SEMAPHORE_GIT_REF_TYPE:-unknown}}"
 labels+=",ci-group=${CI_GROUP_LABEL:-unknown}"
@@ -55,6 +55,12 @@ labels+=",ci-branch=${branch_label}"
 labels+=",ci-project=${CALICO_DIR_NAME}"
 if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
   labels+=",ci-pr-number=${SEMAPHORE_GIT_PR_NUMBER}"
+fi
+if [ -n "${SEMAPHORE_WORKFLOW_ID}" ]; then
+  labels+=",ci-workflow-id=${SEMAPHORE_WORKFLOW_ID}"
+fi
+if [ -n "${SEMAPHORE_JOB_ID}" ]; then
+  labels+=",ci-job-id=${SEMAPHORE_JOB_ID}"
 fi
 if [ "${SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE}" = "true" ]; then
   labels+=",ci-scheduled=true"
