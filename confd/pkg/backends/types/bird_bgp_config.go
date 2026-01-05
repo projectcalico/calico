@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ type BirdBGPConfig struct {
 	NodeIPv6         string
 	ASNumber         string
 	RouterID         string
-	RouterIDComment  string
 	Peers            []BirdBGPPeer
 	Filters          map[string]string
 	Communities      []CommunityRule
@@ -50,7 +49,6 @@ type BirdBGPPeer struct {
 	NextHopKeep     bool
 	AddPaths        string
 	Passive         bool
-	PassiveComment  string // Comment for passive mode (only for auto-passive)
 	GracefulRestart string // restart time value
 	KeepaliveTime   string
 	NumAllowLocalAs string
