@@ -49,6 +49,7 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -1279,6 +1280,36 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 		iface.info.endpointID = &wlID
 		return true // Force interface to be marked dirty in case policies changed.
 	})
+
+    m.addAllowSourceSets(wlID, wl)
+}
+
+func (m *bpfEndpointManager) addAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
+    allowSources := wl.AllowSpoofedSourcePrefixes
+
+    for _, cidrString := range allowSources {
+        cidr, err := ip.CIDRFromString(cidrString)
+        if err != nil {
+            logrus.WithField("wep", wlID).WithField("cidr", cidrString).Warn("Invalid allowed source CIDR, skipping")
+            continue
+        }
+
+        var mapAddError error
+        if cidr.Version() == 4 {
+            entry := allowsources.MakeAllowSourcesEntry(cidr)
+            mapAddError = m.v4.AllowSourcesMap.Update(entry.AsBytes(), allowsources.DummyValue)
+        } else if cidr.Version() == 6 {
+            entry := allowsources.MakeAllowSourcesEntryV6(cidr)
+            mapAddError = m.v6.AllowSourcesMap.Update(entry.AsBytes(), allowsources.DummyValue)
+        }
+
+        if mapAddError != nil {
+            logrus.WithField("wep", wlID).WithField("cidr", cidrString).WithError(mapAddError).Warn("Failed to add allowed source CIDR")
+            return
+        }
+
+        logrus.WithField("wep", wlID).WithField("cidr", cidrString).Debug("Successfully added allowed source CIDR")
+    }
 }
 
 // onWorkloadEndpointRemove removes the workload from the cache and the index, which maps from policy to workload.
@@ -1300,6 +1331,35 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 	})
 	// Remove policy debug info if any
 	m.removeIfaceAllPolicyDebugInfo(oldWEP.Name)
+    m.removeAllowSourceSets(wlID, oldWEP)
+}
+
+func (m *bpfEndpointManager) removeAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
+    allowSources := wl.AllowSpoofedSourcePrefixes
+
+    for _, cidrString := range allowSources {
+        cidr, err := ip.CIDRFromString(cidrString)
+        if err != nil {
+            logrus.WithField("wep", wlID).WithField("cidr", cidrString).Warn("Invalid allowed source CIDR, skipping")
+            continue
+        }
+
+        var mapDelError error
+        if cidr.Version() == 4 {
+            entry := allowsources.MakeAllowSourcesEntry(cidr)
+            mapDelError = m.v4.AllowSourcesMap.Delete(entry.AsBytes())
+        } else if cidr.Version() == 6 {
+            entry := allowsources.MakeAllowSourcesEntryV6(cidr)
+            mapDelError = m.v6.AllowSourcesMap.Delete(entry.AsBytes())
+        }
+
+        if mapDelError != nil {
+            logrus.WithField("wep", wlID).WithField("cidr", cidrString).WithError(mapDelError).Warn("Failed to remove allowed source CIDR")
+            return
+        }
+
+        logrus.WithField("wep", wlID).WithField("cidr", cidrString).Debug("Successfully removed allowed source CIDR")
+    }
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.

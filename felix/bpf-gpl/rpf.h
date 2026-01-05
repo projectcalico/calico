@@ -8,6 +8,7 @@
 #include "types.h"
 #include "skb.h"
 #include "routes.h"
+#include "allowsources.h"
 
 #define RPF_RES_FAIL		0
 #define RPF_RES_STRICT		1
@@ -18,10 +19,13 @@ static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt
 {
         CALI_DEBUG("Workload RPF check src=" IP_FMT " skb iface=%d.",
                         debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
-        if (!r) {
+        if (!r && !cali_allowsource_lookup(&ctx->state->ip_src)) {
                 CALI_INFO("Workload RPF fail: missing route.");
                 return RPF_RES_FAIL;
-        }
+		} else if (!r) {
+				CALI_INFO("Workload RPF bypass: allowing spoofed source IP");
+				return RPF_RES_STRICT;
+		}
 #ifdef IPVER6
 	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
 		return RPF_RES_STRICT;
