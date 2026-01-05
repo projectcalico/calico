@@ -54,7 +54,8 @@ var (
 	StringRegexp             = regexp.MustCompile(`^.*$`)
 	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
-	HostAddressRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
+	HostAddressRegexp   = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
+	LogActionRateRegexp = regexp.MustCompile(`^(\d+/(?:second|minute|hour|day))?$`)
 )
 
 // Source of a config value.  Values from higher-numbered sources override
@@ -329,6 +330,8 @@ type Config struct {
 	IptablesMangleAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
 	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
 	LogPrefix                   string `config:"string;calico-packet"`
+	LogActionRateLimit          string `config:"log-rate;"`
+	LogActionRateLimitBurst     int    `config:"int(0,);5"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
@@ -1104,6 +1107,11 @@ func loadParams() {
 				Delimiter:           ",",
 				Msg:                 "list contains invalid Linux interface name or regex pattern",
 				Schema:              "Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with `/`.",
+			}
+		case "log-rate":
+			param = &RegexpParam{
+				Regexp: LogActionRateRegexp,
+				Msg:    "invalid log rate limit",
 			}
 		case "regexp":
 			param = &RegexpPatternParam{

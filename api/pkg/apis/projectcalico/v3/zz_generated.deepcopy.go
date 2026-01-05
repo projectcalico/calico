@@ -1234,6 +1234,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.LogActionRateLimit != nil {
+		in, out := &in.LogActionRateLimit, &out.LogActionRateLimit
+		*out = new(string)
+		**out = **in
+	}
+	if in.LogActionRateLimitBurst != nil {
+		in, out := &in.LogActionRateLimitBurst, &out.LogActionRateLimitBurst
+		*out = new(int)
+		**out = **in
+	}
 	if in.IPIPEnabled != nil {
 		in, out := &in.IPIPEnabled, &out.IPIPEnabled
 		*out = new(bool)
