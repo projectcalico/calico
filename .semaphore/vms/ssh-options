@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-# Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
-
-my_dir="$(dirname "$0")"
-vm_ip="$("$my_dir/vm-ip")"
-source "$my_dir/ssh-options"
-
-exec ssh "ubuntu@${vm_ip}" -n -A "${SSH_OPTIONS[@]}" "$@"
+SSH_OPTIONS=(
+  -o ServerAliveInterval=10
+  -o StrictHostKeyChecking=yes
+  -o BatchMode=yes
+  -o UpdateHostKeys=no
+)
+export SSH_OPTIONS
