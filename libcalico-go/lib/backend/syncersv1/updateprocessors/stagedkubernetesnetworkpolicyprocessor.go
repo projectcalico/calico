@@ -40,11 +40,8 @@ func ConvertStagedKubernetesNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (mod
 		return model.PolicyKey{}, errors.New("Missing Name or Namespace field to create a v1 StagedKubernetesNetworkPolicy Key")
 	}
 
-	c := conversion.NewConverter()
-	name := c.StagedKubernetesNetworkPolicyToStagedName(v3key.Name)
-
 	return model.PolicyKey{
-		Name:      name,
+		Name:      v3key.Name,
 		Namespace: v3key.Namespace,
 		Kind:      apiv3.KindStagedKubernetesNetworkPolicy,
 	}, nil
