@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -121,8 +121,7 @@ test_pid=()
 monitor_pids=()
 log_files=()
 
-for i in "${!batches[@]}"; do
-  batch=${batches[$i]}
+for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
   log_file="$artifacts_dir/test-$batch.log"
@@ -130,6 +129,8 @@ for i in "${!batches[@]}"; do
   prefix="[batch=${batch}]"
   touch "$log_file"
 
+  # Run the configuration, test, and, teardown in a subshell so we can
+  # background it.
   (
     set +e
 
