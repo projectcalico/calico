@@ -111,9 +111,6 @@ for r in "${log_monitor_regexps[@]}"; do
 done
 monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 
-vm_name_prefix=$1
-artifacts_dir="$repo_dir/artifacts"
-
 test_pid=()
 monitor_pids=()
 log_files=()
@@ -139,7 +136,7 @@ for i in "${!batches[@]}"; do
       exit 1
     fi
 
-    echo "$prefix Started test batch in background with PID=$pid; monitoring its log ($log_file)."
+    echo "$prefix Test batch $batch STARTING (sending logs to $log_file)..."
     run_batch "$my_dir/on-test-vm" "$batch" "$vm_name" "$log_file"
     rc=$?
     if [ $rc = 0 ]; then

@@ -16,7 +16,7 @@
 set -e
 
 if [ -z "${VM_NAME}" ]; then
-  echo "VM_NAME is not set' it should be set to the name of the test VM" 1>&2
+  echo "VM_NAME is not set; it should be set to the name of the test VM" 1>&2
   exit 1
 fi
 if [ -z "${ZONE}" ]; then
