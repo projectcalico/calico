@@ -1,0 +1,38 @@
+#ifndef __CALI_ALLOWSOURCES_H__
+#define __CALI_ALLOWSOURCES_H__
+
+#include <linux/in.h>
+#include "bpf.h"
+
+// WARNING: must be kept in sync with the definitions in bpf/allowsources/map.go
+struct allow_sources_key {
+    __u32 prefixlen;
+    ipv46_addr_t addr;
+} __attribute__((packed));
+
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_sprefix, cali_sprefix,,
+#else
+CALI_MAP_NAMED(cali_v4_sprefix, cali_sprefix,,
+#endif
+    BPF_MAP_TYPE_LPM_TRIE,
+    struct allow_sources_key,
+    __u32,
+    1024*1024,
+    BPF_F_NO_PREALLOC)
+
+static CALI_BPF_INLINE bool cali_allowsource_lookup(ipv46_addr_t *addr)
+{
+    struct allow_sources_key k;
+#ifdef IPVER6
+    k.prefixlen = 128;
+#else
+    k.prefixlen = 32;
+#endif
+    k.addr = *addr;
+    __u32 *val = cali_sprefix_lookup_elem(&k);
+    bpf_printk("Allow source lookup src=%pI4 found=%d", &k.addr, val != NULL);
+    return val != NULL;
+}
+
+# endif /* __CALI_ALLOWSOURCES_H__ */
