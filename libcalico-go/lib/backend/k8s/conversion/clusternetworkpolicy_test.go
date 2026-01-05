@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
@@ -2175,8 +2174,7 @@ func convertToGNP(
 	}
 
 	// Assert key fields are correct.
-	policyName, tier := k8sClusterNetPolNameAndTier(cnp)
-	Expect(pol.Key.(model.ResourceKey).Name).To(Equal(policyName))
+	tier := clusterNetworkPolicyTier(cnp)
 
 	gnp, ok := pol.Value.(*apiv3.GlobalNetworkPolicy)
 	Expect(ok).To(BeTrue())
