@@ -40,6 +40,21 @@ const (
 	maxBytesPerOp          = 10000.0 // Max allowed bytes allocated per op
 )
 
+var flows []*types.Flow
+
+func init() {
+	now := time.Now()
+	for i := 0; i < 1000; i++ {
+		randomNumber := rand.IntN(1000)
+		flowStartTime := now.Add(time.Duration(randomNumber) * time.Millisecond)
+		flows = append(flows,
+			types.ProtoToFlow(
+				newRandomFlow(flowStartTime.Unix()),
+			),
+		)
+	}
+}
+
 func setupBenchmark(b *testing.B) func() {
 	// Set up logrus to use b.Logf via custom writer
 	writer := &logrusWriter{b}
@@ -71,8 +86,8 @@ func BenchmarkGoldmaneReceive(b *testing.B) {
 	<-gm.Run(now)
 	defer gm.Stop()
 
-	// Create a test flow
-	flow := types.ProtoToFlow(newRandomFlow(now))
+	flowCount := len(flows)
+	idx := rand.IntN(flowCount)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -81,7 +96,12 @@ func BenchmarkGoldmaneReceive(b *testing.B) {
 	runtime.GC()
 
 	for b.Loop() {
-		gm.Receive(flow)
+		gm.Receive(flows[idx])
+
+		idx++
+		if idx == flowCount {
+			idx = 0
+		}
 	}
 
 	// Cleanup and give GC a moment to settle before measuring memory
@@ -117,8 +137,7 @@ func BenchmarkGoldmaneReceiveParallel(b *testing.B) {
 	<-gm.Run(now)
 	defer gm.Stop()
 
-	// Create a test flow
-	flow := types.ProtoToFlow(newRandomFlow(now))
+	flowCount := len(flows)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -127,8 +146,15 @@ func BenchmarkGoldmaneReceiveParallel(b *testing.B) {
 	runtime.GC()
 
 	b.RunParallel(func(pb *testing.PB) {
+		idx := rand.IntN(flowCount)
+
 		for pb.Next() {
-			gm.Receive(flow)
+			gm.Receive(flows[idx])
+
+			idx++
+			if idx == flowCount {
+				idx = 0
+			}
 		}
 	})
 
@@ -185,15 +211,21 @@ func newRandomFlow(start int64) *proto.Flow {
 		0: "test-ns",
 		1: "test-ns-2",
 		2: "test-ns-3",
+		3: "test-ns-4",
+		4: "test-ns-5",
 	}
 	tiers := map[int]string{
 		0: "tier-1",
 		1: "tier-2",
-		2: "default",
+		2: "tier-3",
+		3: "default",
 	}
 	policies := map[int]string{
 		0: "policy-1",
 		1: "policy-2",
+		2: "policy-3",
+		3: "policy-4",
+		4: "policy-5",
 	}
 	indices := map[int]int64{
 		0: 0,
