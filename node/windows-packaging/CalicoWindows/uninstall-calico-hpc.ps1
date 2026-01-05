@@ -38,43 +38,46 @@ function Remove-CalicoService($ServiceName)
     }
 }
 
-if ("$env:CNI_NET_DIR" -eq $null)
-{
-    Write-Host "CNI_NET_DIR env var not set, skipping Calico CNI config cleanup"
-} elseif (-not (Test-Path "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_NET_DIR"))
-{
-    Write-Host "$env:CNI_NET_DIR dir does not exist, skipping Calico CNI config cleanup"
-} else
-{
-    $cniConfFile = "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_NET_DIR/10-calico.conf"
-        if (Test-Path $cniConfFile) {
-            Write-Host "Removing Calico CNI conf file at $cniConfFile ..."
-                rm $cniConfFile
-        }
+# Only clean up CNI dirs if using Calico CNI
+if ("$env:CNI_PLUGIN_TYPE" -eq "Calico") {
+    if ("$env:CNI_NET_DIR" -eq $null)
+    {
+        Write-Host "CNI_NET_DIR env var not set, skipping Calico CNI config cleanup"
+    } elseif (-not (Test-Path "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_NET_DIR"))
+    {
+        Write-Host "$env:CNI_NET_DIR dir does not exist, skipping Calico CNI config cleanup"
+    } else
+    {
+        $cniConfFile = "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_NET_DIR/10-calico.conf"
+            if (Test-Path $cniConfFile) {
+                Write-Host "Removing Calico CNI conf file at $cniConfFile ..."
+                    rm $cniConfFile
+            }
 
-    if (Test-Path "$env:CNI_CONF_NAME") {
-        $cniConfListFile = "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_NET_DIR/$env:CNI_CONF_NAME"
-            if (Test-Path $cniConfListFile) {
-                Write-Host "Removing Calico CNI conf file at $cniConfListFile ..."
-                    rm $cniConfListFile
+        if (Test-Path "$env:CNI_CONF_NAME") {
+            $cniConfListFile = "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_NET_DIR/$env:CNI_CONF_NAME"
+                if (Test-Path $cniConfListFile) {
+                    Write-Host "Removing Calico CNI conf file at $cniConfListFile ..."
+                        rm $cniConfListFile
+                }
+        }
+    }
+
+
+    if ("$env:CNI_BIN_DIR" -eq $null)
+    {
+        Write-Host "CNI_BIN_DIR env var not set, skipping Calico CNI binary cleanup"
+    } elseif (-not (Test-Path "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_BIN_DIR"))
+    {
+        Write-Host "$env:CNI_BIN_DIR dir does not exist, skipping Calico CNI binary cleanup"
+    } else
+    {
+        $cniBinPath = "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_BIN_DIR/calico*.exe"
+            if (Test-Path $cniBinPath) {
+                Write-Host "Removing Calico CNI binaries at $cniBinPath ..."
+                    rm $cniBinPath
             }
     }
-}
-
-
-if ("$env:CNI_BIN_DIR" -eq $null)
-{
-    Write-Host "CNI_BIN_DIR env var not set, skipping Calico CNI binary cleanup"
-} elseif (-not (Test-Path "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_BIN_DIR"))
-{
-    Write-Host "$env:CNI_BIN_DIR dir does not exist, skipping Calico CNI binary cleanup"
-} else
-{
-    $cniBinPath = "$env:CONTAINER_SANDBOX_MOUNT_POINT/$env:CNI_BIN_DIR/calico*.exe"
-        if (Test-Path $cniBinPath) {
-            Write-Host "Removing Calico CNI binaries at $cniBinPath ..."
-                rm $cniBinPath
-        }
 }
 
 Write-Host "Stopping and removing Calico services if they are present..."
@@ -83,9 +86,13 @@ Remove-CalicoService CalicoFelix
 Remove-CalicoService CalicoNode
 Remove-CalicoService CalicoUpgrade
 
-Write-Host "Stopping and removing kube-proxy service if it is present..."
-Write-Host "It is recommended to run kube-proxy as kubernetes daemonset instead"
-Remove-CalicoService kube-proxy
+# Only remove kube-proxy service if using Calico CNI (the recommended kube-proxy
+# daemonset from sig-windows only supports Calico CNI)
+if ("$env:CNI_PLUGIN_TYPE" -eq "Calico") {
+    Write-Host "Stopping and removing kube-proxy service if it is present..."
+    Write-Host "It is recommended to run kube-proxy as kubernetes daemonset instead"
+    Remove-CalicoService kube-proxy
+}
 
 Write-Host "Logging containerd CNI bin and conf dir paths:"
 Get-Content "$env:ProgramFiles/containerd/config.toml" | Select-String -Pattern "^(\s)*bin_dir = (.)*$"
