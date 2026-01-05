@@ -47,7 +47,12 @@ fi
 # Verify systemd cgroup is enabled
 if ! grep -q "SystemdCgroup = true" /etc/containerd/config.toml; then
   echo "WARNING: SystemdCgroup is not enabled in containerd config"
-  echo "This may cause issues with Kubernetes. Please check vmss-linux.yaml extension."
+  # echo "This may cause issues with Kubernetes. Please check vmss-linux.yaml extension."
+
+  echo "Enabling SystemdCgroup in containerd config"
+  # Enable systemd cgroup driver (required for Kubernetes)
+  sudo sed -i "s/SystemdCgroup = false/SystemdCgroup = true/g" /etc/containerd/config.toml
+  sudo systemctl restart containerd
 fi
 
 # Ensure containerd is running
