@@ -56,7 +56,6 @@ type Converter interface {
 	IsScheduled(pod *kapiv1.Pod) bool
 	IsHostNetworked(pod *kapiv1.Pod) bool
 	HasIPAddress(pod *kapiv1.Pod) bool
-	StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string
 	K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error)
 	K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNetworkPolicy) (*model.KVPair, error)
 	EndpointSliceToKVP(svc *discovery.EndpointSlice) (*model.KVPair, error)
@@ -243,11 +242,6 @@ func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 	return podIPNets, nil
 }
 
-// StagedKubernetesNetworkPolicyToStagedName converts a StagedKubernetesNetworkPolicy name into a StagedNetworkPolicy name
-func (c converter) StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string {
-	return names.K8sNetworkPolicyNamePrefix + stagedK8sName
-}
-
 // EndpointSliceToKVP converts a k8s EndpointSlice to a model.KVPair.
 func (c converter) EndpointSliceToKVP(slice *discovery.EndpointSlice) (*model.KVPair, error) {
 	return &model.KVPair{
@@ -282,9 +276,6 @@ func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
 
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
 func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error) {
-	// Pull out important fields.
-	policyName := names.K8sNetworkPolicyNamePrefix + np.Name
-
 	// We insert all the NetworkPolicy Policies at order 1000.0 after conversion.
 	// This order might change in future.
 	order := float64(1000.0)
@@ -360,7 +351,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	// Create the NetworkPolicy.
 	policy := apiv3.NewNetworkPolicy()
 	policy.ObjectMeta = metav1.ObjectMeta{
-		Name:              policyName,
+		Name:              np.Name,
 		Namespace:         np.Namespace,
 		CreationTimestamp: np.CreationTimestamp,
 		UID:               uid,
@@ -377,7 +368,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	// Build the KVPair.
 	kvp := &model.KVPair{
 		Key: model.ResourceKey{
-			Name:      policyName,
+			Name:      np.Name,
 			Namespace: np.Namespace,
 			Kind:      apiv3.KindNetworkPolicy,
 		},
