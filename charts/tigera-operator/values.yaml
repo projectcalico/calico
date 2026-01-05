@@ -10,7 +10,9 @@ imagePullSecrets: {}
 # here: https://docs.tigera.io/calico/latest/reference/installation/api#installationspec
 installation:
   enabled: true
-
+  # Uncomment to enable prometheus metrics reporting for node and typha. 
+  # nodeMetricsPort: 9090
+  # typhaMetricsPort: 9091
   # Disable CSI driver. Default: /var/lib/kubelet
   kubeletVolumePluginPath: "None"
 
