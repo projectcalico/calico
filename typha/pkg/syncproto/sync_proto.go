@@ -416,6 +416,13 @@ func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 			}
 		}
 	}
+
+	// If the key supports upgrade, do it now that we've used the key to parse the value.
+	if k, ok := parsedKey.(model.LegacyKey); ok {
+		parsedKey = k.Upgrade()
+		log.Debugf("Upgraded legacy key %+v to %+v", k, parsedKey)
+	}
+
 	revStr := ""
 	switch r := s.Revision.(type) {
 	case string:

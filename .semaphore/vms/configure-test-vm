@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,12 +45,7 @@ if [[ -z "$vm_pub_key" ]]; then
   exit 22
 fi
 
-vm_ip=$(gcloud compute instances describe "${vm_name}" --zone="${zone}" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
-
-# Prime on-test-vm's cache.
-ip_cache_file="/tmp/vm_ip_${vm_name}_${zone}"
-echo "$vm_ip" > "$ip_cache_file"
-
+vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
 echo "$vm_ip ssh-ed25519 $vm_pub_key" >> ~/.ssh/known_hosts
 
 ssh_cmd=( env "VM_NAME=$vm_name" "ZONE=$zone" "$my_dir/on-test-vm" )
@@ -90,3 +85,7 @@ set -x
   tar -xzf /tmp/working-copy.tgz && \
   ${CALICO_DIR_NAME}/${COMPONENT}/.semaphore/load-test-artifacts"
 
+if [ "$ENABLE_JIT_HARDENING" = "true" ]; then
+  echo "Enabling BPF JIT hardening on test VM"
+  "${ssh_cmd[@]}" sudo sysctl -w net.core.bpf_jit_harden=2
+fi

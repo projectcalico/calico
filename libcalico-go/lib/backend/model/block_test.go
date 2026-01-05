@@ -23,6 +23,14 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
+func mustParseCIDR(s string) net.IPNet {
+	_, ipNet, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return *ipNet
+}
+
 var _ = Describe("AllocationBlock tests", func() {
 	It("should calculate non-affine allocations correctly", func() {
 		affinity := "host:myhost"
