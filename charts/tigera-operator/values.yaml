@@ -10,7 +10,7 @@ imagePullSecrets: {}
 # here: https://docs.tigera.io/calico/latest/reference/installation/api#installationspec
 installation:
   enabled: true
-  # Uncomment to enable prometheus metrics reporting for node and typha. 
+  # Uncomment to enable prometheus metrics reporting for node and typha.
   # nodeMetricsPort: 9090
   # typhaMetricsPort: 9091
   # Disable CSI driver. Default: /var/lib/kubelet
@@ -30,14 +30,14 @@ installation:
 
   # Valid options: EKS, GKE, AKS, RKE2, OpenShift, DockerEnterprise, TKG, Kind.
   # If empty the operator will attempt to automatically determine the current provider.
-  kubernetesProvider: ""
+  # kubernetesProvider: ""
 
-  cni:
-    # "Calico" (default), "AmazonVPC", "GKE", "AzureVNET", "HostLocal"
-    type: "Calico"
-    ipam:
-      # "Calico" (default), "HostLocal", "AmazonVPC", "AzureVNET"
-      type: "Calico"
+  # cni:
+  #   # "Calico" (default), "AmazonVPC", "GKE", "AzureVNET", "HostLocal"
+  #   type: "Calico"
+  #   ipam:
+  #     # "Calico" (default), "HostLocal", "AmazonVPC", "AzureVNET"
+  #     type: "Calico"
 
   # calicoNetwork:
   #   # "Enabled" (default) or "Disabled"
@@ -71,15 +71,15 @@ installation:
 
   # Enable FIPS compliance mode (Requires FIPS compliant cluster/images)
   # Only supported for Variant=Calico.
-  fipsMode: "Disabled"
+  # fipsMode: "Disabled"
 
   # Configure log severity (Info, Debug, Warning, Error, Fatal)
-  logging:
-    cni:
-      logSeverity: Info
-      logFileMaxSize: 100Mi
-      logFileMaxAgeDays: 30 # Days
-      logFileMaxCount: 10
+  # logging:
+  #   cni:
+  #     logSeverity: Info
+  #     logFileMaxSize: 100Mi
+  #     logFileMaxAgeDays: 30 # Days
+  #     logFileMaxCount: 10
 
 # apiServer configures the Calico API server, needed for interacting with
 # the projectcalico.org/v3 suite of APIs.
