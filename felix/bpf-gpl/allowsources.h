@@ -31,7 +31,6 @@ static CALI_BPF_INLINE bool cali_allowsource_lookup(ipv46_addr_t *addr)
 #endif
     k.addr = *addr;
     __u32 *val = cali_sprefix_lookup_elem(&k);
-    bpf_printk("Allow source lookup src=%pI4 found=%d", &k.addr, val != NULL);
     return val != NULL;
 }
 
