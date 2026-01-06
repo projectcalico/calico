@@ -1305,7 +1305,7 @@ func (m *bpfEndpointManager) addAllowSourceSets(wlID types.WorkloadEndpointID, w
 
         if mapAddError != nil {
             logrus.WithField("wep", wlID).WithField("cidr", cidrString).WithError(mapAddError).Warn("Failed to add allowed source CIDR")
-            return
+            continue
         }
 
         logrus.WithField("wep", wlID).WithField("cidr", cidrString).Debug("Successfully added allowed source CIDR")
