@@ -84,7 +84,7 @@ int calico_tc_main(struct __sk_buff *skb)
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS)) {
-		if (skb->mark == CALI_SKB_MARK_BYPASS_FRAG) {
+		if (skb_mark_equals(skb, CALI_SKB_MARK_BYPASS_FRAG, CALI_SKB_MARK_BYPASS_FRAG)) {
 			DECLARE_TC_CTX(_ctx,
 				.skb = skb,
 				.fwd = {
