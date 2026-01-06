@@ -822,8 +822,7 @@ compare_templates() {
         fi
         expected=/tests/compiled_templates/${testdir}/${f}
         actual=/etc/calico/confd/config/${f}
-
-        if ! diff_files_ignoring_comments_and_blank_lines ${expected} ${actual}; then
+        if ! diff --ignore-blank-lines -q ${expected} ${actual} 1>/dev/null 2>&1; then
             if ! $record; then
                 rc=1;
             fi
@@ -862,34 +861,6 @@ compare_templates() {
     fi
 
     return $rc
-}
-
-# Compares two files ignoring comments (lines starting with #) and blank lines
-# $1: expected file path
-# $2: actual file path  
-# Returns: 0 if files match, 1 if they differ
-diff_files_ignoring_comments_and_blank_lines() {
-    expected=$1
-    actual=$2
-    
-    # Function to normalize a file: remove blank lines, comment-only lines, and trailing whitespace
-    # Preserves leading whitespace (indentation) which is significant in BIRD config
-    # Also removes section headers like "# ------------- Node-to-node mesh -------------"
-    # and peer-specific comments like "# For peer /bgp/v1/host/..."
-    # IMPORTANT: Does NOT remove inline comments (e.g., "source address 10.0.0.1;  # comment")
-    # because those are part of the template output and should be preserved
-    normalize_file() {
-        # First remove comment-only lines (lines that are only whitespace and comments)
-        # Then remove blank lines and trailing whitespace
-        sed '/^[[:space:]]*#/d' "$1" | \
-        sed '/^[[:space:]]*$/d' | \
-        sed 's/[[:space:]]*$//'
-    }
-    
-    # Debug: Save normalized files for inspection
-    normalize_file ${expected} > /go/src/github.com/projectcalico/calico/confd/n_expected.cfg
-    normalize_file ${actual} > /go/src/github.com/projectcalico/calico/confd/n_actual.cfg
-    diff -q <(normalize_file ${expected}) <(normalize_file ${actual}) 1>/dev/null 2>&1
 }
 
 test_router_id_hash() {

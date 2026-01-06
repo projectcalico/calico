@@ -15,7 +15,7 @@ function apply_communities ()
 include "bird_aggr.cfg";
 include "bird_ipam.cfg";
 
-router id {{$config.RouterID}};{{if $config.RouterIDComment}}  {{$config.RouterIDComment}}{{end}}
+router id {{$config.RouterID}};
 
 {{- if or $config.ListenAddress $config.ListenPort}}
 # BGP listen configuration
@@ -116,7 +116,7 @@ protocol bgp {{.Name}} from bgp_template {
   export all;
 {{- end}}
 {{- if .Passive}}
-  passive on;{{.PassiveComment}}
+  passive on;
 {{- end}}
 {{- if .GracefulRestart}}
   graceful restart time {{.GracefulRestart}};

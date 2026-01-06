@@ -63,10 +63,13 @@ if [[ $FELIX_TEST_GROUP =~ no-fv ]]; then
   export NUM_FV_BATCHES=0
 fi
 
+ENABLE_JIT_HARDENING=false
 if [[ $FELIX_TEST_GROUP =~ jitharden ]]; then
   JOB_TAG+="jit"
   TEST_REPORT_NAME+="/jitharden=2"
+  ENABLE_JIT_HARDENING=true
 fi
+export ENABLE_JIT_HARDENING
 export JOB_TAG
 export CI_GROUP_LABEL="felix-fv"
 export CI_JOB_LABEL="${JOB_TAG}"

@@ -827,7 +827,6 @@ blocks:
           commands:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=16
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -851,7 +850,6 @@ blocks:
           commands:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=16
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -875,7 +873,6 @@ blocks:
           commands:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=60
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -903,7 +900,6 @@ blocks:
             # Limit to BPF conntrack tests to reduce overall runtime.
             - export FV_FOCUS='_BPF_.*ct=true'
             - export NUM_FV_BATCHES=10
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -930,7 +926,6 @@ blocks:
             - source felix/.semaphore/fv-prologue
             # Only run the UT that checks that the precompiled BPF binaries are loadable.
             - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -958,8 +953,6 @@ blocks:
             # Limit to BPF TCP+conntrack tests to reduce overall runtime.
             - export FV_FOCUS='_BPF_.*tcp.*ct=true'
             - export NUM_FV_BATCHES=16
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
-            - .semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -1180,7 +1173,6 @@ blocks:
           - export VM_DISK_SIZE=80GB
           - mkdir artifacts
           - ./.semaphore/cache-test-artifacts
-          - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
         - name: "Node: kind-cluster tests"
           execution_time_limit:
@@ -1190,7 +1182,6 @@ blocks:
       epilogue:
         always:
           commands:
-            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
             - '../.semaphore/vms/publish-reports "Node: KinD STs"'
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
