@@ -28,6 +28,10 @@ import (
 //   - For a port range, set MinPort and MaxPort to the (inclusive) port numbers.  Set
 //     PortName to "".
 //   - For a single port, set MinPort = MaxPort and PortName = "".
+//
+// +kubebuilder:validation:Type=integer
+// +kubebuilder:validation:XIntOrString
+// +kubebuilder:validation:Pattern=`^.*`
 type Port struct {
 	MinPort  uint16 `json:"minPort,omitempty"`
 	MaxPort  uint16 `json:"maxPort,omitempty"`

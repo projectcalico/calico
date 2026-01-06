@@ -69,7 +69,7 @@ endif
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
-FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
+FV_K8SIMAGE=jha48/go-build:$(GO_BUILD_VER)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,

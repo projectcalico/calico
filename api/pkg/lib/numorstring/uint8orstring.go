@@ -23,6 +23,10 @@ import (
 // JSON or YAML marshalling and unmarshalling, it produces or consumes the
 // inner type.  This allows you to have, for example, a JSON field that can
 // accept a name or number.
+//
+// +kubebuilder:validation:Type=integer
+// +kubebuilder:validation:XIntOrString
+// +kubebuilder:validation:Pattern=`^.*`
 type Uint8OrString struct {
 	Type   NumOrStringType `json:"type"`
 	NumVal uint8           `json:"numVal"`
