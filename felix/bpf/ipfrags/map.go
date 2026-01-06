@@ -32,8 +32,10 @@ var MapParams = maps.MapParameters{
 }
 
 const (
-	KeySize   = 12
-	ValueSize = 2 + 2 + 4 + 1504
+	KeySize      = 12
+	ValueSize    = 2 + 2 + 4 + 1504
+	KeySizeFwd   = 16
+	ValueSizeFwd = 4
 )
 
 func Map() maps.Map {
@@ -51,4 +53,17 @@ var MapParameters = maps.MapParameters{
 
 func MapTmp() maps.Map {
 	return maps.NewPinnedMap(MapParameters)
+}
+
+var FwdMapParams = maps.MapParameters{
+	Type:       "lru_hash",
+	KeySize:    KeySizeFwd,
+	ValueSize:  ValueSizeFwd,
+	MaxEntries: 10000,
+	Name:       "cali_v4_frgfwd",
+	Version:    3,
+}
+
+func FwdMap() maps.Map {
+	return maps.NewPinnedMap(FwdMapParams)
 }

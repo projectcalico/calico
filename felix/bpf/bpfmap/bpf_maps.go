@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/ipfrags"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -49,6 +50,8 @@ type IPMaps struct {
 	CtNatsMap    maps.Map
 	CtCleanupMap maps.Map
 	MaglevMap    maps.Map
+	IPFragMap    maps.Map
+	IPFragFwdMap maps.Map
 }
 
 type CommonMaps struct {
@@ -109,12 +112,18 @@ func getIPMaps(ipFamily int) *IPMaps {
 		if ipFamily == 4 {
 			return v4()
 		}
+		if v6 == nil {
+			return nil
+		}
 		return v6()
 	}
 
 	getmapWithExistsCheck := func(v4, v6 func() maps.MapWithExistsCheck) maps.MapWithExistsCheck {
 		if ipFamily == 4 {
 			return v4()
+		}
+		if v6 == nil {
+			return nil
 		}
 		return v6()
 	}
@@ -131,7 +140,10 @@ func getIPMaps(ipFamily int) *IPMaps {
 		CtCleanupMap: getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
 		SrMsgMap:     getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
 		CtNatsMap:    getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
-		MaglevMap:    getmapWithExistsCheck(nat.MaglevMap, nat.MaglevMapV6)}
+		MaglevMap:    getmapWithExistsCheck(nat.MaglevMap, nat.MaglevMapV6),
+		IPFragMap:    getmap(ipfrags.Map, nil),
+		IPFragFwdMap: getmap(ipfrags.FwdMap, nil),
+	}
 }
 
 func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
@@ -145,6 +157,9 @@ func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
 
 	mps := ret.slice()
 	for i, bpfMap := range mps {
+		if bpfMap == nil {
+			continue
+		}
 		err := bpfMap.EnsureExists()
 		if err != nil {
 			for j := 0; j < i; j++ {
@@ -205,6 +220,8 @@ func (i *IPMaps) slice() []maps.Map {
 		i.SrMsgMap,
 		i.CtNatsMap,
 		i.MaglevMap,
+		i.IPFragMap,
+		i.IPFragFwdMap,
 	}
 }
 
