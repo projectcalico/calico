@@ -2656,6 +2656,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"logActionRateLimit": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format \"N/unit\", where N is a number and unit is one of: second, minute, hour, or day. For example: \"10/second\" or \"100/hour\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"logActionRateLimitBurst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"logFilePath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]",
