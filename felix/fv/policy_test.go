@@ -19,6 +19,8 @@ package fv_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -76,6 +78,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
 		felixConfig.Name = "default"
 		felixConfig.Spec.LogPrefix = "aXy9%n%%t %k %p"
+		LogActionRateLimitBurst := 20
+		felixConfig.Spec.LogActionRateLimitBurst = &LogActionRateLimitBurst
+		logActionRateLimit := "100/hour"
+		felixConfig.Spec.LogActionRateLimit = &logActionRateLimit
 		_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -101,12 +107,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 			if ipVersion == 6 {
 				binary = "ip6tables-save"
 			}
-			getRules := func() string {
-				output, _ := felix.ExecOutput(binary, "-t", "filter")
-				return output
+			logLimitPattern := fmt.Sprintf("-m limit --limit %s --limit-burst %d",
+				logActionRateLimit, LogActionRateLimitBurst,
+			)
+			getRules := func() bool {
+				output, err := felix.ExecOutput(binary, "-t", "filter")
+				Expect(err).NotTo(HaveOccurred())
+				return strings.Contains(output, expectedPattern) && strings.Contains(output, logLimitPattern)
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedPattern))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedPattern))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		}
 
 		detectNftablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
@@ -114,12 +124,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 			if ipVersion == 6 {
 				ipFamily = "ip6"
 			}
-			getRules := func() string {
-				output, _ := felix.ExecOutput("nft", "list", "table", ipFamily, "calico")
-				return output
+			logLimitPattern := fmt.Sprintf("limit rate %s burst %d packets",
+				logActionRateLimit, LogActionRateLimitBurst,
+			)
+			getRules := func() bool {
+				output, err := felix.ExecOutput("nft", "list", "table", ipFamily, "calico")
+				Expect(err).NotTo(HaveOccurred())
+				return strings.Contains(output, expectedPattern) && strings.Contains(output, logLimitPattern)
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(expectedPattern))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(expectedPattern))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(BeTrue())
 		}
 
 		if NFTMode() {
