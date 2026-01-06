@@ -490,25 +490,27 @@ func (r *CalicoManager) modifyHelmChartsValues() error {
 	return nil
 }
 
+func (r *CalicoManager) resetCharts() {
+	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "charts/"}, nil); err != nil {
+		logrus.WithError(err).Error("Failed to reset changes to charts")
+	}
+}
+
 func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
 		if err := r.modifyHelmChartsValues(); err != nil {
 			return fmt.Errorf("failed to modify helm chart values: %s", err)
 		}
+		defer r.resetCharts()
 	}
 
 	// Build the helm chart, passing the version to use.
-	env := append(os.Environ(), fmt.Sprintf("GIT_VERSION=%s", r.calicoVersion))
+	env := append(os.Environ(),
+		fmt.Sprintf("GIT_VERSION=%s", r.calicoVersion),
+		fmt.Sprintf("CHART_DESTINATION=%s", r.uploadDir()),
+	)
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "chart", env...); err != nil {
 		return fmt.Errorf("failed to build helm chart: %w", err)
-	}
-
-	if r.isHashRelease {
-		// If we modified the repo above, reset it.
-		if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "charts/"}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to reset changes to charts")
-			return fmt.Errorf("failed to reset changes to charts: %w", err)
-		}
 	}
 	return nil
 }
@@ -869,9 +871,6 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	}
 	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
 		return fmt.Errorf("failed to copy OCP bundle: %w", err)
-	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", r.calicoVersion), uploadDir}, nil); err != nil {
-		return fmt.Errorf("failed to copy tigera-operator bundle: %w", err)
 	}
 
 	// Generate a SHA256SUMS file containing the checksums for each artifact
