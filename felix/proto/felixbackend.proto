@@ -421,6 +421,7 @@ message WorkloadEndpoint {
   LocalBGPPeer local_bgp_peer = 13;
   WorkloadBpfSkipRedir skip_redir = 14;
   repeated QoSPolicy qos_policies = 15;
+  bool is_istio_ambient = 16;
 }
 
 message QoSControls {

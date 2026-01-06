@@ -301,6 +301,8 @@ func StartDataplaneDriver(
 				BPFEnabled:                         configParams.BPFEnabled,
 				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
+				IstioAmbientModeEnabled:            configParams.IsIstioAmbientModeEnabled(),
+				IstioDSCPMark:                      configParams.IstioDSCPMark.ToUint8(),
 			},
 			Wireguard: wireguard.Config{
 				Enabled:             wireguardEnabled,

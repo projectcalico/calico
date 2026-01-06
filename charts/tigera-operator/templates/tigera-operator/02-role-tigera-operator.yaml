@@ -95,6 +95,7 @@ rules:
       - whiskers.operator.tigera.io
       - goldmanes.operator.tigera.io
       - managementclusterconnections.operator.tigera.io
+      - istios.operator.tigera.io
   # We need update and delete access for the ClusterNetworkPolicy CRD to set owner references
   # when assuming control of pre-existing CRDs, for example on OCP.
   - apiGroups:
@@ -230,6 +231,9 @@ rules:
       - whiskers
       - whiskers/finalizers
       - whiskers/status
+      - istios
+      - istios/finalizers
+      - istios/status
     verbs:
       - get
       - list
@@ -351,6 +355,7 @@ rules:
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
+      - validatingwebhookconfigurations
       - mutatingwebhookconfigurations
     verbs:
       - create
@@ -364,6 +369,15 @@ rules:
       - mutatingwebhookconfigurations
     resourceNames:
       - envoy-gateway-topology-injector.tigera-gateway
+    verbs:
+      - update
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    resourceNames:
+      - istiod-default-validator
+      - istio-validator-calico-system
     verbs:
       - update
   # Needed for operator lock
@@ -511,6 +525,12 @@ rules:
       - update
       - delete
 {{- end }}
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - networkpolicies
+    verbs:
+      - '*'
   # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
@@ -526,6 +546,15 @@ rules:
       - create
       - update
       - delete
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - tier.networkpolicies
+      - tier.globalnetworkpolicies
+    verbs:
+      - list
+      - watch
+      - get
   # For tiered network policy actions, tigera-apiserver requires get authorization on the associated tier.
   - apiGroups:
       - projectcalico.org
@@ -543,6 +572,7 @@ rules:
     resources:
       - tiers
     verbs:
+      - get
       - create
       - list
       - watch
@@ -616,3 +646,20 @@ rules:
       - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - update
+    resourceNames:
+      - istiod

@@ -940,12 +940,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var workloadRemoveChanV4, workloadRemoveChanV6 chan string
 		var ipSetIDAllocatorV4, ipSetIDAllocatorV6 *idalloc.IDAllocator
 		ipSetIDAllocatorV4 = idalloc.New()
+		if config.RulesConfig.IstioAmbientModeEnabled {
+			ipSetIDAllocatorV4.ReserveWellKnownID(rules.IPSetIDAllIstioWEPs, bpfipsets.AllIstioWEPsID)
+		}
 
 		// Start IPv4 BPF dataplane components
 		conntrackScannerV4, workloadRemoveChanV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
 			ipSetIDAllocatorV6 = idalloc.New()
+			if config.RulesConfig.IstioAmbientModeEnabled {
+				ipSetIDAllocatorV6.ReserveWellKnownID(rules.IPSetIDAllIstioWEPs, bpfipsets.AllIstioWEPsID)
+			}
 			conntrackScannerV6, workloadRemoveChanV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp)
 		}
 
@@ -2935,6 +2941,13 @@ func startBPFDataplaneComponents(
 	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, maps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer)
 	dp.ipSets = append(dp.ipSets, ipSets)
 	ipSetsMgr.AddDataplane(ipSets)
+
+	if ipFamily == proto.IPVersion_IPV4 && config.RulesConfig.IstioAmbientModeEnabled {
+		// Create an 'ipset' to represent Istio WEPs.
+		ipSets.AddOrReplaceIPSet(
+			ipsets.IPSetMetadata{SetID: rules.IPSetIDAllIstioWEPs, Type: ipsets.IPSetTypeHashIP},
+			nil)
+	}
 
 	failsafeMgr := failsafes.NewManager(
 		maps.FailsafesMap,
