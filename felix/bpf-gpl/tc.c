@@ -97,7 +97,6 @@ int calico_tc_main(struct __sk_buff *skb)
 
 			CALI_DEBUG("New fragment packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
 			parse_packet_ip(ctx);
-			CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
 #ifndef IPVER6
 			if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 				deny_reason(ctx, CALI_REASON_SHORT);
@@ -114,7 +113,6 @@ int calico_tc_main(struct __sk_buff *skb)
 			/* If we are on tunnel and we do not have the key set, we cannot short-cirquit */
 			if (!(CALI_F_VXLAN &&
 				 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
-			/* This generates a bit more richer output for logging */
 			if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 				/* This generates a bit more richer output for logging */
 				DECLARE_TC_CTX(_ctx,
