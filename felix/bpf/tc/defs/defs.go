@@ -29,6 +29,7 @@ const (
 	MarkSeenFallThrough       = MarkSeen | 0x04000000
 	MarkSeenFallThroughMask   = MarkSeenMask | MarkSeenFallThrough
 	MarkSeenBypassForward     = MarkSeenBypass | 0x00300000
+	MarkSeenBypassFragment    = MarkSeenBypass | 0x00400000
 	MarkSeenBypassXDP         = MarkSeenBypass | 0x00500000
 	MarkSeenBypassForwardMask = MarkSeenBypassMask | 0x00f00000
 	MarkSeenNATOutgoing       = MarkSeenBypass | 0x00800000
