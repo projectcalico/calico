@@ -15,7 +15,6 @@
 package goldmane_test
 
 import (
-	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"math/rand/v2"
 	"os"
 	"runtime"
@@ -25,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
+	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/lib/std/time"
 )
