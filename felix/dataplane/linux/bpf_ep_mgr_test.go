@@ -35,6 +35,7 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -412,9 +413,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 		v4Maps.IpsetsMap = bpfipsets.Map()
 		v4Maps.CtMap = conntrack.Map()
+        v4Maps.AllowSourcesMap = mock.NewMockMap(allowsources.MapParameters)
 
 		v6Maps.IpsetsMap = bpfipsets.MapV6()
 		v6Maps.CtMap = conntrack.MapV6()
+        v6Maps.AllowSourcesMap = mock.NewMockMap(allowsources.MapV6Parameters)
 
 		commonMaps.StateMap = state.Map()
 		ifStateMap = mock.NewMockMap(ifstate.MapParams)
@@ -589,7 +592,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					WorkloadId:     name,
 					EndpointId:     name,
 				},
-				Endpoint: &proto.WorkloadEndpoint{Name: name},
+				Endpoint: &proto.WorkloadEndpoint{
+                    Name: name,
+                    AllowSpoofedSourcePrefixes: []string{"192.192.192.192/32"},  // hard-code a spoofed IP for test purposes
+                },
 			}
 			if len(policies) > 0 {
 				update.Endpoint.Tiers = []*proto.TierInfo{{
@@ -2869,6 +2875,38 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(changes).To(Equal(4))
 		})
 	})
+
+    Describe("allowed source prefixes map", func() {
+        JustBeforeEach(func() {
+            newBpfEpMgr(false)
+            genWLUpdate("cali12345")()
+        })
+
+        It("should contain allowed source prefixes from annotation", func () {
+            // initial genWLUpdate should add the following prefix to the map
+            cidrString := "192.192.192.192/32"
+            cidr, err := ip.CIDRFromString(cidrString)
+            Expect(err).NotTo(HaveOccurred())
+
+            expectedEntry := allowsources.MakeAllowSourcesEntry(cidr)
+            _, err = maps.V4.AllowSourcesMap.Get(expectedEntry.AsBytes())
+            Expect(err).NotTo(HaveOccurred())
+        })
+
+        It("should remove prefix from the map upon removal", func () {
+            // the following prefix should be removed from the map once WLUpdateEpRemove runs
+            genWLUpdateEpRemove("cali12345")()
+
+            cidrString := "192.192.192.192/32"
+            cidr, err := ip.CIDRFromString(cidrString)
+            Expect(err).NotTo(HaveOccurred())
+
+            expectedEntry := allowsources.MakeAllowSourcesEntry(cidr)
+            value, err := maps.V4.AllowSourcesMap.Get(expectedEntry.AsBytes())
+            Expect(err).To(HaveOccurred())
+            Expect(value).To(BeNil())
+        })
+    })
 })
 
 var _ = Describe("jumpMapAlloc tests", func() {
