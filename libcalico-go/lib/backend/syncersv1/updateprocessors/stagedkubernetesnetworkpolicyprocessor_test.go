@@ -34,9 +34,9 @@ var _ = Describe("Test the StagedKubernetesNetworkPolicy update processor", func
 	}
 
 	v1StagedKubernetesNetworkPolicyKey1 := model.PolicyKey{
-		Name:      "knp.default." + name1,
-		Namespace: ns1,
 		Kind:      apiv3.KindStagedKubernetesNetworkPolicy,
+		Name:      name1,
+		Namespace: ns1,
 	}
 
 	It("should handle conversion of valid StagedKubernetesNetworkPolicy", func() {
