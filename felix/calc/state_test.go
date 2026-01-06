@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -50,6 +51,7 @@ type State struct {
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
 	ExpectedHostMetadataV4V6             map[string]*proto.HostMetadataV4V6Update
+	ExpectedEndpointComputedData         map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData
 	ExpectedNumberOfALPPolicies          int
 	ExpectedNumberOfTiers                int
 	ExpectedNumberOfPolicies             int
@@ -79,6 +81,7 @@ func NewState() State {
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
 		ExpectedHostMetadataV4V6:             make(map[string]*proto.HostMetadataV4V6Update),
+		ExpectedEndpointComputedData:         make(map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData),
 		ExpectedNumberOfPolicies:             -1,
 		ExpectedNumberOfTiers:                -1,
 		ExpectedEncapsulation:                &proto.Encapsulation{},
@@ -96,6 +99,7 @@ func (s State) Copy() State {
 	maps.Copy(cpy.ExpectedUntrackedEndpointPolicyOrder, s.ExpectedUntrackedEndpointPolicyOrder)
 	maps.Copy(cpy.ExpectedPreDNATEndpointPolicyOrder, s.ExpectedPreDNATEndpointPolicyOrder)
 	maps.Copy(cpy.ExpectedHostMetadataV4V6, s.ExpectedHostMetadataV4V6)
+	maps.Copy(cpy.ExpectedEndpointComputedData, s.ExpectedEndpointComputedData)
 
 	cpy.ExpectedPolicyIDs = s.ExpectedPolicyIDs.Copy()
 	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
