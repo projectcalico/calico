@@ -3590,6 +3590,19 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"istioAmbientMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IstioAmbientMode configures Felix to work together with Tigera's Istio distribution. [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"istioDSCPMark": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used with other Istio installation. [Default: 23]",
+							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.DSCP"),
+						},
+					},
 					"cgroupV2Path": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CgroupV2Path overrides the default location where to find the cgroup hierarchy.",
@@ -3857,7 +3870,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.DSCP", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 

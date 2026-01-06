@@ -3442,7 +3442,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 
 	// Setup initial policy configuration
 	// localWlEp1 has policy1 for both ingress and egress
-	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, []*proto.TierInfo{
+	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, nil, []*proto.TierInfo{
 		{
 			Name:            "default",
 			IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
@@ -3451,7 +3451,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	})
 
 	// localWlEp2 initially has policy2 (deny) for both ingress and egress
-	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
 		{
 			Name:            "default",
 			IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
@@ -3460,7 +3460,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	})
 
 	// remoteWlEp1 has no policies
-	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, []*proto.TierInfo{})
+	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, nil, []*proto.TierInfo{})
 
 	// Initialize policy store with endpoints and policies
 	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
@@ -3567,7 +3567,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	// Test policy update scenario
 	t.Run("PolicyUpdate", func(t *testing.T) {
 		// Change localWlEp2 from policy2 (deny) to policy1 (allow)
-		updatedLocalWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+		updatedLocalWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
 			{Name: "default", IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}}, EgressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}}},
 		})
 
@@ -3739,7 +3739,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 		c.luc = lm
 
 		// Make another policy change to trigger evaluation
-		localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+		localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
 			{Name: "default", IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}}, EgressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}}},
 		})
 
