@@ -30,7 +30,7 @@ export VERBOSE="${VERBOSE:="true"}"
 
 export KUBE_VERSION="${KUBE_VERSION:="v1.33.6"}"
 
-export CONTAINERD_VERSION="${CONTAINERD_VERSION:="1.7.22"}"
+export CONTAINERD_VERSION="${CONTAINERD_VERSION:="1.7.28"}"
 
 export SSH_KEY_FILE="${ASO_DIR}/.sshkey"
 

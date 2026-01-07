@@ -39,7 +39,7 @@ CALI_MAP(cali_v4_frgtmp, 2,
 		__u32, struct frags4_value,
 		1, 0)
 
-CALI_MAP(cali_v4_frgfwd, 2, BPF_MAP_TYPE_LRU_HASH, struct frags4_fwd_key, __u32, 10000, 0)
+CALI_MAP(cali_v4_frgfwd, 3, BPF_MAP_TYPE_LRU_HASH, struct frags4_fwd_key, struct frags4_fwd_value, 10000, 0)
 
 struct frags4_fwd_key {
 	ipv4_addr_t src;
@@ -47,6 +47,11 @@ struct frags4_fwd_key {
 	__u32 ifindex; /* The stream of fragments may be crossing multiple devices */
 	__u16 id;
 	__u16 __pad;
+};
+
+struct frags4_fwd_value {
+	__u16 sport;
+	__u16 dport;
 };
 
 static CALI_BPF_INLINE struct frags4_value *frags4_get_scratch()
@@ -281,7 +286,10 @@ static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 		.id = ip_hdr(ctx)->id,
 	};
 
-	__u32 v = 0;
+	struct frags4_fwd_value v = {
+		.sport = ctx->state->sport,
+		.dport = ctx->state->dport,
+	};
 
 	cali_v4_frgfwd_update_elem(&k, &v, 0);
 	CALI_DEBUG("IP FRAG: created ct from " IP_FMT " to " IP_FMT,
@@ -314,10 +322,10 @@ static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 #endif /* BPF_CORE_SUPPORTED */
 }
 
-static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct frags4_fwd_value *frags4_lookup_ct(struct cali_tc_ctx *ctx)
 {
 #ifndef BPF_CORE_SUPPORTED
-	return false;
+	return NULL;
 #else
 	/* We do not really use bpf_loop() here, but we need to check if the kernel
 	 * supports it. If it does not, we cannot handle fragments as the
@@ -325,7 +333,7 @@ static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 	 */
 	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
 		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
-		return false;
+		return NULL;
 	}
 
 	struct frags4_fwd_key k = {
@@ -337,7 +345,7 @@ static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 
 	CALI_DEBUG("IP FRAG: lookup ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
-	return cali_v4_frgfwd_lookup_elem(&k) != NULL;
+	return cali_v4_frgfwd_lookup_elem(&k);
 #endif /* BPF_CORE_SUPPORTED */
 }
 
