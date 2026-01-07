@@ -2645,9 +2645,23 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"logPrefix": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]",
+							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers to include extra information in the log prefix. - %t: Tier name. - %k: Kind (short names). - %n: Policy or profile name. - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds). [Default: calico-packet]",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"logActionRateLimit": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format \"N/unit\", where N is a number and unit is one of: second, minute, hour, or day. For example: \"10/second\" or \"100/hour\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"logActionRateLimitBurst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"logFilePath": {
