@@ -201,8 +201,6 @@ enum calico_skb_mark {
 	CALI_SKB_MARK_BYPASS_FWD             = CALI_SKB_MARK_BYPASS  | 0x00300000,
 	/* Accepted by XDP untracked policy. */
 	CALI_SKB_MARK_BYPASS_XDP             = CALI_SKB_MARK_BYPASS  | 0x00500000,
-	/* Mark used for fragmented packets. */
-	CALI_SKB_MARK_BYPASS_FRAG            = CALI_SKB_MARK_BYPASS  | 0x00400000,
 	CALI_SKB_MARK_BYPASS_MASK            = CALI_SKB_MARK_SEEN_MASK | 0x02f00000,
 	/* The FALLTHROUGH bit is used by programs that are towards the host namespace to indicate
 	 * that the packet is not known in BPF conntrack. We have iptables rules to drop or allow
