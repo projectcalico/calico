@@ -2,21 +2,22 @@ package postrelease
 
 import (
 	"fmt"
-	"io"
 	"net/http"
-	"os"
+	"path"
 	"slices"
 	"testing"
 
+	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/spf13/cast"
 	"go.yaml.in/yaml/v3"
+	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
-const helmIndexURL = "https://projectcalico.docs.tigera.io/charts/index.yaml"
-
 func chartURL(githubOrg, githubRepo, version string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/tigera-operator-%s.tgz", githubOrg, githubRepo, version, version)
+	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, utils.TigeraOperatorChart, version)
 }
 
 func TestHelmChart(t *testing.T) {
@@ -24,31 +25,55 @@ func TestHelmChart(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	resp, err := http.Get(chartURL(githubOrg, githubRepo, releaseVersion))
-	if err != nil {
-		t.Fatalf("failed to fetch helm chart: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to fetch helm chart: server returned %s", resp.Status)
-	}
-	defer func() { _ = resp.Body.Close() }()
+	t.Run("github", func(t *testing.T) {
+		t.Parallel()
+		resp, err := http.Get(chartURL(githubOrg, githubRepo, releaseVersion))
+		if err != nil {
+			t.Fatalf("failed to fetch helm chart: %v", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("failed to fetch helm chart: server returned %s", resp.Status)
+		}
 
-	tmpFile, err := os.CreateTemp("", "*.tgz")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-	defer func() { _ = os.Remove(tmpFile.Name()) }()
+		chart, err := loader.LoadArchive(resp.Body)
+		if err != nil {
+			t.Fatalf("load helm chart: %v", err)
+		}
+		validateChart(t, chart)
+	})
+	t.Run("OCI registry", func(t *testing.T) {
+		t.Parallel()
 
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
-		t.Fatalf("failed to write helm chart to temp file: %v", err)
-	}
+		checkVersion(t, releaseVersion)
 
-	chart, err := loader.Load(tmpFile.Name())
-	if err != nil {
-		t.Fatalf("failed to load helm chart: %v", err)
-	}
+		for _, reg := range registry.DefaultHelmRegistries {
+			reg := reg
+			t.Run(reg, func(t *testing.T) {
+				t.Parallel()
+
+				dir := t.TempDir()
+				args := []string{
+					"pull", fmt.Sprintf("oci://%s/%s", reg, utils.TigeraOperatorChart),
+					"--version", releaseVersion,
+				}
+				out, err := command.RunInDir(dir, "helm", args)
+				if err != nil {
+					t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.TigeraOperatorChart, releaseVersion, reg, err, out)
+				}
+				chart, err := loader.LoadDir(dir)
+				if err != nil {
+					t.Fatalf("load helm chart from %s: %v", reg, err)
+				}
+				validateChart(t, chart)
+			})
+		}
+	})
+}
+
+func validateChart(t testing.TB, chart *chart.Chart) {
+	t.Helper()
 	if err := chart.Validate(); err != nil {
-		t.Fatalf("failed to validate helm chart: %v", err)
+		t.Fatalf("invalid helm chart: %v", err)
 	}
 	if chart.AppVersion() != releaseVersion {
 		t.Fatalf("expected helm chart app version %s, got %s", releaseVersion, chart.AppVersion())
@@ -64,7 +89,7 @@ func TestHelmIndex(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	resp, err := http.Get(helmIndexURL)
+	resp, err := http.Get(path.Join(utils.CalicoHelmRepoURL, "index.yaml"))
 	if err != nil {
 		t.Fatalf("failed to fetch helm index: %v", err)
 	}

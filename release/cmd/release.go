@@ -147,9 +147,19 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithPublishGitTag(c.Bool(publishGitTagFlag.Name)),
 					calico.WithPublishGithubRelease(c.Bool(publishGitHubReleaseFlag.Name)),
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
+					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
+				}
+				if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
+					opts = append(opts, calico.WithHelmRegistries(reg))
+				}
+				if v := c.String(awsProfileFlag.Name); v != "" {
+					opts = append(opts, calico.WithAWSProfile(v))
+				}
+				if v := c.String(s3BucketFlag.Name); v != "" {
+					opts = append(opts, calico.WithS3Bucket(v))
 				}
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
@@ -227,6 +237,9 @@ func releasePublishFlags() []cli.Flag {
 		publishGitTagFlag,
 		publishGitHubReleaseFlag,
 		githubTokenFlag,
+		publishChartsFlag,
+		awsProfileFlag,
+		s3BucketFlag,
 		skipValidationFlag)
 	return f
 }
