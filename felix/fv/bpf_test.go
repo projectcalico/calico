@@ -1702,6 +1702,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// We should see the fragments reach the workload.  We reassemble them in the middle but they
 						// get fragmented again.
 						Eventually(func() int { return tcpdump0.MatchCount("udp-pod-frags") }).Should(Equal(12))
+						// Send another set of fragmented packets with the same source and destination ports. This
+						// will result in the first fragment hitting the conntrack and bypass mark set. We should
+						// still see the fragments reach the destination.
+						By("Sending another set of fragmented packets")
+						_, err = w[1][0].RunCmd("pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=16000", "--udp-sock")
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(24))
 					})
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
