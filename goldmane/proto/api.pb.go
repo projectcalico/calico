@@ -33,6 +33,8 @@ const (
 	FilterType_FilterTypeSourceNamespace FilterType = 4
 	FilterType_FilterTypePolicyTier      FilterType = 5
 	FilterType_FilterTypePolicyName      FilterType = 6
+	FilterType_FilterTypePolicyKind      FilterType = 7
+	FilterType_FilterTypePolicyNamespace FilterType = 8
 )
 
 // Enum value maps for FilterType.
@@ -45,6 +47,8 @@ var (
 		4: "FilterTypeSourceNamespace",
 		5: "FilterTypePolicyTier",
 		6: "FilterTypePolicyName",
+		7: "FilterTypePolicyKind",
+		8: "FilterTypePolicyNamespace",
 	}
 	FilterType_value = map[string]int32{
 		"FilterTypeUnspecified":     0,
@@ -54,6 +58,8 @@ var (
 		"FilterTypeSourceNamespace": 4,
 		"FilterTypePolicyTier":      5,
 		"FilterTypePolicyName":      6,
+		"FilterTypePolicyKind":      7,
+		"FilterTypePolicyNamespace": 8,
 	}
 )
 
@@ -1154,9 +1160,13 @@ type Filter struct {
 	// Actions filters on the action field. Combined using logical OR.
 	Actions []Action `protobuf:"varint,7,rep,packed,name=actions,proto3,enum=goldmane.Action" json:"actions,omitempty"`
 	// Policies matches on policy fields. Combined using logical OR.
-	Policies      []*PolicyMatch `protobuf:"bytes,8,rep,name=policies,proto3" json:"policies,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Policies []*PolicyMatch `protobuf:"bytes,8,rep,name=policies,proto3" json:"policies,omitempty"`
+	// Reporter filters on the reporter field.
+	Reporter Reporter `protobuf:"varint,9,opt,name=reporter,proto3,enum=goldmane.Reporter" json:"reporter,omitempty"`
+	// Pending/Staged Actions filters on the action field. Combined using logical OR.
+	PendingActions []Action `protobuf:"varint,10,rep,packed,name=pending_actions,json=pendingActions,proto3,enum=goldmane.Action" json:"pending_actions,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Filter) Reset() {
@@ -1241,6 +1251,20 @@ func (x *Filter) GetActions() []Action {
 func (x *Filter) GetPolicies() []*PolicyMatch {
 	if x != nil {
 		return x.Policies
+	}
+	return nil
+}
+
+func (x *Filter) GetReporter() Reporter {
+	if x != nil {
+		return x.Reporter
+	}
+	return Reporter_ReporterUnspecified
+}
+
+func (x *Filter) GetPendingActions() []Action {
+	if x != nil {
+		return x.PendingActions
 	}
 	return nil
 }
@@ -2343,7 +2367,7 @@ const file_api_proto_rawDesc = "" +
 	"\n" +
 	"FlowResult\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\"\n" +
-	"\x04flow\x18\x02 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xc4\x03\n" +
+	"\x04flow\x18\x02 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xaf\x04\n" +
 	"\x06Filter\x128\n" +
 	"\fsource_names\x18\x01 \x03(\v2\x15.goldmane.StringMatchR\vsourceNames\x12B\n" +
 	"\x11source_namespaces\x18\x02 \x03(\v2\x15.goldmane.StringMatchR\x10sourceNamespaces\x124\n" +
@@ -2354,7 +2378,10 @@ const file_api_proto_rawDesc = "" +
 	"\n" +
 	"dest_ports\x18\x06 \x03(\v2\x13.goldmane.PortMatchR\tdestPorts\x12*\n" +
 	"\aactions\x18\a \x03(\x0e2\x10.goldmane.ActionR\aactions\x121\n" +
-	"\bpolicies\x18\b \x03(\v2\x15.goldmane.PolicyMatchR\bpolicies\"L\n" +
+	"\bpolicies\x18\b \x03(\v2\x15.goldmane.PolicyMatchR\bpolicies\x12.\n" +
+	"\breporter\x18\t \x01(\x0e2\x12.goldmane.ReporterR\breporter\x129\n" +
+	"\x0fpending_actions\x18\n" +
+	" \x03(\x0e2\x10.goldmane.ActionR\x0ependingActions\"L\n" +
 	"\vStringMatch\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\x12'\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x13.goldmane.MatchTypeR\x04type\"\x1f\n" +
@@ -2447,7 +2474,7 @@ const file_api_proto_rawDesc = "" +
 	"\n" +
 	"passed_out\x18\n" +
 	" \x03(\x03R\tpassedOut\x12\f\n" +
-	"\x01x\x18\v \x03(\x03R\x01x*\xc9\x01\n" +
+	"\x01x\x18\v \x03(\x03R\x01x*\x82\x02\n" +
 	"\n" +
 	"FilterType\x12\x19\n" +
 	"\x15FilterTypeUnspecified\x10\x00\x12\x16\n" +
@@ -2456,7 +2483,9 @@ const file_api_proto_rawDesc = "" +
 	"\x17FilterTypeDestNamespace\x10\x03\x12\x1d\n" +
 	"\x19FilterTypeSourceNamespace\x10\x04\x12\x18\n" +
 	"\x14FilterTypePolicyTier\x10\x05\x12\x18\n" +
-	"\x14FilterTypePolicyName\x10\x06*>\n" +
+	"\x14FilterTypePolicyName\x10\x06\x12\x18\n" +
+	"\x14FilterTypePolicyKind\x10\a\x12\x1d\n" +
+	"\x19FilterTypePolicyNamespace\x10\b*>\n" +
 	"\x06Action\x12\x15\n" +
 	"\x11ActionUnspecified\x10\x00\x12\t\n" +
 	"\x05Allow\x10\x01\x12\b\n" +
@@ -2589,44 +2618,46 @@ var file_api_proto_depIdxs = []int32{
 	20, // 15: goldmane.Filter.dest_ports:type_name -> goldmane.PortMatch
 	1,  // 16: goldmane.Filter.actions:type_name -> goldmane.Action
 	22, // 17: goldmane.Filter.policies:type_name -> goldmane.PolicyMatch
-	2,  // 18: goldmane.StringMatch.type:type_name -> goldmane.MatchType
-	4,  // 19: goldmane.SortOption.sort_by:type_name -> goldmane.SortBy
-	3,  // 20: goldmane.PolicyMatch.kind:type_name -> goldmane.PolicyKind
-	1,  // 21: goldmane.PolicyMatch.action:type_name -> goldmane.Action
-	26, // 22: goldmane.FlowUpdate.flow:type_name -> goldmane.Flow
-	5,  // 23: goldmane.FlowKey.source_type:type_name -> goldmane.EndpointType
-	5,  // 24: goldmane.FlowKey.dest_type:type_name -> goldmane.EndpointType
-	6,  // 25: goldmane.FlowKey.reporter:type_name -> goldmane.Reporter
-	1,  // 26: goldmane.FlowKey.action:type_name -> goldmane.Action
-	27, // 27: goldmane.FlowKey.policies:type_name -> goldmane.PolicyTrace
-	25, // 28: goldmane.Flow.Key:type_name -> goldmane.FlowKey
-	28, // 29: goldmane.PolicyTrace.enforced_policies:type_name -> goldmane.PolicyHit
-	28, // 30: goldmane.PolicyTrace.pending_policies:type_name -> goldmane.PolicyHit
-	3,  // 31: goldmane.PolicyHit.kind:type_name -> goldmane.PolicyKind
-	1,  // 32: goldmane.PolicyHit.action:type_name -> goldmane.Action
-	28, // 33: goldmane.PolicyHit.trigger:type_name -> goldmane.PolicyHit
-	7,  // 34: goldmane.StatisticsRequest.type:type_name -> goldmane.StatisticType
-	8,  // 35: goldmane.StatisticsRequest.group_by:type_name -> goldmane.StatisticsGroupBy
-	22, // 36: goldmane.StatisticsRequest.policy_match:type_name -> goldmane.PolicyMatch
-	28, // 37: goldmane.StatisticsResult.policy:type_name -> goldmane.PolicyHit
-	9,  // 38: goldmane.StatisticsResult.direction:type_name -> goldmane.RuleDirection
-	8,  // 39: goldmane.StatisticsResult.group_by:type_name -> goldmane.StatisticsGroupBy
-	7,  // 40: goldmane.StatisticsResult.type:type_name -> goldmane.StatisticType
-	10, // 41: goldmane.Flows.List:input_type -> goldmane.FlowListRequest
-	12, // 42: goldmane.Flows.Stream:input_type -> goldmane.FlowStreamRequest
-	13, // 43: goldmane.Flows.FilterHints:input_type -> goldmane.FilterHintsRequest
-	24, // 44: goldmane.FlowCollector.Connect:input_type -> goldmane.FlowUpdate
-	29, // 45: goldmane.Statistics.List:input_type -> goldmane.StatisticsRequest
-	11, // 46: goldmane.Flows.List:output_type -> goldmane.FlowListResult
-	17, // 47: goldmane.Flows.Stream:output_type -> goldmane.FlowResult
-	14, // 48: goldmane.Flows.FilterHints:output_type -> goldmane.FilterHintsResult
-	23, // 49: goldmane.FlowCollector.Connect:output_type -> goldmane.FlowReceipt
-	30, // 50: goldmane.Statistics.List:output_type -> goldmane.StatisticsResult
-	46, // [46:51] is the sub-list for method output_type
-	41, // [41:46] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	6,  // 18: goldmane.Filter.reporter:type_name -> goldmane.Reporter
+	1,  // 19: goldmane.Filter.pending_actions:type_name -> goldmane.Action
+	2,  // 20: goldmane.StringMatch.type:type_name -> goldmane.MatchType
+	4,  // 21: goldmane.SortOption.sort_by:type_name -> goldmane.SortBy
+	3,  // 22: goldmane.PolicyMatch.kind:type_name -> goldmane.PolicyKind
+	1,  // 23: goldmane.PolicyMatch.action:type_name -> goldmane.Action
+	26, // 24: goldmane.FlowUpdate.flow:type_name -> goldmane.Flow
+	5,  // 25: goldmane.FlowKey.source_type:type_name -> goldmane.EndpointType
+	5,  // 26: goldmane.FlowKey.dest_type:type_name -> goldmane.EndpointType
+	6,  // 27: goldmane.FlowKey.reporter:type_name -> goldmane.Reporter
+	1,  // 28: goldmane.FlowKey.action:type_name -> goldmane.Action
+	27, // 29: goldmane.FlowKey.policies:type_name -> goldmane.PolicyTrace
+	25, // 30: goldmane.Flow.Key:type_name -> goldmane.FlowKey
+	28, // 31: goldmane.PolicyTrace.enforced_policies:type_name -> goldmane.PolicyHit
+	28, // 32: goldmane.PolicyTrace.pending_policies:type_name -> goldmane.PolicyHit
+	3,  // 33: goldmane.PolicyHit.kind:type_name -> goldmane.PolicyKind
+	1,  // 34: goldmane.PolicyHit.action:type_name -> goldmane.Action
+	28, // 35: goldmane.PolicyHit.trigger:type_name -> goldmane.PolicyHit
+	7,  // 36: goldmane.StatisticsRequest.type:type_name -> goldmane.StatisticType
+	8,  // 37: goldmane.StatisticsRequest.group_by:type_name -> goldmane.StatisticsGroupBy
+	22, // 38: goldmane.StatisticsRequest.policy_match:type_name -> goldmane.PolicyMatch
+	28, // 39: goldmane.StatisticsResult.policy:type_name -> goldmane.PolicyHit
+	9,  // 40: goldmane.StatisticsResult.direction:type_name -> goldmane.RuleDirection
+	8,  // 41: goldmane.StatisticsResult.group_by:type_name -> goldmane.StatisticsGroupBy
+	7,  // 42: goldmane.StatisticsResult.type:type_name -> goldmane.StatisticType
+	10, // 43: goldmane.Flows.List:input_type -> goldmane.FlowListRequest
+	12, // 44: goldmane.Flows.Stream:input_type -> goldmane.FlowStreamRequest
+	13, // 45: goldmane.Flows.FilterHints:input_type -> goldmane.FilterHintsRequest
+	24, // 46: goldmane.FlowCollector.Connect:input_type -> goldmane.FlowUpdate
+	29, // 47: goldmane.Statistics.List:input_type -> goldmane.StatisticsRequest
+	11, // 48: goldmane.Flows.List:output_type -> goldmane.FlowListResult
+	17, // 49: goldmane.Flows.Stream:output_type -> goldmane.FlowResult
+	14, // 50: goldmane.Flows.FilterHints:output_type -> goldmane.FilterHintsResult
+	23, // 51: goldmane.FlowCollector.Connect:output_type -> goldmane.FlowReceipt
+	30, // 52: goldmane.Statistics.List:output_type -> goldmane.StatisticsResult
+	48, // [48:53] is the sub-list for method output_type
+	43, // [43:48] is the sub-list for method input_type
+	43, // [43:43] is the sub-list for extension type_name
+	43, // [43:43] is the sub-list for extension extendee
+	0,  // [0:43] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_init() }

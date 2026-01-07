@@ -1608,6 +1608,18 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                logActionRateLimit:
+                  description: |-
+                    LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
+                    where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+                  pattern: ^\d+/(?:second|minute|hour|day)$
+                  type: string
+                logActionRateLimitBurst:
+                  description:
+                    LogActionRateLimitBurst sets the rate limit burst of
+                    hitting a Log action when LogActionRateLimit is enabled.
+                  minimum: 0
+                  type: integer
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
@@ -1620,9 +1632,15 @@ spec:
                     none to disable file logging. [Default: /var/log/calico/felix.log]"
                   type: string
                 logPrefix:
-                  description:
-                    "LogPrefix is the log prefix that Felix uses when rendering
-                    LOG rules. [Default: calico-packet]"
+                  description: |-
+                    LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers
+                    to include extra information in the log prefix.
+                    - %t: Tier name.
+                    - %k: Kind (short names).
+                    - %n: Policy or profile name.
+                    - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
+                    [Default: calico-packet]
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
                   type: string
                 logSeverityFile:
                   description:
@@ -2403,6 +2421,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
@@ -2882,6 +2901,15 @@ spec:
                         reconcilerPeriod:
                           type: string
                       type: object
+                    policyMigration:
+                      properties:
+                        enabled:
+                          default: Enabled
+                          enum:
+                            - Disabled
+                            - Enabled
+                          type: string
+                      type: object
                     serviceAccount:
                       properties:
                         reconcilerPeriod:
@@ -2967,6 +2995,15 @@ spec:
                         policy:
                           properties:
                             reconcilerPeriod:
+                              type: string
+                          type: object
+                        policyMigration:
+                          properties:
+                            enabled:
+                              default: Enabled
+                              enum:
+                                - Disabled
+                                - Enabled
                               type: string
                           type: object
                         serviceAccount:
@@ -3355,6 +3392,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
@@ -3769,6 +3807,7 @@ spec:
                 stagedAction:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
@@ -4385,6 +4424,7 @@ spec:
                 stagedAction:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
@@ -5572,6 +5612,28 @@ rules:
       - update
       # watch for changes
       - watch
+  # Needed for policy name migrator.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - networkpolicies
+      - stagednetworkpolicies
+      - globalnetworkpolicies
+      - stagedglobalnetworkpolicies
+    verbs:
+      - watch
+      - list
+      - get
+      - create
+      - update
+      - delete
+  # Needed for policy name migrator to check calico/node daemonset status.
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - get
+    resourceNames:
+      - calico-node
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,

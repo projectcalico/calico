@@ -78,8 +78,9 @@ type K8sDatastoreInfra struct {
 	apiServerBindIP       string
 	ipMask                string
 
-	cleanups cleanupStack
-	felixes  []*Felix
+	cleanups        cleanupStack
+	felixes         []*Felix
+	bpfLogByteLimit int
 }
 
 var (
@@ -197,9 +198,13 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 	return K8sInfra[index], err
 }
 
+func (kds *K8sDatastoreInfra) setBPFLogByteLimit(limit int) {
+	kds.bpfLogByteLimit = limit
+}
+
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
-		kds.bpfLog = RunBPFLog(kds)
+		kds.bpfLog = RunBPFLog(kds, kds.bpfLogByteLimit)
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
@@ -208,11 +213,12 @@ type CleanupProvider interface {
 	AddCleanup(func())
 }
 
-func RunBPFLog(cp CleanupProvider) *containers.Container {
+func RunBPFLog(cp CleanupProvider, byteLimit int) *containers.Container {
 	c := containers.Run("bpf-log",
 		containers.RunOpts{
 			AutoRemove:       true,
 			IgnoreEmptyLines: true,
+			LogLimitBytes:    byteLimit,
 		}, "--privileged",
 		utils.Config.FelixImage, "/usr/bin/bpftool", "prog", "tracelog")
 	cp.AddCleanup(c.Stop)
@@ -1212,7 +1218,7 @@ func cleanupAllNetworkSets(clientset *kubernetes.Clientset, client client.Interf
 	}
 	log.WithField("count", len(ns.Items)).Info("networksets present")
 	for _, n := range ns.Items {
-		_, err = client.NetworkSets().Delete(ctx, n.Name, n.Namespace, options.DeleteOptions{})
+		_, err = client.NetworkSets().Delete(ctx, n.Namespace, n.Name, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
 		}

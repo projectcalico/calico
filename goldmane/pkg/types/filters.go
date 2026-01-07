@@ -70,6 +70,8 @@ func Matches(filter *proto.Filter, key *FlowKey) bool {
 		&stringComparison{filter: filter.DestNamespaces, genVals: namespaces(key.DestNamespace)},
 		&stringComparison{filter: filter.Protocols, genVals: func() []string { return []string{key.Proto()} }},
 		&actionMatch{filter: filter.Actions, key: key},
+		&pendingActionMatch{filter: filter.PendingActions, key: key},
+		&reporterMatch{filter: filter.Reporter, key: key},
 		&portComparison{filter: filter.DestPorts, key: key},
 		&policyComparison{filter: filter.Policies, key: key},
 	}
@@ -98,6 +100,40 @@ func (a *actionMatch) matches() bool {
 		return true
 	}
 	return slices.Contains(a.filter, a.key.Action())
+}
+
+type pendingActionMatch struct {
+	filter []proto.Action
+	key    *FlowKey
+}
+
+func (a *pendingActionMatch) matches() bool {
+	if len(a.filter) == 0 {
+		return true
+	}
+
+	policyTrace := FlowLogPolicyToProto(a.key.Policies())
+
+	for _, hit := range policyTrace.PendingPolicies {
+		if slices.Contains(a.filter, hit.Action) {
+			return true
+		}
+	}
+
+	return false
+}
+
+type reporterMatch struct {
+	filter proto.Reporter
+	key    *FlowKey
+}
+
+func (r *reporterMatch) matches() bool {
+	if r.filter == proto.Reporter_ReporterUnspecified {
+		// No filter value specified, so this comparison matches.
+		return true
+	}
+	return r.filter == r.key.Reporter()
 }
 
 type portComparison struct {

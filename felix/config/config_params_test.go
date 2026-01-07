@@ -197,6 +197,22 @@ var _ = Describe("Config override empty", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cp.IptablesBackend).To(Equal("auto"))
 	})
+
+	It("should have correct default EndpointStatusPathPrefix value", func() {
+		Expect(cp.EndpointStatusPathPrefix).To(Equal("/var/run/calico"))
+	})
+
+	Context("with EndpointStatusPathPrefix=none in config file", func() {
+		BeforeEach(func() {
+			changed, err := cp.UpdateFrom(map[string]string{"EndpointStatusPathPrefix": "none"}, config.ConfigFile)
+			Expect(changed).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should have EndpointStatusPathPrefix empty", func() {
+			Expect(cp.EndpointStatusPathPrefix).To(Equal(""))
+		})
+	})
 })
 
 var (

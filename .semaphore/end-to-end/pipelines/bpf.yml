@@ -135,7 +135,7 @@ blocks:
               value: '["172.16.101.0/24"]'
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
-            - name: ENABLE_DSR
+            - name: ENABLE_BPF_DSR
               value: "true"
             - name: PROVISIONER
               value: "aws-kubeadm"
@@ -152,7 +152,7 @@ blocks:
           env_vars:
             - name: PROVISIONER
               value: "gcp-kubeadm"
-            - name: ENABLE_DSR
+            - name: ENABLE_BPF_DSR
               value: "true"
             - name: ENABLE_IP_FORWARDING
               value: "true"

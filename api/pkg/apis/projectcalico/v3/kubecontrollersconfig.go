@@ -46,6 +46,15 @@ type KubeControllersConfiguration struct {
 	Status KubeControllersConfigurationStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
+// ControllerMode is used to enable or disable a controller.
+// +kubebuilder:validation:Enum=Disabled;Enabled
+type ControllerMode string
+
+const (
+	ControllerDisabled ControllerMode = "Disabled"
+	ControllerEnabled  ControllerMode = "Enabled"
+)
+
 // KubeControllersConfigurationSpec contains the values of the Kubernetes controllers configuration.
 type KubeControllersConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
@@ -87,6 +96,16 @@ type ControllersConfig struct {
 
 	// LoadBalancer enables and configures the LoadBalancer controller. Enabled by default, set to nil to disable.
 	LoadBalancer *LoadBalancerControllerConfig `json:"loadBalancer,omitempty"`
+
+	// Migration enables and configures migration controllers.
+	Migration *MigrationControllerConfig `json:"policyMigration,omitempty"`
+}
+
+type MigrationControllerConfig struct {
+	// PolicyNameMigrator enables or disables the Policy Name Migrator, which migrates
+	// old-style Calico backend policy names to use v3 style names.
+	// +kubebuilder:default=Enabled
+	PolicyNameMigrator ControllerMode `json:"enabled,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 }
 
 // NodeControllerConfig configures the node controller, which automatically cleans up configuration

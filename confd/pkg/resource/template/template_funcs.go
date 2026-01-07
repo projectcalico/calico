@@ -1,7 +1,6 @@
 package template
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,12 +9,13 @@ import (
 	"os"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/confd/pkg/backends"
 )
 
 func newFuncMap() map[string]interface{} {
@@ -39,8 +39,6 @@ func newFuncMap() map[string]interface{} {
 	m["fileExists"] = isFileExist
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
-	m["hashToIPv4"] = hashToIPv4
-	m["bgpFilterFunctionName"] = BGPFilterFunctionName
 	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
 	return m
 }
@@ -48,6 +46,22 @@ func newFuncMap() map[string]interface{} {
 func addFuncs(out, in map[string]interface{}) {
 	for name, fn := range in {
 		out[name] = fn
+	}
+}
+
+// addCalicoFuncs adds Calico-specific template functions
+func addCalicoFuncs(funcMap map[string]interface{}) {
+	// Add getBGPConfig function that takes the ipVersion and client as parameters
+	funcMap["getBGPConfig"] = func(ipVersion int, client interface{}) (interface{}, error) {
+		if storeClient, ok := client.(backends.StoreClient); ok {
+			config, err := storeClient.GetBirdBGPConfig(ipVersion)
+			if err != nil {
+				// Return error to fail template execution and prevent broken config
+				return nil, err
+			}
+			return config, nil
+		}
+		return nil, errors.New("client does not support GetBirdBGPConfig")
 	}
 }
 
@@ -183,7 +197,7 @@ func BGPFilterFunctionName(filterName, direction, version string) (string, error
 	}
 	pieces := []string{"bgp_", "", "_", normalizedDirection, "FilterV", version}
 	maxBIRDSymLen := 64
-	resizedName, err := truncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
+	resizedName, err := TruncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
 	if err != nil {
 		return "", err
 	}
@@ -387,54 +401,6 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 		lines = append(lines, line)
 	}
 	return lines, nil
-}
-
-// The maximum length of a k8s resource (253 bytes) is longer than the maximum length of BIRD symbols (64 chars).
-// This function provides a way to map the k8s resource name to a BIRD symbol name that accounts
-// for the length difference in a way that minimizes the chance of collisions
-func truncateAndHashName(name string, maxLen int) (string, error) {
-	if len(name) <= maxLen {
-		return name, nil
-	}
-	// SHA256 outputs a hash 64 chars long but we'll use only the first 16
-	hashCharsToUse := 16
-	// Account for underscore we insert between truncated name and hash string
-	hashStrSize := hashCharsToUse + 1
-	if maxLen <= hashStrSize {
-		return "", fmt.Errorf("max truncated string length must be greater than the minimum size of %d",
-			hashStrSize)
-	}
-	hash := sha256.New()
-	_, err := hash.Write([]byte(name))
-	if err != nil {
-		return "", err
-	}
-	truncationLen := maxLen - hashStrSize
-	hashStr := fmt.Sprintf("%X", hash.Sum(nil))
-	truncatedName := fmt.Sprintf("%s_%s", name[:truncationLen], hashStr[:hashCharsToUse])
-	return truncatedName, nil
-}
-
-// hashToIPv4 hashes the given string and
-// formats the resulting 4 bytes as an IPv4 address.
-func hashToIPv4(nodeName string) string {
-	hash := sha256.New()
-	_, err := hash.Write([]byte(nodeName))
-	if err != nil {
-		return ""
-	}
-	hashBytes := hash.Sum(nil)
-	ip := hashBytes[:4]
-	//BGP doesn't allow router IDs in special IP ranges (e.g., 224.x.x.x)
-	ip0Value := int(ip[0])
-	if ip0Value > 223 {
-		ip0Value = ip0Value - 32
-	}
-	routerId := strconv.Itoa(ip0Value) + "." +
-		strconv.Itoa(int(ip[1])) + "." +
-		strconv.Itoa(int(ip[2])) + "." +
-		strconv.Itoa(int(ip[3]))
-	return routerId
 }
 
 // Getenv retrieves the value of the environment variable named by the key.

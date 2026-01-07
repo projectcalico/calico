@@ -77,8 +77,8 @@ int calico_tc_main(struct __sk_buff *skb)
 
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
-	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS &&
-			/* If we are on vxlan and we do not have the key set, we cannot short-cirquit */
+	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
+			/* If we are on tunnel and we do not have the key set, we cannot short-cirquit */
 			!(CALI_F_TUNNEL &&
 			 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
 		if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
@@ -207,14 +207,14 @@ int calico_tc_main(struct __sk_buff *skb)
 		goto finalize;
 	}
 
-	if (CALI_F_VXLAN && CALI_F_TO_HEP
+	if (CALI_F_TUNNEL && CALI_F_TO_HEP
 			&& skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS)) {
-		/* In case we are on VXLAN device, CALI_SKB_MARK_BYPASS is set we only got
+		/* In case we are on tunnel device, CALI_SKB_MARK_BYPASS is set we only got
 		 * here because CALI_SKB_MARK_TUNNEL_KEY_SET wasn't set. This happens when
 		 * redirecting on a WEP was disabled, e.g. not to bypass the qdisc. We do
 		 * not have the key set, but CALI_SKB_MARK_BYPASS tells us that we do not
 		 * need to do more than that. Juset forward the packet. We already parsed
-		 * IP header so we have enough to forward via vxlan. So just got to allow
+		 * IP header so we have enough to forward via tunnel. So just got to allow
 		 * and forward it. forward_or_drop() will set the key.
 		 */
 		tc_state_fill_from_iphdr(ctx);
@@ -294,7 +294,10 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 
 #ifndef IPVER6
 	if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
-		if (frags4_lookup_ct(ctx)) {
+		struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
+		if (frag_ct_val) {
+			ctx->state->sport = frag_ct_val->sport;
+			ctx->state->dport = frag_ct_val->dport;
 			if (ip_is_last_frag(ip_hdr(ctx))) {
 				frags4_remove_ct(ctx);
 			}
