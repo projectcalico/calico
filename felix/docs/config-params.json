@@ -1905,12 +1905,13 @@
           "ParsedDefaultJSON": "\"Disabled\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`.",
+          "YAMLSchema": "One of: `\"Auto\"`, `\"Disabled\"`, `\"Enabled\"`.",
           "YAMLEnumValues": [
+            "`\"Auto\"`",
             "`\"Disabled\"`",
             "`\"Enabled\"`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>\"Auto\"</code>, <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
           "YAMLDefault": "Disabled",
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
