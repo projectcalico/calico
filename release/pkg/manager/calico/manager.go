@@ -460,11 +460,6 @@ func (r *CalicoManager) PreReleaseValidate() error {
 		return err
 	}
 
-	// Assert that s3 bucket is set if publishing charts.
-	if r.publishCharts && r.s3Bucket == "" {
-		return fmt.Errorf("S3 bucket must be specified when publishing charts")
-	}
-
 	return r.releasePrereqs()
 }
 
@@ -885,6 +880,14 @@ func (r *CalicoManager) publishPrereqs() error {
 	if r.publishImages && len(r.imageRegistries) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
 	}
+	if r.publishCharts {
+		if len(r.helmRegistries) == 0 {
+			errStack = errors.Join(errStack, fmt.Errorf("no helm chart registries specified"))
+		}
+		if !r.isHashRelease && r.s3Bucket == "" {
+			errStack = errors.Join(errStack, fmt.Errorf("no S3 bucket specified for pushing helm index"))
+		}
+	}
 	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before publishing the release"))
 	}
@@ -1170,7 +1173,7 @@ Attached to this release are the following artifacts:
 
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
-- {helm_chart}: Calico Helm 3 chart (also hosted at oci://{helm_registry}/tigera-operator).
+- {helm_chart}: Calico Helm 3 chart (also hosted at oci://quay.io/calico/charts/tigera-operator).
 - ocp.tgz: Manifest bundle for OpenShift.
 
 Additional links:
@@ -1189,7 +1192,6 @@ Additional links:
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
 		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.calicoVersion),
-		"{helm_registry}", r.helmRegistries[0],
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -1286,7 +1288,7 @@ func (r *CalicoManager) publishHelmChart(chart, registry string) error {
 	// network flakes can occasionally result in images failing to push.
 	maxRetries := 1
 	attempt := 0
-	args := []string{"push", chart, registry}
+	args := []string{"push", chart, fmt.Sprintf("oci://%s", registry)}
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		args = append(args, "--debug")
 	}

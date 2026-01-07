@@ -56,7 +56,7 @@ type Hashrelease struct {
 	// ProductVersion is the product version in the hashrelease
 	ProductVersion string
 
-	// OperatorVersion is the operator version for the hashreleaseq
+	// OperatorVersion is the operator version for the hashrelease
 	OperatorVersion string
 
 	// Source is the source of hashrelease content on the local filesystem

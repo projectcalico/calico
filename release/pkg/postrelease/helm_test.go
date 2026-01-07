@@ -3,7 +3,8 @@ package postrelease
 import (
 	"fmt"
 	"net/http"
-	"path"
+	"net/url"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -35,6 +36,7 @@ func TestHelmChart(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("failed to fetch helm chart: server returned %s", resp.Status)
 		}
+		defer func() { _ = resp.Body.Close() }()
 
 		chart, err := loader.LoadArchive(resp.Body)
 		if err != nil {
@@ -42,10 +44,9 @@ func TestHelmChart(t *testing.T) {
 		}
 		validateChart(t, chart)
 	})
+
 	t.Run("OCI registry", func(t *testing.T) {
 		t.Parallel()
-
-		checkVersion(t, releaseVersion)
 
 		for _, reg := range registry.DefaultHelmRegistries {
 			reg := reg
@@ -61,7 +62,7 @@ func TestHelmChart(t *testing.T) {
 				if err != nil {
 					t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.TigeraOperatorChart, releaseVersion, reg, err, out)
 				}
-				chart, err := loader.LoadDir(dir)
+				chart, err := loader.Load(filepath.Join(dir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, releaseVersion)))
 				if err != nil {
 					t.Fatalf("load helm chart from %s: %v", reg, err)
 				}
@@ -90,7 +91,11 @@ func TestHelmIndex(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	resp, err := http.Get(path.Join(utils.CalicoHelmRepoURL, "index.yaml"))
+	indexURL, err := url.JoinPath(utils.CalicoHelmRepoURL, "index.yaml")
+	if err != nil {
+		t.Fatalf("construct helm index url: %v", err)
+	}
+	resp, err := http.Get(indexURL)
 	if err != nil {
 		t.Fatalf("failed to fetch helm index: %v", err)
 	}
