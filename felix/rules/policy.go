@@ -737,20 +737,32 @@ func (r *DefaultRuleRenderer) generateLogPrefix(name, tier, namespace string) st
 		return logPrefix
 	}
 
-	namespacedName := name
-	if len(namespace) != 0 {
-		namespacedName = fmt.Sprintf("%s/%s", namespace, name)
+	kind := policyNameToKindShortName(name, tier, namespace)
+
+	strippedName := name
+	if kind != "pro" {
+		var err error
+		_, _, strippedName, err = names.DeconstructPolicyName(name)
+		if err != nil {
+			logrus.WithError(err).WithField("name", name).Warnf("Failed to deconstruct policy name")
+			strippedName = "unknown"
+		}
 	}
 
-	kind := policyNameToKindShortName(name, tier, namespace)
+	namespacedName := strippedName
+	if len(namespace) != 0 {
+		namespacedName = fmt.Sprintf("%s/%s", namespace, strippedName)
+	}
 
 	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
 	logPrefix = strings.ReplaceAll(logPrefix, "%p", namespacedName)
-	logPrefix = strings.ReplaceAll(logPrefix, "%n", name)
+	logPrefix = strings.ReplaceAll(logPrefix, "%n", strippedName)
 	return strings.ReplaceAll(logPrefix, "%t", tier)
 }
 
 func policyNameToKindShortName(name, tier, namespace string) string {
+	// Staged policies are not programmed in dataplane anymore. As such, we don't need to consider
+	// those here.
 	if strings.HasPrefix(name, names.K8sNetworkPolicyNamePrefix) {
 		return "knp"
 	}
@@ -763,16 +775,16 @@ func policyNameToKindShortName(name, tier, namespace string) string {
 	if strings.HasPrefix(name, names.OpenStackNetworkPolicyNamePrefix) {
 		return "ossg"
 	}
-
 	if len(namespace) == 0 && len(tier) == 0 {
 		return "pro"
 	}
-
-	if len(namespace) == 0 {
+	if len(namespace) == 0 && len(tier) != 0 {
 		return "gnp"
 	}
-
-	return "np"
+	if len(namespace) != 0 && len(tier) != 0 {
+		return "np"
+	}
+	return "unknown"
 }
 
 func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
