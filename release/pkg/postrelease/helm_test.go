@@ -7,13 +7,14 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/spf13/cast"
 	"go.yaml.in/yaml/v3"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
+
+	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func chartURL(githubOrg, githubRepo, version string) string {
