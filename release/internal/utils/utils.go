@@ -50,11 +50,13 @@ const (
 
 	// TigeraOrg is the name of the Tigera organization.
 	TigeraOrg = "tigera"
-)
 
-var HelmCharts = []string{
-	"tigera-operator",
-}
+	// TigeraOperatorChart is the name of the Tigera Operator Helm chart.
+	TigeraOperatorChart = "tigera-operator"
+
+	// CalicoHelmRepoURL is the URL for the Calico Helm charts.
+	CalicoHelmRepoURL = "https://docs.tigera.io/calico/charts"
+)
 
 var once sync.Once
 

@@ -174,11 +174,22 @@ var (
 		Sources: publishImagesFlag.Sources,
 		Value:   false,
 	}
+
 	publishChartsFlag = &cli.BoolFlag{
 		Name:    "publish-charts",
 		Usage:   "Publish Helm charts to the registry",
 		Sources: cli.EnvVars("PUBLISH_CHARTS"),
 		Value:   true,
+	}
+	awsProfileFlag = &cli.StringFlag{
+		Name:    "aws-profile",
+		Usage:   "The AWS profile to use",
+		Sources: cli.EnvVars("AWS_PROFILE"),
+	}
+	s3BucketFlag = &cli.StringFlag{
+		Name:    "s3-bucket",
+		Usage:   "The S3 bucket to publish release artifacts to.",
+		Sources: cli.EnvVars("S3_BUCKET"),
 	}
 
 	archiveImagesFlag = &cli.BoolFlag{

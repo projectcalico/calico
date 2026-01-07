@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -51,10 +52,11 @@ var (
 		"cni-plugin",
 	}
 
-	// Names of helm charts.
-	helmCharts = utils.HelmCharts
-
 	metadataFileName = "metadata.yaml"
+
+	helmIndexFileName = "index.yaml"
+
+	s3ACLPublicRead = []string{"--acl", "public-read"}
 )
 
 func NewManager(opts ...Option) *CalicoManager {
@@ -72,6 +74,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		publishGithub:     true,
 		imageRegistries:   defaultRegistries,
 		helmRegistries:    registry.DefaultHelmRegistries,
+		helmRepoURL:       utils.CalicoHelmRepoURL,
 		operatorRegistry:  operator.DefaultRegistry,
 		operatorImage:     operator.DefaultImage,
 		operatorGithubOrg: operator.DefaultOrg,
@@ -157,12 +160,17 @@ type CalicoManager struct {
 	publishCharts bool
 	publishTag    bool
 	publishGithub bool
+	awsProfile    string
+	s3Bucket      string
 
 	// imageRegistries is the list of imageRegistries to which we should publish images.
 	imageRegistries []string
 
 	// helmRegistries is the list of OCI-based registries to which we should publish charts.
 	helmRegistries []string
+
+	// helmRepoURL is the URL of the helm chart repository.
+	helmRepoURL string
 
 	// githubOrg is the GitHub organization to which we should publish releases.
 	githubOrg string
@@ -446,9 +454,15 @@ func (r *CalicoManager) PreReleaseValidate() error {
 		return err
 	}
 
+	// Assert that release notes are present.
 	err = r.assertReleaseNotesPresent(r.calicoVersion)
 	if err != nil {
 		return err
+	}
+
+	// Assert that s3 bucket is set if publishing charts.
+	if r.publishCharts && r.s3Bucket == "" {
+		return fmt.Errorf("S3 bucket must be specified when publishing charts")
 	}
 
 	return r.releasePrereqs()
@@ -511,6 +525,69 @@ func (r *CalicoManager) BuildHelm() error {
 	)
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "chart", env...); err != nil {
 		return fmt.Errorf("failed to build helm chart: %w", err)
+	}
+
+	// Create helm index for the chart.
+	chartURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s", r.githubOrg, r.repo, r.calicoVersion)
+	if r.isHashRelease {
+		chartURL = r.hashrelease.URL()
+	}
+	if err := r.buildHelmIndex(r.uploadDir(), chartURL); err != nil {
+		return err
+	}
+	return nil
+}
+
+// buildHelmIndex builds the helm index for the given charts directory.
+// It downloads the existing helm index, merges in the new chart to create an updated index.
+//
+// For hashreleases, it copies the helm index to charts/ in the upload directory.
+func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
+	// Download existing helm index.
+	indexURL, err := url.JoinPath(r.helmRepoURL, helmIndexFileName)
+	if err != nil {
+		return fmt.Errorf("construct helm index url: %w", err)
+	}
+	downloadedHelmIndexPath := filepath.Join(r.tmpDir, helmIndexFileName)
+	if out, err := r.runner.Run("curl", []string{"-fsSL", "--retry", "3", indexURL, "-o", downloadedHelmIndexPath}, nil); err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("download previous helm index from %s: %w", indexURL, err)
+	}
+
+	// Create tmp directory for building index and copy chart there.
+	tmpChartsDir := filepath.Join(filepath.Dir(r.uploadDir()), fmt.Sprintf("charts-%s", r.helmChartVersion()))
+	if err := os.MkdirAll(tmpChartsDir, utils.DirPerms); err != nil {
+		return fmt.Errorf("create temp dir for building helm index: %w", err)
+	}
+	srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
+	destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
+	if err := utils.CopyFile(srcChart, destChart); err != nil {
+		return fmt.Errorf("copy chart to temp dir for building helm index: %w", err)
+	}
+
+	// Build the new helm index.
+	args := []string{
+		"repo", "index", tmpChartsDir,
+		"--url", chartURL,
+		"--merge", downloadedHelmIndexPath,
+	}
+	if out, err := r.runner.RunInDir(r.repoRoot, "./bin/helm", args, nil); err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("build helm index: %w", err)
+	}
+
+	if r.isHashRelease {
+		// For hashreleases, copy the helm index to the upload dir.
+		srcIndex := filepath.Join(tmpChartsDir, helmIndexFileName)
+		destIndex := filepath.Join(r.uploadDir(), "charts", helmIndexFileName)
+		// Ensure destination directory exists.
+		if err := os.MkdirAll(filepath.Dir(destIndex), utils.DirPerms); err != nil {
+			return fmt.Errorf("create dest dir for helm index: %w", err)
+		}
+		if err := utils.CopyFile(srcIndex, destIndex); err != nil {
+			return fmt.Errorf("copy helm index to upload dir: %w", err)
+		}
+		return nil
 	}
 	return nil
 }
@@ -576,6 +653,11 @@ func (r *CalicoManager) PublishRelease() error {
 		// Publish the release to github.
 		if err := r.publishGithubRelease(); err != nil {
 			return fmt.Errorf("failed to publish github release: %s", err)
+		}
+
+		// Update helm chart index
+		if err := r.updateHelmChartIndex(); err != nil {
+			return fmt.Errorf("update helm chart index: %s", err)
 		}
 	}
 
@@ -1106,7 +1188,7 @@ Additional links:
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
-		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", r.calicoVersion),
+		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.calicoVersion),
 		"{helm_registry}", r.helmRegistries[0],
 	}
 	replacer := strings.NewReplacer(formatters...)
@@ -1191,11 +1273,9 @@ func (r *CalicoManager) publishHelmCharts() error {
 		logrus.Info("Skipping publishing helm charts")
 		return nil
 	}
-	for _, chart := range helmCharts {
-		for _, reg := range r.helmRegistries {
-			if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion())), reg); err != nil {
-				return err
-			}
+	for _, reg := range r.helmRegistries {
+		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion())), reg); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1225,6 +1305,17 @@ func (r *CalicoManager) publishHelmChart(chart, registry string) error {
 		// Success - move on to the next.
 		logrus.Info(out)
 		break
+	}
+	return nil
+}
+
+func (r *CalicoManager) updateHelmChartIndex() error {
+	if !r.publishCharts {
+		logrus.Info("Skipping updating helm index")
+		return nil
+	}
+	if err := r.s3Cp(filepath.Join(filepath.Dir(r.uploadDir()), fmt.Sprintf("charts-%s", r.helmChartVersion()), helmIndexFileName), fmt.Sprintf("s3://%s/charts/", r.s3Bucket), s3ACLPublicRead...); err != nil {
+		return fmt.Errorf("update helm index: %w", err)
 	}
 	return nil
 }
@@ -1319,6 +1410,29 @@ func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...str
 func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {
 	_, err := r.makeInDirectoryWithOutput(dir, target, env...)
 	return err
+}
+
+func (r *CalicoManager) s3Cp(src, dest string, additionalFlags ...string) error {
+	args := []string{
+		"s3", "cp",
+		src, dest,
+	}
+	if r.awsProfile != "" {
+		args = append(args, "--profile", r.awsProfile)
+	}
+	if strings.HasSuffix(src, "/") {
+		args = append(args, "--recursive")
+	}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		args = append(args, "--debug")
+	}
+	if len(additionalFlags) > 0 {
+		args = append(args, additionalFlags...)
+	}
+	if _, err := r.runner.Run("aws", args, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *CalicoManager) releaseBranchPrereqs(branch string) error {

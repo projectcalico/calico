@@ -3,6 +3,7 @@ package postrelease
 import (
 	"fmt"
 	"net/http"
+	"path"
 	"slices"
 	"testing"
 
@@ -15,10 +16,8 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
-const helmIndexURL = "https://projectcalico.docs.tigera.io/charts/index.yaml"
-
 func chartURL(githubOrg, githubRepo, version string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/tigera-operator-%s.tgz", githubOrg, githubRepo, version, version)
+	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, utils.TigeraOperatorChart, version)
 }
 
 func TestHelmChart(t *testing.T) {
@@ -52,22 +51,20 @@ func TestHelmChart(t *testing.T) {
 			t.Run(reg, func(t *testing.T) {
 				t.Parallel()
 
-				for _, chart := range utils.HelmCharts {
-					dir := t.TempDir()
-					args := []string{
-						"pull", fmt.Sprintf("oci://%s/%s", reg, chart),
-						"--version", releaseVersion,
-					}
-					out, err := command.RunInDir(dir, "helm", args)
-					if err != nil {
-						t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", chart, releaseVersion, reg, err, out)
-					}
-					chart, err := loader.LoadDir(dir)
-					if err != nil {
-						t.Fatalf("load helm chart from %s: %v", reg, err)
-					}
-					validateChart(t, chart)
+				dir := t.TempDir()
+				args := []string{
+					"pull", fmt.Sprintf("oci://%s/%s", reg, utils.TigeraOperatorChart),
+					"--version", releaseVersion,
 				}
+				out, err := command.RunInDir(dir, "helm", args)
+				if err != nil {
+					t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.TigeraOperatorChart, releaseVersion, reg, err, out)
+				}
+				chart, err := loader.LoadDir(dir)
+				if err != nil {
+					t.Fatalf("load helm chart from %s: %v", reg, err)
+				}
+				validateChart(t, chart)
 			})
 		}
 	})
@@ -92,7 +89,7 @@ func TestHelmIndex(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	resp, err := http.Get(helmIndexURL)
+	resp, err := http.Get(path.Join(utils.CalicoHelmRepoURL, "index.yaml"))
 	if err != nil {
 		t.Fatalf("failed to fetch helm index: %v", err)
 	}
