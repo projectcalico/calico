@@ -1,8 +1,8 @@
 apiVersion: network.azure.com/v1api20201101
 kind: NetworkSecurityGroup
 metadata:
-  name: aso-sg
-  namespace: aso
+  name: winfv-sg
+  namespace: winfv
 spec:
   location: {{.Env.AZURE_LOCATION}}
   owner:
@@ -12,11 +12,11 @@ spec:
 apiVersion: network.azure.com/v1api20201101
 kind: NetworkSecurityGroupsSecurityRule
 metadata:
-  name: aso-sgrule-allow-ssh
-  namespace: aso
+  name: winfv-sgrule-allow-ssh
+  namespace: winfv
 spec:
   owner:
-    name: aso-sg
+    name: winfv-sg
   protocol: Tcp
   sourcePortRange: "*"
   destinationPortRange: "22"
@@ -31,11 +31,11 @@ spec:
 apiVersion: network.azure.com/v1api20201101
 kind: NetworkSecurityGroupsSecurityRule
 metadata:
-  name: aso-sgrule-allow-rdp
-  namespace: aso
+  name: winfv-sgrule-allow-rdp
+  namespace: winfv
 spec:
   owner:
-    name: aso-sg
+    name: winfv-sg
   protocol: Tcp
   sourcePortRange: "*"
   destinationPortRange: "3389"
@@ -50,11 +50,11 @@ spec:
 apiVersion: network.azure.com/v1api20201101
 kind: NetworkSecurityGroupsSecurityRule
 metadata:
-  name: aso-sgrule-allow-k8s-api
-  namespace: aso
+  name: winfv-sgrule-allow-k8s-api
+  namespace: winfv
 spec:
   owner:
-    name: aso-sg
+    name: winfv-sg
   protocol: Tcp
   sourcePortRange: "*"
   destinationPortRange: "6443"

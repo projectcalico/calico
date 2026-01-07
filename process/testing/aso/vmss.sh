@@ -66,7 +66,7 @@ function ensure_aso_credentials() {
   log_info "Configuring namespaced ASO v2 credentials..."
 
   # Create namespace for our resources
-  ${KUBECTL} create namespace aso --dry-run=client -o yaml | ${KUBECTL} apply -f -
+  ${KUBECTL} create namespace winfv --dry-run=client -o yaml | ${KUBECTL} apply -f -
 
   log_info "Creating namespaced ASO credentials in aso namespace..."
 
@@ -76,7 +76,7 @@ apiVersion: v1
 kind: Secret
 metadata:
    name: aso-credential
-   namespace: aso
+   namespace: winfv
 stringData:
   AZURE_SUBSCRIPTION_ID: "$AZURE_SUBSCRIPTION_ID"
   AZURE_TENANT_ID: "$AZURE_TENANT_ID"
@@ -637,10 +637,10 @@ function diagnose_aso_resources() {
 
     # Check credential status
     log_info "Checking ASO credentials:"
-    if ${KUBECTL} get secret aso-credential -n aso &>/dev/null; then
-      echo "✓ aso-credential secret exists in aso namespace"
+    if ${KUBECTL} get secret aso-credential -n winfv &>/dev/null; then
+      echo "✓ aso-credential secret exists in winfv namespace"
     else
-      echo "✗ aso-credential secret NOT found in aso namespace - this explains the credential errors!"
+      echo "✗ aso-credential secret NOT found in winfv namespace - this explains the credential errors!"
       echo "  Re-run './vmss.sh create' to recreate the required credentials"
     fi
 
