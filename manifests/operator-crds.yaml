@@ -727,8 +727,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -1147,7 +1147,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -1230,7 +1230,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -2397,8 +2397,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -2779,7 +2779,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -3593,8 +3593,8 @@ spec:
                                                   most preferred is the one with the greatest sum of weights, i.e.
                                                   for each node that meets all of the scheduling requirements (resource
                                                   request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                                  compute a sum by iterating through the elements of this field and adding
-                                                  "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                                  compute a sum by iterating through the elements of this field and subtracting
+                                                  "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                                   node(s) with the highest sum are the most preferred.
                                                 items:
                                                   description:
@@ -3986,7 +3986,7 @@ spec:
                                                   description: |-
                                                     Claims lists the names of resources, defined in spec.resourceClaims,
                                                     that are used by this container.
-                                                    This is an alpha field and requires enabling the
+                                                    This field depends on the
                                                     DynamicResourceAllocation feature gate.
                                                     This field is immutable. It can only be set for containers.
                                                   items:
@@ -4997,8 +4997,8 @@ spec:
                                                   most preferred is the one with the greatest sum of weights, i.e.
                                                   for each node that meets all of the scheduling requirements (resource
                                                   request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                                  compute a sum by iterating through the elements of this field and adding
-                                                  "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                                  compute a sum by iterating through the elements of this field and subtracting
+                                                  "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                                   node(s) with the highest sum are the most preferred.
                                                 items:
                                                   description:
@@ -5390,7 +5390,7 @@ spec:
                                                   description: |-
                                                     Claims lists the names of resources, defined in spec.resourceClaims,
                                                     that are used by this container.
-                                                    This is an alpha field and requires enabling the
+                                                    This field depends on the
                                                     DynamicResourceAllocation feature gate.
                                                     This field is immutable. It can only be set for containers.
                                                   items:
@@ -6429,8 +6429,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -6811,7 +6811,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -7871,8 +7871,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -8254,7 +8254,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -9455,8 +9455,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -9847,7 +9847,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -10926,8 +10926,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -11317,7 +11317,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -11466,7 +11466,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -12266,8 +12266,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -12657,7 +12657,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -12745,7 +12745,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -13545,8 +13545,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -13936,7 +13936,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -14192,7 +14192,7 @@ spec:
                             description: |-
                               Claims lists the names of resources, defined in spec.resourceClaims,
                               that are used by this container.
-                              This is an alpha field and requires enabling the
+                              This field depends on the
                               DynamicResourceAllocation feature gate.
                               This field is immutable. It can only be set for containers.
                             items:
@@ -14986,8 +14986,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -15378,7 +15378,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -15638,7 +15638,7 @@ spec:
                             pod is available (Ready for at least minReadySeconds) the old DaemonSet pod
                             on that node is marked deleted. If the old pod becomes unavailable for any
                             reason (Ready transitions to false, is evicted, or is drained) an updated
-                            pod is immediatedly created on that node without considering surge limits.
+                            pod is immediately created on that node without considering surge limits.
                             Allowing surge implies the possibility that the resources consumed by the
                             daemonset on any given node can double if the readiness check fails, and
                             so resource intensive daemonsets should take into account that they may
@@ -16689,8 +16689,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -17080,7 +17080,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -17164,7 +17164,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -18251,8 +18251,8 @@ spec:
                                                 most preferred is the one with the greatest sum of weights, i.e.
                                                 for each node that meets all of the scheduling requirements (resource
                                                 request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                                compute a sum by iterating through the elements of this field and adding
-                                                "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                                compute a sum by iterating through the elements of this field and subtracting
+                                                "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                                 node(s) with the highest sum are the most preferred.
                                               items:
                                                 description:
@@ -18652,7 +18652,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -19749,8 +19749,8 @@ spec:
                                                 most preferred is the one with the greatest sum of weights, i.e.
                                                 for each node that meets all of the scheduling requirements (resource
                                                 request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                                compute a sum by iterating through the elements of this field and adding
-                                                "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                                compute a sum by iterating through the elements of this field and subtracting
+                                                "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                                 node(s) with the highest sum are the most preferred.
                                               items:
                                                 description:
@@ -20149,7 +20149,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -20298,7 +20298,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -21112,8 +21112,8 @@ spec:
                                                 most preferred is the one with the greatest sum of weights, i.e.
                                                 for each node that meets all of the scheduling requirements (resource
                                                 request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                                compute a sum by iterating through the elements of this field and adding
-                                                "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                                compute a sum by iterating through the elements of this field and subtracting
+                                                "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                                 node(s) with the highest sum are the most preferred.
                                               items:
                                                 description:
@@ -21512,7 +21512,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -21600,7 +21600,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -22414,8 +22414,8 @@ spec:
                                                 most preferred is the one with the greatest sum of weights, i.e.
                                                 for each node that meets all of the scheduling requirements (resource
                                                 request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                                compute a sum by iterating through the elements of this field and adding
-                                                "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                                compute a sum by iterating through the elements of this field and subtracting
+                                                "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                                 node(s) with the highest sum are the most preferred.
                                               items:
                                                 description:
@@ -22814,7 +22814,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -23073,7 +23073,7 @@ spec:
                                 description: |-
                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                   that are used by this container.
-                                  This is an alpha field and requires enabling the
+                                  This field depends on the
                                   DynamicResourceAllocation feature gate.
                                   This field is immutable. It can only be set for containers.
                                 items:
@@ -23885,8 +23885,8 @@ spec:
                                                 most preferred is the one with the greatest sum of weights, i.e.
                                                 for each node that meets all of the scheduling requirements (resource
                                                 request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                                compute a sum by iterating through the elements of this field and adding
-                                                "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                                compute a sum by iterating through the elements of this field and subtracting
+                                                "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                                 node(s) with the highest sum are the most preferred.
                                               items:
                                                 description:
@@ -24286,7 +24286,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -24548,7 +24548,7 @@ spec:
                                 pod is available (Ready for at least minReadySeconds) the old DaemonSet pod
                                 on that node is marked deleted. If the old pod becomes unavailable for any
                                 reason (Ready transitions to false, is evicted, or is drained) an updated
-                                pod is immediatedly created on that node without considering surge limits.
+                                pod is immediately created on that node without considering surge limits.
                                 Allowing surge implies the possibility that the resources consumed by the
                                 daemonset on any given node can double if the readiness check fails, and
                                 so resource intensive daemonsets should take into account that they may
@@ -25613,8 +25613,8 @@ spec:
                                                 most preferred is the one with the greatest sum of weights, i.e.
                                                 for each node that meets all of the scheduling requirements (resource
                                                 request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                                compute a sum by iterating through the elements of this field and adding
-                                                "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                                compute a sum by iterating through the elements of this field and subtracting
+                                                "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                                 node(s) with the highest sum are the most preferred.
                                               items:
                                                 description:
@@ -26013,7 +26013,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -26097,7 +26097,7 @@ spec:
                                                 description: |-
                                                   Claims lists the names of resources, defined in spec.resourceClaims,
                                                   that are used by this container.
-                                                  This is an alpha field and requires enabling the
+                                                  This field depends on the
                                                   DynamicResourceAllocation feature gate.
                                                   This field is immutable. It can only be set for containers.
                                                 items:
@@ -26629,7 +26629,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -26711,7 +26711,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
@@ -27791,8 +27791,8 @@ spec:
                                             most preferred is the one with the greatest sum of weights, i.e.
                                             for each node that meets all of the scheduling requirements (resource
                                             request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                            compute a sum by iterating through the elements of this field and adding
-                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                             node(s) with the highest sum are the most preferred.
                                           items:
                                             description:
@@ -28175,7 +28175,7 @@ spec:
                                             description: |-
                                               Claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This is an alpha field and requires enabling the
+                                              This field depends on the
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
