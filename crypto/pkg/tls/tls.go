@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 )
 
 // Ciphers supported by TLS 1.2
@@ -99,7 +98,6 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
 // boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
 func NewTLSConfig() (*tls.Config, error) {
-	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
 	env := os.Getenv("TLS_CIPHER_SUITES")
 	ciphers, err := ParseTLSCiphers(env)
 	if err != nil {
