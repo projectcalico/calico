@@ -144,4 +144,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 			detectIptablesRule(tc.Felixes[0], 6)
 		}
 	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			for _, felix := range tc.Felixes {
+				felix.Exec("iptables-save", "-c")
+				felix.Exec("ipset", "list")
+				felix.Exec("ip", "r")
+				felix.Exec("ip", "a")
+			}
+		}
+
+		ep1_1.Stop()
+		ep2_1.Stop()
+		tc.Stop()
+
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+		infra.Stop()
+	})
 })
