@@ -29,29 +29,31 @@ cd "${SCRIPT_DIR}"
 : ${GOMPLATE:=${ASO_DIR}/bin/gomplate}
 : ${BACKEND:?Error: BACKEND is not set}
 
+: "${CALICO_HOME:=${SCRIPT_DIR}/../../..}"
+
 # Kubeadm API server runs on port 6443
 export APISERVER_PORT=6443
 
 function setup_etcd() {
   echo "Setting up etcd server on Linux node..."
-  
+
   # Remove any existing etcd container and start fresh
-  ${MASTER_CONNECT_COMMAND} "docker rm -f calico-etcd" || true
-  
+  ${MASTER_CONNECT_COMMAND} "sudo docker rm -f calico-etcd" || true
+
   # Start etcd container
   ETCD_CONTAINER="quay.io/coreos/etcd:v3.4.6"
-  ${MASTER_CONNECT_COMMAND} "docker run --detach -p 2389:2389 -p 8001:8001 --name calico-etcd ${ETCD_CONTAINER} etcd --advertise-client-urls 'http://${LINUX_PIP}:2389,http://127.0.0.1:2389,http://${LINUX_PIP}:8001,http://127.0.0.1:8001' --listen-client-urls 'http://0.0.0.0:2389,http://0.0.0.0:8001'"
-  
+  ${MASTER_CONNECT_COMMAND} "sudo docker run --detach -p 2389:2389 -p 8001:8001 --name calico-etcd ${ETCD_CONTAINER} etcd --advertise-client-urls 'http://${LINUX_PIP}:2389,http://127.0.0.1:2389,http://${LINUX_PIP}:8001,http://127.0.0.1:8001' --listen-client-urls 'http://0.0.0.0:2389,http://0.0.0.0:8001'"
+
   echo "Waiting for etcd to be ready..."
   sleep 5
-  ${MASTER_CONNECT_COMMAND} docker ps -a
-  
+  ${MASTER_CONNECT_COMMAND} sudo docker ps -a
+
   echo "etcd server is running at ${LINUX_PIP}:2389"
 }
 
 function create_l2bridge_network() {
   # Create external network will cause ssh session to hang.
-  # Use timeout and ignore error state to make sure the script will 
+  # Use timeout and ignore error state to make sure the script will
   # keep running.
   set +e
   timeout -s SIGTERM 20s ${WINDOWS_CONNECT_COMMAND} "c:\\k\\create-network.ps1 -Backend l2bridge"
@@ -82,6 +84,11 @@ function copy_run_fv_script_to_windows() {
   # Copy run-fv.ps1 to Windows node using ASO helper
   ${ASO_DIR}/scp-to-windows.sh 0 ./windows/run-fv.ps1 'c:\k\run-fv.ps1'
   echo "Copied run-fv.ps1 to Windows node"
+
+  make -C "${CALICO_HOME}/cni-plugin" bin/windows/win-fv.exe
+
+  ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/cni-plugin/bin/windows/win-fv.exe" 'c:\k\win-fv.exe'
+  echo "Copied win-fv.exe to Windows node"
 }
 
 # Main execution
@@ -96,6 +103,5 @@ elif [[ "$BACKEND" = "l2bridge" ]]; then
   run_fv_l2bridge
 else
   echo "Invalid network backend paramenter $BACKEND provided"
-  exit -1
+  exit 1
 fi
-
