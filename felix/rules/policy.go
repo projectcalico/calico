@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package rules
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -29,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // ruleRenderer defined in rules_defs.go.
@@ -46,6 +48,8 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			ipVersion, RuleOwnerTypePolicy,
 			RuleDirIngress,
 			policyID.Name,
+			policyID.Tier,
+			policy.Namespace,
 			policy.Untracked,
 			fmt.Sprintf("Policy %s ingress", policyID.Name),
 		),
@@ -58,6 +62,8 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			ipVersion, RuleOwnerTypePolicy,
 			RuleDirEgress,
 			policyID.Name,
+			policyID.Tier,
+			policy.Namespace,
 			policy.Untracked,
 			fmt.Sprintf("Policy %s egress", policyID.Name),
 		),
@@ -66,6 +72,9 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 }
 
 func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+	// Profiles are not related to any tier or namespace.
+	tier := ""
+	namespace := ""
 	inbound = &generictables.Chain{
 		Name: ProfileChainName(ProfileInboundPfx, profileID, r.NFTables),
 		Rules: r.ProtoRulesToIptablesRules(
@@ -74,6 +83,8 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			RuleOwnerTypeProfile,
 			RuleDirIngress,
 			profileID.Name,
+			tier,
+			namespace,
 			false,
 			fmt.Sprintf("Profile %s ingress", profileID.Name),
 		),
@@ -85,6 +96,8 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			ipVersion, RuleOwnerTypeProfile,
 			RuleDirEgress,
 			profileID.Name,
+			tier,
+			namespace,
 			false,
 			fmt.Sprintf("Profile %s egress", profileID.Name),
 		),
@@ -98,13 +111,17 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	owner RuleOwnerType,
 	dir RuleDir,
 	name string,
+	tier string,
+	namspace string,
 	untracked bool,
 	chainComments ...string,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	for ii, protoRule := range protoRules {
 		// TODO (Matt): Need rule hash when that's cleaned up.
-		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked)...)
+		rules = append(rules,
+			r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, tier, namspace, untracked)...,
+		)
 	}
 
 	// Strip off any return rules at the end of the chain.  No matter their
@@ -216,7 +233,10 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	ipVersion uint8,
 	owner RuleOwnerType,
 	dir RuleDir,
-	idx int, name string,
+	idx int,
+	name string,
+	tier string,
+	namespace string,
 	untracked bool,
 ) []generictables.Rule {
 	ruleCopy := FilterRuleToIPVersion(ipVersion, pRule)
@@ -353,7 +373,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	}
 
 	rs := matchBlockBuilder.Rules
-	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked)
+	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, tier, namespace, untracked)
 	rs = append(rs, rules...)
 	// Render rule annotations as comments on each rule.
 	for i := range rs {
@@ -592,6 +612,8 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	dir RuleDir,
 	idx int,
 	name string,
+	tier string,
+	namespace string,
 	untracked bool,
 ) []generictables.Rule {
 	var rules []generictables.Rule
@@ -599,13 +621,13 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
-		logPrefix := r.LogPrefix
-		if logPrefix == "" {
-			logPrefix = "calico-packet"
+		logMatch := r.NewMatch()
+		if len(r.LogActionRateLimit) != 0 {
+			logMatch = logMatch.Limit(r.LogActionRateLimit, uint32(r.LogActionRateLimitBurst))
 		}
 		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch(),
-			Action: r.Log(logPrefix),
+			Match:  logMatch,
+			Action: r.Log(r.generateLogPrefix(name, tier, namespace)),
 		})
 	}
 
@@ -698,6 +720,86 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	}
 
 	return finalRules
+}
+
+var logPrefixRE = regexp.MustCompile("%[tknp]")
+
+// generateLogPrefix returns a log prefix string with known specifiers replaced by their corresponding values.
+// If no known specifiers are present, the log prefix is returned as-is.
+// Supported specifiers in the log prefix format string:
+//
+//	%t - Tier name
+//	%k - Kind (short names like gnp for GlobalNetworkPolicies)
+//	%n - Policy or profile name.
+//	%p - Policy or profile name including namespace:
+//	     - namespace/name for namespaced kinds.
+//	     - name for non namespaced kinds.
+func (r *DefaultRuleRenderer) generateLogPrefix(name, tier, namespace string) string {
+	logPrefix := "calico-packet"
+	if len(r.LogPrefix) != 0 {
+		logPrefix = r.LogPrefix
+	}
+
+	if !strings.Contains(logPrefix, "%") {
+		return logPrefix
+	}
+
+	kind := policyNameToKindShortName(name, tier, namespace)
+
+	strippedName := name
+	if kind != "pro" {
+		var err error
+		_, _, strippedName, err = names.DeconstructPolicyName(name)
+		if err != nil {
+			logrus.WithError(err).WithField("name", name).Warnf("Failed to deconstruct policy name")
+			strippedName = "unknown"
+		}
+	}
+
+	return logPrefixRE.ReplaceAllStringFunc(logPrefix, func(specifier string) string {
+		switch specifier {
+		case "%k":
+			return kind
+		case "%p":
+			if len(namespace) != 0 {
+				return fmt.Sprintf("%s/%s", namespace, strippedName)
+			}
+			return strippedName
+		case "%n":
+			return strippedName
+		case "%t":
+			return tier
+		default:
+			return specifier
+		}
+	})
+}
+
+func policyNameToKindShortName(name, tier, namespace string) string {
+	// Staged policies are not programmed in dataplane anymore. As such, we don't need to consider
+	// those here.
+	if strings.HasPrefix(name, names.K8sNetworkPolicyNamePrefix) {
+		return "knp"
+	}
+	if strings.HasPrefix(name, names.K8sAdminNetworkPolicyNamePrefix) {
+		return "kanp"
+	}
+	if strings.HasPrefix(name, names.K8sBaselineAdminNetworkPolicyNamePrefix) {
+		return "kbanp"
+	}
+	if strings.HasPrefix(name, names.OpenStackNetworkPolicyNamePrefix) {
+		return "ossg"
+	}
+	if len(namespace) == 0 && len(tier) == 0 {
+		return "pro"
+	}
+	if len(namespace) == 0 && len(tier) != 0 {
+		return "gnp"
+	}
+	if len(namespace) != 0 && len(tier) != 0 {
+		return "np"
+	}
+	return "unknown"
 }
 
 func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
