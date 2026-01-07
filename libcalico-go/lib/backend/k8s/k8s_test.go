@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	clusternetpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
@@ -2584,7 +2585,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 	})
 
 	It("should support setting and getting FelixConfig", func() {
-		enabled := apiv3.FloatingIPsEnabled
 		fc := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "myfelixconfig",
@@ -2600,7 +2600,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				},
 				Spec: apiv3.FelixConfigurationSpec{
 					InterfacePrefix: "xali-",
-					FloatingIPs:     &enabled,
+					FloatingIPs:     ptr.To(apiv3.FloatingIPsEnabled),
+					NFTablesMode:    ptr.To(apiv3.NFTablesModeAuto),
 				},
 			},
 		}
