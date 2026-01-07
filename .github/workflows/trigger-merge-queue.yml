@@ -1,28 +1,36 @@
 name: Trigger Merge Cat
 
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
 
 jobs:
   trigger-merge-queue-bot:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'master'
+    if: >
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'master'
     runs-on: ubuntu-latest
 
     steps:
+      - name: Print information about the PR
+        run: |
+          echo "PR number:        ${{ github.event.pull_request.number }}"
+          echo "Merge commit SHA: ${{ github.event.pull_request.merge_commit_sha }}"
+          echo "Base branch:      ${{ github.event.pull_request.base.ref }}"
+
       - name: Trigger Merge Cat
         run: |
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.TIGERA_BOT_PAT }}" \
-            https://api.github.com/repos/tigera/merge-queue-bot/actions/workflows/merge-queue-bot-oss-gh-action.yml/dispatches \
+            https://api.github.com/repos/tigera/merge-queue-bot/actions/workflows/221254945/dispatches \
             -d @- <<'EOF'
           {
             "ref": "master",
             "inputs": {
               "trigger_pr_number": "${{ github.event.pull_request.number }}",
               "trigger_merge_sha": "${{ github.event.pull_request.merge_commit_sha }}",
-              "triggered_by_action: "OSS_MERGE"
+              "triggered_by_action": "OSS_MERGE"
             }
           }
           EOF
