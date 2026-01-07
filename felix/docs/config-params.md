@@ -387,6 +387,33 @@ subcomponents, see Felix's logs.
 
 ## <a id="process-logging">Process: Logging
 
+### `LogActionRateLimit` (config file) / `logActionRateLimit` (YAML)
+
+Sets the rate of hitting a Log action. The value must be in the format "N/unit",
+where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogActionRateLimit` |
+| Encoding (env var/config file) | String matching regex <code>^(\d+/(?:second\|minute\|hour\|day))?$</code> |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `logActionRateLimit` (YAML) `LogActionRateLimit` (Go API) |
+| `FelixConfiguration` schema | String matching the regular expression <code>^\d+/(?:second\|minute\|hour\|day)$</code>. |
+| Default value (YAML) | none |
+
+### `LogActionRateLimitBurst` (config file) / `logActionRateLimitBurst` (YAML)
+
+Sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogActionRateLimitBurst` |
+| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
+| Default value (above encoding) | `5` |
+| `FelixConfiguration` field | `logActionRateLimitBurst` (YAML) `LogActionRateLimitBurst` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
+| Default value (YAML) | `5` |
+
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
 
 Controls which source code files have their Debug log output included in the logs.
@@ -418,7 +445,12 @@ The full path to the Felix log. Set to none to disable file logging.
 
 ### `LogPrefix` (config file) / `logPrefix` (YAML)
 
-The log prefix that Felix uses when rendering LOG rules.
+The log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers
+to include extra information in the log prefix.
+- %t: Tier name.
+- %k: Kind (short names).
+- %n: Policy or profile name.
+- %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
 
 | Detail |   |
 | --- | --- |
@@ -426,7 +458,7 @@ The log prefix that Felix uses when rendering LOG rules.
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | `calico-packet` |
 | `FelixConfiguration` field | `logPrefix` (YAML) `LogPrefix` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-zA-Z0-9%: /_-])*$</code>. |
 | Default value (YAML) | `calico-packet` |
 
 ### `LogSeverityFile` (config file) / `logSeverityFile` (YAML)
