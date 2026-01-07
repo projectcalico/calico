@@ -57,7 +57,7 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
         # Reset global etcd client.
         etcdv3._client = None
         mech_calico.mech_driver = None
-        
+
         super(TestMechanismDriverVoting, self).tearDown()
 
     def _disable_background_threads(self, driver):
