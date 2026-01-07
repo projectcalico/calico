@@ -66,7 +66,7 @@ var _ = Describe("Dispatch chains", func() {
 		var epMarkMapper EndpointMarkMapper
 		var renderer RuleRenderer
 		BeforeEach(func() {
-			renderer = NewRenderer(rrConfigNormal)
+			renderer = NewRenderer(rrConfigNormal, false)
 			epMarkMapper = NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint)
 		})
 
