@@ -61,7 +61,7 @@ sudo systemctl status containerd --no-pager || {
 }
 
 # Install kubeadm, kubelet, and kubectl
-KUBE_VERSION=${1:-"v1.33.6"}
+KUBE_VERSION=${1:-"v1.33.7"}
 # Extract major.minor version (e.g., v1.33.6 -> v1.33)
 KUBE_MAJOR_MINOR=$(echo "${KUBE_VERSION}" | cut -d'.' -f1,2)
 echo "Installing kubeadm, kubelet, and kubectl ${KUBE_VERSION}..."

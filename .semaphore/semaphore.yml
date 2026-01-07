@@ -501,7 +501,7 @@ blocks:
         - name: AZURE_LOCATION
           value: eastus2
         - name: KUBE_VERSION
-          value: v1.33.6
+          value: v1.33.7
       jobs:
         - name: "CNI Plugin: Windows Containerd FV - overlay"
           execution_time_limit:

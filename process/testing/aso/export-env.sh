@@ -28,7 +28,7 @@ export WINDOWS_NODE_COUNT="${WINDOWS_NODE_COUNT:=2}"
 # Verbose mode - set to "true" to see all command output, "false" to suppress output
 export VERBOSE="${VERBOSE:="true"}"
 
-export KUBE_VERSION="${KUBE_VERSION:="v1.33.6"}"
+export KUBE_VERSION="${KUBE_VERSION:="v1.33.7"}"
 
 export KINDEST_NODE_VERSION="${KINDEST_NODE_VERSION:="v1.31.0"}"
 export KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:="kind"}"
