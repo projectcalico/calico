@@ -112,7 +112,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	dir RuleDir,
 	name string,
 	tier string,
-	namspace string,
+	namespace string,
 	untracked bool,
 	chainComments ...string,
 ) []generictables.Rule {
@@ -120,7 +120,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	for ii, protoRule := range protoRules {
 		// TODO (Matt): Need rule hash when that's cleaned up.
 		rules = append(rules,
-			r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, tier, namspace, untracked)...,
+			r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, tier, namespace, untracked)...,
 		)
 	}
 
