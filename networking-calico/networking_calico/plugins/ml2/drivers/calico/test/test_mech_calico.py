@@ -41,18 +41,29 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
         lib.m_oslo_config.cfg.CONF.calico.resync_interval_secs = 0
         lib.m_oslo_config.cfg.CONF.calico.project_name_cache_max = 0
 
-        etcdv3._client = mock.Mock()
-        etcdv3.get_status = mock.Mock(return_value=("cluster-id", "123"))
-        etcdv3.get_prefix = mock.Mock(return_value=[])
+        # Mock etcd3gw client so background threads don't touch real etcd.
+        etcdv3._client = self.clientv3 = mock.Mock()
+
+        self.clientv3.status.return_value = {
+            "header": {"revision": "123", "cluster_id": "cluster-id"},
+        }
+        self.clientv3.get_prefix.return_value = []
+        self.clientv3.watch_prefix.return_value = (iter(()), mock.Mock())
 
         # Reset the driver
         mech_calico.mech_driver = None
+
+    def tearDown(self):
+        # Reset global etcd client.
+        etcdv3._client = None
+        mech_calico.mech_driver = None
+        
+        super(TestMechanismDriverVoting, self).tearDown()
 
     def _disable_background_threads(self, driver):
         """Disable background threads that would touch etcd."""
         driver.periodic_resync_thread = mock.Mock()
         driver._status_updating_thread = mock.Mock()
-        driver.start_etcd_watcher = mock.Mock()
 
     @mock.patch.object(mech_calico, "Elector")
     def test_parent_creates_elector(self, m_elector):
