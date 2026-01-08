@@ -68,7 +68,7 @@ function ensure_aso_credentials() {
   # Create namespace for our resources
   ${KUBECTL} create namespace winfv --dry-run=client -o yaml | ${KUBECTL} apply -f -
 
-  log_info "Creating namespaced ASO credentials in winfv namespace..."
+  log_info "Creating namespaced ASO credentials in aso namespace..."
 
   # Create the namespaced credential secret
   cat <<EOF | ${KUBECTL} apply -f -
@@ -695,7 +695,7 @@ function delete_rg() {
     if ! az group show --name "${AZURE_RESOURCE_GROUP}" &>/dev/null; then
       log_info "Resource group '${AZURE_RESOURCE_GROUP}' has been deleted successfully"
 
-      # Also clean up the winfv namespace if it exists
+      # Also clean up the aso namespace if it exists
       if ${KUBECTL} get namespace winfv &>/dev/null; then
         log_info "Cleaning up winfv namespace..."
         ${KUBECTL} delete namespace winfv --timeout=60s || true
