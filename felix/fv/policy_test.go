@@ -51,6 +51,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		infra = getInfra()
 
 		options := infrastructure.DefaultTopologyOptions()
+		options.IPIPEnabled = false
 		tc, client = infrastructure.StartSingleNodeTopology(options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
