@@ -111,10 +111,13 @@ struct cali_tc_state {
 	struct calico_nat_dest nat_dest; /* 8 bytes */
 	__u64 prog_start_time;
 	/* Temporary store for the MASQ source when policing
-	 * pod->service->self. We use it to restore ip_src to create
-	 * appropriate conntrack entry.
-	 */
+	* pod->service->self. We use it to restore ip_src to create
+	* appropriate conntrack entry.
+	*/
 	DECLARE_IP_ADDR(ip_src_masq);
+
+	__u32 nat_svc_id;
+	__u32 pad;
 #ifndef IPVER6
 	__u8 __pad_ipv4[44];
 #endif
