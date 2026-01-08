@@ -35,11 +35,11 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
     def setUp(self):
         super(TestMechanismDriverVoting, self).setUp()
 
-        lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
-        lib.m_oslo_config.cfg.CONF.calico.openstack_region = "no-region"
-        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 0
-        lib.m_oslo_config.cfg.CONF.calico.resync_interval_secs = 0
-        lib.m_oslo_config.cfg.CONF.calico.project_name_cache_max = 0
+        lib.m_compat.cfg.CONF.keystone_authtoken.auth_url = ""
+        lib.m_compat.cfg.CONF.calico.openstack_region = "no-region"
+        lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 0
+        lib.m_compat.cfg.CONF.calico.resync_interval_secs = 0
+        lib.m_compat.cfg.CONF.calico.project_name_cache_max = 0
 
         # Mock etcd3gw client so background threads don't touch real etcd.
         etcdv3._client = self.clientv3 = mock.Mock()
