@@ -332,6 +332,11 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		}
 	}
 
+	// In some cases, we can receive a notification for a new link of the same name before
+	// receiving the deletion notification for the old link.  In that case, we want to avoid
+	// notifying of changes until the final state is known.
+	multipleIndices := len(m.ifaceNameToIdx[ifaceName]) > 1
+
 	// Store or remove the information.
 	trackAddrs := !m.isExcludedInterface(ifaceName)
 	if ifaceExists {
@@ -356,15 +361,18 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		}
 	}
 
-	// In some cases, we can receive a notification for a new link of the same name before
-	// receiving the deletion notification for the old link.  In that case, we want to avoid
-	// notifying of changes until the final state is known.
-	if len(m.ifaceNameToIdx[ifaceName]) > 1 {
+	// Defer notification if either:
+	// - there are now multiple interfaces with the same name.
+	// - there were multiple interfaces with the same name before this update.
+	// Since the calculated oldState and newState are per-ifIndex, we can't be sure
+	// that the determined states are correct until we have only one interface with
+	// that name.
+	if multipleIndices || len(m.ifaceNameToIdx[ifaceName]) > 1 {
 		log.WithFields(log.Fields{
 			"ifaceName": ifaceName,
 			"ifIndex":   ifIndex,
 			"numIfaces": len(m.ifaceNameToIdx[ifaceName]),
-		}).Debug("Multiple interfaces with same name exist; deferring notification.")
+		}).Debug("Multiple interfaces with same name exist, deferring notification.")
 		return
 	}
 
