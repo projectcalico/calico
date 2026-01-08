@@ -33,9 +33,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali
 	CALI_DEBUG("Maglev: hashed packet to %d", hash);
 	struct cali_maglev_key ch_key = {
 		.ordinal = (hash % lut_size),
-		.vip = *ip_dst,
-		.port = dport,
-		.proto = ip_proto,
+		.sid = ctx->state->nat_svc_id,
 	};
 	struct calico_nat_dest *ch_val;
 

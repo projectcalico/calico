@@ -110,6 +110,8 @@ struct cali_tc_state {
 	/* Result of the NAT calculation.  Zeroed if there is no DNAT. */
 	struct calico_nat_dest nat_dest; /* 8 bytes */
 	__u64 prog_start_time;
+	__u32 nat_svc_id;
+	__u32 pad;
 	/* Temporary store for the MASQ source when policing
 	 * pod->service->self. We use it to restore ip_src to create
 	 * appropriate conntrack entry.

@@ -120,10 +120,7 @@ struct vxlanhdr {
 };
 
 struct cali_maglev_key {
-	ipv46_addr_t vip;
-	__u16 port;
-	__u8 proto;
-	__u8 pad;
+	__u32 sid;
 	__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
 };
 
