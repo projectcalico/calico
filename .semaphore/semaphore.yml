@@ -501,7 +501,7 @@ blocks:
         - name: AZURE_LOCATION
           value: eastus2
         - name: KUBE_VERSION
-          value: v1.33.6
+          value: v1.33.7
       jobs:
         - name: "CNI Plugin: Windows Containerd FV - overlay"
           execution_time_limit:
@@ -807,8 +807,7 @@ blocks:
       jobs:
         - name: "Felix: Windows FV"
           commands:
-            - export BACKEND=overlay
-            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh
   - name: "Felix: iptables tests on Ubuntu 22.04"
