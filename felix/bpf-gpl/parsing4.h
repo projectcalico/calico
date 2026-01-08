@@ -93,6 +93,9 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v4(struct cali_tc_ctx *ctx)
 	ctx->state->ip_proto = ip_hdr(ctx)->protocol;
 	ctx->state->ip_size = ip_hdr(ctx)->tot_len;
 	ctx->ipheader_len = ctx->state->ihl = ip_hdr(ctx)->ihl * 4;
+	if (ip_is_first_frag(ip_hdr(ctx))) {
+		ctx->state->flags |= CALI_ST_FIRST_FRAG;
+	}
 	CALI_DEBUG("IP ihl=%d bytes", ctx->ipheader_len);
 }
 

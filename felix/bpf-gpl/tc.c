@@ -78,10 +78,9 @@ int calico_tc_main(struct __sk_buff *skb)
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
-			/* If we are on tunnel and we do not have the key set, we cannot short-cirquit */
-			!(CALI_F_TUNNEL &&
-			 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
-		if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
+			/* If we are on tunnel and we do not have the key set, we cannot short-circuit */
+			!(CALI_F_TUNNEL &&  !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
+		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
 			DECLARE_TC_CTX(_ctx,
 				.skb = skb,
@@ -298,6 +297,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 		if (frag_ct_val) {
 			ctx->state->sport = frag_ct_val->sport;
 			ctx->state->dport = frag_ct_val->dport;
+			ctx->fwd.mark = frag_ct_val->seen_mark;
 			if (ip_is_last_frag(ip_hdr(ctx))) {
 				frags4_remove_ct(ctx);
 			}
@@ -1371,12 +1371,6 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		update_rule_counters(ctx);
 		skb_log(ctx, true);
 	}
-
-#ifndef IPVER6
-	if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_first_frag(ip_hdr(ctx))) {
-		frags4_record_ct(ctx);
-	}
-#endif
 
 	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && qos_dscp_needs_update(ctx) && !qos_dscp_set(ctx)) {
 		goto deny;
