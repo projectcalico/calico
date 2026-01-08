@@ -161,6 +161,8 @@ enum cali_state_flags {
 	/* CALI_ST_CLUSTER_EXTERNAL is set if the packet is heading toward or originating from
 	 * an endpoint outside the cluster */
 	CALI_ST_CLUSTER_EXTERNAL   = 0x2000,
+	/* CALI_ST_FIRST_FRAG is set if this packet is the first fragment of a fragmented IP packet */
+	CALI_ST_FIRST_FRAG        = 0x4000,
 };
 
 struct fwd {
