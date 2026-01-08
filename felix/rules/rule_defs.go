@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -319,7 +319,17 @@ type RuleRenderer interface {
 
 	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
-	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked bool) []generictables.Rule
+	ProtoRuleToIptablesRules(
+		pRule *proto.Rule,
+		ipVersion uint8,
+		owner RuleOwnerType,
+		dir RuleDir,
+		idx int,
+		name string,
+		tier string,
+		namespace string,
+		untracked bool,
+	) []generictables.Rule
 
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
 
@@ -423,7 +433,10 @@ type Config struct {
 	WireguardEncryptHostTraffic bool
 	RouteSource                 string
 
-	LogPrefix            string
+	LogPrefix               string
+	LogActionRateLimit      string
+	LogActionRateLimitBurst int
+
 	EndpointToHostAction string
 	FilterAllowAction    string
 	MangleAllowAction    string
