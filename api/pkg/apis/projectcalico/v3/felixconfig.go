@@ -301,8 +301,26 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
 	IptablesFilterDenyAction string `json:"iptablesFilterDenyAction,omitempty" validate:"omitempty,dropReject"`
 
-	// LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]
+	// LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers
+	// to include extra information in the log prefix.
+	// - %t: Tier name.
+	// - %k: Kind (short names).
+	// - %n: Policy or profile name.
+	// - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
+	// [Default: calico-packet]
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9%: /_-])*$`
 	LogPrefix string `json:"logPrefix,omitempty"`
+
+	// LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
+	// where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+	// +optional
+	// +kubebuilder:validation:Pattern=`^\d+/(?:second|minute|hour|day)$`
+	LogActionRateLimit *string `json:"logActionRateLimit,omitempty"`
+
+	// LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	LogActionRateLimitBurst *int `json:"logActionRateLimitBurst,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath string `json:"logFilePath,omitempty"`
