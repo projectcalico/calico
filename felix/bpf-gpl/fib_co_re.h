@@ -6,7 +6,9 @@
 #define __CALI_FIB_CO_RE_H__
 
 #include "profiling.h"
-
+#ifndef IPVER6
+#include "ip_v4_fragment.h"
+#endif
 #include <linux/if_packet.h>
 
 static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
@@ -72,6 +74,17 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
+#ifndef IPVER6
+        if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && (ctx->state->flags & CALI_ST_FIRST_FRAG)) {
+		/* Revalidate the access to the packet */
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+			deny_reason(ctx, CALI_REASON_SHORT);
+			CALI_DEBUG("Too short");
+			goto deny;
+		}
+		frags4_record_ct(ctx);
+	}
+#endif
 	if (ctx->state->flags & CALI_ST_SKIP_REDIR_ONCE) {
 		goto skip_fib;
 	}

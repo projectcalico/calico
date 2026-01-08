@@ -1372,12 +1372,6 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		skb_log(ctx, true);
 	}
 
-#ifndef IPVER6
-	if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_first_frag(ip_hdr(ctx))) {
-		frags4_record_ct(ctx);
-	}
-#endif
-
 	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && qos_dscp_needs_update(ctx) && !qos_dscp_set(ctx)) {
 		goto deny;
 	}
@@ -1779,11 +1773,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	case CALI_CT_ESTABLISHED_BYPASS:
 		if (!ct_result_is_syn(state->ct_result.rc)) {
 			seen_mark = CALI_SKB_MARK_BYPASS;
-#ifndef IPVER6
-			if (ip_is_first_frag(ip_hdr(ctx))) {
-				frags4_record_ct_mark(ctx, seen_mark);
-			}
-#endif
 			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS");
 		}
 		// fall through
