@@ -1136,21 +1136,24 @@ class TestPluginEtcd(TestPluginEtcdBase):
         ]))
 
         # Define two subnets.
-        subnet1 = {'network_id': 'net-id-1',
-                   'enable_dhcp': True,
-                   'id': 'subnet-id-10.65.0--24',
-                   'cidr': '10.65.0/24',
-                   'gateway_ip': '10.65.0.1',
-                   'host_routes': [{'destination': '11.11.0.0/16',
-                                    'nexthop': '10.65.0.1'}],
-                   'dns_nameservers': []}
-        subnet2 = {'network_id': 'net-id-2',
-                   'enable_dhcp': False,
-                   'id': 'subnet-id-10.28.0--24',
-                   'cidr': '10.28.0/24',
-                   'gateway_ip': '10.28.0.1',
-                   'host_routes': [],
-                   'dns_nameservers': ['172.18.10.55']}
+        subnet1 = {
+            "network_id": "net-id-1",
+            "enable_dhcp": True,
+            "id": "subnet-id-10.65.0--24",
+            "cidr": "10.65.0.0/24",
+            "gateway_ip": "10.65.0.1",
+            "host_routes": [{"destination": "11.11.0.0/16", "nexthop": "10.65.0.1"}],
+            "dns_nameservers": [],
+        }
+        subnet2 = {
+            "network_id": "net-id-2",
+            "enable_dhcp": False,
+            "id": "subnet-id-10.28.0--24",
+            "cidr": "10.28.0.0/24",
+            "gateway_ip": "10.28.0.1",
+            "host_routes": [],
+            "dns_nameservers": ["172.18.10.55"],
+        }
         self.osdb_subnets = [subnet1, subnet2]
 
         # Notify creation of subnet1, and expect corresponding etcd write.
