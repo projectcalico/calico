@@ -577,7 +577,7 @@ blocks:
       agent:
         machine:
           type: f1-standard-4
-          os_image: ubuntu2004
+          os_image: ubuntu2204
       jobs:
         - name: "E2E tests: Conformance"
           commands:
@@ -1088,7 +1088,7 @@ blocks:
       agent:
         machine:
           type: f1-standard-4
-          os_image: ubuntu2004
+          os_image: ubuntu2204
       prologue:
         commands:
           - cd node
@@ -1325,7 +1325,7 @@ blocks:
       agent:
         machine:
           type: f1-standard-2
-          os_image: ubuntu2004
+          os_image: ubuntu2204
       prologue:
         commands:
           - cd networking-calico
