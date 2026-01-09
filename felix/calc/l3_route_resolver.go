@@ -806,8 +806,11 @@ func (c *L3RouteResolver) flush() {
 					rt.Borrowed = true
 				}
 				if ri.Refs[0].RefType == RefTypeWEP {
-					// This is not a tunnel ref, so must be a workload.
+					// This is explicitly a workload endpoint.
 					if ri.Refs[0].NodeName == c.myNodeName {
+						// Flag that there's a live WEP on this IP; this avoids
+						// confusion in the dataplane if we have borrowed IPs
+						// (which get flagged as both local and remote!).
 						rt.LocalWorkload = true
 						rt.Types |= proto.RouteType_LOCAL_WORKLOAD
 					} else {
