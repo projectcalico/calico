@@ -338,8 +338,7 @@ type FelixConfigurationSpec struct {
 
 	// LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
 	// +optional
-	// +kubebuilder:validation:Minimum=0
-	LogActionRateLimitBurst *int `json:"logActionRateLimitBurst,omitempty"`
+	LogActionRateLimitBurst *uint32 `json:"logActionRateLimitBurst,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath string `json:"logFilePath,omitempty"`
