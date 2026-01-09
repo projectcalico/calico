@@ -105,11 +105,17 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		CALI_DEBUG("NAT: nodeport hit");
 	}
 
+	/* Since we must use ctx to communicate the svc ID we hit out to the Maglev prog,
+	 * we're gating this code from XDP.
+	 */
+	#if !(CALI_F_XDP) && !(CALI_F_CGROUP)
 	if (HAS_MAGLEV && (nat_lv1_val->flags & NAT_FLG_MAGLEV)) {
 		CALI_DEBUG("NAT: 1st level hit; id=%d, NAT maglev", nat_lv1_val->id);
 		*res = NAT_MAGLEV;
+		ctx->state->nat_svc_id = nat_lv1_val->id;
 		return NULL; /* Make the lookup fail, but signal, that another lookup should be done for maglev */
 	}
+	#endif
 
 	/* With LB source range, we install a drop entry in the NAT FE map
 	 * with count equal to all-ones for both ip4/6. If we hit this entry,
