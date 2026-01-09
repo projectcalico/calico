@@ -459,6 +459,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # We deliberately do this last, to ensure that all of the setup
                 # above is complete before we start running.
                 self._epoch += 1
+                eventlet.spawn(self.resync_monitor_thread, self._epoch)
                 eventlet.spawn(self.periodic_resync_thread, self._epoch)
                 if cfg.CONF.calico.etcd_compaction_period_mins > 0:
                     eventlet.spawn(self.periodic_compaction_thread, self._epoch)
@@ -474,19 +475,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
             self._my_pid = current_pid
 
-            # Start our resynchronization process and status updating. Just in
-            # case we ever get two same threads running, use an epoch counter
-            # to tell the old thread to die.
-            # We deliberately do this last, to ensure that all of the setup
-            # above is complete before we start running.
-            self._epoch += 1
-            eventlet.spawn(self.resync_monitor_thread, self._epoch)
-            eventlet.spawn(self.periodic_resync_thread, self._epoch)
-            if cfg.CONF.calico.etcd_compaction_period_mins > 0:
-                eventlet.spawn(self.periodic_compaction_thread, self._epoch)
-            eventlet.spawn(self._status_updating_thread, self._epoch)
-            for _ in range(cfg.CONF.calico.num_port_status_threads):
-                eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
             LOG.info(
                 "Calico mechanism driver initialisation done in process %s", current_pid
             )
