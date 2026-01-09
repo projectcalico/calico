@@ -395,10 +395,10 @@ where N is a number and unit is one of: second, minute, hour, or day. For exampl
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogActionRateLimit` |
-| Encoding (env var/config file) | String matching regex <code>^(\d{1,4}/(?:second\|minute\|hour\|day))?$</code> |
+| Encoding (env var/config file) | String matching regex <code>^([1-9]\d{0,3}/(?:second\|minute\|hour\|day))?$</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `logActionRateLimit` (YAML) `LogActionRateLimit` (Go API) |
-| `FelixConfiguration` schema | String matching the regular expression <code>^\d+/(?:second\|minute\|hour\|day)$</code>. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^[1-9]\d{0,3}/(?:second\|minute\|hour\|day)$</code>. |
 | Default value (YAML) | none |
 
 ### `LogActionRateLimitBurst` (config file) / `logActionRateLimitBurst` (YAML)

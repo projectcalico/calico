@@ -77,7 +77,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy tests", []apiconfig.
 		felixConfig.Spec.LogPrefix = "aXy9%n%%t %k %p"
 		LogActionRateLimitBurst := 9_999
 		felixConfig.Spec.LogActionRateLimitBurst = &LogActionRateLimitBurst
-		logActionRateLimit := "0/day"
+		logActionRateLimit := "9999/day"
 		felixConfig.Spec.LogActionRateLimit = &logActionRateLimit
 		_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
