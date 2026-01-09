@@ -289,7 +289,7 @@ var _ = Describe("Raw egress policy manager", func() {
 			MarkDrop:            0x80,
 			MarkEndpoint:        0xff00,
 			MarkNonCaliEndpoint: 0x0100,
-		})
+		}, false)
 		policyMgr = newRawEgressPolicyManager(
 			rawTable,
 			ruleRenderer,

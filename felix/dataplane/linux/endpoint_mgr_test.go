@@ -840,7 +840,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 		})
 
 		JustBeforeEach(func() {
-			renderer := rules.NewRenderer(rrConfigNormal)
+			renderer := rules.NewRenderer(rrConfigNormal, false)
 			rawTable = newMockTable("raw")
 			mangleTable = newMockTable("mangle")
 			filterTable = newMockTable("filter")

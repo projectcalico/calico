@@ -27,8 +27,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("DSCP manager - IPv4", dscpManagerTests(4))
-var _ = Describe("DSCP manager - IPv6", dscpManagerTests(6))
+var (
+	_ = Describe("DSCP manager - IPv4", dscpManagerTests(4))
+	_ = Describe("DSCP manager - IPv6", dscpManagerTests(6))
+)
 
 func dscpManagerTests(ipVersion uint8) func() {
 	return func() {
@@ -49,7 +51,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 				MarkScratch1: 0x8,
 				MarkDrop:     0x10,
 				MarkEndpoint: 0x11110000,
-			})
+			}, false)
 			manager = newDSCPManager(ipSets, mangleTable, ruleRenderer, ipVersion,
 				Config{
 					MaxIPSetSize: 1024,
