@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -339,6 +339,7 @@ type FelixConfigurationSpec struct {
 	// LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
 	// +optional
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=9999
 	LogActionRateLimitBurst *int `json:"logActionRateLimitBurst,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
