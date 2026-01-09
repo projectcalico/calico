@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -522,77 +521,54 @@ func (r *RuleID) DirectionString() string {
 
 func (r *RuleID) setFlowLogPolicyName() {
 	if r.IsProfile() {
-		// Profile.
+		// This is a profile rule.
 		r.fpName = fmt.Sprintf(
-			"%s|%s.%s|%s",
-			ProfileTierStr,
-			ProfileTierStr,
-			r.NameString(),
-			r.ActionString(),
-		)
-	} else if r.Kind == v3.KindGlobalNetworkPolicy || r.Kind == model.KindKubernetesClusterNetworkPolicy {
-		// GlobalNetworkPolicy, ClusterNetworkPolicy.
-		r.fpName = fmt.Sprintf(
-			"%s|%s|%s",
+			// <tier>|<kind>:<name>|<action>
+			"%s|pro:%s|%s",
 			r.TierString(),
 			r.NameString(),
 			r.ActionString(),
 		)
-	} else if r.Kind == v3.KindStagedGlobalNetworkPolicy {
-		// Staged GlobalNetworkPolicy.
-		r.fpName = fmt.Sprintf(
-			"%s|%s.staged:%s|%s",
-			r.TierString(),
-			r.TierString(),
-			r.NameString(),
-			r.ActionString(),
-		)
-	} else if r.Kind == model.KindKubernetesNetworkPolicy {
-		// Kubernetes NetworkPolicy.
-		r.fpName = fmt.Sprintf(
-			"%s|%s/%s|%s",
-			r.TierString(),
-			r.Namespace,
-			r.NameString(),
-			r.ActionString(),
-		)
-	} else if r.Kind == v3.KindStagedKubernetesNetworkPolicy {
-		// StagedKubernetesNetworkPolicy.
-		r.fpName = fmt.Sprintf(
-			"%s|%s/staged:%s|%s",
-			r.TierString(),
-			r.Namespace,
-			r.NameString(),
-			r.ActionString(),
-		)
-	} else if r.Kind == v3.KindStagedNetworkPolicy {
-		// StagedNetworkPolicy.
-		r.fpName = fmt.Sprintf(
-			"%s|%s/%s.staged:%s|%s",
-			r.TierString(),
-			r.Namespace,
-			r.TierString(),
-			r.NameString(),
-			r.ActionString(),
-		)
-	} else if r.Kind == v3.KindNetworkPolicy {
-		r.fpName = fmt.Sprintf(
-			"%s|%s/%s|%s",
-			r.TierString(),
-			r.Namespace,
-			r.NameString(),
-			r.ActionString(),
-		)
+		return
 	} else if r.Kind == "" {
 		// This is not a profile rule, nor a known policy kind. This makes it an end-of-tier rule.
 		r.fpName = fmt.Sprintf(
-			"%s|%s|%s",
+			"%s|eot:%s|%s",
 			r.TierString(),
 			NoMatchNameStr,
 			r.ActionString(),
 		)
+		return
+	}
+
+	// Construct the flow log policy name based on the kind of rule. This varies based on
+	// whether the policy is namespaced or not.
+	id := types.PolicyID{
+		Kind:      r.Kind,
+		Namespace: r.Namespace,
+		Name:      r.Name,
+	}
+	if r.IsNamespaced() {
+		// Namespaced policy.
+		r.fpName = fmt.Sprintf(
+			// <tier>|<kind>:<namespace>/<name>|<action>
+			"%s|%s:%s/%s|%s",
+			r.TierString(),
+			id.KindShortName(),
+			r.NamespaceString(),
+			r.NameString(),
+			r.ActionString(),
+		)
 	} else {
-		log.WithField("ruleID", r.String()).Warn("Unknown RuleID kind")
+		// Non-namespaced policy.
+		r.fpName = fmt.Sprintf(
+			// <tier>|<kind>:<name>|<action>
+			"%s|%s:%s|%s",
+			r.TierString(),
+			id.KindShortName(),
+			r.NameString(),
+			r.ActionString(),
+		)
 	}
 }
 

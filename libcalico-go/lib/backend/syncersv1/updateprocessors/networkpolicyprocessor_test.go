@@ -211,7 +211,7 @@ var (
 	expected1 = []*model.KVPair{
 		{
 			Key: model.PolicyKey{
-				Name:      "knp.default.test.policy",
+				Name:      "test.policy",
 				Namespace: "default",
 				Kind:      apiv3.KindNetworkPolicy,
 			},
@@ -261,7 +261,7 @@ var np2 = networkingv1.NetworkPolicy{
 var expected2 = []*model.KVPair{
 	{
 		Key: model.PolicyKey{
-			Name:      "knp.default.test.policy",
+			Name:      "test.policy",
 			Namespace: "default",
 			Kind:      apiv3.KindNetworkPolicy,
 		},

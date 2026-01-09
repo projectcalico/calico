@@ -6,13 +6,14 @@
 {{- $pipName := printf "pip-linux-%d" $nodeNum -}}
 {{- $extContainerdName := printf "vm-linux-%d-containerd" $nodeNum -}}
 {{- $extDockerName := printf "vm-linux-%d-docker-legacy" $nodeNum -}}
-{{- $computerName := printf "winfv-linux-%d" $nodeNum }}
+# NOTE: asovm-linux-%d here would have the l2bridge cni-plugin hang, maybe there's a problem with the name being too short?
+{{- $computerName := printf "asovm-linux-%d" $nodeNum }}
 ---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine
 metadata:
   name: {{$nodeName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -27,16 +28,16 @@ spec:
           name: {{$nicName}}
   osProfile:
     computerName: {{$computerName}}
-    adminUsername: winfv
+    adminUsername: aso
     adminPassword:
       key: password
-      name: winfv-secret-windows
+      name: aso-secret-windows
     linuxConfiguration:
       disablePasswordAuthentication: true
       ssh:
         publicKeys:
           - keyData: {{$.Env.PUBLIC_KEY}}
-            path: /home/winfv/.ssh/authorized_keys
+            path: /home/aso/.ssh/authorized_keys
   storageProfile:
     imageReference:
       publisher: Canonical
@@ -52,7 +53,7 @@ apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
   name: {{$extContainerdName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -105,7 +106,7 @@ apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
   name: {{$extDockerName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -119,7 +120,7 @@ apiVersion: network.azure.com/v1api20240301
 kind: NetworkInterface
 metadata:
   name: {{$nicName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -128,14 +129,14 @@ spec:
     reference:
       group: network.azure.com
       kind: NetworkSecurityGroup
-      name: winfv-sg
+      name: aso-sg
   ipConfigurations:
     - name: ipconfig-linux-{{$nodeNum}}
       subnet:
         reference:
           group: network.azure.com
           kind: VirtualNetworksSubnet
-          name: subnet-winfv
+          name: subnet-aso
       publicIPAddress:
         reference:
           group: network.azure.com
@@ -146,7 +147,7 @@ apiVersion: network.azure.com/v1api20240301
 kind: PublicIPAddress
 metadata:
   name: {{$pipName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
