@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -333,12 +333,13 @@ type FelixConfigurationSpec struct {
 	// LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
 	// where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
 	// +optional
-	// +kubebuilder:validation:Pattern=`^\d+/(?:second|minute|hour|day)$`
+	// +kubebuilder:validation:Pattern=`^[1-9]\d{0,3}/(?:second|minute|hour|day)$`
 	LogActionRateLimit *string `json:"logActionRateLimit,omitempty"`
 
 	// LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
 	// +optional
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=9999
 	LogActionRateLimitBurst *int `json:"logActionRateLimitBurst,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
