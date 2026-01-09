@@ -370,7 +370,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 		Key: model.ResourceKey{
 			Name:      np.Name,
 			Namespace: np.Namespace,
-			Kind:      apiv3.KindNetworkPolicy,
+			Kind:      model.KindKubernetesNetworkPolicy,
 		},
 		Value:    policy,
 		Revision: np.ResourceVersion,

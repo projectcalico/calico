@@ -115,7 +115,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 	kvp := &model.KVPair{
 		Key: model.ResourceKey{
 			Name: kcnp.Name,
-			Kind: apiv3.KindGlobalNetworkPolicy,
+			Kind: model.KindKubernetesClusterNetworkPolicy,
 		},
 		Value:    gnp,
 		Revision: kcnp.ResourceVersion,
