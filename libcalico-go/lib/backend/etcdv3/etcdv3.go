@@ -198,6 +198,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 		if len(getResp.Kvs) != 0 {
 			existing, _ = etcdToKVPair(d.Key, getResp.Kvs[0])
 		}
+		model.AddKindLabel(existing)
 		return existing, cerrors.ErrorResourceAlreadyExists{Identifier: keyCopy}
 	}
 
@@ -208,6 +209,8 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	d.Value = v
 	d.Revision = strconv.FormatInt(txnResp.Header.Revision, 10)
 
+	// "projectcalico.org/kind" label is required for certain resources when read by calico
+	model.AddKindLabel(d)
 	return d, nil
 }
 
@@ -215,6 +218,10 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 // an ErrorResourceDoesNotExist error.  The ResourceVersion must be specified, and if
 // incorrect will return an ErrorResourceUpdateConflict error and the current entry.
 func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
+	// "projectcalico.org/kind" label should not be entered into the datastore. It is exclusively used by calico on reads only.
+	defer model.AddKindLabel(d)
+	model.RemoveKindLabel(d)
+
 	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for update
 	keyCopy := d.Key
 
@@ -429,7 +436,15 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 	}
 
-	return etcdToKVPair(k, resp.Kvs[0])
+	data, err := etcdToKVPair(k, resp.Kvs[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Add "projectcalico.org/kind" label to certain resources
+	// to assist with selection
+	model.AddKindLabel(data)
+	return data, nil
 }
 
 // List entries in the datastore.  This may return an empty list of there are
@@ -463,6 +478,9 @@ func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision
 	list := []*model.KVPair{}
 	for _, p := range resp.Kvs {
 		if kv := convertListResponse(p, l); kv != nil {
+			// Add "projectcalico.org/kind" label to certain resources
+			// to assist with selection
+			model.AddKindLabel(kv)
 			list = append(list, kv)
 		}
 	}
