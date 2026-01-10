@@ -25,6 +25,7 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
+from datetime import datetime, timedelta
 import os
 import re
 import threading
@@ -92,6 +93,9 @@ LOG = log.getLogger(__name__)
 # The default interval between periodic resyncs, in seconds.
 DEFAULT_RESYNC_INTERVAL_SECS = 60
 
+# The default maximum interval between resync completions, in seconds.
+DEFAULT_RESYNC_MAX_INTERVAL_SECS = 3600
+
 calico_opts = [
     cfg.IntOpt(
         "num_port_status_threads",
@@ -133,6 +137,14 @@ calico_opts = [
             " the Neutron DB.  Zero means to disable any periodic rechecking.  Please"
             " note that Calico _always_ performs an _initial_ check when the Neutron"
             " server starts or is restarted."
+        ),
+    ),
+    cfg.IntOpt(
+        "resync_max_interval_secs",
+        default=DEFAULT_RESYNC_MAX_INTERVAL_SECS,
+        help=(
+            "Calico will log an error if the interval between periodic"
+            " resync completions surpasses this maximum (in seconds)."
         ),
     ),
 ]
@@ -323,6 +335,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # safe to compare this with other values returned by monotonic_time().
         self._last_status_queue_log_time = monotonic_time()
 
+        # Last resync completion time
+        self.last_resync_time = datetime.now()
+
         # Tell the monkeypatch where we are.
         global mech_driver
         assert mech_driver is None
@@ -444,6 +459,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # We deliberately do this last, to ensure that all of the setup
                 # above is complete before we start running.
                 self._epoch += 1
+                eventlet.spawn(self.resync_monitor_thread, self._epoch)
                 eventlet.spawn(self.periodic_resync_thread, self._epoch)
                 if cfg.CONF.calico.etcd_compaction_period_mins > 0:
                     eventlet.spawn(self.periodic_compaction_thread, self._epoch)
@@ -1083,6 +1099,46 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Port unbound, attempting delete if needed.")
             self.endpoint_syncer.delete_endpoint(port)
 
+    def resync_monitor_thread(self, launch_epoch):
+        """Monitor the interval between completed resyncs.
+
+        Logs an error if the period resync duration surpasses
+        the configured maximum time in seconds.
+        """
+        try:
+            LOG.info("Resync monitor thread started")
+
+            while self._epoch == launch_epoch:
+                # Only monitor the resync if we are the master node.
+                if self.elector.master():
+                    LOG.info("I am master: monitoring periodic resync")
+
+                    curr_time = datetime.now()
+                    time_delta = curr_time - self.last_resync_time
+                    if time_delta.seconds > cfg.CONF.calico.resync_max_interval_secs:
+                        LOG.error(
+                            "The time since the last resync completion has surpassed"
+                            f" {cfg.CONF.calico.resync_max_interval_secs} seconds"
+                        )
+
+                    deadline = self.last_resync_time + timedelta(
+                        seconds=cfg.CONF.calico.resync_max_interval_secs
+                    )
+                    time_left = (deadline - curr_time).seconds
+                    polling_rate = cfg.CONF.calico.resync_max_interval_secs / 5
+                    sleep_time = time_left if deadline > curr_time else polling_rate
+                    eventlet.sleep(sleep_time)
+                else:
+                    LOG.debug("I am not master")
+                    eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
+        except Exception:
+            # TODO(nj) Should we tear down the process.
+            LOG.exception("Resync monitor thread died!")
+            if self.elector:
+                # Stop the elector so that we give up the mastership.
+                self.elector.stop()
+            raise
+
     def periodic_resync_thread(self, launch_epoch):
         """Periodic Neutron DB -> etcd resynchronization logic.
 
@@ -1097,6 +1153,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Only do the resync if we are the master node.
                 if self.elector.master():
                     LOG.info("I am master: doing periodic resync")
+                    start_time = datetime.now()
 
                     # Since this thread is not associated with any particular
                     # request, we use our own admin context for accessing the
@@ -1118,6 +1175,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                         # Resync ClusterInformation and FelixConfiguration.
                         self.provide_felix_config()
+
+                        # mark this resync as finished.
+                        self.last_resync_time = datetime.now()
+                        LOG.info(
+                            "The periodic resync finished after"
+                            f" {self.last_resync_time - start_time}"
+                        )
                     except Exception:
                         LOG.exception("Error in periodic resync thread.")
 
