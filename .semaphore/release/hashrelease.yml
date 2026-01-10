@@ -37,6 +37,7 @@ global_job_config:
       # Log in to container registries needed for release.
       - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
       - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+      - echo $QUAY_TOKEN | helm registry login --username "$QUAY_USER" --password-stdin quay.io
       # Credentials for accessing gcloud
       - echo "${SEMAPHORE_OIDC_TOKEN}" > "${SEMAPHORE_TOKEN_FILE_PATH}"
       - |

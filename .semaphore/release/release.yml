@@ -30,6 +30,7 @@ blocks:
           # Log in to container registries needed for release.
           - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+          - echo $QUAY_TOKEN | helm registry login --username "$QUAY_USER" --password-stdin quay.io
           # Credentials for accessing gcloud, needed to push images to gcr
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
           - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}

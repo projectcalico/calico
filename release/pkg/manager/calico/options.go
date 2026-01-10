@@ -97,9 +97,30 @@ func WithOutputDir(outputDir string) Option {
 	}
 }
 
+func WithAWSProfile(profile string) Option {
+	return func(r *CalicoManager) error {
+		r.awsProfile = profile
+		return nil
+	}
+}
+
+func WithS3Bucket(bucket string) Option {
+	return func(r *CalicoManager) error {
+		r.s3Bucket = bucket
+		return nil
+	}
+}
+
 func WithPublishImages(publish bool) Option {
 	return func(r *CalicoManager) error {
 		r.publishImages = publish
+		return nil
+	}
+}
+
+func WithPublishCharts(publish bool) Option {
+	return func(r *CalicoManager) error {
+		r.publishCharts = publish
 		return nil
 	}
 }
@@ -135,6 +156,20 @@ func WithBuildImages(buildImages bool) Option {
 func WithImageRegistries(registries []string) Option {
 	return func(r *CalicoManager) error {
 		r.imageRegistries = registries
+		return nil
+	}
+}
+
+func WithHelmRegistries(registries []string) Option {
+	return func(r *CalicoManager) error {
+		r.helmRegistries = registries
+		return nil
+	}
+}
+
+func WithHelmRepo(url string) Option {
+	return func(r *CalicoManager) error {
+		r.helmRepoURL = url
 		return nil
 	}
 }
