@@ -162,7 +162,7 @@ type Syncer struct {
 	newFrontendKey         func(addr net.IP, port uint16, protocol uint8) nat.FrontendKeyInterface
 	newFrontendKeySrc      func(addr net.IP, port uint16, protocol uint8, cidr ip.CIDR) nat.FrontendKeyInterface
 	newBackendValue        func(addr net.IP, port uint16) nat.BackendValueInterface
-	newMaglevKey           func(addr net.IP, port uint16, protocol uint8, ordinal uint32) nat.MaglevBackendKeyInterface
+	newMaglevKey           func(svcID, ordinal uint32) nat.MaglevBackendKeyInterface
 	affinityKeyFromBytes   func([]byte) nat.AffinityKeyInterface
 	affinityValueFromBytes func([]byte) nat.AffinityValueInterface
 
@@ -549,7 +549,6 @@ func (s *Syncer) applyDerived(
 	sname k8sp.ServicePortName,
 	t svcType,
 	sinfo Service,
-	maglevEPs []k8sp.Endpoint,
 ) error {
 
 	svc, ok := s.newSvcMap[getSvcKey(sname, "")]
@@ -567,7 +566,7 @@ func (s *Syncer) applyDerived(
 	if sinfo.UseMaglev() {
 		switch t {
 		case svcTypeNodePort, svcTypeNodePortRemote:
-			log.WithField("service", sname).Warn("Ignoring Maglev directive for unsupported service type: NodePort")
+			log.WithField("service", sname).Warn("Refusing to mark service of type: NodePort with Maglev flag")
 		default:
 			flags |= nat.NATFlgMaglev
 		}
@@ -588,10 +587,6 @@ func (s *Syncer) applyDerived(
 		count:      count,
 		localCount: local,
 		svc:        sinfo,
-	}
-
-	if sinfo.UseMaglev() && maglevEPs != nil {
-		s.writeMaglevSvcBackends(skey, sinfo, maglevEPs)
 	}
 
 	if (svcTypeLoadBalancer == t || svcTypeExternalIP == t) && len(sinfo.LoadBalancerSourceRanges()) != 0 {
@@ -677,7 +672,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			if len(lbIP) != 0 {
 				extInfo := serviceInfoFromK8sServicePort(svc)
 				extInfo.clusterIP = lbIP
-				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo, maglevEPs)
+				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo)
 				if err != nil {
 					log.Errorf("failed to apply LoadBalancer IP %s for service %s : %s", lbIP, sname, err)
 					continue
@@ -690,7 +685,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		for _, extIP := range svc.ExternalIPs() {
 			extInfo := serviceInfoFromK8sServicePort(svc)
 			extInfo.clusterIP = extIP
-			err := s.applyDerived(sname, svcTypeExternalIP, extInfo, maglevEPs)
+			err := s.applyDerived(sname, svcTypeExternalIP, extInfo)
 			if err != nil {
 				log.Errorf("failed to apply ExternalIP %s for service %s : %s", extIP, sname, err)
 				continue
@@ -708,7 +703,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 					// separately
 					continue
 				}
-				err := s.applyDerived(sname, svcTypeNodePort, npInfo, nil)
+				err := s.applyDerived(sname, svcTypeNodePort, npInfo)
 				if err != nil {
 					log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)
 					continue
@@ -850,7 +845,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 
 	if sinfo.UseMaglev() && maglevEPs != nil {
 		flags |= nat.NATFlgMaglev
-		s.writeMaglevSvcBackends(skey, sinfo, maglevEPs)
+		s.writeMaglevSvcBackends(id, skey, maglevEPs)
 	}
 
 	if err := s.writeSvc(sinfo, id, cnt, local, flags); err != nil {
@@ -880,17 +875,13 @@ func (s *Syncer) newConsistentHash() *consistenthash.ConsistentHash {
 }
 
 // writeMaglevBackends takes frontend info, and a pre-populated CH module (backends already programmed).
-func (s *Syncer) writeMaglevSvcBackends(skey svcKey, sinfo Service, maglevEPs []k8sp.Endpoint) {
-	vip := sinfo.ClusterIP()
-	port := uint16(sinfo.Port())
-	proto := ProtoV1ToIntPanic(sinfo.Protocol())
-
+func (s *Syncer) writeMaglevSvcBackends(sID uint32, skey svcKey, maglevEPs []k8sp.Endpoint) {
 	for i, b := range maglevEPs {
-		mKey := s.newMaglevKey(vip, port, proto, uint32(i))
+		mKey := s.newMaglevKey(sID, uint32(i))
 		mVal := s.newBackendValue(net.ParseIP(b.IP()), uint16(b.Port()))
 		s.bpfMaglevEps.Desired().Set(mKey, mVal)
 	}
-	log.WithField("service", skey.sname).Info("Wrote Maglev service backends to LUT")
+	log.WithFields(log.Fields{"service": skey.sname, "id": sID}).Info("Wrote Maglev service backends to LUT")
 }
 
 func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) error {

@@ -121,10 +121,12 @@ type State struct {
 	SrcAddrMasq1        uint32
 	SrcAddrMasq2        uint32
 	SrcAddrMasq3        uint32
-	_                   [48]byte // ipv6 padding
+	NATSvcID            uint32
+	_                   uint32
+	_                   [44]byte // ipv6 padding
 }
 
-const expectedSize = 488
+const expectedSize = 496
 
 func (s *State) AsBytes() []byte {
 	bPtr := (*[expectedSize]byte)(unsafe.Pointer(s))
@@ -146,7 +148,7 @@ var MapParameters = maps.MapParameters{
 	ValueSize:  expectedSize,
 	MaxEntries: 2,
 	Name:       "cali_state",
-	Version:    4,
+	Version:    5,
 }
 
 func Map() maps.Map {

@@ -7,7 +7,7 @@
 
 #include "types.h"
 
-CALI_MAP(cali_state, 4,
+CALI_MAP(cali_state, 5,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
 		__u32, struct cali_tc_state,
 		2, 0)

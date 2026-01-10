@@ -115,6 +115,9 @@ struct cali_tc_state {
 	 * appropriate conntrack entry.
 	 */
 	DECLARE_IP_ADDR(ip_src_masq);
+
+	__u32 nat_svc_id;
+	__u32 pad;
 #ifndef IPVER6
 	__u8 __pad_ipv4[44];
 #endif

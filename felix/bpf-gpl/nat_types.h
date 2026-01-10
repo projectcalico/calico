@@ -120,17 +120,14 @@ struct vxlanhdr {
 };
 
 struct cali_maglev_key {
-	ipv46_addr_t vip;
-	__u16 port;
-	__u8 proto;
-	__u8 pad;
+	__u32 sid;
 	__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
 };
 
 #ifdef IPVER6
-CALI_MAP_NAMED(cali_v6_mglv, cali_maglev,,
+CALI_MAP_NAMED(cali_v6_mglv, cali_maglev,2,
 #else
-CALI_MAP_NAMED(cali_v4_mglv, cali_maglev,,
+CALI_MAP_NAMED(cali_v4_mglv, cali_maglev,2,
 #endif
 		BPF_MAP_TYPE_HASH,
 		struct cali_maglev_key, struct calico_nat_dest,
