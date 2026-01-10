@@ -25,8 +25,9 @@ const _RouteClass_name = "RouteClassLocalWorkloadRouteClassBPFSpecialRouteClassW
 var _RouteClass_index = [...]uint8{0, 23, 43, 62, 87, 108, 132, 152, 169, 192, 205}
 
 func (i RouteClass) String() string {
-	if i < 0 || i >= RouteClass(len(_RouteClass_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_RouteClass_index)-1 {
 		return "RouteClass(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _RouteClass_name[_RouteClass_index[i]:_RouteClass_index[i+1]]
+	return _RouteClass_name[_RouteClass_index[idx]:_RouteClass_index[idx+1]]
 }
