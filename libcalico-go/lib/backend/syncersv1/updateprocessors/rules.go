@@ -278,7 +278,9 @@ func NormalizeIPNets(nets []string) []*cnet.IPNet {
 	}
 	out := make([]*cnet.IPNet, len(nets))
 	for i, n := range nets {
-		out[i] = normalizeIPNet(n)
+		if x := normalizeIPNet(n); x != nil {
+			out[i] = x
+		}
 	}
 	return out
 }
