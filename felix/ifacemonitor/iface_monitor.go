@@ -318,7 +318,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 
 	// Calculate the old and new states of the interface.
 	oldState := StateNotPresent
-	if info := m.ifaceIdxToInfo[ifIndex]; info != nil {
+	if info := m.ifaceIdxToInfo[ifIndex]; info != nil && m.ifaceNameToIdx[ifaceName] == ifIndex {
 		oldState = info.State
 	}
 	newState := StateNotPresent
