@@ -75,7 +75,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
 
     def test_monitor_logs_error_when_over_max(self):
         """Test that an error is logged when interval surpasses maximum."""
-        lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
+        lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
         fake_resync_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
         self.driver.last_resync_time = fake_resync_time
@@ -91,7 +91,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
 
     def test_monitor_no_error_if_interval_under_max(self):
         """If interval is below max, no error should be logged."""
-        lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
+        lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
         self.mock_sleep.side_effect = self.simulate_epoch_progression()
 
@@ -113,7 +113,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
 
     def test_resync_resets_time(self):
         """Test that resync resets current interval duration to below max."""
-        lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
+        lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
         fake_resync_time_time = datetime.now() - timedelta(
             seconds=TEST_MAX_INTERVAL + 1
@@ -140,7 +140,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
 
     def test_errors_continue_to_log(self):
         """Test that errors continue logging if resync does not occur."""
-        lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
+        lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
         fake_resync_time_time = datetime.now() - timedelta(
             seconds=TEST_MAX_INTERVAL + 1
@@ -168,7 +168,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
     @mock.patch("networking_calico.plugins.ml2.drivers.calico.mech_calico.datetime")
     def test_sleep_time_logic_before_deadline(self, mock_datetime):
         """Test that we sleep until deadline if there is time left."""
-        lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
+        lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
 
         curr_time = datetime.now()
@@ -183,7 +183,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
 
     def test_sleep_time_logic_after_deadline(self):
         """Test that we poll if the deadline has passed."""
-        lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
+        lib.m_compat.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
         self.driver.elector.master.return_value = True
 
         fake_resync_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
