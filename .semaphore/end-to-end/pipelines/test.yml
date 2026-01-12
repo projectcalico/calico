@@ -1,0 +1,72 @@
+version: v1.0
+
+name: Generic test pipeline
+
+agent:
+  machine:
+    type: c1-standard-1
+    os_image: ubuntu2204
+
+auto_cancel:
+  queued:
+    when: "true"
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    - name: TEST_TYPE
+      value: k8s-e2e
+    - name: PRODUCT
+      value: calico
+    - name: FUNCTIONAL_AREA
+      value: "test.yml"
+    - name: K8S_E2E_FLAGS
+      value: --ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/"
+
+blocks:
+  - name: calico tests
+    dependencies: []
+    task:
+      jobs:
+        - name: kubeadm - bpf
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values: ["gcp-kubeadm"]
+            - env_var: K8S_VERSION
+              values: ["stable"]
+            - env_var: INSTALLER
+              values: ["operator"]
+            - env_var: DATAPLANE
+              values: ["CalicoBPF"]
+
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: /promotions/cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force
