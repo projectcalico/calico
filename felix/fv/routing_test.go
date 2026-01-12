@@ -835,6 +835,65 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 		})
 
+		Describe("with borrowed workload IPs", func() {
+			var (
+				infra           infrastructure.DatastoreInfra
+				tc              infrastructure.TopologyContainers
+				felixes         []*infrastructure.Felix
+				client          client.Interface
+				w               [3]*workload.Workload
+				w6              [3]*workload.Workload
+				cc              *connectivity.Checker
+				topologyOptions infrastructure.TopologyOptions
+				timeout         = time.Second * 30
+			)
+
+			BeforeEach(func() {
+				infra = getInfra()
+
+				if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
+					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
+				}
+
+				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, enableIPv6, routeSource, brokenXSum)
+
+				cc = &connectivity.Checker{}
+
+				// Deploy the topology.
+				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+
+				// Offset of +1 means that felix[0]'s workload borrwos its IP from
+				// felix[1]'s block and so on.
+				w, w6, _, _ = setupWorkloadsWithOffset(infra, tc, topologyOptions, client, enableIPv6, 1)
+				felixes = tc.Felixes
+
+				// Assign tunnel addresees in IPAM based on the topology.
+				assignTunnelAddresses(infra, tc, client)
+			})
+
+			It("should have connectivity", func() {
+				if !ipipTunnelSupported(ipipMode, routeSource) {
+					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
+				}
+
+				for i := 0; i < 3; i++ {
+					f := felixes[i]
+					cc.ExpectSome(f, w[i])
+					cc.ExpectSome(f, w[(i+1)%3])
+					cc.ExpectSome(w[i], w[(i+1)%3])
+
+					if enableIPv6 {
+						cc.ExpectSome(f, w6[0])
+						cc.ExpectSome(f, w6[(i+1)%3])
+						cc.ExpectSome(w6[i], w6[(i+1)%3])
+					}
+
+				}
+
+				cc.CheckConnectivityWithTimeout(timeout)
+			})
+		})
+
 		Describe("with a borrowed tunnel IP on one host", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
