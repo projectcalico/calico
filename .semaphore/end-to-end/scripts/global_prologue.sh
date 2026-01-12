@@ -143,7 +143,7 @@ azure_cli_cmd="$azure_cli_cmd; curl --retry 9 --retry-all-errors -sfL https://ak
 azure_cli_cmd="$azure_cli_cmd; az login --service-principal -u ${AZ_SP_ID} -p ${AZ_SP_PASSWORD} --tenant ${AZ_TENANT_ID}"
 if [[ $PROVISIONER =~ ^azr-.* ]]; then eval "$azure_cli_cmd"; fi
 
-install_tools_cmd="echo \"[INFO] installing addtional tools for c1...\""
+install_tools_cmd="echo \"[INFO] installing additional tools for c1...\""
 install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing jq, unzip...\" && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install jq unzip -y && sudo needrestart -r a"
 install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing requests...\" && pip3 install --retries=20 --upgrade requests"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$install_tools_cmd"; fi
@@ -161,7 +161,7 @@ cp ~/secrets/docker_cfg.json "$HOME/.docker/config.json"
 
 mkdir -p "${BZ_LOGS_DIR}"
 
-cd "$HOME" || exit
+cd "$HOME" || { echo "[ERROR] Failed to change directory to \$HOME"; false; }
 hcp_scripts="echo \"[INFO] Initializing Banzai utilities...\""
 hcp_scripts="$hcp_scripts; git clone git@github.com:tigera/banzai-utils.git \"${HOME}/banzai-utils\""
 hcp_scripts="$hcp_scripts; cp -R \"${HOME}/banzai-utils\"/ocp-hcp/*.sh \"${BZ_GLOBAL_BIN}\""

@@ -126,7 +126,7 @@ blocks:
               value: ""
             - name: INSTALLER
               value: "helmerator"
-            - name: ENABLE_AUTO_HEP # autohep
+            - name: ENABLE_AUTOHEP # autohep
               value: "true"
 
   - name: "Manifests"
@@ -333,8 +333,6 @@ blocks:
             #   value: "private"    # I couldn't get this to provision, so I've skipped this for now
             - name: PROVISIONER
               value: "azr-aks"
-            - name: K8S_VERSION
-              value: "stable-1"
             - name: AZ_CREATE_MODE
               value: AKS
             - name: K8S_VERSION
@@ -451,7 +449,7 @@ blocks:
               value: "containerd:2.1.1"
             - name: ENCAPSULATION_TYPE
               value: "VXLAN"
-            - name: ENABLE_AUTO_HEP
+            - name: ENABLE_AUTOHEP
               value: "true"
 
         # operator, calicocni, stable-3, amd64, nftables, ipv4, aws-kubeadm, kdd, windows 1809, docker, ubuntu2204, autohep, none encap, nftables-kube-proxy
@@ -479,13 +477,11 @@ blocks:
               value: "None"
             - name: VPC_SUBNETS
               value: '["172.16.101.0/24"]' # single subnet because no encapsulation is being used
-            - name: ENABLE_AUTO_HEP
-              value: "true"
             - name: KUBE_PROXY_MODE
               value: nftables
             - name: CLUSTER_IMAGE
               value: "jammy-22.04"
-            - name: ENABLE_AUTO_HEP
+            - name: ENABLE_AUTOHEP
               value: "true"
 
           # operator, calicocni, stable-1, amd64, bpf, ipv4, gcp-rke2, kdd, ubuntu2204, autohep, vxlan encap, nodelocaldns
@@ -511,7 +507,7 @@ blocks:
               value: "VXLAN"
             - name: CLUSTER_IMAGE
               value: "ubuntu-2204-lts"
-            - name: ENABLE_AUTO_HEP
+            - name: ENABLE_AUTOHEP
               value: "true"
             # - name: ENABLE_NODE_LOCAL_DNS_CACHE # nodelocaldns - doesn't appear to work with RKE2
             #   value: "true"
