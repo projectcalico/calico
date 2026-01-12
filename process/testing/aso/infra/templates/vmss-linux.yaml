@@ -6,8 +6,7 @@
 {{- $pipName := printf "pip-linux-%d" $nodeNum -}}
 {{- $extContainerdName := printf "vm-linux-%d-containerd" $nodeNum -}}
 {{- $extDockerName := printf "vm-linux-%d-docker-legacy" $nodeNum -}}
-# NOTE: asovm-linux-%d here would have the l2bridge cni-plugin hang, maybe there's a problem with the name being too short?
-{{- $computerName := printf "asovm-linux-%d" $nodeNum }}
+{{- $computerName := printf "asovm-linux-%d" $nodeNum -}}{{/* NOTE: asovm-linux-%d here would have the l2bridge cni-plugin hang, maybe there's a problem with the name being too short? */}}
 ---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine
@@ -155,4 +154,4 @@ spec:
   publicIPAllocationMethod: Static
   sku:
     name: Standard
-{{- end}}
+{{end}}
