@@ -121,10 +121,22 @@ test_pid=()
 monitor_pids=()
 log_files=()
 
+# Format batch name for log files: zero-pad numeric values to 3 digits
+format_batch_for_log() {
+  local batch="$1"
+  # Check if batch is a number
+  if [[ "$batch" =~ ^[0-9]+$ ]]; then
+    printf "%03d" "$batch"
+  else
+    echo "$batch"
+  fi
+}
+
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
-  log_file="$artifacts_dir/test-$batch.log"
+  batch_formatted="$(format_batch_for_log "$batch")"
+  log_file="$artifacts_dir/test-$batch_formatted.log"
   ssh_cmd=( env "VM_NAME=$vm_name" "ZONE=$zone" "$my_dir/on-test-vm" )
   prefix="[batch=${batch}]"
   touch "$log_file"
@@ -134,7 +146,7 @@ for batch in "${batches[@]}"; do
   (
     set +e
 
-    conf_log_file="$artifacts_dir/configure-vm-$batch.log"
+    conf_log_file="$artifacts_dir/configure-vm-$batch_formatted.log"
     echo "$prefix Configuring test VM $vm_name. Redirecting log to $conf_log_file."
     if "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
       echo "$prefix Configuration of VM $vm_name SUCCEEDED."
@@ -152,7 +164,7 @@ for batch in "${batches[@]}"; do
       echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $log_file."
     fi
 
-    collect_log_file="$artifacts_dir/collect-artifacts-$batch.log"
+    collect_log_file="$artifacts_dir/collect-artifacts-$batch_formatted.log"
     if "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
       echo "$prefix Remote artifact collection SUCCEEDED"
     else
