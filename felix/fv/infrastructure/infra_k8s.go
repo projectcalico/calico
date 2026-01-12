@@ -51,6 +51,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
+const DefaultBPFLogByteLimit = 64 * 1024 * 1024
+
 type K8sDatastoreInfra struct {
 	etcdContainer        *containers.Container
 	bpfLog               *containers.Container
@@ -180,6 +182,7 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 		resetAll := temp.ipv6 != kds.ipv6 || temp.dualStack != kds.dualStack
 
 		if !resetAll {
+			kds.bpfLogByteLimit = temp.bpfLogByteLimit
 			kds.EnsureReady()
 			kds.PerTestSetup(index)
 			return kds, nil
@@ -214,6 +217,9 @@ type CleanupProvider interface {
 }
 
 func RunBPFLog(cp CleanupProvider, byteLimit int) *containers.Container {
+	if byteLimit == 0 {
+		byteLimit = DefaultBPFLogByteLimit
+	}
 	c := containers.Run("bpf-log",
 		containers.RunOpts{
 			AutoRemove:       true,
