@@ -1,0 +1,103 @@
+version: v1.0
+
+name: banzai-calico Benchmarking
+
+# This file runs performance benchmarking tests for Calico.
+
+agent:
+  machine:
+    type: c1-standard-1
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    - name: SEMAPHORE_ARTIFACT_EXPIRY
+      value: 1w
+    - name: PRODUCT
+      value: calico
+    - name: GOOGLE_PROJECT
+      value: unique-caldron-775
+    - name: GOOGLE_NETWORK
+      value: semaphore-autotest
+    - name: OPENSHIFT_BASE_DOMAIN
+      value: openshift.ci.aws.eng.tigera.net
+    - name: KOPS_STATE_STORE_NAME
+      value: kops-tigera-dev-ci
+    - name: KOPS_AWS_DNS_ZONE
+      value: kops.ci.aws.eng.tigera.net
+    - name: RANCHER_DNS_NAME
+      value: rancher.ci.gcp.eng.tigera.net
+    - name: FUNCTIONAL_AREA
+      value: "benchmarking.yml"
+    - name: BENCHMARKER_IMAGE
+      value: gcr.io/unique-caldron-775/banzai-tests/benchmark:master
+    - name: STO_RELEASE
+      value: v0.16.0
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/"
+
+blocks:
+  - name: Benchmarks
+    dependencies: []
+    task:
+      jobs:
+        - name: Benchmark tests Calico
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PRODUCT
+              values: ["calico"]
+      env_vars:
+        - name: NUM_ADDON_PODS
+          value: "300"
+        - name: USE_HASH_RELEASE
+          value: "true"
+        - name: VPC_SUBNETS
+          value: '["172.16.101.0/24"]'
+        - name: K8S_VERSION
+          value: "stable"
+        - name: NUM_INFRA_NODES
+          value: "3"
+        - name: AWS_NODE_INSTANCE_TYPE
+          value: m5.large
+        - name: DATAPLANE
+          value: "CalicoIptables"
+        - name: PROVISIONER
+          value: "aws-kubeadm"
+        - name: INSTALLER
+          value: "operator"
+        - name: TEST_TYPE
+          value: "benchmark"
+        - name: BENCHMARKS
+          value: "benchmarker"
+        - name: BENCHMARKER_TEST_CONFIGS
+          value: >
+            '[{"testtype":"sto","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"iptables"},{"testtype":"qperf","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"iptables"},{"testtype":"iperf","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"iptables"},{"testtype":"sto","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"iptables"},{"testtype":"qperf","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"iptables"},{"testtype":"iperf","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"iptables"},{"testtype":"sto","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"bpf"},{"testtype":"qperf","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"bpf"},{"testtype":"iperf","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"bpf"},{"testtype":"sto","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"bpf"},{"testtype":"qperf","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"bpf"},{"testtype":"iperf","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"bpf"}]'
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force
