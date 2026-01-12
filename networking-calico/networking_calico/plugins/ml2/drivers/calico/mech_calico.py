@@ -1102,7 +1102,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def resync_monitor_thread(self, launch_epoch):
         """Monitor the interval between completed resyncs.
 
-        Logs an error if the period resync duration surpasses
+        Logs an error if the periodic resync duration surpasses
         the configured maximum time in seconds.
         """
         try:
@@ -1115,7 +1115,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                     curr_time = datetime.now()
                     time_delta = curr_time - self.last_resync_time
-                    if time_delta.seconds > cfg.CONF.calico.resync_max_interval_secs:
+                    if (
+                        time_delta.total_seconds()
+                        > cfg.CONF.calico.resync_max_interval_secs
+                    ):
                         LOG.error(
                             "The time since the last resync completion has surpassed"
                             f" {cfg.CONF.calico.resync_max_interval_secs} seconds"
@@ -1124,7 +1127,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     deadline = self.last_resync_time + timedelta(
                         seconds=cfg.CONF.calico.resync_max_interval_secs
                     )
-                    time_left = (deadline - curr_time).seconds
+                    time_left = (deadline - curr_time).total_seconds()
                     polling_rate = cfg.CONF.calico.resync_max_interval_secs / 5
                     sleep_time = time_left if deadline > curr_time else polling_rate
                     eventlet.sleep(sleep_time)
