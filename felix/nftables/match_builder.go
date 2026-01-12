@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -534,8 +534,8 @@ func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 	return m
 }
 
-// The expected rate must be a digit with /second, /minute, /hour, or /day suffix.
-func (m nftMatch) Limit(rate string, burst uint32) generictables.MatchCriteria {
+// The expected rate must be an integer (0~9999) with /second, /minute, /hour, or /day suffix.
+func (m nftMatch) Limit(rate string, burst uint16) generictables.MatchCriteria {
 	if burst > 0 {
 		m.clauses = append(m.clauses, fmt.Sprintf("limit rate %s burst %d packets", rate, burst))
 	} else {

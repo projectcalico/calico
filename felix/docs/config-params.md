@@ -395,10 +395,10 @@ where N is a number and unit is one of: second, minute, hour, or day. For exampl
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogActionRateLimit` |
-| Encoding (env var/config file) | String matching regex <code>^(\d+/(?:second\|minute\|hour\|day))?$</code> |
+| Encoding (env var/config file) | String matching regex <code>^([1-9]\d{0,3}/(?:second\|minute\|hour\|day))?$</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `logActionRateLimit` (YAML) `LogActionRateLimit` (Go API) |
-| `FelixConfiguration` schema | String matching the regular expression <code>^\d+/(?:second\|minute\|hour\|day)$</code>. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^[1-9]\d{0,3}/(?:second\|minute\|hour\|day)$</code>. |
 | Default value (YAML) | none |
 
 ### `LogActionRateLimitBurst` (config file) / `logActionRateLimitBurst` (YAML)
@@ -408,10 +408,10 @@ Sets the rate limit burst of hitting a Log action when LogActionRateLimit is ena
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogActionRateLimitBurst` |
-| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
+| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
 | Default value (above encoding) | `5` |
 | `FelixConfiguration` field | `logActionRateLimitBurst` (YAML) `LogActionRateLimitBurst` (Go API) |
-| `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
+| `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
 | Default value (YAML) | `5` |
 
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
