@@ -938,9 +938,9 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 			}
 		}
 		if (encap_needed) {
-			if (!(STATE->ip_proto == IPPROTO_TCP && skb_is_gso(ctx->skb)) &&
-					ip_is_dnf(ip_hdr(ctx)) && vxlan_encap_too_big(ctx)) {
-				CALI_DEBUG("Request packet with DNF set is too big");
+			if (!skb_is_gso(ctx->skb) && ip_is_dnf(ip_hdr(ctx)) && vxlan_encap_too_big(ctx)) {
+				CALI_DEBUG("Return ICMP mtu is too big segs %d size %d",
+					   ctx->skb->gso_segs, ctx->skb->gso_size);
 				goto icmp_too_big;
 			}
 			STATE->ip_src = HOST_IP;
@@ -1070,9 +1070,9 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 				goto allow;
 			}
 
-			if (!(STATE->ip_proto == IPPROTO_TCP && skb_is_gso(ctx->skb)) &&
-					ip_is_dnf(ip_hdr(ctx)) && vxlan_encap_too_big(ctx)) {
-				CALI_DEBUG("Return ICMP mtu is too big");
+			if (!skb_is_gso(ctx->skb) && ip_is_dnf(ip_hdr(ctx)) && vxlan_encap_too_big(ctx)) {
+				CALI_DEBUG("Return ICMP mtu is too big segs %d size %d",
+					   ctx->skb->gso_segs, ctx->skb->gso_size);
 				goto icmp_too_big;
 			}
 		}
