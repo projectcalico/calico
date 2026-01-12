@@ -6,8 +6,7 @@
 {{- $pipName := printf "pip-windows-%d" $nodeNum -}}
 {{- $extOpenSSHName := printf "vm-windows-%d-openssh" $nodeNum -}}
 {{- $extCustomName := printf "vm-windows-%d-customextension" $nodeNum -}}
-# NOTE: aso-win-%d here would have the l2bridge cni-plugin hang, maybe there's a problem with the name being too short?
-{{- $computerName := printf "asovm-win-%d" $nodeNum }}
+{{- $computerName := printf "asovm-win-%d" $nodeNum -}}{{/* NOTE: aso-win-%d here would have the l2bridge cni-plugin hang, maybe there's a problem with the name being too short? */}}
 ---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine
@@ -110,4 +109,4 @@ spec:
   typeHandlerVersion: "1.9"
   settings:
     commandToExecute: powershell -command "New-Item -ItemType Directory -Path C:\k -Force; echo \"{{$.Env.PUBLIC_KEY}}\" | Add-Content 'C:\ProgramData\ssh\administrators_authorized_keys' -Encoding UTF8;icacls.exe 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F'"
-{{- end}}
+{{end}}
