@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 26
+	MaxCounterNumber    int = 28
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -85,6 +85,8 @@ const (
 	DroppedQoS
 	Reserved1
 	DroppedMaglevNoBackend
+	ForwardedMaglevToLocal
+	ForwardedMaglevToRemote
 )
 
 type Description struct {
@@ -211,6 +213,14 @@ var descriptions DescList = DescList{
 		Counter:  DroppedMaglevNoBackend,
 		Category: "Dropped", Caption: "Maglev lookup found no backends for service IP",
 	},
+	{
+		Counter:  ForwardedMaglevToRemote,
+		Category: "Forwarded", Caption: "Maglev forwarded to backend on another node",
+	},
+	{
+		Counter:  ForwardedMaglevToLocal,
+		Category: "Forwarded", Caption: "Maglev forwarded to backend on local node",
+	},
 }
 
 func Descriptions() DescList {
@@ -234,6 +244,22 @@ func Read(m maps.Map, ifindex int, hook hook.Hook) ([]uint64, error) {
 	}
 	return bpfCounters, nil
 }
+
+// Parses the raw byte slice returned from BPF map into a single counter value.
+func CounterFromValBytes(b []byte, counter int) (uint64, error) {
+	if len(b) != counterMapValueSize*MaxCounterNumber*maps.NumPossibleCPUs() {
+		return 0, fmt.Errorf("invalid value size %d, expected %d", len(b), counterMapValueSize*MaxCounterNumber*maps.NumPossibleCPUs())
+	}
+
+	var total uint64
+	for cpu := 0; cpu < maps.NumPossibleCPUs(); cpu++ {
+		begin := counter*counterMapValueSize + cpu*MaxCounterNumber*counterMapValueSize
+		data := uint64(binary.LittleEndian.Uint32(b[begin : begin+counterMapValueSize]))
+		total += data
+	}
+	return total, nil
+}
+
 
 func Flush(m maps.Map, ifindex int, hook hook.Hook) error {
 	if err := m.(maps.MapWithUpdateWithFlags).
