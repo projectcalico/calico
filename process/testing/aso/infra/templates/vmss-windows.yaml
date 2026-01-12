@@ -6,13 +6,14 @@
 {{- $pipName := printf "pip-windows-%d" $nodeNum -}}
 {{- $extOpenSSHName := printf "vm-windows-%d-openssh" $nodeNum -}}
 {{- $extCustomName := printf "vm-windows-%d-customextension" $nodeNum -}}
-{{- $computerName := printf "winfv-win-%d" $nodeNum }}
+# NOTE: aso-win-%d here would have the l2bridge cni-plugin hang, maybe there's a problem with the name being too short?
+{{- $computerName := printf "asovm-win-%d" $nodeNum }}
 ---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine
 metadata:
   name: {{$nodeName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -27,10 +28,10 @@ spec:
           name: {{$nicName}}
   osProfile:
     computerName: {{$computerName}}
-    adminUsername: winfv
+    adminUsername: aso
     adminPassword:
       key: password
-      name: winfv-secret-windows
+      name: aso-secret-windows
   storageProfile:
     imageReference:
       publisher: MicrosoftWindowsServer
@@ -46,7 +47,7 @@ apiVersion: network.azure.com/v1api20240301
 kind: NetworkInterface
 metadata:
   name: {{$nicName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -55,14 +56,14 @@ spec:
     reference:
       group: network.azure.com
       kind: NetworkSecurityGroup
-      name: winfv-sg
+      name: aso-sg
   ipConfigurations:
     - name: ipconfig-windows-{{$nodeNum}}
       subnet:
         reference:
           group: network.azure.com
           kind: VirtualNetworksSubnet
-          name: subnet-winfv
+          name: subnet-aso
       publicIPAddress:
         reference:
           group: network.azure.com
@@ -73,7 +74,7 @@ apiVersion: network.azure.com/v1api20240301
 kind: PublicIPAddress
 metadata:
   name: {{$pipName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -86,7 +87,7 @@ apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
   name: {{$extOpenSSHName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -99,7 +100,7 @@ apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
   name: {{$extCustomName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:

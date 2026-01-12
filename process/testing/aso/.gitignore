@@ -5,6 +5,7 @@
 cert-manager.yaml
 connect.txt
 infra/manifests/
+kind-kubeconfig
 kubeconfig
 operator-crds.yaml
 password.txt
@@ -14,6 +15,7 @@ ssh-node-linux.sh
 ssh-node-windows.sh
 tigera-operator.yaml
 tigera-prometheus-operator.yaml
+windows/*.exe
 windows/config
 windows/kubeadm/
 windows/run-fv.ps1

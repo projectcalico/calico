@@ -17,7 +17,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+: "${ASO_DIR:="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"}"
+
+: "${KIND_CLUSTER_NAME:=kind}"
 : "${KINDEST_NODE_VERSION:=v1.31.0}"
+: "${CERT_MANAGER_VERSION:=v1.14.1}"
 CRD_PATTERN="resources.azure.com/*;containerservice.azure.com/*;compute.azure.com/*;network.azure.com/*"
 
 # Utilities
@@ -28,12 +32,13 @@ CRD_PATTERN="resources.azure.com/*;containerservice.azure.com/*;compute.azure.co
 : ${HELM:=./bin/helm}
 
 # Create management cluster
-${KIND} create cluster --image kindest/node:${KINDEST_NODE_VERSION} --name kind
-${KUBECTL} wait node kind-control-plane --for=condition=ready --timeout=90s
+${KIND} create cluster --image "kindest/node:${KINDEST_NODE_VERSION}" --name "${KIND_CLUSTER_NAME}" --verbosity 5
+${KIND} get kubeconfig --name "${KIND_CLUSTER_NAME}" > "${ASO_DIR}/kind-kubeconfig"
+${KUBECTL} wait node "${KIND_CLUSTER_NAME}-control-plane" --for=condition=ready --timeout=90s
 
 # Install cert-manager
 echo; echo "Wait for cert manager to be installed ..."
-curl -sSf -L --retry 5 https://github.com/jetstack/cert-manager/releases/download/v1.14.1/cert-manager.yaml -o cert-manager.yaml
+curl -sSf -L --retry 5 "https://github.com/jetstack/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml" -o cert-manager.yaml
 ${KUBECTL} apply -f ./cert-manager.yaml
 ${CMCTL} check api --wait=2m
 
