@@ -45,6 +45,8 @@ sudo apt-get update -y
 sudo apt-get install jq -y
 
 echo "[INFO] exporting default env vars..."
+export RELEASE_STREAM=${RELEASE_STREAM:-v3.31}
+
 export SEMAPHORE_PIPELINE_STARTED_AT=$(date +%s)
 export PROVISIONER=${PROVISIONER:-"gcp-kubeadm"}
 export INSTALLER=${INSTALLER:-"manual"}
@@ -72,12 +74,11 @@ export DOCKER_UCP_VERSION=${DOCKER_UCP_VERSION:-"3.3.0"}
 export ENABLE_ALP=${ENABLE_ALP:-"false"}
 export USE_HASH_RELEASE=${USE_HASH_RELEASE:-"true"}
 export USE_LATEST_RELEASE=${USE_LATEST_RELEASE:-"false"}
-export RELEASE_STREAM=${RELEASE_STREAM:-master}
 export K8S_E2E_EXTRA_FLAGS=${K8S_E2E_EXTRA_FLAGS:-" --e2ecfg.calicoctl-opensource-image=calico/ctl:release-${RELEASE_STREAM} "}
 export HELM_PATCH=${HELM_PATCH:-"0"}
 export CALICOCTL_INSTALL_TYPE=${CALICOCTL_INSTALL_TYPE:-"binary"}
 export BZ_LOGS_DIR=${BZ_LOGS_DIR:-$HOME/.bz/logs}
-export BZ_HOME=${BZ_HOME:-"${PWD}/${SEMAPHORE_JOB_ID}"}
+export BZ_HOME=${BZ_HOME:-"${HOME}/${SEMAPHORE_JOB_ID}"}
 export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-"${BZ_HOME}/.local"}
 export REPORT_DIR=${REPORT_DIR:-"${BZ_LOCAL_DIR}/report/${TEST_TYPE}"}
 export BZ_GLOBAL_BIN=${BZ_GLOBAL_BIN:-$HOME/.local/bin}
@@ -106,6 +107,10 @@ cat /proc/cpuinfo
 echo "-----------"
 echo "Semaphore OS information"
 lsb_release -a
+
+echo "[INFO] overriding DNS..."
+echo "nameserver 208.67.222.222" | sudo tee /etc/resolv.conf
+echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
 
 echo "[INFO] installing google cloud sdk..."
 gcloud_cmd_c1="echo \"deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main\" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list"
@@ -138,7 +143,7 @@ azure_cli_cmd="$azure_cli_cmd; curl --retry 9 --retry-all-errors -sfL https://ak
 azure_cli_cmd="$azure_cli_cmd; az login --service-principal -u ${AZ_SP_ID} -p ${AZ_SP_PASSWORD} --tenant ${AZ_TENANT_ID}"
 if [[ $PROVISIONER =~ ^azr-.* ]]; then eval "$azure_cli_cmd"; fi
 
-install_tools_cmd="echo \"[INFO] installing addtional tools for c1...\""
+install_tools_cmd="echo \"[INFO] installing additional tools for c1...\""
 install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing jq, unzip...\" && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install jq unzip -y && sudo needrestart -r a"
 install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing requests...\" && pip3 install --retries=20 --upgrade requests"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$install_tools_cmd"; fi
@@ -156,9 +161,41 @@ cp ~/secrets/docker_cfg.json "$HOME/.docker/config.json"
 
 mkdir -p "${BZ_LOGS_DIR}"
 
+cd "$HOME" || { echo "[ERROR] Failed to change directory to \$HOME"; false; }
+hcp_scripts="echo \"[INFO] Initializing Banzai utilities...\""
+hcp_scripts="$hcp_scripts; git clone git@github.com:tigera/banzai-utils.git \"${HOME}/banzai-utils\""
+hcp_scripts="$hcp_scripts; cp -R \"${HOME}/banzai-utils\"/ocp-hcp/*.sh \"${BZ_GLOBAL_BIN}\""
+if [[ "${HCP_ENABLED}" == "true" ]]; then eval $hcp_scripts; fi
+
 std="echo \"[INFO] Initializing Banzai profile...\""
-std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
+std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets 2>&1 | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
 std="$std; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
-eval "$std"
+
+hcp="unset CLUSTER_NAME; unset DIAGS_ARCHIVE_FILENAME; unset K8S_VERSION"
+hcp="$hcp; echo \"[INFO] starting hcp init...\""
+hcp="$hcp; hcp-init.sh 2>&1 | tee \"${BZ_LOGS_DIR}/initialize.log\""
+hcp="$hcp; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
+
+restore_hcp_hosting="echo \"[INFO] Restoring from ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} cache\""
+restore_hcp_hosting="$restore_hcp_hosting; cache restore ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} |& tee ${BZ_LOGS_DIR}/restore.log"
+
+if [[ "${HCP_ENABLED}" == "true" ]]; then std=$hcp; elif [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then std=$restore_hcp_hosting; fi
+echo "$std"; eval "$std"
+
+restore_hcp_hosting_home="echo \"[INFO] Setting BZ_HOME env var from restored cache\""
+restore_hcp_hosting_home="$restore_hcp_hosting_home; unset BZ_HOME; export BZ_HOME=$(cat ${BZ_LOGS_DIR}/restore.log | grep -oP 'Restored: \K(.*)(?=.)' || echo '')"
+if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then echo "$restore_hcp_hosting_home"; eval "$restore_hcp_hosting_home"; fi
+
+if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then python3 -m pip install -r ${BZ_HOME}/scripts/requirements.txt; export PROVISIONER=aws-openshift; pip3 install --upgrade --user awscli; fi
+export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-"${BZ_HOME}/.local"}
+
+cmd="sudo apt-get install -y putty-tools"
+if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then eval "$cmd"; fi
+
+if [[ "${HCP_STAGE}" == "hosted" ]]; then artifact pull workflow hosting-${HOSTING_CLUSTER}-kubeconfig -f --destination ${BZ_LOCAL_DIR}/hosting-kubeconfig; fi
+
+rm_firmware_cmd="echo \"[INFO] Removing /usr/lib/firmware to free disk space\""
+rm_firmware_cmd="$rm_firmware_cmd; sudo rm -rf /usr/lib/firmware"
+if [[ "${HCP_STAGE}" == "hosted" ]]; then echo "$rm_firmware_cmd"; eval "$rm_firmware_cmd"; fi
 
 echo "[INFO] exiting prologue"
