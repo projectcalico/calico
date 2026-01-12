@@ -1946,37 +1946,39 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						return val, exists
 					}
-					maglevMapAnySearch := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) nat.BackendValueInterface {
+					maglevMapAnySearch := func(val nat.BackendValueInterface, family string, felix *infrastructure.Felix) nat.BackendValueInterface {
 						Expect(family).To(Or(Equal("ipv4"), Equal("ipv6")))
 
-						var v nat.BackendValueInterface
-						var ok bool
 						switch family {
 						case "ipv4":
-							mm := dumpMaglevMap(felix)
-							kp := nat.MaglevBackendKey{}
-							Expect(key).To(BeAssignableToTypeOf(kp))
-							kp, _ = key.(nat.MaglevBackendKey)
+							vType := nat.BackendValue{}
+							Expect(val).To(BeAssignableToTypeOf(vType))
+							kvs := dumpMaglevMap(felix)
+							valParsed, _ := val.(nat.BackendValue)
 
-							if v, ok = mm[kp]; !ok {
-								return nil
+							for _, v := range kvs {
+								if v.Addr().Equal(valParsed.Addr()) && v.Port() == valParsed.Port() {
+									return v
+								}
 							}
 
 						case "ipv6":
-							mm := dumpMaglevMapV6(felix)
-							kp := nat.MaglevBackendKeyV6{}
-							Expect(key).To(BeAssignableToTypeOf(kp))
-							kp, _ = key.(nat.MaglevBackendKeyV6)
+							vType := nat.BackendValueV6{}
+							Expect(val).To(BeAssignableToTypeOf(vType))
+							kvs := dumpMaglevMapV6(felix)
+							valParsed, _ := val.(nat.BackendValueV6)
 
-							if v, ok = mm[kp]; !ok {
-								return nil
+							for _, v := range kvs {
+								if v.Addr().Equal(valParsed.Addr()) && v.Port() == valParsed.Port() {
+									return v
+								}
 							}
 						}
-						return v
+						return nil
 					}
-					maglevMapAnySearchFunc := func(key nat.MaglevBackendKeyInterface, family string, felix *infrastructure.Felix) func() nat.BackendValueInterface {
+					maglevMapAnySearchFunc := func(val nat.BackendValueInterface, family string, felix *infrastructure.Felix) func() nat.BackendValueInterface {
 						return func() nat.BackendValueInterface {
-							return maglevMapAnySearch(key, family, felix)
+							return maglevMapAnySearch(val, family, felix)
 						}
 					}
 
@@ -2034,22 +2036,28 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						conntrackFlushWorkloadEntries(tc.Felixes)
 
-						var testMaglevMapKey nat.MaglevBackendKeyInterface
+						eps := k8sGetEpsForService(k8sClient, testSvc)
+						Expect(eps).NotTo(HaveLen(0), "Expected endpoints for the service")
+						Expect(eps[0].Endpoints).NotTo(HaveLen(0), "Endpointslice had no endpoints")
+						Expect(eps[0].Endpoints[0].Addresses).NotTo(BeEmpty(), "No addresses in endpointslice item")
+						Expect(net.ParseIP(eps[0].Endpoints[0].Addresses[0])).NotTo(BeNil(), "Endpoint address was not parseable as an IP")
+
+						var testMaglevMapVal nat.BackendValueInterface
 						switch family {
 						case "ipv4":
-							testMaglevMapKey = nat.NewMaglevBackendKey(net.ParseIP(clusterIP), port, proto, 0)
+							testMaglevMapVal = nat.NewNATBackendValue(net.ParseIP(eps[0].Endpoints[0].Addresses[0]), uint16(tgtPort))
 						case "ipv6":
-							testMaglevMapKey = nat.NewMaglevBackendKeyV6(net.ParseIP(clusterIP), port, proto, 0)
+							testMaglevMapVal = nat.NewNATBackendValueV6(net.ParseIP(eps[0].Endpoints[0].Addresses[0]), uint16(tgtPort))
 						default:
 							log.Panicf("Unexpected IP family %s", family)
 						}
 
 						log.Info("Waiting for Maglev map to converge...")
-						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[0]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[0])")
-						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[1]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[1])")
-						Eventually(maglevMapAnySearchFunc(testMaglevMapKey, family, tc.Felixes[2]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[2])")
+						Eventually(maglevMapAnySearchFunc(testMaglevMapVal, family, tc.Felixes[0]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[0]). Looked for backend: %v", testMaglevMapVal)
+						Eventually(maglevMapAnySearchFunc(testMaglevMapVal, family, tc.Felixes[1]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[1]). Looked for backend: %v", testMaglevMapVal)
+						Eventually(maglevMapAnySearchFunc(testMaglevMapVal, family, tc.Felixes[2]), "10s").ShouldNot(BeNil(), "A maglev map entry never showed up (Felix[2]). Looked for backend: %v", testMaglevMapVal)
 
-						Expect(maglevMapAnySearch(testMaglevMapKey, family, tc.Felixes[1]).Addr().String()).Should(Equal(w[0][0].IP))
+						Expect(maglevMapAnySearch(testMaglevMapVal, family, tc.Felixes[1]).Addr().String()).Should(Equal(w[0][0].IP))
 
 						// Configure routes on external client and Felix nodes.
 						// Use Felix[1] as a middlebox initially.
