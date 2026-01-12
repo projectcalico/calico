@@ -863,7 +863,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				// Assign tunnel addresees in IPAM based on the topology.
+				// Assign tunnel addresses in IPAM based on the topology.
 				// This will assign blocks to particular nodes so that the
 				// workload IP assignments below will borrow.
 				assignTunnelAddresses(infra, tc, client)
@@ -881,12 +881,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 
 				for i := 0; i < 3; i++ {
 					f := felixes[i]
-					cc.ExpectSome(f, w[i])
-					cc.ExpectSome(f, w[(i+1)%3])
-					cc.ExpectSome(w[i], w[(i+1)%3])
+					cc.ExpectSome(f, w[i])          // Host to local workload.
+					cc.ExpectSome(f, w[(i+1)%3])    // Host to next node's workload
+					cc.ExpectSome(w[i], w[(i+1)%3]) // Local workload to next node's workload.
 
 					if enableIPv6 {
-						cc.ExpectSome(f, w6[0])
+						cc.ExpectSome(f, w6[i])
 						cc.ExpectSome(f, w6[(i+1)%3])
 						cc.ExpectSome(w6[i], w6[(i+1)%3])
 					}
