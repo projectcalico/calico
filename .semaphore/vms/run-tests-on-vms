@@ -23,6 +23,7 @@ repo_dir="$my_dir/../.."
 vm_name_prefix=$1
 artifacts_dir="$repo_dir/artifacts"
 zone=${ZONE:-europe-west3-c}
+: "${VM_MACHINE_TYPE:=n4-standard-4}"
 : "${IMAGE_FAMILY:=ubuntu-minimal-2204-lts}"
 : "${MAX_RUN_DURATION:=4h}"
 disk_size=${VM_DISK_SIZE:-20GB}
@@ -77,7 +78,7 @@ echo "Creating test VMs in bulk..."
 gcloud --quiet compute instances bulk create \
        --predefined-names="$names" \
        --zone=${zone} \
-       --machine-type=n4-standard-4 \
+       --machine-type=${VM_MACHINE_TYPE} \
        --image-family=${IMAGE_FAMILY} \
        --image-project=ubuntu-os-cloud \
        --boot-disk-size=$disk_size \
