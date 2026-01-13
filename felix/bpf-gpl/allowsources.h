@@ -4,11 +4,17 @@
 #include <linux/in.h>
 #include "bpf.h"
 
+#define IPV4_ADDR_BITS 32
+#define IPV6_ADDR_BITS 128
+#define IFINDEX_BITS 32
+
 // WARNING: must be kept in sync with the definitions in bpf/allowsources/map.go
 struct allow_sources_key {
     __u32 prefixlen;
+    __u32 ifindex;
     ipv46_addr_t addr;
 } __attribute__((packed));
+
 
 #ifdef IPVER6
 CALI_MAP_NAMED(cali_v6_sprefix, cali_sprefix,,
@@ -21,16 +27,19 @@ CALI_MAP_NAMED(cali_v4_sprefix, cali_sprefix,,
     1024*1024,
     BPF_F_NO_PREALLOC)
 
-static CALI_BPF_INLINE bool cali_allowsource_lookup(ipv46_addr_t *addr)
+static CALI_BPF_INLINE bool cali_allowsource_lookup(ipv46_addr_t *addr, __u32 ifindex)
 {
     struct allow_sources_key k;
 #ifdef IPVER6
-    k.prefixlen = 128;
+    k.prefixlen = IPV6_ADDR_BITS + IFINDEX_BITS;
 #else
-    k.prefixlen = 32;
+    k.prefixlen = IPV4_ADDR_BITS + IFINDEX_BITS;
 #endif
     k.addr = *addr;
+    k.ifindex = ifindex;
     __u32 *val = cali_sprefix_lookup_elem(&k);
+    bpf_printk("looking up k.prefixlen=%d k.addr=%x k.ifindex=%d => val=%p\n",
+        k.prefixlen, *((__u32*)&k.addr), k.ifindex, val);
     return val != NULL;
 }
 

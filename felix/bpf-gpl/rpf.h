@@ -19,7 +19,7 @@ static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt
 {
         CALI_DEBUG("Workload RPF check src=" IP_FMT " skb iface=%d.",
                         debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
-        if (!r && !cali_allowsource_lookup(&ctx->state->ip_src)) {
+        if (!r && !cali_allowsource_lookup(&ctx->state->ip_src, ctx->skb->ifindex)) {
                 CALI_INFO("Workload RPF fail: missing route.");
                 return RPF_RES_FAIL;
 		} else if (!r) {

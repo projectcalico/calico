@@ -9,7 +9,7 @@ import (
 )
 
 
-const AllowSourcesEntryV6Size = 32
+const AllowSourcesEntryV6Size = 24
 
 type AllowSourcesEntryV6 [AllowSourcesEntryV6Size]byte
 
@@ -28,7 +28,7 @@ func MapV6() maps.Map {
 
 func (e AllowSourcesEntryV6) Addr() ip.Addr {
     var addr ip.V6Addr
-    copy(addr[:], e[4:20])
+    copy(addr[:], e[8:24])
     return addr
 }
 
@@ -36,19 +36,19 @@ func (e AllowSourcesEntryV6) PrefixLen() int {
     return int(binary.LittleEndian.Uint32(e[:4]))
 }
 
+func (e AllowSourcesEntryV6) IfIndex() int {
+    return int(binary.LittleEndian.Uint32(e[4:8]))
+}
+
 func (e AllowSourcesEntryV6) AsBytes() []byte {
     return e[:]
 }
 
-func MakeAllowSourcesEntryV6(cidr ip.CIDR) AllowSourcesEntryV6 {
+func MakeAllowSourcesEntryV6(cidr ip.CIDR, ifindex int) AllowSourcesEntryV6 {
     var entry AllowSourcesEntryV6
     ipv6 := cidr.Addr().(ip.V6Addr)
     binary.LittleEndian.PutUint32(entry[:4], uint32(cidr.Prefix()))
-    copy(entry[4:20], ipv6[:])
+    binary.LittleEndian.PutUint32(entry[4:8], uint32(ifindex))
+    copy(entry[8:24], ipv6[:])
     return entry
-}
-
-func AddAllowSourceEntryV6(cidr ip.CIDR) error {
-    entry := MakeAllowSourcesEntryV6(cidr)
-    return MapV6().Update(entry.AsBytes(), DummyValue)
 }
