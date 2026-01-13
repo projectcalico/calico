@@ -254,6 +254,16 @@ func main() {
 			log.WithError(err).Fatal("failed to create UDP socket")
 		}
 
+		if sport != 0 {
+			laddr := &unix.SockaddrInet4{
+				Port: int(sport), // Your specific source port
+				Addr: [4]byte{0, 0, 0, 0},
+			}
+			if err := unix.Bind(s, laddr); err != nil {
+				log.WithError(err).Fatal("failed to bind to source port")
+			}
+		}
+
 		if !ipDNF {
 			err = unix.SetsockoptInt(s, unix.IPPROTO_IP, unix.IP_PMTUDISC, unix.IP_PMTUDISC_DONT)
 			if err != nil {
