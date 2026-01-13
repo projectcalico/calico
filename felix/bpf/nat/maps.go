@@ -370,58 +370,36 @@ func BackendValueFromBytes(b []byte) BackendValueInterface {
 }
 
 //	struct cali_maglev_key {
-//		ipv46_addr_t vip; (be32)
-//		__u16 port;
-//		__u8 proto;
-//		__u8 pad;
+//		__u32 svc_id;
 //		__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
 //	};
-const MaglevBackendKeySize = 12
+const MaglevBackendKeySize = 8
 
 type MaglevBackendKey [MaglevBackendKeySize]byte
 
-func NewMaglevBackendKey(addr net.IP, port uint16, proto uint8, ordinal uint32) MaglevBackendKey {
+func NewMaglevBackendKey(svcID uint32, ordinal uint32) MaglevBackendKey {
 	var k MaglevBackendKey
-	addr = addr.To4()
-	if len(addr) != 4 {
-		log.WithField("ip", addr).Panic("Bad IP")
-	}
-	copy(k[:4], addr)
-
-	binary.LittleEndian.PutUint16(k[4:6], port)
-	k[6] = proto
-	k[7] = 0
-	binary.LittleEndian.PutUint32(k[8:12], ordinal)
-
+	binary.LittleEndian.PutUint32(k[0:4], svcID)
+	binary.LittleEndian.PutUint32(k[4:8], ordinal)
 	return k
 }
 
 type MaglevBackendKeyInterface interface {
-	VIP() net.IP
-	Port() uint16
-	Protocol() uint8
+	SvcID() uint32
 	Ordinal() uint32
 	AsBytes() []byte
 }
 
-func NewMaglevBackendKeyIntf(addr net.IP, port uint16, proto uint8, ordinal uint32) MaglevBackendKeyInterface {
-	return NewMaglevBackendKey(addr, port, proto, uint32(ordinal))
+func NewMaglevBackendKeyIntf(svcID, ordinal uint32) MaglevBackendKeyInterface {
+	return NewMaglevBackendKey(svcID, uint32(ordinal))
 }
 
-func (k MaglevBackendKey) VIP() net.IP {
-	return k[0:4]
-}
-
-func (k MaglevBackendKey) Port() uint16 {
-	return binary.LittleEndian.Uint16(k[4:6])
-}
-
-func (k MaglevBackendKey) Protocol() uint8 {
-	return k[6]
+func (k MaglevBackendKey) SvcID() uint32 {
+	return binary.LittleEndian.Uint32(k[0:4])
 }
 
 func (k MaglevBackendKey) Ordinal() uint32 {
-	return binary.LittleEndian.Uint32(k[8:12])
+	return binary.LittleEndian.Uint32(k[4:8])
 }
 
 func (k MaglevBackendKey) AsBytes() []byte {
@@ -429,11 +407,9 @@ func (k MaglevBackendKey) AsBytes() []byte {
 }
 
 func (k MaglevBackendKey) String() string {
-	addr := k.VIP()
-	port := k.Port()
-	proto := k.Protocol()
+	svcID := k.SvcID()
 	ord := k.Ordinal()
-	return fmt.Sprintf("MaglevBackendKey{VIP: %s, Port: %d, Proto: %d, Ordinal: %d}", addr, port, proto, ord)
+	return fmt.Sprintf("MaglevBackendKey{SvcID: %d, Ordinal: %d}", svcID, ord)
 }
 
 func MaglevBackendKeyFromBytes(b []byte) MaglevBackendKeyInterface {
@@ -453,6 +429,7 @@ var MaglevMapParameters = maps.MapParameters{
 	MaxEntries: 1009,
 	Name:       "cali_v4_mglv",
 	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    2,
 }
 
 func MaglevMap() maps.MapWithExistsCheck {

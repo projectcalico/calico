@@ -30,7 +30,7 @@ import (
 // consumption by Felix.
 func NewNetworkPolicyUpdateProcessor(keyKind string) watchersyncer.SyncerUpdateProcessor {
 	return NewSimpleUpdateProcessor(
-		apiv3.KindNetworkPolicy,
+		keyKind,
 		npKeyConverter(keyKind),
 		ConvertNetworkPolicyV3ToV1Value,
 	)
