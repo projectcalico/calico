@@ -74,6 +74,13 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
+	if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK && ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
+		/* needs to go viaer routing in netfilter unless we have access
+		 * to BPF_FIB_LOOKUP_MARK in kernel 6.10+
+		 */
+		goto skip_fib;
+	}
+
 #ifndef IPVER6
         if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && (ctx->state->flags & CALI_ST_FIRST_FRAG)) {
 		/* Revalidate the access to the packet */
@@ -512,12 +519,6 @@ skip_fib:
 		if (ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL");
 			ctx->fwd.mark |= EXT_TO_SVC_MARK;
-			if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK) {
-				/* needs to go via normal routing unless we have access
-				 * to BPF_FIB_LOOKUP_MARK in kernel 6.10+
-				 */
-				rc = TC_ACT_UNSPEC;
-			}
 		}
 
 		if (CALI_F_NAT_IF) {
