@@ -56,6 +56,9 @@ go-vet:
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
+update-x-libraries:
+	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
+
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
