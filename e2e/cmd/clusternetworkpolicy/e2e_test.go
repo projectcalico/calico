@@ -17,12 +17,8 @@ limitations under the License.
 package conformance_test
 
 import (
-	"context"
 	"testing"
-	"time"
 
-	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
@@ -30,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	api "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 	"sigs.k8s.io/network-policy-api/conformance/tests"
-	cconfig "sigs.k8s.io/network-policy-api/conformance/utils/config"
 	"sigs.k8s.io/network-policy-api/conformance/utils/flags"
 	"sigs.k8s.io/network-policy-api/conformance/utils/suite"
 )
@@ -65,38 +60,17 @@ func TestConformance(t *testing.T) {
 	t.Logf("Running conformance tests with cleanup: %t\n debug: %t\n enable all features: %t \n supported features: [%v]\n exempt features: [%v]",
 		*flags.CleanupBaseResources, *flags.ShowDebug, *flags.EnableAllSupportedFeatures, *flags.SupportedFeatures, *flags.ExemptFeatures)
 
-	timeoutConf := cconfig.DefaultTimeoutConfig()
-	timeoutConf.RequestTimeout = 10 * time.Second
-	timeoutConf.GetTimeout = 5 * time.Second
-
 	cSuite := suite.New(suite.Options{
 		Client:                     c,
 		ClientSet:                  clientset,
 		KubeConfig:                 *cfg,
-		Debug:                      true,
-		CleanupBaseResources:       true,
+		Debug:                      *flags.ShowDebug,
+		CleanupBaseResources:       *flags.CleanupBaseResources,
 		SupportedFeatures:          supportedFeatures,
 		ExemptFeatures:             exemptFeatures,
 		EnableAllSupportedFeatures: *flags.EnableAllSupportedFeatures,
-		TimeoutConfig:              timeoutConf,
 	})
 	cSuite.Setup(t)
 
-	serverPod := &v1.Pod{}
-	err = cSuite.Client.Get(context.Background(), client.ObjectKey{
-		Namespace: "network-policy-conformance-hufflepuff",
-		Name:      "cedric-diggory-0",
-	}, serverPod)
-	logrus.Infof("pepper client %v", cSuite.Client)
-	logrus.Infof("pepper found %v", err)
-
 	cSuite.Run(t, tests.ConformanceTests)
-
-	serverPod = &v1.Pod{}
-	err = cSuite.Client.Get(context.Background(), client.ObjectKey{
-		Namespace: "network-policy-conformance-hufflepuff",
-		Name:      "cedric-diggory-0",
-	}, serverPod)
-	logrus.Infof("pepper client %v", cSuite.Client)
-	logrus.Infof("pepper found %v", err)
 }

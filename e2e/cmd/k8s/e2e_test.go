@@ -29,7 +29,6 @@ import (
 
 	// Import tests.
 	_ "k8s.io/kubernetes/test/e2e/network"
-	//_ "sigs.k8s.io/network-policy-api/conformance"
 
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/apis"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/bgp"
