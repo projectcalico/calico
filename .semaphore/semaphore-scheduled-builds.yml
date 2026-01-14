@@ -250,7 +250,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['go.mod', 'go.sum', '/**/*.go', '**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       env_vars:
@@ -281,7 +281,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -294,7 +294,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['**/*'], {pipeline_file: 'track', exclude: ['libbpf', '.[a-z]*']})
+        change_in(['/**/*'], {pipeline_file: 'track', exclude: ['libbpf', '.[a-z]*']})
     dependencies: []
     task:
       jobs:
@@ -307,7 +307,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['**/*.pb.go', '**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -501,7 +501,7 @@ blocks:
         - name: AZURE_LOCATION
           value: eastus2
         - name: KUBE_VERSION
-          value: v1.29.7
+          value: v1.33.7
       jobs:
         - name: "CNI Plugin: Windows Containerd FV - overlay"
           execution_time_limit:
@@ -803,12 +803,11 @@ blocks:
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
         - name: CONTAINERD_VERSION
-          value: 1.7.22
+          value: 1.7.28
       jobs:
         - name: "Felix: Windows FV"
           commands:
-            - export BACKEND=overlay
-            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh
   - name: "Felix: iptables tests on Ubuntu 22.04"
@@ -827,7 +826,6 @@ blocks:
           commands:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=16
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -851,7 +849,6 @@ blocks:
           commands:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=16
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -875,7 +872,6 @@ blocks:
           commands:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=60
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -903,7 +899,6 @@ blocks:
             # Limit to BPF conntrack tests to reduce overall runtime.
             - export FV_FOCUS='_BPF_.*ct=true'
             - export NUM_FV_BATCHES=10
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -930,7 +925,6 @@ blocks:
             - source felix/.semaphore/fv-prologue
             # Only run the UT that checks that the precompiled BPF binaries are loadable.
             - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -958,8 +952,6 @@ blocks:
             # Limit to BPF TCP+conntrack tests to reduce overall runtime.
             - export FV_FOCUS='_BPF_.*tcp.*ct=true'
             - export NUM_FV_BATCHES=16
-            - .semaphore/vms/create-test-vms ${VM_PREFIX}
-            - .semaphore/vms/run-on-vms ${VM_PREFIX} "sudo sysctl -w net.core.bpf_jit_harden=2"
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -1161,6 +1153,10 @@ blocks:
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "node"
+        - name: CI_GROUP_LABEL
+          value: "node"
+        - name: CI_JOB_LABEL
+          value: "kind-cluster-tests"
       prologue:
         commands:
           # Set up access to GCP buckets.
@@ -1176,7 +1172,6 @@ blocks:
           - export VM_DISK_SIZE=80GB
           - mkdir artifacts
           - ./.semaphore/cache-test-artifacts
-          - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
       jobs:
         - name: "Node: kind-cluster tests"
           execution_time_limit:
@@ -1186,7 +1181,6 @@ blocks:
       epilogue:
         always:
           commands:
-            - ../.semaphore/vms/collect-artifacts-from-vms ${VM_PREFIX}
             - '../.semaphore/vms/publish-reports "Node: KinD STs"'
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:

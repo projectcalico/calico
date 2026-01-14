@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package rules
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -619,8 +620,12 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
+		logMatch := r.NewMatch()
+		if len(r.LogActionRateLimit) != 0 {
+			logMatch = logMatch.Limit(r.LogActionRateLimit, uint16(r.LogActionRateLimitBurst))
+		}
 		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch(),
+			Match:  logMatch,
 			Action: r.Log(r.generateLogPrefix(id, tier)),
 		})
 	}
@@ -716,6 +721,8 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	return finalRules
 }
 
+var logPrefixRE = regexp.MustCompile("%[tknp]")
+
 // generateLogPrefix returns a log prefix string with known specifiers replaced by their corresponding values.
 // If no known specifiers are present, the log prefix is returned as-is.
 // Supported specifiers in the log prefix format string:
@@ -750,15 +757,23 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 		name = "unknown"
 	}
 
-	namespacedName := name
-	if len(namespace) != 0 {
-		namespacedName = fmt.Sprintf("%s/%s", namespace, name)
-	}
-
-	logPrefix = strings.ReplaceAll(logPrefix, "%k", kind)
-	logPrefix = strings.ReplaceAll(logPrefix, "%p", namespacedName)
-	logPrefix = strings.ReplaceAll(logPrefix, "%n", name)
-	return strings.ReplaceAll(logPrefix, "%t", tier)
+	return logPrefixRE.ReplaceAllStringFunc(logPrefix, func(specifier string) string {
+		switch specifier {
+		case "%k":
+			return kind
+		case "%p":
+			if len(namespace) != 0 {
+				return fmt.Sprintf("%s/%s", namespace, name)
+			}
+			return name
+		case "%n":
+			return name
+		case "%t":
+			return tier
+		default:
+			return specifier
+		}
+	})
 }
 
 func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {

@@ -26,7 +26,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -47,7 +47,6 @@ type healthRecorder struct {
 }
 
 func (r *healthRecorder) RegisterReporter(name string, reports *health.HealthReport, timeout time.Duration) {
-
 }
 
 func (r *healthRecorder) Report(name string, report *health.HealthReport) {
@@ -123,13 +122,13 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 		BeforeEach(func() {
 			kvNodeRev10 = model.KVPair{
-				Key: model.ResourceKey{Name: "node1", Kind: v3.KindNode},
-				Value: &v3.Node{
+				Key: model.ResourceKey{Name: "node1", Kind: libapiv3.KindNode},
+				Value: &libapiv3.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						ResourceVersion: "10",
 						Name:            "foo",
 					},
-					Spec: v3.NodeSpec{
+					Spec: libapiv3.NodeSpec{
 						IPv4VXLANTunnelAddr: "10.0.0.1",
 					},
 				},
@@ -162,13 +161,13 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			// Then send in another update with same value, and another value to make sure we generate another
 			// crumb.
 			kvNodeRev11 := model.KVPair{
-				Key: model.ResourceKey{Name: "node1", Kind: v3.KindNode},
-				Value: &v3.Node{
+				Key: model.ResourceKey{Name: "node1", Kind: libapiv3.KindNode},
+				Value: &libapiv3.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						ResourceVersion: "11",
 						Name:            "foo",
 					},
-					Spec: v3.NodeSpec{
+					Spec: libapiv3.NodeSpec{
 						IPv4VXLANTunnelAddr: "10.0.0.1",
 					},
 				},
@@ -348,7 +347,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 	generateUpdates := func(num int) []api.Update {
 		var updates []api.Update
-		var seenKeys = set.New[string]()
+		seenKeys := set.New[string]()
 		for i := 0; i < num; i++ {
 			configIdx := i % 100
 			value := fmt.Sprintf("config%v", i%55)

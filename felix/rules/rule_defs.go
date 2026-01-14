@@ -433,7 +433,10 @@ type Config struct {
 	WireguardEncryptHostTraffic bool
 	RouteSource                 string
 
-	LogPrefix            string
+	LogPrefix               string
+	LogActionRateLimit      string
+	LogActionRateLimitBurst int
+
 	EndpointToHostAction string
 	FilterAllowAction    string
 	MangleAllowAction    string

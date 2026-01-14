@@ -524,10 +524,10 @@ class Lib(object):
             # Also return it.
             return thread
 
-        def simulated_spawn_after(secs, fn, *args):
+        def simulated_spawn_after(secs, fn, *args, **kwargs):
             def sleep_then_run():
                 simulated_time_sleep(secs)
-                fn(*args)
+                fn(*args, **kwargs)
 
             return simulated_spawn(sleep_then_run)
 

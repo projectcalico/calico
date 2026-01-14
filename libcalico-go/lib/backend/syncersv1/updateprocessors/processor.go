@@ -61,7 +61,7 @@ func (sup *simpleUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, e
 	// Check the v3 resource is the correct type.
 	rk, ok := kvp.Key.(model.ResourceKey)
 	if !ok || rk.Kind != sup.v3Kind {
-		return nil, fmt.Errorf("Incorrect key type - expecting resource of kind %s", sup.v3Kind)
+		return nil, fmt.Errorf("Incorrect key type %s - expecting resource of kind %s", rk.Kind, sup.v3Kind)
 	}
 
 	// Convert the v3 resource to the equivalent v1 resource type, started with the Key.

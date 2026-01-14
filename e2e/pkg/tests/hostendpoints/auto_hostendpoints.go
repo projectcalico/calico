@@ -326,22 +326,39 @@ func GetAutoHEPsEnabled(kcc v3.KubeControllersConfiguration) bool {
 }
 
 func WaitForAutoHEPs(client ctrlclient.Client, expect bool) {
-	Eventually(func() bool {
+	if expect {
+		logrus.Info("Waiting for the host endpoints to be created")
+	} else {
 		logrus.Info("Waiting for the host endpoints to be deleted")
-		heps := getAllAutoHostEndpoints(client)
-		if expect {
-			return len(heps.Items) > 0
+	}
+	EventuallyWithOffset(1, func() error {
+		heps := &v3.HostEndpointList{}
+		err := client.List(context.Background(), heps)
+		if err != nil {
+			return err
 		}
-		return len(heps.Items) == 0
-	}, 2*time.Minute, 2*time.Second).Should(BeTrue())
+		if expect && len(heps.Items) == 0 {
+			return fmt.Errorf("expected host endpoints to be present, but none found")
+		}
+		if !expect && len(heps.Items) > 0 {
+			return fmt.Errorf("expected no host endpoints, but found %d", len(heps.Items))
+		}
+		return nil
+	}, 1*time.Minute, 2*time.Second).Should(BeNil())
 }
 
 // expectAutoHostEndpoint asserts that a specified node has the correct auto
 // host endpoint created for it.
 func expectAutoHostEndpoint(client ctrlclient.Client, nodeName string) {
-	Eventually(func() error {
+	EventuallyWithOffset(1, func() error {
 		// Get the node and its auto host endpoint
-		hep := getAutoHostEndpoint(client, nodeName)
+		// This naming convention is hardcoded in kube-controllers.
+		hepName := nodeName + "-auto-hep"
+		hep := &v3.HostEndpoint{}
+		err := client.Get(context.Background(), types.NamespacedName{Name: hepName}, hep)
+		if err != nil {
+			return fmt.Errorf("error getting HEP %s: %v", hepName, err)
+		}
 
 		// Auto host endpoints are all-interfaces host endpoints.
 		if hep.Spec.InterfaceName != "*" {
@@ -355,23 +372,4 @@ func expectAutoHostEndpoint(client ctrlclient.Client, nodeName string) {
 		}
 		return nil
 	}, 30*time.Second, 2*time.Second).Should(BeNil())
-}
-
-// getAutoHostEndpoint gets a host endpoint for the specified node.
-func getAutoHostEndpoint(client ctrlclient.Client, nodeName string) *v3.HostEndpoint {
-	// This naming convention is hardcoded in kube-controllers.
-	hepName := nodeName + "-auto-hep"
-
-	hep := &v3.HostEndpoint{}
-	err := client.Get(context.Background(), types.NamespacedName{Name: hepName}, hep)
-	Expect(err).NotTo(HaveOccurred())
-	return hep
-}
-
-// getAllAutoHostEndpoints gets all host endpoints.
-func getAllAutoHostEndpoints(client ctrlclient.Client) *v3.HostEndpointList {
-	heps := &v3.HostEndpointList{}
-	err := client.List(context.Background(), heps)
-	Expect(err).NotTo(HaveOccurred())
-	return heps
 }
