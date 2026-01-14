@@ -88,14 +88,13 @@ var _ = Describe("Etcd to KDD Migration Export handling", func() {
 		allPlurals.Discard("ipamconfigurations")
 		allPlurals.Discard("blockaffinities")
 
-		allPlurals.Iter(func(resource string) error {
+		for resource := range allPlurals.All() {
 			if strings.HasPrefix(resource, "kubernetes") {
 				// "kubernetes"-prefixed resources are backed by Kubernetes API
 				// objects, not Calico objects.
-				return set.RemoveItem
+				allPlurals.Discard(resource)
 			}
-			return nil
-		})
+		}
 
 		Expect(allV3Resources).To(ConsistOf(allPlurals.Slice()))
 	})

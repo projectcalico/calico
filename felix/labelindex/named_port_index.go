@@ -670,7 +670,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 
 	// Iterate over potential new matches and incref any members that
 	// that produces.  (This may temporarily over count.)
-	idx.selectorCandidatesIdx.IterPotentialMatches(epData, func(ipSetID string, _ *selector.Selector) {
+	for ipSetID := range idx.selectorCandidatesIdx.AllPotentialMatches(epData) {
 		// Make sure we don't appear non-live if there are a lot of IP sets to get through.
 		idx.maybeReportLive()
 
@@ -698,7 +698,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 				ipSetData.memberToRefCount[newMember] = newRefCount
 			}
 		}
-	})
+	}
 
 	// Decref all the old matches, emitting events if we drop to zero.
 	for ipSetID, oldMembers := range oldIPSetContributions {
@@ -843,14 +843,13 @@ func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpoint
 		return nil
 	}
 	contrib := map[string][]ipsetmember.IPSetMember{}
-	epData.cachedMatchingIPSetIDs.Iter(func(ipSetID string) error {
+	for ipSetID := range epData.cachedMatchingIPSetIDs.All() {
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		if ipSetData == nil {
 			log.WithField("ipSetID", ipSetID).Panic("Endpoint cachedMatchingIPSetIDs refers to nonexistent IP set.")
 		}
 		contrib[ipSetID] = idx.CalculateEndpointContribution(epData, ipSetData)
-		return nil
-	})
+	}
 	return contrib
 }
 

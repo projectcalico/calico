@@ -387,6 +387,33 @@ subcomponents, see Felix's logs.
 
 ## <a id="process-logging">Process: Logging
 
+### `LogActionRateLimit` (config file) / `logActionRateLimit` (YAML)
+
+Sets the rate of hitting a Log action. The value must be in the format "N/unit",
+where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogActionRateLimit` |
+| Encoding (env var/config file) | String matching regex <code>^([1-9]\d{0,3}/(?:second\|minute\|hour\|day))?$</code> |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `logActionRateLimit` (YAML) `LogActionRateLimit` (Go API) |
+| `FelixConfiguration` schema | String matching the regular expression <code>^[1-9]\d{0,3}/(?:second\|minute\|hour\|day)$</code>. |
+| Default value (YAML) | none |
+
+### `LogActionRateLimitBurst` (config file) / `logActionRateLimitBurst` (YAML)
+
+Sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogActionRateLimitBurst` |
+| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
+| Default value (above encoding) | `5` |
+| `FelixConfiguration` field | `logActionRateLimitBurst` (YAML) `LogActionRateLimitBurst` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
+| Default value (YAML) | `5` |
+
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
 
 Controls which source code files have their Debug log output included in the logs.
@@ -418,7 +445,12 @@ The full path to the Felix log. Set to none to disable file logging.
 
 ### `LogPrefix` (config file) / `logPrefix` (YAML)
 
-The log prefix that Felix uses when rendering LOG rules.
+The log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers
+to include extra information in the log prefix.
+- %t: Tier name.
+- %k: Kind (short names).
+- %n: Policy or profile name.
+- %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
 
 | Detail |   |
 | --- | --- |
@@ -426,7 +458,7 @@ The log prefix that Felix uses when rendering LOG rules.
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | `calico-packet` |
 | `FelixConfiguration` field | `logPrefix` (YAML) `LogPrefix` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-zA-Z0-9%: /_-])*$</code>. |
 | Default value (YAML) | `calico-packet` |
 
 ### `LogSeverityFile` (config file) / `logSeverityFile` (YAML)
@@ -1001,7 +1033,7 @@ Configures nftables support in Felix.
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `nftablesMode` (YAML) `NFTablesMode` (Go API) |
-| `FelixConfiguration` schema | `string` |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Disabled` |
 
 ### `NetlinkTimeoutSecs` (config file) / `netlinkTimeout` (YAML)
@@ -1270,26 +1302,10 @@ with an iptables "DROP" action. If you want to use "REJECT" action instead you c
 | Default value (YAML) | `Drop` |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
-### `IptablesLockFilePath` (config file) / `iptablesLockFilePath` (YAML)
-
-The location of the iptables lock file. You may need to change this
-if the lock file is not in its standard location (for example if you have mapped it into Felix's
-container at a different path).
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_IptablesLockFilePath` |
-| Encoding (env var/config file) | Path to file |
-| Default value (above encoding) | `/run/xtables.lock` |
-| `FelixConfiguration` field | `iptablesLockFilePath` (YAML) `IptablesLockFilePath` (Go API) |
-| `FelixConfiguration` schema | String. |
-| Default value (YAML) | `/run/xtables.lock` |
-
 ### `IptablesLockProbeIntervalMillis` (config file) / `iptablesLockProbeInterval` (YAML)
 
-When IptablesLockTimeout is enabled: the time that Felix will wait between
-attempts to acquire the iptables lock if it is not available. Lower values make Felix more
-responsive when the lock is contended, but use more CPU.
+Configures the interval between attempts to claim
+the xtables lock. Shorter intervals are more responsive but use more CPU.
 
 | Detail |   |
 | --- | --- |
@@ -1299,22 +1315,6 @@ responsive when the lock is contended, but use more CPU.
 | `FelixConfiguration` field | `iptablesLockProbeInterval` (YAML) `IptablesLockProbeInterval` (Go API) |
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `50ms` |
-
-### `IptablesLockTimeoutSecs` (config file) / `iptablesLockTimeout` (YAML)
-
-The time that Felix itself will wait for the iptables lock (rather than delegating the
-lock handling to the `iptables` command).
-
-Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this feature results in deadlock.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_IptablesLockTimeoutSecs` |
-| Encoding (env var/config file) | Seconds (floating point) |
-| Default value (above encoding) | `0` (0s) |
-| `FelixConfiguration` field | `iptablesLockTimeout` (YAML) `IptablesLockTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
-| Default value (YAML) | `0s` |
 
 ### `IptablesMangleAllowAction` (config file) / `iptablesMangleAllowAction` (YAML)
 
@@ -1843,21 +1843,6 @@ Felix will not modify the JIT hardening setting.
 | Default value (YAML) | `Auto` |
 | Notes | Required. | 
 
-### `BPFKubeProxyEndpointSlicesEnabled` (config file) / `bpfKubeProxyEndpointSlicesEnabled` (YAML)
-
-Deprecated and has no effect. BPF
-kube-proxy always accepts endpoint slices. This option will be removed in
-the next release.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_BPFKubeProxyEndpointSlicesEnabled` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `true` |
-| `FelixConfiguration` field | `bpfKubeProxyEndpointSlicesEnabled` (YAML) `BPFKubeProxyEndpointSlicesEnabled` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `true` |
-
 ### `BPFKubeProxyHealthzPort` (config file) / `bpfKubeProxyHealthzPort` (YAML)
 
 In BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
@@ -1952,9 +1937,9 @@ Controls the log level of the BPF programs when in BPF dataplane mode. One of "O
 | Default value (YAML) | `Off` |
 | Notes | Required. | 
 
-### `BPFMaglevMaxEndpointsPerService` (config file) / `maglevMaxEndpointsPerService` (YAML)
+### `BPFMaglevMaxEndpointsPerService` (config file) / `bpfMaglevMaxEndpointsPerService` (YAML)
 
-MaglevMaxEndpointsPerService is the maximum number of endpoints
+The maximum number of endpoints
 expected to be part of a single Maglev-enabled service.
 
 Influences the size of the per-service Maglev lookup-tables generated by Felix
@@ -1965,13 +1950,13 @@ and thus the amount of memory reserved.
 | Environment variable | `FELIX_BPFMaglevMaxEndpointsPerService` |
 | Encoding (env var/config file) | Integer: [1,3000] |
 | Default value (above encoding) | `100` |
-| `FelixConfiguration` field | `maglevMaxEndpointsPerService` (YAML) `BPFMaglevMaxEndpointsPerService` (Go API) |
+| `FelixConfiguration` field | `bpfMaglevMaxEndpointsPerService` (YAML) `BPFMaglevMaxEndpointsPerService` (Go API) |
 | `FelixConfiguration` schema | Integer: [1,3000] |
 | Default value (YAML) | `100` |
 
-### `BPFMaglevMaxServices` (config file) / `maglevMaxService` (YAML)
+### `BPFMaglevMaxServices` (config file) / `bpfMaglevMaxServices` (YAML)
 
-MaglevMaxServices is the maximum number of expected Maglev-enabled
+The maximum number of expected Maglev-enabled
 services that Felix will allocate lookup-tables for.
 
 | Detail |   |
@@ -1979,7 +1964,7 @@ services that Felix will allocate lookup-tables for.
 | Environment variable | `FELIX_BPFMaglevMaxServices` |
 | Encoding (env var/config file) | Integer: [1,3000] |
 | Default value (above encoding) | `100` |
-| `FelixConfiguration` field | `maglevMaxService` (YAML) `BPFMaglevMaxServices` (Go API) |
+| `FelixConfiguration` field | `bpfMaglevMaxServices` (YAML) `BPFMaglevMaxServices` (Go API) |
 | `FelixConfiguration` schema | Integer: [1,3000] |
 | Default value (YAML) | `100` |
 
@@ -2189,22 +2174,20 @@ Disabled or Enabled.
 
 ### `BPFRedirectToPeer` (config file) / `bpfRedirectToPeer` (YAML)
 
-Controls which whether it is allowed to forward straight to the
-peer side of the workload devices. It is allowed for any host L2 devices by default
-(L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
-it on ingress. Value of Enabled also allows redirection from L3 host devices like
-IPIP tunnel or Wireguard directly to the peer side of the workload's device. This
-makes redirection faster, however, it breaks tools like tcpdump on the peer side.
-Use Enabled with caution.
+Controls whether traffic may be forwarded directly to the peer side of a workload’s device.
+Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
+which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
+As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFRedirectToPeer` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code> (case insensitive) |
-| Default value (above encoding) | `L2Only` |
+| Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfRedirectToPeer` (YAML) `BPFRedirectToPeer` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"L2Only"</code>. |
-| Default value (YAML) | `L2Only` |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
 ## <a id="dataplane-windows">Dataplane: Windows

@@ -87,26 +87,11 @@ var _ = infrastructure.DatastoreDescribe("iptables force-programming tests", []a
 		pol, err := client.GlobalNetworkPolicies().Create(utils.Ctx, pol, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		// The expected chain names differ based on if we're using v3 CRDs or crd.projcalico.org/v1 due to
-		// the tier prefix handling differing. In crd.projectcalico.org/v1 the tier prefix is prepended before
-		// it reaches Felix, leading to the chain names being hashed. In v3 CRDs the tier prefix is not prepended,
-		// and so the chain names are not long enough to be hashed.
-		expChains := []string{
-			"cali-pi-_l_CMLPBmpkyZIIwB62k",
-			"cali-po-_l_CMLPBmpkyZIIwB62k",
-		}
-		if infra.UseV3API() {
-			expChains = []string{
-				"cali-pi-default/policy-1",
-				"cali-po-default/policy-1",
-			}
-		}
-
 		Eventually(func() map[string][]string {
 			return tc.Felixes[0].IPTablesChains("filter")
 		}, "10s", "100ms").Should(And(
-			HaveKey(expChains[0]),
-			HaveKey(expChains[1]),
+			HaveKey("cali-pi-gnp/policy-1"),
+			HaveKey("cali-po-gnp/policy-1"),
 		))
 	})
 

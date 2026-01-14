@@ -24,7 +24,6 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -115,7 +114,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + tieredGNPName(name1, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new StagedGlobalNetworkPolicy with name1/spec1 and a non-empty ResourceVersion")
 			polToCreate := &apiv3.StagedGlobalNetworkPolicy{
@@ -138,7 +137,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			res1, outError := c.StagedGlobalNetworkPolicies().Create(ctx, polToCreate, options.SetOptions{})
 			Expect(polToCreate.Spec).To(Equal(polToCreateCopy.Spec), "Create() unexpectedly modified input policy")
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1))
+			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec1))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -149,24 +148,24 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource already exists: StagedGlobalNetworkPolicy(" + tieredGNPName(name1, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: StagedGlobalNetworkPolicy(" + name1 + ") with error:"))
 
 			By("Getting StagedGlobalNetworkPolicy (name1) and comparing the output against spec1")
 			res, outError := c.StagedGlobalNetworkPolicies().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1))
+			Expect(res).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting StagedGlobalNetworkPolicy (name2) before it is created")
 			_, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + tieredGNPName(name2, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
 
 			By("Listing all the StagedGlobalNetworkPolicies, expecting a single result with name1/spec1")
 			outList, outError := c.StagedGlobalNetworkPolicies().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1),
+				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec1),
 			))
 
 			By("Creating a new StagedGlobalNetworkPolicy with name2/spec2")
@@ -176,20 +175,20 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name2, tier), spec2))
+			Expect(res2).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name2, spec2))
 
 			By("Getting StagedGlobalNetworkPolicy (name2) and comparing the output against spec2")
 			res, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name2, tier), spec2))
+			Expect(res2).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name2, spec2))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the StagedGlobalNetworkPolicies, expecting a two results with name1/spec1 and name2/spec2")
 			outList, outError = c.StagedGlobalNetworkPolicies().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1),
-				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name2, tier), spec2),
+				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec1),
+				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name2, spec2),
 			))
 
 			By("Updating StagedGlobalNetworkPolicy name1 with spec2")
@@ -198,7 +197,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			res1out, outError := c.StagedGlobalNetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1.Spec).To(Equal(res1Copy.Spec), "Update() unexpectedly modified input")
-			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec2))
+			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec2))
 			res1 = res1out
 
 			By("Attempting to update the StagedGlobalNetworkPolicy without a Creation Timestamp")
@@ -234,20 +233,20 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			res1.ResourceVersion = rv1_1
 			_, outError = c.StagedGlobalNetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("update conflict: StagedGlobalNetworkPolicy(" + tieredGNPName(name1, tier) + ")"))
+			Expect(outError.Error()).To(Equal("update conflict: StagedGlobalNetworkPolicy(" + name1 + ")"))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Getting StagedGlobalNetworkPolicy (name1) with the original resource version and comparing the output against spec1")
 				res, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
-				Expect(res).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1))
+				Expect(res).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec1))
 				Expect(res.ResourceVersion).To(Equal(rv1_1))
 			}
 
 			By("Getting StagedGlobalNetworkPolicy (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec2))
+			Expect(res).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec2))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
@@ -255,7 +254,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				outList, outError = c.StagedGlobalNetworkPolicies().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
 				Expect(outList.Items).To(ConsistOf(
-					testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1),
+					testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec1),
 				))
 			}
 
@@ -263,21 +262,21 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			outList, outError = c.StagedGlobalNetworkPolicies().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec2),
-				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name2, tier), spec2),
+				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec2),
+				testutils.Resource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name2, spec2),
 			))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Deleting StagedGlobalNetworkPolicy (name1) with the old resource version")
 				_, outError = c.StagedGlobalNetworkPolicies().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("update conflict: StagedGlobalNetworkPolicy(" + tieredGNPName(name1, tier) + ")"))
+				Expect(outError.Error()).To(Equal("update conflict: StagedGlobalNetworkPolicy(" + name1 + ")"))
 			}
 
 			By("Deleting StagedGlobalNetworkPolicy (name1) with the new resource version")
 			dres, outError := c.StagedGlobalNetworkPolicies().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(dres).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec2))
+			Expect(dres).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec2))
 			time.Sleep(1 * time.Second)
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
@@ -290,7 +289,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				time.Sleep(2 * time.Second)
 				_, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + tieredGNPName(name2, tier) + ") with error:"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
 
 				By("Creating StagedGlobalNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedGlobalNetworkPolicies().Create(ctx, &apiv3.StagedGlobalNetworkPolicy{
@@ -304,21 +303,21 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				time.Sleep(2 * time.Second)
 				_, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + tieredGNPName(name2, tier) + ") with error:"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				By("Deleting StagedGlobalNetworkPolicy (name2) for KDD that does not support TTL")
 				dres, outError = c.StagedGlobalNetworkPolicies().Delete(ctx, name2, options.DeleteOptions{})
 				Expect(outError).NotTo(HaveOccurred())
-				Expect(dres).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name2, tier), spec2))
+				Expect(dres).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name2, spec2))
 				time.Sleep(1 * time.Second)
 			}
 
 			By("Attempting to delete StagedGlobalNetworkPolicy (name2) again")
 			_, outError = c.StagedGlobalNetworkPolicies().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + tieredGNPName(name2, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
 
 			By("Listing all StagedGlobalNetworkPolicies and expecting no items")
 			outList, outError = c.StagedGlobalNetworkPolicies().List(ctx, options.ListOptions{})
@@ -328,7 +327,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			By("Getting StagedGlobalNetworkPolicy (name2) and expecting an error")
 			_, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + tieredGNPName(name2, tier) + ") with error:"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
 		},
 
 		// Pass two fully populated StagedGlobalNetworkPolicySpecs in a tier, and expect the series of operations to succeed.
@@ -342,7 +341,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 	)
 
 	DescribeTable("StagedGlobalNetworkPolicy default tier name test",
-		func(policyName string, incorrectPrefixPolicyName string) {
+		func(policyName string, prefixPolicyName string) {
 			By("Getting the policy before it was created")
 			_, err := c.StagedGlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
 			Expect(err).To(HaveOccurred())
@@ -364,16 +363,12 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			if !v3CRD {
-				// In v3 CRD mode, the name field is always as-is. There is no semantic meaning or validation
-				// applied to the name field. So, skip this part of the test.
-				By("Creating the policy with incorrect prefix name")
-				_, err = c.StagedGlobalNetworkPolicies().Create(ctx,
-					&apiv3.StagedGlobalNetworkPolicy{
-						ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName},
-					}, options.SetOptions{})
-				Expect(err).To(HaveOccurred())
-			}
+			By("Creating the policy with prefix name")
+			_, err = c.StagedGlobalNetworkPolicies().Create(ctx,
+				&apiv3.StagedGlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: prefixPolicyName},
+				}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting the policy")
 			returnedPolicy, err = c.StagedGlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
@@ -385,58 +380,20 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
-			By("Getting the policy with incorrect prefix")
-			_, err = c.StagedGlobalNetworkPolicies().Get(ctx, incorrectPrefixPolicyName, options.GetOptions{})
-			Expect(err).To(HaveOccurred())
-
-			By("Updating the policy with incorrect prefix")
-			_, err = c.StagedGlobalNetworkPolicies().Update(ctx, &apiv3.StagedGlobalNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
-				Spec:       spec1,
-			}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
+			By("Getting the policy with prefix")
+			_, err = c.StagedGlobalNetworkPolicies().Get(ctx, prefixPolicyName, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Deleting policy")
 			returnedPolicy, err = c.StagedGlobalNetworkPolicies().Delete(ctx, policyName, options.DeleteOptions{})
 			Expect(returnedPolicy.Name).To(Equal(policyName))
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.StagedGlobalNetworkPolicies().Delete(ctx, prefixPolicyName, options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 		},
 		Entry("StagedGlobalNetworkPolicy without default tier prefix", "netpol", "default.netpol"),
 		Entry("StagedGlobalNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
-
-	Describe("StagedGlobalNetworkPolicy without name on the projectcalico.org annotation", func() {
-		It("Should return the name without default prefix", func() {
-			if v3CRD {
-				Skip("Skipping test for v3 CRD mode")
-			}
-
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
-				Expect(err).NotTo(HaveOccurred())
-				config.ContentType = "application/json"
-				cli, err := ctrlclient.New(config, ctrlclient.Options{})
-				Expect(err).NotTo(HaveOccurred())
-
-				// Create v1 crd with empty metadata annotation name
-				annotations := map[string]string{}
-				annotations["projectcalico.org/metadata"] = "{}"
-				policy := &apiv3.StagedGlobalNetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						Annotations: annotations,
-						Name:        "default.prefix-test-policy",
-					},
-					Spec: apiv3.StagedGlobalNetworkPolicySpec{},
-				}
-				err = cli.Create(context.Background(), policy)
-				Expect(err).NotTo(HaveOccurred())
-
-				// We should be able to get it without the default. prefix
-				_, err = c.StagedGlobalNetworkPolicies().Get(ctx, "prefix-test-policy", options.GetOptions{})
-				Expect(err).ToNot(HaveOccurred())
-			}
-		})
-	})
 
 	DescribeTable("StagedGlobalNetworkPolicy name validation tests",
 		func(policyName string, tier string, expectError bool) {
@@ -467,11 +424,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				Expect(err).ToNot(HaveOccurred())
 			}
 		},
+
+		// We don't enforce any name restrictions.
 		Entry("StagedGlobalNetworkPolicy in default tier without prefix", "netpol", "default", false),
 		Entry("StagedGlobalNetworkPolicy in default tier with prefix", "default.netpol", "default", false),
-		Entry("StagedGlobalNetworkPolicy in custom tier with correct prefix", "tier1.netpol", "tier1", false),
-		Entry("StagedGlobalNetworkPolicy in custom tier without prefix", "netpol", "tier1", true),
-		Entry("StagedGlobalNetworkPolicy in custom tier with incorrect prefix", "tier1.netpol", "tier2", true),
+		Entry("StagedGlobalNetworkPolicy in custom tier with tier prefix", "tier1.netpol", "tier1", false),
+		Entry("StagedGlobalNetworkPolicy in custom tier without prefix", "netpol", "tier1", false),
+		Entry("StagedGlobalNetworkPolicy in custom tier with mismatched prefix", "tier1.netpol", "tier2", false),
 	)
 
 	Describe("StagedGlobalNetworkPolicy watch functionality", func() {

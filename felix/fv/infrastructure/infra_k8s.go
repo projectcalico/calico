@@ -51,6 +51,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
+const DefaultBPFLogByteLimit = 64 * 1024 * 1024
+
 type K8sDatastoreInfra struct {
 	etcdContainer        *containers.Container
 	bpfLog               *containers.Container
@@ -78,8 +80,9 @@ type K8sDatastoreInfra struct {
 	apiServerBindIP       string
 	ipMask                string
 
-	cleanups cleanupStack
-	felixes  []*Felix
+	cleanups        cleanupStack
+	felixes         []*Felix
+	bpfLogByteLimit int
 }
 
 var (
@@ -179,6 +182,7 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 		resetAll := temp.ipv6 != kds.ipv6 || temp.dualStack != kds.dualStack
 
 		if !resetAll {
+			kds.bpfLogByteLimit = temp.bpfLogByteLimit
 			kds.EnsureReady()
 			kds.PerTestSetup(index)
 			return kds, nil
@@ -197,25 +201,35 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 	return K8sInfra[index], err
 }
 
+func (kds *K8sDatastoreInfra) setBPFLogByteLimit(limit int) {
+	kds.bpfLogByteLimit = limit
+}
+
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
-		kds.bpfLog = RunBPFLog()
-		kds.AddCleanup(func() {
-			if kds.bpfLog != nil {
-				kds.bpfLog.Stop()
-			}
-		})
+		kds.bpfLog = RunBPFLog(kds, kds.bpfLogByteLimit)
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
 
-func RunBPFLog() *containers.Container {
-	return containers.Run("bpf-log",
+type CleanupProvider interface {
+	AddCleanup(func())
+}
+
+func RunBPFLog(cp CleanupProvider, byteLimit int) *containers.Container {
+	if byteLimit == 0 {
+		byteLimit = DefaultBPFLogByteLimit
+	}
+	c := containers.Run("bpf-log",
 		containers.RunOpts{
 			AutoRemove:       true,
 			IgnoreEmptyLines: true,
+			LogLimitBytes:    byteLimit,
 		}, "--privileged",
 		utils.Config.FelixImage, "/usr/bin/bpftool", "prog", "tracelog")
+	cp.AddCleanup(c.Stop)
+	cp.AddCleanup(c.StopLogs)
+	return c
 }
 
 func (kds *K8sDatastoreInfra) runK8sApiserver() {
@@ -302,14 +316,20 @@ func (kds *K8sDatastoreInfra) runK8sControllerManager() {
 	kds.k8sControllerManager = c
 }
 
-func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
+func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err error) {
 	log.Info("Starting Kubernetes infrastructure")
 
 	log.Info("Starting etcd")
-	kds := &K8sDatastoreInfra{
+	kds = &K8sDatastoreInfra{
 		serviceClusterIPRange: "10.101.0.0/16",
 		ipMask:                "/32",
 	}
+	defer func() {
+		if err != nil {
+			log.Warn("setupK8sDatastoreInfra about to fail, tearing down the infra.")
+			TearDownK8sInfra(kds)
+		}
+	}()
 
 	for _, o := range opts {
 		o(kds)
@@ -336,7 +356,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 	kds.runK8sApiserver()
 
 	if kds.k8sApiContainer == nil {
-		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s API server container")
 	}
 
@@ -356,7 +375,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 120*time.Second {
 			log.WithError(err).Error("Failed to create k8s client.")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -387,7 +405,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 90*time.Second {
 			log.WithError(err).Error("Failed to install role binding")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -402,7 +419,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 15*time.Second {
 			log.WithError(err).Error("Failed to list namespaces.")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -412,16 +428,14 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 	log.Info("Starting controller manager.")
 	kds.runK8sControllerManager()
 	if kds.k8sControllerManager == nil {
-		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s controller manager container")
 	}
 
 	log.Info("Started controller manager.")
 
 	// Apply CRDs (mounted as docker volume)
-	err := kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
+	err = kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
 	if err != nil {
-		TearDownK8sInfra(kds)
 		return nil, err
 	}
 
@@ -446,7 +460,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 120*time.Second {
 			log.WithError(err).Error("API server is not responding to requests")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -467,7 +480,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 120*time.Second {
 			log.WithError(err).Error("Failed to get API server cert")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -500,7 +512,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 120*time.Second && err != nil {
 			log.WithError(err).Error("Failed to initialise calico client")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -515,7 +526,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 20*time.Second {
 			log.WithError(err).Error("Failed to get default service account.")
-			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -561,11 +571,15 @@ func (kds *K8sDatastoreInfra) Stop() {
 	kds.needsCleanup = true
 	kds.runningTest = ""
 
+	// We do run the per-test cleanup stack, this tears down the resources that
+	// the test created.
 	if ginkgo.CurrentGinkgoTestDescription().Failed {
-		kds.DumpErrorData()
+		// Queue up the diags dump so that the cleanupStack will handle any
+		// panic from it.
+		kds.AddCleanup(kds.DumpErrorData)
 	}
 	// Run registered teardowns (reverse order). Do not suppress panics.
-	kds.cleanups.Run()
+	defer kds.cleanups.Run()
 }
 
 func (kds *K8sDatastoreInfra) AddCleanup(f func()) {
@@ -598,6 +612,7 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllTiers,
 		cleanupAllHostEndpoints,
 		cleanupAllNetworkSets,
+		cleanupAllGlobalNetworkSets,
 		cleanupAllFelixConfigurations,
 		cleanupAllServices,
 	}
@@ -740,7 +755,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 	}
 	if len(felix.IPv6) > 0 && v6CIDR != nil {
 		nodeIn.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
-		v6CIDR := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx)
+		v6CIDR := fmt.Sprintf("%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%04x::/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], idx)
 		// Put the CIDR into canonical format, as required by k8s validation.
 		v6CIDR = ip.MustParseCIDROrIP(v6CIDR).String()
 		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, v6CIDR)
@@ -910,9 +925,8 @@ func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
 	policy := api.NewNetworkPolicy()
 	policy.Name = "deny-all"
 	policy.Namespace = "default"
-	policy.Spec.Ingress = []api.Rule{{Action: api.Deny}}
-	policy.Spec.Egress = []api.Rule{{Action: api.Deny}}
 	policy.Spec.Selector = "all()"
+	policy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
 	_, err := kds.calicoClient.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 	return err
 }
@@ -1197,7 +1211,7 @@ func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {
 	}
 	log.WithField("count", len(tiers.Items)).Info("Tiers present")
 	for _, tier := range tiers.Items {
-		if tier.Name == names.DefaultTierName || tier.Name == names.AdminNetworkPolicyTierName {
+		if names.TierIsStatic(tier.Name) {
 			continue
 		}
 
@@ -1218,12 +1232,29 @@ func cleanupAllNetworkSets(clientset *kubernetes.Clientset, client client.Interf
 	}
 	log.WithField("count", len(ns.Items)).Info("networksets present")
 	for _, n := range ns.Items {
-		_, err = client.HostEndpoints().Delete(ctx, n.Name, options.DeleteOptions{})
+		_, err = client.NetworkSets().Delete(ctx, n.Namespace, n.Name, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
 		}
 	}
-	log.Info("Cleaned up host networksets")
+	log.Info("Cleaned up networksets")
+}
+
+func cleanupAllGlobalNetworkSets(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up global network sets")
+	ctx := context.Background()
+	gns, err := client.GlobalNetworkSets().List(ctx, options.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("count", len(gns.Items)).Info("global networksets present")
+	for _, gn := range gns.Items {
+		_, err = client.GlobalNetworkSets().Delete(ctx, gn.Name, options.DeleteOptions{})
+		if err != nil {
+			panic(err)
+		}
+	}
+	log.Info("Cleaned up global network sets")
 }
 
 func cleanupAllHostEndpoints(clientset *kubernetes.Clientset, client client.Interface) {
@@ -1283,17 +1314,17 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 				panic(err)
 			}
 		}
-		endpointsInterface := coreV1.Endpoints(ns.Name)
-		endpoints, err := endpointsInterface.List(context.Background(), metav1.ListOptions{})
+		endpointSliceInterface := clientset.DiscoveryV1().EndpointSlices(ns.Name)
+		endpointSlices, err := endpointSliceInterface.List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			panic(err)
 		}
-		for _, ep := range endpoints.Items {
-			if ep.Name == "kubernetes" {
+		for _, ep := range endpointSlices.Items {
+			if ep.Labels["kubernetes.io/service-name"] == "kubernetes" {
 				// Skip cleaning up the Kubernetes API service.
 				continue
 			}
-			err := endpointsInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
+			err := endpointSliceInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
 			if err != nil && !strings.Contains(err.Error(), "not found") {
 				panic(err)
 			}
@@ -1341,6 +1372,7 @@ func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
 	podIPs := []v1.PodIP{}
 	for _, ipnet := range wep.Spec.IPNetworks {
 		podIP := strings.Split(ipnet, "/")[0]
+		podIP = net.ParseIP(podIP).String() // Normalise the IP.
 		podIPs = append(podIPs, v1.PodIP{IP: podIP})
 	}
 	podStatus := v1.PodStatus{

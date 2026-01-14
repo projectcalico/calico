@@ -409,6 +409,7 @@ spec:
                     - Ignore
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:

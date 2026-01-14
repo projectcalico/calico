@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -174,6 +175,7 @@ func collectDiags(opts *diagOpts) error {
 		collectSelectedNodeLogs(kubeClient, dir+"/nodes", dir+"/links", opts)
 	}
 	collectGlobalClusterInformation(dir + "/cluster")
+	collectUnsupportedAnnotations(tempDir, directoryName)
 	createArchive(tempDir, directoryName, archiveName)
 
 	return nil
@@ -755,6 +757,46 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 			})
 		}
 		common.ExecAllCmdsWriteToFile(cmds)
+	}
+}
+
+func collectUnsupportedAnnotations(tempDir string, directoryName string) {
+	// Check for files containing unsupported.operator.tigera.io
+	var filesWithString []string
+	fullPath := fmt.Sprintf("%s/%s", tempDir, directoryName)
+	err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if strings.Contains(string(content), "unsupported.operator.tigera.io") {
+				relPath, err := filepath.Rel(fullPath, path)
+				if err != nil {
+					return err
+				}
+				filesWithString = append(filesWithString, relPath)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Printf("Error checking files for unsupported annotation: %s\n", err)
+		return
+	}
+
+	// If files were found containing the string, write them to a file
+	if len(filesWithString) > 0 {
+		fmt.Println("\n==== WARNING: Unsupported annotation usage detected in the cluster ====")
+		content := strings.Join(filesWithString, "\n")
+		filePath := fmt.Sprintf("%s/%s/files_with_unsupported_annotation.txt", tempDir, directoryName)
+		err = os.WriteFile(filePath, []byte(content), 0644)
+		if err != nil {
+			fmt.Printf("Error writing list of files with unsupported annotation: %s\n", err)
+		}
 	}
 }
 

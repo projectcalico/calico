@@ -6,10 +6,9 @@ LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
-NETPOL_TAG = v0.1.5
-NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/experimental
-NETPOL_ANP_CRD = policy.networking.k8s.io_adminnetworkpolicies.yaml
-NETPOL_BANP_CRD = policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
+NETPOL_CNP_TAG = main
+NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/heads/$(NETPOL_CNP_TAG)/config/crd/standard
+NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -23,10 +22,6 @@ include ../lib.Makefile
 BINDIR?=bin
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
-UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go, \
-                             $(wildcard ./lib/upgrade/migrator/clients/v1/k8s/custom/*.go))
-
-# Create a list of files upon which the generated file depends, skip the generated file itself
 APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
 
 .PHONY: clean
@@ -38,7 +33,6 @@ clean:
 # Building the binary
 ###############################################################################
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
-	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
 	./lib/apis/v3/generated.openapi.go \
 	./lib/apis/v1/generated.openapi.go \
 	./lib/selector/tokenizer/kind_string.go
@@ -65,21 +59,12 @@ gen-crds:
 	rm -f config/crd/_nodes.yaml
 	# Remove the first yaml separator line.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
-	# Add K8S AdminNetworkPolicy CRD
-	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
-	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_BANP_CRD) -o ./config/crd/$(NETPOL_BANP_CRD)
+	# Add K8S ClusterNetworkPolicy CRD
+	curl -sSfL --retry 3 $(NETPOL_CNP_CRD_URL)/$(NETPOL_CNP_CRD) -o ./config/crd/$(NETPOL_CNP_CRD)
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 	# Patch in manual tweaks to the generated CRDs.
 	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
-
-./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
-	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
-		--v 1 --logtostderr \
-		--go-header-file "./docs/boilerplate.go.txt" \
-		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
-		--output-file zz_generated.deepcopy.go \
-		"$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom"'
 
 ./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \

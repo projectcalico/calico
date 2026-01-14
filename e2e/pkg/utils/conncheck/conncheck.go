@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -191,14 +191,17 @@ func (c *connectionTester) stop() error {
 	}
 
 	for _, server := range c.servers {
-		By(fmt.Sprintf("Deleting server pod %s and service %s", server.pod.Name, server.service.Name))
+		By(fmt.Sprintf("Deleting server pod %s", server.pod.Name))
 		err := c.f.ClientSet.CoreV1().Pods(server.namespace.Name).Delete(ctx, server.pod.Name, metav1.DeleteOptions{})
 		if err != nil {
 			return err
 		}
-		err = c.f.ClientSet.CoreV1().Services(server.namespace.Name).Delete(ctx, server.service.Name, metav1.DeleteOptions{})
-		if err != nil {
-			return err
+		if server.service != nil {
+			By(fmt.Sprintf("Deleting server service %s", server.service.Name))
+			err = c.f.ClientSet.CoreV1().Services(server.namespace.Name).Delete(ctx, server.service.Name, metav1.DeleteOptions{})
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -222,7 +225,7 @@ func (c *connectionTester) stop() error {
 func (c *connectionTester) expectationsTested() error {
 	for _, exp := range c.expectations {
 		if !exp.executed {
-			return fmt.Errorf("Expected connection %s was not executed. Did you call Execute()?", exp.Description)
+			return fmt.Errorf("expected connection %s was not executed. Did you call Execute()?", exp.Description)
 		}
 	}
 	return nil
@@ -452,7 +455,7 @@ loop:
 // Connect runs a one-shot connection attempt from the client pod to the given target, and returns the output of the command.
 func (c *connectionTester) Connect(client *Client, target Target) (string, error) {
 	if c.clients[client.ID()] == nil {
-		return "", fmt.Errorf("Test bug: client %s not registered with connection tester. AddClient()?", client.ID())
+		return "", fmt.Errorf("test bug: client %s not registered with connection tester. AddClient()?", client.ID())
 	}
 	if c.clients[client.ID()].pod == nil {
 		return "", fmt.Errorf("Client %s has no running pod. Did you Deploy()?", client.ID())
@@ -628,11 +631,11 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 				},
 			},
 			Tolerations: []v1.Toleration{
-				corev1.Toleration{
+				v1.Toleration{
 					Key:      "kubernetes.io/arch",
-					Operator: corev1.TolerationOpEqual,
+					Operator: v1.TolerationOpEqual,
 					Value:    "arm64",
-					Effect:   corev1.TaintEffectNoSchedule,
+					Effect:   v1.TaintEffectNoSchedule,
 				},
 			},
 		},

@@ -254,7 +254,7 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 		}
 
 		// Fail the test.
-		Expect(len(t.events)).To(Equal(len(expectedEvents)))
+		ExpectWithOffset(2, len(t.events)).To(Equal(len(expectedEvents)))
 	} else {
 		actualEvents = t.events
 	}

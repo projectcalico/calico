@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
@@ -74,10 +75,10 @@ func setEgressTraceAndMetrics(mu metric.Update, egress, pendingEgress []*calc.Ru
 var _ = Describe("FlowPolicySets", func() {
 	var ca *Aggregator
 
-	egress1Staged := calc.NewRuleID("tier1", "staged:policy1", "namespace1", 0, rules.RuleDirEgress, rules.RuleActionAllow)
-	egress2 := calc.NewRuleID("tier2", "policy2", "namespace2", 1, rules.RuleDirEgress, rules.RuleActionAllow)
-	egress3 := calc.NewRuleID("tier3", "policy3", "namespace3", 3, rules.RuleDirEgress, rules.RuleActionAllow)
-	egress4 := calc.NewRuleID("tier4", "policy4", "namespace4", 1, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress1Staged := calc.NewRuleID(v3.KindStagedNetworkPolicy, "tier1", "policy1", "namespace1", 0, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress2 := calc.NewRuleID(v3.KindNetworkPolicy, "tier2", "policy2", "namespace2", 1, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress3 := calc.NewRuleID(v3.KindNetworkPolicy, "tier3", "policy3", "namespace3", 3, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress4 := calc.NewRuleID(v3.KindNetworkPolicy, "tier4", "policy4", "namespace4", 1, rules.RuleDirEgress, rules.RuleActionAllow)
 
 	BeforeEach(func() {
 		ca = NewAggregator()
@@ -85,7 +86,6 @@ var _ = Describe("FlowPolicySets", func() {
 
 	DescribeTable("splits up FlowStore into multiple FlowLogs for multiple items in the FlowPolicySets",
 		func(mus []*metric.Update, aggregation AggregationKind, expected TraceAndMetrics) {
-			//ca.AggregateOver(aggregation)
 			ca.IncludePolicies(true)
 			for _, mu := range mus {
 				Expect(ca.FeedUpdate(mu)).NotTo(HaveOccurred())
@@ -113,16 +113,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowDefault,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      21,
 				Bytes:        246,
 			},
@@ -138,16 +138,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowSourcePort,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      21,
 				Bytes:        246,
 			},
@@ -163,16 +163,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowPrefixName,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      21,
 				Bytes:        246,
 			},
@@ -188,16 +188,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowNoDestPorts,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      21,
 				Bytes:        246,
 			},
@@ -223,16 +223,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowDefault,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      93,
 				Bytes:        980,
 			},
@@ -249,16 +249,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowDefault,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      36,
 				Bytes:        372,
 			},
@@ -275,16 +275,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowDefault,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      36,
 				Bytes:        372,
 			},
@@ -303,16 +303,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowDefault,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      48,
 				Bytes:        474,
 			},
@@ -332,16 +332,16 @@ var _ = Describe("FlowPolicySets", func() {
 			FlowDefault,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue, "3|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue, "1|tier2|np:namespace2/policy2|allow|1": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue, "3|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
 				EnforcedTraces: []FlowPolicySet{
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier3|np:namespace3/policy3|allow|3": emptyValue, "2|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier4|np:namespace4/policy4|allow|1": emptyValue},
+					{"0|tier2|np:namespace2/policy2|allow|1": emptyValue, "1|tier4|np:namespace4/policy4|allow|1": emptyValue, "2|tier3|np:namespace3/policy3|allow|3": emptyValue},
 				},
-				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				PendingTrace: FlowPolicySet{"0|tier1|snp:namespace1/policy1|allow|0": emptyValue},
 				Packets:      48,
 				Bytes:        524,
 			},

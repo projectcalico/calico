@@ -170,47 +170,61 @@ func (r *reconciler) OnStatusUpdated(status bapi.SyncStatus) {
 // OnUpdates handles the syncer resource updates.
 func (r *reconciler) OnUpdates(updates []bapi.Update) {
 	var updated bool
+
 	for _, u := range updates {
-		switch u.UpdateType {
-		case bapi.UpdateTypeKVDeleted:
-			// Resource is deleted. If this resource is in our cache then trigger an update.
-			if _, ok := r.data[u.Key.String()]; ok {
+		key := u.Key.String()
+
+		// The presence (or absence) of u.Value determines if this is a delete.
+		// Even if UpdateType is "New" or "Updated", Value may be nil if validation failed in the syncer.
+		if u.Value == nil {
+			log.WithField("key", key).Debug("Received delete or invalid update (Value is nil)")
+
+			// If we had cached data for this key, remove it and trigger reconciliation.
+			if _, ok := r.data[key]; ok {
 				updated = true
+				log.WithField("key", key).Debug("Deleted cached entry - trigger reconciliation")
 			}
-			delete(r.data, u.Key.String())
-		case bapi.UpdateTypeKVNew, bapi.UpdateTypeKVUpdated:
-			// Resource is created or updated. Depending on the resource, we extract and cache the relevant data that
-			// we are monitoring. If the data has changed then trigger an update.
-			var data interface{}
-			switch v := u.Value.(type) {
-			case *model.IPPool:
-				// For pools just track the whole data.
-				log.Debugf("Updated pool resource: %s", u.Key)
-				data = v
-			case *libapi.Node:
-				// For nodes, we only care about our own node, *and* we only care about the wireguard public key.
-				if v.Name != r.nodename {
-					continue
-				}
-				log.Debugf("Updated node resource: %s", u.Key)
-				data = wireguardData{
-					publicKey:   v.Status.WireguardPublicKey,
-					publicKeyV6: v.Status.WireguardPublicKeyV6,
-				}
-			default:
-				// We got an update for an unexpected resource type. Rather than ignore, just treat as updated so that
-				// we reconcile the addresses.
-				log.Warningf("Unexpected resource update: %s", u.Key)
-				updated = true
+			delete(r.data, key)
+			continue
+		}
+
+		// Handle non-nil value updates (Add or Update)
+		var data interface{}
+		switch v := u.Value.(type) {
+		case *model.IPPool:
+			log.Debugf("Updated IPPool resource: %s", key)
+			data = v
+
+		case *libapi.Node:
+			// Only process our own node
+			if v.Name != r.nodename {
 				continue
 			}
+			log.Debugf("Updated Node resource: %s", key)
 
-			if existing, ok := r.data[u.Key.String()]; !ok || !reflect.DeepEqual(existing, data) {
-				// Entry is new or associated data is modified. In either case update the data and flag as updated.
-				log.Debug("Stored data has been modified - trigger reconciliation")
-				updated = true
-				r.data[u.Key.String()] = data
+			// Track both IPv4 and IPv6 WireGuard public keys
+			data = wireguardData{
+				publicKey:   v.Status.WireguardPublicKey,
+				publicKeyV6: v.Status.WireguardPublicKeyV6,
 			}
+
+		default:
+			// We got an update for an unexpected resource type. Rather than ignore, just treat as updated so that
+			// we reconcile the addresses.
+			log.Warningf("Unexpected resource update: %s", key)
+			updated = true
+			continue
+		}
+
+		if existing, ok := r.data[key]; !ok || !reflect.DeepEqual(existing, data) {
+			// Entry is new or associated data is modified. In either case update the data and flag as updated.
+			log.WithFields(log.Fields{
+				"key":      key,
+				"existing": existing,
+				"new":      data,
+			}).Debug("Stored data has changed — trigger reconciliation")
+			r.data[key] = data
+			updated = true
 		}
 	}
 

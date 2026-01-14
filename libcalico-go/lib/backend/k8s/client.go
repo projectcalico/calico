@@ -35,7 +35,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
@@ -58,7 +58,11 @@ type KubeClient struct {
 	// Main Kubernetes clients.
 	ClientSet *kubernetes.Clientset
 
-	// Contains methods for converting Kubernetes resources to Calico resources.
+	// Client for interacting with K8S Cluster Network Policy.
+	k8sClusterPolicyClient *netpolicyclient.PolicyV1alpha2Client
+
+	// Contains methods for converting Kubernetes resources to
+	// Calico resources.
 	converter conversion.Converter
 
 	// Resource clients keyed off Kind.
@@ -92,9 +96,9 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, fmt.Errorf("failed to build CRD client: %v", err)
 	}
 
-	adminPolicyClient, err := adminpolicyclient.NewForConfig(config)
+	cnpClient, err := clusterNetworkPolicyClient(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build AdminNetworkPolicy client: %v", err)
+		return nil, fmt.Errorf("Failed to build ClusterNetworkPolicy client: %v", err)
 	}
 
 	c := &KubeClient{
@@ -273,18 +277,11 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		resources.NewKubernetesNetworkPolicyClient(cs),
 	)
 
-	// These resources are backed by the AdminNetworkPolicy API.
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		model.KindKubernetesAdminNetworkPolicy,
-		resources.NewKubernetesAdminNetworkPolicyClient(adminPolicyClient),
-	)
-	c.registerResourceClient(
-		reflect.TypeOf(model.ResourceKey{}),
-		reflect.TypeOf(model.ResourceListOptions{}),
-		model.KindKubernetesBaselineAdminNetworkPolicy,
-		resources.NewKubernetesBaselineAdminNetworkPolicyClient(adminPolicyClient),
+		model.KindKubernetesClusterNetworkPolicy,
+		resources.NewKubernetesClusterNetworkPolicyClient(cnpClient),
 	)
 
 	if !ca.K8sUsePodCIDR {
@@ -639,6 +636,11 @@ func (c *KubeClient) Clean() error {
 func (c *KubeClient) Close() error {
 	log.Debugf("Closing client - NOOP")
 	return nil
+}
+
+// clusterNetworkPolicyClient builds a RESTClient configured to interact Cluster Network Policy.
+func clusterNetworkPolicyClient(cfg *rest.Config) (*netpolicyclient.PolicyV1alpha2Client, error) {
+	return netpolicyclient.NewForConfig(cfg)
 }
 
 // restClient builds a RESTClient configured to interact with Calico CustomResourceDefinitions

@@ -19,6 +19,10 @@ struct frags4_key {
 	__u16 offset;
 };
 
+// BPF imposes a 16,000 byte limit on growing the packet; we want enough
+// fragments to cover that, but not enough to upset the verifier by making our
+// loop too long.
+#define MAX_FRAGS 16
 #define MAX_FRAG 1504 /* requires multiple of 8 */
 
 struct frags4_value {
@@ -35,7 +39,7 @@ CALI_MAP(cali_v4_frgtmp, 2,
 		__u32, struct frags4_value,
 		1, 0)
 
-CALI_MAP(cali_v4_frgfwd, 2, BPF_MAP_TYPE_LRU_HASH, struct frags4_fwd_key, __u32, 10000, 0)
+CALI_MAP(cali_v4_frgfwd, 3, BPF_MAP_TYPE_LRU_HASH, struct frags4_fwd_key, struct frags4_fwd_value, 10000, 0)
 
 struct frags4_fwd_key {
 	ipv4_addr_t src;
@@ -43,6 +47,12 @@ struct frags4_fwd_key {
 	__u32 ifindex; /* The stream of fragments may be crossing multiple devices */
 	__u16 id;
 	__u16 __pad;
+};
+
+struct frags4_fwd_value {
+	__u16 sport;
+	__u16 dport;
+	__u32 seen_mark;
 };
 
 static CALI_BPF_INLINE struct frags4_value *frags4_get_scratch()
@@ -109,7 +119,7 @@ static CALI_BPF_INLINE bool frags4_try_assemble(struct cali_tc_ctx *ctx)
 
 	int i, tot_len = 0;
 
-	for (i = 0; i < 10; i++) {
+	for (i = 0; i < MAX_FRAGS; i++) {
 		struct frags4_value *v = cali_v4_frags_lookup_elem(&k);
 
 		if (!v) {
@@ -146,7 +156,7 @@ assemble:
 		.iphdr_off = off,
 	};
 
-	bpf_loop(10, frag_to_skb, &f2sctx, 0);
+	bpf_loop(MAX_FRAGS, frag_to_skb, &f2sctx, 0);
 
 	if (parse_packet_ip(ctx) != PARSING_OK) {
 		goto out;
@@ -202,8 +212,7 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
 		.id = ip_hdr(ctx)->id,
-		.offset = 8 * bpf_ntohs(ip_hdr(ctx)->frag_off) & 0x1fff,
-
+		.offset = 8 * (bpf_ntohs(ip_hdr(ctx)->frag_off) & 0x1fff),
 	};
 
 	int i;
@@ -278,7 +287,11 @@ static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 		.id = ip_hdr(ctx)->id,
 	};
 
-	__u32 v = 0;
+	struct frags4_fwd_value v = {
+		.sport = ctx->state->sport,
+		.dport = ctx->state->dport,
+		.seen_mark = ctx->fwd.mark,
+	};
 
 	cali_v4_frgfwd_update_elem(&k, &v, 0);
 	CALI_DEBUG("IP FRAG: created ct from " IP_FMT " to " IP_FMT,
@@ -311,10 +324,10 @@ static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 #endif /* BPF_CORE_SUPPORTED */
 }
 
-static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct frags4_fwd_value *frags4_lookup_ct(struct cali_tc_ctx *ctx)
 {
 #ifndef BPF_CORE_SUPPORTED
-	return false;
+	return NULL;
 #else
 	/* We do not really use bpf_loop() here, but we need to check if the kernel
 	 * supports it. If it does not, we cannot handle fragments as the
@@ -322,7 +335,7 @@ static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 	 */
 	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
 		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
-		return false;
+		return NULL;
 	}
 
 	struct frags4_fwd_key k = {
@@ -334,7 +347,7 @@ static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 
 	CALI_DEBUG("IP FRAG: lookup ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
-	return cali_v4_frgfwd_lookup_elem(&k) != NULL;
+	return cali_v4_frgfwd_lookup_elem(&k);
 #endif /* BPF_CORE_SUPPORTED */
 }
 

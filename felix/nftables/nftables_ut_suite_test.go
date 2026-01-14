@@ -30,6 +30,6 @@ func init() {
 
 func TestNftablesUT(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/nftables_ut_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "nftables Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_nftables_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/nftables", []Reporter{junitReporter})
 }

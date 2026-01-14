@@ -1,0 +1,66 @@
+apiVersion: network.azure.com/v1api20201101
+kind: NetworkSecurityGroup
+metadata:
+  name: aso-sg
+  namespace: aso
+spec:
+  location: {{.Env.AZURE_LOCATION}}
+  owner:
+    name: {{.Env.AZURE_RESOURCE_GROUP}}
+
+---
+apiVersion: network.azure.com/v1api20201101
+kind: NetworkSecurityGroupsSecurityRule
+metadata:
+  name: aso-sgrule-allow-ssh
+  namespace: aso
+spec:
+  owner:
+    name: aso-sg
+  protocol: Tcp
+  sourcePortRange: "*"
+  destinationPortRange: "22"
+  sourceAddressPrefix: "*"
+  destinationAddressPrefix: "*"
+  access: Allow
+  priority: 1000
+  direction: Inbound
+  description: Allow ssh access
+
+---
+apiVersion: network.azure.com/v1api20201101
+kind: NetworkSecurityGroupsSecurityRule
+metadata:
+  name: aso-sgrule-allow-rdp
+  namespace: aso
+spec:
+  owner:
+    name: aso-sg
+  protocol: Tcp
+  sourcePortRange: "*"
+  destinationPortRange: "3389"
+  sourceAddressPrefix: "*"
+  destinationAddressPrefix: "*"
+  access: Allow
+  priority: 1001
+  direction: Inbound
+  description: Allow RDP access
+
+---
+apiVersion: network.azure.com/v1api20201101
+kind: NetworkSecurityGroupsSecurityRule
+metadata:
+  name: aso-sgrule-allow-k8s-api
+  namespace: aso
+spec:
+  owner:
+    name: aso-sg
+  protocol: Tcp
+  sourcePortRange: "*"
+  destinationPortRange: "6443"
+  sourceAddressPrefix: "*"
+  destinationAddressPrefix: "*"
+  access: Allow
+  priority: 1002
+  direction: Inbound
+  description: Allow Kubernetes API server access

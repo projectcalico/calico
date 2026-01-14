@@ -49,10 +49,9 @@ func describeSetTests(
 	})
 	It("should iterate over no items", func() {
 		called := false
-		s.Iter(func(item int) error {
+		for range s.All() {
 			called = true
-			return nil
-		})
+		}
 		Expect(called).To(BeFalse())
 	})
 	It("should do nothing on clear", func() {
@@ -152,7 +151,7 @@ func describeSetTests(
 		It("should iterate over 1 and 2 in some order", func() {
 			seen1 := false
 			seen2 := false
-			s.Iter(func(item int) error {
+			for item := range s.All() {
 				if item == 1 {
 					Expect(seen1).To(BeFalse())
 					seen1 = true
@@ -162,8 +161,7 @@ func describeSetTests(
 				} else {
 					Fail("Unexpected item")
 				}
-				return nil
-			})
+			}
 			Expect(seen1).To(BeTrue())
 			Expect(seen2).To(BeTrue())
 		})
@@ -295,5 +293,89 @@ var _ = Describe("EmptySet", func() {
 	})
 	It("should stringify", func() {
 		Expect(empty.String()).To(Equal("set.Set{}"))
+	})
+	It("should iterate 0 times with All()", func() {
+		for range empty.All() {
+			Fail("Iterated > 0 times")
+		}
+	})
+})
+
+var _ = Describe("Set.All() iterator", func() {
+	It("should iterate over empty set", func() {
+		s := set.New[int]()
+		count := 0
+		for range s.All() {
+			count++
+		}
+		Expect(count).To(Equal(0))
+	})
+
+	It("should iterate over all elements", func() {
+		s := set.From(1, 2, 3, 4, 5)
+		seen := make(map[int]bool)
+		for item := range s.All() {
+			seen[item] = true
+		}
+		Expect(seen).To(HaveLen(5))
+		Expect(seen[1]).To(BeTrue())
+		Expect(seen[2]).To(BeTrue())
+		Expect(seen[3]).To(BeTrue())
+		Expect(seen[4]).To(BeTrue())
+		Expect(seen[5]).To(BeTrue())
+	})
+
+	It("should support early termination", func() {
+		s := set.From(1, 2, 3, 4, 5)
+		count := 0
+		for range s.All() {
+			count++
+			if count >= 2 {
+				break
+			}
+		}
+		Expect(count).To(Equal(2))
+		Expect(s.Len()).To(Equal(5)) // Set should be unchanged
+	})
+
+	It("should allow discarding during iteration", func() {
+		s := set.From(1, 2, 3, 4, 5)
+		for item := range s.All() {
+			if item%2 == 0 {
+				s.Discard(item)
+			}
+		}
+		Expect(s.Len()).To(Equal(3))
+		Expect(s.Contains(1)).To(BeTrue())
+		Expect(s.Contains(2)).To(BeFalse())
+		Expect(s.Contains(3)).To(BeTrue())
+		Expect(s.Contains(4)).To(BeFalse())
+		Expect(s.Contains(5)).To(BeTrue())
+	})
+
+	It("should allow discarding of all items during iteration", func() {
+		s := set.From(1, 2, 3, 4, 5)
+		count := 0
+		for item := range s.All() {
+			s.Discard(item)
+			count++
+		}
+		Expect(count).To(Equal(5))
+		Expect(s.Len()).To(Equal(0))
+	})
+
+	It("should allow addition during iteration", func() {
+		s := set.From(1, 2, 3)
+		count := 0
+		for item := range s.All() {
+			count++
+			if item == 1 {
+				s.Add(100) // May or may not be visited depending on map iteration order
+			}
+		}
+		// Count will be at least 3 (original items), but may include 100 if it's visited
+		Expect(count).To(BeNumerically(">=", 3))
+		Expect(count).To(BeNumerically("<=", 4))
+		Expect(s.Contains(100)).To(BeTrue())
 	})
 })

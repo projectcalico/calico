@@ -30,6 +30,6 @@ func init() {
 
 func TestLabels(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/labels_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Labels Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../report/felix_labelindex_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/labelindex", []Reporter{junitReporter})
 }

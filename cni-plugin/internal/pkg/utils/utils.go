@@ -27,12 +27,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/DeRuina/timberjack"
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
@@ -760,11 +760,13 @@ func ConfigureLogging(conf types.NetConf) {
 		}
 
 		// Create file logger with log file rotation.
-		fileLogger := &lumberjack.Logger{
-			Filename:   conf.LogFilePath,
-			MaxSize:    100,
-			MaxAge:     30,
-			MaxBackups: 10,
+		fileLogger := &timberjack.Logger{
+			Filename:    conf.LogFilePath,
+			FileMode:    0o644,
+			Compression: "zstd",
+			MaxSize:     100,
+			MaxAge:      30,
+			MaxBackups:  10,
 		}
 
 		// Set the max size if exists. Defaults to 100 MB.

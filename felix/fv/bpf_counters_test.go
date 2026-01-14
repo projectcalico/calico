@@ -98,7 +98,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 		pol = createPolicy(pol)
 
-		bpfWaitForPolicy(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.drop-workload0-to-workload1")
+		bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], w[1].InterfaceName, "ingress", "drop-workload0-to-workload1")
 
 		By("generating packets and checking the counter")
 		numberOfpackets := 10
@@ -123,19 +123,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		pol = createPolicy(pol)
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "deny", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "deny", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "deny", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "deny", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		for i := 0; i < 10; i++ {
@@ -148,26 +148,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			Expect(v).To(Equal(uint64(10)))
 		}
 
-		checkRuleCounters(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", 10)
+		checkRuleCounters(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-test", 10)
 
 		pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
 		pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 
 		pol = updatePolicy(pol)
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		for i := 0; i < 10; i++ {
@@ -183,26 +183,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			Expect(v).To(Equal(uint64(1)))
 		}
 
-		checkRuleCounters(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", 1)
-		checkRuleCounters(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", 1)
+		checkRuleCounters(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-test", 1)
+		checkRuleCounters(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-test", 1)
 
 		_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-test", options2.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-test", "allow", true)
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "policy-test", "allow", true)
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-test", "allow", true)
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow", true)
+			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-test", "allow", true)
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() int {
@@ -226,7 +226,7 @@ func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string
 
 	startOfPol := -1
 	for idx, str := range strOut {
-		if strings.Contains(str, fmt.Sprintf("Start of policy %s", polName)) {
+		if strings.Contains(str, fmt.Sprintf("Start of GlobalNetworkPolicy %s", polName)) {
 			startOfPol = idx
 			break
 		}

@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/stacktrace"
 )
 
 type Container struct {
@@ -64,6 +64,7 @@ type Container struct {
 	logFinished      sync.WaitGroup
 	dropAllLogs      bool
 	ignoreEmptyLines bool
+	logLimitBytes    int
 }
 
 type watch struct {
@@ -193,6 +194,7 @@ type RunOpts struct {
 	SameNamespace    *Container
 	StopTimeoutSecs  int
 	StopSignal       string
+	LogLimitBytes    int
 }
 
 func NextContainerIndex() int {
@@ -215,6 +217,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	c = &Container{
 		Name:             name,
 		ignoreEmptyLines: opts.IgnoreEmptyLines,
+		logLimitBytes:    opts.LogLimitBytes,
 	}
 
 	// Prep command to run the container.
@@ -258,6 +261,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
+
 	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
 	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
 
@@ -383,6 +387,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log (close).")
 	}()
 
+	bytesSeen := 0
 	for scanner.Scan() {
 		line := scanner.Text()
 		if extraWriter != nil {
@@ -400,6 +405,19 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		c.mutex.Lock()
 		droppingLogs := c.dropAllLogs
 		c.mutex.Unlock()
+
+		// Or because we hit the limit.
+		wasDropping := c.logLimitBytes > 0 && bytesSeen > c.logLimitBytes
+		bytesSeen += len(line)
+		nowDropping := c.logLimitBytes > 0 && bytesSeen > c.logLimitBytes
+		if nowDropping {
+			if !wasDropping {
+				// We just hit the limit.
+				fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, "...truncated...")
+			}
+			droppingLogs = true
+		}
+
 		if !droppingLogs {
 			fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, line)
 		}
@@ -683,31 +701,15 @@ func (c *Container) ExecMayFail(cmd ...string) error {
 	return utils.RunMayFail("docker", arg...)
 }
 
-// miniStackTrace returns a short stack trace showing the first couple of callers
-// outside this package.  Handy for telling where in a test an Exec call was
-// initiated.
-func miniStackTrace() string {
-	// Find the first/second caller outside this package.
-	for i := 2; ; i++ {
-		_, file, line, ok := runtime.Caller(i)
-		if !ok {
-			return "unknown:0"
-		}
-		if !strings.Contains(file, "/containers/") {
-			parts := strings.Split(file, "/")
-			file = parts[len(parts)-1]
-			firstCaller := fmt.Sprintf("%s:%d", file, line)
-
-			_, file, line, ok := runtime.Caller(i + 1)
-			if !ok || !strings.Contains(file, "/calico/") {
-				return firstCaller
-			} else {
-				parts := strings.Split(file, "/")
-				file = parts[len(parts)-1]
-				return fmt.Sprintf("%s:%d>%s", file, line, firstCaller)
-			}
-		}
+func (c *Container) ExecBestEffort(cmd ...string) {
+	err := c.ExecMayFail(cmd...)
+	if err != nil {
+		log.WithError(err).Errorf("Command (%s) failed, ignoring.", strings.Join(cmd, " "))
 	}
+}
+
+func miniStackTrace() string {
+	return stacktrace.MiniStackStrace("/containers/")
 }
 
 func (c *Container) ExecOutput(args ...string) (string, error) {

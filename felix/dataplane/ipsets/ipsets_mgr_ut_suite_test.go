@@ -30,6 +30,6 @@ func init() {
 
 func TestIPSetMgr(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/ipset_mgr_ut_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "IPSet Mgr Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/felix_dataplane_ipsets_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/dataplane/ipsets", []Reporter{junitReporter})
 }

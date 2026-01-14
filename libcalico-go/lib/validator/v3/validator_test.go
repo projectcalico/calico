@@ -15,8 +15,10 @@
 package v3_test
 
 import (
+	"context"
 	"time"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -24,10 +26,16 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 func init() {
@@ -44,8 +52,8 @@ func init() {
 	V100000000 := 0x100000000
 	tierOrder := float64(100.0)
 	defaultTierOrder := api.DefaultTierOrder
-	anpTierOrder := api.AdminNetworkPolicyTierOrder
-	banpTierOrder := api.BaselineAdminNetworkPolicyTierOrder
+	adminTierOrder := api.KubeAdminTierOrder
+	baselineTierOrder := api.KubeBaselineTierOrder
 	defaultTierBadOrder := float64(10.0)
 
 	// We need pointers to bools, so define the values here.
@@ -135,7 +143,7 @@ func init() {
 	// Perform validation on error messages from validator
 	DescribeTable("Validator errors",
 		func(input interface{}, e string) {
-			err := v3.Validate(input)
+			err := validator.Validate(input)
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(Equal(e))
 		},
@@ -158,10 +166,10 @@ func init() {
 	DescribeTable("Validator",
 		func(input interface{}, valid bool) {
 			if valid {
-				Expect(v3.Validate(input)).NotTo(HaveOccurred(),
+				Expect(validator.Validate(input)).NotTo(HaveOccurred(),
 					"expected value to be valid")
 			} else {
-				Expect(v3.Validate(input)).To(HaveOccurred(),
+				Expect(validator.Validate(input)).To(HaveOccurred(),
 					"expected value to be invalid")
 			}
 		},
@@ -2703,28 +2711,28 @@ func init() {
 				Order: &defaultTierOrder,
 			},
 		}, true),
-		Entry("Tier: disallow adminnetworkpolicy tier with an invalid order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
+		Entry("Tier: disallow kube-admin tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
 			},
 		}, false),
-		Entry("Tier: allow adminnetworkpolicy tier with the predefined order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
+		Entry("Tier: allow kube-admin tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{
-				Order: &anpTierOrder,
+				Order: &adminTierOrder,
 			},
 		}, true),
-		Entry("Tier: disallow baselineadminnetworkpolicy tier with an invalid order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
+		Entry("Tier: disallow kube-baseline tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
 			},
 		}, false),
-		Entry("Tier: allow baselineadminnetworkpolicy tier with the predefined order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
+		Entry("Tier: allow kube-baseline tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
 			Spec: api.TierSpec{
-				Order: &banpTierOrder,
+				Order: &baselineTierOrder,
 			},
 		}, true),
 		Entry("Tier: allow a tier with a valid order", &api.Tier{
@@ -3771,6 +3779,81 @@ func init() {
 		),
 	)
 }
+
+// These tests run e2e validation against a real datastore (compared to the above tests which only verify the validator code).
+// This is needed because our architecture places validation in several places, including in the datastore backend when running in
+// CRD mode. Note that these tests execute a superset of the validation tests done above.
+//
+// TODO: Right now, these only run against Kubernetes (CRD) datastore. This is because many of the validaitons are specifically to test
+// logic implemented with CEL validations on CRDs, and no equivalents exist for etcd.
+var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
+	BeforeEach(func() {
+		// Clean the datastore before each test.
+		bc, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(bc.Clean()).To(Succeed(), "Failed to clean datastore before test")
+	})
+
+	DescribeTable("Tier validation tests", func(tierSpec api.Tier, errStr string) {
+		// Create a client.
+		client, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Try to create the Tier.
+		_, err = client.Tiers().Create(context.Background(), &tierSpec, options.SetOptions{})
+		if errStr == "" {
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(errStr), "Expected error message to contain substring")
+		}
+	},
+		Entry("should accept an empty Tier spec",
+			api.Tier{ObjectMeta: v1.ObjectMeta{Name: "valid-tier"}, Spec: api.TierSpec{}},
+			"",
+		),
+
+		Entry("should reject kube-baseline with wrong default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "kube-baseline"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Deny), Order: ptr.To(api.KubeBaselineTierOrder)},
+			},
+			"must have default action",
+		),
+
+		Entry("should accept kube-baseline with correct default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "kube-baseline"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.KubeBaselineTierOrder)},
+			},
+			"",
+		),
+
+		Entry("should reject kube-admin with wrong default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "kube-admin"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Deny), Order: ptr.To(api.KubeAdminTierOrder)},
+			},
+			"must have default action",
+		),
+
+		Entry("should accept kube-admin with correct default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "kube-admin"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.KubeAdminTierOrder)},
+			},
+			"",
+		),
+
+		Entry("should reject default tier with wrong default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.DefaultTierOrder)},
+			},
+			"must have default action",
+		),
+	)
+})
 
 func protocolFromString(s string) *numorstring.Protocol {
 	p := numorstring.ProtocolFromString(s)

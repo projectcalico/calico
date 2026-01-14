@@ -524,6 +524,12 @@ func (cc *controllerControl) InitControllers(
 		cc.registerInformers(serviceInformer, namespaceInformer)
 	}
 
+	if cfg.Controllers.Migration != nil && cfg.Controllers.Migration.PolicyNameMigrator == "Enabled" {
+		// Register the policy name migrator controller.
+		policyMigrator := networkpolicy.NewMigratorController(ctx, k8sClientset, calicoClient, dataFeed)
+		cc.controllers["NetworkPolicyMigrator"] = policyMigrator
+	}
+
 	// We don't need the full Pod object. In order to reduce memory usage, add a transform that only
 	// includes the fields we need.
 	if err := podInformer.SetTransform(converter.PodTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
@@ -562,10 +568,8 @@ func (cc *controllerControl) RunControllers(dataFeed *utils.DataFeed, cfg config
 		go c.Run(cc.stop)
 	}
 
-	if cfg.Controllers.Node != nil || cfg.Controllers.LoadBalancer != nil {
-		// Start dataFeed for controllers that need it
-		dataFeed.Start()
-	}
+	// Start dataFeed for controllers that need it
+	dataFeed.Start()
 
 	// Block until we are cancelled, or get a new configuration and need to restart
 	select {

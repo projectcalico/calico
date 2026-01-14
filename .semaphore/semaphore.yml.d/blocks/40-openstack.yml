@@ -1,21 +1,21 @@
 - name: "OpenStack integration (Yoga)"
   run:
-    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'], {pipeline_file: 'ignore'})"
+    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"
   dependencies:
     - Prerequisites
   task:
     agent:
       machine:
         type: f1-standard-2
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
         - cd networking-calico
     jobs:
-      - name: "Unit and FV tests (tox) on Yoga"
+      - name: "OpenStack: Unit and FV tests (tox) on Yoga"
         commands:
           - ../.semaphore/run-and-monitor tox.log make tox-yoga
-      - name: "Mainline ST (DevStack + Tempest) on Yoga"
+      - name: "OpenStack: Mainline ST (DevStack + Tempest) on Yoga"
         commands:
           # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
           # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
@@ -38,7 +38,10 @@
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-          - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
+          # The BIRD config in our DevStack setup is thoroughly broken and generates loads of errors
+          # in the log.  But we don't need it for a single node setup anyway, so let's disable it.
+          - export CALICO_BGP_MODE=none
+          - TEMPEST=true OPENSTACK_RELEASE=yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:
         commands:
@@ -48,7 +51,7 @@
 
 - name: "OpenStack integration (Caracal)"
   run:
-    when: "${FORCE_RUN} or change_in(['/networking-calico/'], {pipeline_file: 'ignore'})"
+    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"
   dependencies:
     - Prerequisites
   task:
@@ -60,10 +63,10 @@
       commands:
         - cd networking-calico
     jobs:
-      - name: "Unit and FV tests (tox) on Caracal"
+      - name: "OpenStack: Unit and FV tests (tox) on Caracal"
         commands:
           - ../.semaphore/run-and-monitor tox.log make tox-caracal
-      - name: "Mainline ST (DevStack + Tempest) on Caracal"
+      - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
         commands:
           # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
           # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
@@ -77,7 +80,10 @@
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-          - TEMPEST=true DEVSTACK_BRANCH=stable/2024.1 ./devstack/bootstrap.sh
+          # The BIRD config in our DevStack setup is thoroughly broken and generates loads of errors
+          # in the log.  But we don't need it for a single node setup anyway, so let's disable it.
+          - export CALICO_BGP_MODE=none
+          - TEMPEST=true OPENSTACK_RELEASE=caracal ./devstack/bootstrap.sh
     epilogue:
       always:
         commands:

@@ -350,11 +350,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 			for _, felix := range tc.Felixes {
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(felix, "bond0", "egress", "default.allow-egress", "allow", false)
+					return bpfCheckIfGlobalNetworkPolicyProgrammed(felix, "bond0", "egress", "allow-egress", "allow", false)
 				}, "5s", "200ms").Should(BeTrue())
 
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammedV6(felix, "bond0", "egress", "default.allow-egress", "allow", false)
+					return bpfCheckIfGlobalNetworkPolicyProgrammedV6(felix, "bond0", "egress", "allow-egress", "allow", false)
 				}, "5s", "200ms").Should(BeTrue())
 
 			}

@@ -135,8 +135,6 @@ spec:
                         - Auto
                         - Strict
                   type: string
-                bpfKubeProxyEndpointSlicesEnabled:
-                  type: boolean
                 bpfKubeProxyHealthzPort:
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
@@ -153,6 +151,10 @@ spec:
                 bpfLogLevel:
                   pattern: ^(?i)(Off|Info|Debug)?$
                   type: string
+                bpfMaglevMaxEndpointsPerService:
+                  type: integer
+                bpfMaglevMaxServices:
+                  type: integer
                 bpfMapSizeConntrack:
                   type: integer
                 bpfMapSizeConntrackCleanupQueue:
@@ -192,7 +194,6 @@ spec:
                   enum:
                     - Enabled
                     - Disabled
-                    - L2Only
                   type: string
                 cgroupV2Path:
                   type: string
@@ -354,12 +355,7 @@ spec:
                 iptablesFilterDenyAction:
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
-                iptablesLockFilePath:
-                  type: string
                 iptablesLockProbeInterval:
-                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
-                  type: string
-                iptablesLockTimeout:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 iptablesMangleAllowAction:
@@ -386,11 +382,19 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                logActionRateLimit:
+                  pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
+                  type: string
+                logActionRateLimitBurst:
+                  maximum: 9999
+                  minimum: 0
+                  type: integer
                 logDebugFilenameRegex:
                   type: string
                 logFilePath:
                   type: string
                 logPrefix:
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
                   type: string
                 logSeverityFile:
                   pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
@@ -401,10 +405,6 @@ spec:
                 logSeveritySys:
                   pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
-                maglevMaxEndpointsPerService:
-                  type: integer
-                maglevMaxService:
-                  type: integer
                 maxIpsetSize:
                   type: integer
                 metadataAddr:
@@ -442,14 +442,9 @@ spec:
                   format: int32
                   type: integer
                 nftablesMode:
-                  allOf:
-                    - enum:
-                        - Enabled
-                        - Disabled
-                    - enum:
-                        - Disabled
-                        - Enabled
-                        - Auto
+                  enum:
+                    - Disabled
+                    - Enabled
                   type: string
                 nftablesRefreshInterval:
                   type: string

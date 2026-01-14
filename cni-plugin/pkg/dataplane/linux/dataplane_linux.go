@@ -20,6 +20,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"syscall"
 	"time"
 
@@ -140,6 +141,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
 		}
 
+		var expectedHostSideIPv6Addr net.IP
 		if err := netlink.LinkAdd(veth); err != nil {
 			d.logger.Errorf("Error adding veth %+v: %s", veth, err)
 			return err
@@ -151,21 +153,33 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			return err
 		}
 
-		// We create the veth with random MAC address because the kernel sometimes
-		// fails to honor a MAC that we set on the LinkAdd request.  However,
-		// we want a fixed MAC address so try to set that now.  A fixed MAC
-		// address makes ARP programming easier/static, and it paves the way for
-		// live migration of workloads in the future.
-		var expectedHostSideIPv6Addr net.IP
-		if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, hostSideMAC); err != nil {
-			d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
-		} else {
-			// We've seen the kernel use the old MAC to calculate the link-local
-			// address.  Presumably because we bring the link "up" before the
-			// MAC has reached all parts of the kernel.  Give it a bit of time
-			// to settle in hopes of making that less likely.
-			time.Sleep(10 * time.Millisecond)
-			expectedHostSideIPv6Addr = hostSideMACAsIPv6LL
+		macUpdateTimeout := time.After(5 * time.Second)
+		for {
+			// We create the veth with random MAC address because the kernel sometimes
+			// fails to honor a MAC that we set on the LinkAdd request.  In addition,
+			// LinkSetHardwareAddr sometimes fails silently so we retry.
+			if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, hostSideMAC); err != nil {
+				d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
+				break
+			}
+
+			// Read back the MAC to check that the set actually worked.
+			hostVeth, err = hostNlHandle.LinkByName(hostVethName)
+			if err != nil {
+				err = fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
+				return err
+			}
+			if slices.Equal(hostVeth.Attrs().HardwareAddr, hostSideMAC) {
+				d.logger.Info("Read back correct host-side MAC.")
+				expectedHostSideIPv6Addr = hostSideMACAsIPv6LL
+				break
+			}
+			d.logger.Warnf("Host-side veth MAC %s does not match expected %s. Retrying...", hostVeth.Attrs().HardwareAddr, hostSideMAC)
+			select {
+			case <-macUpdateTimeout:
+				return fmt.Errorf("timed out waiting for host veth %q to accept MAC %s", hostVethName, hostSideMAC.String())
+			case <-time.After(100 * time.Millisecond):
+			}
 		}
 
 		// Figure out whether we have IPv4 and/or IPv6 addresses.

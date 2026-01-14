@@ -147,6 +147,9 @@ var _ = Describe("Config", func() {
 				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
 					AssignIPs: v3.AllServices,
 				}))
+				Expect(rc.Migration).To(Equal(&config.MigrationControllerConfig{
+					PolicyNameMigrator: "Enabled",
+				}))
 				close(done)
 			})
 
@@ -219,6 +222,9 @@ var _ = Describe("Config", func() {
 						LoadBalancer: &v3.LoadBalancerControllerConfig{
 							AssignIPs: v3.RequestedServicesOnly,
 						},
+						Migration: &v3.MigrationControllerConfig{
+							PolicyNameMigrator: "Disabled",
+						},
 					},
 				}
 				m = &mockKCC{get: kcc}
@@ -264,6 +270,9 @@ var _ = Describe("Config", func() {
 				}))
 				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
 					AssignIPs: v3.RequestedServicesOnly,
+				}))
+				Expect(rc.Migration).To(Equal(&config.MigrationControllerConfig{
+					PolicyNameMigrator: "Disabled",
 				}))
 				close(done)
 			})

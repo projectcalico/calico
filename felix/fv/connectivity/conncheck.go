@@ -945,17 +945,18 @@ type Runtime interface {
 type PersistentConnection struct {
 	sync.Mutex
 
-	RuntimeName         string
-	Runtime             Runtime
-	Name                string
-	Protocol            string
-	IP                  string
-	Port                int
-	SourcePort          int
-	MonitorConnectivity bool
-	NamespacePath       string
-	Timeout             time.Duration
-	Sleep               time.Duration
+	RuntimeName          string
+	Runtime              Runtime
+	Name                 string
+	Protocol             string
+	IP                   string
+	Port                 int
+	SourcePort           int
+	MonitorConnectivity  bool
+	NamespacePath        string
+	Timeout              time.Duration
+	Sleep                time.Duration
+	ProbeLoopFileTimeout time.Duration
 
 	loopFile string
 	runCmd   *exec.Cmd
@@ -1073,23 +1074,27 @@ func (pc *PersistentConnection) Start() error {
 		return fmt.Errorf("failed to start a permanent connection: %v", err)
 	}
 
-	loopFileGone := false
-	for range 5 {
+	timeout := 5 * time.Second
+	if pc.ProbeLoopFileTimeout > 0 {
+		timeout = pc.ProbeLoopFileTimeout
+	}
+
+	timedOut := time.After(timeout)
+	for {
 		err = pc.Runtime.ExecMayFail("stat", loopFile)
 		if err != nil {
-			loopFileGone = true
 			break
 		}
-		time.Sleep(time.Second)
+		select {
+		case <-timedOut:
+			return fmt.Errorf("failed to wait for test-connection to be ready, the loop file did not disappear")
+		case <-time.After(time.Second):
+		}
 	}
 
 	pc.loopFile = loopFile
 	pc.runCmd = runCmd
 	pc.Name = n
-
-	if !loopFileGone {
-		return fmt.Errorf("failed to wait for test-connection to be ready, the loop file did not disappear")
-	}
 
 	return nil
 }

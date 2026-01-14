@@ -225,6 +225,7 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = Driver
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 from networking_calico import etcdv3
+from networking_calico.plugins.calico.context import SGRUpdateContext
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico import endpoints
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
@@ -523,10 +524,10 @@ class Lib(object):
             # Also return it.
             return thread
 
-        def simulated_spawn_after(secs, fn, *args):
+        def simulated_spawn_after(secs, fn, *args, **kwargs):
             def sleep_then_run():
                 simulated_time_sleep(secs)
-                fn(*args)
+                fn(*args, **kwargs)
 
             return simulated_spawn(sleep_then_run)
 
@@ -707,8 +708,8 @@ class Lib(object):
 
         if type == "rule":
             # Call security_groups_rule_updated with the new or changed ID.
-            mech_calico.security_groups_rule_updated(
-                mock.MagicMock(), mock.MagicMock(), [id]
+            self.driver.security_groups_rule_updated(
+                SGRUpdateContext(mock.MagicMock(), [id])
             )
 
     def get_port_security_group_bindings(self, context, filters):

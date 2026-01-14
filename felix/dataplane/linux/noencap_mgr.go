@@ -91,20 +91,25 @@ func newNoEncapManagerWithSims(
 
 func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataV4V6Update:
-		if (m.ipVersion == 4 && msg.Ipv4Addr == "") || (m.ipVersion == 6 && msg.Ipv6Addr == "") {
-			// Skip since the update is for a mismatched IP version
-			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched IP version update")
-			return
-		}
-
+	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if msg.Hostname == m.hostname {
-			if m.ipVersion == 6 {
-				m.routesNeedUpdate(msg.Ipv6Addr)
-			} else {
-				m.routesNeedUpdate(msg.Ipv4Addr)
-			}
+		if msg.Hostname == m.hostname && m.ipVersion == 4 {
+			m.routesNeedUpdate(msg.Ipv4Addr)
+		}
+	case *proto.HostMetadataRemove:
+		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
+		if msg.Hostname == m.hostname && m.ipVersion == 4 {
+			m.routesNeedUpdate("")
+		}
+	case *proto.HostMetadataV6Update:
+		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
+		if msg.Hostname == m.hostname && m.ipVersion == 6 {
+			m.routesNeedUpdate(msg.Ipv6Addr)
+		}
+	case *proto.HostMetadataV6Remove:
+		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
+		if msg.Hostname == m.hostname && m.ipVersion == 6 {
+			m.routesNeedUpdate("")
 		}
 	case *proto.HostMetadataV4V6Remove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")

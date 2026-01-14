@@ -38,7 +38,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
@@ -351,8 +350,6 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
 
-	k = defaultPolicyKey(k)
-
 	key, err := model.KeyToDefaultDeletePath(k)
 	if err != nil {
 		return nil, err
@@ -418,8 +415,6 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
-
-	k = defaultPolicyKey(k)
 
 	key, err := model.KeyToDefaultPath(k)
 	if err != nil {
@@ -730,14 +725,6 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 
 		value.Annotations = annotations
-
-		// Now that we've captured the original name, canonicalize the name for storage,
-		// adding the tier prefix to ensure policies with the same name in different tiers do not conflict.
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
 	}
 
 	if _, ok := d.Value.(*apiv3.GlobalNetworkPolicy); ok {
@@ -749,12 +736,6 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 
 		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
 	}
 
 	if _, ok := d.Value.(*apiv3.StagedNetworkPolicy); ok {
@@ -766,12 +747,6 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 
 		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
 	}
 
 	if _, ok := d.Value.(*apiv3.StagedGlobalNetworkPolicy); ok {
@@ -783,32 +758,7 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 
 		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
 	}
-
-	d.Key = defaultPolicyKey(d.Key)
 
 	return nil
-}
-
-func defaultPolicyKey(k model.Key) model.Key {
-	if _, ok := k.(model.ResourceKey); ok {
-		resourceKey := k.(model.ResourceKey)
-		if resourceKey.Kind == apiv3.KindNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindStagedNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindGlobalNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindStagedGlobalNetworkPolicy {
-			// To avoid conflicts all policies need to have the tier prefix added to the name to ensure they are unique
-			polName := names.TieredPolicyName(resourceKey.Name)
-			resourceKey.Name = polName
-
-			return resourceKey
-		}
-	}
-	return k
 }

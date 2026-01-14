@@ -60,6 +60,11 @@ type ControllersConfig struct {
 	ServiceAccount   *GenericControllerConfig
 	Namespace        *GenericControllerConfig
 	LoadBalancer     *LoadBalancerControllerConfig
+	Migration        *MigrationControllerConfig
+}
+
+type MigrationControllerConfig struct {
+	PolicyNameMigrator v3.ControllerMode
 }
 
 type GenericControllerConfig struct {
@@ -142,6 +147,9 @@ func NewDefaultKubeControllersConfig() *v3.KubeControllersConfiguration {
 			LoadBalancer: &v3.LoadBalancerControllerConfig{
 				AssignIPs: v3.AllServices,
 			},
+			Migration: &v3.MigrationControllerConfig{
+				PolicyNameMigrator: v3.ControllerEnabled,
+			},
 		},
 	}
 
@@ -168,6 +176,11 @@ func syncDatastore(ctx context.Context, cfg Config, client clientv3.KubeControll
 	// set to the empty state.
 	var currentSet bool
 	var w watch.Interface
+	defer func() {
+		if w != nil {
+			w.Stop()
+		}
+	}()
 
 	env := make(map[string]string)
 	for _, k := range AllEnvs {
@@ -243,7 +256,6 @@ MAINLOOP:
 			time.Sleep(datastoreBackoff)
 			continue MAINLOOP
 		}
-		defer w.Stop()
 		for e := range w.ResultChan() {
 			switch e.Type {
 			case watch.Error:
@@ -350,6 +362,8 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 
 	mergeLoadBalancer(&status, &rCfg, apiCfg)
 
+	mergeMigrationController(&status, &rCfg, apiCfg)
+
 	// Merge prometheus information.
 	if apiCfg.PrometheusMetricsPort != nil {
 		rCfg.PrometheusPort = *apiCfg.PrometheusMetricsPort
@@ -408,6 +422,23 @@ func mergeLoadBalancer(status *v3.KubeControllersConfigurationStatus, rCfg *RunC
 		}
 		status.RunningConfig.Controllers.LoadBalancer = &v3.LoadBalancerControllerConfig{
 			AssignIPs: v3.AllServices,
+		}
+	}
+}
+
+func mergeMigrationController(status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
+	rCfg.Controllers.Migration = &MigrationControllerConfig{
+		PolicyNameMigrator: v3.ControllerEnabled,
+	}
+	status.RunningConfig.Controllers.Migration = &v3.MigrationControllerConfig{
+		PolicyNameMigrator: v3.ControllerEnabled,
+	}
+
+	// Override from API if set.
+	if apiCfg.Controllers.Migration != nil {
+		if apiCfg.Controllers.Migration.PolicyNameMigrator == v3.ControllerDisabled {
+			rCfg.Controllers.Migration.PolicyNameMigrator = v3.ControllerDisabled
+			status.RunningConfig.Controllers.Migration.PolicyNameMigrator = v3.ControllerDisabled
 		}
 	}
 }

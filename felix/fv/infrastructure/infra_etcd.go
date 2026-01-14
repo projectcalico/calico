@@ -43,16 +43,28 @@ type EtcdDatastoreInfra struct {
 
 	cleanups cleanupStack
 	felixes  []*Felix
+
+	bpfLogByteLimit int
 }
 
 func createEtcdDatastoreInfra(opts ...CreateOption) DatastoreInfra {
-	infra, err := GetEtcdDatastoreInfra()
+	infra, err := GetEtcdDatastoreInfra(opts...)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return infra
 }
 
-func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
+func GetEtcdDatastoreInfra(opts ...CreateOption) (_ *EtcdDatastoreInfra, err error) {
 	eds := &EtcdDatastoreInfra{}
+	defer func() {
+		if err != nil {
+			log.Warn("Failed to get etcd datastore infra, running cleanups.")
+			eds.Stop()
+		}
+	}()
+
+	for _, opt := range opts {
+		opt(eds)
+	}
 
 	// Start etcd.
 	eds.EtcdContainer = RunEtcd()
@@ -69,13 +81,7 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		eds.bpfLog = RunBPFLog()
-		eds.AddCleanup(func() {
-			if eds.bpfLog != nil {
-				eds.bpfLog.StopLogs()
-				eds.bpfLog.Stop()
-			}
-		})
+		eds.bpfLog = RunBPFLog(eds, eds.bpfLogByteLimit)
 	}
 
 	// Ensure client is closed via cleanup stack (if it was created).
@@ -91,6 +97,10 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 	eds.BadEndpoint = fmt.Sprintf("https://%s:1234", eds.EtcdContainer.IP)
 
 	return eds, nil
+}
+
+func (eds *EtcdDatastoreInfra) setBPFLogByteLimit(limit int) {
+	eds.bpfLogByteLimit = limit
 }
 
 func (eds *EtcdDatastoreInfra) GetDockerArgs() []string {
@@ -260,8 +270,11 @@ func (eds *EtcdDatastoreInfra) DumpErrorData() {
 
 func (eds *EtcdDatastoreInfra) Stop() {
 	// Collect diagnostics first, before tearing anything down.
+	log.Info("Stopping etcd infra.")
 	if ginkgo.CurrentGinkgoTestDescription().Failed {
-		eds.DumpErrorData()
+		// Queue up the diags dump so that the cleanupStack will handle any
+		// panic from it.
+		eds.AddCleanup(eds.DumpErrorData)
 	}
 	// Run registered teardowns (reverse order). Do not suppress panics.
 	eds.cleanups.Run()

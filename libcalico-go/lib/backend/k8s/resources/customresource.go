@@ -16,12 +16,10 @@ package resources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // customResourceClient implements the K8sResourceClient interface and provides a generic
@@ -161,7 +158,6 @@ func (c *customResourceClient) Update(ctx context.Context, kvp *model.KVPair) (*
 
 	// Send the update request using the name.
 	name := resIn.GetObjectMeta().GetName()
-	name = c.defaultPolicyName(name)
 	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource by name")
@@ -212,7 +208,6 @@ func (c *customResourceClient) UpdateStatus(ctx context.Context, kvp *model.KVPa
 
 	// Send the update request using the name.
 	name := resIn.GetObjectMeta().GetName()
-	name = c.defaultPolicyName(name)
 	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource status by name")
@@ -259,7 +254,6 @@ func (c *customResourceClient) Delete(ctx context.Context, k model.Key, revision
 		logContext.WithError(err).Debug("Error deleting resource")
 		return nil, err
 	}
-	name = c.defaultPolicyName(name)
 
 	existing, err := c.Get(ctx, k, revision)
 	if err != nil {
@@ -314,7 +308,6 @@ func (c *customResourceClient) Get(ctx context.Context, key model.Key, revision 
 		logContext.WithError(err).Debug("Error getting resource")
 		return nil, err
 	}
-	name = c.defaultPolicyName(name)
 	namespace := key.(model.ResourceKey).Namespace
 
 	// Add the name and namespace to the log context now that we know it, and query Kubernetes.
@@ -370,26 +363,6 @@ func (c *customResourceClient) List(ctx context.Context, list model.ListInterfac
 			NamespaceIfScoped(namespace, c.namespaced).
 			Resource(c.resource).
 			VersionedParams(&opts, scheme.ParameterCodec)
-
-		// If the prefix is specified, look for the resources with the label of prefix.
-		if resList.Prefix {
-			// The prefix has a trailing "." character, remove it, since it is not valid for k8s labels
-			if !strings.HasSuffix(resList.Name, ".") {
-				return nil, errors.New("internal error: custom resource list invoked for a prefix not in the form '<tier>.'")
-			}
-
-			// TODO: We will need a way to ensure that the tier label is set on the resources. e.g., a mutating webhook.
-			name := resList.Name[:len(resList.Name)-1]
-			if name == "default" {
-				req = req.VersionedParams(&metav1.ListOptions{
-					LabelSelector: "!" + apiv3.LabelTier,
-				}, scheme.ParameterCodec)
-			} else {
-				req = req.VersionedParams(&metav1.ListOptions{
-					LabelSelector: apiv3.LabelTier + "=" + name,
-				}, scheme.ParameterCodec)
-			}
-		}
 
 		// Perform the request.
 		err := req.Do(ctx).Into(out)
@@ -482,7 +455,7 @@ func (c *customResourceClient) typeMeta() *metav1.TypeMeta {
 		// apiVersion is the API group and version for the resources returned by this client.
 		// Note that this is not necessarily the same as the API version used in the Kubernetes API. For example,
 		// CRs may be stored using crd.projectcalico.org/v1, but returned to callers with projectcalico.org/v3.
-		APIVersion: apiv3.GroupVersionCurrent,
+		APIVersion: v3.GroupVersionCurrent,
 		Kind:       c.kind,
 	}
 }
@@ -533,21 +506,4 @@ func (c *customResourceClient) convertKVPairToResource(kvp *model.KVPair) (Resou
 		// Perform the transform from projectcalico.org/v3 to crd.projectcalico.org/v1
 		return ConvertCalicoResourceToK8sResource(resource)
 	}
-}
-
-func (c *customResourceClient) defaultPolicyName(name string) string {
-	if c.noTransform {
-		// Configured to write directly to projectcalico.org/v3 CRDs, so no transformation needed.
-		return name
-	}
-
-	if c.kind == apiv3.KindGlobalNetworkPolicy ||
-		c.kind == apiv3.KindNetworkPolicy ||
-		c.kind == apiv3.KindStagedGlobalNetworkPolicy ||
-		c.kind == apiv3.KindStagedNetworkPolicy {
-		// Policies in default tier are stored in the backend with the default prefix, if the prefix is not present we prefix it now
-		name = names.TieredPolicyName(name)
-	}
-
-	return name
 }

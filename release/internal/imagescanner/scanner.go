@@ -67,8 +67,11 @@ func New(cfg Config) *Scanner {
 // Scan sends a request to the image scanner to scan the given images for the given product code and stream.
 func (i *Scanner) Scan(productCode string, images []string, stream string, release bool, outputDir string) error {
 	if !i.config.Valid() {
-		logrus.Error("Invalid image scanner configuration")
 		return fmt.Errorf("invalid image scanner configuration")
+	}
+	if len(images) == 0 {
+		logrus.Warn("No images to send to scanner, skipping...")
+		return nil
 	}
 	var bucketPath, scanType string
 	if release {

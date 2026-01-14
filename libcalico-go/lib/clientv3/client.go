@@ -275,15 +275,15 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 		errs = append(errs, err)
 	}
 
-	err = c.ensureTierExists(ctx, names.AdminNetworkPolicyTierName, v3.Pass, v3.AdminNetworkPolicyTierOrder)
+	err = c.ensureTierExists(ctx, names.KubeAdminTierName, v3.Pass, v3.KubeAdminTierOrder)
 	if err != nil {
-		log.WithError(err).Info("Unable to initialize adminnetworkpolicy Tier")
+		log.WithError(err).Info("Unable to initialize kube-admin Tier")
 		errs = append(errs, err)
 	}
 
-	err = c.ensureTierExists(ctx, names.BaselineAdminNetworkPolicyTierName, v3.Pass, v3.BaselineAdminNetworkPolicyTierOrder)
+	err = c.ensureTierExists(ctx, names.KubeBaselineTierName, v3.Pass, v3.KubeBaselineTierOrder)
 	if err != nil {
-		log.WithError(err).Info("Unable to initialize baselineadminnetworkpolicy Tier")
+		log.WithError(err).Info("Unable to initialize kube-baseline Tier")
 		errs = append(errs, err)
 	}
 

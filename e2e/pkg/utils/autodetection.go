@@ -17,7 +17,7 @@ package utils
 import (
 	"context"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	v1 "github.com/tigera/operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,11 +32,11 @@ import (
 func ExpectedPodMTU(f *framework.Framework) *int32 {
 	// Create a client to the API server.
 	cli, err := client.New(f.ClientConfig())
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	installs := &v1.InstallationList{}
 	err = cli.List(context.TODO(), installs)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	for _, inst := range installs.Items {
 		if inst.Status.MTU > 0 {

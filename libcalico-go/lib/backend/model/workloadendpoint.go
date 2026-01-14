@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -85,9 +86,24 @@ func (key WorkloadEndpointKey) valueType() (reflect.Type, error) {
 	return reflect.TypeOf(WorkloadEndpoint{}), nil
 }
 
+func (key WorkloadEndpointKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[WorkloadEndpoint](key, rawData)
+}
+
 func (key WorkloadEndpointKey) String() string {
 	return fmt.Sprintf("WorkloadEndpoint(node=%s, orchestrator=%s, workload=%s, name=%s)",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
+}
+
+// GetNamespace extracts and returns the namespace from the WorkloadID.
+// WorkloadID is expected to be in the format "namespace/name".
+// Returns an empty string if the WorkloadID doesn't contain a namespace.
+func (key WorkloadEndpointKey) GetNamespace() string {
+	parts := strings.SplitN(key.WorkloadID, "/", 2)
+	if len(parts) == 2 {
+		return parts[0]
+	}
+	return ""
 }
 
 var _ EndpointKey = WorkloadEndpointKey{}

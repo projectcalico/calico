@@ -209,12 +209,11 @@ func (s *PolicySets) ProcessIpSetUpdate(ipSetId string) []string {
 // getPoliciesByIpSetId locates any Policy set(s) which reference the provided IP set
 func (s *PolicySets) getPoliciesByIpSetId(ipSetId string) (policies []string) {
 	for policySetId, policySet := range s.policySetIdToPolicySet {
-		policySet.IpSetIds.Iter(func(id string) error {
+		for id := range policySet.IpSetIds.All() {
 			if id == ipSetId {
 				policies = append(policies, policySetId)
 			}
-			return nil
-		})
+		}
 	}
 	return
 }
@@ -594,7 +593,6 @@ func protoPortToHCSPort(port *proto.PortRange) string {
 
 // This function will create chunks of ports/ports range with chunksize
 func SplitPortList(ports []*proto.PortRange, chunkSize int) (splits [][]*proto.PortRange) {
-
 	if len(ports) == 0 {
 		splits = append(splits, []*proto.PortRange{})
 	}
@@ -612,7 +610,6 @@ func SplitPortList(ports []*proto.PortRange, chunkSize int) (splits [][]*proto.P
 
 // This function will create chunks of IP addresses/Cidr with chunksize
 func SplitIPList(ipAddrs []string, chunkSize int) (splits [][]string) {
-
 	if len(ipAddrs) == 0 {
 		splits = append(splits, []string{})
 	}

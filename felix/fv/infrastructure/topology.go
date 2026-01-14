@@ -33,6 +33,8 @@ import (
 
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -122,7 +124,6 @@ func DefaultTopologyOptions() TopologyOptions {
 		TyphaLogSeverity:      "info",
 		IPIPMode:              api.IPIPModeAlways,
 		IPIPStrategy:          NewDefaultTunnelStrategy(DefaultIPPoolCIDR, DefaultIPv6PoolCIDR),
-		SimulateBIRDRoutes:    true,
 		IPPoolCIDR:            DefaultIPPoolCIDR,
 		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
 		UseIPPools:            true,
@@ -228,6 +229,10 @@ func StartNNodeTopology(
 
 	if opts.IPIPMode == "" {
 		opts.IPIPMode = api.IPIPModeNever
+	}
+
+	if !opts.SimulateBIRDRoutes {
+		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	}
 
 	// Get client.
@@ -465,6 +470,11 @@ func StartNNodeTopology(
 	}
 
 	wg.Wait()
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		// If one of our parallel start-up goroutines fails, it will eventually
+		// fail the test but Ginkgo has no automatic way to abort the main goroutine.
+		ginkgo.Fail("StartNNodeTopology: failure on background goroutine.")
+	}
 	success = true
 	return
 }
@@ -510,4 +520,17 @@ func mustInitDatastore(client client.Interface) {
 		log.WithError(err).Info("EnsureInitialized result")
 		return err
 	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
+}
+
+func AssignIP(workload, addr, hostname string, client client.Interface) {
+	// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+	err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+		IP:       cnet.MustParseIP(addr),
+		HandleID: &workload,
+		Attrs: map[string]string{
+			ipam.AttributeNode: hostname,
+		},
+		Hostname: hostname,
+	})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }

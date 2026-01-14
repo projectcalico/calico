@@ -156,17 +156,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF policy scale tests", []
 			// Remove one EP.
 			w[0].RemoveFromInfra(infra)
 			// After removing workload, we get a dummy "drop all" policy program.
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress), "60s", "1s").Should(Equal(1),
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(1),
 				"w[0] ingress policy programs not cleaned up after removing ep?")
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress), "60s", "1s").Should(Equal(1),
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(1),
 				"w[0] egress policy programs not cleaned up after removing ep?")
 
 			// Stop it, should get full cleanup now.
 			w[0].Stop()
 			w[0] = nil // Prevent second call to Stop in AfterEach.
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress), "60s", "1s").Should(Equal(0),
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(0),
 				"w[0] ingress policy programs not cleaned up?")
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress), "60s", "1s").Should(Equal(0),
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(0),
 				"w[0] egress policy programs not cleaned up?")
 		})
 
@@ -178,16 +178,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF policy scale tests", []
 				w[0] = nil
 			}()
 			// After stopping workload, interface is gone and programs get cleaned up.
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress), "60s", "1s").Should(Equal(0),
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(0),
 				"w[0] ingress policy programs not cleaned up?")
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress), "60s", "1s").Should(Equal(0),
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(0),
 				"w[0] egress policy programs not cleaned up?")
 
 			// Remove should have no further effect.
 			w[0].RemoveFromInfra(infra)
-			Consistently(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress), "10s", "1s").Should(Equal(0),
+			Consistently(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress, "ingress"), "10s", "1s").Should(Equal(0),
 				"w[0] ingress policy programs came back?")
-			Consistently(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress), "10s", "1s").Should(Equal(0),
+			Consistently(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress, "egress"), "10s", "1s").Should(Equal(0),
 				"w[0] egress policy programs came back?")
 		})
 	})

@@ -380,6 +380,13 @@ configRetry:
 			if err != nil {
 				log.WithError(err).Panic("Bug: failed to override config parameter BPFConntrackCleanupMode")
 			}
+			if configParams.BPFRedirectToPeer == "L2Only" {
+				log.Warn("BPFRedirectToPeer 'L2Only' is deprecated and equals 'Enabled' now.")
+				_, err := configParams.OverrideParam("BPFRedirectToPeer", "Enabled")
+				if err != nil {
+					log.WithError(err).Panic("Bug: failed to override config parameter BPFRedirectToPeer")
+				}
+			}
 		}
 	}
 
@@ -1429,7 +1436,7 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 	oldRawConfig := oldConfigCopy.RawValues()
 	newRawConfig := newConfigCopy.RawValues()
 	restartNeeded := false
-	changedFields.Iter(func(fieldName string) error {
+	for fieldName := range changedFields.All() {
 		logCtx := log.WithFields(log.Fields{
 			"key":      fieldName,
 			"oldValue": oldRawConfig[fieldName],
@@ -1441,8 +1448,7 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 			logCtx.Info("Configuration value changed; change DOES require Felix to restart.")
 			restartNeeded = true
 		}
-		return nil
-	})
+	}
 
 	if restartNeeded {
 		fc.shutDownProcess(reasonConfigChanged)
