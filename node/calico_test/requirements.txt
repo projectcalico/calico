@@ -34,6 +34,6 @@ simplejson==3.13.2
 six==1.16.0
 termcolor==1.1.0
 typing==3.10.0.0
-urllib3==1.26.19
+urllib3==2.6.3
 wcwidth==0.2.13
 websocket-client==0.59.0
