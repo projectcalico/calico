@@ -702,6 +702,11 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 			return nil, err
 		}
 	}
+	if conf.CalicoAPIGroup != "" {
+		if err := os.Setenv("CALICO_API_GROUP", conf.CalicoAPIGroup); err != nil {
+			return nil, err
+		}
+	}
 
 	// Load the client config from the current environment.
 	clientConfig, err := apiconfig.LoadClientConfig("")

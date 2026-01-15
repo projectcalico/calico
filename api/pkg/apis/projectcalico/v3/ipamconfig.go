@@ -25,6 +25,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // IPAMConfigurationList contains a list of IPAMConfiguration resources.
 type IPAMConfigurationList struct {
@@ -37,6 +38,7 @@ type IPAMConfigurationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster,shortName={ipamconfig,ipamconfigs}
 
 // IPAMConfiguration contains information about a block for IP address assignment.
 type IPAMConfiguration struct {
@@ -46,14 +48,24 @@ type IPAMConfiguration struct {
 	Spec IPAMConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
-// IPAMConfigurationSpec contains the specification for an IPPool resource.
+// IPAMConfigurationSpec contains the specification for an IPAMConfiguration resource.
 type IPAMConfigurationSpec struct {
 	// When StrictAffinity is true, borrowing IP addresses is not allowed.
-	StrictAffinity bool `json:"strictAffinity" validate:"required"`
+	// +kubebuilder:default=false
+	StrictAffinity bool `json:"strictAffinity"`
 
 	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
 	// affine to each host.
+	//
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000000
+	// +kubebuilder:default=0
+	// +optional
 	MaxBlocksPerHost int32 `json:"maxBlocksPerHost,omitempty"`
+
+	// Whether or not to auto allocate blocks to hosts.
+	// +kubebuilder:default=true
+	AutoAllocateBlocks bool `json:"autoAllocateBlocks"`
 }
 
 // NewIPAMConfiguration creates a new (zeroed) IPAMConfiguration struct with the TypeMetadata initialised to the current
@@ -61,7 +73,7 @@ type IPAMConfigurationSpec struct {
 func NewIPAMConfiguration() *IPAMConfiguration {
 	return &IPAMConfiguration{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       KindIPPool,
+			Kind:       KindIPAMConfiguration,
 			APIVersion: GroupVersionCurrent,
 		},
 	}
