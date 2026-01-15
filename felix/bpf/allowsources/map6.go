@@ -44,7 +44,7 @@ func (e AllowSourcesEntryV6) AsBytes() []byte {
     return e[:]
 }
 
-func MakeAllowSourcesEntryV6(cidr ip.CIDR, ifindex int) AllowSourcesEntryV6 {
+func NewKeyV6(cidr ip.CIDR, ifindex int) AllowSourcesEntryV6 {
     var entry AllowSourcesEntryV6
     ipv6 := cidr.Addr().(ip.V6Addr)
     binary.LittleEndian.PutUint32(entry[:4], uint32(cidr.Prefix()))

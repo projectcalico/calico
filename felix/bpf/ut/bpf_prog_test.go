@@ -39,6 +39,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
@@ -595,16 +596,16 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6       maps.Map
-	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMapXDP                                                          maps.Map
-	policyJumpMap                                                                                                            []maps.Map
-	perfMap                                                                                                                  maps.Map
-	profilingMap, ipfragsMapTmp                                                                                              maps.Map
-	qosMap                                                                                                                   maps.Map
-	ctlbProgsMap                                                                                                             []maps.Map
-	progMap                                                                                                                  []maps.Map
-	allMaps                                                                                                                  []maps.Map
+	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap, allowSourcesMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6, allowSourcesMapV6     maps.Map
+	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMapXDP                                                                           maps.Map
+	policyJumpMap                                                                                                                             []maps.Map
+	perfMap                                                                                                                                   maps.Map
+	profilingMap, ipfragsMapTmp                                                                                                               maps.Map
+	qosMap                                                                                                                                    maps.Map
+	ctlbProgsMap                                                                                                                              []maps.Map
+	progMap                                                                                                                                   []maps.Map
+	allMaps                                                                                                                                   []maps.Map
 )
 
 func initMapsOnce() {
@@ -641,13 +642,16 @@ func initMapsOnce() {
 		qosMap = qos.Map()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
+		allowSourcesMap = allowsources.Map()
+		allowSourcesMapV6 = allowsources.MapV6()
 
 		perfMap = perf.Map("perf_evnt", 512)
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
-			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6}
+			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6,
+			allowSourcesMap, allowSourcesMapV6 }
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {

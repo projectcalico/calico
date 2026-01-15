@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
 )
@@ -28,6 +29,7 @@ var (
 	rtValGood       = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
 	rtValWrongIface = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 2).AsBytes()
 	rtValWrongType  = routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.V4Addr{1, 0, 0, 0}).AsBytes()
+    allowSourcesKey = allowsources.NewKey(srcV4CIDR, 1).AsBytes()
 )
 
 func TestWorkloadSpoof(t *testing.T) {
@@ -56,6 +58,20 @@ func TestWorkloadSpoof(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	runSpoofTest(t, resTC_ACT_SHOT)
 	cleanUpMaps()
+
+    t.Log("Missing return route & allowed sources -> ALLOW")
+	err = allowSourcesMap.Update(allowSourcesKey, allowsources.DummyValue)
+	Expect(err).NotTo(HaveOccurred())
+    runSpoofTest(t, resTC_ACT_UNSPEC)
+    cleanUpMaps()
+
+    t.Log("Correct return route & allowed source -> ALLOW")
+    err = allowSourcesMap.Update(allowSourcesKey, allowsources.DummyValue)
+    Expect(err).NotTo(HaveOccurred())
+    err = rtMap.Update(rtKeySrc, rtValGood)
+	Expect(err).NotTo(HaveOccurred())
+    runSpoofTest(t, resTC_ACT_UNSPEC)
+    cleanUpMaps()
 }
 
 func runSpoofTest(t *testing.T, expRC int) {

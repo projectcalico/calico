@@ -65,7 +65,7 @@ func (e AllowSourcesEntry) String() string {
     return fmt.Sprintf("%11s prefix %d (ifindex=%d)", e.Addr(), e.PrefixLen(), e.IfIndex())
 }
 
-func MakeAllowSourcesEntry(cidr ip.CIDR, ifindex int) AllowSourcesEntry {
+func NewKey(cidr ip.CIDR, ifindex int) AllowSourcesEntry {
     var entry AllowSourcesEntry
     prefixLen := cidr.Prefix() + 32 // accounting for exact match field ifindex
 
@@ -73,6 +73,14 @@ func MakeAllowSourcesEntry(cidr ip.CIDR, ifindex int) AllowSourcesEntry {
     binary.LittleEndian.PutUint32(entry[4:8], uint32(ifindex))
     binary.BigEndian.PutUint32(entry[8:12], cidr.Addr().(ip.V4Addr).AsUint32())
     return entry
+}
+
+func NewKeyFromString(cidrString string, ifindex int) (AllowSourcesEntry, error) {
+    cidr, err := ip.CIDRFromString(cidrString)
+    if err != nil {
+        return AllowSourcesEntry{}, err
+    }
+    return NewKey(cidr, ifindex), nil
 }
 
 type MapMem map[AllowSourcesEntry]struct{}

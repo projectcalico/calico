@@ -31,6 +31,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -403,6 +404,9 @@ type bpfEndpointManager struct {
 
 	QoSMap        maps.MapWithUpdateWithFlags
 	maglevLUTSize int
+
+    // allowed source prefixes per workload
+    allowedSourcesPerWorkload map[types.WorkloadEndpointID]set.Set[string]
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -523,6 +527,7 @@ func NewBPFEndpointManager(
 
 		QoSMap:        bpfmaps.CommonMaps.QoSMap,
 		maglevLUTSize: config.BPFMaglevLUTSize,
+        allowedSourcesPerWorkload: map[types.WorkloadEndpointID]set.Set[string]{},
 	}
 
 	m.policyTrampolineStride.Store(int32(asm.TrampolineStrideDefault))
@@ -1281,48 +1286,8 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 		return true // Force interface to be marked dirty in case policies changed.
 	})
 
-    m.addAllowSourceSets(wlID, wl)
+    m.updateAllowSourceSets(wlID, wl)
 }
-
-func (m *bpfEndpointManager) addAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
-    allowSources := wl.AllowSpoofedSourcePrefixes
-    bpfInterface, exists := m.nameToIface[wl.Name]
-    if !exists {
-        logrus.WithField("wep", wlID).WithField("iface", wl.Name).Warn("Interface for workload endpoint not found, cannot add allowed source CIDRs")
-        return
-    }
-
-    ifindex := bpfInterface.info.ifIndex
-    if ifindex <= 0 {
-        return // if not an actual interface, don't add it to the map
-    }
-
-    for _, cidrString := range allowSources {
-        cidr, err := ip.CIDRFromString(cidrString)
-        if err != nil {
-            logrus.WithField("wep", wlID).WithField("cidr", cidrString).Warn("Invalid allowed source CIDR, skipping")
-            continue
-        }
-
-        var mapAddError error
-        if cidr.Version() == 4 {
-            entry := allowsources.MakeAllowSourcesEntry(cidr, ifindex)
-            mapAddError = m.v4.AllowSourcesMap.Update(entry.AsBytes(), allowsources.DummyValue)
-        } else if cidr.Version() == 6 {
-            entry := allowsources.MakeAllowSourcesEntryV6(cidr, ifindex)
-            mapAddError = m.v6.AllowSourcesMap.Update(entry.AsBytes(), allowsources.DummyValue)
-        }
-
-        if mapAddError != nil {
-            logrus.WithField("wep", wlID).WithField("cidr", cidrString).WithError(mapAddError).Warn("Failed to add allowed source CIDR")
-            continue
-        }
-
-        logrus.WithField("wep", wlID).WithField("cidr", cidrString).Debug("Successfully added allowed source CIDR")
-    }
-}
-
-
 
 // onWorkloadEndpointRemove removes the workload from the cache and the index, which maps from policy to workload.
 func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpointRemove) {
@@ -1343,46 +1308,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 	})
 	// Remove policy debug info if any
 	m.removeIfaceAllPolicyDebugInfo(oldWEP.Name)
-    m.removeAllowSourceSets(wlID, oldWEP)
-}
-
-func (m *bpfEndpointManager) removeAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
-    allowSources := wl.AllowSpoofedSourcePrefixes
-    bpfInterface, exists := m.nameToIface[wl.Name]
-    if !exists {
-        logrus.WithField("wep", wlID).WithField("iface", wl.Name).Warn("Interface for workload endpoint not found, cannot remove allowed source CIDRs")
-        return
-    }
-
-    ifindex := bpfInterface.info.ifIndex
-    if ifindex <= 0 {
-        return // if not an actual interface, don't add it to the map
-    }
-
-
-    for _, cidrString := range allowSources {
-        cidr, err := ip.CIDRFromString(cidrString)
-        if err != nil {
-            logrus.WithField("wep", wlID).WithField("cidr", cidrString).Warn("Invalid allowed source CIDR, skipping")
-            continue
-        }
-
-        var mapDelError error
-        if cidr.Version() == 4 {
-            entry := allowsources.MakeAllowSourcesEntry(cidr, ifindex)
-            mapDelError = m.v4.AllowSourcesMap.Delete(entry.AsBytes())
-        } else if cidr.Version() == 6 {
-            entry := allowsources.MakeAllowSourcesEntryV6(cidr, ifindex)
-            mapDelError = m.v6.AllowSourcesMap.Delete(entry.AsBytes())
-        }
-
-        if mapDelError != nil {
-            logrus.WithField("wep", wlID).WithField("cidr", cidrString).WithError(mapDelError).Warn("Failed to remove allowed source CIDR")
-            return
-        }
-
-        logrus.WithField("wep", wlID).WithField("cidr", cidrString).Debug("Successfully removed allowed source CIDR")
-    }
+    m.cleanAllowSourceSetPerWorkload(wlID, oldWEP)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -4687,6 +4613,122 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		}
 	}
 	return IfaceTypeData
+}
+
+
+func (m *bpfEndpointManager) updateAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
+    oldPrefixes, exists := m.allowedSourcesPerWorkload[wlID]
+    if !exists {
+        logrus.WithField("wep", wl).Debug("no existing annotations found for this workload")
+        oldPrefixes = set.New[string]()
+    }
+
+    for _, newPrefix := range wl.AllowSpoofedSourcePrefixes {
+        if !oldPrefixes.Contains(newPrefix) {
+            // add new annotation to bookkeeping map AND eBPF map
+            m.addAllowSourcePrefix(wlID, wl, newPrefix)
+        }
+    }
+
+    for existingPrefix := range oldPrefixes.All() {
+        if !slices.Contains(wl.AllowSpoofedSourcePrefixes, existingPrefix) {
+            // remove stale annotations from bookkeeping map AND eBPF map
+            m.removeAllowSourceSets(wlID, wl, existingPrefix)
+        }
+    }
+
+}
+
+func (m *bpfEndpointManager) addAllowSourcePrefix(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint, prefix string) {
+    bpfInterface, exists := m.nameToIface[wl.Name]
+    if !exists {
+        logrus.WithField("iface", wl.Name).Warn("Interface for workload endpoint not found, cannot add allowed source CIDRs")
+        return
+    }
+
+    ifindex := bpfInterface.info.ifIndex
+    if ifindex <= 0 {
+        return // if not an actual interface, don't add it to the map
+    }
+
+    mapAddError := m.adjustMapWithPrefix(prefix, ifindex, "update")
+    if mapAddError != nil {
+        logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapAddError).Warn("Failed to add allowed source CIDR")
+        return
+    }
+
+    allowedSourcesSet, exists := m.allowedSourcesPerWorkload[wlID]
+    if !exists {
+        allowedSourcesSet = set.New[string]()
+        m.allowedSourcesPerWorkload[wlID] = allowedSourcesSet
+    }
+
+    allowedSourcesSet.Add(prefix)
+
+    logrus.WithField("wep", wlID).WithField("cidr", prefix).Debug("Successfully added allowed source CIDR")
+}
+
+func (m *bpfEndpointManager) cleanAllowSourceSetPerWorkload(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
+    wlPrefixes, exists := m.allowedSourcesPerWorkload[wlID]
+    if !exists {
+        return
+    }
+
+    for wlPrefix := range wlPrefixes.All() {
+        m.removeAllowSourceSets(wlID, wl, wlPrefix)
+    }
+}
+
+func (m *bpfEndpointManager) removeAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint, prefix string) {
+    bpfInterface, exists := m.nameToIface[wl.Name]
+    if !exists {
+        logrus.WithField("wep", wlID).WithField("iface", wl.Name).Warn("Interface for workload endpoint not found, cannot remove allowed source CIDRs")
+        return
+    }
+
+    ifindex := bpfInterface.info.ifIndex
+    if ifindex <= 0 {
+        return // if not an actual interface, don't add it to the map
+    }
+
+    mapDelError := m.adjustMapWithPrefix(prefix, ifindex, "delete")
+    if mapDelError != nil {
+        logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapDelError).Warn("Failed to remove allowed source CIDR")
+        return
+    }
+
+    m.allowedSourcesPerWorkload[wlID].Discard(prefix)
+
+    logrus.WithField("wep", wlID).WithField("cidr", prefix).Debug("Successfully removed allowed source CIDR")
+}
+
+func (m *bpfEndpointManager) adjustMapWithPrefix(prefix string, ifindex int, op string) error {
+    var managerDataplane *bpfEndpointManagerDataplane
+    var entry allowsources.AllowSourcesEntryInterface
+    var err error
+
+    cidr, err := ip.CIDRFromString(prefix)
+    if err != nil {
+        return err
+    }
+
+    if cidr.Version() == 4 {
+        entry = allowsources.NewKey(cidr, ifindex)
+        managerDataplane = m.v4
+    } else if cidr.Version() == 6 {
+        entry = allowsources.NewKeyV6(cidr, ifindex)
+        managerDataplane = m.v6
+    }
+
+    if strings.ToLower(op) == "update" {
+        err = managerDataplane.AllowSourcesMap.Update(entry.AsBytes(), allowsources.DummyValue)
+    } else if strings.ToLower(op) == "delete" {
+        err = managerDataplane.AllowSourcesMap.Delete(entry.AsBytes())
+    } else {
+        err = errors.New("invalid operation")
+    }
+
+    return err
 }
 
 func (trees bpfIfaceTrees) getPhyDevices(masterIfName string) []string {
