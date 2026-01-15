@@ -66,9 +66,9 @@ function ensure_aso_credentials() {
   log_info "Configuring namespaced ASO v2 credentials..."
 
   # Create namespace for our resources
-  ${KUBECTL} create namespace winfv --dry-run=client -o yaml | ${KUBECTL} apply -f -
+  ${KUBECTL} create namespace aso --dry-run=client -o yaml | ${KUBECTL} apply -f -
 
-  log_info "Creating namespaced ASO credentials in winfv namespace..."
+  log_info "Creating namespaced ASO credentials in aso namespace..."
 
   # Create the namespaced credential secret
   cat <<EOF | ${KUBECTL} apply -f -
@@ -76,7 +76,7 @@ apiVersion: v1
 kind: Secret
 metadata:
    name: aso-credential
-   namespace: winfv
+   namespace: aso
 stringData:
   AZURE_SUBSCRIPTION_ID: "$AZURE_SUBSCRIPTION_ID"
   AZURE_TENANT_ID: "$AZURE_TENANT_ID"
@@ -103,11 +103,11 @@ function apply_azure_crds() {
   export PASSWORD_BASE64=$(echo -n "$PASSWORD" | base64)
   cat << EOF > ${ASO_DIR}/password.txt
 -------------Connect to Windows Instances-------------
-username: winfv
+username: aso
 password: $PASSWORD
 password-base64: $PASSWORD_BASE64
 EOF
-  log_info "Generated Windows credentials: username=winfv, password saved to password.txt"
+  log_info "Generated Windows credentials: username=aso, password saved to password.txt"
 
   rm -f ${SSH_KEY_FILE} ${SSH_KEY_FILE}.pub
   ssh-keygen -m PEM -t rsa -b 2048 -f "${SSH_KEY_FILE}" -N '' -C "" 1>/dev/null
@@ -125,7 +125,7 @@ EOF
   log_info "Creating Resource Group..."
   ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/resource-group.yaml
 
-  if ! wait_for_aso_resource "resourcegroup" "$AZURE_RESOURCE_GROUP" "winfv" "300s"; then
+  if ! wait_for_aso_resource "resourcegroup" "$AZURE_RESOURCE_GROUP" "aso" "300s"; then
     log_error "Failed to create Resource Group"
     return 1
   fi
@@ -136,7 +136,7 @@ EOF
   ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/security-group.yaml
 
   # Wait for VNet to be ready before proceeding
-  if ! wait_for_aso_resource "virtualnetwork" "vnet-winfv" "winfv" "300s"; then
+  if ! wait_for_aso_resource "virtualnetwork" "vnet-aso" "aso" "300s"; then
     log_error "Failed to create Virtual Network"
     return 1
   fi
@@ -166,13 +166,13 @@ EOF
 
   for vm in "${vm_resources[@]}"; do
     log_info "Waiting for VirtualMachine: $vm"
-    if ! wait_for_aso_resource "virtualmachine" "$vm" "winfv" "$ASO_TIMEOUT_DEFAULT"; then
+    if ! wait_for_aso_resource "virtualmachine" "$vm" "aso" "$ASO_TIMEOUT_DEFAULT"; then
       log_error "VirtualMachine $vm failed to become ready"
       failed_vms+=("$vm")
 
       # Provide diagnostic information
       log_info "Diagnostic information for $vm:"
-      ${KUBECTL} describe virtualmachine "$vm" -n winfv | tail -20
+      ${KUBECTL} describe virtualmachine "$vm" -n aso | tail -20
     else
       log_info "VirtualMachine $vm is ready"
     fi
@@ -180,7 +180,7 @@ EOF
 
   if [[ ${#failed_vms[@]} -gt 0 ]]; then
     log_error "Failed VirtualMachine resources: ${failed_vms[*]}"
-    log_info "Use '${KUBECTL} describe virtualmachine <name> -n winfv' for more details"
+    log_info "Use '${KUBECTL} describe virtualmachine <name> -n aso' for more details"
     return 1
   fi
 
@@ -238,21 +238,21 @@ function get_and_export_node_ips() {
     local pip_name="pip-linux-${i}"
 
     log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
-    if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "winfv" "480s"; then
+    if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "aso" "480s"; then
       log_error "${vm_name} did not become ready in time"
       return 1
     fi
 
     # Get IP addresses from ASO CRDs
     log_info "Getting ${vm_name} IP addresses from ASO resources..."
-    local pip=$(${KUBECTL} get networkinterface ${nic_name} -n winfv -o jsonpath='{.status.ipConfigurations[0].privateIPAddress}' 2>/dev/null || echo "")
-    local eip=$(${KUBECTL} get publicipaddress ${pip_name} -n winfv -o jsonpath='{.status.ipAddress}' 2>/dev/null || echo "")
+    local pip=$(${KUBECTL} get networkinterface ${nic_name} -n aso -o jsonpath='{.status.ipConfigurations[0].privateIPAddress}' 2>/dev/null || echo "")
+    local eip=$(${KUBECTL} get publicipaddress ${pip_name} -n aso -o jsonpath='{.status.ipAddress}' 2>/dev/null || echo "")
 
     if [[ -z "$eip" || -z "$pip" ]]; then
       log_error "Failed to retrieve IP addresses for ${vm_name} from ASO resources"
       log_info "Checking ASO resource status for debugging..."
-      ${KUBECTL} get networkinterface ${nic_name} -n winfv -o yaml | grep -A 10 "status:" || true
-      ${KUBECTL} get publicipaddress ${pip_name} -n winfv -o yaml | grep -A 10 "status:" || true
+      ${KUBECTL} get networkinterface ${nic_name} -n aso -o yaml | grep -A 10 "status:" || true
+      ${KUBECTL} get publicipaddress ${pip_name} -n aso -o yaml | grep -A 10 "status:" || true
       return 1
     fi
 
@@ -279,21 +279,21 @@ function get_and_export_node_ips() {
     local pip_name="pip-windows-${i}"
 
     log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
-    if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "winfv" "480s"; then
+    if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "aso" "480s"; then
       log_error "${vm_name} did not become ready in time"
       return 1
     fi
 
     # Get IP addresses from ASO CRDs for Windows VM
     log_info "Getting ${vm_name} IP addresses from ASO resources..."
-    local pip=$(${KUBECTL} get networkinterface ${nic_name} -n winfv -o jsonpath='{.status.ipConfigurations[0].privateIPAddress}' 2>/dev/null || echo "")
-    local eip=$(${KUBECTL} get publicipaddress ${pip_name} -n winfv -o jsonpath='{.status.ipAddress}' 2>/dev/null || echo "")
+    local pip=$(${KUBECTL} get networkinterface ${nic_name} -n aso -o jsonpath='{.status.ipConfigurations[0].privateIPAddress}' 2>/dev/null || echo "")
+    local eip=$(${KUBECTL} get publicipaddress ${pip_name} -n aso -o jsonpath='{.status.ipAddress}' 2>/dev/null || echo "")
 
     if [[ -z "$eip" || -z "$pip" ]]; then
       log_error "Failed to retrieve IP addresses for ${vm_name} from ASO resources"
       log_info "Checking ASO resource status for debugging..."
-      ${KUBECTL} get networkinterface ${nic_name} -n winfv -o yaml | grep -A 10 "status:" || true
-      ${KUBECTL} get publicipaddress ${pip_name} -n winfv -o yaml | grep -A 10 "status:" || true
+      ${KUBECTL} get networkinterface ${nic_name} -n aso -o yaml | grep -A 10 "status:" || true
+      ${KUBECTL} get publicipaddress ${pip_name} -n aso -o yaml | grep -A 10 "status:" || true
       return 1
     fi
 
@@ -312,13 +312,13 @@ function get_and_export_node_ips() {
   export WINDOWS_EIPS_STR="${WINDOWS_EIPS[*]}"
 
   # Setup connection info
-  MASTER_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${LINUX_EIP}"
-  WINDOWS_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIP} powershell"
+  MASTER_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@${LINUX_EIP}"
+  WINDOWS_CONNECT_COMMAND="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@${WINDOWS_EIP} powershell"
 
   # Create individual connect commands for each Linux node
   for ((i=0; i<${LINUX_NODE_COUNT}; i++)); do
     local var_name="LINUX_NODE_${i}_CONNECT"
-    local cmd="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${LINUX_EIPS[$i]}"
+    local cmd="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@${LINUX_EIPS[$i]}"
     eval "export ${var_name}='${cmd}'"
   done
 
@@ -326,8 +326,8 @@ function get_and_export_node_ips() {
   for ((i=0; i<${WINDOWS_NODE_COUNT}; i++)); do
     local var_name="WINDOWS_NODE_${i}_CONNECT"
     local var_name_ps="WINDOWS_NODE_${i}_CONNECT_PS"
-    local cmd="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIPS[$i]}"
-    local cmd_ps="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@${WINDOWS_EIPS[$i]} powershell"
+    local cmd="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@${WINDOWS_EIPS[$i]}"
+    local cmd_ps="ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@${WINDOWS_EIPS[$i]} powershell"
     eval "export ${var_name}='${cmd}'"
     eval "export ${var_name_ps}='${cmd_ps}'"
   done
@@ -353,7 +353,7 @@ EOF
   for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
     cat << EOF >> ${ASO_DIR}/connect.txt
 -------------Connect to Linux Node ${i}----------------
-ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${LINUX_EIPS[$((i-1))]}
+ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no aso@${LINUX_EIPS[$((i-1))]}
 PIP: ${LINUX_PIPS[$((i-1))]}
 EIP: ${LINUX_EIPS[$((i-1))]}
 
@@ -364,7 +364,7 @@ EOF
   for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
     cat << EOF >> ${ASO_DIR}/connect.txt
 -------------Connect to Windows Node ${i}-------------
-ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no winfv@${WINDOWS_EIPS[$((i-1))]} powershell
+ssh -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no aso@${WINDOWS_EIPS[$((i-1))]} powershell
 PIP: ${WINDOWS_PIPS[$((i-1))]}
 EIP: ${WINDOWS_EIPS[$((i-1))]}
 
@@ -408,7 +408,7 @@ if [[ \$NODE_INDEX -ge \${#LINUX_EIPS[@]} ]]; then
 fi
 
 LINUX_EIP="\${LINUX_EIPS[\$NODE_INDEX]}"
-ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@\${LINUX_EIP} "\$@"
+ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@\${LINUX_EIP} "\$@"
 EOF
   chmod +x ${ASO_DIR}/ssh-node-linux.sh
 
@@ -440,7 +440,7 @@ if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
 fi
 
 WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
-ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 winfv@\${WINDOWS_EIP} powershell "\$@"
+ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 aso@\${WINDOWS_EIP} powershell "\$@"
 EOF
   chmod +x ${ASO_DIR}/ssh-node-windows.sh
 
@@ -486,7 +486,7 @@ if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
 fi
 
 WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
-scp -r -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 "\$LOCAL_FILE" winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH"
+scp -r -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 "\$LOCAL_FILE" aso@\${WINDOWS_EIP}:"\$REMOTE_PATH"
 EOF
   chmod +x ${ASO_DIR}/scp-to-windows.sh
 
@@ -532,7 +532,7 @@ if [[ \$NODE_INDEX -ge \${#WINDOWS_EIPS[@]} ]]; then
 fi
 
 WINDOWS_EIP="\${WINDOWS_EIPS[\$NODE_INDEX]}"
-scp -r -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 winfv@\${WINDOWS_EIP}:"\$REMOTE_PATH" "\$LOCAL_FILE"
+scp -r -i \${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 aso@\${WINDOWS_EIP}:"\$REMOTE_PATH" "\$LOCAL_FILE"
 EOF
   chmod +x ${ASO_DIR}/scp-from-windows.sh
 
@@ -620,27 +620,27 @@ function diagnose_aso_resources() {
   fi
 
   # Check namespace and resources
-  if ${KUBECTL} get namespace winfv &>/dev/null; then
-    log_info "ASO resources in winfv namespace:"
-    ${KUBECTL} get virtualmachines,publicipaddresses,networkinterfaces,networksecuritygroups,virtualnetworks,resourcegroups -n winfv -o wide 2>/dev/null || log_warn "No ASO resources found"
+  if ${KUBECTL} get namespace aso &>/dev/null; then
+    log_info "ASO resources in aso namespace:"
+    ${KUBECTL} get virtualmachines,publicipaddresses,networkinterfaces,networksecuritygroups,virtualnetworks,resourcegroups -n aso -o wide 2>/dev/null || log_warn "No ASO resources found"
 
     # Check for stuck finalizers
     log_info "Checking resources with finalizers:"
     echo "=== Main ASO Resources ==="
-    ${KUBECTL} get virtualmachines,publicipaddresses,networkinterfaces,networksecuritygroups,virtualnetworks,resourcegroups -n winfv -o jsonpath='{range .items[*]}{.kind}/{.metadata.name}: {.metadata.finalizers}{"\n"}{end}' 2>/dev/null || true
+    ${KUBECTL} get virtualmachines,publicipaddresses,networkinterfaces,networksecuritygroups,virtualnetworks,resourcegroups -n aso -o jsonpath='{range .items[*]}{.kind}/{.metadata.name}: {.metadata.finalizers}{"\n"}{end}' 2>/dev/null || true
 
     echo "=== VM Extensions ==="
-    ${KUBECTL} get virtualmachinesextensions -n winfv -o jsonpath='{range .items[*]}{.kind}/{.metadata.name}: {.metadata.finalizers}{"\n"}{end}' 2>/dev/null || true
+    ${KUBECTL} get virtualmachinesextensions -n aso -o jsonpath='{range .items[*]}{.kind}/{.metadata.name}: {.metadata.finalizers}{"\n"}{end}' 2>/dev/null || true
 
     echo "=== Security Rules and Subnets ==="
-    ${KUBECTL} get networksecuritygroupssecurityrules,virtualnetworkssubnets -n winfv -o jsonpath='{range .items[*]}{.kind}/{.metadata.name}: {.metadata.finalizers}{"\n"}{end}' 2>/dev/null || true
+    ${KUBECTL} get networksecuritygroupssecurityrules,virtualnetworkssubnets -n aso -o jsonpath='{range .items[*]}{.kind}/{.metadata.name}: {.metadata.finalizers}{"\n"}{end}' 2>/dev/null || true
 
     # Check credential status
     log_info "Checking ASO credentials:"
-    if ${KUBECTL} get secret aso-credential -n winfv &>/dev/null; then
-      echo "✓ aso-credential secret exists in winfv namespace"
+    if ${KUBECTL} get secret aso-credential -n aso &>/dev/null; then
+      echo "✓ aso-credential secret exists in aso namespace"
     else
-      echo "✗ aso-credential secret NOT found in winfv namespace - this explains the credential errors!"
+      echo "✗ aso-credential secret NOT found in aso namespace - this explains the credential errors!"
       echo "  Re-run './vmss.sh create' to recreate the required credentials"
     fi
 
@@ -648,20 +648,20 @@ function diagnose_aso_resources() {
     log_info "Detailed VirtualMachine status:"
     for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
       local vm="vm-linux-${i}"
-      if ${KUBECTL} get virtualmachine $vm -n winfv &>/dev/null; then
+      if ${KUBECTL} get virtualmachine $vm -n aso &>/dev/null; then
         echo "--- VirtualMachine: $vm ---"
-        ${KUBECTL} get virtualmachine $vm -n winfv -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
+        ${KUBECTL} get virtualmachine $vm -n aso -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
       fi
     done
     for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
       local vm="vm-windows-${i}"
-      if ${KUBECTL} get virtualmachine $vm -n winfv &>/dev/null; then
+      if ${KUBECTL} get virtualmachine $vm -n aso &>/dev/null; then
         echo "--- VirtualMachine: $vm ---"
-        ${KUBECTL} get virtualmachine $vm -n winfv -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
+        ${KUBECTL} get virtualmachine $vm -n aso -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
       fi
     done
   else
-    log_info "Namespace winfv does not exist"
+    log_info "Namespace aso does not exist"
   fi
 }
 
@@ -695,10 +695,10 @@ function delete_rg() {
     if ! az group show --name "${AZURE_RESOURCE_GROUP}" &>/dev/null; then
       log_info "Resource group '${AZURE_RESOURCE_GROUP}' has been deleted successfully"
 
-      # Also clean up the winfv namespace if it exists
-      if ${KUBECTL} get namespace winfv &>/dev/null; then
-        log_info "Cleaning up winfv namespace..."
-        ${KUBECTL} delete namespace winfv --timeout=60s || true
+      # Also clean up the aso namespace if it exists
+      if ${KUBECTL} get namespace aso &>/dev/null; then
+        log_info "Cleaning up aso namespace..."
+        ${KUBECTL} delete namespace aso --timeout=60s || true
       fi
 
       return 0

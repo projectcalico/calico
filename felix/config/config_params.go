@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ var (
 	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	HostAddressRegexp   = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
-	LogActionRateRegexp = regexp.MustCompile(`^(\d+/(?:second|minute|hour|day))?$`)
+	LogActionRateRegexp = regexp.MustCompile(`^([1-9]\d{0,3}/(?:second|minute|hour|day))?$`)
 )
 
 // Source of a config value.  Values from higher-numbered sources override
@@ -331,7 +331,7 @@ type Config struct {
 	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
 	LogPrefix                   string `config:"string;calico-packet"`
 	LogActionRateLimit          string `config:"log-rate;"`
-	LogActionRateLimitBurst     int    `config:"int(0,);5"`
+	LogActionRateLimitBurst     int    `config:"int(0,9999);5"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 

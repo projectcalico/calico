@@ -115,6 +115,9 @@ struct cali_tc_state {
 	 * appropriate conntrack entry.
 	 */
 	DECLARE_IP_ADDR(ip_src_masq);
+
+	__u32 nat_svc_id;
+	__u32 pad;
 #ifndef IPVER6
 	__u8 __pad_ipv4[44];
 #endif
@@ -160,6 +163,8 @@ enum cali_state_flags {
 	CALI_ST_SKIP_REDIR_ONCE   = 0x1000,
 	/* CALI_ST_SET_DSCP is set if we need to update packet's DSCP */
 	CALI_ST_SET_DSCP   = 0x2000,
+	/* CALI_ST_FIRST_FRAG is set if this packet is the first fragment of a fragmented IP packet */
+	CALI_ST_FIRST_FRAG        = 0x4000,
 };
 
 struct fwd {

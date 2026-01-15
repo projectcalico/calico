@@ -42,8 +42,7 @@ blocks:
         - name: Clean up windows felix resources
           commands:
             - export RG_PREFIX=${USER}-win-felix-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
-            - export BACKEND=overlay
-            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+            - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-rg
             - cd ~/calico/process/testing/aso && make dist-clean
         - name: Clean up windows cni resources
           commands:

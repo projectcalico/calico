@@ -1,8 +1,11 @@
 BINDIR?=bin
 ARCH?=amd64
 KIND_VERSION?=v0.24.0
-KUBE_VERSION?=v1.33.6
+KUBE_VERSION?=v1.33.7
 HELM_VERSION?=v3.16.3
+GOMPLATE_VERSION?=v3.11.7
+
+KIND_CLUSTER_NAME?=kind
 
 ###############################################################################
 # ASO management
@@ -23,7 +26,7 @@ ifeq (,$(wildcard $(ASO_INSTALLED_MARKER)))
 	@echo "ASO ready marker '$(ASO_INSTALLED_MARKER)' does not exist, doing nothing"
 else
 	@echo "ASO kind cluster will now be deleted"
-	-$(BINDIR)/kind delete cluster --name kind
+	-$(BINDIR)/kind delete cluster --name $(KIND_CLUSTER_NAME)
 	-rm -f kubeconfig
 	-rm -f $(ASO_INSTALLED_MARKER)
 endif
@@ -94,7 +97,7 @@ $(BINDIR)/asoctl:
 
 $(BINDIR)/gomplate:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://github.com/hairyhenderson/gomplate/releases/download/v3.11.7/gomplate_linux-amd64 -o $@
+	curl -sSf -L --retry 5 https://github.com/hairyhenderson/gomplate/releases/download/$(GOMPLATE_VERSION)/gomplate_linux-amd64 -o $@
 	chmod +x $@
 	touch $@
 
