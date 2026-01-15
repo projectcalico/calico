@@ -461,7 +461,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Auto-detect host MTU.
 	hostMTU, err := findHostMTU(config.MTUIfacePattern)
 	if err != nil {
-		log.WithError(err).Fatal("Unable to detect host MTU, shutting down")
+		log.WithError(err).Panic("Unable to detect host MTU, shutting down")
 		return nil
 	}
 	ConfigureDefaultMTUs(hostMTU, &config)
@@ -1733,6 +1733,7 @@ func (d *InternalDataplane) Start() {
 	go d.loopReportingStatus()
 	go d.ifaceMonitor.MonitorInterfaces()
 	go d.monitorHostMTU()
+	go d.monitorKubeProxyNftablesMode()
 }
 
 // onIfaceInSync is used as a callback from the interface monitor.  We use it to send a message back to
@@ -1787,30 +1788,34 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 	}
 }
 
-// checkKubeProxyNftablesMode checks if kube-proxy's nftables mode has changed since the last check, and
-// triggers a Felix restart if it has and nftables mode is set to Auto.
-func (d *InternalDataplane) checkKubeProxyNftablesMode() {
+// monitorKubeProxyNftablesMode monitors kube-proxy's nftables mode has changed and
+// triggers a Felix restart if it has. This is only active if the nftables mode is set to "Auto".
+func (d *InternalDataplane) monitorKubeProxyNftablesMode() {
 	if d.config.RulesConfig.NFTablesMode != "Auto" {
 		// We can skip this check if nftables is not configured to Auto.
 		return
 	}
 	if d.getKubeProxyNftablesEnabled == nil {
-		log.Fatal("BUG: kube-proxy nftables mode check function is nil")
+		log.Panic("BUG: kube-proxy nftables mode check function is nil")
 	}
 
-	previous := d.kubeProxyNftablesEnabled
-	current, err := d.getKubeProxyNftablesEnabled()
-	if err != nil {
-		log.WithError(err).Warn("Failed to detect kube-proxy nftables mode.")
-		return
-	}
+	// Loop forever, checking kube proxy status at 30s intervals.
+	t := time.Tick(30 * time.Second)
+	for range t {
+		previous := d.kubeProxyNftablesEnabled
+		current, err := d.getKubeProxyNftablesEnabled()
+		if err != nil {
+			log.WithError(err).Warn("Failed to detect kube-proxy nftables mode.")
+			continue
+		}
 
-	if previous != current {
-		log.WithFields(log.Fields{
-			"previous": previous,
-			"current":  current,
-		}).Info("kube-proxy nftables mode changed. Restart felix.")
-		d.config.ConfigChangedRestartCallback()
+		if previous != current {
+			log.WithFields(log.Fields{
+				"previous": previous,
+				"current":  current,
+			}).Info("kube-proxy nftables mode changed. Restart felix.")
+			d.config.ConfigChangedRestartCallback()
+		}
 	}
 }
 
@@ -1822,10 +1827,14 @@ func kubeProxyNftablesFn(config Config) func() (bool, error) {
 	// the presence of the kube-proxy nftables table.
 	nft, err := config.NewNftablesDataplane(knftables.IPv4Family, "kube-proxy")
 	if err != nil {
+		// Don't return an error here - some systems may not have nftables support. We handle
+		// this case in the returned function.
 		log.WithError(err).Warn("Failed to create nftables interface to check kube-proxy mode.")
 	}
 	nftv6, err := config.NewNftablesDataplane(knftables.IPv6Family, "kube-proxy")
 	if err != nil {
+		// Don't return an error here - some systems may not have nftables support. We handle
+		// this case in the returned function.
 		log.WithError(err).Warn("Failed to create IPv6 nftables interface to check kube-proxy mode.")
 	}
 
@@ -2617,10 +2626,6 @@ func (d *InternalDataplane) apply() {
 	// Update sequencing is important here because iptables rules have dependencies on ipsets.
 	// Creating a rule that references an unknown IP set fails, as does deleting an IP set that
 	// is in use.
-
-	// First, check if the dataplane mode has changed since the last apply, and restart if so.
-	// This catches when kube-proxy has changed between iptables/nftables mode on a live system.
-	d.checkKubeProxyNftablesMode()
 
 	// Unset the needs-sync flag, we'll set it again if something fails.
 	d.dataplaneNeedsSync = false
