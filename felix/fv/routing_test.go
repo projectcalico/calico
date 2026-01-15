@@ -69,8 +69,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 		routeSource := testConfig.RouteSource
 		brokenXSum := testConfig.BrokenXSum
 		enableIPv6 := testConfig.EnableIPv6
+		description := fmt.Sprintf("with topology set to IPIPMode %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", ipipMode, routeSource, brokenXSum, enableIPv6)
 
-		Describe(fmt.Sprintf("with topology set to IPIPMode %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", ipipMode, routeSource, brokenXSum, enableIPv6), func() {
+		Describe(description, func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -893,7 +894,102 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 		})
 
-		Describe("with a borrowed tunnel IP on one host", func() {
+		Describe(description+" and borrowed workload IPs", func() {
+			var (
+				infra           infrastructure.DatastoreInfra
+				tc              infrastructure.TopologyContainers
+				felixes         []*infrastructure.Felix
+				client          client.Interface
+				w               [3]*workload.Workload
+				w6              [3]*workload.Workload
+				cc              *connectivity.Checker
+				topologyOptions infrastructure.TopologyOptions
+				timeout         = time.Second * 30
+			)
+
+			BeforeEach(func() {
+				infra = getInfra()
+
+				if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
+					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
+				}
+
+				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, enableIPv6, routeSource, brokenXSum)
+
+				cc = &connectivity.Checker{}
+
+				// Deploy the topology.
+				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+
+				// Assign tunnel addresses in IPAM based on the topology.
+				// This will assign blocks to particular nodes so that the
+				// workload IP assignments below will borrow.
+				assignTunnelAddresses(infra, tc, client)
+
+				// Offset of +1 means that felix[0]'s workload borrows its IP from
+				// felix[1]'s block and so on.
+				w, w6, _, _ = setupWorkloadsWithOffset(infra, tc, topologyOptions, client, enableIPv6, 1)
+				felixes = tc.Felixes
+			})
+
+			AfterEach(func() {
+				if CurrentGinkgoTestDescription().Failed {
+					for _, felix := range felixes {
+						if NFTMode() {
+							logNFTDiags(felix)
+						} else {
+							felix.Exec("iptables-save", "-c")
+							felix.Exec("ipset", "list")
+						}
+						felix.Exec("ipset", "list")
+						felix.Exec("ip", "r")
+						felix.Exec("ip", "a")
+						felix.Exec("calico-bpf", "routes", "dump")
+						if enableIPv6 {
+							felix.Exec("ip", "-6", "route")
+							felix.Exec("calico-bpf", "-6", "routes", "dump")
+						}
+					}
+				}
+
+				for _, wl := range w {
+					wl.Stop()
+				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
+				tc.Stop()
+
+				if CurrentGinkgoTestDescription().Failed {
+					infra.DumpErrorData()
+				}
+				infra.Stop()
+			})
+
+			It("should have connectivity", func() {
+				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
+					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
+				}
+
+				for i := 0; i < 3; i++ {
+					f := felixes[i]
+					cc.ExpectSome(f, w[i])          // Host to local workload.
+					cc.ExpectSome(f, w[(i+1)%3])    // Host to next node's workload
+					cc.ExpectSome(w[i], w[(i+1)%3]) // Local workload to next node's workload.
+
+					if enableIPv6 {
+						cc.ExpectSome(f, w6[i])
+						cc.ExpectSome(f, w6[(i+1)%3])
+						cc.ExpectSome(w6[i], w6[(i+1)%3])
+					}
+
+				}
+
+				cc.CheckConnectivityWithTimeout(timeout)
+			})
+		})
+
+		Describe(description+" and a borrowed tunnel IP on one host", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
