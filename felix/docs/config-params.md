@@ -1033,10 +1033,10 @@ Configures nftables support in Felix.
 | --- | --- |
 | Environment variable | `FELIX_NFTablesMode` |
 | Encoding (env var/config file) | One of: <code>Auto</code>, <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
-| Default value (above encoding) | `Disabled` |
+| Default value (above encoding) | `Auto` |
 | `FelixConfiguration` field | `nftablesMode` (YAML) `NFTablesMode` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Disabled` |
+| Default value (YAML) | `Auto` |
 
 ### `NetlinkTimeoutSecs` (config file) / `netlinkTimeout` (YAML)
 
