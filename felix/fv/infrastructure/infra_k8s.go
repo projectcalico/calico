@@ -905,7 +905,7 @@ func (kds *K8sDatastoreInfra) AddAllowToDatastore(selector string) error {
 	// Create a policy to allow egress from the host so that we don't cut off Felix's datastore connection
 	// when we enable the host endpoint.
 	policy := api.NewGlobalNetworkPolicy()
-	policy.Name = "default.allow-egress"
+	policy.Name = "allow-egress"
 	policy.Spec.Selector = selector
 	policy.Spec.Egress = []api.Rule{{
 		Action: api.Allow,

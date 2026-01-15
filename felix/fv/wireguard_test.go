@@ -745,7 +745,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 						By("Creating policy to deny wireguard port on main felix host endpoint.")
 						policy := api.NewGlobalNetworkPolicy()
-						policy.Name = "default.deny-wg-port"
+						policy.Name = "deny-wg-port"
 						port := numorstring.ProtocolFromString(numorstring.ProtocolUDP)
 						policy.Spec.Egress = []api.Rule{}
 						if wireguardEnabledV4 {
