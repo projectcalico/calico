@@ -102,6 +102,7 @@ rules:
       - gatewayapis.operator.tigera.io
       - imagesets.operator.tigera.io
       - installations.operator.tigera.io
+      - istios.operator.tigera.io
       - tigerastatuses.operator.tigera.io
       - bgpconfigurations.crd.projectcalico.org
       - bgpfilters.crd.projectcalico.org
@@ -253,6 +254,9 @@ rules:
       - installations
       - installations/finalizers
       - installations/status
+      - istios
+      - istios/finalizers
+      - istios/status
       - managementclusterconnections
       - managementclusterconnections/finalizers
       - managementclusterconnections/status
@@ -386,12 +390,21 @@ rules:
       - mutatingwebhookconfigurations
       - validatingwebhookconfigurations
     verbs:
-      - create
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    verbs:
       - delete
       - get
       - list
       - watch
       - create
+      - update
     resourceNames:
       - api.projectcalico.org
   - apiGroups:
