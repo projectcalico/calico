@@ -42,3 +42,6 @@ tigeraOperator:
   image: tigera/operator
   version: test-build
   registry: docker.io
+  env:
+  - name: CALICO_API_GROUP
+    value: "projectcalico.org/v3"

@@ -31,6 +31,7 @@ rules:
       - gatewayapis.operator.tigera.io
       - imagesets.operator.tigera.io
       - installations.operator.tigera.io
+      - istios.operator.tigera.io
       - tigerastatuses.operator.tigera.io
       - bgpconfigurations.crd.projectcalico.org
       - bgpfilters.crd.projectcalico.org

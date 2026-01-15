@@ -207,7 +207,7 @@ ifeq ($(GIT_USE_SSH),true)
 endif
 
 # Get version from git. We allow setting this manually for the hashrelease process.
-# By default, includes commit count and hash (--long). During releases (RELEASE=true), 
+# By default, includes commit count and hash (--long). During releases (RELEASE=true),
 # only the tag is used without the commit count suffix.
 GIT_VERSION ?= $(shell git describe --tags --dirty --always --abbrev=12 --long)
 ifeq ($(RELEASE),true)
@@ -1397,8 +1397,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/$(CALICO_CRD_PATH); do echo "Waiting for CRDs to be created"; sleep 2; done
 
 	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_adminnetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)
