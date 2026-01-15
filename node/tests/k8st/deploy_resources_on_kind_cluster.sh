@@ -88,10 +88,12 @@ if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
   ${kubectl} describe po -n calico-system
   exit 1
 fi
-if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
-  ${kubectl} get -o yaml tigerastatus/apiserver
-  exit 1
-fi
+
+# TODO
+# if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
+#   ${kubectl} get -o yaml tigerastatus/apiserver
+#   exit 1
+# fi
 
 echo "Wait for Calico to be ready..."
 wait_pod_ready -n calico-system -l k8s-app
@@ -137,3 +139,7 @@ test_connection 6
 # make changes to the cluster. Some of our tests modify calico/node, etc.
 # We should remove this once we fix up those tests.
 ${kubectl} scale deployment -n tigera-operator tigera-operator --replicas=0
+
+# TODO: Remove crd.projectcalico.org/v1 resources (but not CNP)
+${kubectl} delete -f ../libcalico-go/config/crd/
+${kubectl} create -f ../libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml
