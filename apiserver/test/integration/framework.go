@@ -112,10 +112,7 @@ func withConfigGetFreshApiserverServerAndClient(
 	return pcs, clientset, cfg, shutdownServer
 }
 
-func getFreshApiserverAndClient(
-	t *testing.T,
-	newEmptyObj func() runtime.Object,
-) (calicoclient.Interface, func()) {
+func getFreshApiserverAndClient(t *testing.T, newEmptyObj func() runtime.Object) (calicoclient.Interface, func()) {
 	serverConfig := &TestServerConfig{
 		etcdServerList: []string{"http://localhost:2379"},
 		emptyObjFunc:   newEmptyObj,
