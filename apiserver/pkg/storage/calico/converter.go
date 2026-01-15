@@ -125,7 +125,7 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		return aapi
 	// BlockAffinity works off of the libapi objects since
 	// the v3 client is used for mostly internal operations.
-	case *libapi.BlockAffinity:
+	case *v3.BlockAffinity:
 		aapi := &v3.BlockAffinity{}
 		BlockAffinityConverter{}.convertToAAPI(obj, aapi)
 		return aapi

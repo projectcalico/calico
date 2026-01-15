@@ -2015,7 +2015,7 @@ func TestBlockAffinityClient(t *testing.T) {
 }
 
 func testBlockAffinityClient(client calicoclient.Interface, name string) error {
-	blockAffinityClient := client.ProjectcalicoV3().BlockAffinities()
+	v3client := client.ProjectcalicoV3().BlockAffinities()
 	blockAffinity := &v3.BlockAffinity{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 
@@ -2049,54 +2049,57 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 			CalicoAPIGroup: os.Getenv("CALICO_API_GROUP"),
 		},
 	}
-	apiClient, err := libclient.New(*config)
+	libcalicoClient, err := libclient.New(*config)
 	if err != nil {
 		return fmt.Errorf("unable to create Calico lib v3 client: %s", err)
 	}
 
-	_, err = blockAffinityClient.Create(ctx, blockAffinity, metav1.CreateOptions{})
+	_, err = v3client.Create(ctx, blockAffinity, metav1.CreateOptions{})
 	if err == nil {
 		return fmt.Errorf("should not be able to create block affinity %s ", blockAffinity.Name)
 	}
 
 	// Create the block affinity using the libv3 client.
-	_, err = apiClient.BlockAffinities().Create(ctx, v3BlockAff, options.SetOptions{})
+	_, err = libcalicoClient.BlockAffinities().Create(ctx, v3BlockAff, options.SetOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating the object through the Calico v3 API '%v' (%v)", v3BlockAff, err)
+		return fmt.Errorf("error creating the object through libcalico API '%v' (%v)", v3BlockAff, err)
 	}
 
-	blockAffinityNew, err := blockAffinityClient.Get(ctx, name, metav1.GetOptions{})
+	blockAffinityNew, err := v3client.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting object %s (%s)", name, err)
 	}
 
-	blockAffinityList, err := blockAffinityClient.List(ctx, metav1.ListOptions{})
+	blockAffinityList, err := v3client.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error listing BlockAffinity (%s)", err)
 	}
 	if blockAffinityList.Items == nil {
 		return fmt.Errorf("items field should not be set to nil")
 	}
+	if len(blockAffinityList.Items) != 1 {
+		return fmt.Errorf("expected 1 block affinity got %d", len(blockAffinityList.Items))
+	}
 
 	blockAffinityNew.Spec.State = "confirmed"
 
-	_, err = blockAffinityClient.Update(ctx, blockAffinityNew, metav1.UpdateOptions{})
+	_, err = v3client.Update(ctx, blockAffinityNew, metav1.UpdateOptions{})
 	if err == nil {
 		return fmt.Errorf("should not be able to update block affinity %s", blockAffinityNew.Name)
 	}
 
-	err = blockAffinityClient.Delete(ctx, name, metav1.DeleteOptions{})
+	err = v3client.Delete(ctx, name, metav1.DeleteOptions{})
 	if err == nil {
 		return fmt.Errorf("should not be able to delete block affinity %s", blockAffinity.Name)
 	}
 
 	// Test watch
-	w, err := blockAffinityClient.Watch(ctx, metav1.ListOptions{})
+	w, err := v3client.Watch(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error watching block affinities (%s)", err)
 	}
 
-	_, err = apiClient.BlockAffinities().Delete(ctx, name, options.DeleteOptions{ResourceVersion: blockAffinityNew.ResourceVersion})
+	_, err = libcalicoClient.BlockAffinities().Delete(ctx, name, options.DeleteOptions{ResourceVersion: blockAffinityNew.ResourceVersion})
 	if err != nil {
 		return fmt.Errorf("error deleting the object through the Calico v3 API '%v' (%v)", name, err)
 	}
