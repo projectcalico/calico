@@ -132,11 +132,14 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules $(dir $@)"; \
 	} > $@
 
-# Build the tigera-operator helm chart.
-chart: bin/tigera-operator-$(GIT_VERSION).tgz
-bin/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+CHART_DESTINATION ?= ./bin
+
+# Build helm charts.
+chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz
+$(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/tigera-operator \
-	--destination ./bin/ \
+	--destination $(CHART_DESTINATION)/ \
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
 
@@ -210,7 +213,7 @@ release: release/bin/release
 	@release/bin/release release build
 
 # Publish an already built release.
-release-publish: release/bin/release bin/ghr
+release-publish: release/bin/release bin/ghr bin/helm
 	@release/bin/release release publish
 
 release-public: bin/gh release/bin/release

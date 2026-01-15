@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -52,6 +53,10 @@ var (
 	}
 
 	metadataFileName = "metadata.yaml"
+
+	helmIndexFileName = "index.yaml"
+
+	s3ACLPublicRead = []string{"--acl", "public-read"}
 )
 
 func NewManager(opts ...Option) *CalicoManager {
@@ -63,10 +68,13 @@ func NewManager(opts ...Option) *CalicoManager {
 		validateBranch:    true,
 		buildImages:       true,
 		publishImages:     true,
+		publishCharts:     true,
 		archiveImages:     true,
 		publishTag:        true,
 		publishGithub:     true,
 		imageRegistries:   defaultRegistries,
+		helmRegistries:    registry.DefaultHelmRegistries,
+		helmRepoURL:       utils.CalicoHelmRepoURL,
 		operatorRegistry:  operator.DefaultRegistry,
 		operatorImage:     operator.DefaultImage,
 		operatorGithubOrg: operator.DefaultOrg,
@@ -149,11 +157,20 @@ type CalicoManager struct {
 
 	// Fine-tuning configuration for publishing.
 	publishImages bool
+	publishCharts bool
 	publishTag    bool
 	publishGithub bool
+	awsProfile    string
+	s3Bucket      string
 
 	// imageRegistries is the list of imageRegistries to which we should publish images.
 	imageRegistries []string
+
+	// helmRegistries is the list of OCI-based registries to which we should publish charts.
+	helmRegistries []string
+
+	// helmRepoURL is the URL of the helm chart repository.
+	helmRepoURL string
 
 	// githubOrg is the GitHub organization to which we should publish releases.
 	githubOrg string
@@ -437,6 +454,7 @@ func (r *CalicoManager) PreReleaseValidate() error {
 		return err
 	}
 
+	// Assert that release notes are present.
 	err = r.assertReleaseNotesPresent(r.calicoVersion)
 	if err != nil {
 		return err
@@ -481,25 +499,91 @@ func (r *CalicoManager) modifyHelmChartsValues() error {
 	return nil
 }
 
+func (r *CalicoManager) resetCharts() {
+	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "charts/"}, nil); err != nil {
+		logrus.WithError(err).Error("Failed to reset changes to charts")
+	}
+}
+
 func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
 		if err := r.modifyHelmChartsValues(); err != nil {
 			return fmt.Errorf("failed to modify helm chart values: %s", err)
 		}
+		defer r.resetCharts()
 	}
 
 	// Build the helm chart, passing the version to use.
-	env := append(os.Environ(), fmt.Sprintf("GIT_VERSION=%s", r.calicoVersion))
+	env := append(os.Environ(),
+		fmt.Sprintf("GIT_VERSION=%s", r.calicoVersion),
+		fmt.Sprintf("CHART_DESTINATION=%s", r.uploadDir()),
+	)
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "chart", env...); err != nil {
 		return fmt.Errorf("failed to build helm chart: %w", err)
 	}
 
+	// Create helm index for the chart.
+	chartURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s", r.githubOrg, r.repo, r.calicoVersion)
 	if r.isHashRelease {
-		// If we modified the repo above, reset it.
-		if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "charts/"}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to reset changes to charts")
-			return fmt.Errorf("failed to reset changes to charts: %w", err)
+		chartURL = r.hashrelease.URL()
+	}
+	if err := r.buildHelmIndex(r.uploadDir(), chartURL); err != nil {
+		return err
+	}
+	return nil
+}
+
+// buildHelmIndex builds the helm index for the given charts directory.
+// It downloads the existing helm index, merges in the new chart to create an updated index.
+//
+// For hashreleases, it copies the helm index to charts/ in the upload directory.
+func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
+	// Download existing helm index.
+	indexURL, err := url.JoinPath(r.helmRepoURL, helmIndexFileName)
+	if err != nil {
+		return fmt.Errorf("construct helm index url: %w", err)
+	}
+	downloadedHelmIndexPath := filepath.Join(r.tmpDir, helmIndexFileName)
+	if out, err := r.runner.Run("curl", []string{"-fsSL", "--retry", "3", indexURL, "-o", downloadedHelmIndexPath}, nil); err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("download previous helm index from %s: %w", indexURL, err)
+	}
+
+	// Create tmp directory for building index and copy chart there.
+	tmpChartsDir := filepath.Join(filepath.Dir(r.uploadDir()), fmt.Sprintf("charts-%s", r.helmChartVersion()))
+	if err := os.MkdirAll(tmpChartsDir, utils.DirPerms); err != nil {
+		return fmt.Errorf("create temp dir for building helm index: %w", err)
+	}
+	srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
+	destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
+	if err := utils.CopyFile(srcChart, destChart); err != nil {
+		return fmt.Errorf("copy chart to temp dir for building helm index: %w", err)
+	}
+
+	// Build the new helm index.
+	args := []string{
+		"repo", "index", tmpChartsDir,
+		"--url", chartURL,
+		"--merge", downloadedHelmIndexPath,
+	}
+	env := append(os.Environ(), "TZ=UTC")
+	if out, err := r.runner.RunInDir(r.repoRoot, "./bin/helm", args, env); err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("build helm index: %w", err)
+	}
+
+	if r.isHashRelease {
+		// For hashreleases, copy the helm index to the upload dir.
+		srcIndex := filepath.Join(tmpChartsDir, helmIndexFileName)
+		destIndex := filepath.Join(r.uploadDir(), "charts", helmIndexFileName)
+		// Ensure destination directory exists.
+		if err := os.MkdirAll(filepath.Dir(destIndex), utils.DirPerms); err != nil {
+			return fmt.Errorf("create dest dir for helm index: %w", err)
 		}
+		if err := utils.CopyFile(srcIndex, destIndex); err != nil {
+			return fmt.Errorf("copy helm index to upload dir: %w", err)
+		}
+		return nil
 	}
 	return nil
 }
@@ -547,6 +631,11 @@ func (r *CalicoManager) PublishRelease() error {
 		}
 	}
 
+	// Publish helm charts.
+	if err := r.publishHelmCharts(); err != nil {
+		return fmt.Errorf("failed to publish helm charts: %s", err)
+	}
+
 	if r.isHashRelease {
 		if err := r.publishToHashreleaseServer(); err != nil {
 			return fmt.Errorf("failed to publish hashrelease: %s", err)
@@ -560,6 +649,11 @@ func (r *CalicoManager) PublishRelease() error {
 		// Publish the release to github.
 		if err := r.publishGithubRelease(); err != nil {
 			return fmt.Errorf("failed to publish github release: %s", err)
+		}
+
+		// Update helm chart index
+		if err := r.updateHelmChartIndex(); err != nil {
+			return fmt.Errorf("update helm chart index: %s", err)
 		}
 	}
 
@@ -787,6 +881,14 @@ func (r *CalicoManager) publishPrereqs() error {
 	if r.publishImages && len(r.imageRegistries) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
 	}
+	if r.publishCharts {
+		if len(r.helmRegistries) == 0 {
+			errStack = errors.Join(errStack, fmt.Errorf("no helm chart registries specified"))
+		}
+		if !r.isHashRelease && r.s3Bucket == "" {
+			errStack = errors.Join(errStack, fmt.Errorf("no S3 bucket specified for pushing helm index"))
+		}
+	}
 	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before publishing the release"))
 	}
@@ -855,9 +957,6 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	}
 	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
 		return fmt.Errorf("failed to copy OCP bundle: %w", err)
-	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", r.calicoVersion), uploadDir}, nil); err != nil {
-		return fmt.Errorf("failed to copy tigera-operator bundle: %w", err)
 	}
 
 	// Generate a SHA256SUMS file containing the checksums for each artifact
@@ -1075,7 +1174,7 @@ Attached to this release are the following artifacts:
 
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
-- {helm_chart}: Calico Helm v3 chart.
+- {helm_chart}: Calico Helm 3 chart (also hosted at oci://quay.io/calico/charts/tigera-operator).
 - ocp.tgz: Manifest bundle for OpenShift.
 
 Additional links:
@@ -1093,7 +1192,7 @@ Additional links:
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
-		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", r.calicoVersion),
+		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.calicoVersion),
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -1168,6 +1267,58 @@ func (r *CalicoManager) publishContainerImages() error {
 				break
 			}
 		}
+	}
+	return nil
+}
+
+func (r *CalicoManager) publishHelmCharts() error {
+	if !r.publishCharts {
+		logrus.Info("Skipping publishing helm charts")
+		return nil
+	}
+	for _, reg := range r.helmRegistries {
+		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion())), reg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *CalicoManager) publishHelmChart(chart, registry string) error {
+	// We allow for a certain number of retries when publishing each chart to a registry, since
+	// network flakes can occasionally result in images failing to push.
+	maxRetries := 1
+	attempt := 0
+	args := []string{"push", chart, fmt.Sprintf("oci://%s", registry)}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		args = append(args, "--debug")
+	}
+	for {
+		out, err := r.runner.RunInDir(r.repoRoot, "./bin/helm", args, nil)
+		if err != nil {
+			if attempt < maxRetries {
+				logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
+				attempt++
+				continue
+			}
+			logrus.Error(out)
+			return fmt.Errorf("publish %s to %s: %s", chart, registry, err)
+		}
+
+		// Success - move on to the next.
+		logrus.Info(out)
+		break
+	}
+	return nil
+}
+
+func (r *CalicoManager) updateHelmChartIndex() error {
+	if !r.publishCharts {
+		logrus.Info("Skipping updating helm index")
+		return nil
+	}
+	if err := r.s3Cp(filepath.Join(filepath.Dir(r.uploadDir()), fmt.Sprintf("charts-%s", r.helmChartVersion()), helmIndexFileName), fmt.Sprintf("s3://%s/charts/", r.s3Bucket), s3ACLPublicRead...); err != nil {
+		return fmt.Errorf("update helm index: %w", err)
 	}
 	return nil
 }
@@ -1262,6 +1413,29 @@ func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...str
 func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {
 	_, err := r.makeInDirectoryWithOutput(dir, target, env...)
 	return err
+}
+
+func (r *CalicoManager) s3Cp(src, dest string, additionalFlags ...string) error {
+	args := []string{
+		"s3", "cp",
+		src, dest,
+	}
+	if r.awsProfile != "" {
+		args = append(args, "--profile", r.awsProfile)
+	}
+	if strings.HasSuffix(src, "/") {
+		args = append(args, "--recursive")
+	}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		args = append(args, "--debug")
+	}
+	if len(additionalFlags) > 0 {
+		args = append(args, additionalFlags...)
+	}
+	if _, err := r.runner.Run("aws", args, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *CalicoManager) releaseBranchPrereqs(branch string) error {
