@@ -287,6 +287,15 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	if !ca.K8sUsePodCIDR {
 		// Using Calico IPAM - use CRDs to back IPAM resources.
 		log.Debug("Calico is configured to use calico-ipam")
+
+		// IPAM uses the model.BlockAffinityKey, so we need to re-register block affinities here.
+		// The v3 resources are already registered above.
+		c.registerResourceClient(
+			reflect.TypeOf(model.BlockAffinityKey{}),
+			reflect.TypeOf(model.BlockAffinityListOptions{}),
+			libapiv3.KindBlockAffinity,
+			resources.NewBlockAffinityClient(restClient, v3),
+		)
 		c.registerResourceClient(
 			reflect.TypeOf(model.BlockKey{}),
 			reflect.TypeOf(model.BlockListOptions{}),
