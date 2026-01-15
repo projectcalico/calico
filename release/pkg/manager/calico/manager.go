@@ -566,7 +566,8 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 		"--url", chartURL,
 		"--merge", downloadedHelmIndexPath,
 	}
-	if out, err := r.runner.RunInDir(r.repoRoot, "./bin/helm", args, nil); err != nil {
+	env := append(os.Environ(), "TZ=UTC")
+	if out, err := r.runner.RunInDir(r.repoRoot, "./bin/helm", args, env); err != nil {
 		logrus.Error(out)
 		return fmt.Errorf("build helm index: %w", err)
 	}
