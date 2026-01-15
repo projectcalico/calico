@@ -467,20 +467,49 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	kds.CertFileName = "/tmp/" + kds.k8sApiContainer.Name + ".crt"
 	start = time.Now()
 	for {
+		// Make sure any retry is clean.
+		_ = os.Remove(kds.CertFileName)
+
 		cmd := utils.Command("docker", "cp",
 			kds.k8sApiContainer.Name+":/home/user/certs/kubernetes.pem",
 			kds.CertFileName,
 		)
 		err = cmd.Run()
-		if err == nil {
-			break
+		if err != nil {
+			if time.Since(start) > 120*time.Second {
+				log.WithError(err).Error("Failed to get API server cert")
+				return nil, err
+			}
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
-		if time.Since(start) > 120*time.Second {
-			log.WithError(err).Error("Failed to get API server cert")
-			return nil, err
+		// Sometimes the very first felix container that we start fails to
+		// mount this file.  Double check that it is there and we can read it.
+		if _, err := os.Stat(kds.CertFileName); err != nil {
+			log.WithError(err).Error("Failed to stat API server cert that we just copied?!")
+			if time.Since(start) > 120*time.Second {
+				return nil, err
+			}
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
-		time.Sleep(100 * time.Millisecond)
+		if f, err := os.Open(kds.CertFileName); err != nil {
+			log.WithError(err).Error("Failed to open API server cert that we just copied?!")
+			if time.Since(start) > 120*time.Second {
+				return nil, err
+			}
+			time.Sleep(100 * time.Millisecond)
+			continue
+		} else {
+			err := f.Sync()
+			if err != nil {
+				log.WithError(err).Error("Failed to sync API server cert that we just copied?!")
+			}
+			_ = f.Close()
+		}
+		break
 	}
+	log.Info("Got API server cert.")
 
 	start = time.Now()
 	for {
@@ -650,7 +679,7 @@ func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
 		"-e", "K8S_API_ENDPOINT=" + kds.Endpoint,
 		"-e", "KUBERNETES_MASTER=" + kds.Endpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", kds.CertFileName, "/tmp/apiserver.crt"),
 	}
 }
 
@@ -661,7 +690,7 @@ func (kds *K8sDatastoreInfra) GetBadEndpointDockerArgs() []string {
 		"-e", "TYPHA_DATASTORETYPE=kubernetes",
 		"-e", "K8S_API_ENDPOINT=" + kds.BadEndpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", kds.CertFileName, "/tmp/apiserver.crt"),
 	}
 }
 
