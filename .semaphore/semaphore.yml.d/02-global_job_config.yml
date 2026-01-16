@@ -63,6 +63,7 @@ global_job_config:
           git clone --recursive --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
           cd "${CALICO_DIR_NAME}" || exit 1
           git submodule update --init --recursive
+          ls e2e/network-policy-api/
         fi
       - |-
         if [[ -z "$SKIP_CHECKOUT" ]]; then
