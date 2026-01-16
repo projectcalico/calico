@@ -93,6 +93,7 @@ global_job_config:
           mkdir -p artifacts
         fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      - sleep 3600
   epilogue:
     commands:
       - cd $HOME
