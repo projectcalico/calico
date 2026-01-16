@@ -18,7 +18,7 @@ installation:
     - cidr: fd00:10:244::/64
 
 apiServer:
-  enabled: true
+  enabled: false
   apiServerDeployment:
     spec:
       template:
@@ -42,3 +42,6 @@ tigeraOperator:
   image: tigera/operator
   version: test-build
   registry: docker.io
+  env:
+  - name: CALICO_API_GROUP
+    value: "projectcalico.org/v3"
