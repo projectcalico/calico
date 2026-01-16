@@ -297,7 +297,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 		if (frag_ct_val) {
 			ctx->state->sport = frag_ct_val->sport;
 			ctx->state->dport = frag_ct_val->dport;
-			ctx->fwd.mark = frag_ct_val->seen_mark;
+			ctx->fwd.mark = frag_ct_val->marks;
 			if (ip_is_last_frag(ip_hdr(ctx))) {
 				frags4_remove_ct(ctx);
 			}

@@ -52,7 +52,7 @@ struct frags4_fwd_key {
 struct frags4_fwd_value {
 	__u16 sport;
 	__u16 dport;
-	__u32 seen_mark;
+	__u32 marks;
 };
 
 static CALI_BPF_INLINE struct frags4_value *frags4_get_scratch()
@@ -290,7 +290,7 @@ static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 	struct frags4_fwd_value v = {
 		.sport = ctx->state->sport,
 		.dport = ctx->state->dport,
-		.seen_mark = ctx->fwd.mark,
+		.marks = ctx->fwd.mark,
 	};
 
 	cali_v4_frgfwd_update_elem(&k, &v, 0);
