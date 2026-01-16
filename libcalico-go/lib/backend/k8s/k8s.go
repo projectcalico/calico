@@ -405,6 +405,11 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 	// efficiently. The IPAM code can create bursts of requests to the API, so
 	// in order to keep pod creation times sensible we allow a higher request rate.
 	config.Burst = 100
+	if ca.K8sClientBurst != 0 {
+		config.Burst = ca.K8sClientBurst
+	}
+	log.Debugf("Kubernetes client QPS set to %v, burst set to %v", config.QPS, config.Burst)
+
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, nil, resources.K8sErrorToCalico(err, nil)
