@@ -1,0 +1,3 @@
+[submodule "e2e/network-policy-api"]
+	path = e2e/network-policy-api
+	url = git@github.com:mazdakn/network-policy-api.git
