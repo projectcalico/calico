@@ -13,6 +13,9 @@ bin/clusternetworkpolicy/e2e.test: $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
 
+network-policy-api:
+	git clone -b improve-conformance-tests git@github.com:mazdakn/network-policy-api.git
+
 ###############################################################################
 # test images
 ###############################################################################
@@ -24,4 +27,4 @@ publish-test-images: test-images
 
 clean:
 	rm -rf bin/
-
+	rm -rf network-policy-api/
