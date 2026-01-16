@@ -27,4 +27,3 @@ publish-test-images: test-images
 
 clean:
 	rm -rf bin/
-	rm -rf network-policy-api/
