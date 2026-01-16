@@ -4651,7 +4651,7 @@ func (m *bpfEndpointManager) addAllowSourcePrefix(wlID types.WorkloadEndpointID,
         return // if not an actual interface, don't add it to the map
     }
 
-    mapAddError := m.adjustMapWithPrefix(prefix, ifindex, "update")
+    mapAddError := m.changeAllowedSource(prefix, ifindex, "update")
     if mapAddError != nil {
         logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapAddError).Warn("Failed to add allowed source CIDR")
         return
@@ -4691,7 +4691,7 @@ func (m *bpfEndpointManager) removeAllowSourceSets(wlID types.WorkloadEndpointID
         return // if not an actual interface, don't add it to the map
     }
 
-    mapDelError := m.adjustMapWithPrefix(prefix, ifindex, "delete")
+    mapDelError := m.changeAllowedSource(prefix, ifindex, "delete")
     if mapDelError != nil {
         logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapDelError).Warn("Failed to remove allowed source CIDR")
         return
@@ -4702,7 +4702,7 @@ func (m *bpfEndpointManager) removeAllowSourceSets(wlID types.WorkloadEndpointID
     logrus.WithField("wep", wlID).WithField("cidr", prefix).Debug("Successfully removed allowed source CIDR")
 }
 
-func (m *bpfEndpointManager) adjustMapWithPrefix(prefix string, ifindex int, op string) error {
+func (m *bpfEndpointManager) changeAllowedSource(prefix string, ifindex int, op string) error {
     var managerDataplane *bpfEndpointManagerDataplane
     var entry allowsources.AllowSourcesEntryInterface
     var err error
