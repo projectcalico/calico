@@ -62,7 +62,8 @@ global_job_config:
           rm -rf "${CALICO_DIR_NAME}"
           git clone --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
           cd "${CALICO_DIR_NAME}" || exit 1
-          git clone -b improve-conformance-tests git@github.com:mazdakn/network-policy-api.git ./e2e/network-policy-api/
+          git clone -b improve-conformance-tests https://github.com/mazdakn/network-policy-api.git ./e2e/network-policy-api/
+          ls -lh ./e2e/network-policy-api/
         fi
       - |-
         if [[ -z "$SKIP_CHECKOUT" ]]; then
