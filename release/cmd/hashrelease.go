@@ -249,6 +249,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					calico.WithTmpDir(cfg.TmpDir),
+					calico.WithOutputDir(hashrel.Source),
 					calico.WithHashrelease(*hashrel, *serverCfg),
 					calico.WithPublishImages(c.Bool(publishHashreleaseImagesFlag.Name)),
 					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
