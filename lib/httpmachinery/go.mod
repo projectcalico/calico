@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico/lib/httpmachinery
 
-go 1.24.9
+go 1.24.12
 
 require (
 	github.com/go-playground/form v3.1.4+incompatible
