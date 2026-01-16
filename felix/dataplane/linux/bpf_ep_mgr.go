@@ -103,14 +103,10 @@ var (
 		Name: "felix_bpf_happy_dataplane_endpoints",
 		Help: "Number of BPF endpoints that are successfully programmed.",
 	})
-	bpfMaglevPacketsToRemote = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_bpf_maglev_forwarded_to_remote_total",
-		Help: "Total number of packets forwarded to remote backends via Maglev.",
-	})
-	bpfMaglevPacketsToLocal = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_bpf_maglev_forwarded_to_local_total",
-		Help: "Total number of packets forwarded to local backends via Maglev.",
-	})
+	bpfMaglevPacketsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_maglev_packets_total",
+		Help: "Total number of Maglev packets forwarded to backends.",
+	}, []string{"direction", "locality"})
 	errApplyingPolicy = errors.New("error applying policy")
 )
 
@@ -131,8 +127,7 @@ func init() {
 	prometheus.MustRegister(bpfEndpointsGauge)
 	prometheus.MustRegister(bpfDirtyEndpointsGauge)
 	prometheus.MustRegister(bpfHappyEndpointsGauge)
-	prometheus.MustRegister(bpfMaglevPacketsToRemote)
-	prometheus.MustRegister(bpfMaglevPacketsToLocal)
+	prometheus.MustRegister(bpfMaglevPacketsTotal)
 
 	binary.LittleEndian.PutUint32(jumpMapV4PolicyKey, uint32(tcdefs.ProgIndexPolicy))
 	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexPolicy))
@@ -4629,8 +4624,8 @@ func (m *bpfEndpointManager) loopUpdatingMaglevMetrics() {
 			continue
 		}
 
-		bpfMaglevPacketsToLocal.Set(float64(cm[counters.ForwardedMaglevToLocal]))
-		bpfMaglevPacketsToRemote.Set(float64(cm[counters.ForwardedMaglevToRemote]))
+		bpfMaglevPacketsTotal.WithLabelValues("to_backend", "local").Set(float64(cm[counters.ForwardedMaglevToLocal]))
+		bpfMaglevPacketsTotal.WithLabelValues("to_backend", "remote").Set(float64(cm[counters.ForwardedMaglevToRemote]))
 	}
 }
 

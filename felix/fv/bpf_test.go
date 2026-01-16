@@ -399,6 +399,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFProfiling"] = "Enabled"
+			options.ExtraEnvVars["FELIX_PrometheusMetricsEnabled"] = "true"
+			options.ExtraEnvVars["FELIX_PrometheusMetricsHost"] = "0.0.0.0"
+
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
@@ -1981,6 +1984,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							return maglevMapAnySearch(val, family, felix)
 						}
 					}
+					probeMaglevMetric := func() int {
+						m, err := tc.Felixes[0].PromMetric("felix_bpf_maglev_packets_total{locality=\".+\",direction=\"to_backend\"}").Int()
+						if err != nil {
+							log.WithError(err).Warn("Error while probing Felix metric: felix_bpf_maglev_packets_total{locality=\".+\",direction=\"to_backend\"}")
+							return -1
+						}
+						return m
+					}
 
 					BeforeEach(func() {
 						switch testOpts.protocol {
@@ -2078,9 +2089,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 
 					It("should have connectivity from external client to maglev backend via cluster IP and external IP", func() {
+						Eventually(probeMaglevMetric, "10s", "1s").Should(BeZero())
+
 						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
 						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
+
+						Eventually(probeMaglevMetric, "10s", "1s").Should(BeNumerically(">", 0), "Expected maglev metric to have increased")
 					})
 
 					testFailover := func(serviceIP string) {
