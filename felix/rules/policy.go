@@ -51,7 +51,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 	}
 
 	inbound := generictables.Chain{
-		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
+		Name: PolicyChainName(PolicyInboundPfx, policyID, r.nft),
 		Rules: r.ProtoRulesToIptablesRules(
 			policy.InboundRules,
 			ipVersion, RuleOwnerTypePolicy,
@@ -63,7 +63,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 		),
 	}
 	outbound := generictables.Chain{
-		Name: PolicyChainName(PolicyOutboundPfx, policyID, r.NFTables),
+		Name: PolicyChainName(PolicyOutboundPfx, policyID, r.nft),
 		// Note that the policy name also includes the tier, so it does not need to be separately specified.
 		Rules: r.ProtoRulesToIptablesRules(
 			policy.OutboundRules,
@@ -82,7 +82,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 	// Profiles are not related to any tier.
 	tier := ""
 	inbound = &generictables.Chain{
-		Name: ProfileChainName(ProfileInboundPfx, profileID, r.NFTables),
+		Name: ProfileChainName(ProfileInboundPfx, profileID, r.nft),
 		Rules: r.ProtoRulesToIptablesRules(
 			profile.InboundRules,
 			ipVersion,
@@ -95,7 +95,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 		),
 	}
 	outbound = &generictables.Chain{
-		Name: ProfileChainName(ProfileOutboundPfx, profileID, r.NFTables),
+		Name: ProfileChainName(ProfileOutboundPfx, profileID, r.nft),
 		Rules: r.ProtoRulesToIptablesRules(
 			profile.OutboundRules,
 			ipVersion, RuleOwnerTypeProfile,

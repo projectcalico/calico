@@ -36,7 +36,7 @@ var _ = Describe("Static", func() {
 	var conf Config
 	JustBeforeEach(func() {
 		// Cast back to the expected type so we can access a finer-grained API for testing.
-		rr = NewRenderer(conf).(*DefaultRuleRenderer)
+		rr = NewRenderer(conf, false).(*DefaultRuleRenderer)
 	})
 
 	checkManglePostrouting := func(ipVersion uint8, ipvs bool) {
