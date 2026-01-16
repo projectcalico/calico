@@ -409,8 +409,10 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// 3) Create the veth, configuring it on both the host and container namespace.
 
 			// 1) Run the IPAM plugin and make sure there's an IP address returned.
-			logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
-				"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
+			logger.WithFields(logrus.Fields{
+				"paths": os.Getenv("CNI_PATH"),
+				"type":  conf.IPAM.Type,
+			}).Debug("Looking for IPAM plugin in paths")
 			var ipamResult cnitypes.Result
 			ipamResult, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")

@@ -95,6 +95,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			}, time.Second*10, time.Millisecond*500).ShouldNot(BeNil())
 
 			// Spot check the status to make sure it's set.
+			Expect(out.Status.RunningConfig).ToNot(BeNil())
 			Expect(out.Status.RunningConfig.HealthChecks).To(Equal(v3.Enabled))
 		})
 
@@ -114,6 +115,9 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			Eventually(func() string {
 				out, err := c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 				if err != nil {
+					return ""
+				}
+				if out.Status.RunningConfig == nil {
 					return ""
 				}
 				return out.Status.RunningConfig.HealthChecks
@@ -149,6 +153,9 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			Eventually(func() bool {
 				out, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
+				if out.Status.RunningConfig == nil {
+					return false
+				}
 				return out.Status.RunningConfig.HealthChecks != ""
 			}, time.Second*10, time.Millisecond*500).Should(BeTrue())
 
@@ -178,6 +185,9 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 				var err error
 				out, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
+				if out.Status.RunningConfig == nil {
+					return nil
+				}
 				return out.Status.RunningConfig.Controllers.Namespace
 			}, time.Second*10, time.Millisecond*500).ShouldNot(BeNil())
 			Expect(out.Status.RunningConfig.Controllers.Node).To(BeNil())

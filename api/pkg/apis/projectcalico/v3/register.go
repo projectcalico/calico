@@ -15,13 +15,18 @@
 package v3
 
 import (
+	"sync"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 // GroupName is the group name use in this package
-const GroupName = "projectcalico.org"
+const (
+	GroupName = "projectcalico.org"
+)
 
 // SchemeGroupVersion is group version used to register these objects
 var (
@@ -30,9 +35,9 @@ var (
 )
 
 var (
+	once               sync.Once
 	SchemeBuilder      runtime.SchemeBuilder
 	localSchemeBuilder = &SchemeBuilder
-	AddToScheme        = localSchemeBuilder.AddToScheme
 	AllKnownTypes      = []runtime.Object{
 		&NetworkPolicy{},
 		&NetworkPolicyList{},
@@ -66,6 +71,10 @@ var (
 		&CalicoNodeStatusList{},
 		&IPAMConfiguration{},
 		&IPAMConfigurationList{},
+		&IPAMHandle{},
+		&IPAMHandleList{},
+		&IPAMBlock{},
+		&IPAMBlockList{},
 		&BlockAffinity{},
 		&BlockAffinityList{},
 		&BGPFilter{},
@@ -86,6 +95,18 @@ func init() {
 	// generated functions takes place in the generated files. The separation
 	// makes the code compile even when the generated files are missing.
 	localSchemeBuilder.Register(addKnownTypes, addConversionFuncs)
+}
+
+func AddToGlobalScheme() error {
+	var err error
+	once.Do(func() {
+		err = AddToScheme(scheme.Scheme)
+	})
+	return err
+}
+
+func AddToScheme(scheme *runtime.Scheme) error {
+	return localSchemeBuilder.AddToScheme(scheme)
 }
 
 // Adds the list of known types to api.Scheme.

@@ -736,30 +736,33 @@ func determineEnabledPoolCIDRs(
 			continue
 		}
 
+		// An IP pool is disabled either if explicitly configured as such, or if it is currently being deleted.
+		disabled := ipPool.Spec.Disabled || ipPool.GetDeletionTimestamp() != nil
+
 		// Check if desired encap is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we
 		// don't support encap with IPv6.
 		switch attrType {
 		case ipam.AttributeTypeVXLAN:
-			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways || ipPool.Spec.VXLANMode == api.VXLANModeCrossSubnet) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
+			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways || ipPool.Spec.VXLANMode == api.VXLANModeCrossSubnet) && !disabled && poolCidr.Version() == 4 {
 				cidrs = append(cidrs, *poolCidr)
 			}
 		case ipam.AttributeTypeVXLANV6:
-			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways || ipPool.Spec.VXLANMode == api.VXLANModeCrossSubnet) && !ipPool.Spec.Disabled && poolCidr.Version() == 6 {
+			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways || ipPool.Spec.VXLANMode == api.VXLANModeCrossSubnet) && !disabled && poolCidr.Version() == 6 {
 				cidrs = append(cidrs, *poolCidr)
 			}
 		case ipam.AttributeTypeIPIP:
 			// Check if IPIP is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support IPIP with IPv6.
-			if (ipPool.Spec.IPIPMode == api.IPIPModeCrossSubnet || ipPool.Spec.IPIPMode == api.IPIPModeAlways) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
+			if (ipPool.Spec.IPIPMode == api.IPIPModeCrossSubnet || ipPool.Spec.IPIPMode == api.IPIPModeAlways) && !disabled && poolCidr.Version() == 4 {
 				cidrs = append(cidrs, *poolCidr)
 			}
 		case ipam.AttributeTypeWireguard:
 			// Wireguard does not require a specific encap configuration on the pool.
-			if !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
+			if !disabled && poolCidr.Version() == 4 {
 				cidrs = append(cidrs, *poolCidr)
 			}
 		case ipam.AttributeTypeWireguardV6:
 			// Wireguard does not require a specific encap configuration on the pool.
-			if !ipPool.Spec.Disabled && poolCidr.Version() == 6 {
+			if !disabled && poolCidr.Version() == 6 {
 				cidrs = append(cidrs, *poolCidr)
 			}
 		}

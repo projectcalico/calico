@@ -225,7 +225,7 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 
 			By(fmt.Sprintf("Applying a default-deny policy to namespace %s", ns.Name))
-			defaultDeny := newDefaultDenyPolicy(ns.Name)
+			defaultDeny := newDefaultDenyIngressPolicy(ns.Name)
 			err = cli.Create(ctx, defaultDeny)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -289,7 +289,7 @@ var _ = describe.CalicoDescribe(
 			ctx := context.Background()
 
 			By(fmt.Sprintf("Applying a default-deny policy to namespace %s", ns.Name))
-			defaultDeny := newDefaultDenyPolicy(ns.Name)
+			defaultDeny := newDefaultDenyIngressPolicy(ns.Name)
 			err := cli.Create(ctx, defaultDeny)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -315,6 +315,14 @@ var _ = describe.CalicoDescribe(
 						{
 							Action: "Allow",
 							Source: v3.EntityRule{
+								NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", ns.Name),
+							},
+						},
+					},
+					Egress: []v3.Rule{
+						{
+							Action: "Allow",
+							Destination: v3.EntityRule{
 								NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", ns.Name),
 							},
 						},
@@ -404,7 +412,7 @@ func newNamespaceIsolationPolicy(name, namespace, ingressSelector, egressSelecto
 	}
 }
 
-func newDefaultDenyPolicy(namespace string) *v3.NetworkPolicy {
+func newDefaultDenyIngressPolicy(namespace string) *v3.NetworkPolicy {
 	return &v3.NetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "NetworkPolicy",
@@ -415,6 +423,7 @@ func newDefaultDenyPolicy(namespace string) *v3.NetworkPolicy {
 			Namespace: namespace,
 		},
 		Spec: v3.NetworkPolicySpec{
+			// If the spec.types field is not set, it defaults to "Ingress" only.
 			Order:    ptr.Float64(5000),
 			Selector: "all()",
 		},

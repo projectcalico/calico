@@ -52,6 +52,7 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		v3CRDs            bool
 	)
 
 	BeforeEach(func() {
@@ -85,12 +86,21 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			if err != nil {
 				return err
 			}
-			serverResources, err := k8sClient.ServerResourcesForGroupVersion("crd.projectcalico.org/v1")
+
+			// Determine the correct group and regex to use to match CRD files.
+			group := "crd.projectcalico.org/v1"
+			re := regexp.MustCompile(`^crd.projectcalico.org_(\w+).yaml$`)
+			if os.Getenv("CALICO_API_GROUP") == "projectcalico.org/v3" {
+				group = "projectcalico.org/v3"
+				re = regexp.MustCompile(`^projectcalico.org_(\w+).yaml$`)
+				v3CRDs = true
+			}
+
+			serverResources, err := k8sClient.ServerResourcesForGroupVersion(group)
 			if err != nil {
 				return err
 			}
 
-			re := regexp.MustCompile(`^crd.projectcalico.org_(\w+).yaml$`)
 			expected := set.New[string]()
 			for _, e := range crdDirEntries {
 				m := re.FindStringSubmatch(e.Name())
@@ -104,7 +114,7 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			}
 
 			if !actual.ContainsAll(expected) {
-				return fmt.Errorf("crd.projectcalico.org/v1 resources are not completely available. expected=%s actual=%s", expected, actual)
+				return fmt.Errorf("%s resources are not completely available. expected=%s actual=%s", group, expected, actual)
 			}
 			return nil
 		}, 15*time.Second, 3*time.Second).ShouldNot(HaveOccurred())
@@ -537,6 +547,14 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			kubeControllers.IP,
 			5*time.Second,
 		)
+
+		// This test doesn't work exactly the same when using the projectcalico.org/v3 API as CRDs. Namely, in v3 CRD mode,
+		// we keep IP pools around with a Finalizer on them until all the blocks are gone (as a safety measure). So we can't
+		// test the exact same scenario of "replacing" a deleted pool with a new one of the same CIDR.
+		if v3CRDs {
+			// Skip the rest of this test if using v3 CRDs.
+			return
+		}
 
 		// Create an IP Pool that is analogous to the deleted pool 2.
 		createIPPool("test-ippool-2-analogue", "172.16.0.0/16", calicoClient)

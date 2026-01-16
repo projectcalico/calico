@@ -30,6 +30,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 interfaceName:
                   type: string
                 node:
@@ -40,6 +41,8 @@ spec:
                       name:
                         type: string
                       port:
+                        maximum: 65535
+                        minimum: 0
                         type: integer
                       protocol:
                         anyOf:
@@ -57,6 +60,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true

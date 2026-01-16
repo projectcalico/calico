@@ -57,6 +57,7 @@ func (r stagedGlobalNetworkPolicies) Create(ctx context.Context, res *apiv3.Stag
 		resCopy := *res
 		res = &resCopy
 	}
+
 	if res.Spec.StagedAction != apiv3.StagedActionDelete {
 		defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 	} else {

@@ -98,6 +98,7 @@ func AllResourcePlurals() []string {
 }
 
 func init() {
+	// Register projectcalico.org/v3 resources.
 	registerResourceInfo[apiv3.BGPPeer](apiv3.KindBGPPeer, "bgppeers")
 	registerResourceInfo[apiv3.BGPConfiguration](apiv3.KindBGPConfiguration, "bgpconfigurations")
 	registerResourceInfo[apiv3.ClusterInformation](apiv3.KindClusterInformation, "clusterinformations")
@@ -106,25 +107,30 @@ func init() {
 	registerResourceInfo[apiv3.StagedGlobalNetworkPolicy](apiv3.KindStagedGlobalNetworkPolicy, "stagedglobalnetworkpolicies")
 	registerResourceInfo[apiv3.HostEndpoint](apiv3.KindHostEndpoint, "hostendpoints")
 	registerResourceInfo[apiv3.GlobalNetworkSet](apiv3.KindGlobalNetworkSet, "globalnetworksets")
-	registerResourceInfo[apiv3.GlobalNetworkPolicy](KindKubernetesClusterNetworkPolicy, "kubernetesclusternetworkpolicies")
 	registerResourceInfo[apiv3.IPPool](apiv3.KindIPPool, "ippools")
 	registerResourceInfo[apiv3.IPReservation](apiv3.KindIPReservation, "ipreservations")
 	registerResourceInfo[apiv3.NetworkPolicy](apiv3.KindNetworkPolicy, "networkpolicies")
 	registerResourceInfo[apiv3.StagedNetworkPolicy](apiv3.KindStagedNetworkPolicy, "stagednetworkpolicies")
-	registerResourceInfo[apiv3.NetworkPolicy](KindKubernetesNetworkPolicy, "kubernetesnetworkpolicies")
 	registerResourceInfo[apiv3.StagedKubernetesNetworkPolicy](apiv3.KindStagedKubernetesNetworkPolicy, "stagedkubernetesnetworkpolicies")
 	registerResourceInfo[discovery.EndpointSlice](KindKubernetesEndpointSlice, "kubernetesendpointslices")
 	registerResourceInfo[apiv3.NetworkSet](apiv3.KindNetworkSet, "networksets")
 	registerResourceInfo[apiv3.Tier](apiv3.KindTier, "tiers")
-	registerResourceInfo[libapiv3.Node](libapiv3.KindNode, "nodes")
 	registerResourceInfo[apiv3.CalicoNodeStatus](apiv3.KindCalicoNodeStatus, "caliconodestatuses")
 	registerResourceInfo[apiv3.Profile](apiv3.KindProfile, "profiles")
+	registerResourceInfo[apiv3.KubeControllersConfiguration](apiv3.KindKubeControllersConfiguration, "kubecontrollersconfigurations")
+	registerResourceInfo[apiv3.BGPFilter](apiv3.KindBGPFilter, "BGPFilters")
+	registerResourceInfo[apiv3.IPAMConfiguration](apiv3.KindIPAMConfiguration, "ipamconfigurations")
+
+	// Register libcalico-go/v3 resources.
+	registerResourceInfo[libapiv3.Node](libapiv3.KindNode, "nodes")
 	registerResourceInfo[libapiv3.WorkloadEndpoint](libapiv3.KindWorkloadEndpoint, "workloadendpoints")
 	registerResourceInfo[libapiv3.IPAMConfig](libapiv3.KindIPAMConfig, "ipamconfigs")
-	registerResourceInfo[apiv3.KubeControllersConfiguration](apiv3.KindKubeControllersConfiguration, "kubecontrollersconfigurations")
-	registerResourceInfo[kapiv1.Service](KindKubernetesService, "kubernetesservice")
 	registerResourceInfo[libapiv3.BlockAffinity](libapiv3.KindBlockAffinity, "blockaffinities")
-	registerResourceInfo[apiv3.BGPFilter](apiv3.KindBGPFilter, "BGPFilters")
+
+	// Register Kubernetes resources.
+	registerResourceInfo[kapiv1.Service](KindKubernetesService, "kubernetesservice")
+	registerResourceInfo[apiv3.NetworkPolicy](KindKubernetesNetworkPolicy, "kubernetesnetworkpolicies")
+	registerResourceInfo[apiv3.GlobalNetworkPolicy](KindKubernetesClusterNetworkPolicy, "kubernetesclusternetworkpolicies")
 }
 
 type ResourceKey struct {

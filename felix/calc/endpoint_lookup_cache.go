@@ -244,7 +244,6 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 
 		var hasIngress, hasEgress bool
 		for _, pol := range ti.OrderedPolicies {
-
 			if pol.GovernsIngress() {
 				// Add an ingress tier default action lookup.
 				rid := NewRuleID(pol.Key.Kind, ti.Name, pol.Key.Name, pol.Key.Namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, tierDefaultAction)

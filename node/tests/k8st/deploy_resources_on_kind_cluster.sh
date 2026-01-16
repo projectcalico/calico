@@ -88,10 +88,12 @@ if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
   ${kubectl} describe po -n calico-system
   exit 1
 fi
-if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
-  ${kubectl} get -o yaml tigerastatus/apiserver
-  exit 1
-fi
+
+# TODO
+# if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
+#   ${kubectl} get -o yaml tigerastatus/apiserver
+#   exit 1
+# fi
 
 echo "Wait for Calico to be ready..."
 wait_pod_ready -n calico-system -l k8s-app

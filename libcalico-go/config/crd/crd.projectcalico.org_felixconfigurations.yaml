@@ -803,6 +803,10 @@ spec:
 
                     Warning: changing this on a running system can leave "orphaned" rules in the "other" backend. These
                     should be cleaned up to avoid confusing interactions.
+                  enum:
+                    - Legacy
+                    - NFT
+                    - Auto
                   pattern: ^(?i)(Auto|Legacy|NFT)?$
                   type: string
                 iptablesFilterAllowAction:

@@ -132,9 +132,10 @@ test: ut
 ut fv: $(TEST_BINARIES)
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
+		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		   CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
 		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
-		   CRDS=$(CURDIR)/../libcalico-go/config/crd \
+		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
 		   ./run-uts $(WHAT)
 

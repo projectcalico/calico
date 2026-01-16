@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/defaults"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -56,6 +57,15 @@ func ConvertNetworkPolicyV3ToV1Value(val any) (any, error) {
 	v3res, ok := val.(*apiv3.NetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid NetworkPolicy resource value")
+	}
+
+	// Run defaulting against the resource to ensure all fields are populated. We do this
+	// here because the resource may not have gone through the API server and so may
+	// not have had defaults applied. This logic is shared with the defaulting controller,
+	// to ensure consistency.
+	_, err := defaults.Default(v3res)
+	if err != nil {
+		return nil, fmt.Errorf("error applying defaulting logic to NetworkPolicy: %w", err)
 	}
 
 	spec := v3res.Spec
