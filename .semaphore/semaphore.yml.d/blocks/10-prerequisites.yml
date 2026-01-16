@@ -130,7 +130,7 @@
     when: "true"
   dependencies:
     - Check SemaphoreCI files
-    - Check YAML files
+    # - Check YAML files
     - Check Go
     - Check Python
     - Check language/Dockerfiles
