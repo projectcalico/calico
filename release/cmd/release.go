@@ -233,6 +233,7 @@ func releaseBuildFlags() []cli.Flag {
 func releasePublishFlags() []cli.Flag {
 	f := append(productFlags,
 		registryFlag,
+		helmRegistryFlag,
 		publishImagesFlag,
 		publishGitTagFlag,
 		publishGitHubReleaseFlag,
