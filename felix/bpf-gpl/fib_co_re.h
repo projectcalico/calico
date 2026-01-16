@@ -69,9 +69,21 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
 	int rc = ctx->fwd.res;
 	struct cali_tc_state *state = ctx->state;
+	__u32 fib_flags = 0;
 
 	if (rc == TC_ACT_SHOT) {
 		goto deny;
+	}
+
+	if (!bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
+		if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK && ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
+			/* needs to go via routing in netfilter unless we have access
+			 * to BPF_FIB_LOOKUP_MARK in kernel 6.10+
+			 */
+			goto skip_fib;
+		}
+	} else {
+		fib_flags = BPF_FIB_LOOKUP_MARK;
 	}
 
 #ifndef IPVER6
@@ -190,6 +202,11 @@ skip_redir_ifindex:
 				.ifindex = ctx->skb->ifindex,
 				.l4_protocol = state->ip_proto,
 			};
+
+			if (bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
+				fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+			}
+
 #ifdef IPVER6
 			ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_src, &state->ip_src);
 			ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_dst, &state->ip_dst);
@@ -198,7 +215,7 @@ skip_redir_ifindex:
 			fib_params(ctx)->ipv4_dst = state->ip_dst;
 #endif
 
-			rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), 0);
+			rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), fib_flags);
 			state->ct_result.ifindex_fwd = fib_params(ctx)->ifindex;
 		}
 
@@ -256,7 +273,7 @@ skip_redir_ifindex:
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
-	
+
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
@@ -341,6 +358,11 @@ try_fib_external:
 			.l4_protocol = state->ip_proto,
 		};
 
+		if (bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
+			fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+			CALI_DEBUG("FIB mark=0x%d", fib_params(ctx)->mark);
+		}
+
 		if (state->ip_proto != IPPROTO_ICMP_46) {
 			fib_params(ctx)->sport = bpf_htons(state->sport);
 			fib_params(ctx)->dport = bpf_htons(state->dport);
@@ -373,7 +395,7 @@ try_fib_external:
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");
 		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup),
-				ctx->fwd.fib_flags | BPF_FIB_LOOKUP_SKIP_NEIGH);
+				ctx->fwd.fib_flags | BPF_FIB_LOOKUP_SKIP_NEIGH | fib_flags);
 		switch (rc) {
 		case BPF_FIB_LKUP_RET_FRAG_NEEDED:
 			/* We are not asking for an MTU check, but we may still get
@@ -512,12 +534,6 @@ skip_fib:
 		if (ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL");
 			ctx->fwd.mark |= EXT_TO_SVC_MARK;
-			if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK) {
-				/* needs to go via normal routing unless we have access
-				 * to BPF_FIB_LOOKUP_MARK in kernel 6.10+
-				 */
-				rc = TC_ACT_UNSPEC;
-			}
 		}
 
 		if (CALI_F_NAT_IF) {

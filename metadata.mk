@@ -61,7 +61,7 @@ CNI_VERSION=master
 FLANNEL_VERSION=main
 
 # The libbpf version to use
-LIBBPF_VERSION=v1.4.6
+LIBBPF_VERSION=v1.6.2
 
 # The bpftool image to use; this is the output of the https://github.com/projectcalico/bpftool repo.
 BPFTOOL_IMAGE=calico/bpftool:v7.5.0
