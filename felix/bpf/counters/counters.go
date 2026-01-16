@@ -36,6 +36,7 @@ var (
 	zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*maps.NumPossibleCPUs())
 )
 
+// Key is 32bits of iface index, and 32bits of hook number.
 type Key [8]byte
 
 func (k Key) AsBytes() []byte {
@@ -49,7 +50,10 @@ func NewKey(ifindex int, hook hook.Hook) Key {
 	binary.LittleEndian.PutUint32(k[4:8], uint32(hook))
 
 	return k
+}
 
+func (k Key) Hook() hook.Hook {
+	return hook.Hook(binary.LittleEndian.Uint32(k[4:8]))
 }
 
 func (k Key) IfIndex() int {
@@ -90,9 +94,10 @@ const (
 )
 
 type Description struct {
-	Category string
-	Caption  string
-	Counter  int
+	Category  string
+	Caption   string
+	Counter   int
+	PromLabel string
 }
 
 type DescList []Description
@@ -214,12 +219,12 @@ var descriptions DescList = DescList{
 		Category: "Dropped", Caption: "Maglev lookup found no backends for service IP",
 	},
 	{
-		Counter:  ForwardedMaglevToRemote,
-		Category: "Forwarded", Caption: "Maglev forwarded to backend on another node",
-	},
-	{
 		Counter:  ForwardedMaglevToLocal,
 		Category: "Forwarded", Caption: "Maglev forwarded to backend on local node",
+	},
+	{
+		Counter:  ForwardedMaglevToRemote,
+		Category: "Forwarded", Caption: "Maglev forwarded to backend on another node",
 	},
 }
 
@@ -234,6 +239,10 @@ func Read(m maps.Map, ifindex int, hook hook.Hook) ([]uint64, error) {
 		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
 	}
 
+	return ValFromBytes(values), nil
+}
+
+func ValFromBytes(values []byte) []uint64 {
 	bpfCounters := make([]uint64, MaxCounterNumber)
 	for i := range bpfCounters {
 		for cpu := 0; cpu < maps.NumPossibleCPUs(); cpu++ {
@@ -242,24 +251,8 @@ func Read(m maps.Map, ifindex int, hook hook.Hook) ([]uint64, error) {
 			bpfCounters[i] += data
 		}
 	}
-	return bpfCounters, nil
+	return bpfCounters
 }
-
-// Parses the raw byte slice returned from BPF map into a single counter value.
-func CounterFromValBytes(b []byte, counter int) (uint64, error) {
-	if len(b) != counterMapValueSize*MaxCounterNumber*maps.NumPossibleCPUs() {
-		return 0, fmt.Errorf("invalid value size %d, expected %d", len(b), counterMapValueSize*MaxCounterNumber*maps.NumPossibleCPUs())
-	}
-
-	var total uint64
-	for cpu := 0; cpu < maps.NumPossibleCPUs(); cpu++ {
-		begin := counter*counterMapValueSize + cpu*MaxCounterNumber*counterMapValueSize
-		data := uint64(binary.LittleEndian.Uint32(b[begin : begin+counterMapValueSize]))
-		total += data
-	}
-	return total, nil
-}
-
 
 func Flush(m maps.Map, ifindex int, hook hook.Hook) error {
 	if err := m.(maps.MapWithUpdateWithFlags).
