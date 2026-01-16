@@ -76,7 +76,7 @@ global_job_config:
           echo "No cache restored, doing a fresh checkout..."
           cd $HOME
           rm -rf "${CALICO_DIR_NAME}"
-          git clone --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
+          git clone --recursive --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
           cd "${CALICO_DIR_NAME}" || exit 1
         fi
       - |-
