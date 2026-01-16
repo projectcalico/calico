@@ -103,6 +103,10 @@ var (
 		Name: "felix_bpf_happy_dataplane_endpoints",
 		Help: "Number of BPF endpoints that are successfully programmed.",
 	})
+	bpfMaglevPacketsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_maglev_packets_total",
+		Help: "Total number of Maglev packets forwarded to backends.",
+	}, []string{"direction", "locality"})
 	errApplyingPolicy = errors.New("error applying policy")
 )
 
@@ -123,6 +127,7 @@ func init() {
 	prometheus.MustRegister(bpfEndpointsGauge)
 	prometheus.MustRegister(bpfDirtyEndpointsGauge)
 	prometheus.MustRegister(bpfHappyEndpointsGauge)
+	prometheus.MustRegister(bpfMaglevPacketsTotal)
 
 	binary.LittleEndian.PutUint32(jumpMapV4PolicyKey, uint32(tcdefs.ProgIndexPolicy))
 	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexPolicy))
@@ -687,6 +692,8 @@ func NewBPFEndpointManager(
 			}
 		}
 	}
+
+	go m.loopUpdatingMaglevMetrics()
 
 	return m, nil
 }
@@ -4604,6 +4611,22 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		}
 	}
 	return IfaceTypeData
+}
+
+func (m *bpfEndpointManager) loopUpdatingMaglevMetrics() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		cm, err := counters.LoadPolicyMap(m.commonMaps.CountersMap)
+		if err != nil {
+			logrus.WithError(err).Warn("error loading counters map for Maglev metrics")
+			continue
+		}
+
+		bpfMaglevPacketsTotal.WithLabelValues("to_backend", "local").Set(float64(cm[counters.ForwardedMaglevToLocal]))
+		bpfMaglevPacketsTotal.WithLabelValues("to_backend", "remote").Set(float64(cm[counters.ForwardedMaglevToRemote]))
+	}
 }
 
 func (trees bpfIfaceTrees) getPhyDevices(masterIfName string) []string {
