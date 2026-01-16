@@ -76,9 +76,8 @@ global_job_config:
           echo "No cache restored, doing a fresh checkout..."
           cd $HOME
           rm -rf "${CALICO_DIR_NAME}"
-          git clone --recursive --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
+          git clone --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
           cd "${CALICO_DIR_NAME}" || exit 1
-          sleep 3600
         fi
       - |-
         if [[ -z "$SKIP_CHECKOUT" ]]; then
@@ -94,7 +93,6 @@ global_job_config:
         fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       - git clone -b improve-conformance-tests git@github.com:mazdakn/network-policy-api.git ./e2e/network-policy-api/
-      - sleep 3600
   epilogue:
     commands:
       - cd $HOME
