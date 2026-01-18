@@ -18,6 +18,7 @@ package conformance_test
 
 import (
 	"testing"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -26,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	api "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 	"sigs.k8s.io/network-policy-api/conformance/tests"
+	cconfig "sigs.k8s.io/network-policy-api/conformance/utils/config"
 	"sigs.k8s.io/network-policy-api/conformance/utils/flags"
 	"sigs.k8s.io/network-policy-api/conformance/utils/suite"
 )
@@ -60,6 +62,10 @@ func TestConformance(t *testing.T) {
 	t.Logf("Running conformance tests with cleanup: %t\n debug: %t\n enable all features: %t \n supported features: [%v]\n exempt features: [%v]",
 		*flags.CleanupBaseResources, *flags.ShowDebug, *flags.EnableAllSupportedFeatures, *flags.SupportedFeatures, *flags.ExemptFeatures)
 
+	timeoutConf := cconfig.DefaultTimeoutConfig()
+	timeoutConf.PokeTimeout = 10 * time.Second
+	timeoutConf.PokeInterval = 500 * time.Millisecond
+
 	cSuite := suite.New(suite.Options{
 		Client:                     c,
 		ClientSet:                  clientset,
@@ -69,6 +75,7 @@ func TestConformance(t *testing.T) {
 		SupportedFeatures:          supportedFeatures,
 		ExemptFeatures:             exemptFeatures,
 		EnableAllSupportedFeatures: *flags.EnableAllSupportedFeatures,
+		TimeoutConfig:              timeoutConf,
 	})
 	cSuite.Setup(t)
 

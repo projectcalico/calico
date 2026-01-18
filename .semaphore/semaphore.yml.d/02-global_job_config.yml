@@ -76,6 +76,7 @@ global_job_config:
           mkdir -p artifacts
         fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      - git clone -b improve-conformance-tests git@github.com:mazdakn/network-policy-api.git ./e2e/network-policy-api/
   epilogue:
     commands:
       - cd $HOME

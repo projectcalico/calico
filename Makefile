@@ -169,9 +169,7 @@ e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	$(MAKE) e2e-run-test
-	# Disabling k8s CNP conformance test since it's failing in Ubuntu22.04 and newer.
-	# It's been tracked in CORE-12206 task, and will be fixed seperately.
-	#$(MAKE) e2e-run-cnp-test
+	$(MAKE) e2e-run-cnp-test
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
@@ -185,7 +183,7 @@ e2e-run-test:
 
 ## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
 e2e-run-cnp-test:
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test -test.v \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
