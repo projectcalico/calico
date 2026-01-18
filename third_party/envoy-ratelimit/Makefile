@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_RATELIMIT_VERSION=0141a24f
+ENVOY_RATELIMIT_VERSION=e74a664a
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -22,11 +22,10 @@ include ../../lib.Makefile
 ENVOY_RATELIMIT_DOWNLOADED=.envoy-ratelimit.downloaded
 
 .PHONY: init-source
-init-source:: $(ENVOY_RATELIMIT_DOWNLOADED)
+init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED):
 	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
 	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
-	patch -d envoy-ratelimit -p1 < patches/0001-Bump-golang.org-x-net-to-v0.38.0.patch
 	touch $@
 
 .PHONY: build
