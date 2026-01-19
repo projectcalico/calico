@@ -42,36 +42,30 @@ type Hashrelease struct {
 	// Name is the name of the hashrelease.
 	// When publishing a hashrelease, this is the name of the folder in the server.
 	// When getting a hashrelease, this is the full path of the hashrelease folder.
-	Name string
+	Name string `yaml:"name"`
 
 	// Hash is the hash of the hashrelease
-	Hash string
+	Hash string `yaml:"hash"`
 
 	// Note is the info about the hashrelease
-	Note string
+	Note string `yaml:"note,omitempty"`
 
 	// Stream is the version the hashrelease is for (e.g master, v3.19)
-	Stream string
+	Stream string `yaml:"stream"`
 
 	// ProductVersion is the product version in the hashrelease
-	ProductVersion string
+	ProductVersion string `yaml:"version"`
 
 	// OperatorVersion is the operator version for the hashrelease
-	OperatorVersion string
+	OperatorVersion string `yaml:"operator"`
 
 	// Source is the source of hashrelease content on the local filesystem
-	Source string
-
-	// Dest is the path to the hashrelease dir on the server
-	Dest string
-
-	// Time is the modified time of the hashrelease
-	Time time.Time
+	Source string `yaml:"source,omitempty"`
 
 	// Latest is if the hashrelease is the latest for the stream
-	Latest bool
+	Latest bool `yaml:"latest,omitempty"`
 
-	ImageScanResultURL string
+	ImageScanResultURL string `yaml:"iss_url,omitempty"`
 }
 
 func (h *Hashrelease) URL() string {
