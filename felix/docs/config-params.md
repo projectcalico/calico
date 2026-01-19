@@ -452,7 +452,7 @@ to include extra information in the log prefix.
 - %n: Policy or profile name.
 - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
 Calico includes ": " characters at the end of the generated log prefix.
-Note that iptables only accept 29 characters for log prefix and nftables only 127. Extra characters are truncated.
+Note that iptables accepts only 29 characters for LogPrefix and nftables accepts only 127 characters. Extra characters are truncated.
 
 | Detail |   |
 | --- | --- |
