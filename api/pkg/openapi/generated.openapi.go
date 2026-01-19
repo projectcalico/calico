@@ -2651,7 +2651,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"logPrefix": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers to include extra information in the log prefix. - %t: Tier name. - %k: Kind (short names). - %n: Policy or profile name. - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds). [Default: calico-packet]",
+							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers to include extra information in the log prefix. - %t: Tier name. - %k: Kind (short names). - %n: Policy or profile name. - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds). Calico includes \": \" characters at the end of the generated log prefix. Note that iptables shows up to 29 characters for the log prefix and nftables up to 127 characters. Extra characters are truncated. [Default: calico-packet]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
