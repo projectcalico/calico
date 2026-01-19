@@ -290,7 +290,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				// Send a slack message to notify that the hashrelease has been published.
 				if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) {
-					return tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c))
+					if _, err := tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c)); err != nil {
+						logrus.WithError(err).Warn("Failed to send hashrelease announcement to Slack")
+					}
 				}
 				return nil
 			},

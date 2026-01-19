@@ -367,7 +367,6 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 		ProductVersion:  pinnedVersion.Title,
 		OperatorVersion: pinnedVersion.TigeraOperator.Version,
 		Source:          filepath.Join(hashreleaseSrcBaseDir, pinnedVersion.Hash),
-		Time:            time.Now(),
 		Latest:          latest,
 	}, nil
 }
