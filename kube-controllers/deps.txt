@@ -123,7 +123,7 @@ k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 sigs.k8s.io/controller-runtime v0.22.3
 sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
 sigs.k8s.io/knftables v0.0.19
-sigs.k8s.io/network-policy-api v0.1.8-0.20251017092043-375c8a75a50a
+sigs.k8s.io/network-policy-api v0.1.8-0.20251216172012-399040aaf83d
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 sigs.k8s.io/yaml v1.6.0
