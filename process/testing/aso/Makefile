@@ -84,20 +84,20 @@ $(BINDIR)/kubectl:
 
 $(BINDIR)/cmctl:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://github.com/cert-manager/cmctl/releases/latest/download/cmctl_linux_amd64 -o $@
+	curl -sSf -L --retry 5 https://github.com/cert-manager/cmctl/releases/latest/download/cmctl_linux_$(ARCH) -o $@
 	chmod +x $@
 	touch $@
 
 $(BINDIR)/asoctl:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://github.com/Azure/azure-service-operator/releases/latest/download/asoctl-linux-amd64.gz -o $(BINDIR)/asoctl.gz
+	curl -sSf -L --retry 5 https://github.com/Azure/azure-service-operator/releases/latest/download/asoctl-linux-$(ARCH).gz -o $(BINDIR)/asoctl.gz
 	gunzip $(BINDIR)/asoctl.gz
 	chmod +x $@
 	touch $@
 
 $(BINDIR)/gomplate:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://github.com/hairyhenderson/gomplate/releases/download/$(GOMPLATE_VERSION)/gomplate_linux-amd64 -o $@
+	curl -sSf -L --retry 5 https://github.com/hairyhenderson/gomplate/releases/download/$(GOMPLATE_VERSION)/gomplate_linux-$(ARCH) -o $@
 	chmod +x $@
 	touch $@
 
