@@ -851,8 +851,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "The log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers\nto include extra information in the log prefix.\n- %t: Tier name.\n- %k: Kind (short names).\n- %n: Policy or profile name.\n- %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).",
-          "DescriptionHTML": "<p>The log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers\nto include extra information in the log prefix.\n- %t: Tier name.\n- %k: Kind (short names).\n- %n: Policy or profile name.\n- %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).</p>",
+          "Description": "The log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers\nto include extra information in the log prefix.\n- %t: Tier name.\n- %k: Kind (short names).\n- %n: Policy or profile name.\n- %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).\nCalico includes \": \" characters at the end of the generated log prefix.\nNote that iptables shows up to 29 characters for the log prefix and nftables up to 127 characters. Extra characters are truncated.",
+          "DescriptionHTML": "<p>The log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers\nto include extra information in the log prefix.\n- %t: Tier name.\n- %k: Kind (short names).\n- %n: Policy or profile name.\n- %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).\nCalico includes \": \" characters at the end of the generated log prefix.\nNote that iptables shows up to 29 characters for the log prefix and nftables up to 127 characters. Extra characters are truncated.</p>",
           "UserEditable": true,
           "GoType": "string"
         },
