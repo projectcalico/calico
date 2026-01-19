@@ -40,6 +40,9 @@ var (
 	}
 )
 
+// +kubebuilder:validation:Type=integer
+// +kubebuilder:validation:XIntOrString
+// +kubebuilder:validation:Pattern=`^.*`
 type Protocol Uint8OrString
 
 // ProtocolFromInt creates a Protocol struct from an integer value.

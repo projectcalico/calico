@@ -28553,7 +28553,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: bgpconfigurations.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -28674,7 +28674,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: bgpfilters.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -28828,7 +28828,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: bgppeers.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -28929,7 +28929,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: blockaffinities.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -28978,7 +28978,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: caliconodestatuses.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -29142,7 +29142,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: clusterinformations.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -29186,7 +29186,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: felixconfigurations.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -29602,9 +29602,6 @@ spec:
                     tunnel IPs).
                   type: integer
                 bpfPSNATPorts:
-                  anyOf:
-                    - type: integer
-                    - type: string
                   description: |-
                     BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
                     collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and
@@ -29613,6 +29610,7 @@ spec:
                     a problem if this range overlaps with the operating systems. Both ends of the range are
                     inclusive. [Default: 20000:29999]
                   pattern: ^.*
+                  type: integer
                   x-kubernetes-int-or-string: true
                 bpfPolicyDebugEnabled:
                   description: |-
@@ -30059,10 +30057,8 @@ spec:
                     KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
                     Felix uses these ranges to separate host and workload traffic. [Default: 30000:32767].
                   items:
-                    anyOf:
-                      - type: integer
-                      - type: string
                     pattern: ^.*
+                    type: integer
                     x-kubernetes-int-or-string: true
                   type: array
                 logActionRateLimit:
@@ -30160,13 +30156,11 @@ spec:
                     - IPPoolsAndHostIPs
                   type: string
                 natPortRange:
-                  anyOf:
-                    - type: integer
-                    - type: string
                   description: |-
                     NATPortRange specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behavior of the
                     network stack is used.
                   pattern: ^.*
+                  type: integer
                   x-kubernetes-int-or-string: true
                 netlinkTimeout:
                   description: |-
@@ -30520,7 +30514,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: globalnetworkpolicies.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -30567,20 +30561,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -30642,16 +30632,12 @@ spec:
                             type: integer
                         type: object
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         properties:
@@ -30667,20 +30653,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -30725,20 +30707,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -30800,16 +30778,12 @@ spec:
                             type: integer
                         type: object
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         properties:
@@ -30825,20 +30799,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -30895,7 +30865,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: globalnetworksets.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -30933,7 +30903,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: hostendpoints.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -30973,10 +30943,8 @@ spec:
                       port:
                         type: integer
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                     required:
                       - name
@@ -30998,7 +30966,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: ipamblocks.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31080,7 +31048,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: ipamconfigs.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31125,7 +31093,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: ipamhandles.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31170,7 +31138,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: ippools.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31243,7 +31211,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: ipreservations.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31281,7 +31249,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: kubecontrollersconfigurations.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31499,7 +31467,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: networkpolicies.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31542,20 +31510,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -31617,16 +31581,12 @@ spec:
                             type: integer
                         type: object
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         properties:
@@ -31642,20 +31602,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -31700,20 +31656,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -31775,16 +31727,12 @@ spec:
                             type: integer
                         type: object
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         properties:
@@ -31800,20 +31748,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -31866,7 +31810,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: networksets.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31904,7 +31848,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: stagedglobalnetworkpolicies.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -31951,20 +31895,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -32026,16 +31966,12 @@ spec:
                             type: integer
                         type: object
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         properties:
@@ -32051,20 +31987,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -32109,20 +32041,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -32184,16 +32112,12 @@ spec:
                             type: integer
                         type: object
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         properties:
@@ -32209,20 +32133,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -32281,7 +32201,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: stagedkubernetesnetworkpolicies.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -32529,7 +32449,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: stagednetworkpolicies.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -32572,20 +32492,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -32647,16 +32563,12 @@ spec:
                             type: integer
                         type: object
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         properties:
@@ -32672,20 +32584,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -32730,20 +32638,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -32805,16 +32709,12 @@ spec:
                             type: integer
                         type: object
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         properties:
@@ -32830,20 +32730,16 @@ spec:
                             type: array
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           notSelector:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: integer
                               x-kubernetes-int-or-string: true
                             type: array
                           selector:
@@ -32898,7 +32794,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: tiers.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
