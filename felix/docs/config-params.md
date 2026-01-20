@@ -1022,7 +1022,7 @@ network stack is used.
 | Encoding (env var/config file) | Port range: either a single number in [0,65535] or a range of numbers <code>n:m</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `natPortRange` (YAML) `NATPortRange` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | Port range: either an integer in [0,65535] or a string, representing a range, in format <code>n:m</code> |
 | Default value (YAML) | `0` |
 
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
@@ -2142,7 +2142,7 @@ inclusive.
 | Encoding (env var/config file) | Port range: either a single number in [0,65535] or a range of numbers <code>n:m</code> |
 | Default value (above encoding) | `20000:29999` |
 | `FelixConfiguration` field | `bpfPSNATPorts` (YAML) `BPFPSNATPorts` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | Port range: either an integer in [0,65535] or a string, representing a range, in format <code>n:m</code> |
 | Default value (YAML) | `20000:29999` |
 
 ### `BPFPolicyDebugEnabled` (config file) / `bpfPolicyDebugEnabled` (YAML)
