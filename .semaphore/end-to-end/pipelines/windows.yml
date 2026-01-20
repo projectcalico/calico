@@ -4,7 +4,7 @@ name: banzai-calico Windows
 
 agent:
   machine:
-    type: c1-standard-1
+    type: f1-standard-2
     os_image: ubuntu2204
 
 execution_time_limit:
