@@ -30,6 +30,7 @@ import (
 	conntrack4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/consistenthash"
 	chtypes "github.com/projectcalico/calico/felix/bpf/consistenthash/test"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -55,6 +56,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 
 	var natMap, mgMap maps.MapWithExistsCheck
 	var ctMap, rtMap maps.Map
+	var countersMap maps.Map
 	var err error
 
 	natMap = nat.FrontendMap()
@@ -73,12 +75,17 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
+	countersMap = counters.Map()
+	err = countersMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
 	resetMaps := func() {
 		resetMap(natMap)
 		resetMap(mgMap)
 		resetCTMap(ctMap)
 		resetRTMap(rtMap)
 		resetMap(arpMap)
+		resetMap(countersMap)
 	}
 	defer resetMaps()
 
@@ -205,6 +212,12 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		Expect(ok).To(BeTrue())
 		Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
 		Expect(v.Flags()).To(Equal(conntrack4.FlagNATNPFwd | conntrack4.FlagMaglev))
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeEquivalentTo(1))
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeZero())
+
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -218,6 +231,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		fmt.Printf("pktR = %+v\n", pktR)
 
 		Expect(res.dataOut).To(Equal(encapedPkt))
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeEquivalentTo(1))
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeZero())
 	})
 
 	dumpCTMap(ctMap)
@@ -331,6 +349,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		Expect(ok).To(BeTrue())
 		Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
 		Expect(v.Flags()).To(Equal(conntrack4.FlagExtLocal | conntrack4.FlagMaglev))
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -356,6 +379,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		res, err := bpfrun(spoofedPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 
 	skbMark = tcdefs.MarkSeen
@@ -398,6 +426,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
 		// Approved destination side as well
 		Expect(ctr.Data().B2A.Approved).To(BeTrue())
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 
 	skbMark = 0
@@ -434,6 +467,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		checkVxlan(pktR)
 
 		encapedPkt = res.dataOut
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 
 	dumpCTMap(ctMap)
@@ -458,6 +496,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		checkVxlan(pktR)
 
 		encapedPkt = res.dataOut
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -500,6 +543,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeZero())
 	})
 
 	err = rtMap.Update(
@@ -559,6 +607,12 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		// Approved for both sides due to forwarding through the tunnel
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
 		Expect(ctr.Data().B2A.Approved).To(BeTrue())
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeEquivalentTo(1))
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeZero())
+
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -580,6 +634,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		fmt.Printf("pktR = %+v\n", pktR)
 
 		Expect(res.dataOut).To(Equal(encapedPkt))
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeEquivalentTo(1))
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeZero())
 	})
 
 	dumpCTMap(ctMap)
@@ -674,6 +733,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		Expect(ok).To(BeTrue())
 		Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
 		Expect(v.Flags()).To(Equal(conntrack4.FlagExtLocal | conntrack4.FlagMaglev))
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -737,6 +801,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
 		// Approved destination side as well
 		Expect(ctr.Data().B2A.Approved).To(BeTrue())
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 
 	skbMark = 0
@@ -773,6 +842,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		checkVxlan(pktR)
 
 		encapedPkt = res.dataOut
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 
 	dumpCTMap(ctMap)
@@ -797,6 +871,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		checkVxlan(pktR)
 
 		encapedPkt = res.dataOut
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeEquivalentTo(1))
 	})
 
 	dumpCTMap(ctMap)
@@ -852,6 +931,11 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		Expect(payload).To(Equal(payloadL.Payload()))
 
 		recvPkt = res.dataOut
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeZero())
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeZero())
 	})
 
 	expectMark(tcdefs.MarkSeenBypassForward)
@@ -884,33 +968,31 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 		Expect(udpR.SrcPort).To(BeEquivalentTo(tcp.SrcPort ^ tcp.DstPort))
 
 		checkVxlanEncap(pktR, false, ipv4, tcp, payload)
+
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeEquivalentTo(1))
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeZero())
 	})
 
 	skbMark = 0
 
-	hostIP = node2ip
+	// One more packet coming in - check counters go up.
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		// Do comparison on the strings rather than the numbers to give more
+		// meaning to Gomega failure messages.
+		Expect(retvalToStr[res.Retval]).To(Equal(retvalToStr[resTC_ACT_REDIRECT]))
 
-	// change the routing - it is a local workload now!
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&node2WlCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsLocalWorkload|routes.FlagInIPAMPool).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
+		c, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c[counters.ForwardedMaglevToRemote]).To(BeEquivalentTo(2))
+		Expect(c[counters.ForwardedMaglevToLocal]).To(BeZero())
 
-	// we must know that the encaped packet src ip if from a known host
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsRemoteHost).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&node2CIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsLocalHost).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
+	})
+	expectMark(tcdefs.MarkSeenBypassForward)
 
-	dumpRTMap(rtMap)
-	dumpCTMap(ctMap)
 }
 
 func TestMaglevNATServiceIPTCPV6(t *testing.T) {
