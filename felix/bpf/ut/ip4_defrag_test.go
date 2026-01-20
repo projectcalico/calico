@@ -45,7 +45,7 @@ func TestIP4Defrag(t *testing.T) {
 	udp := *udpDefault
 	udp.Length = 8 + 2000
 
-	// compute ull packet
+	// compute full packet
 	payload := gopacket.Payload(data)
 	_ = udp.SetNetworkLayerForChecksum(&ip)
 
@@ -104,6 +104,8 @@ func TestIP4Defrag(t *testing.T) {
 
 	pktFullR := gopacket.NewPacket(pktFull.Bytes(), layers.LayerTypeEthernet, gopacket.Default)
 
+	/* First fragment in-order */
+
 	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		bytes := pkt0.Bytes()
@@ -112,12 +114,54 @@ func TestIP4Defrag(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
 	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pkt1.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	})
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pkt3.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	})
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pkt2.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	})
+
+	/* First fragment out-of-order */
+
+	cleanupMap(ipfragsFwdMap)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pkt1.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	})
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		bytes := pkt0.Bytes()
+		copy(bytes[40:42], pktFull.Bytes()[40:42]) // patch in the udp csum for the entire packet
+		res, err := bpfrun(bytes)
 		Expect(err).NotTo(HaveOccurred())
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
