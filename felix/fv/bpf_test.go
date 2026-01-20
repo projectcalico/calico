@@ -51,6 +51,7 @@ import (
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
@@ -1651,10 +1652,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 
 				It("connectivity from all workloads via workload 0's main IP", func() {
+					var tcpd *tcpdump.TCPDump
+
+					if testOpts.tunnel == "vxlan" {
+						tcpd = tc.Felixes[0].AttachTCPDump("eth0")
+						tcpd.SetLogEnabled(true)
+						tcpd.AddMatcher("eth0-vxlan", regexp.MustCompile("VXLAN,.* vni 4096"))
+						tcpd.Start("-vvv", "udp", "port", "4789")
+						defer tcpd.Stop()
+					}
+
 					cc.ExpectSome(w[0][1], w[0][0])
 					cc.ExpectSome(w[1][0], w[0][0])
 					cc.ExpectSome(w[1][1], w[0][0])
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+
+					if testOpts.tunnel == "vxlan" {
+						Eventually(func() int { return tcpd.MatchCount("eth0-vxlan") }).Should(BeNumerically(">", 0))
+					}
 				})
 
 				_ = !testOpts.ipv6 && !testOpts.dsr && testOpts.protocol == "udp" && testOpts.udpUnConnected && !testOpts.connTimeEnabled &&
