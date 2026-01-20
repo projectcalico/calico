@@ -2927,7 +2927,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				WorkloadId:     "cali12345",
 				EndpointId:     "cali12345",
 			}
-			bookkeepingSet, exists := bpfEpMgr.allowedSourcesPerWorkload[workloadEndpointID]
+			bookkeepingSet, exists := bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
 			Expect(exists).To(BeTrue())
 			Expect(bookkeepingSet.Len()).To(Equal(1))
 			Expect(bookkeepingSet.Contains(cidrString)).To(BeTrue())
@@ -2935,7 +2935,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			// test multiple IPs in the annotation
 			updatedSpoofedSources := []string{"192.192.192.192/32", "0.0.0.0/32"}
 			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
-			bookkeepingSet, exists = bpfEpMgr.allowedSourcesPerWorkload[workloadEndpointID]
+			bookkeepingSet, exists = bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
 			Expect(exists).To(BeTrue())
 			Expect(bookkeepingSet.Len()).To(Equal(2))
 
@@ -2946,7 +2946,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			// test the case where one of the annotations are removed via genWLUpdate
 			updatedSpoofedSources = []string{"0.0.0.0/32"}
 			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
-			bookkeepingSet, exists = bpfEpMgr.allowedSourcesPerWorkload[workloadEndpointID]
+			bookkeepingSet, exists = bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
 			Expect(exists).To(BeTrue())
 			Expect(bookkeepingSet.Len()).To(Equal(1))
 			Expect(bookkeepingSet.Contains("0.0.0.0/32")).To(BeTrue())
@@ -2998,7 +2998,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				WorkloadId:     "cali12345",
 				EndpointId:     "cali12345",
 			}
-			bookkeepingSet, exists := bpfEpMgr.allowedSourcesPerWorkload[workloadEndpointID]
+			bookkeepingSet, exists := bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
 			Expect(exists).To(BeTrue())
 			Expect(bookkeepingSet.Len()).To(Equal(1))
 			Expect(bookkeepingSet.Contains(cidrString)).To(BeTrue())
@@ -3006,7 +3006,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			// test multiple IPv6 addresses in the annotation
 			updatedSpoofedSources := []string{"2001:db8::1/128", "::1/128"}
 			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
-			bookkeepingSet, exists = bpfEpMgr.allowedSourcesPerWorkload[workloadEndpointID]
+			bookkeepingSet, exists = bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
 			Expect(exists).To(BeTrue())
 			Expect(bookkeepingSet.Len()).To(Equal(2))
 
@@ -3017,7 +3017,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			// test the case where one of the annotations are removed via genWLUpdate
 			updatedSpoofedSources = []string{"::1/128"}
 			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
-			bookkeepingSet, exists = bpfEpMgr.allowedSourcesPerWorkload[workloadEndpointID]
+			bookkeepingSet, exists = bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
 			Expect(exists).To(BeTrue())
 			Expect(bookkeepingSet.Len()).To(Equal(1))
 			Expect(bookkeepingSet.Contains("::1/128")).To(BeTrue())
@@ -3035,6 +3035,72 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(value).To(BeNil())
 		})
 	})
+
+    Describe("allowed source prefixes map (dual-stack)", func() {
+        var (
+			ifaceName  string
+			cidr       ip.CIDR
+			cidrString string
+		)
+
+		JustBeforeEach(func() {
+			ifaceName = "cali12345"
+			cidrString = "2001:db8::1/128"
+
+			newBpfEpMgr(true) // Enable IPv6
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdateWithSpoofedSource("cali12345", []string{cidrString})()
+
+			var err error
+			cidr, err = ip.CIDRFromString(cidrString)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+        It("should contain allowed source prefixes from annotation", func() {
+			// initial genWLUpdate should add the prefix to the map
+
+			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
+			expectedEbpfEntry := allowsources.NewKeyV6(cidr, ifindex)
+			_, err := bpfEpMgr.v6.AllowSourcesMap.Get(expectedEbpfEntry.AsBytes())
+			Expect(err).NotTo(HaveOccurred())
+
+			workloadEndpointID := types.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			}
+			bookkeepingSet, exists := bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains(cidrString)).To(BeTrue())
+
+			// test a combination of IPv4 and IPv6 addresses in the annotation
+			updatedSpoofedSources := []string{"2001:db8::1/128", "192.168.1.10/24"}
+			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
+			bookkeepingSet, exists = bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+            Expect(bookkeepingSet.Contains("2001:db8::1/128")).To(BeTrue())
+
+            bookkeepingSetV4, exists := bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
+            Expect(exists).To(BeTrue())
+            Expect(bookkeepingSetV4.Len()).To(Equal(1))
+            Expect(bookkeepingSetV4.Contains("192.168.1.10/24")).To(BeTrue())
+
+			// test the case where one of the annotations are removed via genWLUpdate
+			updatedSpoofedSources = []string{"192.168.1.10/24"}
+			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
+			bookkeepingSet, exists = bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains("192.168.1.10/24")).To(BeTrue())
+
+            bookkeepingSetV6, exists := bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+            Expect(exists).To(BeTrue())
+            Expect(bookkeepingSetV6.Len()).To(Equal(0))
+		})
+
+    })
 })
 
 var _ = Describe("jumpMapAlloc tests", func() {
