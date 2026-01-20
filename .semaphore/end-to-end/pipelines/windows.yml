@@ -52,7 +52,7 @@ blocks:
     dependencies: []
     task:
       jobs:
-        - name: azr-aso, 2022, stable, bpf, vxlan
+        - name: azr-aso, 2022, stable, iptables, vxlan
           execution_time_limit:
             hours: 5
           commands:
@@ -63,24 +63,24 @@ blocks:
             - name: K8S_VERSION
               value: stable
             - name: DATAPLANE
-              value: CalicoBPF
+              value: CalicoIptables
             - name: ENCAPSULATION_TYPE
               value: VXLAN
 
-        - name: azr-aso, 2022, stable-1, nftables, vxlan
-          execution_time_limit:
-            hours: 5
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            - name: PROVISIONER
-              value: azr-aso
-            - name: K8S_VERSION
-              value: stable-1
-            - name: DATAPLANE
-              value: CalicoNftables
-            - name: ENCAPSULATION_TYPE
-              value: VXLAN
+        # - name: azr-aso, 2022, stable-1, nftables, vxlan
+        #   execution_time_limit:
+        #     hours: 5
+        #   commands:
+        #     - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+        #   env_vars:
+        #     - name: PROVISIONER
+        #       value: azr-aso
+        #     - name: K8S_VERSION
+        #       value: stable-1
+        #     - name: DATAPLANE
+        #       value: CalicoNftables
+        #     - name: ENCAPSULATION_TYPE
+        #       value: VXLAN
 
 #         - name: azr-aks, 2022, stable-1, iptables, vxlan
 #           execution_time_limit:
