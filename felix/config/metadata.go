@@ -219,7 +219,7 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 		}
 		if pm.GoType == "*numorstring.Port" {
 			// The Port type has its own string encoding.
-			pm.YAMLSchema = "Port range: either a single number in [0,65535] or a range of numbers `n:m`"
+			pm.YAMLSchema = "Port range: either an integer in [0,65535] or a string, representing a range, in format `n:m`"
 		}
 
 		pm.StringSchemaHTML = convertSchemaToHTML(pm.StringSchema)
