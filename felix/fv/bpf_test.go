@@ -1697,7 +1697,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=16000", "--udp-sock")
 						Expect(err).NotTo(HaveOccurred())
 
-						// We should see two fragments on the host interface
+						// Given the MTU, we should see the packet fragmented into
+						// 12 fragments on the host interface.
 						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(12))
 						// We should see the fragments reach the workload.  We reassemble them in the middle but they
 						// get fragmented again.
