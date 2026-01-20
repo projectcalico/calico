@@ -31,6 +31,8 @@ global_job_config:
       value: "true"
     - name: PRIVATE_REGISTRY
       value: "quay.io/"
+    - name: INSTALLER
+      value: "operator"
 
 # Dimensions
 # Provisioners: azr-aso, azr-aks
