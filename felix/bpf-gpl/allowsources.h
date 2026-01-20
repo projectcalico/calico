@@ -37,8 +37,7 @@ static CALI_BPF_INLINE bool cali_allowsource_lookup(ipv46_addr_t *addr, __u32 if
 #endif
     k.addr = *addr;
     k.ifindex = ifindex;
-    __u32 *val = cali_sprefix_lookup_elem(&k);
-    return val != NULL;
+    return cali_sprefix_lookup_elem(&k);
 }
 
 # endif /* __CALI_ALLOWSOURCES_H__ */
