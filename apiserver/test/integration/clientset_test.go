@@ -31,6 +31,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -1910,25 +1911,27 @@ func testCalicoNodeStatusClient(client calicoclient.Interface, name string) erro
 
 // TestIPAMConfigClient exercises the IPAMConfig client.
 func TestIPAMConfigClient(t *testing.T) {
-	const name = "test-ipamconfig"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
 				return &v3.IPAMConfiguration{}
 			})
 			defer shutdownServer()
-			if err := testIPAMConfigClient(client, name); err != nil {
+			if err := testIPAMConfigClient(client); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
 
-	if !t.Run(name, rootTestFunc()) {
+	if !t.Run("test-ipamconfig", rootTestFunc()) {
 		t.Errorf("test-ipamconfig test failed")
 	}
 }
 
-func testIPAMConfigClient(client calicoclient.Interface, name string) error {
+func testIPAMConfigClient(client calicoclient.Interface) error {
+	logrus.SetLevel(logrus.DebugLevel)
+	name := "default"
+
 	ipamConfigClient := client.ProjectcalicoV3().IPAMConfigurations()
 	ipamConfig := &v3.IPAMConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
@@ -1938,19 +1941,21 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 			MaxBlocksPerHost: 28,
 		},
 	}
-	ctx := context.Background()
 
+	ctx := context.Background()
 	_, err := ipamConfigClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error listing IPAMConfigurations: %s", err)
 	}
 
-	_, err = ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	// Should not be able to create a non-default IPAM config.
+	badConfig := ipamConfig.DeepCopy()
+	badConfig.Name = "not-default"
+	_, err = ipamConfigClient.Create(ctx, badConfig, metav1.CreateOptions{})
 	if err == nil {
-		return fmt.Errorf("should not be able to create ipam config %s ", ipamConfig.Name)
+		return fmt.Errorf("should not be able to create ipam config %s ", badConfig.Name)
 	}
 
-	ipamConfig.Name = "default"
 	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("error creating the object '%v' (%v)", ipamConfig, err)

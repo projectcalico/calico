@@ -42,6 +42,7 @@ spec:
                   format: cidr
                   type: string
                 deleted:
+                  default: false
                   type: boolean
                 node:
                   type: string
@@ -56,6 +57,7 @@ spec:
                   type: string
               required:
                 - cidr
+                - deleted
                 - node
                 - state
               type: object
