@@ -19,8 +19,8 @@ set -e
 
 . ./vmss.sh node-ips
 
-: ${KUBECTL:=./bin/kubectl}
-: ${GOMPLATE:=./bin/gomplate}
+: "${KUBECTL:=./bin/kubectl}"
+: "${GOMPLATE:=./bin/gomplate}"
 
 # Reconstruct arrays from exported string variables
 # Bash arrays cannot be exported across shells, so we export them as space-separated strings
@@ -34,13 +34,12 @@ echo "========================================"
 echo "Node configuration loaded:"
 echo "  LINUX_NODE_COUNT: ${LINUX_NODE_COUNT}"
 echo "  WINDOWS_NODE_COUNT: ${WINDOWS_NODE_COUNT}"
-echo "  LINUX_EIPS (count: ${#LINUX_EIPS[@]}): ${LINUX_EIPS[@]}"
-echo "  LINUX_PIPS (count: ${#LINUX_PIPS[@]}): ${LINUX_PIPS[@]}"
-echo "  WINDOWS_EIPS (count: ${#WINDOWS_EIPS[@]}): ${WINDOWS_EIPS[@]}"
-echo "  WINDOWS_PIPS (count: ${#WINDOWS_PIPS[@]}): ${WINDOWS_PIPS[@]}"
+echo "  LINUX_EIPS (count: ${#LINUX_EIPS[@]}): ${LINUX_EIPS[*]}"
+echo "  LINUX_PIPS (count: ${#LINUX_PIPS[@]}): ${LINUX_PIPS[*]}"
+echo "  WINDOWS_EIPS (count: ${#WINDOWS_EIPS[@]}): ${WINDOWS_EIPS[*]}"
+echo "  WINDOWS_PIPS (count: ${#WINDOWS_PIPS[@]}): ${WINDOWS_PIPS[*]}"
 echo "========================================"
 echo
-
 
 function copy_scripts_to_linux_nodes() {
   echo "Copying Linux setup scripts to all Linux nodes..."
@@ -56,8 +55,8 @@ function copy_scripts_to_linux_nodes() {
     fi
 
     echo "Copying scripts to Linux node ${node_num} (${linux_eip})..."
-    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ./linux/*.sh aso@${linux_eip}:~/ || {
+    scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ./linux/*.sh "aso@${linux_eip}:~/" || {
       echo "ERROR: Failed to copy scripts to Linux node ${node_num}"
       return 1
     }
@@ -83,8 +82,8 @@ function copy_scripts_to_windows_nodes() {
     fi
 
     echo "Copying scripts to Windows node ${node_num} (${windows_eip})..."
-    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ./windows/*.ps1 aso@${windows_eip}:c:\\k\\ || {
+    scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ./windows/*.ps1 "aso@${windows_eip}:c:\\k\\" || {
       echo "ERROR: Failed to copy scripts to Windows node ${node_num}"
       return 1
     }
@@ -146,8 +145,8 @@ function setup_kubeadm_cluster() {
 
   # Copy kubeconfig to local directory
   echo "Copying kubeconfig from master node..."
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    aso@${LINUX_EIP}:/home/aso/.kube/config ./kubeconfig
+  scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    "aso@${LINUX_EIP}:/home/aso/.kube/config" ./kubeconfig
 
   # Fix the API server address in kubeconfig - replace internal IP with external IP
   echo "Updating API server address in kubeconfig to use external IP ${LINUX_EIP}..."
@@ -155,7 +154,7 @@ function setup_kubeadm_cluster() {
   echo "  Original API server address: ${INTERNAL_API_SERVER}"
 
   # Extract port from the original server URL
-  API_PORT=$(echo ${INTERNAL_API_SERVER} | sed -n 's/.*:\([0-9]*\)$/\1/p')
+  API_PORT=$(echo "${INTERNAL_API_SERVER}" | sed -n 's/.*:\([0-9]*\)$/\1/p')
   if [[ -z "${API_PORT}" ]]; then
     API_PORT="6443"  # Default Kubernetes API port
   fi
@@ -264,11 +263,11 @@ function copy_files_from_linux() {
   mkdir -p ./windows/kubeadm
 
   # Copy kubeconfig
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no aso@${LINUX_EIP}:/home/aso/.kube/config ./windows/kubeadm/config
+  scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "aso@${LINUX_EIP}:/home/aso/.kube/config" ./windows/kubeadm/config
 
   # Copy Kubernetes PKI certificates (needed for authentication)
   ${MASTER_CONNECT_COMMAND} "sudo cp /etc/kubernetes/pki/ca.crt /tmp/ca.crt && sudo chmod 644 /tmp/ca.crt"
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no aso@${LINUX_EIP}:/tmp/ca.crt ./windows/kubeadm/
+  scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "aso@${LINUX_EIP}:/tmp/ca.crt" ./windows/kubeadm/
 
   echo "Kubernetes certificates copied successfully"
 }
@@ -309,7 +308,7 @@ function prepare_windows_node() {
 
   # Copy windows directory contents to c:\k\
   echo "Copying Windows files to node..."
-  scp -r -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* aso@${windows_eip}:c:\\k\\
+  scp -r -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* "aso@${windows_eip}:c:\\k\\"
 
   # Enable containers feature (requires reboot)
   echo "Enabling Windows Containers feature..."
