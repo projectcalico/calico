@@ -149,6 +149,10 @@ type NetConf struct {
 
 	// RequireMTUFile specifies whether mtu file is required to execute the cni-plugin
 	RequireMTUFile bool `json:"require_mtu_file,omitempty"`
+
+	// CalicoAPIGroup specifies the API group to use when connecting to the Kubernetes API server.
+	// If not specified, the default value of "crd.projectcalico.org" is used.
+	CalicoAPIGroup string `json:"calico_api_group,omitempty"`
 }
 
 // Runtime Config is provided by kubernetes
