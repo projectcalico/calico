@@ -136,7 +136,11 @@ func (t *TCPDump) ResetCount(name string) {
 	logrus.Infof("[%s] Reset count for %s", t.contName, name)
 }
 
-func (t *TCPDump) Start(expr ...string) {
+type CleanupProvider interface {
+	AddCleanup(func())
+}
+
+func (t *TCPDump) Start(infra CleanupProvider, expr ...string) {
 	args := append(t.args, expr...)
 	t.cmd = utils.Command(t.exe, args...)
 	var err error
@@ -151,13 +155,15 @@ func (t *TCPDump) Start(expr ...string) {
 
 	err = t.cmd.Start()
 
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	infra.AddCleanup(t.Stop)
+
 	select {
 	case <-t.listeningStarted:
 	case <-time.After(60 * time.Second):
 		ginkgo.Fail("Failed to start tcpdump: it never reported that it was listening")
 	}
 
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }
 
 func (t *TCPDump) Stop() {

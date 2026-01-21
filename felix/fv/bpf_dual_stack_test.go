@@ -354,8 +354,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					felixIP6(0), externalClient.IPv6)
 
 				tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
-				tcpdump.Start()
-				defer tcpdump.Stop()
+				tcpdump.Start(infra)
 
 				_, err := w[0][0].ExecCombinedOutput("ping6", "-c", "2", externalClient.IPv6)
 				Expect(err).NotTo(HaveOccurred())

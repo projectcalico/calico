@@ -144,14 +144,12 @@ func describeBPFMultiHomedTests() bool {
 			dump20 := Felix.AttachTCPDump("eth20")
 			dump20.SetLogEnabled(true)
 			dump20.AddMatcher("eth20-egress", regexp.MustCompile("10.65.0.2.30444 > 10.65.1.3.30444: UDP"))
-			dump20.Start("-v", "udp", "and", "dst", "host", "10.65.1.3")
-			defer dump20.Stop()
+			dump20.Start(infra, "-v", "udp", "and", "dst", "host", "10.65.1.3")
 
 			dump30 := Felix.AttachTCPDump("eth30")
 			dump30.SetLogEnabled(true)
 			dump30.AddMatcher("eth30-ingress", regexp.MustCompile("10.65.1.3.30444 > 10.65.0.2.30444: UDP"))
-			dump30.Start("-v", "udp", "and", "dst", "host", "10.65.0.2")
-			defer dump30.Stop()
+			dump30.Start(infra, "-v", "udp", "and", "dst", "host", "10.65.0.2")
 
 			By("Sending packet from the workload via eth20")
 			_, err = w.RunCmd("pktgen", w.IP, "10.65.1.3", "udp", "--ip-id", "1",
@@ -205,14 +203,12 @@ func describeBPFMultiHomedTests() bool {
 			dump20 := Felix.AttachTCPDump("eth20")
 			dump20.SetLogEnabled(true)
 			dump20.AddMatcher("eth20-egress", regexp.MustCompile(clusterIP+".30444 > 10.65.1.3.30444: UDP"))
-			dump20.Start("-v", "udp", "and", "src", "host", clusterIP)
-			defer dump20.Stop()
+			dump20.Start(infra, "-v", "udp", "and", "src", "host", clusterIP)
 
 			dump30 := Felix.AttachTCPDump("eth30")
 			dump30.SetLogEnabled(true)
 			dump30.AddMatcher("eth30-ingress", regexp.MustCompile("10.65.1.3.30444 > "+clusterIP+".30444: UDP"))
-			dump30.Start("-v", "udp", "and", "dst", "host", clusterIP)
-			defer dump30.Stop()
+			dump30.Start(infra, "-v", "udp", "and", "dst", "host", clusterIP)
 
 			ip := testSvc.Spec.ClusterIP
 			natK := nat.NewNATKey(net.ParseIP(ip), 30444, 17)
