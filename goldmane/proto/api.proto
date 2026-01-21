@@ -255,7 +255,12 @@ enum PolicyKind {
 
   // Native Kubernetes types.
   NetworkPolicy = 6;
-  ClusterNetworkPolicy = 7;
+  // AdminNetworkPolicy and BaselineAdminNetworkPolicy is no longer supported.
+  reserved 7;
+  reserved AdminNetworkPolicy;
+  reserved 8;
+  reserved BaselineAdminNetworkPolicy;
+  ClusterNetworkPolicy = 11;
 
   // Calico Profiles.
   Profile = 9;
