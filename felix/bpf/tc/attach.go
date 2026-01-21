@@ -519,6 +519,8 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	copy(in, ap.Iface)
 	globalData.IfaceName = string(in)
 
+	globalData.OverlayTunnelID = ap.OverlayTunnelID
+
 	return globalData
 }
 
