@@ -100,7 +100,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build K8S Admin Network Policy client: %v", err)
 	}
-	k8sClusterPolicyClient, err := buildK8SCNPClient(config)
+	k8sClusterPolicyClient, err := BuildK8SCNPClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build K8S Cluster Network Policy client: %v", err)
 	}
@@ -645,8 +645,8 @@ func buildK8SAdminPolicyClient(cfg *rest.Config) (*adminpolicyclient.PolicyV1alp
 	return adminpolicyclient.NewForConfig(cfg)
 }
 
-// buildK8SCNPClient builds a RESTClient configured to interact Cluster Network Policy.
-func buildK8SCNPClient(cfg *rest.Config) (*netpolicyclient.PolicyV1alpha2Client, error) {
+// BuildK8SCNPClient builds a RESTClient configured to interact Cluster Network Policy.
+func BuildK8SCNPClient(cfg *rest.Config) (*netpolicyclient.PolicyV1alpha2Client, error) {
 	return netpolicyclient.NewForConfig(cfg)
 }
 
