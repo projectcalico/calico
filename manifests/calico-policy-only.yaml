@@ -7063,7 +7063,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:v3.31.3
+          image: quay.io/calico/cni:v3.31.4
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/install"]
           envFrom:
@@ -7101,7 +7101,7 @@ spec:
         # networking to allow communication with the API Server. Calico-node initialization is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptables mode.
         - name: "ebpf-bootstrap"
-          image: quay.io/calico/node:v3.31.3
+          image: quay.io/calico/node:v3.31.4
           imagePullPolicy: IfNotPresent
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
@@ -7127,7 +7127,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:v3.31.3
+          image: quay.io/calico/node:v3.31.4
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -7321,7 +7321,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/kube-controllers:v3.31.3
+          image: quay.io/calico/kube-controllers:v3.31.4
           imagePullPolicy: IfNotPresent
           env:
             # Choose which controllers to run.
@@ -7414,7 +7414,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - image: quay.io/calico/typha:v3.31.3
+        - image: quay.io/calico/typha:v3.31.4
           imagePullPolicy: IfNotPresent
           name: calico-typha
           ports:
