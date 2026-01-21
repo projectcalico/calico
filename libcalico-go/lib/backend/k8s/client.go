@@ -216,7 +216,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBlockAffinity,
-		resources.NewBlockAffinityClient(restClient, v3),
+		resources.NewBlockAffinityClientV3(restClient, v3),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -225,17 +225,16 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		resources.NewBGPFilterClient(restClient, v3),
 	)
 
-	ipamConfigKind := libapiv3.KindIPAMConfig
-	if v3 {
-		// If we're using the v3 API, we use IPAMConfiguration as the kind. This is because historically, there
-		// has been a mismatch in the Kind used on the v3 API and the CRD API.
-		ipamConfigKind = apiv3.KindIPAMConfiguration
-	}
+	// IPAMConfig can come to us from two places:
+	// - The lib/ipam code, which uses the older v1 API 'IPAMConfig'
+	// - The lib/clientv3 code, which uses the newer v3 API 'IPAMConfiguration'
+	// We always register the v3 client, but also register the v1 client for the
+	// older IPAM code below if it's in use.
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		ipamConfigKind,
-		resources.NewIPAMConfigClient(restClient, v3),
+		apiv3.KindIPAMConfiguration,
+		resources.NewIPAMConfigClientV3(restClient, v3),
 	)
 
 	// These resources are backed directly by core Kubernetes APIs, and do not
@@ -288,14 +287,23 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		// Using Calico IPAM - use CRDs to back IPAM resources.
 		log.Debug("Calico is configured to use calico-ipam")
 
-		// IPAM uses the model.BlockAffinityKey, so we need to re-register block affinities here.
-		// The v3 resources are already registered above.
+		// lib/ipam uses different types for these resources, so register them separately
+		// from the v3 resources already registered above.
 		c.registerResourceClient(
 			reflect.TypeOf(model.BlockAffinityKey{}),
 			reflect.TypeOf(model.BlockAffinityListOptions{}),
 			libapiv3.KindBlockAffinity,
-			resources.NewBlockAffinityClient(restClient, v3),
+			resources.NewBlockAffinityClientV1(restClient, v3),
 		)
+		c.registerResourceClient(
+			reflect.TypeOf(model.IPAMConfigKey{}),
+			nil,
+			libapiv3.KindIPAMConfig,
+			resources.NewIPAMConfigClientV1(restClient, v3),
+		)
+
+		// These do not get registered as part of the v3 API, and are only
+		// accessed from the lib/ipam code.
 		c.registerResourceClient(
 			reflect.TypeOf(model.BlockKey{}),
 			reflect.TypeOf(model.BlockListOptions{}),
@@ -307,13 +315,6 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 			reflect.TypeOf(model.IPAMHandleListOptions{}),
 			libapiv3.KindIPAMHandle,
 			resources.NewIPAMHandleClient(restClient, v3),
-		)
-
-		c.registerResourceClient(
-			reflect.TypeOf(model.IPAMConfigKey{}),
-			nil,
-			libapiv3.KindIPAMConfig,
-			resources.NewIPAMConfigClient(restClient, v3),
 		)
 	}
 

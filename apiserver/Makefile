@@ -36,12 +36,16 @@ ifdef UNIT_TESTS
 UNIT_TEST_FLAGS = -run $(UNIT_TESTS) -v
 endif
 
+# The API server tests always use the crd.projectcalico.org API group, since
+# the server is never used when the projectcalico.org/v3 API is implemented directly as CRDs.
+# Define this prior to including ../lib.Makefile so that the variable is available there.
+CALICO_API_GROUP := crd.projectcalico.org/v1
+
 ##############################################################################
-# Download and include ../lib.Makefile before anything else
+# Include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ##############################################################################
-
 include ../lib.Makefile
 
 
