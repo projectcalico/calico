@@ -72,6 +72,17 @@ func TestWorkloadSpoof(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
     runSpoofTest(t, resTC_ACT_UNSPEC)
     cleanUpMaps()
+
+    t.Log("Annotation removed -> DROP")
+    err = allowSourcesMap.Update(allowSourcesKey, allowsources.DummyValue)
+    Expect(err).NotTo(HaveOccurred())
+    err = rtMap.Update(rtKeySrc, rtValGood)
+	Expect(err).NotTo(HaveOccurred())
+    runSpoofTest(t, resTC_ACT_UNSPEC)
+    err = allowSourcesMap.Delete(allowSourcesKey)
+    Expect(err).NotTo(HaveOccurred())
+    runSpoofTest(t, resTC_ACT_SHOT)
+    cleanUpMaps()
 }
 
 func runSpoofTest(t *testing.T, expRC int) {
