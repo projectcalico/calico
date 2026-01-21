@@ -31,7 +31,8 @@ func defaultNetConf() string {
       "ipam": {"type": "calico-ipam"},
       "policy": {"type": "k8s"},
       "kubernetes": {"kubeconfig": "__KUBECONFIG_FILEPATH__"},
-      "require_mtu_file": __REQUIRE_MTU_FILE__
+      "require_mtu_file": __REQUIRE_MTU_FILE__,
+      "calico_api_group": "__CALICO_API_GROUP__"
     },
     {
       "type": "portmap",

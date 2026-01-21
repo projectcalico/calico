@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -37,6 +38,11 @@ var (
 	ingressEgress = []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress}
 	ingress       = []apiv3.PolicyType{apiv3.PolicyTypeIngress}
 	egress        = []apiv3.PolicyType{apiv3.PolicyTypeEgress}
+)
+
+// If true, run the tests in v3 CRD mode. Otherwise, run against crd.projectcalico.org/v1
+var (
+	v3CRD bool
 )
 
 var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
@@ -87,6 +93,8 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 
 		err = c.EnsureInitialized(ctx, "", "")
 		Expect(err).NotTo(HaveOccurred())
+
+		v3CRD = k8s.UsingV3CRDs(&config.Spec)
 	})
 
 	DescribeTable("GlobalNetworkPolicy e2e CRUD tests",
