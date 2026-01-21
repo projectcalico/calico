@@ -511,6 +511,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		log.SetLevel(log.DebugLevel)
 		v3CRD = UsingV3CRDs(&cfg.Spec)
 
+		// Increase the QPS to avoid throttling during tests.
+		cfg.Spec.KubeConfig.K8sClientQPS = 1000
+
 		// Create a Kubernetes client, callbacks, and a syncer.
 		c, cb, syncer = CreateClientAndSyncer(cfg.Spec.KubeConfig)
 

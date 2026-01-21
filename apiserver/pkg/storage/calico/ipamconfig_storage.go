@@ -12,7 +12,6 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
@@ -77,7 +76,7 @@ func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 	lcgIPAMConfig := &api.IPAMConfiguration{}
 	lcgIPAMConfig.TypeMeta = aapiIPAMConfig.TypeMeta
 	lcgIPAMConfig.ObjectMeta = aapiIPAMConfig.ObjectMeta
-	lcgIPAMConfig.Kind = libapi.KindIPAMConfig
+	lcgIPAMConfig.Kind = api.KindIPAMConfiguration
 	lcgIPAMConfig.APIVersion = api.GroupVersionCurrent
 	lcgIPAMConfig.Spec = aapiIPAMConfig.Spec
 
