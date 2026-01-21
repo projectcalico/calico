@@ -14,6 +14,7 @@ images=(
     pod2daemon
     kube-controllers
     goldmane
+    tier-rbac
     whisker
     whisker-backend
 )

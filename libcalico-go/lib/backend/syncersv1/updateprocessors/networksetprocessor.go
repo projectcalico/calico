@@ -53,7 +53,7 @@ func convertNetworkSetV2ToV1Value(val interface{}) (interface{}, error) {
 
 	var addrs []cnet.IPNet
 	for _, cidrString := range v3res.Spec.Nets {
-		_, ipNet, err := cnet.ParseCIDROrIP(cidrString)
+		_, ipNet, err := cnet.ParseCIDROrIP(string(cidrString))
 		if err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"CIDR":       cidrString,
