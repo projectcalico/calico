@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include <linux/types.h>
@@ -60,6 +60,9 @@
 
 #ifndef IPVER6
 #include "ip_v4_fragment.h"
+#include "tcp4.h"
+#else
+#include "tcp6.h"
 #endif
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
@@ -1961,6 +1964,43 @@ allow:
 
 deny:
 	return TC_ACT_SHOT;
+}
+
+SEC("tc")
+int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
+{
+        /* Initialise the context, which is stored on the stack, and the state, which
+         * we use to pass data from one program to the next via tail calls. */
+        DECLARE_TC_CTX(_ctx,
+                .skb = skb,
+                .fwd = {
+                        .res = TC_ACT_UNSPEC,
+                        .reason = CALI_REASON_UNKNOWN,
+                },
+        );
+        struct cali_tc_ctx *ctx = &_ctx;
+	int ret = 0;
+#ifndef IPVER6
+	ret = tcp_v4_rst(ctx);
+#else
+	ret = tcp_v6_rst(ctx);
+#endif
+
+        CALI_DEBUG("Entering calico_tc_skb_send_tcp_rst");
+        if (ret) {
+                ctx->fwd.res = TC_ACT_SHOT;
+        } else {
+                fwd_fib_set(&ctx->fwd, true);
+        }
+
+        if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+                deny_reason(ctx, CALI_REASON_SHORT);
+                CALI_DEBUG("Too short");
+                return TC_ACT_SHOT;
+        }
+
+        tc_state_fill_from_iphdr(ctx);
+        return forward_or_drop(ctx);
 }
 
 
