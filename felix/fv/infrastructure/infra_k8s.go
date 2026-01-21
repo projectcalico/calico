@@ -238,9 +238,11 @@ func (kds *K8sDatastoreInfra) runK8sApiserver() {
 	if err != nil {
 		panic(err)
 	}
+	crdPath := os.Getenv("CALICO_CRD_PATH")
+
 	args := []string{
 		"-v", os.Getenv("CERTS_PATH") + ":/home/user/certs", // Mount in location of certificates.
-		"-v", pwd + "/../../libcalico-go/config/crd:/crds", // Mount in location of CRDs.
+		"-v", fmt.Sprintf("%s/../../%s:/crds", pwd, crdPath), // Mount in location of CRDs.
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
@@ -442,9 +444,10 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	kds.BadEndpoint = fmt.Sprintf("https://%s:1234", kds.containerGetIPForURL(kds.k8sApiContainer))
 
 	start = time.Now()
+	groupVersion := os.Getenv("CALICO_API_GROUP")
 	for {
 		var resp *http.Response
-		resp, err = insecureHTTPClient.Get(kds.Endpoint + "/apis/crd.projectcalico.org/v1/felixconfigurations")
+		resp, err = insecureHTTPClient.Get(fmt.Sprintf("%s/apis/%s/felixconfigurations", kds.Endpoint, groupVersion))
 		if resp.StatusCode != 200 {
 			err = fmt.Errorf("bad status (%v) for CRD GET request", resp.StatusCode)
 		}
@@ -467,49 +470,20 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	kds.CertFileName = "/tmp/" + kds.k8sApiContainer.Name + ".crt"
 	start = time.Now()
 	for {
-		// Make sure any retry is clean.
-		_ = os.Remove(kds.CertFileName)
-
 		cmd := utils.Command("docker", "cp",
 			kds.k8sApiContainer.Name+":/home/user/certs/kubernetes.pem",
 			kds.CertFileName,
 		)
 		err = cmd.Run()
-		if err != nil {
-			if time.Since(start) > 120*time.Second {
-				log.WithError(err).Error("Failed to get API server cert")
-				return nil, err
-			}
-			time.Sleep(100 * time.Millisecond)
-			continue
+		if err == nil {
+			break
 		}
-		// Sometimes the very first felix container that we start fails to
-		// mount this file.  Double check that it is there and we can read it.
-		if _, err := os.Stat(kds.CertFileName); err != nil {
-			log.WithError(err).Error("Failed to stat API server cert that we just copied?!")
-			if time.Since(start) > 120*time.Second {
-				return nil, err
-			}
-			time.Sleep(100 * time.Millisecond)
-			continue
+		if time.Since(start) > 120*time.Second {
+			log.WithError(err).Error("Failed to get API server cert")
+			return nil, err
 		}
-		if f, err := os.Open(kds.CertFileName); err != nil {
-			log.WithError(err).Error("Failed to open API server cert that we just copied?!")
-			if time.Since(start) > 120*time.Second {
-				return nil, err
-			}
-			time.Sleep(100 * time.Millisecond)
-			continue
-		} else {
-			err := f.Sync()
-			if err != nil {
-				log.WithError(err).Error("Failed to sync API server cert that we just copied?!")
-			}
-			_ = f.Close()
-		}
-		break
+		time.Sleep(100 * time.Millisecond)
 	}
-	log.Info("Got API server cert.")
 
 	start = time.Now()
 	for {
@@ -520,6 +494,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 					K8sAPIEndpoint:           kds.Endpoint,
 					K8sInsecureSkipTLSVerify: true,
 					K8sClientQPS:             100,
+					CalicoAPIGroup:           os.Getenv("CALICO_API_GROUP"),
 				},
 			},
 		})
@@ -679,7 +654,7 @@ func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
 		"-e", "K8S_API_ENDPOINT=" + kds.Endpoint,
 		"-e", "KUBERNETES_MASTER=" + kds.Endpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", kds.CertFileName, "/tmp/apiserver.crt"),
+		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
 	}
 }
 
@@ -690,12 +665,16 @@ func (kds *K8sDatastoreInfra) GetBadEndpointDockerArgs() []string {
 		"-e", "TYPHA_DATASTORETYPE=kubernetes",
 		"-e", "K8S_API_ENDPOINT=" + kds.BadEndpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", kds.CertFileName, "/tmp/apiserver.crt"),
+		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
 	}
 }
 
 func (kds *K8sDatastoreInfra) GetCalicoClient() client.Interface {
 	return kds.calicoClient
+}
+
+func (kds *K8sDatastoreInfra) UseV3API() bool {
+	return os.Getenv("CALICO_API_GROUP") == "projectcalico.org/v3"
 }
 
 func (kds *K8sDatastoreInfra) GetClusterGUID() string {
