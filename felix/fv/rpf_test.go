@@ -136,15 +136,13 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
-				tcpdumpHEP.Start()
-				defer tcpdumpHEP.Stop()
+				tcpdumpHEP.Start(infra)
 
 				tcpdumpWl := w.AttachTCPDump()
 				tcpdumpWl.SetLogEnabled(true)
 				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
-				tcpdumpWl.Start()
-				defer tcpdumpWl.Stop()
+				tcpdumpWl.Start(infra)
 
 				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
@@ -172,15 +170,13 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
-				tcpdumpHEP.Start()
-				defer tcpdumpHEP.Stop()
+				tcpdumpHEP.Start(infra)
 
 				tcpdumpWl := w.AttachTCPDump()
 				tcpdumpWl.SetLogEnabled(true)
 				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
-				tcpdumpWl.Start()
-				defer tcpdumpWl.Stop()
+				tcpdumpWl.Start(infra)
 
 				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
@@ -206,15 +202,13 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
-				tcpdumpHEP.Start()
-				defer tcpdumpHEP.Stop()
+				tcpdumpHEP.Start(infra)
 
 				tcpdumpWl := w.AttachTCPDump()
 				tcpdumpWl.SetLogEnabled(true)
 				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
-				tcpdumpWl.Start()
-				defer tcpdumpWl.Stop()
+				tcpdumpWl.Start(infra)
 
 				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
