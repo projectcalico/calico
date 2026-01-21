@@ -2,7 +2,7 @@
 This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
-go 1.25.5
+go 1.25.6
 github.com/fxamacker/cbor/v2 v2.9.0
 github.com/go-logr/logr v1.4.3
 github.com/gogo/protobuf v1.3.2
@@ -18,8 +18,8 @@ golang.org/x/net v0.48.0
 golang.org/x/sys v0.39.0
 golang.org/x/text v0.32.0
 gopkg.in/inf.v0 v0.9.1
-k8s.io/api v0.34.2
-k8s.io/apimachinery v0.34.2
+k8s.io/api v0.34.3
+k8s.io/apimachinery v0.34.3
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
 k8s.io/utils v0.0.0-20250604170112-4c0f3b243397

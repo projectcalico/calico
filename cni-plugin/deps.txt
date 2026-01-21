@@ -2,7 +2,7 @@
 This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
-go 1.25.5
+go 1.25.6
 github.com/DeRuina/timberjack v1.3.9
 github.com/alexflint/go-filemutex v1.3.0
 github.com/beorn7/perks v1.0.1
@@ -87,9 +87,9 @@ gopkg.in/go-playground/validator.v9 v9.30.2
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.34.2
-k8s.io/apimachinery v0.34.2
-k8s.io/client-go v0.34.2
+k8s.io/api v0.34.3
+k8s.io/apimachinery v0.34.3
+k8s.io/client-go v0.34.3
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
 k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
