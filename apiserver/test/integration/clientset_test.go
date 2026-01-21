@@ -31,6 +31,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -1929,6 +1930,8 @@ func TestIPAMConfigClient(t *testing.T) {
 }
 
 func testIPAMConfigClient(client calicoclient.Interface, name string) error {
+	logrus.SetLevel(logrus.DebugLevel)
+
 	ipamConfigClient := client.ProjectcalicoV3().IPAMConfigurations()
 	ipamConfig := &v3.IPAMConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: name},

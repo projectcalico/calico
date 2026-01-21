@@ -225,17 +225,16 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		resources.NewBGPFilterClient(restClient, v3),
 	)
 
-	ipamConfigKind := libapiv3.KindIPAMConfig
-	if v3 {
-		// If we're using the v3 API, we use IPAMConfiguration as the kind. This is because historically, there
-		// has been a mismatch in the Kind used on the v3 API and the CRD API.
-		ipamConfigKind = apiv3.KindIPAMConfiguration
-	}
+	// IPAMConfig can come to us from two places:
+	// - The lib/ipam code, which uses the older v1 API 'IPAMConfig'
+	// - The lib/clientv3 code, which uses the newer v3 API 'IPAMConfiguration'
+	// We always register the v3 client, but also register the v1 client for the
+	// older IPAM code below if it's in use.
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		ipamConfigKind,
-		resources.NewIPAMConfigClient(restClient, v3),
+		apiv3.KindIPAMConfiguration,
+		resources.NewIPAMConfigClientV3(restClient, v3),
 	)
 
 	// These resources are backed directly by core Kubernetes APIs, and do not
@@ -308,12 +307,11 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 			libapiv3.KindIPAMHandle,
 			resources.NewIPAMHandleClient(restClient, v3),
 		)
-
 		c.registerResourceClient(
 			reflect.TypeOf(model.IPAMConfigKey{}),
 			nil,
 			libapiv3.KindIPAMConfig,
-			resources.NewIPAMConfigClient(restClient, v3),
+			resources.NewIPAMConfigClientV1(restClient, v3),
 		)
 	}
 
