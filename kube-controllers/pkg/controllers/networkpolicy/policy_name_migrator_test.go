@@ -31,8 +31,8 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -401,7 +401,7 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Register Calico CRD types with the scheme.
-		scheme.AddCalicoResourcesToGlobalScheme()
+		v1scheme.AddCalicoResourcesToGlobalScheme()
 
 		// Create a client for interacting with CRDs directly.
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
