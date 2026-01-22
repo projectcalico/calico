@@ -2958,7 +2958,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		config, _, err := CreateKubernetesClientset(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		config.ContentType = runtime.ContentTypeJSON
-		kcnpClient, err = buildK8SCNPClient(config)
+		kcnpClient, err = BuildK8SCNPClient(config)
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx = context.Background()
