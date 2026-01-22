@@ -4631,7 +4631,7 @@ func (m *bpfEndpointManager) loopUpdatingMaglevMetrics() {
 	for range ticker.C {
 		maglevToLocalSum := uint64(0)
 		maglevToRemoteSum := uint64(0)
-		m.commonMaps.CountersMap.Iter(func(k, v []byte) maps.IteratorAction {
+		err = m.commonMaps.CountersMap.Iter(func(k, v []byte) maps.IteratorAction {
 			var keyParsed counters.Key = [8]byte{}
 			copy(keyParsed[:], k)
 			if keyParsed.Hook() != hook.Ingress {
@@ -4655,6 +4655,10 @@ func (m *bpfEndpointManager) loopUpdatingMaglevMetrics() {
 			maglevToRemoteSum += maglevToRemote
 			return maps.IterNone
 		})
+		if err != nil {
+			logrus.WithError(err).Warn("Error iterating Maglev counters map")
+		}
+
 		local.Set(float64(maglevToLocalSum))
 		remote.Set(float64(maglevToRemoteSum))
 	}
