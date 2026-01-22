@@ -21,7 +21,7 @@ struct counters_key {
 #define COUNTERS_TC_EGRESS	1
 #define COUNTERS_XDP		2
 
-CALI_MAP(cali_counters, 6,
+CALI_MAP(cali_counters, 7,
 		BPF_MAP_TYPE_PERCPU_HASH,
 		struct counters_key, counters_t, 20000,
 		0)
