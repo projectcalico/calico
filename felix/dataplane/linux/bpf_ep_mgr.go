@@ -103,6 +103,10 @@ var (
 		Name: "felix_bpf_happy_dataplane_endpoints",
 		Help: "Number of BPF endpoints that are successfully programmed.",
 	})
+	bpfMaglevPacketsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_maglev_packets_total",
+		Help: "Total number of Maglev packets forwarded.",
+	}, []string{"direction", "location"})
 	errApplyingPolicy = errors.New("error applying policy")
 )
 
@@ -123,6 +127,7 @@ func init() {
 	prometheus.MustRegister(bpfEndpointsGauge)
 	prometheus.MustRegister(bpfDirtyEndpointsGauge)
 	prometheus.MustRegister(bpfHappyEndpointsGauge)
+	prometheus.MustRegister(bpfMaglevPacketsTotal)
 
 	binary.LittleEndian.PutUint32(jumpMapV4PolicyKey, uint32(tcdefs.ProgIndexPolicy))
 	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexPolicy))
@@ -687,6 +692,8 @@ func NewBPFEndpointManager(
 			}
 		}
 	}
+
+	go m.loopUpdatingMaglevMetrics()
 
 	return m, nil
 }
@@ -4604,6 +4611,57 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		}
 	}
 	return IfaceTypeData
+}
+
+func (m *bpfEndpointManager) loopUpdatingMaglevMetrics() {
+	// Labels are: "direction", "location".
+	local, err := bpfMaglevPacketsTotal.GetMetricWithLabelValues("to_backend", "local")
+	if err != nil {
+		logrus.WithError(err).Warn("Error getting Maglev local metric")
+	}
+	remote, err := bpfMaglevPacketsTotal.GetMetricWithLabelValues("to_backend", "remote")
+	if err != nil {
+		logrus.WithError(err).Warn("Error getting Maglev remote metric")
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	logrus.Debug("Starting maglev metrics loop...")
+	for range ticker.C {
+		maglevToLocalSum := uint64(0)
+		maglevToRemoteSum := uint64(0)
+		err = m.commonMaps.CountersMap.Iter(func(k, v []byte) maps.IteratorAction {
+			var keyParsed counters.Key = [8]byte{}
+			copy(keyParsed[:], k)
+			if keyParsed.Hook() != hook.Ingress {
+				logrus.Debug("Skipping non-ingress Maglev counters")
+				return maps.IterNone
+			}
+
+			vParsed := counters.ValFromBytes(v)
+			maglevToLocal := vParsed[counters.ForwardedMaglevToLocal]
+			maglevToRemote := vParsed[counters.ForwardedMaglevToRemote]
+
+			if logrus.GetLevel() == logrus.DebugLevel {
+				logrus.WithField("valBytes", v).Debug("Got counters bytes for some key")
+				logrus.WithFields(logrus.Fields{
+					"maglevToLocal":  maglevToLocal,
+					"maglevToRemote": maglevToRemote,
+				}).Debug("Parsed Maglev Counters")
+			}
+
+			maglevToLocalSum += maglevToLocal
+			maglevToRemoteSum += maglevToRemote
+			return maps.IterNone
+		})
+		if err != nil {
+			logrus.WithError(err).Warn("Error iterating Maglev counters map")
+		}
+
+		local.Set(float64(maglevToLocalSum))
+		remote.Set(float64(maglevToRemoteSum))
+	}
 }
 
 func (trees bpfIfaceTrees) getPhyDevices(masterIfName string) []string {
