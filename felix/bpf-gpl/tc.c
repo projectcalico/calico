@@ -865,7 +865,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		 * if we need encap or not. Must do before MTU check and before
 		 * we jump to do the encap.
 		 */
-		if (ct_ctx_nat /* iff CALI_CT_NEW || CALI_CT_MAGLEV_MID_FLOW_MISS */) {
+		if (ct_ctx_nat) {
 			struct cali_rt * rt;
 
 			if (encap_needed) {
@@ -889,6 +889,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 								(STATE->ct_result.flags & CALI_CT_FLAG_NP_NO_DSR);
 						}
 						ct_ctx_nat->flags |= CALI_CT_FLAG_NP_FWD;
+						STATE->ct_result.flags |= CALI_CT_FLAG_NP_FWD;
 					}
 
 					ct_ctx_nat->allow_return = true;
@@ -2241,7 +2242,7 @@ int calico_tc_maglev(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	// Ammend CT state now that we know it's Maglev.
+	// Amend CT state now that we know it's Maglev.
 	ctx->state->ct_result.flags |= CALI_CT_FLAG_MAGLEV;
 	ctx->state->post_nat_ip_dst = ctx->nat_dest->addr;
 	ctx->state->post_nat_dport = ctx->nat_dest->port;

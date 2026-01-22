@@ -400,6 +400,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFProfiling"] = "Enabled"
+			options.ExtraEnvVars["FELIX_PrometheusMetricsEnabled"] = "true"
+			options.ExtraEnvVars["FELIX_PrometheusMetricsHost"] = "0.0.0.0"
+
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
@@ -1996,6 +1999,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							return maglevMapAnySearch(val, family, felix)
 						}
 					}
+					probeMaglevMetric := func() []int {
+						sums := make([]int, 0)
+						for i := range 3 {
+							remoteMetrics, err := tc.Felixes[i].PromMetric("felix_bpf_maglev_packets_total{direction=\"to_backend\",location=\"remote\"}").Int()
+							if err != nil {
+								log.WithError(err).WithField("felix", tc.Felixes[i].Name).Warn("Error while probing Felix metric. Skipping this felix")
+								continue
+							}
+
+							localMetrics, err := tc.Felixes[i].PromMetric("felix_bpf_maglev_packets_total{direction=\"to_backend\",location=\"local\"}").Int()
+							if err != nil {
+								log.WithError(err).WithField("felix", tc.Felixes[i].Name).Warn("Error while probing Felix metric. Skipping this felix")
+								continue
+							}
+
+							sum := remoteMetrics + localMetrics
+							sums = append(sums, sum)
+						}
+						return sums
+					}
 
 					BeforeEach(func() {
 						switch testOpts.protocol {
@@ -2010,11 +2033,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						log.WithFields(log.Fields{"number": proto, "name": testOpts.protocol}).Info("parsed protocol")
 
+						pTCP := numorstring.ProtocolFromString("tcp")
+						promPinhole := api.Rule{
+							Action:   "Allow",
+							Protocol: &pTCP,
+							Destination: api.EntityRule{
+								Ports: []numorstring.Port{
+									{MinPort: 9091, MaxPort: 9091},
+								},
+								Nets: []string{},
+							},
+						}
+
 						// Create policy allowing ingress from external client
 						allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
 						allowIngressFromExtClient.Namespace = "fv"
 						allowIngressFromExtClient.Name = "policy-ext-client"
 						allowIngressFromExtClient.Spec.Ingress = []api.Rule{
+							promPinhole,
 							{
 								Action: "Allow",
 								Source: api.EntityRule{
@@ -2093,9 +2129,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 
 					It("should have connectivity from external client to maglev backend via cluster IP and external IP", func() {
+						Eventually(probeMaglevMetric, "10s", "1s").Should(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev metric to start at 0")
+
 						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
 						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
+
+						Eventually(probeMaglevMetric, "5s").ShouldNot(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev metric to have increased")
 					})
 
 					testFailover := func(serviceIP string) {
