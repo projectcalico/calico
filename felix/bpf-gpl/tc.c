@@ -889,6 +889,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 								(STATE->ct_result.flags & CALI_CT_FLAG_NP_NO_DSR);
 						}
 						ct_ctx_nat->flags |= CALI_CT_FLAG_NP_FWD;
+						STATE->ct_result.flags |= CALI_CT_FLAG_NP_FWD;
 					}
 
 					ct_ctx_nat->allow_return = true;

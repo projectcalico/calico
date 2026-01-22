@@ -572,15 +572,20 @@ allow:
 		}
 	}
 
-	if (CALI_F_TO_HOST && rc != TC_ACT_SHOT
-			&& ctx->state->ct_result.flags & CALI_CT_FLAG_MAGLEV) {
-		struct cali_rt *rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-		if (rt && cali_rt_flags_local_workload(rt->flags)) {
+	if (ctx->state->ct_result.flags & CALI_CT_FLAG_MAGLEV &&
+		CALI_F_TO_HOST && CALI_F_FROM_HEP && rc != TC_ACT_SHOT ) {
+
+		int ret_from_tun = CALI_F_FROM_HEP &&
+			!ip_void(ctx->state->tun_ip) &&
+			ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_DNAT &&
+			ctx->state->ct_result.flags & CALI_CT_FLAG_NP_FWD;
+
+		if (ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL)  {
 			CALI_INFO("Counting Maglev packet forwarded to local workload");
-			counter_inc(ctx, CALI_REASON_MAGLEV_FORWARDED_LOCAL);
-		} else if (rt && cali_rt_flags_remote_workload(rt->flags)) {
+			counter_inc(ctx, CALI_REASON_MAGLEV_FORWARDED_TO_LOCAL);
+		} else if (ctx->state->ct_result.flags & CALI_CT_FLAG_NP_FWD && !ret_from_tun) {
 			CALI_INFO("Counting Maglev packet forwarded to remote workload");
-			counter_inc(ctx, CALI_REASON_MAGLEV_FORWARDED_REMOTE);
+			counter_inc(ctx, CALI_REASON_MAGLEV_FORWARDED_TO_REMOTE);
 		}
 	}
 

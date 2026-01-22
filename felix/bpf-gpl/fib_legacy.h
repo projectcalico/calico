@@ -322,9 +322,9 @@ allow:
 			&& ctx->state->ct_result.flags & CALI_CT_FLAG_MAGLEV) {
 		struct cali_rt *rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
 		if (rt && cali_rt_flags_local_workload(rt->flags)) {
-			counter_inc(ctx, CALI_REASON_MAGLEV_FORWARDED_LOCAL);
+			counter_inc(ctx, CALI_REASON_MAGLEV_FORWARDED_TO_LOCAL);
 		} else if (rt && cali_rt_flags_remote_workload(rt->flags)) {
-			counter_inc(ctx, CALI_REASON_MAGLEV_FORWARDED_REMOTE);
+			counter_inc(ctx, CALI_REASON_MAGLEV_FORWARDED_TO_REMOTE);
 		}
 	}
 
