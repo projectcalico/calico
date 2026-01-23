@@ -1,0 +1,70 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: blockaffinities.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: BlockAffinity
+    listKind: BlockAffinityList
+    plural: blockaffinities
+    shortNames:
+      - affinity
+      - affinities
+    singular: blockaffinity
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - additionalPrinterColumns:
+        - description: The block CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The node the block is affine to
+          jsonPath: .spec.node
+          name: Node
+          type: string
+      name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                cidr:
+                  format: cidr
+                  type: string
+                deleted:
+                  default: false
+                  type: boolean
+                node:
+                  type: string
+                state:
+                  enum:
+                    - ""
+                    - confirmed
+                    - pending
+                    - pendingDeletion
+                  type: string
+                type:
+                  type: string
+              required:
+                - cidr
+                - deleted
+                - node
+                - state
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+      subresources: {}
