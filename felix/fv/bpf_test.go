@@ -400,6 +400,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFProfiling"] = "Enabled"
+			options.ExtraEnvVars["FELIX_PrometheusMetricsEnabled"] = "true"
+			options.ExtraEnvVars["FELIX_PrometheusMetricsHost"] = "0.0.0.0"
+
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
@@ -1990,6 +1993,38 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							return maglevMapAnySearch(val, family, felix)
 						}
 					}
+					probeMaglevCounterMetric := func(felixes []*infrastructure.Felix) []int {
+						sums := make([]int, 0)
+						for _, f := range felixes {
+							remoteMetrics, err := f.PromMetric("felix_bpf_maglev_packets_total{direction=\"to_backend\",location=\"remote\"}").Int()
+							if err != nil {
+								log.WithError(err).WithField("felix", f.Name).Warn("Error while probing Felix metric. Skipping this felix")
+								continue
+							}
+
+							localMetrics, err := f.PromMetric("felix_bpf_maglev_packets_total{direction=\"to_backend\",location=\"local\"}").Int()
+							if err != nil {
+								log.WithError(err).WithField("felix", f.Name).Warn("Error while probing Felix metric. Skipping this felix")
+								continue
+							}
+
+							sum := remoteMetrics + localMetrics
+							sums = append(sums, sum)
+						}
+						return sums
+					}
+					probeMaglevConntrackMetric := func(felixes []*infrastructure.Felix) []int {
+						counts := make([]int, 0)
+						for _, f := range felixes {
+							ctCount, err := f.PromMetric("felix_bpf_conntrack_maglev_total{location=\"local\"}").Int()
+							if err != nil {
+								log.WithError(err).WithField("felix", f.Name).Warn("Error while probing Felix metric. Skipping this felix")
+								continue
+							}
+							counts = append(counts, ctCount)
+						}
+						return counts
+					}
 
 					BeforeEach(func() {
 						switch testOpts.protocol {
@@ -2004,11 +2039,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						log.WithFields(log.Fields{"number": proto, "name": testOpts.protocol}).Info("parsed protocol")
 
+						pTCP := numorstring.ProtocolFromString("tcp")
+						promPinhole := api.Rule{
+							Action:   "Allow",
+							Protocol: &pTCP,
+							Destination: api.EntityRule{
+								Ports: []numorstring.Port{
+									{MinPort: 9091, MaxPort: 9091},
+								},
+								Nets: []string{},
+							},
+						}
+
 						// Create policy allowing ingress from external client
 						allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
 						allowIngressFromExtClient.Namespace = "fv"
 						allowIngressFromExtClient.Name = "policy-ext-client"
 						allowIngressFromExtClient.Spec.Ingress = []api.Rule{
+							promPinhole,
 							{
 								Action: "Allow",
 								Source: api.EntityRule{
@@ -2087,9 +2135,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 
 					It("should have connectivity from external client to maglev backend via cluster IP and external IP", func() {
+						Eventually(func() []int { return probeMaglevCounterMetric(tc.Felixes) }, "10s", "1s").Should(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev PACKETS metric to start at 0")
+						Eventually(func() []int { return probeMaglevConntrackMetric(tc.Felixes) }, "10s", "1s").Should(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev CONNTRACK metric to start at 0")
+
 						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
 						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
+
+						Eventually(func() []int { return probeMaglevCounterMetric(tc.Felixes) }, "10s").ShouldNot(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev PACKETS metric to have increased")
+						Eventually(func() []int { return probeMaglevConntrackMetric(tc.Felixes) }, "10s").ShouldNot(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev CONNTRACK metric to have increased")
 					})
 
 					testFailover := func(serviceIP string) {
