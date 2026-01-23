@@ -134,13 +134,13 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 	logrus.Info("Starting IPPool controller")
 
 	// Wait till k8s cache is synced
-	logrus.Debug("Waiting to sync with Kubernetes API (IPPools)")
-	if !cache.WaitForNamedCacheSync("pools", stopCh, c.poolInformer.HasSynced) {
+	logrus.Debug("Waiting to sync with Kubernetes API")
+	if !cache.WaitForNamedCacheSync("pools", stopCh, c.poolInformer.HasSynced, c.blockInformer.HasSynced) {
 		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
 
-	logrus.Debug("Finished syncing with Kubernetes API (IPPools)")
+	logrus.Debug("Finished syncing with Kubernetes API")
 
 	// We're in-sync. Start the sub-controllers.
 	<-stopCh
@@ -154,6 +154,8 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 		"cidr":         p.Spec.CIDR,
 		"hasFinalizer": HasFinalizer(p),
 	})
+	logCtx.Debug("Reconciling IPPool")
+
 	if p.DeletionTimestamp != nil {
 		logCtx = logCtx.WithField("deletionTimestamp", p.DeletionTimestamp.String())
 	}
