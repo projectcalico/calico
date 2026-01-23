@@ -36,7 +36,8 @@ var expectedDefaultConfig string = `{
       "ipam": {"type": "calico-ipam"},
       "policy": {"type": "k8s"},
       "kubernetes": {"kubeconfig": "/etc/cni/net.d/calico-kubeconfig"},
-      "require_mtu_file": false
+      "require_mtu_file": false,
+      "calico_api_group": "crd.projectcalico.org/v1"
     },
     {
       "type": "portmap",
@@ -170,15 +171,15 @@ var _ = Describe("CNI installation tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make subdirectories for where we expect binaries and config to be installed.
-		err = os.MkdirAll(tempDir+"/bin", 0755)
+		err = os.MkdirAll(tempDir+"/bin", 0o755)
 		if err != nil {
 			Fail("Failed to create directory tmp/bin")
 		}
-		err = os.MkdirAll(tempDir+"/net.d", 0755)
+		err = os.MkdirAll(tempDir+"/net.d", 0o755)
 		if err != nil {
 			Fail("Failed to create directory tmp/net.d")
 		}
-		err = os.MkdirAll(tempDir+"/serviceaccount", 0755)
+		err = os.MkdirAll(tempDir+"/serviceaccount", 0o755)
 		if err != nil {
 			Fail("Failed to create directory tmp/serviceaccount")
 		}
@@ -186,7 +187,7 @@ var _ = Describe("CNI installation tests", func() {
 		// Create token file for the Kubernetes client.
 		k8sSecret := []byte("my-secret-key")
 		tokenFile := fmt.Sprintf("%s/serviceaccount/token", tempDir)
-		err = os.WriteFile(tokenFile, k8sSecret, 0755)
+		err = os.WriteFile(tokenFile, k8sSecret, 0o755)
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s secret file: %v", err))
 		}
@@ -215,15 +216,15 @@ yvQ/7I8lUKV1hMeCWc2k/x146B/gEgyDl1zUNnJZ/hrKmXqjQy3dkj4HzBePHYND
 PuB/TL+u2y+iQUyXxLy3
 -----END CERTIFICATE-----`)
 		caFile := fmt.Sprintf("%s/serviceaccount/ca.crt", tempDir)
-		err = os.WriteFile(caFile, k8sCA, 0755)
+		err = os.WriteFile(caFile, k8sCA, 0o755)
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s CA file for test: %v", err))
 		}
 
 		// Create namespace file for token refresh
 		k8sNamespace := []byte("kube-system")
-		var namespaceFile = fmt.Sprintf("%s/serviceaccount/namespace", tempDir)
-		err = os.WriteFile(namespaceFile, k8sNamespace, 0755)
+		namespaceFile := fmt.Sprintf("%s/serviceaccount/namespace", tempDir)
+		err = os.WriteFile(namespaceFile, k8sNamespace, 0o755)
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s namespace file: %v", err))
 		}
@@ -326,7 +327,7 @@ PuB/TL+u2y+iQUyXxLy3
 		// Write the alternate configuration to disk so it can be picked up by
 		// the CNI container.
 		altConfigFile := tempDir + "/net.d/alternate-config"
-		err := os.WriteFile(altConfigFile, []byte(expectedAlternateConfig), 0755)
+		err := os.WriteFile(altConfigFile, []byte(expectedAlternateConfig), 0o755)
 		Expect(err).NotTo(HaveOccurred())
 		err = runCniContainer(
 			tempDir, true,
@@ -366,12 +367,12 @@ PuB/TL+u2y+iQUyXxLy3
 	Context("copying /calico-secrets", func() {
 		var err error
 		BeforeEach(func() {
-			err = os.MkdirAll(tempDir+"/certs", 0755)
+			err = os.MkdirAll(tempDir+"/certs", 0o755)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("Should not crash or copy when having a hidden file", func() {
-			err = os.WriteFile(tempDir+"/certs/.hidden", []byte("doesn't matter"), 0644)
+			err = os.WriteFile(tempDir+"/certs/.hidden", []byte("doesn't matter"), 0o644)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
 			err = runCniContainer(tempDir, true, "-v", tempDir+"/certs:/calico-secrets")
 			Expect(err).NotTo(HaveOccurred())
@@ -379,7 +380,7 @@ PuB/TL+u2y+iQUyXxLy3
 			Expect(err).To(HaveOccurred())
 		})
 		It("Should copy a non-hidden file", func() {
-			err = os.WriteFile(tempDir+"/certs/etcd-cert", []byte("doesn't matter"), 0644)
+			err = os.WriteFile(tempDir+"/certs/etcd-cert", []byte("doesn't matter"), 0o644)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 			err = runCniContainer(tempDir, true, "-v", tempDir+"/certs:/calico-secrets", "-e", "CNI_NETWORK_CONFIG={\"etcd_cert\": \"__ETCD_CERT_FILE__\"}")
 			Expect(err).NotTo(HaveOccurred())
@@ -425,9 +426,9 @@ var _ = Describe("file comparison tests", func() {
 
 	It("should compare two equal files", func() {
 		// Write two identical files.
-		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = os.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+		err = os.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are equal.
@@ -438,9 +439,9 @@ var _ = Describe("file comparison tests", func() {
 
 	It("should compare two unequal files", func() {
 		// Write two files with different contents.
-		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = os.WriteFile(tempDir+"/dstFile", []byte("it does matter"), 0644)
+		err = os.WriteFile(tempDir+"/dstFile", []byte("it does matter"), 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -451,9 +452,9 @@ var _ = Describe("file comparison tests", func() {
 
 	It("should compare two unequal files of the same size", func() {
 		// Write two files with different contents, but same total size.
-		err := os.WriteFile(tempDir+"/srcFile", []byte("foobar"), 0644)
+		err := os.WriteFile(tempDir+"/srcFile", []byte("foobar"), 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = os.WriteFile(tempDir+"/dstFile", []byte("barfoo"), 0644)
+		err = os.WriteFile(tempDir+"/dstFile", []byte("barfoo"), 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -464,13 +465,13 @@ var _ = Describe("file comparison tests", func() {
 
 	It("should compare two files with differing file modes", func() {
 		// Write two identical files.
-		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = os.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+		err = os.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// For whatever reason, we need to explicitly chmod the file to get the permissions to change.
-		Expect(os.Chmod(tempDir+"/dstFile", 0777)).NotTo(HaveOccurred())
+		Expect(os.Chmod(tempDir+"/dstFile", 0o777)).NotTo(HaveOccurred())
 
 		// Assert that they are not equal.
 		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
@@ -479,12 +480,12 @@ var _ = Describe("file comparison tests", func() {
 	})
 
 	It("should compare a big file with a small file", func() {
-		err := os.WriteFile(tempDir+"/srcFile", bigFile, 0644)
+		err := os.WriteFile(tempDir+"/srcFile", bigFile, 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Here we use the first 10 bytes from "bigFile" to be extra tricky, to make sure
 		// we spot if the files partially match.
-		err = os.WriteFile(tempDir+"/dstFile", bigFile[:10], 0644)
+		err = os.WriteFile(tempDir+"/dstFile", bigFile[:10], 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -496,9 +497,9 @@ var _ = Describe("file comparison tests", func() {
 	It("should compare a small file with a big file", func() {
 		// Here we use the first 10 bytes from "bigFile" to be extra tricky, to make sure
 		// we spot if the files partially match.
-		err := os.WriteFile(tempDir+"/srcFile", bigFile[:10], 0644)
+		err := os.WriteFile(tempDir+"/srcFile", bigFile[:10], 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = os.WriteFile(tempDir+"/dstFile", bigFile, 0644)
+		err = os.WriteFile(tempDir+"/dstFile", bigFile, 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -510,9 +511,9 @@ var _ = Describe("file comparison tests", func() {
 	It("should compare two files larger than the buffer size, that differ slightly", func() {
 		// Grab a slightly different number of bytes, ensuring that both are large enough
 		// to require a second loop iteration.
-		err := os.WriteFile(tempDir+"/srcFile", bigFile[:128002], 0644)
+		err := os.WriteFile(tempDir+"/srcFile", bigFile[:128002], 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = os.WriteFile(tempDir+"/dstFile", bigFile[:128003], 0644)
+		err = os.WriteFile(tempDir+"/dstFile", bigFile[:128003], 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -522,9 +523,9 @@ var _ = Describe("file comparison tests", func() {
 	})
 
 	It("should compare two identical files larger than the buffer size", func() {
-		err := os.WriteFile(tempDir+"/srcFile", bigFile, 0644)
+		err := os.WriteFile(tempDir+"/srcFile", bigFile, 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = os.WriteFile(tempDir+"/dstFile", bigFile, 0644)
+		err = os.WriteFile(tempDir+"/dstFile", bigFile, 0o644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are equal.
