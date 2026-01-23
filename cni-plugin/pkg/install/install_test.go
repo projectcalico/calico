@@ -577,6 +577,18 @@ func TestCalculateKubeconfig_IPv6_Wrapped(t *testing.T) {
 	}
 }
 
+func TestCalculateKubeconfig_IPv6_PreWrapped(t *testing.T) {
+	t.Setenv("KUBERNETES_SERVICE_HOST", "[2001:db8::1]")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
+
+	cfg := &rest.Config{TLSClientConfig: rest.TLSClientConfig{CAData: []byte("my-ca-data")}}
+	out := calculateKubeconfig(cfg, "tok")
+
+	if !strings.Contains(out, "server: https://[2001:db8::1]:6443") {
+		t.Fatalf("expected IPv6 host to be wrapped in brackets; got:\n%s", out)
+	}
+}
+
 func TestCalculateKubeconfig_SkipTLSVerify(t *testing.T) {
 	t.Setenv("SKIP_TLS_VERIFY", "true")
 	t.Setenv("KUBERNETES_SERVICE_HOST", "127.0.0.1")
