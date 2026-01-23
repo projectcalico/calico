@@ -703,7 +703,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 							tcpdump.AddMatcher("numWorkload1to0PacketsV6", regexp.MustCompile(workload10PacketsPatternV6))
 						}
 
-						tcpdump.Start()
+						tcpdump.Start(infra)
 						tcpdumps[i] = tcpdump
 					}
 				})
@@ -1345,7 +1345,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 				inWorkloadPacketsPattern := fmt.Sprintf("IP %s\\.\\d+ > %s\\.\\d+:", wls[2].IP, wls[0].IP)
 				tcpdump.AddMatcher("numInWorkloadPackets", regexp.MustCompile(inWorkloadPacketsPattern))
 
-				tcpdump.Start()
+				tcpdump.Start(infra)
 				tcpdumps = append(tcpdumps, tcpdump)
 			}
 		})
@@ -1495,7 +1495,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 			nonTunnelPacketsFelix1toFelix0Pattern := fmt.Sprintf("IP %s\\.%s > %s\\.%s: TCP", tc.Felixes[1].IP, defaultWorkloadPort, tc.Felixes[0].IP, defaultWorkloadPort)
 			tcpdump.AddMatcher("numNonTunnelPacketsFelix1toFelix0", regexp.MustCompile(nonTunnelPacketsFelix1toFelix0Pattern))
 
-			tcpdump.Start()
+			tcpdump.Start(infra)
 			tcpdumps = append(tcpdumps, tcpdump)
 		}
 
