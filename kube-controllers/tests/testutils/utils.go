@@ -26,8 +26,9 @@ import (
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
-	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/onsi/ginkgo"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
