@@ -33,6 +33,8 @@ global_job_config:
       value: "quay.io/"
     - name: INSTALLER
       value: "operator"
+    - name: RUN_LOCAL_TESTS
+      value: "true"
 
 # Dimensions
 # Provisioners: azr-aso, azr-aks
