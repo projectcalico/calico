@@ -77,6 +77,9 @@ spec:
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
               value: {{.Values.tigeraOperator.version}}
+          {{- with .Values.tigeraOperator.env }}
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint
