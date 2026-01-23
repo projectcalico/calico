@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/jitter"
@@ -54,6 +55,10 @@ var (
 		Name: "felix_bpf_conntrack_sweep_duration",
 		Help: "Conntrack sweep execution time (ns)",
 	})
+	conntrackGaugeMaglevTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_maglev_total",
+		Help: "Total number of maglev entries in conntrack table",
+	}, []string{"location"})
 	dummyKeyV6 = NewKeyV6(0, net.IPv6zero, 0, net.IPv6zero, 0)
 	dummyKey   = NewKey(0, net.IPv4zero, 0, net.IPv4zero, 0)
 )
@@ -64,6 +69,7 @@ func init() {
 	prometheus.MustRegister(conntrackGaugeCleaned)
 	prometheus.MustRegister(conntrackCounterCleaned)
 	prometheus.MustRegister(conntrackGaugeSweepDuration)
+	prometheus.MustRegister(conntrackGaugeMaglevTotal)
 }
 
 // ScanVerdict represents the set of values returned by EntryScan
@@ -223,6 +229,7 @@ func (s *Scanner) Scan() {
 	used := 0
 	cleaned := 0
 	numExpired := 0
+	maglevEntries := 0
 
 	if s.ctCleanupMap != nil {
 		s.ctCleanupMap.Desired().DeleteAll()
@@ -231,9 +238,15 @@ func (s *Scanner) Scan() {
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
 		ctVal := s.valueFromBytes(v)
+		ctFlags := ctVal.Flags()
 
 		used++
 		conntrackCounterCleaned.Inc()
+
+		if ctFlags&v4.FlagMaglev != 0 &&
+			ctFlags&v4.FlagExtLocal != 0 {
+			maglevEntries++
+		}
 
 		if debug {
 			log.WithFields(log.Fields{
@@ -318,6 +331,13 @@ func (s *Scanner) Scan() {
 
 	// Run the bpf cleaner to process the remaining entries in the cleanup map.
 	cleaned += s.runBPFCleaner()
+
+	maglevConntracksToLocalBackend, err := conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local")
+	if err != nil {
+		log.WithError(err).Warn("Couldn't get Maglev conntracks metric, will not update it on this iteration")
+	} else {
+		maglevConntracksToLocalBackend.Set(float64(maglevEntries))
+	}
 
 	conntrackCounterSweeps.Inc()
 	conntrackGaugeUsed.Set(float64(used))
