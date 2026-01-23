@@ -277,6 +277,11 @@ type Config struct {
 
 	RouteSource string
 
+	IPv4NormalRoutePriority   int
+	IPv4ElevatedRoutePriority int
+	IPv6NormalRoutePriority   int
+	IPv6ElevatedRoutePriority int
+
 	KubernetesProvider felixconfig.Provider
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
@@ -1093,6 +1098,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
+		&endpointManagerConfig{
+			kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
+			wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
+			bpfEnabled:             config.BPFEnabled,
+			bpfAttachType:          config.BPFAttachType,
+			nft:                    nftablesEnabled,
+			floatingIPsEnabled:     config.FloatingIPsEnabled,
+			normalRoutePriority:    config.IPv4NormalRoutePriority,
+			elevatedRoutePriority:  config.IPv4ElevatedRoutePriority,
+		},
 		rawTableV4,
 		mangleTableV4,
 		filterTableV4,
@@ -1100,17 +1115,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV4,
 		4,
 		epMarkMapper,
-		config.RulesConfig.KubeIPVSSupportEnabled,
-		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
 		filterMaps,
-		config.BPFEnabled,
-		config.BPFAttachType,
 		bpfEndpointManager,
 		callbacks,
-		config.FloatingIPsEnabled,
-		nftablesEnabled,
 		linkAddrsManagerV4,
 	)
 	dp.RegisterManager(epManager)
@@ -1299,6 +1308,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
 		dp.RegisterManager(newEndpointManager(
+			&endpointManagerConfig{
+				kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
+				wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
+				bpfEnabled:             config.BPFEnabled,
+				bpfAttachType:          config.BPFAttachType,
+				nft:                    nftablesEnabled,
+				floatingIPsEnabled:     config.FloatingIPsEnabled,
+				normalRoutePriority:    config.IPv6NormalRoutePriority,
+				elevatedRoutePriority:  config.IPv6ElevatedRoutePriority,
+			},
 			rawTableV6,
 			mangleTableV6,
 			filterTableV6,
@@ -1306,17 +1325,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6,
 			6,
 			epMarkMapper,
-			config.RulesConfig.KubeIPVSSupportEnabled,
-			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
 			filterMapsV6,
-			config.BPFEnabled,
-			config.BPFAttachType,
 			nil,
 			callbacks,
-			config.FloatingIPsEnabled,
-			nftablesEnabled,
 			linkAddrsManagerV6,
 		))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))

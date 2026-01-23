@@ -461,6 +461,12 @@ type Config struct {
 	RouteTableRanges  []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
 	RouteSyncDisabled bool                 `config:"bool;false"`
 
+	// Routing priority values.
+	IPv4NormalRoutePriority   int `config:"int(1:2147483646);1024"`
+	IPv4ElevatedRoutePriority int `config:"int(1:2147483646);512"`
+	IPv6NormalRoutePriority   int `config:"int(1:2147483646);1024"`
+	IPv6ElevatedRoutePriority int `config:"int(1:2147483646);512"`
+
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
 	SidecarAccelerationEnabled bool `config:"bool;false"`

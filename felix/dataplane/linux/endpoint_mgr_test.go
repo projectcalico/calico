@@ -866,6 +866,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			epMgr = newEndpointManagerWithShims(
+				&endpointManagerConfig{
+					kubeIPVSSupportEnabled: rrConfigNormal.KubeIPVSSupportEnabled,
+					wlInterfacePrefixes:    []string{"cali"},
+					bpfEnabled:             false,
+					bpfAttachType:          v3.BPFAttachOptionTCX,
+					nft:                    false,
+					floatingIPsEnabled:     true,
+				},
 				rawTable,
 				mangleTable,
 				filterTable,
@@ -873,19 +881,13 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				routeTable,
 				ipVersion,
 				rules.NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint),
-				rrConfigNormal.KubeIPVSSupportEnabled,
-				[]string{"cali"},
 				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,
 				mockProcSys.stat,
 				"1",
 				nil,
-				false,
-				v3.BPFAttachOptionTCX,
 				hepListener,
 				common.NewCallbacks(),
-				true,
-				false,
 				linkAddrsMgr,
 			)
 		})
@@ -2028,7 +2030,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					// programmed.
 					Context("with floating IPs disabled, but added to the endpoint", func() {
 						JustBeforeEach(func() {
-							epMgr.floatingIPsEnabled = false
+							epMgr.cfg.floatingIPsEnabled = false
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &wlEPID1,
 								Endpoint: &proto.WorkloadEndpoint{

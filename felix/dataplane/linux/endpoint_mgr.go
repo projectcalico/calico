@@ -111,6 +111,17 @@ func (c *endpointManagerCallbacks) InvokeRemoveWorkload(old *proto.WorkloadEndpo
 	c.removeWorkloadEndpoint.Invoke(old)
 }
 
+type endpointManagerConfig struct {
+	kubeIPVSSupportEnabled bool
+	wlInterfacePrefixes    []string
+	bpfEnabled             bool
+	bpfAttachType          apiv3.BPFAttachOption
+	nft                    bool
+	floatingIPsEnabled     bool
+	normalRoutePriority    int
+	elevatedRoutePriority  int
+}
+
 // endpointManager manages the dataplane resources that belong to each endpoint as well as
 // the "dispatch chains" that fan out packets to the right per-endpoint chain.
 //
@@ -123,10 +134,9 @@ func (c *endpointManagerCallbacks) InvokeRemoveWorkload(old *proto.WorkloadEndpo
 // that fail are left in the pending state so they can be retried later.
 type endpointManager struct {
 	// Config.
-	ipVersion              uint8
-	wlIfacesRegexp         *regexp.Regexp
-	kubeIPVSSupportEnabled bool
-	floatingIPsEnabled     bool
+	cfg            *endpointManagerConfig
+	ipVersion      uint8
+	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
 	rawTable     Table
@@ -216,8 +226,6 @@ type endpointManager struct {
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
-	bpfEnabled             bool
-	bpfAttachType          apiv3.BPFAttachOption
 	bpfEndpointManager     hepListener
 }
 
@@ -226,6 +234,7 @@ type EndpointStatusUpdateCallback func(ipVersion uint8, id any, status string, e
 type procSysWriter func(path, value string) error
 
 func newEndpointManager(
+	cfg *endpointManagerConfig,
 	rawTable Table,
 	mangleTable Table,
 	filterTable Table,
@@ -233,20 +242,15 @@ func newEndpointManager(
 	routeTable routetable.Interface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
-	kubeIPVSSupportEnabled bool,
-	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
-	bpfEnabled bool,
-	bpfAttachType apiv3.BPFAttachOption,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	floatingIPsEnabled bool,
-	nft bool,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
+		cfg,
 		rawTable,
 		mangleTable,
 		filterTable,
@@ -254,24 +258,19 @@ func newEndpointManager(
 		routeTable,
 		ipVersion,
 		epMarkMapper,
-		kubeIPVSSupportEnabled,
-		wlInterfacePrefixes,
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
 		os.Stat,
 		defaultRPFilter,
 		filterMaps,
-		bpfEnabled,
-		bpfAttachType,
 		bpfEndpointManager,
 		callbacks,
-		floatingIPsEnabled,
-		nft,
 		linkAddrsMgr,
 	)
 }
 
 func newEndpointManagerWithShims(
+	cfg *endpointManagerConfig,
 	rawTable Table,
 	mangleTable Table,
 	filterTable Table,
@@ -279,40 +278,31 @@ func newEndpointManagerWithShims(
 	routeTable routetable.Interface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
-	kubeIPVSSupportEnabled bool,
-	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
-	bpfEnabled bool,
-	bpfAttachType apiv3.BPFAttachOption,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	floatingIPsEnabled bool,
-	nft bool,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
 ) *endpointManager {
-	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
+	wlIfacesPattern := "^(" + strings.Join(cfg.wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
 
 	newMatchFn := iptables.Match
 	actions := iptables.Actions()
-	if nft {
+	if cfg.nft {
 		newMatchFn = nftables.Match
 		actions = nftables.Actions()
 	}
 
 	epManager := &endpointManager{
-		ipVersion:              ipVersion,
-		wlIfacesRegexp:         wlIfacesRegexp,
-		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
-		bpfEnabled:             bpfEnabled,
-		bpfAttachType:          bpfAttachType,
-		filterMaps:             filterMaps,
-		bpfEndpointManager:     bpfEndpointManager,
-		floatingIPsEnabled:     floatingIPsEnabled,
+		cfg:                cfg,
+		ipVersion:          ipVersion,
+		wlIfacesRegexp:     wlIfacesRegexp,
+		filterMaps:         filterMaps,
+		bpfEndpointManager: bpfEndpointManager,
 
 		newMatch: newMatchFn,
 		actions:  actions,
@@ -497,7 +487,7 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		m.rpfSkipChainDirty = false
 	}
 
-	if m.kubeIPVSSupportEnabled && m.needToCheckEndpointMarkChains {
+	if m.cfg.kubeIPVSSupportEnabled && m.needToCheckEndpointMarkChains {
 		m.resolveEndpointMarks()
 		m.needToCheckEndpointMarkChains = false
 	}
@@ -756,7 +746,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				if oldWorkload != nil && oldWorkload.Name != workload.Name {
 					logCxt.Debug("Interface name changed, cleaning up old state")
 					m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
-					if !m.bpfEnabled {
+					if !m.cfg.bpfEnabled {
 						m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 						if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
 							logCxt.Debugf("Removing RPF configuration for workload %s", workload.Name)
@@ -770,7 +760,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 				}
 				adminUp := workload.State == "active"
-				if !m.bpfEnabled {
+				if !m.cfg.bpfEnabled {
 					m.updateWorkloadEndpointChains(id, workload, adminUp)
 
 					if len(workload.AllowSpoofedSourcePrefixes) > 0 && !m.hasSourceSpoofingConfiguration(workload.Name) {
@@ -802,7 +792,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				}
 				alreadyCopied := false
 				for _, natInfo := range natInfos {
-					if m.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
+					if m.cfg.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
 						if !alreadyCopied {
 							ipStrings = append([]string(nil), ipStrings...)
 							alreadyCopied = true
@@ -826,8 +816,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					for _, s := range ipStrings {
 						routeTargets = append(routeTargets, routetable.Target{
 							RouteKey: routetable.RouteKey{
-
-								CIDR: ip.MustParseCIDROrIP(s),
+								CIDR:     ip.MustParseCIDROrIP(s),
+								Priority: m.cfg.normalRoutePriority,
 							},
 							DestMAC: mac,
 						})
@@ -881,7 +871,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		}
 	}
 
-	if !m.bpfEnabled && m.needToCheckDispatchChains {
+	if !m.cfg.bpfEnabled && m.needToCheckDispatchChains {
 		if m.filterMaps != nil {
 			// Update dispatch verdict maps if needed.
 			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
@@ -1018,7 +1008,7 @@ func (m *endpointManager) updateRPFSkipChain() {
 }
 
 func (m *endpointManager) resolveEndpointMarks() {
-	if m.bpfEnabled {
+	if m.cfg.bpfEnabled {
 		return
 	}
 
@@ -1208,7 +1198,7 @@ func (m *endpointManager) updateHostEndpoints() {
 		ifaceNameToPolicyGroups[ifaceName] = append(ifaceNameToPolicyGroups[ifaceName], pgs...)
 	}
 
-	if !m.bpfEnabled {
+	if !m.cfg.bpfEnabled {
 		// Build iptables chains for normal and apply-on-forward host endpoint policy.
 		newHostIfaceFiltChains := map[string][]*generictables.Chain{}
 		newHostIfaceMangleEgressChains := map[string][]*generictables.Chain{}
@@ -1301,7 +1291,7 @@ func (m *endpointManager) updateHostEndpoints() {
 
 		// Update the raw chain, for untracked traffic.
 		var rawChains []*generictables.Chain
-		if m.bpfEnabled {
+		if m.cfg.bpfEnabled {
 			untrackedTierGroups := m.groupTieredPolicy(hostEp.UntrackedTiers, includeOutbound)
 			addPolicyGroups(ifaceName, untrackedTierGroups)
 
@@ -1357,14 +1347,14 @@ func (m *endpointManager) updateHostEndpoints() {
 	// egress policy even in BPF mode.
 	log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
 	var newRawDispatchChains []*generictables.Chain
-	if m.bpfEnabled {
+	if m.cfg.bpfEnabled {
 		newRawDispatchChains = m.ruleRenderer.ToHostDispatchChains(newUntrackedIfaceNameToHostEpID, "")
 	} else {
 		newRawDispatchChains = m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, "", false)
 	}
 	m.updateDispatchChains(m.activeHostRawDispatchChains, newRawDispatchChains, m.rawTable)
 
-	if m.bpfEnabled {
+	if m.cfg.bpfEnabled {
 		// Code after this point is for other dispatch chains and IPVS endpoint marking,
 		// which aren't needed in BPF mode.
 		return
@@ -1540,7 +1530,7 @@ func (m *endpointManager) configureInterface(name string) error {
 	}
 
 	rpFilter := m.defaultRPFilter
-	if m.hasSourceSpoofingConfiguration(name) || m.bpfEnabled {
+	if m.hasSourceSpoofingConfiguration(name) || m.cfg.bpfEnabled {
 		rpFilter = "0"
 	}
 

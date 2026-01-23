@@ -421,6 +421,11 @@ func StartDataplaneDriver(
 
 			RouteSource: configParams.RouteSource,
 
+			IPv4NormalRoutePriority:   configParams.IPv4NormalRoutePriority,
+			IPv4ElevatedRoutePriority: configParams.IPv4ElevatedRoutePriority,
+			IPv6NormalRoutePriority:   configParams.IPv6NormalRoutePriority,
+			IPv6ElevatedRoutePriority: configParams.IPv6ElevatedRoutePriority,
+
 			KubernetesProvider: configParams.KubernetesProvider(),
 			Collector:          collector,
 			LookupsCache:       lc,
