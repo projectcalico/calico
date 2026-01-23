@@ -16,6 +16,7 @@ package config_test
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"reflect"
 	"regexp"
@@ -934,3 +935,26 @@ var _ = DescribeTable("SafeParamsEqual",
 		false,
 	),
 )
+
+var _ = Describe("ParamForField", func() {
+	It("int(0);1024", func() {
+		param, defaultStr, flags := config.ParamForField("TestField", "int(0);1024")
+		Expect(param).To(BeAssignableToTypeOf(&config.IntParam{}))
+		intParam := param.(*config.IntParam)
+		Expect(intParam.Ranges).To(HaveLen(1))
+		Expect(intParam.Ranges[0].Min).To(BeNumerically("==", 0))
+		Expect(intParam.Ranges[0].Max).To(BeNumerically("==", math.MaxInt))
+		Expect(defaultStr).To(Equal("1024"))
+		Expect(flags).To(Equal(""))
+	})
+	It("int(1:2147483646);512", func() {
+		param, defaultStr, flags := config.ParamForField("TestField6", "int(1:2147483646);512")
+		Expect(param).To(BeAssignableToTypeOf(&config.IntParam{}))
+		intParam := param.(*config.IntParam)
+		Expect(intParam.Ranges).To(HaveLen(1))
+		Expect(intParam.Ranges[0].Min).To(BeNumerically("==", 1))
+		Expect(intParam.Ranges[0].Max).To(BeNumerically("==", 2147483646))
+		Expect(defaultStr).To(Equal("512"))
+		Expect(flags).To(Equal(""))
+	})
+})
