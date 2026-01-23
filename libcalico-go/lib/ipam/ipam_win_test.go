@@ -183,7 +183,6 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			for _, ip := range outv4ia.IPs {
 				Expect(reservedIPs).NotTo(ContainElement(ip.String()))
 			}
-
 		},
 
 		// Test 1: AutoAssign 256 IPv4 - expect NOT to assign 100.0.0.0, 100.0.0.1, 100.0.0.2, 100.0.0.63,
@@ -200,7 +199,6 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 	// Request for another 100 IPs by a Linux host, created initially, will get all 100 IPs.
 	// Request for another 100 IPs by the other Linux host, created initially, will not get all 100 IPs as all the IPs exhausted.
 	Describe("Windows: IPAM AutoAssign should not assign IPs from non-affine block for Windows", func() {
-
 		BeforeEach(func() {
 			bc.Clean()
 			deleteAllPoolsWindows()
@@ -375,7 +373,6 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			Expect(checkWindowsValidIP(v4ia_next.IPs[0].IP, 26)).To(BeTrue())
 			Expect(isValidWindowsHandle(bc, ipPoolsWindows, v4ia_next.IPs[0].IP, ctx)).To(BeTrue())
 		})
-
 	})
 
 	Describe("Windows: IPAM AutoAssign from different pools", func() {
@@ -402,7 +399,6 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		})
 
 		It("Windows: Should get an IP from pool1 when explicitly requesting from that pool", func() {
-
 			args_1 := AutoAssignArgs{
 				IntendedUse:           v3.IPPoolAllowedUseWorkload,
 				Num4:                  1,
@@ -485,7 +481,6 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			Expect(v4ia_6).ToNot(BeNil())
 			Expect(len(v4ia_6.IPs)).To(Equal(0))
 		})
-
 	})
 
 	DescribeTable("Windows: AutoAssign: requested IPs vs returned IPs",

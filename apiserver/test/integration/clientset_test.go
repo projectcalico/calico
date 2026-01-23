@@ -31,12 +31,12 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	libclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -1654,7 +1654,7 @@ func testKubeControllersConfigurationClient(client calicoclient.Interface) error
 	kubeControllersConfig := &v3.KubeControllersConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
 		Status: v3.KubeControllersConfigurationStatus{
-			RunningConfig: v3.KubeControllersConfigurationSpec{
+			RunningConfig: &v3.KubeControllersConfigurationSpec{
 				Controllers: v3.ControllersConfig{
 					Node: &v3.NodeControllerConfig{
 						SyncLabels: v3.Enabled,
@@ -1911,25 +1911,27 @@ func testCalicoNodeStatusClient(client calicoclient.Interface, name string) erro
 
 // TestIPAMConfigClient exercises the IPAMConfig client.
 func TestIPAMConfigClient(t *testing.T) {
-	const name = "test-ipamconfig"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
 				return &v3.IPAMConfiguration{}
 			})
 			defer shutdownServer()
-			if err := testIPAMConfigClient(client, name); err != nil {
+			if err := testIPAMConfigClient(client); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
 
-	if !t.Run(name, rootTestFunc()) {
+	if !t.Run("test-ipamconfig", rootTestFunc()) {
 		t.Errorf("test-ipamconfig test failed")
 	}
 }
 
-func testIPAMConfigClient(client calicoclient.Interface, name string) error {
+func testIPAMConfigClient(client calicoclient.Interface) error {
+	logrus.SetLevel(logrus.DebugLevel)
+	name := "default"
+
 	ipamConfigClient := client.ProjectcalicoV3().IPAMConfigurations()
 	ipamConfig := &v3.IPAMConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
@@ -1939,19 +1941,21 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 			MaxBlocksPerHost: 28,
 		},
 	}
-	ctx := context.Background()
 
+	ctx := context.Background()
 	_, err := ipamConfigClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error listing IPAMConfigurations: %s", err)
 	}
 
-	_, err = ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	// Should not be able to create a non-default IPAM config.
+	badConfig := ipamConfig.DeepCopy()
+	badConfig.Name = "not-default"
+	_, err = ipamConfigClient.Create(ctx, badConfig, metav1.CreateOptions{})
 	if err == nil {
-		return fmt.Errorf("should not be able to create ipam config %s ", ipamConfig.Name)
+		return fmt.Errorf("should not be able to create ipam config %s ", badConfig.Name)
 	}
 
-	ipamConfig.Name = "default"
 	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("error creating the object '%v' (%v)", ipamConfig, err)
@@ -2016,7 +2020,7 @@ func TestBlockAffinityClient(t *testing.T) {
 }
 
 func testBlockAffinityClient(client calicoclient.Interface, name string) error {
-	blockAffinityClient := client.ProjectcalicoV3().BlockAffinities()
+	v3client := client.ProjectcalicoV3().BlockAffinities()
 	blockAffinity := &v3.BlockAffinity{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 
@@ -2026,22 +2030,19 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 			State: "pending",
 		},
 	}
-	libV3BlockAffinity := &libapiv3.BlockAffinity{
+	v3BlockAff := &v3.BlockAffinity{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 
-		Spec: libapiv3.BlockAffinitySpec{
+		Spec: v3.BlockAffinitySpec{
 			CIDR:    "10.0.0.0/24",
 			Node:    "node1",
 			State:   "pending",
-			Deleted: "false",
+			Deleted: false,
 		},
 	}
 	ctx := context.Background()
 
 	// Calico libv3 client instantiation in order to get around the API create restrictions
-	// TODO: Currently these tests only run on a Kubernetes datastore since profile creation
-	// does not work in etcd. Figure out how to divide this configuration to etcd once that
-	// is fixed.
 	config := apiconfig.NewCalicoAPIConfig()
 	config.Spec = apiconfig.CalicoAPIConfigSpec{
 		DatastoreType: apiconfig.Kubernetes,
@@ -2049,57 +2050,61 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 			EtcdEndpoints: "http://localhost:2379",
 		},
 		KubeConfig: apiconfig.KubeConfig{
-			Kubeconfig: os.Getenv("KUBECONFIG"),
+			Kubeconfig:     os.Getenv("KUBECONFIG"),
+			CalicoAPIGroup: os.Getenv("CALICO_API_GROUP"),
 		},
 	}
-	apiClient, err := libclient.New(*config)
+	libcalicoClient, err := libclient.New(*config)
 	if err != nil {
 		return fmt.Errorf("unable to create Calico lib v3 client: %s", err)
 	}
 
-	_, err = blockAffinityClient.Create(ctx, blockAffinity, metav1.CreateOptions{})
+	_, err = v3client.Create(ctx, blockAffinity, metav1.CreateOptions{})
 	if err == nil {
 		return fmt.Errorf("should not be able to create block affinity %s ", blockAffinity.Name)
 	}
 
 	// Create the block affinity using the libv3 client.
-	_, err = apiClient.BlockAffinities().Create(ctx, libV3BlockAffinity, options.SetOptions{})
+	_, err = libcalicoClient.BlockAffinities().Create(ctx, v3BlockAff, options.SetOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating the object through the Calico v3 API '%v' (%v)", libV3BlockAffinity, err)
+		return fmt.Errorf("error creating the object through libcalico API '%v' (%v)", v3BlockAff, err)
 	}
 
-	blockAffinityNew, err := blockAffinityClient.Get(ctx, name, metav1.GetOptions{})
+	blockAffinityNew, err := v3client.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting object %s (%s)", name, err)
 	}
 
-	blockAffinityList, err := blockAffinityClient.List(ctx, metav1.ListOptions{})
+	blockAffinityList, err := v3client.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error listing BlockAffinity (%s)", err)
 	}
 	if blockAffinityList.Items == nil {
 		return fmt.Errorf("items field should not be set to nil")
 	}
+	if len(blockAffinityList.Items) != 1 {
+		return fmt.Errorf("expected 1 block affinity got %d", len(blockAffinityList.Items))
+	}
 
 	blockAffinityNew.Spec.State = "confirmed"
 
-	_, err = blockAffinityClient.Update(ctx, blockAffinityNew, metav1.UpdateOptions{})
+	_, err = v3client.Update(ctx, blockAffinityNew, metav1.UpdateOptions{})
 	if err == nil {
 		return fmt.Errorf("should not be able to update block affinity %s", blockAffinityNew.Name)
 	}
 
-	err = blockAffinityClient.Delete(ctx, name, metav1.DeleteOptions{})
-	if nil == err {
+	err = v3client.Delete(ctx, name, metav1.DeleteOptions{})
+	if err == nil {
 		return fmt.Errorf("should not be able to delete block affinity %s", blockAffinity.Name)
 	}
 
 	// Test watch
-	w, err := blockAffinityClient.Watch(ctx, metav1.ListOptions{})
+	w, err := v3client.Watch(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error watching block affinities (%s)", err)
 	}
 
-	_, err = apiClient.BlockAffinities().Delete(ctx, name, options.DeleteOptions{ResourceVersion: blockAffinityNew.ResourceVersion})
+	_, err = libcalicoClient.BlockAffinities().Delete(ctx, name, options.DeleteOptions{ResourceVersion: blockAffinityNew.ResourceVersion})
 	if err != nil {
 		return fmt.Errorf("error deleting the object through the Calico v3 API '%v' (%v)", name, err)
 	}
@@ -2107,25 +2112,20 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	// Verify watch
 	var events []watch.Event
 	timeout := time.After(500 * time.Millisecond)
-	var timeoutErr error
+
 	// watch for 2 events
-loop:
 	for range 2 {
 		select {
 		case e := <-w.ResultChan():
 			events = append(events, e)
 		case <-timeout:
-			timeoutErr = fmt.Errorf("timed out waiting for events")
-			break loop
+			return fmt.Errorf("timed out waiting for events")
 		}
 	}
-	if timeoutErr != nil {
-		return timeoutErr
-	}
+
 	if len(events) != 2 {
 		return fmt.Errorf("expected 2 watch events got %d", len(events))
 	}
-
 	return nil
 }
 
