@@ -26,6 +26,7 @@ import (
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -91,6 +92,8 @@ func BuildKubeconfig(apiserverIP string) (string, func()) {
 }
 
 func ApplyCRDs(apiserver *containers.Container) {
+	ginkgo.By("applying CRDs to the API server")
+
 	// Apply the necessary CRDs. There can sometimes be a delay between starting
 	// the API server and when CRDs are apply-able, so retry here.
 	apply := func() error {
