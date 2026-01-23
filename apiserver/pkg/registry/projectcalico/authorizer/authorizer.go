@@ -81,7 +81,7 @@ func (a *authorizer) AuthorizeTierOperation(
 		logrus.Trace("Checking authorization using tier resource type (user can get tier)")
 		logAuthorizerAttributes(attrs)
 		var reason string
-		decisionGetTier, reason, err = a.Authorize(context.TODO(), attrs)
+		decisionGetTier, reason, err = a.Authorize(ctx, attrs)
 		if err != nil {
 			logrus.WithField("reason", reason).Errorf("Error authorizing tier GET request: %v", err)
 		}
@@ -117,7 +117,7 @@ func (a *authorizer) AuthorizeTierOperation(
 
 		logrus.Trace("Checking authorization using tier scoped resource type (policy name match)")
 		logAuthorizerAttributes(attrs)
-		decisionPolicy, _, err = a.Authorize(context.TODO(), attrs)
+		decisionPolicy, _, err = a.Authorize(ctx, attrs)
 		if err != nil {
 			logrus.Errorf("Error authorizing tiered policy request: %v", err)
 		}
@@ -141,7 +141,7 @@ func (a *authorizer) AuthorizeTierOperation(
 
 		logrus.Trace("Checking authorization using tier scoped resource type (tier name match)")
 		logAuthorizerAttributes(attrs)
-		decisionTierWildcard, _, err = a.Authorize(context.TODO(), attrs)
+		decisionTierWildcard, _, err = a.Authorize(ctx, attrs)
 		if err != nil {
 			logrus.Errorf("Error authorizing tier wildcard request: %v", err)
 		}

@@ -75,7 +75,7 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Register Calico CRD types with the scheme.
-		v3.AddToGlobalScheme()
+		Expect(v3.AddToGlobalScheme()).NotTo(HaveOccurred())
 
 		// Create a client for interacting with CRDs directly.
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
@@ -166,7 +166,7 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should still exist")
 
 		// Release the assigned IP address.
-		ipamcli.ReleaseByHandle(context.Background(), "test-handle")
+		Expect(ipamcli.ReleaseByHandle(context.Background(), "test-handle")).NotTo(HaveOccurred())
 
 		// Expect the IP pool to be removed from the API server.
 		waitForPoolDeleted(cli, pool.Name)

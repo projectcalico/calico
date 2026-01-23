@@ -409,7 +409,7 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 
 		// Register Calico CRD types with the scheme.
 		if useV3CRDs {
-			v3.AddToGlobalScheme()
+			Expect(v3.AddToGlobalScheme()).NotTo(HaveOccurred())
 		} else {
 			v1scheme.AddCalicoResourcesToGlobalScheme()
 		}
