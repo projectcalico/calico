@@ -226,6 +226,9 @@ $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]')
 	$(DOCKER_GO_BUILD) make -j 16 -C bpf-gpl all ut-objs map-objs
 	touch -c $@
 
+bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
+	$(MAKE) -C bpf-gpl $(@F)
+
 clean-bpf:
 	rm -rf bpf-gpl/*.d bpf-apache/*.d bin/bpf
 	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
@@ -477,7 +480,7 @@ stop-grafana:
 	@-docker rm -f k8sfv-grafana
 	sleep 2
 
-bin/calico-bpf: $(SRC_FILES)
+bin/calico-bpf: $(LIBBPF_A) $(SRC_FILES)
 	@echo Building calico-bpf...
 	$(call build_cgo_binary, "$(PACKAGE_NAME)/cmd/calico-bpf", $@)
 
