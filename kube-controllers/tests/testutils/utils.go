@@ -26,6 +26,7 @@ import (
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -91,6 +92,8 @@ func BuildKubeconfig(apiserverIP string) (string, func()) {
 }
 
 func ApplyCRDs(apiserver *containers.Container) {
+	ginkgo.By("applying CRDs to the API server")
+
 	// Apply the necessary CRDs. There can sometimes be a delay between starting
 	// the API server and when CRDs are apply-able, so retry here.
 	apply := func() error {
@@ -163,22 +166,30 @@ func RunEtcd() *containers.Container {
 }
 
 func GetCalicoClient(dsType apiconfig.DatastoreType, etcdIP, kcfg string) client.Interface {
-	cfg := apiconfig.NewCalicoAPIConfig()
+	// Load the config from the environment.
+	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Override with the given config.
 	cfg.Spec.DatastoreType = dsType
 	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
 	cfg.Spec.Kubeconfig = kcfg
-	client, err := client.New(*cfg)
 
+	client, err := client.New(*cfg)
 	Expect(err).NotTo(HaveOccurred())
 	return client
 }
 
 func GetBackendClient(etcdIP string) api.Client {
-	cfg := apiconfig.NewCalicoAPIConfig()
+	// Load the config from the environment.
+	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Override with the given config.
 	cfg.Spec.DatastoreType = apiconfig.EtcdV3
 	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
-	be, err := backend.NewClient(*cfg)
 
+	be, err := backend.NewClient(*cfg)
 	Expect(err).NotTo(HaveOccurred())
 	return be
 }
