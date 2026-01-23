@@ -3,11 +3,13 @@ package install
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -15,6 +17,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
@@ -537,4 +540,67 @@ func expectFileContents(filename, expected string) {
 	ExpectWithOffset(0, string(actual)).To(Equal(expected), fmt.Sprintf(
 		"actual file (%s) differed from expected contents.\nActual: (%s)\nExpected: (%s)",
 		filename, string(actual), string(expected)))
+}
+
+func TestCalculateKubeconfig_IPv4_NoBrackets(t *testing.T) {
+	// Ensure env vars are restored after the test using t.Setenv
+	t.Setenv("KUBERNETES_SERVICE_HOST", "127.0.0.1")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
+	t.Setenv("KUBERNETES_SERVICE_PROTOCOL", "https")
+
+	cfg := &rest.Config{TLSClientConfig: rest.TLSClientConfig{CAData: []byte("my-ca-data")}}
+	out := calculateKubeconfig(cfg, "my-token")
+
+	if !strings.Contains(out, "server: https://127.0.0.1:6443") {
+		t.Fatalf("expected IPv4 host to not be wrapped in brackets; got:\n%s", out)
+	}
+
+	expectedCA := base64.StdEncoding.EncodeToString(cfg.CAData)
+	if !strings.Contains(out, "certificate-authority-data: "+expectedCA) {
+		t.Fatalf("expected certificate-authority-data to be present; got:\n%s", out)
+	}
+
+	if !strings.Contains(out, "token: my-token") {
+		t.Fatalf("expected token to be present; got:\n%s", out)
+	}
+}
+
+func TestCalculateKubeconfig_IPv6_Wrapped(t *testing.T) {
+	t.Setenv("KUBERNETES_SERVICE_HOST", "2001:db8::1")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
+
+	cfg := &rest.Config{TLSClientConfig: rest.TLSClientConfig{CAData: []byte("my-ca-data")}}
+	out := calculateKubeconfig(cfg, "tok")
+
+	if !strings.Contains(out, "server: https://[2001:db8::1]:6443") {
+		t.Fatalf("expected IPv6 host to be wrapped in brackets; got:\n%s", out)
+	}
+}
+
+func TestCalculateKubeconfig_IPv6_PreWrapped(t *testing.T) {
+	t.Setenv("KUBERNETES_SERVICE_HOST", "[2001:db8::1]")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
+
+	cfg := &rest.Config{TLSClientConfig: rest.TLSClientConfig{CAData: []byte("my-ca-data")}}
+	out := calculateKubeconfig(cfg, "tok")
+
+	if !strings.Contains(out, "server: https://[2001:db8::1]:6443") {
+		t.Fatalf("expected IPv6 host to be wrapped in brackets; got:\n%s", out)
+	}
+}
+
+func TestCalculateKubeconfig_SkipTLSVerify(t *testing.T) {
+	t.Setenv("SKIP_TLS_VERIFY", "true")
+	t.Setenv("KUBERNETES_SERVICE_HOST", "127.0.0.1")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
+
+	cfg := &rest.Config{TLSClientConfig: rest.TLSClientConfig{CAData: []byte("my-ca-data")}}
+	out := calculateKubeconfig(cfg, "tok")
+
+	if !strings.Contains(out, "insecure-skip-tls-verify: true") {
+		t.Fatalf("expected insecure-skip-tls-verify: true to be present; got:\n%s", out)
+	}
+	if strings.Contains(out, "certificate-authority-data:") {
+		t.Fatalf("did not expect certificate-authority-data when SKIP_TLS_VERIFY=true; got:\n%s", out)
+	}
 }
