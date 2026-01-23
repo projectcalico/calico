@@ -2230,10 +2230,8 @@ func TestTruncateBGPFilterName(t *testing.T) {
 // goroutines in processor.go's monitorPrefix function. Each template calls
 // GetBirdBGPConfig with its respective IP version.
 //
-// This test will FAIL when run with the -race flag if the configCache map
-// is accessed without proper synchronization:
-//
-//	go test -race -run TestConfigCache_ConcurrentReadWrite ./confd/pkg/backends/calico/
+// We now run confd UT with -race, so this test will fail if the configCache map
+// is accessed without proper synchronization.
 func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 	originalNodeName := NodeName
 	NodeName = "test-node"
@@ -2246,24 +2244,23 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 	configCache = make(map[int]*bgpConfigCache)
 	configCacheMutex.Unlock()
 
-	// Set up cache with basic configuration needed for GetBirdBGPConfig
-	cache := map[string]string{
-		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
-		"/calico/bgp/v1/host/test-node/ip_addr_v6": "fd00::1",
-		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/global/loglevel":           "info",
-	}
-
 	// Enable mesh for more realistic scenario
 	meshConfig := map[string]interface{}{
 		"enabled": true,
 	}
-	meshConfigJSON, _ := json.Marshal(meshConfig)
-	cache["/calico/bgp/v1/global/node_mesh"] = string(meshConfigJSON)
+	meshConfigJSON, err := json.Marshal(meshConfig)
+	require.NoError(t, err)
 
-	// Add some peer nodes
-	cache["/calico/bgp/v1/host/peer-node-1/ip_addr_v4"] = "10.0.0.2"
-	cache["/calico/bgp/v1/host/peer-node-2/ip_addr_v6"] = "fd00::2"
+	// Set up cache with basic configuration needed for GetBirdBGPConfig
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4":   "10.0.0.1",
+		"/calico/bgp/v1/host/test-node/ip_addr_v6":   "fd00::1",
+		"/calico/bgp/v1/global/as_num":               "64512",
+		"/calico/bgp/v1/global/loglevel":             "info",
+		"/calico/bgp/v1/global/node_mesh":            string(meshConfigJSON),
+		"/calico/bgp/v1/host/peer-node-1/ip_addr_v4": "10.0.0.2",
+		"/calico/bgp/v1/host/peer-node-2/ip_addr_v6": "fd00::2",
+	}
 
 	c := newTestClient(cache, nil)
 
@@ -2299,13 +2296,11 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 					return
 				default:
 					// This is what the template actually calls via getBGPConfig template function
-					config, err := c.GetBirdBGPConfig(ipVersion)
+					_, err := c.GetBirdBGPConfig(ipVersion)
 					if err != nil {
 						// Some errors are expected if cache is cleared
 						continue
 					}
-					// Use the config to prevent optimization
-					_ = config
 
 					// Periodically clear the cache to force re-computation and increase
 					// the likelihood of hitting the race condition
