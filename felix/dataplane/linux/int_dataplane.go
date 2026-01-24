@@ -1823,15 +1823,20 @@ func (d *InternalDataplane) monitorKubeProxyNftablesMode() {
 // in nftables mode. It does this by checking for the presence of the nftables chains that
 // kube-proxy creates when running in nftables mode.
 func kubeProxyNftablesFn(config Config) func() (bool, error) {
+	newDataplane := knftables.New
+	if config.NewNftablesDataplane != nil {
+		newDataplane = config.NewNftablesDataplane
+	}
+
 	// Create v4 and v6 nftables interfaces. If either succeeds, we can use it to check for
 	// the presence of the kube-proxy nftables table.
-	nft, err := config.NewNftablesDataplane(knftables.IPv4Family, "kube-proxy")
+	nft, err := newDataplane(knftables.IPv4Family, "kube-proxy")
 	if err != nil {
 		// Don't return an error here - some systems may not have nftables support. We handle
 		// this case in the returned function.
 		log.WithError(err).Warn("Failed to create nftables interface to check kube-proxy mode.")
 	}
-	nftv6, err := config.NewNftablesDataplane(knftables.IPv6Family, "kube-proxy")
+	nftv6, err := newDataplane(knftables.IPv6Family, "kube-proxy")
 	if err != nil {
 		// Don't return an error here - some systems may not have nftables support. We handle
 		// this case in the returned function.
