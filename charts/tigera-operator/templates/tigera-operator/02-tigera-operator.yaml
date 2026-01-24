@@ -47,8 +47,6 @@ spec:
       dnsPolicy: {{ .Values.dnsPolicy }}
       {{- else }}
       # This must be set when hostNetwork is true or else the cluster services won't resolve
-      # Default: ClusterFirstWithHostNet for backward compatibility
-      # Note: For EKS clusters, consider setting dnsPolicy: Default in values.yaml
       dnsPolicy: ClusterFirstWithHostNet
       {{- end }}
       {{- if .Values.dnsConfig }}
