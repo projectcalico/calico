@@ -412,6 +412,7 @@ func StartDataplaneDriver(
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
 			BPFAttachType:                      configParams.GetBPFAttachType(),
 			BPFProfiling:                       configParams.BPFProfiling,
+			BPFIPFragTimeout:                   configParams.BPFIPFragTimeout,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 
 			KubeClientSet: k8sClientSet,
