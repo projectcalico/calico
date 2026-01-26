@@ -262,20 +262,20 @@ func (c *VXLANResolver) hasVTEPInfo(node string) (bool, bool) {
 	logCtx := logrus.WithField("node", node)
 	hasV4Info, hasV6Info := true, true
 
-	if _, ok := c.nodeNameToVXLANTunnelAddr[node]; !ok {
-		logCtx.Debug("Missing IPv4 VXLAN tunnel address for node")
+	if _, ok := c.nodeNameToVXLANTunnelAddr[node]; !ok || addr == "" || addr == "<nil>" {
+		logCtx.Debug("Missing or Invalid IPv4 VXLAN tunnel address for node")
 		hasV4Info = false
 	}
-	if _, ok := c.nodeNameToIPv4Addr[node]; !ok {
+	if _, ok := c.nodeNameToIPv4Addr[node]; !ok || addr == "" || addr == "<nil>" {
 		logCtx.Debug("Missing IPv4 address for node")
 		hasV4Info = false
 	}
 
-	if _, ok := c.nodeNameToVXLANTunnelAddrV6[node]; !ok {
+	if _, ok := c.nodeNameToVXLANTunnelAddrV6[node]; !ok || addr == "" || addr == "<nil>" {
 		logCtx.Debug("Missing IPv6 VXLAN tunnel address for node")
 		hasV6Info = false
 	}
-	if _, ok := c.nodeNameToIPv6Addr[node]; !ok {
+	if _, ok := c.nodeNameToIPv6Addr[node]; !ok || addr == "" || addr == "<nil>" {
 		logCtx.Debug("Missing IPv6 address for node")
 		hasV6Info = false
 	}
