@@ -184,12 +184,12 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			Expect(out.Status.RunningConfig.Controllers.Policy).To(BeNil())
 			Expect(out.Status.RunningConfig.Controllers.WorkloadEndpoint).To(BeNil())
 			Expect(out.Status.RunningConfig.Controllers.ServiceAccount).To(BeNil())
+			Expect(out.Status.RunningConfig.Controllers.LoadBalancer).To(BeNil())
 
 			// These fields are defaulted
 			Expect(out.Status.RunningConfig.HealthChecks).To(Equal(v3.Enabled))
 			Expect(out.Status.RunningConfig.LogSeverityScreen).To(Equal("Info"))
 			Expect(out.Status.RunningConfig.EtcdV3CompactionPeriod).To(Equal(&metav1.Duration{Duration: time.Minute * 10}))
-			Expect(out.Status.RunningConfig.Controllers.LoadBalancer.AssignIPs).To(Equal(v3.AllServices))
 		})
 	})
 
@@ -237,6 +237,19 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kcc.Status.EnvironmentVars).To(Equal(map[string]string{"ENABLED_CONTROLLERS": "node"}))
+		})
+
+		It("should not default loadbalancer config if not part of ENABLED_CONTROLLERS", func() {
+			// Wait until controller is up and has set status
+			var kcc *v3.KubeControllersConfiguration
+			Eventually(func() map[string]string {
+				var err error
+				kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				return kcc.Status.EnvironmentVars
+			}, time.Second*10, time.Millisecond*500).Should(Equal(map[string]string{"ENABLED_CONTROLLERS": "node"}))
+
+			Expect(kcc.Status.RunningConfig.Controllers.LoadBalancer).To(BeNil())
 		})
 	})
 })
