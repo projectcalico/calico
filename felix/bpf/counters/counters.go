@@ -97,7 +97,6 @@ type Description struct {
 	Category  string
 	Caption   string
 	Counter   int
-	PromLabel string
 }
 
 type DescList []Description
