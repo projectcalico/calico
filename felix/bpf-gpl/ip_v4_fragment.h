@@ -5,6 +5,8 @@
 #ifndef __CALI_IP_V4_FRAGMENT_H__
 #define __CALI_IP_V4_FRAGMENT_H__
 
+#include <time.h>
+
 #include "bpf.h"
 #include "ip_addr.h"
 #include "log.h"
@@ -29,6 +31,7 @@ struct frags4_value {
 	__u16 more_frags:1;
 	__u16 len;
 	__u32 __pad;
+	struct bpf_timer timer;
 	char data[MAX_FRAG];
 };
 
@@ -39,7 +42,9 @@ CALI_MAP(cali_v4_frgtmp, 2,
 		__u32, struct frags4_value,
 		1, 0)
 
-CALI_MAP(cali_v4_frgfwd, 4, BPF_MAP_TYPE_LRU_HASH, struct frags4_fwd_key, struct frags4_fwd_value, 10000, 0)
+#define CALI_V4_FRGFWD_VER 4
+CALI_MAP(cali_v4_frgfwd, CALI_V4_FRGFWD_VER, BPF_MAP_TYPE_LRU_HASH,
+		struct frags4_fwd_key, struct frags4_fwd_value, 10000, 0)
 
 struct frags4_fwd_key {
 	ipv4_addr_t src;
@@ -52,6 +57,7 @@ struct frags4_fwd_key {
 #define FRAGS4_FWD_FLAG_FIRST_OOR  (1<<0) /* Signals that the first fragment was out of order */
 
 struct frags4_fwd_value {
+	struct bpf_timer timer;
 	__u16 sport;
 	__u16 dport;
 	__u32 marks;
@@ -195,6 +201,18 @@ out:
 	return false;
 }
 
+#ifdef BPF_CORE_SUPPORTED
+static int frags4_remove_ct_cb(void *map, struct frags4_fwd_key *key, __unused struct frags4_fwd_value *value)
+{
+	cali_v4_frgfwd_delete_elem(key);
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
+		bpf_log("IP FRAG: timer expired, removed ct entry ifindex %d id %d", key->ifindex, key->id);
+	}
+	return 0;
+}
+#endif
+
 static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 {
 #ifndef BPF_CORE_SUPPORTED
@@ -209,11 +227,6 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 		return false;
 	}
 
-	struct frags4_value *v = frags4_get_scratch();
-
-	if (!v) {
-		goto out;
-	}
 
 	struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
 
@@ -242,6 +255,14 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 		/* We had an out-of-order fragment before, continue storing fragments. */
 	}
 
+	/* Out of order fragment, we haven't seen the first yet, store it. */
+
+	struct frags4_value *v = frags4_get_scratch();
+
+	if (!v) {
+		goto out;
+	}
+
 	struct frags4_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -253,7 +274,7 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 	int r_off = skb_l4hdr_offset(ctx);
 	bool more_frags = bpf_ntohs(ip_hdr(ctx)->frag_off) & 0x2000;
 
-	/* When we get a fragment, it may be large than the storage in the map.
+	/* When we get a fragment, it may be larger than the storage in the map.
 	 * We may need to break it into multiple fragments to be able to store
 	 * it.
 	 */
@@ -321,16 +342,33 @@ static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u3
 		.id = ip_hdr(ctx)->id,
 	};
 
-	struct frags4_fwd_value v = {
+	struct frags4_fwd_value vinit = {
 		.sport = ctx->state->sport,
 		.dport = ctx->state->dport,
 		.marks = ctx->fwd.mark,
 		.flags = flags,
 	};
 
-	cali_v4_frgfwd_update_elem(&k, &v, 0);
+	cali_v4_frgfwd_update_elem(&k, &vinit, 0);
 	CALI_DEBUG("IP FRAG: created ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
+
+
+	struct frags4_fwd_value *val = cali_v4_frgfwd_lookup_elem(&k);
+
+	if (!val) {
+		CALI_DEBUG("IP FRAG: failed to create ct entry");
+		return;
+	}
+
+	int err = bpf_timer_init(&val->timer, &map_symbol(cali_v4_frgfwd, CALI_V4_FRGFWD_VER), CLOCK_MONOTONIC);
+	if (err) {
+		CALI_DEBUG("IP FRAG: bpf_timer_init failed %d", err);
+		return;
+	}
+
+	bpf_timer_set_callback(&val->timer, frags4_remove_ct_cb);
+	bpf_timer_start(&val->timer, 30 * 1000000000ULL, 0);
 #endif
 }
 
