@@ -74,6 +74,10 @@ type SyncerUpdateProcessor interface {
 	OnSyncerStarting()
 }
 
+type WatcherCacheProvider interface {
+	WatcherCache(resourceType ResourceType, results chan interface{}, watchTimeout time.Duration) WatcherCacheIface
+}
+
 type Option func(*watcherSyncer)
 
 func WithWatchRetryTimeout(t time.Duration) Option {
@@ -86,8 +90,12 @@ var _ = WithWatchRetryTimeout
 
 // New creates a new multiple Watcher-backed api.Syncer.
 func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
+	return NewFromProvider(NewWatcherCacheFactory(client), resourceTypes, callbacks, options...)
+}
+
+func NewFromProvider(watcherCacheProvider WatcherCacheProvider, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
 	rs := &watcherSyncer{
-		watcherCaches:     make([]*watcherCache, len(resourceTypes)),
+		watcherCaches:     make([]WatcherCacheIface, len(resourceTypes)),
 		results:           make(chan interface{}, 2000),
 		callbacks:         callbacks,
 		watchRetryTimeout: DefaultWatchRetryTimeout,
@@ -96,15 +104,19 @@ func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCa
 		o(rs)
 	}
 	for i, r := range resourceTypes {
-		rs.watcherCaches[i] = newWatcherCache(client, r, rs.results, rs.watchRetryTimeout)
+		rs.watcherCaches[i] = watcherCacheProvider.WatcherCache(r, rs.results, rs.watchRetryTimeout)
 	}
 	return rs
+}
+
+type WatcherCacheIface interface {
+	run(ctx context.Context)
 }
 
 // watcherSyncer implements the api.Syncer interface.
 type watcherSyncer struct {
 	status            api.SyncStatus
-	watcherCaches     []*watcherCache
+	watcherCaches     []WatcherCacheIface
 	results           chan interface{}
 	numSynced         int
 	callbacks         api.SyncerCallbacks
@@ -167,7 +179,7 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 	ws.sendStatusUpdate(api.WaitForDatastore)
 	for _, wc := range ws.watcherCaches {
 		// no need for ws.wgwc.Add(1), been set already
-		go func(wc *watcherCache) {
+		go func(wc WatcherCacheIface) {
 			defer ws.wgwc.Done()
 			wc.run(ctx)
 			log.Debug("Watcher cache run completed")
