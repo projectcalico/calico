@@ -543,6 +543,7 @@ var _ = Describe("ifacemonitor", func() {
 			dp.expectLinkStateCb(iface, ifacemonitor.StateNotPresent, idx)
 
 			// Check it can be added again.
+			By("Adding the interface again")
 			idx = nl.nextIndex
 			nl.addLink(iface)
 			resyncC <- time.Time{}
@@ -556,7 +557,7 @@ var _ = Describe("ifacemonitor", func() {
 		}
 
 		// Repeat for 3 different interfaces (to test regexp of interface excludes)
-		for index := 0; index < 3; index++ {
+		for index := range 3 {
 			interfaceName := fmt.Sprintf("kube-ipvs%d", index)
 			netlinkUpdates(interfaceName)
 		}
@@ -718,9 +719,11 @@ var _ = Describe("ifacemonitor", func() {
 		}
 		nl.linkUpdates <- update
 
-		// We should have correctly spotted that the interface is still present and up, so
-		// no change in link state, but we should now get an address callback for the new address.
-		dp.notExpectLinkStateCb()
+		// We should get a callback indicating a delete for the old ifindex.
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx1)
+
+		// And a callback indicating that the new ifindex is up.
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp, idx2)
 
 		// Trigger a resync.
 		resyncC <- time.Time{}
@@ -728,7 +731,7 @@ var _ = Describe("ifacemonitor", func() {
 		// We still shouldn't see any link state change - the interface is still up.
 		dp.notExpectLinkStateCb()
 
-		// Now delete the new interface. This should result in a deletion callback for the new ifindex.
+		// Now delete the new interface. This should result in a deletion callback for the second ifindex, and no more callbacks after that.
 		nl.delLink("eth0")
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx2)
 	})
