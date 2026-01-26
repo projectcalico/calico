@@ -3227,6 +3227,12 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts"),
 						},
 					},
+					"bpfIPFragTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly. This is the maximum time that the BPF dataplane will wait for all fragments of a fragmented IP packet to arrive before discarding them.  The value is specified in seconds. If left unset, the value is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30 seconds). [Default: Auto - read from net.ipv4.ipfrag_time]",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 					"bpfLogFilters": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFLogFilters is a map of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints.\n\nWhen specified as an env var, it accepts a comma-separated list of key=values. [Default: unset - means all debug logs are emitted]",
