@@ -442,24 +442,24 @@ func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
 		// Try to read from /proc/sys/net/ipv4/ipfrag_time
 		data, err := os.ReadFile("/proc/sys/net/ipv4/ipfrag_time")
 		if err != nil {
-			log.WithError(err).Warn("Failed to read net.ipv4.ipfrag_time, using default of 30 seconds")
+			logrus.WithError(err).Warn("Failed to read net.ipv4.ipfrag_time, using default of 30 seconds")
 			return 30
 		}
 
 		timeoutStr := strings.TrimSpace(string(data))
 		timeout, err := strconv.Atoi(timeoutStr)
 		if err != nil {
-			log.WithError(err).Warn("Failed to parse net.ipv4.ipfrag_time, using default of 30 seconds")
+			logrus.WithError(err).Warn("Failed to parse net.ipv4.ipfrag_time, using default of 30 seconds")
 			return 30
 		}
 
-		log.WithField("timeout", timeout).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
+		logrus.WithField("timeout", timeout).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
 		return uint32(timeout)
 	}
 
 	// Convert duration to seconds
 	timeoutSecs := uint32(configuredTimeout.Seconds())
-	log.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout set from configuration")
+	logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout set from configuration")
 	return timeoutSecs
 }
 
