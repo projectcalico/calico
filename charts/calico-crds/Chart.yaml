@@ -4,7 +4,7 @@ description: Installs Calico and operator.tigera.io Custom Resource Definitions 
 home: https://docs.tigera.io/calico
 icon: https://docs.tigera.io/img/calico-logo.png
 sources:
-  - https://github.com/projectcalico/calico/tree/master/charts/crds
+  - https://github.com/projectcalico/calico/tree/master/charts/calico-crds
   - https://github.com/tigera/operator
   - https://github.com/projectcalico/calico
 
