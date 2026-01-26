@@ -398,7 +398,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				for _, f := range tc.Felixes {
 					felixReady := func() int {
-						return healthStatus("["+f.IPv6+"]", "9099", "readiness")
+						return healthStatus(f.IPv6, "9099", "readiness")
 					}
 					Eventually(felixReady, "10s", "330ms").Should(BeGood())
 					Consistently(felixReady, "10s", "1s").Should(BeGood())
@@ -535,7 +535,7 @@ func describeBPFDualStackProxyHealthTests() bool {
 			}, "10s", "330ms").Should(Equal(200))
 
 			Eventually(func() int {
-				return healthStatus("["+tc.Felixes[0].IPv6+"]", strconv.Itoa(int(healthCheckNodePort)), "")
+				return healthStatus(tc.Felixes[0].IPv6, strconv.Itoa(int(healthCheckNodePort)), "")
 			}, "10s", "330ms").Should(Equal(200))
 
 			// Check health probe on node 1 (no local endpoint) - should return 503
@@ -544,7 +544,7 @@ func describeBPFDualStackProxyHealthTests() bool {
 			}, "10s", "330ms").Should(Equal(503))
 
 			Eventually(func() int {
-				return healthStatus("["+tc.Felixes[1].IPv6+"]", strconv.Itoa(int(healthCheckNodePort)), "")
+				return healthStatus(tc.Felixes[1].IPv6, strconv.Itoa(int(healthCheckNodePort)), "")
 			}, "10s", "330ms").Should(Equal(503))
 
 			// Clean up

@@ -4868,18 +4868,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				hostIP0 := TargetIP(felixIP(0))
 				hostPort := uint16(8080)
+				target := net.JoinHostPort(w[0][0].IP, "8055")
+
 				var (
-					target    string
 					tool      string
 					nftFamily string
 				)
-
 				if testOpts.ipv6 {
-					target = fmt.Sprintf("[%s]:8055", w[0][0].IP)
 					tool = "ip6tables"
 					nftFamily = "ip6"
 				} else {
-					target = fmt.Sprintf("%s:8055", w[0][0].IP)
 					tool = "iptables"
 					nftFamily = "ip"
 				}
