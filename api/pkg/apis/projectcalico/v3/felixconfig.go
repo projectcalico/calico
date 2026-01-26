@@ -708,6 +708,16 @@ type FelixConfigurationSpec struct {
 	// +optional
 	BPFConntrackTimeouts *BPFConntrackTimeouts `json:"bpfConntrackTimeouts,omitempty" validate:"omitempty"`
 
+	// BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
+	// This is the maximum time that the BPF dataplane will wait for all fragments of a
+	// fragmented IP packet to arrive before discarding them.  If left unset, the value
+	// is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+	// seconds).
+	// [Default: unset - read from net.ipv4.ipfrag_time]
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
+	BPFIPFragTimeout *metav1.Duration `json:"bpfIPFragTimeout,omitempty" configv1timescale:"seconds"`
+
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
