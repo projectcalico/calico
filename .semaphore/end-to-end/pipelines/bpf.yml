@@ -125,7 +125,7 @@ blocks:
             - name: KUBE_PROXY_MANAGEMENT
               value: "Enabled"
 
-        - name: AWS, no encap, DSR
+        - name: AWS-Talos, no encap, DSR
           execution_time_limit:
             hours: 7
           commands:
@@ -138,7 +138,7 @@ blocks:
             - name: ENABLE_BPF_DSR
               value: "true"
             - name: PROVISIONER
-              value: "aws-kubeadm"
+              value: "aws-talos"
             - name: ENCAPSULATION_TYPE
               value: "None"
             - name: BGP_STATUS
