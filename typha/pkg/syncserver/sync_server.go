@@ -374,11 +374,11 @@ func (s *Server) serve(cxt context.Context) {
 			s.config.ClientURISAN,
 		)
 
-		laddr := fmt.Sprintf("[%v]:%v", s.config.Host, s.config.ListenPort())
+		laddr := net.JoinHostPort(s.config.Host, fmt.Sprint(s.config.Port))
 		l, err = tls.Listen("tcp", laddr, tlsConfig)
 	} else {
 		logCxt.Info("Opening listen socket")
-		laddr := fmt.Sprintf("[%v]:%v", s.config.Host, s.config.ListenPort())
+		laddr := net.JoinHostPort(s.config.Host, fmt.Sprint(s.config.Port))
 		l, err = net.Listen("tcp", laddr)
 	}
 	if err != nil {
