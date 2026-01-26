@@ -1792,14 +1792,15 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 func (d *InternalDataplane) monitorKubeProxyNftablesMode() {
 	if d.config.RulesConfig.NFTablesMode != "Auto" {
 		// We can skip this check if nftables is not configured to Auto.
+		log.Debug("Skipping kube-proxy nftables mode monitoring as NFTablesMode is not set to Auto.")
 		return
 	}
 	if d.getKubeProxyNftablesEnabled == nil {
 		log.Panic("BUG: kube-proxy nftables mode check function is nil")
 	}
 
-	// Loop forever, checking kube proxy status at 30s intervals.
-	t := time.Tick(30 * time.Second)
+	// Loop forever, checking kube proxy status at intervals.
+	t := time.Tick(15 * time.Second)
 	for range t {
 		previous := d.kubeProxyNftablesEnabled
 		current, err := d.getKubeProxyNftablesEnabled()
