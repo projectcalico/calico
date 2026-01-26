@@ -94,7 +94,8 @@ func (cte *CtEntry) OriginalTuplePostDNAT() (CtTuple, error) {
 		return EmptyCtTuple, errors.New("Entry is not DNAT-ed")
 	}
 
-	if cte.OriginalTuple.ProtoNum == nfnl.ICMP_PROTO {
+	switch cte.OriginalTuple.ProtoNum {
+	case nfnl.ICMP_PROTO:
 		return CtTuple{
 			cte.OriginalTuple.Src,
 			cte.ReplyTuple.Src,
@@ -103,7 +104,7 @@ func (cte *CtEntry) OriginalTuplePostDNAT() (CtTuple, error) {
 			cte.OriginalTuple.Zone,
 			CtL4Src{Id: cte.ReplyTuple.L4Src.Id},
 			CtL4Dst{Type: cte.ReplyTuple.L4Dst.Type, Code: cte.ReplyTuple.L4Dst.Code}}, nil
-	} else if cte.OriginalTuple.ProtoNum == nfnl.TCP_PROTO || cte.OriginalTuple.ProtoNum == nfnl.UDP_PROTO {
+	case nfnl.TCP_PROTO, nfnl.UDP_PROTO:
 		return CtTuple{
 			cte.OriginalTuple.Src,
 			cte.ReplyTuple.Src,
@@ -112,7 +113,7 @@ func (cte *CtEntry) OriginalTuplePostDNAT() (CtTuple, error) {
 			cte.OriginalTuple.Zone,
 			CtL4Src{Port: cte.ReplyTuple.L4Dst.Port},
 			CtL4Dst{Port: cte.ReplyTuple.L4Src.Port}}, nil
-	} else {
+	default:
 		return CtTuple{
 			cte.OriginalTuple.Src,
 			cte.ReplyTuple.Src,
