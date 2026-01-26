@@ -67,7 +67,7 @@ type InterfaceMonitor struct {
 	netlinkStub netlinkStub
 	resyncC     <-chan time.Time
 
-	ifaceNameToIdx map[string]map[int]struct{}
+	ifaceNameToIdx map[string]set.Adaptive[int]
 	ifaceIdxToInfo map[int]*ifaceInfo
 
 	StateCallback    InterfaceStateCallback
@@ -104,7 +104,7 @@ func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Ti
 		Config:           config,
 		netlinkStub:      netlinkStub,
 		resyncC:          resyncC,
-		ifaceNameToIdx:   map[string]map[int]struct{}{},
+		ifaceNameToIdx:   map[string]set.Adaptive[int]{},
 		ifaceIdxToInfo:   map[int]*ifaceInfo{},
 		fatalErrCallback: fatalErrCallback,
 	}
@@ -332,10 +332,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		}
 	}
 
-	// In some cases, we can receive a notification for a new link of the same name before
-	// receiving the deletion notification for the old link.  In that case, we want to avoid
-	// notifying of changes until the final state is known.
-	multipleIndices := len(m.ifaceNameToIdx[ifaceName]) > 1
+	ids := m.ifaceNameToIdx[ifaceName]
 
 	// Store or remove the information.
 	trackAddrs := !m.isExcludedInterface(ifaceName)
@@ -348,30 +345,25 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 				Addrs:      set.New[string](),
 			}
 		}
-		if m.ifaceNameToIdx[ifaceName] == nil {
-			m.ifaceNameToIdx[ifaceName] = map[int]struct{}{}
-		}
-		m.ifaceNameToIdx[ifaceName][ifIndex] = struct{}{}
+		ids.Add(ifIndex)
 		m.ifaceIdxToInfo[ifIndex].State = newState
 	} else {
 		delete(m.ifaceIdxToInfo, ifIndex)
-		delete(m.ifaceNameToIdx[ifaceName], ifIndex)
-		if len(m.ifaceNameToIdx[ifaceName]) == 0 {
+		ids.Discard(ifIndex)
+		if ids.Len() == 0 {
 			delete(m.ifaceNameToIdx, ifaceName)
 		}
 	}
 
-	// Defer notification if either:
-	// - there are now multiple interfaces with the same name.
-	// - there were multiple interfaces with the same name before this update.
-	// Since the calculated oldState and newState are per-ifIndex, we can't be sure
-	// that the determined states are correct until we have only one interface with
-	// that name.
-	if multipleIndices || len(m.ifaceNameToIdx[ifaceName]) > 1 {
+	// In some cases, we can receive a notification for a new link of the same name before
+	// receiving the deletion notification for the old link.  In that case, we want to avoid
+	// notifying of changes until the final state is known. Defer notification if there are
+	// now multiple interface indices associated with the same name.
+	if ids.Len() > 1 {
 		log.WithFields(log.Fields{
 			"ifaceName": ifaceName,
 			"ifIndex":   ifIndex,
-			"numIfaces": len(m.ifaceNameToIdx[ifaceName]),
+			"numIfaces": ids.Len(),
 		}).Debug("Multiple interfaces with same name exist, deferring notification.")
 		return
 	}
@@ -387,6 +379,31 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		m.StateCallback(ifaceName, newState, ifIndex)
 	} else {
 		logCxt.Debug("Interface state hasn't changed, nothing to notify.")
+	}
+
+	// If we sent a notification that the interface is gone, but there is another index associated with
+	// this name, we should notify the state of the newly unmasked interface now.
+	for remainingIdx := range ids.All() {
+		if remainingIdx == ifIndex {
+			// This is the same interface idx that we just sent an update for - we
+			// don't need to notify again.
+			break
+		}
+
+		// At this point, we know that:
+		// - There is one remaining interface with this name (because ids.Len() == 1)
+		// - It does not match the index we just sent an update for.
+		// Thus, we can conclude that we must have just sent an update that the
+		// interface is gone, and now we need to notify the state of the remaining
+		// interface info associated with this ifname.
+		remainingInfo := m.ifaceIdxToInfo[remainingIdx]
+		logCxt := log.WithFields(log.Fields{
+			"ifaceName": ifaceName,
+			"ifIndex":   remainingIdx,
+			"state":     remainingInfo.State,
+		})
+		logCxt.Debug("Notifying remaining interface with same name after deletion.")
+		m.StateCallback(ifaceName, remainingInfo.State, remainingIdx)
 	}
 
 	if !trackAddrs {
@@ -479,8 +496,9 @@ func (m *InterfaceMonitor) resync() error {
 			// We were tracking addresses for this interface before but now it's gone.  Signal that.
 			m.AddrCallback(name, nil)
 		}
-		delete(m.ifaceNameToIdx[name], ifIndex)
-		if len(m.ifaceNameToIdx[name]) == 0 {
+		ids := m.ifaceNameToIdx[name]
+		ids.Discard(ifIndex)
+		if ids.Len() == 0 {
 			delete(m.ifaceNameToIdx, name)
 		}
 		delete(m.ifaceIdxToInfo, ifIndex)
