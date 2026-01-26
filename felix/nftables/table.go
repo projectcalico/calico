@@ -255,7 +255,7 @@ type NftablesTable struct {
 type TableOptions struct {
 	// NewDataplane is an optional function to override the creation of the knftables client,
 	// used for testing.
-	NewDataplane func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error)
+	NewDataplane NewNftablesDataplaneFn
 
 	// Disabled can be set to true when running in iptables mode, triggering a cleanup
 	// of any Calico nftables content.
