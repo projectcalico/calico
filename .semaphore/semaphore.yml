@@ -249,7 +249,7 @@ blocks:
       - name: AZURE_LOCATION
         value: eastus2
       - name: KUBE_VERSION
-        value: v1.29.7
+        value: v1.33.6
     jobs:
       - name: Containerd - Windows FV
         execution_time_limit:
@@ -422,6 +422,8 @@ blocks:
         value: "calico-felix"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
+      - name: CONTAINERD_VERSION
+        value: 1.7.28
     jobs:
       - name: CAPZ - Windows FV
         commands:
