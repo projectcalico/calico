@@ -33,7 +33,7 @@ global_job_config:
       value: "quay.io/"
     - name: INSTALLER
       value: "operator"
-    - name: RUN_LOCAL_TESTS
+    - name: RUN_LOCAL_TESTS # run e2e tests from locally built binary
       value: "true"
 
 # Dimensions
