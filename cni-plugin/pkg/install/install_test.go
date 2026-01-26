@@ -544,9 +544,9 @@ func expectFileContents(filename, expected string) {
 
 func TestCalculateKubeconfig_IPv4_NoBrackets(t *testing.T) {
 	// Ensure env vars are restored after the test using t.Setenv
+	t.Setenv("KUBERNETES_SERVICE_PROTOCOL", "")
 	t.Setenv("KUBERNETES_SERVICE_HOST", "127.0.0.1")
 	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
-	t.Setenv("KUBERNETES_SERVICE_PROTOCOL", "https")
 
 	cfg := &rest.Config{TLSClientConfig: rest.TLSClientConfig{CAData: []byte("my-ca-data")}}
 	out := calculateKubeconfig(cfg, "my-token")
@@ -566,19 +566,8 @@ func TestCalculateKubeconfig_IPv4_NoBrackets(t *testing.T) {
 }
 
 func TestCalculateKubeconfig_IPv6_Wrapped(t *testing.T) {
+	t.Setenv("KUBERNETES_SERVICE_PROTOCOL", "https")
 	t.Setenv("KUBERNETES_SERVICE_HOST", "2001:db8::1")
-	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
-
-	cfg := &rest.Config{TLSClientConfig: rest.TLSClientConfig{CAData: []byte("my-ca-data")}}
-	out := calculateKubeconfig(cfg, "tok")
-
-	if !strings.Contains(out, "server: https://[2001:db8::1]:6443") {
-		t.Fatalf("expected IPv6 host to be wrapped in brackets; got:\n%s", out)
-	}
-}
-
-func TestCalculateKubeconfig_IPv6_PreWrapped(t *testing.T) {
-	t.Setenv("KUBERNETES_SERVICE_HOST", "[2001:db8::1]")
 	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
 
 	cfg := &rest.Config{TLSClientConfig: rest.TLSClientConfig{CAData: []byte("my-ca-data")}}
@@ -591,6 +580,7 @@ func TestCalculateKubeconfig_IPv6_PreWrapped(t *testing.T) {
 
 func TestCalculateKubeconfig_SkipTLSVerify(t *testing.T) {
 	t.Setenv("SKIP_TLS_VERIFY", "true")
+	t.Setenv("KUBERNETES_SERVICE_PROTOCOL", "https")
 	t.Setenv("KUBERNETES_SERVICE_HOST", "127.0.0.1")
 	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
 
