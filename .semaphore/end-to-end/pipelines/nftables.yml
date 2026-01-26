@@ -72,6 +72,24 @@ blocks:
             - name: ENABLE_WIREGUARD
               value: "true"
 
+  - name: Nftables, Talos
+    dependencies: []
+    task:
+      jobs:
+        - name: Nftables, Talos
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: K8S_VERSION
+              values: ["stable"]
+          env_vars:
+            - name: PROVISIONER
+              value: aws-talos
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+
   - name: Nftables mode, EKS
     dependencies: []
     task:
