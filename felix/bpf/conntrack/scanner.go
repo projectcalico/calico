@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/jitter"
@@ -75,9 +76,11 @@ const (
 	// ScanVerdictDelete means entry should be deleted
 	ScanVerdictDelete
 	ScanVerdictDeleteImmediate // Delete without adding to cleanup map
+	ScanVerdictSendRST         // Send RST for TCP connections.
 )
 
 const cleanupBatchSize int = 1000
+const rstBatchSize int = 10
 
 // EntryGet is a function prototype provided to EntryScanner in case it needs to
 // evaluate other entries to make a verdict
@@ -224,6 +227,9 @@ func (s *Scanner) Scan() {
 	cleaned := 0
 	numExpired := 0
 
+	batchK := make([][]byte, 0, rstBatchSize)
+	batchV := make([][]byte, 0, rstBatchSize)
+
 	if s.ctCleanupMap != nil {
 		s.ctCleanupMap.Desired().DeleteAll()
 	}
@@ -251,6 +257,26 @@ func (s *Scanner) Scan() {
 			case ScanVerdictDelete, ScanVerdictDeleteImmediate:
 				// Entry should be deleted.
 				numExpired++
+			case ScanVerdictSendRST:
+				if ctVal.Flags()&v4.FlagSendRST != 0 {
+					// RST already set, no need to update.
+					continue
+				}
+				updatedVal := setRSTFlagInValue(ctVal)
+				batchK = append(batchK, ctKey.AsBytes())
+				batchV = append(batchV, updatedVal.AsBytes())
+				if len(batchK) >= rstBatchSize {
+					if debug {
+						log.Debugf("Updating RST flag on %d conntrack entries in batch.", len(batchK))
+					}
+					_, err := s.ctMap.BatchUpdate(batchK, batchV, 0)
+					if err != nil {
+						log.WithError(err).Warn("Failed to batch update conntrack entries to send RST.")
+					}
+					batchK = batchK[:0]
+					batchV = batchV[:0]
+				}
+				continue
 			}
 			if debug {
 				log.Debug("Deleting conntrack entry.")
@@ -319,6 +345,15 @@ func (s *Scanner) Scan() {
 	// Run the bpf cleaner to process the remaining entries in the cleanup map.
 	cleaned += s.runBPFCleaner()
 
+	if len(batchK) > 0 {
+		_, err := s.ctMap.BatchUpdate(batchK, batchV, 0)
+		if err != nil {
+			log.WithError(err).Warn("Failed to batch update conntrack entries to send RST.")
+		}
+	}
+
+	batchK = nil
+	batchV = nil
 	conntrackCounterSweeps.Inc()
 	conntrackGaugeUsed.Set(float64(used))
 	conntrackGaugeCleaned.Set(float64(cleaned))
@@ -395,6 +430,21 @@ func (s *Scanner) get(k KeyInterface) (ValueInterface, error) {
 	}
 
 	return s.valueFromBytes(v), nil
+}
+
+func setRSTFlagInValue(v ValueInterface) ValueInterface {
+	flags := v.Flags()
+	flags |= v4.FlagSendRST
+	var newVal ValueInterface
+	if v.Type() == TypeNATForward {
+		newVal = v4.NewValueNATForward(time.Duration(v.LastSeen()), flags, (v.ReverseNATKey()).(v4.Key))
+	} else if v.Type() == TypeNATReverse {
+		newVal = v4.NewValueNATReverse(time.Duration(v.LastSeen()), flags,
+			v.Data().A2B, v.Data().B2A, v.Data().TunIP, v.OrigIP(), v.OrigPort())
+	} else {
+		newVal = v4.NewValueNormal(time.Duration(v.LastSeen()), flags, v.Data().A2B, v.Data().B2A)
+	}
+	return newVal
 }
 
 // Start the periodic scanner
