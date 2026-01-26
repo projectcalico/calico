@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 26
+	MaxCounterNumber    int = 28
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -36,6 +36,7 @@ var (
 	zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*maps.NumPossibleCPUs())
 )
 
+// Key is 32bits of iface index, and 32bits of hook number.
 type Key [8]byte
 
 func (k Key) AsBytes() []byte {
@@ -49,7 +50,10 @@ func NewKey(ifindex int, hook hook.Hook) Key {
 	binary.LittleEndian.PutUint32(k[4:8], uint32(hook))
 
 	return k
+}
 
+func (k Key) Hook() hook.Hook {
+	return hook.Hook(binary.LittleEndian.Uint32(k[4:8]))
 }
 
 func (k Key) IfIndex() int {
@@ -85,12 +89,14 @@ const (
 	DroppedQoS
 	Reserved1
 	DroppedMaglevNoBackend
+	ForwardedMaglevToLocal
+	ForwardedMaglevToRemote
 )
 
 type Description struct {
-	Category string
-	Caption  string
-	Counter  int
+	Category  string
+	Caption   string
+	Counter   int
 }
 
 type DescList []Description
@@ -211,6 +217,14 @@ var descriptions DescList = DescList{
 		Counter:  DroppedMaglevNoBackend,
 		Category: "Dropped", Caption: "Maglev lookup found no backends for service IP",
 	},
+	{
+		Counter:  ForwardedMaglevToLocal,
+		Category: "Forwarded", Caption: "Maglev forwarded to backend on local node",
+	},
+	{
+		Counter:  ForwardedMaglevToRemote,
+		Category: "Forwarded", Caption: "Maglev forwarded to backend on another node",
+	},
 }
 
 func Descriptions() DescList {
@@ -224,6 +238,10 @@ func Read(m maps.Map, ifindex int, hook hook.Hook) ([]uint64, error) {
 		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
 	}
 
+	return ValFromBytes(values), nil
+}
+
+func ValFromBytes(values []byte) []uint64 {
 	bpfCounters := make([]uint64, MaxCounterNumber)
 	for i := range bpfCounters {
 		for cpu := 0; cpu < maps.NumPossibleCPUs(); cpu++ {
@@ -232,7 +250,7 @@ func Read(m maps.Map, ifindex int, hook hook.Hook) ([]uint64, error) {
 			bpfCounters[i] += data
 		}
 	}
-	return bpfCounters, nil
+	return bpfCounters
 }
 
 func Flush(m maps.Map, ifindex int, hook hook.Hook) error {
