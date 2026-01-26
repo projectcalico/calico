@@ -357,7 +357,7 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 
 	mergeHealthEnabled(envVars, &status, &rCfg, apiCfg)
 
-	mergeLoadBalancer(envVars, &status, &rCfg, apiCfg)
+	mergeLoadBalancer(&status, &rCfg, apiCfg)
 
 	mergeMigrationController(&status, &rCfg, apiCfg)
 
@@ -406,22 +406,11 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	return rCfg, status
 }
 
-func mergeLoadBalancer(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
+func mergeLoadBalancer(status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
 	if rCfg.Controllers.LoadBalancer != nil {
 		if apiCfg.Controllers.LoadBalancer != nil {
 			rCfg.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
 			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
-		}
-	} else if _, ok := envVars[EnvEnabledControllers]; ok {
-		if strings.Contains(envVars[EnvEnabledControllers], "loadbalancer") {
-			// We can enable the LoadBalancer controller as it won't be assigning any IPs if IPPool for LoadBalancer is not set
-			// This should only happen when the loadbalancer is enabled in the kubecontrollersconfiguration
-			rCfg.Controllers.LoadBalancer = &LoadBalancerControllerConfig{
-				AssignIPs: v3.AllServices,
-			}
-			status.RunningConfig.Controllers.LoadBalancer = &v3.LoadBalancerControllerConfig{
-				AssignIPs: v3.AllServices,
-			}
 		}
 	}
 }
@@ -672,8 +661,12 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 				rc.ServiceAccount = &GenericControllerConfig{}
 				sc.ServiceAccount = &v3.ServiceAccountControllerConfig{}
 			case "loadbalancer":
-				rc.LoadBalancer = &LoadBalancerControllerConfig{}
-				sc.LoadBalancer = &v3.LoadBalancerControllerConfig{}
+				rc.LoadBalancer = &LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}
+				sc.LoadBalancer = &v3.LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}
 			case "flannelmigration":
 				log.WithField(EnvEnabledControllers, v).Fatal("cannot run flannelmigration with other controllers")
 			default:
