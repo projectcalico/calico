@@ -1829,6 +1829,23 @@ determines the CTLB behavior.
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
+### `BPFIPFragTimeout` (config file) / `bpfIPFragTimeout` (YAML)
+
+In BPF mode, controls the timeout for IP fragment reassembly.
+This is the maximum time that the BPF dataplane will wait for all fragments of a
+fragmented IP packet to arrive before discarding them. If left unset, the value
+is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+seconds).
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFIPFragTimeout` |
+| Encoding (env var/config file) | Seconds (floating point) |
+| Default value (above encoding) | `0` (0s) |
+| `FelixConfiguration` field | `bpfIPFragTimeout` (YAML) `BPFIPFragTimeout` (Go API) |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
+| Default value (YAML) | `0s` |
+
 ### `BPFJITHardening` (config file) / `bpfJITHardening` (YAML)
 
 Controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
