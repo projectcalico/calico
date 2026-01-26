@@ -223,6 +223,10 @@ var _ = infrastructure.DatastoreDescribe("Config update tests, after starting fe
 		}
 
 		BeforeEach(func() {
+			if NFTMode() {
+				Skip("Skipping auto-detection tests when felix is already explicitly in nftables mode")
+			}
+
 			cfgChangeTime = time.Now()
 
 			// Create nftables rules in the "kube-proxy" table, which should trigger felix restart.
