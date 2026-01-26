@@ -453,6 +453,12 @@ func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
 			return 30
 		}
 
+		// Validate range - must be positive and fit in uint32
+		if timeout < 0 || timeout > int(^uint32(0)) {
+			logrus.WithField("timeout", timeout).Warn("Invalid net.ipv4.ipfrag_time value (out of range), using default of 30 seconds")
+			return 30
+		}
+
 		logrus.WithField("timeout", timeout).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
 		return uint32(timeout)
 	}
