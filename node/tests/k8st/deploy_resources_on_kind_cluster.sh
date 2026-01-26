@@ -69,6 +69,8 @@ echo "Install additional permissions for BGP password"
 ${kubectl} apply -f $TEST_DIR/infra/additional-rbac.yaml
 echo
 
+# CRDs are already created prior to reaching this script from within lib.Makefile as part
+# of kind cluster creation.
 echo "Install Calico using the helm chart"
 $HELM install calico $CHART -f $TEST_DIR/infra/values.yaml -n tigera-operator --create-namespace
 
