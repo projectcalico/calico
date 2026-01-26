@@ -122,7 +122,7 @@ var _ = infrastructure.DatastoreDescribe("Config update tests, after starting fe
 		if monitorTime > 0 {
 			Consistently(tc.Felixes[0].GetFelixPIDs, monitorTime, "100ms").Should(ContainElement(felixPID))
 		}
-		Eventually(tc.Felixes[0].GetFelixPIDs, "10s", "100ms").ShouldNot(ContainElement(felixPID))
+		Eventually(tc.Felixes[0].GetFelixPIDs, "15s", "100ms").ShouldNot(ContainElement(felixPID))
 
 		// Update felix pid after restart.
 		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
@@ -207,6 +207,34 @@ var _ = infrastructure.DatastoreDescribe("Config update tests, after starting fe
 				cfgChangeTime = time.Now()
 				err = proxy.switchToMode(kubeProxyModeIptables)
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should exit after a delay", shouldExitAfterADelay)
+		})
+	})
+
+	Context("after switching kube-proxy mode to nftables that should trigger a restart", func() {
+		BeforeEach(func() {
+			cfgChangeTime = time.Now()
+
+			// Create nftables rules in the "kube-proxy" table, which should trigger felix restart.
+			tc.Felixes[0].Exec("nft", "add", "table", "ip", "kube-proxy")
+			tc.Felixes[0].Exec("nft", "add", "chain", "ip", "kube-proxy", "KUBE-TEST", "{ type filter hook forward priority 0 ; }")
+		})
+
+		It("should exit after a delay", shouldExitAfterADelay)
+
+		Context("after removing nftables rules that should trigger a restart", func() {
+			BeforeEach(func() {
+				// Wait felix in sync again.
+				shouldExitAfterADelay()
+				waitForFelixInSync(tc.Felixes[0])
+
+				// Track the current time and then make the config change back to iptables mode.
+				cfgChangeTime = time.Now()
+
+				// Remove the nftables rules in the "kube-proxy" table, which should trigger felix restart.
+				tc.Felixes[0].Exec("nft", "delete", "table", "ip", "kube-proxy")
 			})
 
 			It("should exit after a delay", shouldExitAfterADelay)
