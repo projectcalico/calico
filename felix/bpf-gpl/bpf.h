@@ -19,6 +19,8 @@
  */
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
+#define __unused __attribute__((unused))
+
 #include "globals.h"
 
 #define BPF_REDIR_EGRESS 0
@@ -340,7 +342,8 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define EGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED)
 #define WORKLOAD_SRC_SPOOFING_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED)
 
-#define map_symbol(name, ver) name##ver
+#define MAP_VERSIONED(name, ver) name##ver
+#define map_symbol(name, ver)  MAP_VERSIONED(name, ver)
 
 #define MAP_LOOKUP_FN(fname, name, ver) \
 static CALI_BPF_INLINE void * fname##_lookup_elem(const void* key)	\
