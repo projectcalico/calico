@@ -91,7 +91,8 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
-              value: azr-aks
+              #value: azr-aks
+              value: azr-aso
             - name: K8S_VERSION
               value: stable-1
             - name: DATAPLANE
