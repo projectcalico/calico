@@ -16,7 +16,9 @@ import (
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	operatorv1 "github.com/tigera/operator/api/v1"
@@ -44,7 +46,7 @@ var _ = describe.CalicoDescribe(
 			originalInstallation *operatorv1.Installation
 		)
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			ctx = context.Background()
 
 			// Ensure a clean starting environment before each test.
@@ -71,7 +73,7 @@ var _ = describe.CalicoDescribe(
 			// Additionally, skip if this cluster is operator managed but doesn't use the Calico CNI plugin, as validation
 			// for non-Calico CNI clusters requires that IP pools use the 'all()' node selector which is incompatible with this test.
 			if errors.IsNotFound(err) || installation.Spec.CNI == nil || installation.Spec.CNI.Type != operatorv1.PluginCalico {
-				Skip("Skipping IP pool management test.")
+				ginkgo.Skip("Skipping IP pool management test.")
 			}
 			Expect(err).NotTo(HaveOccurred())
 
@@ -79,7 +81,7 @@ var _ = describe.CalicoDescribe(
 			originalInstallation = installation.DeepCopy()
 		})
 
-		AfterEach(func() {
+		ginkgo.AfterEach(func() {
 			// Revert the installation to its original state. This might take an attempt or two
 			// if we hit resource version conflicts.
 			Eventually(func() error {
@@ -94,7 +96,7 @@ var _ = describe.CalicoDescribe(
 
 		// This test verifies that the operator properly creates and deletes IP pools when added / removed
 		// from the Installation spec.
-		It("should create and delete IP pools", func() {
+		ginkgo.It("should create and delete IP pools", func() {
 			// Determine a free CIDR.
 			var newCIDR string
 			pools := v3.IPPoolList{}
@@ -152,7 +154,7 @@ var _ = describe.CalicoDescribe(
 					return err
 				}
 				if pool.Spec.NodeSelector != "!all()" {
-					return fmt.Errorf("Operator did not revert the change to the IP pool")
+					return fmt.Errorf("operator did not revert the change to the IP pool")
 				}
 				return nil
 			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
@@ -178,7 +180,7 @@ var _ = describe.CalicoDescribe(
 					return err
 				}
 				if pool.Spec.NodeSelector != "has(dummy-key)" {
-					return fmt.Errorf("Operator did not apply the change to the IP pool")
+					return fmt.Errorf("operator did not apply the change to the IP pool")
 				}
 				return nil
 			}).ShouldNot(HaveOccurred())
@@ -201,7 +203,7 @@ var _ = describe.CalicoDescribe(
 				} else if err != nil {
 					return err
 				}
-				return fmt.Errorf("Pool still exists")
+				return fmt.Errorf("pool still exists")
 			}).ShouldNot(HaveOccurred())
 		})
 	})

@@ -26,7 +26,7 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
 
 blocks:
-  - name: Publish mock-node images
+  - name: Publish mock-node images and multi-arch manifests
     dependencies: []
     skip:
       when: "branch !~ '.+'"
@@ -34,14 +34,4 @@ blocks:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C test-tools/mocknode cd CONFIRM=true; fi
-  - name: Publish mock-node multi-arch manifests
-    dependencies:
-      - Publish mock-node images
-    skip:
-      when: "branch !~ '.+'"
-    task:
-      jobs:
-        - name: Linux multi-arch manifests
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C test-tools/mocknode push-manifests-with-tag CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C test-tools/mocknode cd push-manifests-with-tag CONFIRM=true; fi

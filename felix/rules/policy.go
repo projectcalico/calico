@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package rules
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -34,20 +35,31 @@ import (
 // ruleRenderer defined in rules_defs.go.
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
-	if model.PolicyIsStaged(policyID.Name) {
+	if model.KindIsStaged(policyID.Kind) {
 		logrus.Debugf("Skip programming staged policy %v", policyID.Name)
 		return nil
 	}
+
+	// Build an appropriate comment for the policy.
+	var commentIngress, commentEgress string
+	if policyID.Namespace == "" {
+		commentIngress = fmt.Sprintf("%s %s ingress", policyID.Kind, policyID.Name)
+		commentEgress = fmt.Sprintf("%s %s egress", policyID.Kind, policyID.Name)
+	} else {
+		commentIngress = fmt.Sprintf("%s %s/%s ingress", policyID.Kind, policyID.Namespace, policyID.Name)
+		commentEgress = fmt.Sprintf("%s %s/%s egress", policyID.Kind, policyID.Namespace, policyID.Name)
+	}
+
 	inbound := generictables.Chain{
 		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
-		// Note that the policy name includes the tier, so it does not need to be separately specified.
 		Rules: r.ProtoRulesToIptablesRules(
 			policy.InboundRules,
 			ipVersion, RuleOwnerTypePolicy,
 			RuleDirIngress,
-			policyID.Name,
+			policyID,
+			policy.Tier,
 			policy.Untracked,
-			fmt.Sprintf("Policy %s ingress", policyID.Name),
+			commentIngress,
 		),
 	}
 	outbound := generictables.Chain{
@@ -57,15 +69,18 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			policy.OutboundRules,
 			ipVersion, RuleOwnerTypePolicy,
 			RuleDirEgress,
-			policyID.Name,
+			policyID,
+			policy.Tier,
 			policy.Untracked,
-			fmt.Sprintf("Policy %s egress", policyID.Name),
+			commentEgress,
 		),
 	}
 	return []*generictables.Chain{&inbound, &outbound}
 }
 
 func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+	// Profiles are not related to any tier.
+	tier := ""
 	inbound = &generictables.Chain{
 		Name: ProfileChainName(ProfileInboundPfx, profileID, r.NFTables),
 		Rules: r.ProtoRulesToIptablesRules(
@@ -73,7 +88,8 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			ipVersion,
 			RuleOwnerTypeProfile,
 			RuleDirIngress,
-			profileID.Name,
+			profileID,
+			tier,
 			false,
 			fmt.Sprintf("Profile %s ingress", profileID.Name),
 		),
@@ -84,7 +100,8 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			profile.OutboundRules,
 			ipVersion, RuleOwnerTypeProfile,
 			RuleDirEgress,
-			profileID.Name,
+			profileID,
+			tier,
 			false,
 			fmt.Sprintf("Profile %s egress", profileID.Name),
 		),
@@ -97,14 +114,15 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	ipVersion uint8,
 	owner RuleOwnerType,
 	dir RuleDir,
-	name string,
+	id types.IDMaker,
+	tier string,
 	untracked bool,
 	chainComments ...string,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	for ii, protoRule := range protoRules {
 		// TODO (Matt): Need rule hash when that's cleaned up.
-		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked)...)
+		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, id, tier, untracked)...)
 	}
 
 	// Strip off any return rules at the end of the chain.  No matter their
@@ -216,7 +234,9 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	ipVersion uint8,
 	owner RuleOwnerType,
 	dir RuleDir,
-	idx int, name string,
+	idx int,
+	id types.IDMaker,
+	tier string,
 	untracked bool,
 ) []generictables.Rule {
 	ruleCopy := FilterRuleToIPVersion(ipVersion, pRule)
@@ -353,7 +373,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	}
 
 	rs := matchBlockBuilder.Rules
-	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked)
+	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, id, tier, untracked)
 	rs = append(rs, rules...)
 	// Render rule annotations as comments on each rule.
 	for i := range rs {
@@ -591,7 +611,8 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	owner RuleOwnerType,
 	dir RuleDir,
 	idx int,
-	name string,
+	id types.IDMaker,
+	tier string,
 	untracked bool,
 ) []generictables.Rule {
 	var rules []generictables.Rule
@@ -599,13 +620,13 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
-		logPrefix := r.LogPrefix
-		if logPrefix == "" {
-			logPrefix = "calico-packet"
+		logMatch := r.NewMatch()
+		if len(r.LogActionRateLimit) != 0 {
+			logMatch = logMatch.Limit(r.LogActionRateLimit, uint16(r.LogActionRateLimitBurst))
 		}
 		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch(),
-			Action: r.Log(logPrefix),
+			Match:  logMatch,
+			Action: r.Log(r.generateLogPrefix(id, tier)),
 		})
 	}
 
@@ -625,7 +646,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 				Match: r.NewMatch(),
 				Action: r.Nflog(
 					nflogGroup,
-					CalculateNFLOGPrefixStr(RuleActionAllow, owner, dir, idx, name),
+					CalculateNFLOGPrefixStr(RuleActionAllow, owner, dir, idx, id),
 					0,
 				),
 			})
@@ -644,7 +665,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 				Match: r.NewMatch(),
 				Action: r.Nflog(
 					nflogGroup,
-					CalculateNFLOGPrefixStr(RuleActionPass, owner, dir, idx, name),
+					CalculateNFLOGPrefixStr(RuleActionPass, owner, dir, idx, id),
 					0,
 				),
 			})
@@ -662,7 +683,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 				Match: r.NewMatch(),
 				Action: r.Nflog(
 					nflogGroup,
-					CalculateNFLOGPrefixStr(RuleActionDeny, owner, dir, idx, name),
+					CalculateNFLOGPrefixStr(RuleActionDeny, owner, dir, idx, id),
 					0,
 				),
 			})
@@ -698,6 +719,61 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	}
 
 	return finalRules
+}
+
+var logPrefixRE = regexp.MustCompile("%[tknp]")
+
+// generateLogPrefix returns a log prefix string with known specifiers replaced by their corresponding values.
+// If no known specifiers are present, the log prefix is returned as-is.
+// Supported specifiers in the log prefix format string:
+//
+//	%t - Tier name
+//	%k - Kind (short names like gnp for GlobalNetworkPolicies)
+//	%n - Policy or profile name.
+//	%p - Policy or profile name including namespace:
+//	     - namespace/name for namespaced kinds.
+//	     - name for non namespaced kinds.
+func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) string {
+	logPrefix := "calico-packet"
+	if len(r.LogPrefix) != 0 {
+		logPrefix = r.LogPrefix
+	}
+
+	if !strings.Contains(logPrefix, "%") {
+		return logPrefix
+	}
+
+	var kind, name, namespace string
+	switch v := id.(type) {
+	case *types.PolicyID:
+		kind = v.KindShortName()
+		name = v.Name
+		namespace = v.Namespace
+	case *types.ProfileID:
+		kind = "pro"
+		name = v.Name
+	default:
+		kind = "unknown"
+		name = "unknown"
+	}
+
+	return logPrefixRE.ReplaceAllStringFunc(logPrefix, func(specifier string) string {
+		switch specifier {
+		case "%k":
+			return kind
+		case "%p":
+			if len(namespace) != 0 {
+				return fmt.Sprintf("%s/%s", namespace, name)
+			}
+			return name
+		case "%n":
+			return name
+		case "%t":
+			return tier
+		default:
+			return specifier
+		}
+	})
 }
 
 func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
@@ -953,7 +1029,7 @@ func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bo
 	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
-		polID.Tier+"/"+polID.Name,
+		polID.ID(),
 		maxLen,
 	)
 }

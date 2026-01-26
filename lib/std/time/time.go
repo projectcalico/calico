@@ -1,6 +1,9 @@
 package time
 
-import "time"
+import (
+	"testing"
+	"time"
+)
 
 func init() {
 	activeClock = newStdClock()
@@ -13,27 +16,38 @@ type (
 
 	Duration = time.Duration
 
+	Weekday = time.Weekday
+
 	Month = time.Month
 
 	Location = time.Location
 )
 
 const (
-	January Month = 1 + iota
-	February
-	March
-	April
-	May
-	June
-	July
-	August
-	September
-	October
-	November
-	December
+	Sunday    Weekday = time.Sunday
+	Monday    Weekday = time.Monday
+	Tuesday   Weekday = time.Tuesday
+	Wednesday Weekday = time.Wednesday
+	Thursday  Weekday = time.Thursday
+	Friday    Weekday = time.Friday
+	Saturday  Weekday = time.Saturday
+
+	January   Month = time.January
+	February  Month = time.February
+	March     Month = time.March
+	April     Month = time.April
+	May       Month = time.May
+	June      Month = time.June
+	July      Month = time.July
+	August    Month = time.August
+	September Month = time.September
+	October   Month = time.October
+	November  Month = time.November
+	December  Month = time.December
 )
 
 const (
+	Day         = 24 * time.Hour
 	Hour        = time.Hour
 	Minute      = time.Minute
 	Second      = time.Second
@@ -50,11 +64,16 @@ const (
 	RFC850      = time.RFC850
 	Kitchen     = time.Kitchen
 	Stamp       = time.Stamp
+	DateOnly    = time.DateOnly
+	DateTime    = time.DateTime
+	UnixDate    = time.UnixDate
 )
 
 var (
 	UTC   = time.UTC
 	Local = time.Local
+
+	localOverride *time.Location
 )
 
 // DoWithClock temporarily sets the shim as the time and runs the given function. After the function is run, the time
@@ -67,6 +86,13 @@ func DoWithClock(shim Clock, fn func() error) error {
 
 type CleanUpRegisterable interface {
 	Cleanup(func())
+}
+
+// ShimLocalForTesting temporarily sets the local used by the time package to the given location. This helps with time
+// comparisons where two equal times with different locations are considered unequal.
+func ShimLocalForTesting(t *testing.T, local *time.Location) {
+	localOverride = local
+	t.Cleanup(func() { localOverride = nil })
 }
 
 // ShimClockForTestingT temporarily sets the shim as the time and runs the given function for a test and when the test
@@ -142,4 +168,16 @@ func Parse(layout, value string) (Time, error) {
 
 func Date(year int, month Month, day, hour, min, sec, nsec int, loc *Location) Time {
 	return time.Date(year, month, day, hour, min, sec, nsec, loc)
+}
+
+func FixedZone(name string, offset int) *Location {
+	return time.FixedZone(name, offset)
+}
+
+func ParseDuration(s string) (Duration, error) {
+	return time.ParseDuration(s)
+}
+
+func ParseInLocation(layout, value string, loc *Location) (Time, error) {
+	return time.ParseInLocation(layout, value, loc)
 }

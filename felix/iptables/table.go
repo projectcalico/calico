@@ -24,7 +24,6 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -261,9 +260,6 @@ type Table struct {
 	peakIptablesSaveTime    time.Duration
 	peakIptablesRestoreTime time.Duration
 
-	// calicoXtablesLock, if enabled, our implementation of the xtables lock.
-	calicoXtablesLock sync.Locker
-
 	// lockTimeout is the timeout used for iptables-restore's native xtables lock implementation.
 	lockTimeout time.Duration
 	// lockTimeout is the lock probe interval used for iptables-restore's native xtables lock
@@ -302,8 +298,6 @@ type TableOptions struct {
 	RefreshInterval          time.Duration
 	PostWriteInterval        time.Duration
 
-	// LockTimeout is the timeout to use for iptables-restore's native xtables lock.
-	LockTimeout time.Duration
 	// LockProbeInterval is the probe interval to use for iptables-restore's native xtables lock.
 	LockProbeInterval time.Duration
 
@@ -325,7 +319,6 @@ func NewTable(
 	name string,
 	ipVersion uint8,
 	hashPrefix string,
-	iptablesWriteLock sync.Locker,
 	featureDetector environment.FeatureDetectorIface,
 	options TableOptions,
 ) *Table {
@@ -436,9 +429,6 @@ func NewTable(
 
 		refreshInterval: options.RefreshInterval,
 
-		calicoXtablesLock: iptablesWriteLock,
-
-		lockTimeout:       options.LockTimeout,
 		lockProbeInterval: options.LockProbeInterval,
 
 		newCmd:    newCmd,
@@ -1162,7 +1152,7 @@ func (t *Table) applyUpdates() error {
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
 	// Writing a forward reference ensures that the chain exists and that it is empty.
-	t.dirtyChains.Iter(func(chainName string) error {
+	for chainName := range t.dirtyChains.All() {
 		chainNeedsToBeFlushed := false
 		if t.nftablesMode {
 			// iptables-nft-restore <v1.8.3 has a bug (https://bugzilla.netfilter.org/show_bug.cgi?id=1348)
@@ -1178,7 +1168,8 @@ func (t *Table) applyUpdates() error {
 			if len(previousHashes) > 0 && reflect.DeepEqual(currentHashes, previousHashes) {
 				// Chain is already correct, skip it.
 				log.Debug("Chain already correct")
-				return set.RemoveItem
+				t.dirtyChains.Discard(chainName)
+				continue
 			}
 			chainNeedsToBeFlushed = true
 		} else if _, present := t.desiredStateOfChain(chainName); !present {
@@ -1191,12 +1182,11 @@ func (t *Table) applyUpdates() error {
 		if chainNeedsToBeFlushed {
 			buf.WriteForwardReference(chainName)
 		}
-		return nil
-	})
+	}
 
 	// Make a second pass over the dirty chains.  This time, we write out the rule changes.
 	newHashes := map[string][]string{}
-	t.dirtyChains.Iter(func(chainName string) error {
+	for chainName := range t.dirtyChains.All() {
 		if chain, ok := t.desiredStateOfChain(chainName); ok {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
@@ -1230,8 +1220,7 @@ func (t *Table) applyUpdates() error {
 				buf.WriteLine(line)
 			}
 		}
-		return nil // Delay clearing the set until we've programmed iptables.
-	})
+	}
 
 	// Make a copy of our full rules map and keep track of all changes made while processing dirtyInsertAppend.
 	// When we've successfully updated iptables, we'll update our cache of chainToFullRules with this map.
@@ -1244,7 +1233,7 @@ func (t *Table) applyUpdates() error {
 	// Now calculate iptables updates for our inserted and appended rules, which are used to hook top-level chains.
 	var deleteRenderingErr error
 	var line string
-	t.dirtyInsertAppend.Iter(func(chainName string) error {
+	for chainName := range t.dirtyInsertAppend.All() {
 		previousHashes := t.chainToDataplaneHashes[chainName]
 		newRules := newChainToFullRules[chainName]
 
@@ -1254,7 +1243,7 @@ func (t *Table) applyUpdates() error {
 
 		if reflect.DeepEqual(newChainHashes, previousHashes) {
 			// Chain is in sync, skip to next one.
-			return nil
+			continue
 		}
 
 		// For simplicity, if we've discovered that we're out-of-sync, remove all our
@@ -1263,7 +1252,7 @@ func (t *Table) applyUpdates() error {
 			if previousHashes[i] != "" {
 				line, deleteRenderingErr = t.renderDeleteByValueLine(chainName, i)
 				if deleteRenderingErr != nil {
-					return set.StopIteration
+					break
 				}
 				buf.WriteLine(line)
 			}
@@ -1320,9 +1309,7 @@ func (t *Table) applyUpdates() error {
 
 		newHashes[chainName] = newChainHashes
 		newChainToFullRules[chainName] = newRules
-
-		return nil // Delay clearing the set until we've programmed iptables.
-	})
+	}
 	// If rendering a delete by line number reached an unexpected state, error out so applyUpdates() can be retried.
 	if deleteRenderingErr != nil {
 		return deleteRenderingErr
@@ -1337,13 +1324,12 @@ func (t *Table) applyUpdates() error {
 		buf.EndTransaction()
 		buf.StartTransaction(t.name)
 
-		t.dirtyChains.Iter(func(chainName string) error {
+		for chainName := range t.dirtyChains.All() {
 			if _, ok := t.desiredStateOfChain(chainName); !ok {
 				// Chain deletion
 				buf.WriteForwardReference(chainName)
 			}
-			return nil // Delay clearing the set until we've programmed iptables.
-		})
+		}
 	}
 
 	// Do deletions at the end.  This ensures that we don't try to delete any chains that
@@ -1351,14 +1337,13 @@ func (t *Table) applyUpdates() error {
 	// above).  Note: if a chain is being deleted at the same time as a chain that it refers to
 	// then we'll issue a create+flush instruction in the very first pass, which will sever the
 	// references.
-	t.dirtyChains.Iter(func(chainName string) error {
+	for chainName := range t.dirtyChains.All() {
 		if _, ok := t.desiredStateOfChain(chainName); !ok {
 			// Chain deletion
 			buf.WriteLine(fmt.Sprintf("--delete-chain %s", chainName))
 			newHashes[chainName] = nil
 		}
-		return nil // Delay clearing the set until we've programmed iptables.
-	})
+	}
 
 	buf.EndTransaction()
 
@@ -1462,11 +1447,7 @@ func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
 	cmd.SetStdout(&outputBuf)
 	cmd.SetStderr(&errBuf)
 	countNumRestoreCalls.Inc()
-	// Note: calicoXtablesLock will be a dummy lock if our xtables lock is disabled (i.e. if iptables-restore
-	// supports the xtables lock itself, or if our implementation is disabled by config.
-	t.calicoXtablesLock.Lock()
 	err := cmd.Run()
-	t.calicoXtablesLock.Unlock()
 	if err != nil {
 		// To log out the input, we must convert to string here since, after we return, the buffer can be re-used
 		// (and the logger may convert to string on a background thread).

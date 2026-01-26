@@ -26,7 +26,7 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
 
 blocks:
-  - name: Publish cni-plugin images
+  - name: Publish cni-plugin images and multi-arch manifests
     dependencies: []
     skip:
       when: "branch !~ '.+'"
@@ -34,17 +34,7 @@ blocks:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin cd CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin cd push-manifests-with-tag CONFIRM=true; fi
         - name: Windows
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin release-windows CONFIRM=true; fi
-  - name: Publish cni-plugin multi-arch manifests
-    dependencies:
-      - Publish cni-plugin images
-    skip:
-      when: "branch !~ '.+'"
-    task:
-      jobs:
-        - name: Linux multi-arch manifests
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin push-manifests-with-tag CONFIRM=true; fi

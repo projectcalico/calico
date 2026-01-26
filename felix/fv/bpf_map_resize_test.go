@@ -61,20 +61,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 	BeforeEach(func() {
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		tc, client = infrastructure.StartNNodeTopology(1, opts, infra)
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
 
 		infra.AddDefaultAllow()
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		for _, wl := range w {
-			wl.Stop()
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("should copy data from old map to new map", func() {
@@ -199,17 +188,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 			)
 			w[i].ConfigureInInfra(infra)
 		}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		for _, wl := range w {
-			wl.Stop()
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("should resize ct map when it is full", func() {

@@ -23,12 +23,14 @@ import (
 	"github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 func init() {
@@ -36,10 +38,28 @@ func init() {
 	format.MaxLength = 0
 }
 
-var _ = Describe("Endpoints", endpointRulesTests(false))
-var _ = Describe("Endpoints with flowlogs", endpointRulesTests(true))
+var (
+	_ = Describe("Endpoints", endpointRulesTests(false, "DROP"))
+	_ = Describe("Endpoints with flowlogs", endpointRulesTests(true, "DROP"))
+)
 
-func endpointRulesTests(flowLogsEnabled bool) func() {
+var (
+	// Expected ID suffixes for policies used in tests.
+	// These don't exceed the length limit for iptables chain names, so
+	// they do not get hashed.
+	gnpAI = "gnp/ai"
+	gnpBI = "gnp/bi"
+	gnpAE = "gnp/ae"
+	gnpBE = "gnp/be"
+
+	gnpC   = "gnp/c"
+	gnpAFI = "gnp/afi"
+	gnpBFI = "gnp/bfi"
+	gnpAFE = "gnp/afe"
+	gnpBFE = "gnp/bfe"
+)
+
+func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() {
 	return func() {
 		const (
 			ProtoUDP          = 17
@@ -102,8 +122,16 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				VXLANVNI:                4096,
 			}
 
-			var renderer RuleRenderer
-			var epMarkMapper EndpointMarkMapper
+			var (
+				renderer              RuleRenderer
+				epMarkMapper          EndpointMarkMapper
+				commonRuleBuilderOpts = []ruleBuilderOpt{
+					withFlowLogs(flowLogsEnabled),
+					withDropActionOverride(dropActionOverride),
+					withDenyAction(denyAction, denyActionString),
+					withVXLANPort(VXLANPort),
+				}
+			)
 
 			Context("with normal config", func() {
 				BeforeEach(func() {
@@ -113,20 +141,11 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a minimal workload endpoint", func() {
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-					).build()
-
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
+					toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -152,11 +171,10 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a disabled workload endpoint", func() {
-					rules := newRuleBuilder(
-						withDenyAction(denyAction),
-						withFlowLogs(flowLogsEnabled),
+					opts := append(commonRuleBuilderOpts,
 						withDisabledEndpoint(),
-					).build()
+					)
+					rules := newRuleBuilder(opts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -182,24 +200,18 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a fully-loaded workload endpoint", func() {
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("ai", "bi"),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withPolicies("ae", "be"),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -215,64 +227,74 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-					Expect(renderer.WorkloadEndpointToIptablesChains(
+					actual := renderer.WorkloadEndpointToIptablesChains(
 						"cali1234",
 						epMarkMapper,
 						true,
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"ai", "bi"},
-							EgressPolicies:  []string{"ae", "be"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
+							},
 						}}),
 						[]string{"prof1", "prof2"},
 						nil,
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
 				It("should render a workload endpoint with policy groups", func() {
 					polGrpInABC := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"a", "b", "c"},
-						Selector:    "all()",
+						Direction: PolicyDirectionInbound,
+						Policies: []*types.PolicyID{
+							{Name: "a"},
+							{Name: "b"},
+							{Name: "c"},
+						},
+						Selector: "all()",
 					}
 					polGrpInEF := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"e", "f"},
-						Selector:    "someLabel == 'bar'",
+						Direction: PolicyDirectionInbound,
+						Policies: []*types.PolicyID{
+							{Name: "e"},
+							{Name: "f"},
+						},
+						Selector: "someLabel == 'bar'",
 					}
 					polGrpOutAB := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"a", "b"},
-						Selector:    "all()",
+						Direction: PolicyDirectionOutbound,
+						Policies: []*types.PolicyID{
+							{Name: "a"},
+							{Name: "b"},
+						},
+						Selector: "all()",
 					}
 					polGrpOutDE := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"d", "e"},
-						Selector:    "someLabel == 'bar'",
+						Direction: PolicyDirectionOutbound,
+						Policies: []*types.PolicyID{
+							{Name: "d"},
+							{Name: "e"},
+						},
+						Selector: "someLabel == 'bar'",
 					}
 
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicyGroups(polGrpInABC, polGrpInEF),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicyGroups(polGrpOutAB, polGrpOutDE),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -312,24 +334,18 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("staged:ai", "bi"),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
+						withPolicies("staged:ai", gnpBI),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withPolicies("ae", "staged:be"),
+						withPolicies(gnpAE, "staged:be"),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -345,39 +361,40 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-					Expect(renderer.WorkloadEndpointToIptablesChains(
+					actual := renderer.WorkloadEndpointToIptablesChains(
 						"cali1234",
 						epMarkMapper,
 						true,
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"staged:ai", "bi"},
-							EgressPolicies:  []string{"ae", "staged:be"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindStagedGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindStagedGlobalNetworkPolicy},
+							},
 						}}),
 						[]string{"prof1", "prof2"},
 						nil,
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
 				It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicies("staged:ai", "staged:bi"),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicies("staged:ae", "staged:be"),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -398,9 +415,15 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						epMarkMapper,
 						true,
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"staged:ai", "staged:bi"},
-							EgressPolicies:  []string{"staged:ae", "staged:be"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindStagedGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindStagedGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindStagedGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindStagedGlobalNetworkPolicy},
+							},
 						}}),
 						[]string{"prof1", "prof2"},
 						nil,
@@ -409,35 +432,33 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 
 				It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
 					polGrpIngress := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
-						PolicyNames: []string{"staged:ai", "staged:bi"},
-						Selector:    "all()",
+						Direction: PolicyDirectionInbound,
+						Policies: []*types.PolicyID{
+							{Name: "ai", Kind: v3.KindStagedGlobalNetworkPolicy},
+							{Name: "bi", Kind: v3.KindStagedGlobalNetworkPolicy},
+						},
+						Selector: "all()",
 					}
 					polGrpEgress := &PolicyGroup{
-						Tier:        "default",
-						Direction:   PolicyDirectionOutbound,
-						PolicyNames: []string{"staged:ae", "staged:be"},
-						Selector:    "all()",
+						Direction: PolicyDirectionOutbound,
+						Policies: []*types.PolicyID{
+							{Name: "ae", Kind: v3.KindStagedGlobalNetworkPolicy},
+							{Name: "be", Kind: v3.KindStagedGlobalNetworkPolicy},
+						},
+						Selector: "all()",
 					}
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withPolicyGroups(polGrpIngress),
 						withProfiles("prof1", "prof2"),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
 						withPolicyGroups(polGrpEgress),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -471,26 +492,21 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("ai", "bi"),
+					// Suffixes for policy IDs "ai" and "bi".
+					toWlRulesOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpAI, gnpBI),
 						withProfiles("prof1", "prof2"),
 						withTierPassAction(),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withPolicies("ae", "be"),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
 						withTierPassAction(),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -506,73 +522,85 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-					Expect(renderer.WorkloadEndpointToIptablesChains(
+					actual := renderer.WorkloadEndpointToIptablesChains(
 						"cali1234",
 						epMarkMapper,
 						true,
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							DefaultAction:   "Pass",
-							IngressPolicies: []string{"ai", "bi"},
-							EgressPolicies:  []string{"ae", "be"},
+							Name:          "default",
+							DefaultAction: "Pass",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
+							},
 						}}),
 						[]string{"prof1", "prof2"},
 						nil,
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
 				It("should render a host endpoint", func() {
 					actual := renderer.HostEndpointToFilterChains("eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"ai", "bi"},
-							EgressPolicies:  []string{"ae", "be"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
+							},
 						}}),
 						tiersToSinglePolGroups([]*proto.TierInfo{{
-							Name:            "default",
-							IngressPolicies: []string{"afi", "bfi"},
-							EgressPolicies:  []string{"afe", "bfe"},
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "afi", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bfi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "afe", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bfe", Kind: v3.KindGlobalNetworkPolicy},
+							},
 						}}),
 						epMarkMapper,
 						[]string{"prof1", "prof2"},
 					)
-					toHostRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("ae", "be"),
-						withProfiles("prof1", "prof2"),
-						forHostEndpoint(),
+
+					toHostOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-					).build()
-
-					fromHostRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("ai", "bi"),
+						withPolicies(gnpAE, gnpBE),
 						withProfiles("prof1", "prof2"),
 						forHostEndpoint(),
-					).build()
+					)
+					toHostRules := newRuleBuilder(toHostOpts...).build()
 
-					toHostFWRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("afe", "bfe"),
+					fromHostOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpAI, gnpBI),
+						withProfiles("prof1", "prof2"),
+						forHostEndpoint(),
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
+
+					toHostFWOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpAFE, gnpBFE),
 						withForwardPolicies(),
 						withEgress(),
 						forHostEndpoint(),
-					).build()
+					)
+					toHostFWRules := newRuleBuilder(toHostFWOpts...).build()
 
-					fromHostFWRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("afi", "bfi"),
+					fromHostFWOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpAFI, gnpBFI),
 						withForwardPolicies(),
 						forHostEndpoint(),
-					).build()
+					)
+					fromHostFWRules := newRuleBuilder(fromHostFWOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -600,24 +628,20 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render host endpoint raw chains with untracked policies", func() {
-					toHostRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("c"),
+					toHostOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
 						withEgress(),
-					).build()
+					)
+					toHostRules := newRuleBuilder(toHostOpts...).build()
 
-					fromHostRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("c"),
+					fromHostOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withUntrackedPolicies(),
-					).build()
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 
 					expected := []*generictables.Chain{
 						{
@@ -632,53 +656,46 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					Expect(renderer.HostEndpointToRawChains("eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []string{"c"},
-							EgressPolicies:  []string{"c"},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
+							EgressPolicies:  []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
 					)).To(Equal(expected))
 				})
 
 				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-					fromHostRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("c"),
+					fromHostOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
-					).build()
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 					expected := []*generictables.Chain{
 						{
 							Name:  "cali-fh-eth0",
 							Rules: fromHostRules,
 						},
 					}
-					Expect(renderer.HostEndpointToMangleIngressChains(
+					actual := renderer.HostEndpointToMangleIngressChains(
 						"eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []string{"c"},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
 				It("should render a workload endpoint with packet rate limiting QoSControls", func() {
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withQoSPacketRate(2000, 4000),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
 						withQoSPacketRate(1000, 2000),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := []*generictables.Chain{
 						{
@@ -709,22 +726,16 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a workload endpoint with connection limiting QoSControls", func() {
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withQoSMaxConnections(20),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
 						withQoSMaxConnections(10),
-					).build()
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -761,22 +772,16 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a minimal workload endpoint", func() {
-					toWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
+					toWlRulesOpts := append(commonRuleBuilderOpts,
 						withInvalidCTStateDisabled(),
-					).build()
+					)
+					toWlRules := newRuleBuilder(toWlRulesOpts...).build()
 
-					fromWlRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withInvalidCTStateDisabled(),
+					fromWlOpts := append(commonRuleBuilderOpts,
 						withEgress(),
-						withDropIPIP(),
-						withDropVXLAN(VXLANPort),
-					).build()
+						withInvalidCTStateDisabled(),
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -803,15 +808,13 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-					fromHostRules := newRuleBuilder(
-						withFlowLogs(flowLogsEnabled),
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withPolicies("c"),
+					fromHostOpts := append(commonRuleBuilderOpts,
+						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
 						withInvalidCTStateDisabled(),
-					).build()
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 
 					expected := []*generictables.Chain{
 						{
@@ -819,13 +822,14 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 							Rules: fromHostRules,
 						},
 					}
-					Expect(renderer.HostEndpointToMangleIngressChains(
+					actual := renderer.HostEndpointToMangleIngressChains(
 						"eth0",
 						tiersToSinglePolGroups([]*proto.TierInfo{{
 							Name:            "default",
-							IngressPolicies: []string{"c"},
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
-					)).To(Equal(expected))
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 			})
 
@@ -837,19 +841,12 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-						toWlRules := newRuleBuilder(
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-						).build()
-
-						fromWlRules := newRuleBuilder(
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-							withDropIPIP(),
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
+						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
-						).build()
+							withAllowVXLAN(),
+						)
+						fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 							{
@@ -890,19 +887,12 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 							nil,
 						)
 
-						toWlRules := newRuleBuilder(
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-						).build()
-
-						fromWlRules := newRuleBuilder(
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-							withDropVXLAN(VXLANPort),
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
+						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
-						).build()
+							withAllowIPIP(),
+						)
+						fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 							{
@@ -930,18 +920,13 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-						toWlRules := newRuleBuilder(
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
-						).build()
-
-						fromWlRules := newRuleBuilder(
-							withFlowLogs(flowLogsEnabled),
-							withDenyAction(denyAction),
-							withDenyActionString(denyActionString),
+						toWlRules := newRuleBuilder(commonRuleBuilderOpts...).build()
+						fromWlOpts := append(commonRuleBuilderOpts,
 							withEgress(),
-						).build()
+							withAllowIPIP(),
+							withAllowVXLAN(),
+						)
+						fromWlRules := newRuleBuilder(fromWlOpts...).build()
 
 						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 							{
@@ -995,15 +980,15 @@ func tiersToSinglePolGroups(tiers []*proto.TierInfo) (tierGroups []TierPolicyGro
 			DefaultAction: t.DefaultAction,
 		}
 		for _, n := range t.IngressPolicies {
+			conv := types.ProtoToPolicyID(n)
 			tg.IngressPolicies = append(tg.IngressPolicies, &PolicyGroup{
-				Tier:        t.Name,
-				PolicyNames: []string{n},
+				Policies: []*types.PolicyID{&conv},
 			})
 		}
 		for _, n := range t.EgressPolicies {
+			conv := types.ProtoToPolicyID(n)
 			tg.EgressPolicies = append(tg.EgressPolicies, &PolicyGroup{
-				Tier:        t.Name,
-				PolicyNames: []string{n},
+				Policies: []*types.PolicyID{&conv},
 			})
 		}
 		tierGroups = append(tierGroups, tg)
@@ -1016,60 +1001,51 @@ var _ = Describe("PolicyGroups", func() {
 	It("should make sensible UIDs", func() {
 		pgs := []PolicyGroup{
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "foo",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionOutbound,
-				PolicyNames: nil,
-				Selector:    "all()",
+				Direction: PolicyDirectionOutbound,
+				Policies:  nil,
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"a"},
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  []*types.PolicyID{{Name: "a"}},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: nil,
-				Selector:    "a == 'b'",
+				Direction: PolicyDirectionInbound,
+				Policies:  nil,
+				Selector:  "a == 'b'",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"a", "b"},
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  []*types.PolicyID{{Name: "a"}, {Name: "b"}},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"ab"},
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  []*types.PolicyID{{Name: "ab"}},
+				Selector:  "all()",
 			},
 			{
-				Tier:        "default",
-				Direction:   PolicyDirectionInbound,
-				PolicyNames: []string{"aaa", "bbb"},
-				Selector:    "all()",
+				Direction: PolicyDirectionInbound,
+				Policies:  []*types.PolicyID{{Name: "aaa"}, {Name: "bbb"}},
+				Selector:  "all()",
 			},
 			{
-				Tier:      "default",
 				Direction: PolicyDirectionInbound,
 				// Between this and the entry above, we check that the data
 				// sent to the hasher is delimited somehow.
-				PolicyNames: []string{"aaab", "bb"},
-				Selector:    "all()",
+				Policies: []*types.PolicyID{{Name: "aaab"}, {Name: "bb"}},
+				Selector: "all()",
 			},
 		}
 
@@ -1083,27 +1059,71 @@ var _ = Describe("PolicyGroups", func() {
 
 	It("should detect staged policies", func() {
 		pg := PolicyGroup{
-			Tier:      "default",
 			Direction: PolicyDirectionInbound,
-			PolicyNames: []string{
-				"namespace/staged:foo",
+			Policies: []*types.PolicyID{
+				{
+					Namespace: "namespace",
+					Name:      "foo",
+					Kind:      v3.KindStagedNetworkPolicy,
+				},
 			},
 			Selector: "all()",
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeFalse())
 
-		pg.PolicyNames = []string{
-			"staged:foo",
+		pg.Policies = []*types.PolicyID{
+			{
+				Name: "bar",
+				Kind: v3.KindStagedGlobalNetworkPolicy,
+			},
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeFalse())
 
-		pg.PolicyNames = []string{
-			"namespace/staged:foo",
-			"namespace/bar",
+		pg.Policies = []*types.PolicyID{
+			{
+				Namespace: "namespace",
+				Name:      "foo",
+				Kind:      v3.KindStagedNetworkPolicy,
+			},
+			{
+				Namespace: "namespace",
+				Name:      "bar",
+				Kind:      v3.KindGlobalNetworkPolicy,
+			},
 		}
 		Expect(pg.HasNonStagedPolicies()).To(BeTrue())
 	})
 })
+
+var (
+	// Chain names for policy ID "a".
+	cali_pi_a = PolicyChainName("cali-pi-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_a = PolicyChainName("cali-po-", &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "b".
+	cali_pi_b = PolicyChainName("cali-pi-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_b = PolicyChainName("cali-po-", &types.PolicyID{Name: "b", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "c".
+	cali_pi_c = PolicyChainName("cali-pi-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_c = PolicyChainName("cali-po-", &types.PolicyID{Name: "c", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "d".
+	cali_pi_d = PolicyChainName("cali-pi-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_d = PolicyChainName("cali-po-", &types.PolicyID{Name: "d", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "e".
+	cali_pi_e = PolicyChainName("cali-pi-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_e = PolicyChainName("cali-po-", &types.PolicyID{Name: "e", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	// Chain names for policy ID "f".
+	cali_pi_f = PolicyChainName("cali-pi-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_f = PolicyChainName("cali-po-", &types.PolicyID{Name: "f", Kind: v3.KindGlobalNetworkPolicy}, false)
+
+	cali_po_g = PolicyChainName("cali-po-", &types.PolicyID{Name: "g", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_h = PolicyChainName("cali-po-", &types.PolicyID{Name: "h", Kind: v3.KindGlobalNetworkPolicy}, false)
+	cali_po_i = PolicyChainName("cali-po-", &types.PolicyID{Name: "i", Kind: v3.KindGlobalNetworkPolicy}, false)
+)
 
 var _ = table.DescribeTable("PolicyGroup chains",
 	func(group PolicyGroup, expectedRules []generictables.Rule) {
@@ -1120,86 +1140,107 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		Expect(chains).To(HaveLen(1))
 		Expect(chains[0].Name).ToNot(BeEmpty())
 		Expect(chains[0].Name).To(Equal(group.ChainName()))
-		Expect(chains[0].Rules).To(Equal(expectedRules))
+		Expect(chains[0].Rules).To(Equal(expectedRules), cmp.Diff(chains[0].Rules, expectedRules))
 	},
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
+			jumpToPolicyGroup(cali_pi_a, 0),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			jumpToPolicyGroup("cali-pi-default/c", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
+			jumpToPolicyGroup(cali_pi_c, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			jumpToPolicyGroup("cali-pi-default/d", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
+			jumpToPolicyGroup(cali_pi_c, 0x18),
+			jumpToPolicyGroup(cali_pi_d, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			jumpToPolicyGroup("cali-pi-default/d", 0x18),
-			jumpToPolicyGroup("cali-pi-default/e", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
+			jumpToPolicyGroup(cali_pi_c, 0x18),
+			jumpToPolicyGroup(cali_pi_d, 0x18),
+			jumpToPolicyGroup(cali_pi_e, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionInbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e", "f"},
-			Selector:    "all()",
+			Direction: PolicyDirectionInbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-pi-default/a", 0),
-			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			jumpToPolicyGroup("cali-pi-default/d", 0x18),
-			jumpToPolicyGroup("cali-pi-default/e", 0x18),
+			jumpToPolicyGroup(cali_pi_a, 0),
+			jumpToPolicyGroup(cali_pi_b, 0x18),
+			jumpToPolicyGroup(cali_pi_c, 0x18),
+			jumpToPolicyGroup(cali_pi_d, 0x18),
+			jumpToPolicyGroup(cali_pi_e, 0x18),
 			{
 				// Only get a return action every 5 rules and only if it's
 				// not the last action.
@@ -1207,82 +1248,112 @@ var _ = table.DescribeTable("PolicyGroup chains",
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			jumpToPolicyGroup("cali-pi-default/f", 0),
+			jumpToPolicyGroup(cali_pi_f, 0),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"a", "b", "c", "d", "e", "f", "g"},
-			Selector:    "all()",
+			Direction: PolicyDirectionOutbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "g", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
-			jumpToPolicyGroup("cali-po-default/a", 0),
-			jumpToPolicyGroup("cali-po-default/b", 0x18),
-			jumpToPolicyGroup("cali-po-default/c", 0x18),
-			jumpToPolicyGroup("cali-po-default/d", 0x18),
-			jumpToPolicyGroup("cali-po-default/e", 0x18),
+			jumpToPolicyGroup(cali_po_a, 0),
+			jumpToPolicyGroup(cali_po_b, 0x18),
+			jumpToPolicyGroup(cali_po_c, 0x18),
+			jumpToPolicyGroup(cali_po_d, 0x18),
+			jumpToPolicyGroup(cali_po_e, 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			jumpToPolicyGroup("cali-po-default/f", 0),
-			jumpToPolicyGroup("cali-po-default/g", 0x18),
+			jumpToPolicyGroup(cali_po_f, 0),
+			jumpToPolicyGroup(cali_po_g, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "c", "d", "e", "f", "g", "h", "i"},
-			Selector:    "all()",
+			Direction: PolicyDirectionOutbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "g", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "h", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "i", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			jumpToPolicyGroup("cali-po-default/c", 0),
-			jumpToPolicyGroup("cali-po-default/d", 0x18),
-			jumpToPolicyGroup("cali-po-default/e", 0x18),
-			jumpToPolicyGroup("cali-po-default/f", 0x18),
-			jumpToPolicyGroup("cali-po-default/g", 0x18),
+			jumpToPolicyGroup(cali_po_c, 0),
+			jumpToPolicyGroup(cali_po_d, 0x18),
+			jumpToPolicyGroup(cali_po_e, 0x18),
+			jumpToPolicyGroup(cali_po_f, 0x18),
+			jumpToPolicyGroup(cali_po_g, 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			jumpToPolicyGroup("cali-po-default/h", 0),
-			jumpToPolicyGroup("cali-po-default/i", 0x18),
+			jumpToPolicyGroup(cali_po_h, 0),
+			jumpToPolicyGroup(cali_po_i, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "staged:c", "d", "staged:e", "f", "g"},
-			Selector:    "all()",
+			Direction: PolicyDirectionOutbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "g", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			jumpToPolicyGroup("cali-po-default/d", 0),
-			jumpToPolicyGroup("cali-po-default/f", 0x18),
-			jumpToPolicyGroup("cali-po-default/g", 0x18),
+			jumpToPolicyGroup(cali_po_d, 0),
+			jumpToPolicyGroup(cali_po_f, 0x18),
+			jumpToPolicyGroup(cali_po_g, 0x18),
 		},
 	),
 	polGroupEntry(
 		PolicyGroup{
-			Tier:        "default",
-			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "staged:c", "staged:d", "staged:e", "f", "g"},
-			Selector:    "all()",
+			Direction: PolicyDirectionOutbound,
+			Policies: []*types.PolicyID{
+				{Name: "a", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "b", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "c", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "d", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "e", Kind: v3.KindStagedGlobalNetworkPolicy},
+				{Name: "f", Kind: v3.KindGlobalNetworkPolicy},
+				{Name: "g", Kind: v3.KindGlobalNetworkPolicy},
+			},
+			Selector: "all()",
 		},
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			jumpToPolicyGroup("cali-po-default/f", 0),
-			jumpToPolicyGroup("cali-po-default/g", 0x18),
+			jumpToPolicyGroup(cali_po_f, 0),
+			jumpToPolicyGroup(cali_po_g, 0x18),
 		},
 	),
 )
@@ -1310,28 +1381,28 @@ func withEgress() ruleBuilderOpt {
 	}
 }
 
-func withDenyAction(action generictables.Action) ruleBuilderOpt {
+func withDenyAction(action generictables.Action, actionStr string) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.denyAction = action
-	}
-}
-
-func withDenyActionString(actionStr string) ruleBuilderOpt {
-	return func(r *ruleBuilder) {
 		r.denyActionString = actionStr
 	}
 }
 
-func withDropIPIP() ruleBuilderOpt {
+func withAllowIPIP() ruleBuilderOpt {
 	return func(r *ruleBuilder) {
-		r.dropIPIP = true
+		r.dropIPIP = false
 	}
 }
 
-func withDropVXLAN(vxlanPort int) ruleBuilderOpt {
+func withAllowVXLAN() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.dropVXLAN = false
+	}
+}
+
+func withVXLANPort(vxlanPort int) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.vxlanPort = vxlanPort
-		r.dropVXLAN = true
 	}
 }
 
@@ -1409,9 +1480,18 @@ func withDisabledEndpoint() ruleBuilderOpt {
 	}
 }
 
+func withDropActionOverride(action string) ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.dropActionOverride = action
+	}
+}
+
 func forHostEndpoint() ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.forHostEndpoint = true
+		// IPIP and VXLAN must be allowed to/from a host.
+		r.dropIPIP = false
+		r.dropVXLAN = false
 	}
 }
 
@@ -1445,10 +1525,15 @@ type ruleBuilder struct {
 	qosMaxConn         int64
 
 	flowLogsEnabled bool
+
+	dropActionOverride string
 }
 
 func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
-	b := &ruleBuilder{}
+	b := &ruleBuilder{
+		dropIPIP:  true,
+		dropVXLAN: true,
+	}
 	for _, o := range opts {
 		o(b)
 	}
@@ -1463,11 +1548,7 @@ func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
 func (b *ruleBuilder) build() []generictables.Rule {
 	var rules []generictables.Rule
 	if b.disabled {
-		return []generictables.Rule{{
-			Match:   Match(),
-			Action:  b.denyAction,
-			Comment: []string{"Endpoint admin disabled"},
-		}}
+		return b.getDropActionOverrideRules(Match(), "Endpoint admin disabled")
 	}
 	// Add rules only if endpoint is not disabled.
 
@@ -1495,12 +1576,12 @@ func (b *ruleBuilder) build() []generictables.Rule {
 	rules = append(rules, clearMarkRule(0x18, ""))
 
 	// Drop VXLAN traffic originating from workloads, if not allowed.
-	if b.dropVXLAN {
+	if b.dropVXLAN && b.direction == "egress" {
 		rules = append(rules, b.dropVXLANTunnel())
 	}
 
 	// Drop IPIP traffic originating from workloads, if not allowed.
-	if b.dropIPIP {
+	if b.dropIPIP && b.direction == "egress" {
 		rules = append(rules, b.dropIPIPTunnel())
 	}
 
@@ -1707,9 +1788,9 @@ func (b *ruleBuilder) matchPolicies() []generictables.Rule {
 			continue
 		}
 		endOfTierDrop = true
-		target := fmt.Sprintf("cali-pi-default/%v", p)
+		target := fmt.Sprintf("cali-pi-%v", p)
 		if b.egress {
-			target = fmt.Sprintf("cali-po-default/%v", p)
+			target = fmt.Sprintf("cali-po-%v", p)
 		}
 		rules = append(rules, generictables.Rule{
 			Match:  Match().MarkClear(0x10),
@@ -1735,18 +1816,12 @@ func (b *ruleBuilder) matchPolicies() []generictables.Rule {
 		endOfTierDrop = false
 	}
 
+	ruleComment := fmt.Sprintf("End of tier default. %s if no policies passed packet", b.denyActionString)
 	if b.flowLogsEnabled {
 		rules = append(rules, b.nflogAction(endOfTierDrop, false))
 	}
 	if endOfTierDrop {
-		rules = append(rules,
-			generictables.Rule{
-				Match:  Match().MarkClear(0x10),
-				Action: b.denyAction,
-				Comment: []string{fmt.Sprintf("End of tier default. %s if no policies passed packet",
-					b.denyActionString,
-				)},
-			})
+		rules = append(rules, b.getDropActionOverrideRules(Match().MarkClear(0x10), ruleComment)...)
 	}
 	return rules
 }
@@ -1770,16 +1845,42 @@ func (b *ruleBuilder) matchProfiles() []generictables.Rule {
 			},
 		)
 	}
+
+	ruleComment := fmt.Sprintf("%s if no profiles matched", b.denyActionString)
 	if b.flowLogsEnabled {
 		rules = append(rules, b.nflogAction(true, true))
 	}
-	rules = append(rules,
-		generictables.Rule{
-			Match:   Match(),
-			Action:  b.denyAction,
-			Comment: []string{fmt.Sprintf("%s if no profiles matched", b.denyActionString)},
-		},
-	)
+
+	rules = append(rules, b.getDropActionOverrideRules(Match(), ruleComment)...)
+
+	return rules
+}
+
+func (b *ruleBuilder) getDropActionOverrideRules(matchCriteria generictables.MatchCriteria, comment string) []generictables.Rule {
+	var rules []generictables.Rule
+	if strings.HasPrefix(b.dropActionOverride, "LOG") {
+		rules = append(rules,
+			generictables.Rule{
+				Match:   matchCriteria,
+				Action:  Actions().Log("calico-drop"),
+				Comment: []string{comment},
+			})
+	}
+	if strings.HasSuffix(b.dropActionOverride, "ACCEPT") {
+		rules = append(rules,
+			generictables.Rule{
+				Match:   matchCriteria,
+				Action:  Actions().Allow(),
+				Comment: []string{comment},
+			})
+	} else {
+		rules = append(rules,
+			generictables.Rule{
+				Match:   matchCriteria,
+				Action:  b.denyAction,
+				Comment: []string{comment},
+			})
+	}
 	return rules
 }
 

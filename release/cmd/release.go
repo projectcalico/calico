@@ -147,9 +147,19 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithPublishGitTag(c.Bool(publishGitTagFlag.Name)),
 					calico.WithPublishGithubRelease(c.Bool(publishGitHubReleaseFlag.Name)),
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
+					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
+				}
+				if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
+					opts = append(opts, calico.WithHelmRegistries(reg))
+				}
+				if v := c.String(awsProfileFlag.Name); v != "" {
+					opts = append(opts, calico.WithAWSProfile(v))
+				}
+				if v := c.String(s3BucketFlag.Name); v != "" {
+					opts = append(opts, calico.WithS3Bucket(v))
 				}
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
@@ -213,6 +223,7 @@ func releaseBuildFlags() []cli.Flag {
 		archFlag,
 		registryFlag,
 		buildImagesFlag,
+		archiveImagesFlag,
 		githubTokenFlag,
 		skipValidationFlag)
 	return f
@@ -222,10 +233,14 @@ func releaseBuildFlags() []cli.Flag {
 func releasePublishFlags() []cli.Flag {
 	f := append(productFlags,
 		registryFlag,
+		helmRegistryFlag,
 		publishImagesFlag,
 		publishGitTagFlag,
 		publishGitHubReleaseFlag,
 		githubTokenFlag,
+		publishChartsFlag,
+		awsProfileFlag,
+		s3BucketFlag,
 		skipValidationFlag)
 	return f
 }
@@ -249,39 +264,17 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				return err
 			}
 
-			pinnedCfg := pinnedversion.CalicoReleaseVersions{
-				Dir:                 cfg.TmpDir,
-				ProductVersion:      ver.FormattedString(),
-				ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
-				OperatorVersion:     operatorVer.FormattedString(),
-				OperatorCfg: pinnedversion.OperatorConfig{
-					Image:    operator.DefaultImage,
-					Registry: operator.DefaultRegistry,
-				},
-			}
-			if _, err := pinnedCfg.GenerateFile(); err != nil {
-				return fmt.Errorf("failed to generate pinned version file: %w", err)
-			}
-			images, err := pinnedCfg.ImageList()
-			if err != nil {
-				return fmt.Errorf("failed to get image list: %w", err)
-			}
-			flannelVer, err := pinnedCfg.FlannelVersion()
-			if err != nil {
-				return fmt.Errorf("failed to get flannel version: %w", err)
-			}
-
 			postreleaseDir := filepath.Join(cfg.RepoRootDir, utils.ReleaseFolderName, "pkg", "postrelease")
 			args := []string{
 				"--format=testname",
 				"--", "-v", "./...",
 				fmt.Sprintf("-release-version=%s", ver.FormattedString()),
 				fmt.Sprintf("-operator-version=%s", operatorVer.FormattedString()),
-				fmt.Sprintf("-flannel-version=%s", flannelVer),
+				fmt.Sprintf("-flannel-version=%s", pinnedversion.FlannelComponent.Version),
 				fmt.Sprintf("-github-org=%s", c.String(orgFlag.Name)),
 				fmt.Sprintf("-github-repo=%s", c.String(repoFlag.Name)),
 				fmt.Sprintf("-github-repo-remote=%s", c.String(repoRemoteFlag.Name)),
-				fmt.Sprintf("-images=%s", strings.Join(images, " ")),
+				fmt.Sprintf("-images=%s", strings.Join(utils.ReleaseImages(), " ")),
 			}
 			if c.String(githubTokenFlag.Name) != "" {
 				args = append(args, fmt.Sprintf("-github-token=%s", c.String(githubTokenFlag.Name)))

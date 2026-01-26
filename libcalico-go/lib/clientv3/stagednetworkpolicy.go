@@ -16,13 +16,10 @@ package clientv3
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
@@ -66,20 +63,7 @@ func (r stagedNetworkPolicies) Create(ctx context.Context, res *apiv3.StagedNetw
 		res.Spec.Types = []apiv3.PolicyType(nil)
 	}
 
-	if strings.HasPrefix(res.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
-		// We don't support Create of a StagedNetworkPolicy with such prefix
-		return nil, cerrors.ErrorOperationNotSupported{
-			Identifier: names.K8sNetworkPolicyNamePrefix,
-			Operation:  "Create",
-			Reason:     "Cannot create a StagedNetworkPolicy with that name prefix",
-		}
-	}
-
 	if err := validator.Validate(res); err != nil {
-		return nil, err
-	}
-	err := names.ValidateTieredPolicyName(res.Name, tier)
-	if err != nil {
 		return nil, err
 	}
 
@@ -117,20 +101,7 @@ func (r stagedNetworkPolicies) Update(ctx context.Context, res *apiv3.StagedNetw
 		res.Spec.Types = []apiv3.PolicyType(nil)
 	}
 
-	if strings.HasPrefix(res.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
-		// We don't support Create of a StagedNetworkPolicy with such prefix
-		return nil, cerrors.ErrorOperationNotSupported{
-			Identifier: names.K8sNetworkPolicyNamePrefix,
-			Operation:  "Update",
-			Reason:     "Cannot creaupdatete a StagedNetworkPolicy with that name prefix",
-		}
-	}
-
 	if err := validator.Validate(res); err != nil {
-		return nil, err
-	}
-	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
-	if err != nil {
 		return nil, err
 	}
 
@@ -155,15 +126,6 @@ func (r stagedNetworkPolicies) Update(ctx context.Context, res *apiv3.StagedNetw
 
 // Delete takes name of the StagedNetworkPolicy and deletes it. Returns an error if one occurs.
 func (r stagedNetworkPolicies) Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*apiv3.StagedNetworkPolicy, error) {
-	if strings.HasPrefix(name, names.K8sNetworkPolicyNamePrefix) {
-		// We don't support Create of a StagedNetworkPolicy with such prefix
-		return nil, cerrors.ErrorOperationNotSupported{
-			Identifier: names.K8sNetworkPolicyNamePrefix,
-			Operation:  "Delete",
-			Reason:     "No staged network policies should be available to be deleted for the knp prefix",
-		}
-	}
-
 	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
@@ -180,21 +142,7 @@ func (r stagedNetworkPolicies) Get(ctx context.Context, namespace, name string, 
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
-		// Fill in the tier information from the policy name if we find it missing.
-		// We expect backend policies to have the right name (prefixed with tier name).
-		resOut := out.(*apiv3.StagedNetworkPolicy)
-		if resOut.Spec.Tier == "" {
-			tier, tierErr := names.TierFromPolicyName(resOut.Name)
-			if tierErr != nil {
-				log.WithError(tierErr).Infof("Skipping setting tier for name %v", resOut.Name)
-				return resOut, tierErr
-			}
-			resOut.Spec.Tier = tier
-		}
-		if resOut.Name != name {
-			return nil, fmt.Errorf("resource not found GlobalNetworkPolicy(%s)", name)
-		}
-		return resOut, err
+		return out.(*apiv3.StagedNetworkPolicy), err
 	}
 	return nil, err
 }
@@ -202,11 +150,6 @@ func (r stagedNetworkPolicies) Get(ctx context.Context, namespace, name string, 
 // List returns the list of StagedNetworkPolicy objects that match the supplied options.
 func (r stagedNetworkPolicies) List(ctx context.Context, opts options.ListOptions) (*apiv3.StagedNetworkPolicyList, error) {
 	res := &apiv3.StagedNetworkPolicyList{}
-	// Add the name prefix if name is provided
-	if opts.Name != "" && !opts.Prefix {
-		opts.Name = names.TieredPolicyName(opts.Name)
-	}
-
 	if err := r.client.resources.List(ctx, opts, apiv3.KindStagedNetworkPolicy, apiv3.KindStagedNetworkPolicyList, res); err != nil {
 		return nil, err
 	}
@@ -214,16 +157,6 @@ func (r stagedNetworkPolicies) List(ctx context.Context, opts options.ListOption
 	// Make sure the tier labels are added
 	for i := range res.Items {
 		res.Items[i].GetObjectMeta().SetLabels(defaultTierLabelIfMissing(res.Items[i].GetObjectMeta().GetLabels()))
-		// Fill in the tier information from the policy name if we find it missing.
-		// We expect backend policies to have the right name (prefixed with tier name).
-		if res.Items[i].Spec.Tier == "" {
-			tier, tierErr := names.TierFromPolicyName(res.Items[i].Name)
-			if tierErr != nil {
-				log.WithError(tierErr).Infof("Skipping setting tier for name %v", res.Items[i].Name)
-				continue
-			}
-			res.Items[i].Spec.Tier = tier
-		}
 	}
 
 	return res, nil
@@ -232,10 +165,5 @@ func (r stagedNetworkPolicies) List(ctx context.Context, opts options.ListOption
 // Watch returns a watch.Interface that watches the stagedNetworkPolicies that match the
 // supplied options.
 func (r stagedNetworkPolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	// Add the name prefix if name is provided
-	if opts.Name != "" {
-		opts.Name = names.TieredPolicyName(opts.Name)
-	}
-
 	return r.client.resources.Watch(ctx, opts, apiv3.KindStagedNetworkPolicy, &policyConverter{})
 }

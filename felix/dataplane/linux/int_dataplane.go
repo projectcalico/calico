@@ -36,7 +36,6 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
-	k8shealthcheck "k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -178,7 +177,6 @@ type Config struct {
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
-	IptablesLockFilePath           string
 	IptablesLockTimeout            time.Duration
 	IptablesLockProbeInterval      time.Duration
 	XDPRefreshInterval             time.Duration
@@ -198,11 +196,11 @@ type Config struct {
 	ConfigChangedRestartCallback func()
 	FatalErrorRestartCallback    func(error)
 
-	PostInSyncCallback    func()
-	HealthAggregator      *health.HealthAggregator
-	WatchdogTimeout       time.Duration
-	RouteTableManager     *idalloc.IndexAllocator
-	bpfProxyHealthzServer *k8shealthcheck.ProxyHealthServer
+	PostInSyncCallback  func()
+	HealthAggregator    *health.HealthAggregator
+	WatchdogTimeout     time.Duration
+	RouteTableManager   *idalloc.IndexAllocator
+	bpfProxyHealthCheck bpfproxy.Healthcheck
 
 	DebugSimulateDataplaneHangAfter  time.Duration
 	DebugSimulateDataplaneApplyDelay time.Duration
@@ -283,7 +281,7 @@ type Config struct {
 	KubernetesProvider felixconfig.Provider
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
-	NewNftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
+	NewNftablesDataplane func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error)
 }
 
 type UpdateBatchResolver interface {
@@ -496,7 +494,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		InsertMode:            config.IptablesInsertMode,
 		RefreshInterval:       config.TableRefreshInterval,
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
-		LockTimeout:           config.IptablesLockTimeout,
 		LockProbeInterval:     config.IptablesLockProbeInterval,
 		BackendMode:           backendMode,
 		LookPathOverride:      config.LookPathOverride,
@@ -534,32 +531,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
-	dataplaneFeatures := featureDetector.GetFeatures()
-	var iptablesLock sync.Locker
-	if config.RulesConfig.NFTables {
-		iptablesLock = dummyLock{}
-	} else {
-		if dataplaneFeatures.RestoreSupportsLock {
-			log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
-				"iptables-restore will use its own implementation).")
-			iptablesLock = dummyLock{}
-		} else if config.IptablesLockTimeout <= 0 {
-			log.Debug("Calico implementation of iptables lock disabled (by configuration).")
-			iptablesLock = dummyLock{}
-		} else {
-			// Create the shared iptables lock.  This allows us to block other processes from
-			// manipulating iptables while we make our updates.  We use a shared lock because we
-			// actually do multiple updates in parallel (but to different tables), which is safe.
-			log.WithField("timeout", config.IptablesLockTimeout).Debug(
-				"Calico implementation of iptables lock enabled")
-			iptablesLock = iptables.NewSharedLock(
-				config.IptablesLockFilePath,
-				config.IptablesLockTimeout,
-				config.IptablesLockProbeInterval,
-			)
-		}
-	}
-
 	// iptables and nftables implementations.
 	var mangleTableV4NFT, natTableV4NFT, rawTableV4NFT, filterTableV4NFT generictables.Table
 	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
@@ -576,10 +547,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	// Create iptables table implementations.
-	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
-	natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesNATOptions)
-	rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
-	filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+	natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
+	rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+	filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 	// Based on configuration, some of the above tables should be active and others not.
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
@@ -724,6 +695,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
+	dataplaneFeatures := featureDetector.GetFeatures()
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
 		if config.BPFEnabled && bpfutils.BTFEnabled {
@@ -836,7 +808,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
 
 	// Create iptables Table implementations for IPv6.
-	filterTableV6IPT = iptables.NewTable("filter", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+	filterTableV6IPT = iptables.NewTable("filter", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 	// Select the correct table implementation based on whether we're using nftables or iptables.
 	var filterTableV6 generictables.Table
@@ -964,7 +936,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nil,
 			&config,
 			bpfMaps,
-			true,
 			workloadIfaceRegex,
 			ipSetIDAllocatorV4,
 			ipSetIDAllocatorV6,
@@ -1020,7 +991,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			// Activate the connect-time load balancer.
 			err = bpfnat.InstallConnectTimeLoadBalancer(true, config.BPFIpv6Enabled,
-				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP, bpfMaps.CommonMaps.CTLBProgramsMap)
+				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP, bpfMaps.CommonMaps.CTLBProgramsMaps)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
@@ -1183,9 +1154,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		// Define iptables table implementations for IPv6.
-		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
-		natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesNATOptions)
-		rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+		natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
+		rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 		// Select the correct table implementation based on whether we're using nftables or iptables.
 		var mangleTableV6, natTableV6, rawTableV6 generictables.Table
@@ -1405,7 +1376,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Info("Starting BPF event poller")
 		if err := bpfEventPoller.Start(); err != nil {
 			log.WithError(err).Info("Stopping bpf event poller")
-			bpfEvnt.Close()
+			err := bpfEvnt.Close()
+			if err != nil {
+				log.WithError(err).Info("Error from closing bpf event source.")
+			}
 		}
 	}
 
@@ -2803,14 +2777,6 @@ func (d *InternalDataplane) reportHealth() {
 	}
 }
 
-type dummyLock struct{}
-
-func (d dummyLock) Lock() {
-}
-
-func (d dummyLock) Unlock() {
-}
-
 func startBPFDataplaneComponents(
 	ipFamily proto.IPVersion,
 	maps *bpfmap.IPMaps,
@@ -2829,22 +2795,17 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
-	if config.bpfProxyHealthzServer == nil && config.KubeProxyHealtzPort != 0 {
-		healthzAddr := fmt.Sprintf(":%d", config.KubeProxyHealtzPort)
-		config.bpfProxyHealthzServer = k8shealthcheck.NewProxyHealthServer(
-			healthzAddr, config.KubeProxyMinSyncPeriod, nil)
-
-		// We cannot wait for the healthz server as we cannot stop it.
-		go func() {
-			log.Infof("Starting BPF Proxy Healthz server on %s", healthzAddr)
-			for {
-				err := config.bpfProxyHealthzServer.Run(context.Background()) // context is mosstly ignored inside
-				if err != nil {
-					log.WithError(err).Error("BPF Proxy Healthz server failed, restarting in 1s")
-					time.Sleep(time.Second)
-				}
-			}
-		}()
+	if config.bpfProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
+		var err error
+		config.bpfProxyHealthCheck, err = bpfproxy.NewHealthCheck(
+			config.KubeClientSet,
+			config.Hostname,
+			config.KubeProxyHealtzPort,
+			config.KubeProxyMinSyncPeriod,
+		)
+		if err != nil {
+			log.WithError(err).Error("Failed to initialize BPF kube-proxy health check")
+		}
 	}
 
 	bpfproxyOpts := []bpfproxy.Option{
@@ -2852,8 +2813,8 @@ func startBPFDataplaneComponents(
 		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
 	}
 
-	if config.bpfProxyHealthzServer != nil {
-		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthzServer(config.bpfProxyHealthzServer))
+	if config.bpfProxyHealthCheck != nil {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthCheck(config.bpfProxyHealthCheck))
 	} else {
 		log.Info("No healthz server configured for BPF kube-proxy.")
 	}

@@ -107,11 +107,6 @@ class _TestBGPAdvertV6(TestBaseV6):
             bird6_peer_config=self.get_bird_conf(),
         )
 
-        # Enable debug logging
-        self.update_ds_env("calico-node",
-                           "calico-system",
-                           {"BGP_LOGSEVERITYSCREEN": "debug"})
-
         # Establish BGPPeer from cluster nodes to node-extra
         calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
@@ -145,8 +140,12 @@ spec:
 EOF
 """)
 
-        # Remove node-2's route-reflector config.
-        json_str = calicoctl("get node %s -o json" % self.nodes[2])
+        # Remove node-2's route-reflector config, using a retry to avoid
+        # transient conflict errors.
+        retry_until_success(lambda: self.clear_rr_config(self.nodes[2]))
+
+    def clear_rr_config(self, node):
+        json_str = calicoctl("get node %s -o json" % node)
         node_dict = json.loads(json_str)
         node_dict['metadata']['labels'].pop('i-am-a-route-reflector', '')
         node_dict['spec']['bgp'].pop('routeReflectorClusterID', '')
@@ -154,6 +153,7 @@ EOF
 %s
 EOF
 """ % json.dumps(node_dict))
+
 
     def get_svc_cluster_ip(self, svc, ns):
         return kubectl("get svc %s -n %s -o json | jq -r .spec.clusterIP" %

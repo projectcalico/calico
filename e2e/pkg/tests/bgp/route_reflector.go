@@ -17,8 +17,11 @@ package bgp
 import (
 	"context"
 	"fmt"
+	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -53,7 +56,7 @@ var _ = describe.CalicoDescribe(
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("route-reflection")
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			// Create a connection tester for the test.
 			checker = conncheck.NewConnectionTester(f)
 
@@ -81,7 +84,7 @@ var _ = describe.CalicoDescribe(
 			// Before each test, perform the following steps:
 			// - Create a server pod and corresponding service in the main namespace for the test.
 			// - Create a client pod and assert that it can connect to the service.
-			By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
+			ginkgo.By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
 			server1 = conncheck.NewServer(
 				"server",
 				f.Namespace,
@@ -110,12 +113,12 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 
-		AfterEach(func() {
+		ginkgo.AfterEach(func() {
 			checker.Stop()
 			restoreBGPConfig()
 		})
 
-		It("should support in-cluster route reflectors", func() {
+		ginkgo.It("should support in-cluster route reflectors", func() {
 			// Disable full mesh BGP.
 			disableFullMesh(cli)
 
@@ -140,7 +143,7 @@ var _ = describe.CalicoDescribe(
 			setNodeAsRouteReflector(cli, &nodes.Items[0], "225.0.0.4")
 
 			// Create BGP peer that causes all non-RR nodes to peer with the RR.
-			By("Creating a BGPPeer to re-enable peers via the RR")
+			ginkgo.By("Creating a BGPPeer to re-enable peers via the RR")
 			peer := &v3.BGPPeer{
 				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-rrs"},
 				Spec: v3.BGPPeerSpec{
@@ -150,7 +153,7 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			DeferCleanup(func() {
+			ginkgo.DeferCleanup(func() {
 				err := cli.Delete(context.Background(), peer)
 				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
 			})
@@ -162,7 +165,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 
-		It("should support clustered route reflectors", func() {
+		ginkgo.It("should support clustered route reflectors", func() {
 			// Disable full mesh BGP.
 			disableFullMesh(cli)
 
@@ -185,7 +188,7 @@ var _ = describe.CalicoDescribe(
 			setNodeAsRouteReflector(cli, &nodes.Items[1], "225.0.0.4")
 
 			// Create BGP peer that causes all non-RR nodes to peer with the RRs.
-			By("Creating a BGPPeer to re-enable peers via the RRs")
+			ginkgo.By("Creating a BGPPeer to re-enable peers via the RRs")
 			peer := &v3.BGPPeer{
 				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-rrs"},
 				Spec: v3.BGPPeerSpec{
@@ -195,10 +198,13 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			DeferCleanup(func() {
+			ginkgo.DeferCleanup(func() {
 				err := cli.Delete(context.Background(), peer)
 				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
 			})
+
+			// Wait for BGP to converge.
+			waitForBGPEstablished(cli, nodes.Items...)
 
 			// Verify connectivity is restored.
 			checker.ResetExpectations()
@@ -216,9 +222,15 @@ var _ = describe.CalicoDescribe(
 			checker.ExpectSuccess(client2, server1.ClusterIPs()...)
 			checker.Execute()
 
+			// Wait for BGP to converge again after the node restarts.
+			waitForBGPEstablished(cli, nodes.Items...)
+
 			// Now, remove one of the RRs and verify connectivity is maintained.
-			By("Removing one of the route reflectors")
+			ginkgo.By("Removing one of the route reflectors")
 			setNodeAsNotRouteReflector(cli, &nodes.Items[1])
+
+			// Wait for BGP to converge.
+			waitForBGPEstablished(cli, nodes.Items...)
 
 			// Verify connectivity is maintained.
 			checker.ResetExpectations()
@@ -227,7 +239,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 
 			// Finally, remove the last RR and verify connectivity is lost.
-			By("Removing the last route reflector")
+			ginkgo.By("Removing the last route reflector")
 			setNodeAsNotRouteReflector(cli, &nodes.Items[0])
 
 			// Verify connectivity is lost.
@@ -235,5 +247,57 @@ var _ = describe.CalicoDescribe(
 			checker.ExpectFailure(client1, server1.ClusterIPs()...)
 			checker.ExpectFailure(client2, server1.ClusterIPs()...)
 			checker.Execute()
+		})
+
+		ginkgo.It("should support graceful transition to route reflectors", func() {
+			// Start a continuous connectivity check in the background.
+			checkpoint := checker.ExpectContinuously(client1, server1.ICMP(), server1.ClusterIP())
+			defer checkpoint.Stop()
+			checkpoint.ExpectSuccess("at the start of the test")
+
+			// Select a node to act as a route reflector. Give it a RR cluster ID, as well
+			// as a label identifying it as a route reflector.
+			nodes := corev1.NodeList{}
+			err = cli.List(context.Background(), &nodes)
+			Expect(err).NotTo(HaveOccurred(), "Error querying nodes in the cluster")
+			Expect(nodes.Items).NotTo(BeEmpty(), "No nodes found in the cluster")
+			setNodeAsRouteReflector(cli, &nodes.Items[0], "225.0.0.4")
+
+			// Create BGP peer that causes all non-RR nodes to peer with the RR.
+			ginkgo.By("Creating a BGPPeer to enable peerings to the RR")
+			peer := &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-rrs"},
+				Spec: v3.BGPPeerSpec{
+					NodeSelector: fmt.Sprintf("!has(%s)", resources.RouteReflectorClusterIDAnnotation),
+					PeerSelector: fmt.Sprintf("has(%s)", resources.RouteReflectorClusterIDAnnotation),
+				},
+			}
+			err = cli.Create(context.Background(), peer)
+			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
+			ginkgo.DeferCleanup(func() {
+				err := cli.Delete(context.Background(), peer)
+				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
+			})
+
+			// Wait until BGP has converged.
+			waitForBGPEstablished(cli, nodes.Items...)
+
+			// At this point, both full mesh and route reflection are enabled, so connectivity
+			// should be fine.
+			checkpoint.ExpectSuccess("after enabling route reflectors")
+
+			// Now disable full mesh BGP - connectivity should be maintained via the RR.
+			disableFullMesh(cli)
+
+			// Wait until BGP has converged again, plus a little extra time to ensure stability.
+			waitForBGPEstablished(cli, nodes.Items...)
+			time.Sleep(5 * time.Second)
+
+			checkpoint.ExpectSuccess("after disabling full mesh")
+
+			// Deleting the route reflector role should cause connectivity to be lost.
+			setNodeAsNotRouteReflector(cli, &nodes.Items[0])
+
+			checkpoint.ExpectFailure("after removing route reflector role")
 		})
 	})

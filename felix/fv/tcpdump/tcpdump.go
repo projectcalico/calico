@@ -136,7 +136,11 @@ func (t *TCPDump) ResetCount(name string) {
 	logrus.Infof("[%s] Reset count for %s", t.contName, name)
 }
 
-func (t *TCPDump) Start(expr ...string) {
+type CleanupProvider interface {
+	AddCleanup(func())
+}
+
+func (t *TCPDump) Start(infra CleanupProvider, expr ...string) {
 	args := append(t.args, expr...)
 	t.cmd = utils.Command(t.exe, args...)
 	var err error
@@ -151,24 +155,33 @@ func (t *TCPDump) Start(expr ...string) {
 
 	err = t.cmd.Start()
 
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	infra.AddCleanup(t.Stop)
+
 	select {
 	case <-t.listeningStarted:
 	case <-time.After(60 * time.Second):
 		ginkgo.Fail("Failed to start tcpdump: it never reported that it was listening")
 	}
 
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }
 
 func (t *TCPDump) Stop() {
 	var err error
 	if t.args[0] == "run" {
 		err = exec.Command("docker", "stop", t.contName).Run()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to stop tcpdump container; maybe it failed to start?")
+		}
 	} else {
 		err = t.cmd.Process.Kill()
-	}
-	if err != nil {
-		logrus.WithError(err).Error("Failed to kill tcpdump; maybe it failed to start?")
+		if err != nil {
+			logrus.Errorf("Failed to stop tcpdump: %v", err)
+		}
+		err := t.cmd.Wait()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to wait for tcpdump to exit")
+		}
 	}
 }
 

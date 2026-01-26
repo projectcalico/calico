@@ -54,11 +54,6 @@ var _ = infrastructure.DatastoreDescribe(
 			tc, calicoClient = infrastructure.StartNNodeTopology(1, options, infra)
 		})
 
-		AfterEach(func() {
-			tc.Stop()
-			infra.Stop()
-		})
-
 		Context("With Felix configuration set GRO disabled on eth0", func() {
 			It("should detected by the ethtool in Felix to assert update made successfully ", func() {
 

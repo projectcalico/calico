@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package model_test
+package model
 
 import (
 	"reflect"
@@ -24,7 +24,6 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
-	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -41,10 +40,6 @@ import (
 var interestingPaths = []string{
 	"/calico/v1/config/foobar",
 	"/calico/v1/config/foobar/bazz",
-	"/calico/v1/policy/profile/foo%2fbar/rules",
-	"/calico/v1/policy/profile/foo%2fbar/labels",
-	"/calico/v1/policy/tier/default/policy/biff%2fbop",
-	"/calico/v1/policy/tier",
 	"/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
 	"/calico/v1/host/foobar/endpoint",
 	"/calico/v1/host/foobar/endpoint/biff",
@@ -57,12 +52,6 @@ var interestingPaths = []string{
 	"/calico/v1/netset/foo",
 	"/calico/v1/Ready",
 	"/calico/v1/Ready/garbage",
-	"/calico/v1/policy/tier",
-	"/calico/v1/policy/tier/foo",
-	"/calico/v1/policy/tier/foo/policy",
-	"/calico/v1/policy/tier/foo/policy/bar",
-	"/calico/v1/policy/tier/foo/metadata",
-	"/calico/v1/policy/profile",
 	"/calico/bgp/v1/global",
 	"/calico/bgp/v1/global/peer_v4",
 	"/calico/bgp/v1/global/peer_v4/name",
@@ -171,7 +160,6 @@ func safeKeysEqual(a, b Key) bool {
 }
 
 var _ = Describe("keys with region component", func() {
-
 	It("should not parse workload endpoint status with wrong region", func() {
 		Expect((WorkloadEndpointStatusListOptions{RegionString: "region-Asia"}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1")).To(BeNil())
 	})
@@ -274,24 +262,6 @@ var _ = DescribeTable(
 			Expect(serialized).To(Equal(strKey))
 		}
 	},
-	Entry(
-		"profile rules with a /",
-		"/calico/v1/policy/profile/foo%2fbar/rules",
-		ProfileRulesKey{ProfileKey: ProfileKey{Name: "foo/bar"}},
-		false,
-	),
-	Entry(
-		"profile labels with a /",
-		"/calico/v1/policy/profile/foo%2fbar/labels",
-		ProfileLabelsKey{ProfileKey: ProfileKey{Name: "foo/bar"}},
-		false,
-	),
-	Entry(
-		"policy with a /",
-		"/calico/v1/policy/tier/default/policy/biff%2fbop",
-		PolicyKey{Tier: "default", Name: "biff/bop"},
-		false,
-	),
 	Entry(
 		"workload with a /",
 		"/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
@@ -402,6 +372,149 @@ var _ = DescribeTable(
 		"/calico/resources/v3/projectcalico.org/felixconfigurations/default/my-network-policy",
 		nil,
 		true,
+	),
+	Entry(
+		"NetworkPolicy",
+		"/calico/v1/policy/NetworkPolicy/default/my-policy",
+		PolicyKey{
+			Kind:      "NetworkPolicy",
+			Namespace: "default",
+			Name:      "my-policy",
+		},
+		false,
+	),
+	Entry(
+		"StagedNetworkPolicy",
+		"/calico/v1/policy/StagedNetworkPolicy/default/my-staged-policy",
+		PolicyKey{
+			Kind:      "StagedNetworkPolicy",
+			Namespace: "default",
+			Name:      "my-staged-policy",
+		},
+		false,
+	),
+	Entry(
+		"GlobalNetworkPolicy",
+		"/calico/v1/policy/GlobalNetworkPolicy//my-global-policy",
+		PolicyKey{
+			Kind: "GlobalNetworkPolicy",
+			Name: "my-global-policy",
+		},
+		false,
+	),
+)
+
+// Test parsing of legacy style PolicyKey of form /calico/v1/policy/tier/<Tier>/policy/<Name>
+var _ = DescribeTable(
+	"key parsing (legacy keys)",
+	func(strKey string, expected Key, shouldFail bool) {
+		key := KeyFromDefaultPath(strKey)
+		if shouldFail {
+			Expect(key).To(BeNil())
+		} else {
+			Expect(key).To(Equal(expected))
+			upg := expected.(LegacyPolicyKey).Upgrade()
+			Expect(upg).To(Equal(PolicyKey{
+				Kind:      expected.(LegacyPolicyKey).Kind,
+				Namespace: expected.(LegacyPolicyKey).Namespace,
+				Name:      expected.(LegacyPolicyKey).Name,
+			}))
+
+			val, err := key.parseValue([]byte(`{"spec":{}}`))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(val).To(Equal(&Policy{
+				Tier: expected.(LegacyPolicyKey).Tier,
+			}))
+		}
+	},
+
+	Entry(
+		"Legacy NetworkPolicy",
+		"/calico/v1/policy/tier/mytier/policy/ns%2fname",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind:      "NetworkPolicy",
+				Namespace: "ns",
+				Name:      "name",
+			},
+			Tier: "mytier",
+		},
+		false,
+	),
+	Entry(
+		"Legacy GlobalNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/name",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind: "GlobalNetworkPolicy",
+				Name: "name",
+			},
+			Tier: "default",
+		},
+		false,
+	),
+	Entry(
+		"Legacy StagedNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/ns%2fstaged:name",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind:      "StagedNetworkPolicy",
+				Namespace: "ns",
+				Name:      "name",
+			},
+			Tier: "default",
+		},
+		false,
+	),
+	Entry(
+		"Legacy StagedGlobalNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/staged:name",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind: "StagedGlobalNetworkPolicy",
+				Name: "name",
+			},
+			Tier: "default",
+		},
+		false,
+	),
+	Entry(
+		"Legacy ClusterNetworkPolicy",
+		"/calico/v1/policy/tier/kube-admin/policy/kcnp.kube-admin.name",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind: "KubernetesClusterNetworkPolicy",
+				Name: "kube-admin.name",
+			},
+			Tier: "kube-admin",
+		},
+		false,
+	),
+	Entry(
+		"Legacy KubernetesNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/ns%2fknp.default.name",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind:      "KubernetesNetworkPolicy",
+				Namespace: "ns",
+				Name:      "name",
+			},
+			Tier: "default",
+		},
+		false,
+	),
+	Entry(
+		"Legacy StagedKubernetesNetworkPolicy",
+		"/calico/v1/policy/tier/default/policy/ns%2fstaged:knp.default.name",
+		LegacyPolicyKey{
+			PolicyKey: PolicyKey{
+				Kind:      "StagedKubernetesNetworkPolicy",
+				Namespace: "ns",
+				Name:      "name",
+			},
+			Tier: "default",
+		},
+		false,
 	),
 )
 
@@ -540,26 +653,28 @@ func mustParseCIDR(s string) net.IPNet {
 	return *ipNet
 }
 
-var benchResult any
-var _ = benchResult
-var benchKeys = []Key{
-	WorkloadEndpointKey{
-		Hostname:       "ip-12-23-24-52.cloud.foo.bar.baz",
-		OrchestratorID: "kubernetes",
-		WorkloadID:     "some-pod-name-12346",
-		EndpointID:     "eth0",
-	},
-	WireguardKey{NodeName: "ip-12-23-24-53.cloud.foo.bar.baz"},
-	HostEndpointKey{
-		Hostname:   "ip-12-23-24-52.cloud.foo.bar.baz",
-		EndpointID: "eth0",
-	},
-	ResourceKey{
-		Name:      "projectcalico-default-allow",
-		Namespace: "default",
-		Kind:      apiv3.KindNetworkPolicy,
-	},
-}
+var (
+	benchResult any
+	_           = benchResult
+	benchKeys   = []Key{
+		WorkloadEndpointKey{
+			Hostname:       "ip-12-23-24-52.cloud.foo.bar.baz",
+			OrchestratorID: "kubernetes",
+			WorkloadID:     "some-pod-name-12346",
+			EndpointID:     "eth0",
+		},
+		WireguardKey{NodeName: "ip-12-23-24-53.cloud.foo.bar.baz"},
+		HostEndpointKey{
+			Hostname:   "ip-12-23-24-52.cloud.foo.bar.baz",
+			EndpointID: "eth0",
+		},
+		ResourceKey{
+			Name:      "projectcalico-default-allow",
+			Namespace: "default",
+			Kind:      apiv3.KindNetworkPolicy,
+		},
+	}
+)
 
 func BenchmarkOldKeyFromDefaultPath(b *testing.B) {
 	benchmarkKeyFromDefaultPathImpl(b, OldKeyFromDefaultPath)

@@ -86,32 +86,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
-		externalClient = infrastructure.RunExtClient("ext-client")
+		externalClient = infrastructure.RunExtClient(infra, "ext-client")
 		err = infra.AddDefaultDeny()
 		Expect(err).To(BeNil())
-	})
-
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ip6tables-save", "-c")
-				}
-				felix.Exec("ip", "r")
-				felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-				felix.Exec("calico-bpf", "-6", "policy", "dump", "eth0", "all", "--asm")
-				felix.Exec("calico-bpf", "counters", "dump")
-			}
-		}
-	})
-
-	AfterEach(func() {
-		tc.Stop()
-		infra.Stop()
-		externalClient.Stop()
 	})
 
 	expectFullConnectivity := func(opts ...ExpectationOption) {
@@ -335,7 +312,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 				Expect(lines).To(HaveLen(1), "expected only one proto kernel route, has docker's routing set-up changed?")
 				subnetArgs := strings.Split(strings.ReplaceAll(lines[0], "eth0", "bond0"), " ")
 
-				//Move IPv6
+				// Move IPv6
 				defaultRoute6, err := felix.ExecOutput("ip", "-6", "route", "show", "default")
 				Expect(err).NotTo(HaveOccurred())
 				lines = strings.Split(strings.Trim(defaultRoute6, "\n "), "\n")
@@ -373,11 +350,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 			for _, felix := range tc.Felixes {
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(felix, "bond0", "egress", "default.allow-egress", "allow", false)
+					return bpfCheckIfGlobalNetworkPolicyProgrammed(felix, "bond0", "egress", "allow-egress", "allow", false)
 				}, "5s", "200ms").Should(BeTrue())
 
 				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammedV6(felix, "bond0", "egress", "default.allow-egress", "allow", false)
+					return bpfCheckIfGlobalNetworkPolicyProgrammedV6(felix, "bond0", "egress", "allow-egress", "allow", false)
 				}, "5s", "200ms").Should(BeTrue())
 
 			}
@@ -389,13 +366,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		It("should implement untracked policy correctly", func() {
 			testDonotTrackPolicy("bond0")
 		})
-
 	})
-
 })
 
 func createHostEndpoint(f *infrastructure.Felix, iface string,
-	expectedIPs []string, client client.Interface, ctx context.Context) {
+	expectedIPs []string, client client.Interface, ctx context.Context,
+) {
 	hep := api.NewHostEndpoint()
 	hep.Name = iface + "-" + f.Name
 	hep.Labels = map[string]string{

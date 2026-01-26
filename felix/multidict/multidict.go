@@ -69,10 +69,9 @@ func (md Multidict[K, V]) Iter(key K, f func(value V)) {
 	if s == nil {
 		return
 	}
-	s.Iter(func(v V) error {
+	for v := range s.All() {
 		f(v)
-		return nil
-	})
+	}
 }
 
 func (md Multidict[K, V]) DiscardKey(k K) {

@@ -485,6 +485,7 @@ class TestDnsmasqRouted(base.BaseTestCase):
                 "--dhcp-range=set:subnet-v6subnet-1,2001:db8:1::"
                 + ",static,off-link,80,86400s",
                 "--enable-ra",
+                "--ra-param=ns-*,mtu:off,0",
                 "--interface=tap1",
                 "--interface=tap2",
                 "--interface=tap3",
@@ -566,6 +567,7 @@ class TestDnsmasqRouted(base.BaseTestCase):
                 "--dhcp-range=set:subnet-v6subnet-1,2001:db8:1::"
                 + ",static,off-link,80,86400s",
                 "--enable-ra",
+                "--ra-param=ns-*,mtu:off,0",
                 "--interface=tap1",
                 "--interface=tap2",
                 "--interface=tap3",

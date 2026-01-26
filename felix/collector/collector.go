@@ -107,6 +107,13 @@ type Config struct {
 	DisplayDebugTraceLogs bool
 
 	BPFConntrackTimeouts bpfconntrack.Timeouts
+
+	PolicyStoreManager policystore.PolicyStoreManager
+}
+
+// namespacedEpKey is an interface for keys that have namespace information.
+type namespacedEpKey interface {
+	GetNamespace() string
 }
 
 // A collector (a StatsManager really) collects StatUpdates from data sources
@@ -141,8 +148,12 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		config:                cfg,
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
-		policyStoreManager:    policystore.NewPolicyStoreManager(),
 		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
+		policyStoreManager:    cfg.PolicyStoreManager,
+	}
+
+	if c.policyStoreManager == nil {
+		c.policyStoreManager = policystore.NewPolicyStoreManager()
 	}
 
 	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
@@ -273,7 +284,7 @@ func (c *collector) startStatsCollectionAndReporting() {
 func (c *collector) loopProcessingDataplaneInfoUpdates(dpInfoC <-chan *proto.ToDataplane) {
 	for dpInfo := range dpInfoC {
 		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-			log.Debugf("Dataplane payload: %v and sequenceNumber: %d, ", dpInfo.Payload, dpInfo.SequenceNumber)
+			log.Debugf("Dataplane payload: %+v and sequenceNumber: %d, ", dpInfo.Payload, dpInfo.SequenceNumber)
 			// Get the data and update the endpoints.
 			ps.ProcessUpdate(perHostPolicySubscription, dpInfo, true)
 		})
@@ -299,13 +310,9 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 		return data
 	}
 
-	// Get the source endpoint. Set the clientIP to an empty value, as it is not used for to get
-	// the source endpoint.
-	srcEp := c.lookupEndpoint([16]byte{}, t.Src)
+	// Get the source and destination endpoints
+	srcEp, dstEp := c.findEndpointBestMatch(t)
 	srcEpIsNotLocal := srcEp == nil || !srcEp.IsLocal()
-
-	// Get the destination endpoint. If the source is local then we can use egress domain lookups if required.
-	dstEp := c.lookupEndpoint(t.Src, t.Dst)
 	dstEpIsNotLocal := dstEp == nil || !dstEp.IsLocal()
 
 	if !exists {
@@ -315,14 +322,17 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 		}
 
 		// Ignore HEP reporters.
-		if (srcEp != nil && srcEp.IsLocal() && srcEp.IsHostEndpoint()) ||
-			(dstEp != nil && dstEp.IsLocal() && dstEp.IsHostEndpoint()) {
+		if (!srcEpIsNotLocal && srcEp.IsHostEndpoint()) ||
+			(!dstEpIsNotLocal && dstEp.IsHostEndpoint()) {
 			return nil
 		}
 
 		// The entry does not exist. Go ahead and create a new one and add it to the map.
 		data = NewData(t, srcEp, dstEp)
 		c.updateEpStatsCache(t, data)
+
+		// Perform an initial evaluation of pending rule traces.
+		c.evaluatePendingRuleTraceForLocalEp(data)
 	} else if data.Reported {
 		if !data.UnreportedPacketInfo && !packetinfo {
 			// Data has been reported.  If the request has not come from a packet info update (e.g. nflog) and we do not
@@ -380,20 +390,59 @@ func endpointChanged(ep1, ep2 calc.EndpointData) bool {
 	return ep1.Key() != ep2.Key()
 }
 
-func (c *collector) lookupEndpoint(clientIPBytes, ip [16]byte) calc.EndpointData {
-	// Get the endpoint data for this entry.
-	if ep, ok := c.luc.GetEndpoint(ip); ok {
+// lookupNetworkSetWithNamespace looks up NetworkSets for the given IP address.
+// If canCheckEgressDomains is true, then egress domain lookups will be performed if no
+// NetworkSet is found for the IP. If preferredNamespace is set, then it will be used for
+// namespace-aware NetworkSet resolution.
+func (c *collector) lookupNetworkSetWithNamespace(clientIPBytes, ip [16]byte, canCheckEgressDomains bool, preferredNamespace string) calc.EndpointData {
+	if !c.config.EnableNetworkSets {
+		return nil
+	}
+
+	// Check if the IP matches a NetworkSet
+	if ep, ok := c.luc.GetNetworkSetWithNamespace(ip, preferredNamespace); ok {
 		return ep
 	}
 
-	// No matching endpoint. If NetworkSets are enabled for flows then check if the IP matches a NetworkSet and
-	// return that.
-	if c.config.EnableNetworkSets {
-		if ep, ok := c.luc.GetNetworkSet(ip); ok {
-			return ep
-		}
-	}
 	return nil
+}
+
+// findEndpointBestMatch performs endpoint lookups for both source and destination. It first tries
+// direct endpoint lookups, and only falls back to NetworkSet lookups if needed, using namespace
+// context from the other endpoint when available.
+func (c *collector) findEndpointBestMatch(t tuple.Tuple) (srcEp, dstEp calc.EndpointData) {
+	var ep calc.EndpointData
+	var srcEpFound, dstEpFound bool
+	if ep, srcEpFound = c.luc.GetEndpoint(t.Src); srcEpFound {
+		// Only set srcEp if lookup succeeded (to avoid storing a typed nil).
+		srcEp = ep
+	}
+
+	if ep, dstEpFound = c.luc.GetEndpoint(t.Dst); dstEpFound {
+		// Only set dstEp if lookup succeeded (to avoid storing a typed nil).
+		dstEp = ep
+	}
+
+	if (srcEpFound && dstEpFound) || !c.config.EnableNetworkSets {
+		// If both endpoints were found directly, or if NetworkSets are not enabled, return what we
+		// found from direct lookups
+		return srcEp, dstEp
+	}
+
+	if !srcEpFound {
+		dstNamespace := getNamespaceFromEp(dstEp)
+		srcEp = c.lookupNetworkSetWithNamespace([16]byte{}, t.Src, false, dstNamespace)
+	}
+
+	if !dstEpFound {
+		srcNamespace := getNamespaceFromEp(srcEp)
+		// This controls whether egress-domain lookups should be performed when resolving the
+		// destination NetworkSet. Only local source endpoints can trigger egress-domain resolution.
+		srcEpLocal := srcEp != nil && srcEp.IsLocal()
+		dstEp = c.lookupNetworkSetWithNamespace(t.Src, t.Dst, srcEpLocal, srcNamespace)
+	}
+
+	return srcEp, dstEp
 }
 
 // updateEpStatsCache updates/add entry to the epStats cache (map[Tuple]*Data) and update the
@@ -447,9 +496,6 @@ func (c *collector) applyNflogStatUpdate(data *Data, ruleID *calc.RuleID, matchI
 	if ru = data.AddRuleID(ruleID, matchIdx, numPkts, numBytes); ru == RuleMatchIsDifferent {
 		c.handleDataEndpointOrRulesChanged(data)
 		data.ReplaceRuleID(ruleID, matchIdx, numPkts, numBytes)
-	}
-	if ru == RuleMatchSet || ru == RuleMatchIsDifferent {
-		c.evaluatePendingRuleTraceForLocalEp(data)
 	}
 }
 
@@ -581,6 +627,16 @@ func (c *collector) expireMetrics(data *Data) {
 	}
 }
 
+// tryReportAndExpire tries to report expired data metrics and clean up the connection entry.
+func (c *collector) tryReportAndExpire(data *Data) {
+	if data.Expired && c.reportMetrics(data, false) {
+		// If the data is expired then attempt to report it now so that we can remove the connection entry. If reported
+		// the data can be expired and deleted immediately, otherwise it will get exported during ticker processing.
+		c.expireMetrics(data)
+		c.deleteDataFromEpStats(data)
+	}
+}
+
 func (c *collector) deleteDataFromEpStats(data *Data) {
 	delete(c.epStats, data.Tuple)
 
@@ -694,6 +750,18 @@ func (c *collector) applyPacketInfo(pktInfo types.PacketInfo) {
 		data.PreDNATPort = originalTuple.L4Dst
 	}
 
+	// Skip processing if either endpoint is marked for deletion.
+	if data.SrcEp != nil && c.luc.IsEndpointDeleted(data.SrcEp) {
+		log.Debugf("Source endpoint: %s marked for deletion, skipping packet info update", data.SrcEp.GenerateName())
+		c.tryReportAndExpire(data)
+		return
+	}
+	if data.DstEp != nil && c.luc.IsEndpointDeleted(data.DstEp) {
+		log.Debugf("Destination endpoint: %s marked for deletion, skipping packet info update", data.DstEp.GenerateName())
+		c.tryReportAndExpire(data)
+		return
+	}
+
 	// Determine the local endpoint for this update.
 	switch pktInfo.Direction {
 	case rules.RuleDirIngress:
@@ -777,12 +845,7 @@ func (c *collector) applyPacketInfo(pktInfo types.PacketInfo) {
 		c.applyNflogStatUpdate(data, ruleID, policyIdx, rule.Hits, rule.Bytes)
 	}
 
-	if data.Expired && c.reportMetrics(data, false) {
-		// If the data is expired then attempt to report it now so that we can remove the connection entry. If reported
-		// the data can be expired and deleted immediately, otherwise it will get exported during ticker processing.
-		c.expireMetrics(data)
-		c.deleteDataFromEpStats(data)
-	}
+	c.tryReportAndExpire(data)
 }
 
 // convertDataplaneStatsAndApplyUpdate merges the proto.DataplaneStatistics into the current
@@ -816,22 +879,26 @@ func (c *collector) updatePendingRuleTraces() {
 }
 
 func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
-	// Convert the tuple to a Dikastes flow, which is used by the rule trace evaluator.
 	flow := TupleAsFlow(data.Tuple)
 
-	if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal() {
-		// Evaluate the pending ingress rule trace for the flow. The policyStoreManager is read-locked.
-		c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
-			c.evaluatePendingRuleTrace(rules.RuleDirIngress, ps, data.DstEp, flow, &data.IngressPendingRuleIDs)
-		})
+	srcEp, dstEp := c.findEndpointBestMatch(data.Tuple)
+
+	// If endpoints have changed compared to what Data currently holds, skip evaluation.
+	if endpointChanged(data.SrcEp, srcEp) || endpointChanged(data.DstEp, dstEp) {
+		return
 	}
 
-	if data.SrcEp != nil && !data.SrcEp.IsHostEndpoint() && data.SrcEp.IsLocal() {
-		// Evaluate the pending egress rule trace for the flow. The policyStoreManager is read-locked.
-		c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
+	c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
+		// Evaluate ingress if destination is local workload endpoint
+		if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal() {
+			c.evaluatePendingRuleTrace(rules.RuleDirIngress, ps, data.DstEp, flow, &data.IngressPendingRuleIDs)
+		}
+
+		// Evaluate egress if source is local workload endpoint
+		if data.SrcEp != nil && !data.SrcEp.IsHostEndpoint() && data.SrcEp.IsLocal() {
 			c.evaluatePendingRuleTrace(rules.RuleDirEgress, ps, data.SrcEp, flow, &data.EgressPendingRuleIDs)
-		})
-	}
+		}
+	})
 }
 
 // evaluatePendingRuleTrace evaluates the pending rule trace for the given direction and endpoint,
@@ -917,6 +984,21 @@ func (f *MessageOnlyFormatter) Format(entry *log.Entry) ([]byte, error) {
 	b.WriteString(entry.Message)
 	b.WriteByte('\n')
 	return b.Bytes(), nil
+}
+
+// getNamespaceFromEp extracts the namespace from the endpoint. Returns an empty string if
+// the namespace cannot be determined.
+func getNamespaceFromEp(ep calc.EndpointData) (namespace string) {
+	if ep == nil {
+		return
+	}
+	if key := ep.Key(); key != nil {
+		if nk, ok := key.(namespacedEpKey); ok {
+			namespace = nk.GetNamespace()
+		}
+	}
+
+	return
 }
 
 // equal returns true if the rule IDs are equal. The order of the content should also the same for

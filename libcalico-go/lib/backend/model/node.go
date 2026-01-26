@@ -86,6 +86,10 @@ func (key NodeKey) valueType() (reflect.Type, error) {
 	return typeNode, nil
 }
 
+func (key NodeKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[Node](key, rawData)
+}
+
 func (key NodeKey) String() string {
 	return fmt.Sprintf("Node(name=%s)", key.Hostname)
 }
@@ -139,6 +143,10 @@ func (key HostMetadataKey) valueType() (reflect.Type, error) {
 	return typeHostMetadata, nil
 }
 
+func (key HostMetadataKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[HostMetadata](key, rawData)
+}
+
 func (key HostMetadataKey) String() string {
 	return fmt.Sprintf("Node(name=%s)", key.Hostname)
 }
@@ -187,6 +195,10 @@ func (key HostIPKey) valueType() (reflect.Type, error) {
 	return typeHostIp, nil
 }
 
+func (key HostIPKey) parseValue(rawData []byte) (any, error) {
+	return parseRawIP(rawData), nil
+}
+
 func (key HostIPKey) String() string {
 	return fmt.Sprintf("Node(name=%s)", key.Hostname)
 }
@@ -210,6 +222,10 @@ func (key OrchRefKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key OrchRefKey) valueType() (reflect.Type, error) {
 	return typeOrchRefs, nil
+}
+
+func (key OrchRefKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONValue[[]OrchRef](key, rawData)
 }
 
 func (key OrchRefKey) String() string {
@@ -251,6 +267,10 @@ func (key WireguardKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key WireguardKey) valueType() (reflect.Type, error) {
 	return typeWireguard, nil
+}
+
+func (key WireguardKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[Wireguard](key, rawData)
 }
 
 func (key WireguardKey) String() string {

@@ -16,8 +16,6 @@ package node_test
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -59,7 +57,6 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
-		kconfigfile       *os.File
 		nodeA             string
 	)
 
@@ -72,17 +69,10 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, err = os.CreateTemp("", "ginkgo-policycontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
+		defer cancel()
 
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
-
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -93,20 +83,13 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
-		apply := func() error {
-			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
-			if err != nil {
-				return fmt.Errorf("%s: %s", err, out)
-			}
-			return nil
-		}
-		Eventually(apply, 10*time.Second, retryInterval).ShouldNot(HaveOccurred())
+		testutils.ApplyCRDs(apiserver)
 
 		// Make a Calico client and backend client.
 		type accessor interface {
 			Backend() backend.Client
 		}
-		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
+		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
 		bc = calicoClient.(accessor).Backend()
 
 		// Create an IP pool with room for 4 blocks.
@@ -160,7 +143,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		})
 
 		// Start the controller.
-		controller = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		controller = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile, "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
@@ -591,8 +574,9 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
-		kconfigfile       *os.File
+		kconfigfile       string
 		nodeA             string
+		removeKubeconfig  func()
 	)
 
 	BeforeEach(func() {
@@ -604,17 +588,9 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, err = os.CreateTemp("", "ginkgo-policycontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
-
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -625,20 +601,13 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
-		apply := func() error {
-			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
-			if err != nil {
-				return fmt.Errorf("%s: %s", err, out)
-			}
-			return nil
-		}
-		Eventually(apply, 10*time.Second, retryInterval).ShouldNot(HaveOccurred())
+		testutils.ApplyCRDs(apiserver)
 
 		// Make a Calico client and backend client.
 		type accessor interface {
 			Backend() backend.Client
 		}
-		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
+		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
 		bc = calicoClient.(accessor).Backend()
 
 		// Create an IP pool with room for 4 blocks.
@@ -693,7 +662,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		})
 
 		// Start the controller.
-		controller = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		controller = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile, "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
@@ -709,6 +678,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		controller.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
 	})
 
 	It("should NOT clean up empty blocks within the grace period", func() {

@@ -79,7 +79,7 @@ func (e *endpointStatusCombiner) OnEndpointStatusUpdate(
 }
 
 func (e *endpointStatusCombiner) Apply() {
-	e.dirtyIDs.Iter(func(id interface{}) error {
+	for id := range e.dirtyIDs.All() {
 		statusToReport := ""
 		logCxt := log.WithField("id", id)
 		for ipVer, statuses := range e.ipVersionToStatuses {
@@ -132,6 +132,6 @@ func (e *endpointStatusCombiner) Apply() {
 				}
 			}
 		}
-		return set.RemoveItem
-	})
+		e.dirtyIDs.Discard(id)
+	}
 }

@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -61,15 +62,6 @@ type config struct {
 	ShouldSleep bool `envconfig:"SLEEP" default:"true"`
 
 	ServiceAccountToken []byte
-}
-
-func (c config) skipBinary(binary string) bool {
-	for _, name := range c.SkipCNIBinaries {
-		if name == binary {
-			return true
-		}
-	}
-	return false
 }
 
 func getEnv(env, def string) string {
@@ -202,7 +194,7 @@ func Install(version string) error {
 			if binary.Name() == "install" || binary.Name() == "install.exe" {
 				continue
 			}
-			if c.skipBinary(binary.Name()) {
+			if slices.Contains(c.SkipCNIBinaries, binary.Name()) {
 				continue
 			}
 			if fileExists(target) && !c.UpdateCNIBinaries {
@@ -472,13 +464,31 @@ func copyFileAndPermissions(src, dst string) (err error) {
 }
 
 func writeKubeconfig(kubecfg *rest.Config) {
+	clientset, err := cni.BuildClientSet()
+	if err != nil {
+		logrus.WithError(err).Fatal("Unable to create client for generating CNI token")
+	}
+	tr := cni.NewTokenRefresher(clientset, cni.NamespaceOfUsedServiceAccount(), cni.CNIServiceAccountName())
+	tu, err := tr.UpdateToken()
+	if err != nil {
+		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
+	}
+
+	data := calculateKubeconfig(kubecfg, tu.Token)
+
+	if err := os.WriteFile(winutils.GetHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0o600); err != nil {
+		logrus.Fatal(err)
+	}
+}
+
+func calculateKubeconfig(kubecfg *rest.Config, token string) string {
 	data := `# Kubeconfig file for Calico CNI plugin.
 apiVersion: v1
 kind: Config
 clusters:
 - name: local
   cluster:
-    server: __KUBERNETES_SERVICE_PROTOCOL__://[__KUBERNETES_SERVICE_HOST__]:__KUBERNETES_SERVICE_PORT__
+    server: __KUBERNETES_SERVICE_PROTOCOL__://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__
     __TLS_CFG__
 users:
 - name: calico
@@ -490,19 +500,14 @@ contexts:
     cluster: local
     user: calico
 current-context: calico-context`
-
-	clientset, err := cni.BuildClientSet()
-	if err != nil {
-		logrus.WithError(err).Fatal("Unable to create client for generating CNI token")
-	}
-	tr := cni.NewTokenRefresher(clientset, cni.NamespaceOfUsedServiceAccount(), cni.CNIServiceAccountName())
-	tu, err := tr.UpdateToken()
-	if err != nil {
-		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
-	}
-	data = strings.Replace(data, "TOKEN", tu.Token, 1)
+	data = strings.Replace(data, "TOKEN", token, 1)
 	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"))
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""))
+	k8sHost := getEnv("KUBERNETES_SERVICE_HOST", "")
+	if strings.Contains(k8sHost, ":") && !strings.HasPrefix(k8sHost, "[") {
+		// IPv6 address needs to be enclosed in brackets.
+		k8sHost = "[" + k8sHost + "]"
+	}
+	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_HOST__", k8sHost)
 	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""))
 
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
@@ -512,10 +517,7 @@ current-context: calico-context`
 		ca := "certificate-authority-data: " + base64.StdEncoding.EncodeToString(kubecfg.CAData)
 		data = strings.ReplaceAll(data, "__TLS_CFG__", ca)
 	}
-
-	if err := os.WriteFile(winutils.GetHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0o600); err != nil {
-		logrus.Fatal(err)
-	}
+	return data
 }
 
 // destinationUptoDate compares the given files and returns

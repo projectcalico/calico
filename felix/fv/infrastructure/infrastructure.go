@@ -28,6 +28,10 @@ import (
 // DatastoreInfra is an interface that is to be used to abstract away
 // the datastore being used and the functions that are datastore specific
 type DatastoreInfra interface {
+	// setBPFLogByteLimit is called before the infra is started by the
+	// WithBPFLogByteLimit option.
+	setBPFLogByteLimit(limit int)
+
 	// GetDockerArgs returns a string slice of args to be passed to the docker
 	// run command when starting Typha or Felix. It includes
 	// CALICO_DATASTORE_TYPE, FELIX_DATASTORETYPE, an appropriate endpoint,
@@ -93,6 +97,10 @@ type DatastoreInfra interface {
 	// occurs.
 	DumpErrorData()
 
+	// AddCleanup registers a function to be run during Stop(), in reverse order of registration.
+	AddCleanup(func())
+	// RegisterFelix records a Felix node to include in diagnostics.
+	RegisterFelix(*Felix)
 	// Stop cleans up anything necessary in preparation for the end of the test.
 	Stop()
 }
@@ -113,3 +121,9 @@ func CreateDefaultProfile(c client.Interface, name string, labels map[string]str
 }
 
 type CreateOption func(DatastoreInfra)
+
+func WithBPFLogByteLimit(limit int) CreateOption {
+	return func(di DatastoreInfra) {
+		di.setBPFLogByteLimit(limit)
+	}
+}
