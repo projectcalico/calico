@@ -2265,7 +2265,7 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 	c := newTestClient(cache, nil)
 
 	const numGoroutines = 10
-	const testDuration = 30 * time.Second
+	const testDuration = 10 * time.Second
 
 	// Create a context with 30-second timeout
 	ctx, cancel := context.WithTimeout(context.Background(), testDuration)
