@@ -344,12 +344,13 @@ func stopBPFLogging(cmd *exec.Cmd) {
 func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rules,
 	runFn func(progName string), opts ...testOption) {
 	topts := testOpts{
-		subtests:  true,
-		logLevel:  log.DebugLevel,
-		psnaStart: 20000,
-		psnatEnd:  30000,
-		dscp:      -1,
-		istioDSCP: -1,
+		subtests:      true,
+		logLevel:      log.DebugLevel,
+		psnaStart:     20000,
+		psnatEnd:      30000,
+		dscp:          -1,
+		istioDSCP:     -1,
+		ipfragTimeout: 30,
 	}
 
 	for _, o := range opts {
@@ -853,6 +854,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					LogFilterJmp:  0xffffffff,
 					IfaceName:     setLogPrefix(ifaceLog),
 					MaglevLUTSize: testMaglevLUTSize,
+					IPFragTimeout: topts.ipfragTimeout,
 				}
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
@@ -1257,6 +1259,7 @@ type testOpts struct {
 	dscp                          int8
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
+	ipfragTimeout                 uint32
 }
 
 type testOption func(opts *testOpts)
@@ -1357,6 +1360,12 @@ func withWorkloadSrcSpoofingConfigured() testOption {
 func withIstioDSCP(value uint8) testOption {
 	return func(o *testOpts) {
 		o.istioDSCP = int8(value)
+	}
+}
+
+func withIPFragTimeout(timeout uint32) testOption {
+	return func(o *testOpts) {
+		o.ipfragTimeout = timeout
 	}
 }
 
