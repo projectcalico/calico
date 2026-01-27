@@ -194,7 +194,7 @@ var _ = describe.CalicoDescribe(
 				// these need to be closures because they are evaluated in JustBeforeEach(), see https://github.com/onsi/ginkgo/issues/378
 				func(getAllowClientPolicy, getAllowServerPolicy func() *v3.NetworkPolicy, createClientService bool) {
 					By("Creating default-deny policy, no client should be able to contact the server.")
-					defaultDeny := newDefaultDenyPolicy(f.Namespace.Name)
+					defaultDeny := newDefaultDenyIngressPolicy(f.Namespace.Name)
 					err := cli.Create(context.Background(), defaultDeny)
 					Expect(err).NotTo(HaveOccurred())
 					defer func() {

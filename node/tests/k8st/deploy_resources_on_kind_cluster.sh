@@ -88,9 +88,15 @@ if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
   ${kubectl} describe po -n calico-system
   exit 1
 fi
-if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
-  ${kubectl} get -o yaml tigerastatus/apiserver
-  exit 1
+
+# Wait for the Calico API server to be available, if not using the projectcalico.org/v3 CRDs.
+# If using the projectcalico.org/v3 CRDs, there is no Calico API server to wait for.
+if [ "$CALICO_API_GROUP" != "projectcalico.org/v3" ]; then
+  echo "Wait for the Calico API server to be ready"
+  if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
+    ${kubectl} get -o yaml tigerastatus/apiserver
+    exit 1
+  fi
 fi
 
 echo "Wait for Calico to be ready..."

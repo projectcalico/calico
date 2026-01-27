@@ -44,6 +44,11 @@ type DatastoreInfra interface {
 	// GetCalicoClient will return a client.Interface configured to access
 	// the datastore.
 	GetCalicoClient() client.Interface
+
+	// UseProjectCalicoV3API returns true if the datastore should be accessed using the v3 CRD API instead
+	// of the crd.projectcalico.org API group.
+	UseProjectCalicoV3API() bool
+
 	// GetClusterGUID will return the cluster GUID.
 	GetClusterGUID() string
 	// SetExpectedIPIPTunnelAddr will set the Felix object's
