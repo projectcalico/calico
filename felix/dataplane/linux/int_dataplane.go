@@ -523,8 +523,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		nftablesKPOptions := nftablesOptions
 		nftablesKPOptions.Disabled = true
 		kubeProxyTableV4NFT := nftables.NewTable("kube-proxy", 4, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, config.RulesConfig.NFTables)
-		kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, config.RulesConfig.NFTables)
-		cleanupTables = append(cleanupTables, kubeProxyTableV4NFT, kubeProxyTableV6NFT)
+		cleanupTables = append(cleanupTables, kubeProxyTableV4NFT)
+		if config.IPv6Enabled {
+			kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, config.RulesConfig.NFTables)
+			cleanupTables = append(cleanupTables, kubeProxyTableV6NFT)
+		}
 	}
 
 	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
