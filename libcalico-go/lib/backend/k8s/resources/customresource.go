@@ -449,7 +449,6 @@ func (c *customResourceClient) nameToKey(name string) (model.Key, error) {
 	}, nil
 }
 
-// TODO: Don't instantiate a new TypeMeta for every call.
 func (c *customResourceClient) typeMeta() *metav1.TypeMeta {
 	return &metav1.TypeMeta{
 		// apiVersion is the API group and version for the resources returned by this client.
