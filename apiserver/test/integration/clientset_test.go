@@ -45,7 +45,7 @@ import (
 func TestGroupVersion(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.NetworkPolicy{}
 			})
 			defer shutdownServer()
@@ -70,7 +70,7 @@ func testGroupVersion(client calicoclient.Interface) error {
 
 func TestEtcdHealthCheckerSuccess(t *testing.T) {
 	serverConfig := NewTestServerConfig()
-	_, _, clientconfig, shutdownServer := withConfigGetFreshApiserverServerAndClient(t, serverConfig)
+	_, _, clientconfig, shutdownServer := withConfigGetFreshAPIServerServerAndClient(t, serverConfig)
 	t.Log(clientconfig.Host)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -112,7 +112,7 @@ func TestEtcdHealthCheckerSuccess(t *testing.T) {
 func TestNoName(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.NetworkPolicy{}
 			})
 			defer shutdownServer()
@@ -144,7 +144,7 @@ func TestNetworkPolicyClient(t *testing.T) {
 	const name = "test-networkpolicy"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.NetworkPolicy{}
 			})
 			defer shutdownServer()
@@ -343,7 +343,7 @@ func TestStagedNetworkPolicyClient(t *testing.T) {
 	const name = "test-networkpolicy"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.NetworkPolicy{}
 			})
 			defer shutdownServer()
@@ -540,7 +540,7 @@ func TestTierClient(t *testing.T) {
 	const name = "test-tier"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.Tier{}
 			})
 			defer shutdownServer()
@@ -610,7 +610,7 @@ func TestGlobalNetworkPolicyClient(t *testing.T) {
 	const name = "test-globalnetworkpolicy"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.GlobalNetworkPolicy{}
 			})
 			defer shutdownServer()
@@ -774,7 +774,7 @@ func TestStagedGlobalNetworkPolicyClient(t *testing.T) {
 	const name = "test-stagedglobalnetworkpolicy"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.StagedGlobalNetworkPolicy{}
 			})
 			defer shutdownServer()
@@ -940,7 +940,7 @@ func TestGlobalNetworkSetClient(t *testing.T) {
 	const name = "test-globalnetworkset"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.GlobalNetworkSet{}
 			})
 			defer shutdownServer()
@@ -1006,7 +1006,7 @@ func TestNetworkSetClient(t *testing.T) {
 	const name = "test-networkset"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.NetworkSet{}
 			})
 			defer shutdownServer()
@@ -1099,7 +1099,7 @@ func TestIPReservationClient(t *testing.T) {
 	const name = "test-ipreservation"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.IPReservation{}
 			})
 			defer shutdownServer()
@@ -1166,7 +1166,7 @@ func testIPReservationClient(client calicoclient.Interface, name string) error {
 // TestHostEndpointClient exercises the HostEndpoint client.
 func TestHostEndpointClient(t *testing.T) {
 	const name = "test-hostendpoint"
-	client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+	client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 		return &v3.HostEndpoint{}
 	})
 	defer shutdownServer()
@@ -1175,7 +1175,7 @@ func TestHostEndpointClient(t *testing.T) {
 	}()
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.HostEndpoint{}
 			})
 			defer shutdownServer()
@@ -1301,7 +1301,7 @@ func TestIPPoolClient(t *testing.T) {
 	const name = "test-ippool"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.IPPool{}
 			})
 			defer shutdownServer()
@@ -1370,7 +1370,7 @@ func TestBGPConfigurationClient(t *testing.T) {
 	const name = "test-bgpconfig"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.BGPConfiguration{}
 			})
 			defer shutdownServer()
@@ -1431,7 +1431,7 @@ func TestBGPPeerClient(t *testing.T) {
 	const name = "test-bgppeer"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.BGPPeer{}
 			})
 			defer shutdownServer()
@@ -1496,7 +1496,7 @@ func TestProfileClient(t *testing.T) {
 	const name = "kns.namespace-1"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.Profile{}
 			})
 			defer shutdownServer()
@@ -1561,7 +1561,7 @@ func TestFelixConfigurationClient(t *testing.T) {
 	const name = "test-felixconfig"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.FelixConfiguration{}
 			})
 			defer shutdownServer()
@@ -1634,7 +1634,7 @@ func TestKubeControllersConfigurationClient(t *testing.T) {
 	const name = "test-kubecontrollersconfig"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.KubeControllersConfiguration{}
 			})
 			defer shutdownServer()
@@ -1789,7 +1789,7 @@ func TestClusterInformationClient(t *testing.T) {
 	const name = "default"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.ClusterInformation{}
 			})
 			defer shutdownServer()
@@ -1846,7 +1846,7 @@ func TestCalicoNodeStatusClient(t *testing.T) {
 	const name = "test-caliconodestatus"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.CalicoNodeStatus{}
 			})
 			defer shutdownServer()
@@ -1913,7 +1913,7 @@ func testCalicoNodeStatusClient(client calicoclient.Interface, name string) erro
 func TestIPAMConfigClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.IPAMConfiguration{}
 			})
 			defer shutdownServer()
@@ -2004,7 +2004,7 @@ func TestBlockAffinityClient(t *testing.T) {
 	const name = "test-blockaffinity"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.BlockAffinity{}
 			})
 			defer shutdownServer()
@@ -2134,7 +2134,7 @@ func TestBGPFilterClient(t *testing.T) {
 	const name = "test-bgpfilter"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.BGPFilter{}
 			})
 			defer shutdownServer()
@@ -2318,7 +2318,7 @@ func TestPolicyWatch(t *testing.T) {
 	const name = "test-policywatch"
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+			client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
 				return &v3.GlobalNetworkPolicy{}
 			})
 			defer shutdownServer()
