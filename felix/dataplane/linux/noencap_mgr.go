@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,25 +91,15 @@ func newNoEncapManagerWithSims(
 
 func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataUpdate:
+	case *proto.HostMetadataV4V6Update:
+		if msg.Hostname != m.hostname {
+			break
+		}
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if msg.Hostname == m.hostname && m.ipVersion == 4 {
+		if m.ipVersion == 4 && msg.Ipv4Addr != "" {
 			m.routesNeedUpdate(msg.Ipv4Addr)
-		}
-	case *proto.HostMetadataRemove:
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
-		if msg.Hostname == m.hostname && m.ipVersion == 4 {
-			m.routesNeedUpdate("")
-		}
-	case *proto.HostMetadataV6Update:
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if msg.Hostname == m.hostname && m.ipVersion == 6 {
+		} else if m.ipVersion == 6 && msg.Ipv6Addr != "" {
 			m.routesNeedUpdate(msg.Ipv6Addr)
-		}
-	case *proto.HostMetadataV6Remove:
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
-		if msg.Hostname == m.hostname && m.ipVersion == 6 {
-			m.routesNeedUpdate("")
 		}
 	case *proto.HostMetadataV4V6Remove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
