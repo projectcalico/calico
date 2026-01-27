@@ -32,6 +32,7 @@ type ProjectcalicoV3Interface interface {
 	KubeControllersConfigurationsGetter
 	NetworkPoliciesGetter
 	NetworkSetsGetter
+	ProfilesGetter
 	StagedGlobalNetworkPoliciesGetter
 	StagedKubernetesNetworkPoliciesGetter
 	StagedNetworkPoliciesGetter
@@ -113,6 +114,10 @@ func (c *ProjectcalicoV3Client) NetworkPolicies(namespace string) NetworkPolicyI
 
 func (c *ProjectcalicoV3Client) NetworkSets(namespace string) NetworkSetInterface {
 	return newNetworkSets(c, namespace)
+}
+
+func (c *ProjectcalicoV3Client) Profiles(namespace string) ProfileInterface {
+	return newProfiles(c, namespace)
 }
 
 func (c *ProjectcalicoV3Client) StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInterface {

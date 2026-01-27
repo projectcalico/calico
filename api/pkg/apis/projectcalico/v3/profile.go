@@ -33,6 +33,7 @@ type ProfileList struct {
 	Items []Profile `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
 

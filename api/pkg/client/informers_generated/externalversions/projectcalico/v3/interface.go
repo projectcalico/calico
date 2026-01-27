@@ -46,6 +46,8 @@ type Interface interface {
 	NetworkPolicies() NetworkPolicyInformer
 	// NetworkSets returns a NetworkSetInformer.
 	NetworkSets() NetworkSetInformer
+	// Profiles returns a ProfileInformer.
+	Profiles() ProfileInformer
 	// StagedGlobalNetworkPolicies returns a StagedGlobalNetworkPolicyInformer.
 	StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInformer
 	// StagedKubernetesNetworkPolicies returns a StagedKubernetesNetworkPolicyInformer.
@@ -155,6 +157,11 @@ func (v *version) NetworkPolicies() NetworkPolicyInformer {
 // NetworkSets returns a NetworkSetInformer.
 func (v *version) NetworkSets() NetworkSetInformer {
 	return &networkSetInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Profiles returns a ProfileInformer.
+func (v *version) Profiles() ProfileInformer {
+	return &profileInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // StagedGlobalNetworkPolicies returns a StagedGlobalNetworkPolicyInformer.
