@@ -564,6 +564,13 @@ ut-bpf-prereqs: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 ut-bpf: ut-bpf-prereqs
 	$(MAKE) ut-bpf-no-prereqs
 
+# Set format for gotestsum based on VERBOSE environment variable
+ifeq ($(VERBOSE),1)
+  GOTESTSUM_FORMAT := standard-verbose
+else
+  GOTESTSUM_FORMAT := testname
+endif
+
 ut-bpf-no-prereqs:
 	mkdir -p report
 	$(DOCKER_RUN) \
@@ -574,7 +581,7 @@ ut-bpf-no-prereqs:
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		gotestsum --format testname --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
+		gotestsum --format $(GOTESTSUM_FORMAT) --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
 	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
 		-e $(ACK_GINKGO) \
@@ -585,7 +592,7 @@ ut-bpf-no-prereqs:
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
 		../../bin/bpf_ut.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		gotestsum --format testname --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
+		gotestsum --format $(GOTESTSUM_FORMAT) --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
 
 .PHONY: bench-bpf
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
