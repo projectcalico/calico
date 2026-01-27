@@ -13,7 +13,7 @@ export ZONE=europe-west3-c
 #
 # With each FV batch being quite small, the tests don't use that much RAM, so
 # we can use a high-CPU machine type to save costs.
-export VM_MACHINE_TYPE=n4-highcpu-4
+export VM_MACHINE_TYPE=n4d-highcpu-4
 
 export NUM_FV_BATCHES=8
 
