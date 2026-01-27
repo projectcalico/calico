@@ -442,9 +442,11 @@ spec:
                   format: int32
                   type: integer
                 nftablesMode:
+                  default: Auto
                   enum:
                     - Disabled
                     - Enabled
+                    - Auto
                   type: string
                 nftablesRefreshInterval:
                   type: string

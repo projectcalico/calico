@@ -312,7 +312,7 @@ function prepare_windows_node() {
 
   # Enable containers feature (requires reboot)
   echo "Enabling Windows Containers feature..."
-  ${windows_connect_command} c:\\k\\enable-containers-with-reboot.ps1
+  ${windows_connect_command} "c:\\k\\enable-containers-with-reboot.ps1 -Force"
 
   # Wait for node to come back online after reboot
   sleep 10
@@ -321,11 +321,16 @@ function prepare_windows_node() {
 
   # Install containerd
   echo "Installing containerd..."
-  if ! ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"; then
+  if ! ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION} -Force"; then
     echo "ERROR: Failed to install containerd on Windows node ${display_name}"
     echo "You can SSH to the node to debug: ${windows_connect_command}"
     return 1
   fi
+
+  # Wait for node to come back online after reboot
+  sleep 10
+  echo "Waiting for node to be ready after reboot..."
+  retry_command 60 "${windows_connect_command} Write-Host 'Node is ready'"
 
   echo "Windows node ${display_name} prepared successfully"
   echo

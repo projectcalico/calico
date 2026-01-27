@@ -60,12 +60,13 @@ const (
 
 // NFTablesMode is the enum used to enable/disable nftables mode.
 // +enum
-// +kubebuilder:validation:Enum=Disabled;Enabled
+// +kubebuilder:validation:Enum=Disabled;Enabled;Auto
 type NFTablesMode string
 
 const (
 	NFTablesModeEnabled  NFTablesMode = "Enabled"
 	NFTablesModeDisabled NFTablesMode = "Disabled"
+	NFTablesModeAuto     NFTablesMode = "Auto"
 )
 
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
@@ -635,7 +636,8 @@ type FelixConfigurationSpec struct {
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 
-	// NFTablesMode configures nftables support in Felix. [Default: Disabled]
+	// NFTablesMode configures nftables support in Felix. [Default: Auto]
+	// +kubebuilder:default=Auto
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
 
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]

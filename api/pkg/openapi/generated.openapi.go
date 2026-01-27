@@ -3248,10 +3248,10 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"nftablesMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NFTablesMode configures nftables support in Felix. [Default: Disabled]\n\nPossible enum values:\n - `\"Disabled\"`\n - `\"Enabled\"`",
+							Description: "NFTablesMode configures nftables support in Felix. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
 							Type:        []string{"string"},
 							Format:      "",
-							Enum:        []interface{}{"Disabled", "Enabled"},
+							Enum:        []interface{}{"Auto", "Disabled", "Enabled"},
 						},
 					},
 					"nftablesRefreshInterval": {
