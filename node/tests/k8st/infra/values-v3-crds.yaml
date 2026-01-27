@@ -1,5 +1,5 @@
 # This file contains a values.yaml configuration for installing Calico backed by
-# the API server instead of using projectcalico.org/v3 CRDs.
+# projectcalico.org/v3 CRDs instead of using the API server.
 installation:
   enabled: true
   registry: docker.io
@@ -20,15 +20,7 @@ installation:
     - cidr: fd00:10:244::/64
 
 apiServer:
-  enabled: true
-  apiServerDeployment:
-    spec:
-      template:
-        spec:
-          # Run apiserver on control-plane node so connectivity with k8s apiserver is not
-          # impacted by tests that disable / re-enable networking.
-          nodeSelector:
-            kubernetes.io/hostname: kind-control-plane
+  enabled: false
 
 goldmane:
   enabled: true
@@ -44,3 +36,6 @@ tigeraOperator:
   image: tigera/operator
   version: test-build
   registry: docker.io
+  env:
+  - name: CALICO_API_GROUP
+    value: "projectcalico.org/v3"
