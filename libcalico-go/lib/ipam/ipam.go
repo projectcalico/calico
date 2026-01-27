@@ -42,8 +42,7 @@ import (
 const (
 	// Number of retries when we have an error writing data
 	// to etcd.
-	datastoreRetries  = 100
-	ipamKeyErrRetries = 3
+	datastoreRetries = 100
 
 	// Common attributes which may be set on allocations by clients.  Moved to the model package so they can be used
 	// by the AllocationBlock code too.

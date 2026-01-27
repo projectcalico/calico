@@ -34,8 +34,9 @@ const (
 	IPPoolFinalizer = "projectcalico.org/ippool-finalizer"
 )
 
-// IPPoolController implements the Controller interface.  It is responsible for monitoring
-// kubernetes nodes and responding to delete events by removing them from the Calico datastore.
+// IPPoolController is responsible for watching IPPool and IPAMBlock resources and managing the finalization / deletion
+// of IP pools. when a new IP pool is added, it ensures a finalizer is added to it. When an IP pool is deleted, it ensures that all
+// associated IPAM blocks are released before allowing the pool to be fully deleted.
 type IPPoolController struct {
 	ctx context.Context
 
@@ -142,7 +143,6 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 
 	logrus.Debug("Finished syncing with Kubernetes API")
 
-	// We're in-sync. Start the sub-controllers.
 	<-stopCh
 	logrus.Info("Stopping IPPool controller")
 }
