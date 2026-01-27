@@ -12,8 +12,8 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
-		-e OS=$(BUILDOS) \
-		-e GOOS=$(BUILDOS) \
+		-e OS=linux \
+		-e GOOS=linux \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
@@ -113,7 +113,7 @@ gen-semaphore-yaml:
 	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
 	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
 
-GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
+GO_DIRS=$(shell find . -name '*.go' | grep -v -e './lib/' -e './pkg/' | sed -E 's|^\./([^/]+)/.*|\1|' | sort -u)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
 gen-deps-files:

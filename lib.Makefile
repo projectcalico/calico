@@ -313,8 +313,8 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
-		-e OS=$(BUILDOS) \
-		-e GOOS=$(BUILDOS) \
+		-e OS=linux \
+		-e GOOS=linux \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
@@ -1262,9 +1262,10 @@ check-dirty:
 bin/yq:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
+	$(eval YQ_OS := $(shell uname -s | tr A-Z a-z))
+	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_$(YQ_OS)_$(BUILDARCH).tar.gz
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
-	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
+	mv $(TMP)/yq_$(YQ_OS)_$(BUILDARCH) bin/yq
 
 # This setup is used to download and install the `crane` binary into $(REPOROOT)/bin/crane.
 # Normalize architecture for go-containerregistry filenames
@@ -1431,9 +1432,10 @@ $(KUBECTL): $(KIND_DIR)/.kubectl-updated-$(K8S_VERSION)
 bin/helm-$(HELM_VERSION):
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/helm3.tar.gz https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz
+	$(eval HELM_OS := $(shell uname -s | tr A-Z a-z))
+	curl -sSf -L --retry 5 -o $(TMP)/helm3.tar.gz https://get.helm.sh/helm-$(HELM_VERSION)-$(HELM_OS)-$(ARCH).tar.gz
 	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
-	mv $(TMP)/linux-$(ARCH)/helm bin/helm-$(HELM_VERSION)
+	mv $(TMP)/$(HELM_OS)-$(ARCH)/helm bin/helm-$(HELM_VERSION)
 
 bin/.helm-updated-$(HELM_VERSION): bin/helm-$(HELM_VERSION)
 	# Remove old marker files so that bin/helm will be stale if we switch
