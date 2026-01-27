@@ -30,8 +30,12 @@ type Interface interface {
 	GlobalNetworkSets() GlobalNetworkSetInformer
 	// HostEndpoints returns a HostEndpointInformer.
 	HostEndpoints() HostEndpointInformer
+	// IPAMBlocks returns a IPAMBlockInformer.
+	IPAMBlocks() IPAMBlockInformer
 	// IPAMConfigurations returns a IPAMConfigurationInformer.
 	IPAMConfigurations() IPAMConfigurationInformer
+	// IPAMHandles returns a IPAMHandleInformer.
+	IPAMHandles() IPAMHandleInformer
 	// IPPools returns a IPPoolInformer.
 	IPPools() IPPoolInformer
 	// IPReservations returns a IPReservationInformer.
@@ -42,8 +46,6 @@ type Interface interface {
 	NetworkPolicies() NetworkPolicyInformer
 	// NetworkSets returns a NetworkSetInformer.
 	NetworkSets() NetworkSetInformer
-	// Profiles returns a ProfileInformer.
-	Profiles() ProfileInformer
 	// StagedGlobalNetworkPolicies returns a StagedGlobalNetworkPolicyInformer.
 	StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInformer
 	// StagedKubernetesNetworkPolicies returns a StagedKubernetesNetworkPolicyInformer.
@@ -115,9 +117,19 @@ func (v *version) HostEndpoints() HostEndpointInformer {
 	return &hostEndpointInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// IPAMBlocks returns a IPAMBlockInformer.
+func (v *version) IPAMBlocks() IPAMBlockInformer {
+	return &iPAMBlockInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // IPAMConfigurations returns a IPAMConfigurationInformer.
 func (v *version) IPAMConfigurations() IPAMConfigurationInformer {
 	return &iPAMConfigurationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IPAMHandles returns a IPAMHandleInformer.
+func (v *version) IPAMHandles() IPAMHandleInformer {
+	return &iPAMHandleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // IPPools returns a IPPoolInformer.
@@ -143,11 +155,6 @@ func (v *version) NetworkPolicies() NetworkPolicyInformer {
 // NetworkSets returns a NetworkSetInformer.
 func (v *version) NetworkSets() NetworkSetInformer {
 	return &networkSetInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// Profiles returns a ProfileInformer.
-func (v *version) Profiles() ProfileInformer {
-	return &profileInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // StagedGlobalNetworkPolicies returns a StagedGlobalNetworkPolicyInformer.

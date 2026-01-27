@@ -24,13 +24,14 @@ type ProjectcalicoV3Interface interface {
 	GlobalNetworkPoliciesGetter
 	GlobalNetworkSetsGetter
 	HostEndpointsGetter
+	IPAMBlocksGetter
 	IPAMConfigurationsGetter
+	IPAMHandlesGetter
 	IPPoolsGetter
 	IPReservationsGetter
 	KubeControllersConfigurationsGetter
 	NetworkPoliciesGetter
 	NetworkSetsGetter
-	ProfilesGetter
 	StagedGlobalNetworkPoliciesGetter
 	StagedKubernetesNetworkPoliciesGetter
 	StagedNetworkPoliciesGetter
@@ -82,8 +83,16 @@ func (c *ProjectcalicoV3Client) HostEndpoints() HostEndpointInterface {
 	return newHostEndpoints(c)
 }
 
+func (c *ProjectcalicoV3Client) IPAMBlocks() IPAMBlockInterface {
+	return newIPAMBlocks(c)
+}
+
 func (c *ProjectcalicoV3Client) IPAMConfigurations() IPAMConfigurationInterface {
 	return newIPAMConfigurations(c)
+}
+
+func (c *ProjectcalicoV3Client) IPAMHandles(namespace string) IPAMHandleInterface {
+	return newIPAMHandles(c, namespace)
 }
 
 func (c *ProjectcalicoV3Client) IPPools() IPPoolInterface {
@@ -104,10 +113,6 @@ func (c *ProjectcalicoV3Client) NetworkPolicies(namespace string) NetworkPolicyI
 
 func (c *ProjectcalicoV3Client) NetworkSets(namespace string) NetworkSetInterface {
 	return newNetworkSets(c, namespace)
-}
-
-func (c *ProjectcalicoV3Client) Profiles() ProfileInterface {
-	return newProfiles(c)
 }
 
 func (c *ProjectcalicoV3Client) StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInterface {

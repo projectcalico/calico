@@ -59,8 +59,12 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().GlobalNetworkSets().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("hostendpoints"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().HostEndpoints().Informer()}, nil
+	case v3.SchemeGroupVersion.WithResource("ipamblocks"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPAMBlocks().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("ipamconfigurations"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPAMConfigurations().Informer()}, nil
+	case v3.SchemeGroupVersion.WithResource("ipamhandles"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPAMHandles().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("ippools"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPPools().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("ipreservations"):
@@ -71,8 +75,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().NetworkPolicies().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("networksets"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().NetworkSets().Informer()}, nil
-	case v3.SchemeGroupVersion.WithResource("profiles"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().Profiles().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("stagedglobalnetworkpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().StagedGlobalNetworkPolicies().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("stagedkubernetesnetworkpolicies"):

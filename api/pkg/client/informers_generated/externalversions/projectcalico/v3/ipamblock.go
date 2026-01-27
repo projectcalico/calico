@@ -18,70 +18,70 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// ProfileInformer provides access to a shared informer and lister for
-// Profiles.
-type ProfileInformer interface {
+// IPAMBlockInformer provides access to a shared informer and lister for
+// IPAMBlocks.
+type IPAMBlockInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() projectcalicov3.ProfileLister
+	Lister() projectcalicov3.IPAMBlockLister
 }
 
-type profileInformer struct {
+type iPAMBlockInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 }
 
-// NewProfileInformer constructs a new informer for Profile type.
+// NewIPAMBlockInformer constructs a new informer for IPAMBlock type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewProfileInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredProfileInformer(client, resyncPeriod, indexers, nil)
+func NewIPAMBlockInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredIPAMBlockInformer(client, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredProfileInformer constructs a new informer for Profile type.
+// NewFilteredIPAMBlockInformer constructs a new informer for IPAMBlock type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredProfileInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredIPAMBlockInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().Profiles().List(context.Background(), options)
+				return client.ProjectcalicoV3().IPAMBlocks().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().Profiles().Watch(context.Background(), options)
+				return client.ProjectcalicoV3().IPAMBlocks().Watch(context.Background(), options)
 			},
 			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().Profiles().List(ctx, options)
+				return client.ProjectcalicoV3().IPAMBlocks().List(ctx, options)
 			},
 			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().Profiles().Watch(ctx, options)
+				return client.ProjectcalicoV3().IPAMBlocks().Watch(ctx, options)
 			},
 		},
-		&apisprojectcalicov3.Profile{},
+		&apisprojectcalicov3.IPAMBlock{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *profileInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredProfileInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *iPAMBlockInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredIPAMBlockInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *profileInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.Profile{}, f.defaultInformer)
+func (f *iPAMBlockInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&apisprojectcalicov3.IPAMBlock{}, f.defaultInformer)
 }
 
-func (f *profileInformer) Lister() projectcalicov3.ProfileLister {
-	return projectcalicov3.NewProfileLister(f.Informer().GetIndexer())
+func (f *iPAMBlockInformer) Lister() projectcalicov3.IPAMBlockLister {
+	return projectcalicov3.NewIPAMBlockLister(f.Informer().GetIndexer())
 }

@@ -24,7 +24,11 @@ type GlobalNetworkSetExpansion interface{}
 
 type HostEndpointExpansion interface{}
 
+type IPAMBlockExpansion interface{}
+
 type IPAMConfigurationExpansion interface{}
+
+type IPAMHandleExpansion interface{}
 
 type IPPoolExpansion interface{}
 
@@ -35,8 +39,6 @@ type KubeControllersConfigurationExpansion interface{}
 type NetworkPolicyExpansion interface{}
 
 type NetworkSetExpansion interface{}
-
-type ProfileExpansion interface{}
 
 type StagedGlobalNetworkPolicyExpansion interface{}
 

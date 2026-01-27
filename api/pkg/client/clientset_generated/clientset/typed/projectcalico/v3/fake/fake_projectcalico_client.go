@@ -54,8 +54,16 @@ func (c *FakeProjectcalicoV3) HostEndpoints() v3.HostEndpointInterface {
 	return newFakeHostEndpoints(c)
 }
 
+func (c *FakeProjectcalicoV3) IPAMBlocks() v3.IPAMBlockInterface {
+	return newFakeIPAMBlocks(c)
+}
+
 func (c *FakeProjectcalicoV3) IPAMConfigurations() v3.IPAMConfigurationInterface {
 	return newFakeIPAMConfigurations(c)
+}
+
+func (c *FakeProjectcalicoV3) IPAMHandles(namespace string) v3.IPAMHandleInterface {
+	return newFakeIPAMHandles(c, namespace)
 }
 
 func (c *FakeProjectcalicoV3) IPPools() v3.IPPoolInterface {
@@ -76,10 +84,6 @@ func (c *FakeProjectcalicoV3) NetworkPolicies(namespace string) v3.NetworkPolicy
 
 func (c *FakeProjectcalicoV3) NetworkSets(namespace string) v3.NetworkSetInterface {
 	return newFakeNetworkSets(c, namespace)
-}
-
-func (c *FakeProjectcalicoV3) Profiles() v3.ProfileInterface {
-	return newFakeProfiles(c)
 }
 
 func (c *FakeProjectcalicoV3) StagedGlobalNetworkPolicies() v3.StagedGlobalNetworkPolicyInterface {
