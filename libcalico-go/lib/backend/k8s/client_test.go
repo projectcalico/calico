@@ -1842,7 +1842,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: "aa-bb-cc",
 				},
 				Spec: apiv3.BGPPeerSpec{
-					PeerIP:   "aa:bb::cc/128",
+					PeerIP:   "aa:bb::cc",
 					ASNumber: numorstring.ASNumber(6514),
 				},
 			},
@@ -1862,7 +1862,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: "aa-bb-cc",
 				},
 				Spec: apiv3.BGPPeerSpec{
-					PeerIP: "aa:bb::cc/128",
+					PeerIP: "aa:bb::cc",
 				},
 			},
 		}
