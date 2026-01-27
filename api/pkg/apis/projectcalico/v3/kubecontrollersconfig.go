@@ -25,11 +25,12 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster,shortName={kcc,kccs}
 
 // KubeControllersConfigurationList contains a list of KubeControllersConfiguration object.
 type KubeControllersConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []KubeControllersConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -37,13 +38,16 @@ type KubeControllersConfigurationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type KubeControllersConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec   KubeControllersConfigurationSpec   `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
-	Status KubeControllersConfigurationStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+	Spec KubeControllersConfigurationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
+
+	// +optional
+	Status KubeControllersConfigurationStatus `json:"status" protobuf:"bytes,3,opt,name=status"`
 }
 
 // ControllerMode is used to enable or disable a controller.
@@ -58,15 +62,23 @@ const (
 // KubeControllersConfigurationSpec contains the values of the Kubernetes controllers configuration.
 type KubeControllersConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
+	// Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+	// +kubebuilder:validation:Enum=None;Debug;Info;Warning;Error;Fatal;Panic
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
 
 	// HealthChecks enables or disables support for health checks [Default: Enabled]
+	// Valid values are: "Enabled", "Disabled".
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +kubebuilder:default=Enabled
 	HealthChecks string `json:"healthChecks,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// EtcdV3CompactionPeriod is the period between etcdv3 compaction requests. Set to 0 to disable. [Default: 10m]
 	EtcdV3CompactionPeriod *metav1.Duration `json:"etcdV3CompactionPeriod,omitempty" validate:"omitempty"`
 
 	// PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
+	// Valid values are: 0-65535.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
 	PrometheusMetricsPort *int `json:"prometheusMetricsPort,omitempty"`
 
 	// Controllers enables and configures individual Kubernetes controllers
@@ -74,6 +86,10 @@ type KubeControllersConfigurationSpec struct {
 
 	// DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
 	// is disabled.
+	// Valid values are: 0-65535.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
 	DebugProfilePort *int32 `json:"debugProfilePort,omitempty"`
 }
 
@@ -115,6 +131,8 @@ type NodeControllerConfig struct {
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 
 	// SyncLabels controls whether to copy Kubernetes node labels to Calico nodes. [Default: Enabled]
+	// Valid values are: "Enabled", "Disabled".
+	// +kubebuilder:validation:Enum=Enabled;Disabled
 	SyncLabels string `json:"syncLabels,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// HostEndpoint controls syncing nodes to host endpoints. Disabled by default, set to nil to disable.
@@ -128,6 +146,8 @@ type NodeControllerConfig struct {
 
 type AutoHostEndpointConfig struct {
 	// AutoCreate enables automatic creation of host endpoints for every node. [Default: Disabled]
+	// Valid values are: "Enabled", "Disabled".
+	// +kubebuilder:validation:Enum=Enabled;Disabled
 	AutoCreate string `json:"autoCreate,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	CreateDefaultHostEndpoint DefaultHostEndpointMode `json:"createDefaultHostEndpoint,omitempty" validate:"omitempty,createDefaultHostEndpoint"`
@@ -136,6 +156,8 @@ type AutoHostEndpointConfig struct {
 	Templates []Template `json:"templates,omitempty" validate:"omitempty"`
 }
 
+// DefaultHostEndpointMode controls whether a default host endpoint is created for each node.
+// Valid values are: "Enabled", "Disabled".
 type DefaultHostEndpointMode string
 
 const (
@@ -151,6 +173,7 @@ type Template struct {
 	// InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint.
 	// If specified, only addresses within these CIDRs will be included in the expected IPs.
 	// At least one of InterfaceCIDRs and InterfacePattern must be specified.
+	// +listType=set
 	InterfaceCIDRs []string `json:"interfaceCIDRs,omitempty" validate:"cidrs"`
 
 	// InterfacePattern contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node.
@@ -198,6 +221,7 @@ type LoadBalancerControllerConfig struct {
 	AssignIPs AssignIPs `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
 }
 
+// +kubebuilder:validation:Enum=AllServices;RequestedServicesOnly
 type AssignIPs string
 
 const (
@@ -211,7 +235,8 @@ const (
 type KubeControllersConfigurationStatus struct {
 	// RunningConfig contains the effective config that is running in the kube-controllers pod, after
 	// merging the API resource with any environment variables.
-	RunningConfig KubeControllersConfigurationSpec `json:"runningConfig,omitempty"`
+	// +optional
+	RunningConfig *KubeControllersConfigurationSpec `json:"runningConfig,omitempty"`
 
 	// EnvironmentVars contains the environment variables on the kube-controllers that influenced
 	// the RunningConfig.

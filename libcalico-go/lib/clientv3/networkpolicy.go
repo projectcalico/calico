@@ -18,6 +18,7 @@ import (
 	"context"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/defaults"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -57,26 +58,21 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, o
 		resCopy := *res
 		res = &resCopy
 	}
-	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
+
+	// Run defaulting logic.
+	if _, err := defaults.Default(res); err != nil {
+		return nil, err
+	}
 
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 
-	// Add tier labels to policy for lookup.
-	if tier != "default" {
-		res.GetObjectMeta().SetLabels(addTierLabel(res.GetObjectMeta().GetLabels(), tier))
-	}
-
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindNetworkPolicy, res)
 	if out != nil {
 		// Add the tier labels if necessary
-		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
 		return out.(*apiv3.NetworkPolicy), err
 	}
-
-	// Add the tier labels if necessary
-	res.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(res.GetObjectMeta().GetLabels()))
 
 	return nil, err
 }
@@ -90,28 +86,21 @@ func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, o
 		resCopy := *res
 		res = &resCopy
 	}
-	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
+
+	// Run defaulting logic.
+	if _, err := defaults.Default(res); err != nil {
+		return nil, err
+	}
 
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 
-	// Add tier labels to policy for lookup.
-	tier := names.TierOrDefault(res.Spec.Tier)
-	if tier != "default" {
-		res.GetObjectMeta().SetLabels(addTierLabel(res.GetObjectMeta().GetLabels(), tier))
-	}
-
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindNetworkPolicy, res)
 	if out != nil {
 		// Add the tier labels if necessary
-		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
 		return out.(*apiv3.NetworkPolicy), err
 	}
-
-	// Add the tier labels if necessary
-	res.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(res.GetObjectMeta().GetLabels()))
-
 	return nil, err
 }
 
