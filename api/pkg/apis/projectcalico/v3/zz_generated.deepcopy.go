@@ -1545,6 +1545,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(BPFConntrackTimeouts)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.BPFIPFragTimeout != nil {
+		in, out := &in.BPFIPFragTimeout, &out.BPFIPFragTimeout
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.BPFLogFilters != nil {
 		in, out := &in.BPFLogFilters, &out.BPFLogFilters
 		*out = new(map[string]string)
