@@ -42,9 +42,9 @@ type BGPPeerList struct {
 // +kubebuilder:resource:scope=Cluster
 type BGPPeer struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec BGPPeerSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec BGPPeerSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // BGPPeerSpec contains the specification for a BGPPeer resource.
@@ -65,7 +65,7 @@ type BGPPeerSpec struct {
 	// If optional port number is not set, and this peer IP and ASNumber belongs to a calico/node
 	// with ListenPort set in BGPConfiguration, then we use that port to peer.
 	// +optional
-	// +kubebuilder:validation:Format=ip
+	// +kubebuilder:validation:Pattern:=`^(\[([0-9a-fA-F:]+)\]|(([0-9]{1,3}\.){3}[0-9]{1,3}))(:[0-9]{1,5})?$`
 	PeerIP string `json:"peerIP,omitempty" validate:"omitempty,IP:port"`
 
 	// The AS Number of the peer.

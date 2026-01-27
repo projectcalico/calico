@@ -1259,6 +1259,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeer(ref common.ReferenceCallback) comm
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
