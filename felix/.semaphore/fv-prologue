@@ -6,7 +6,7 @@ gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS
 gcloud config set project unique-caldron-775
 
 export COMPONENT=felix
-export ZONE=europe-west3-c
+export ZONE=europe-west4-b
 
 # 4 vCPUs seems to be the minimum for stable tests.  8 vCPUs doesn't seem to
 # help performance very much.
