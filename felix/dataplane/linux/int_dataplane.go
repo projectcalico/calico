@@ -509,11 +509,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		NewDataplane:     config.NewNftablesDataplane,
 	}
 
+	var cleanupTables []generictables.Table
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
 		log.Info("BPF enabled, configuring iptables/nftables layer to clean up kube-proxy's rules.")
 		iptablesOptions.ExtraCleanupRegexPattern = rules.KubeProxyInsertRuleRegex
 		iptablesOptions.HistoricChainPrefixes = append(iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...)
+		// Delete the ip kube-proxy and ip6 kube-proxy tables in nftables.
+		nftablesKPOptions := nftablesOptions
+		nftablesKPOptions.Disabled = true
+		kubeProxyTableV4NFT := nftables.NewTable("kube-proxy", 4, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, config.RulesConfig.NFTables)
+		kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, config.RulesConfig.NFTables)
+		cleanupTables = append(cleanupTables, kubeProxyTableV4NFT, kubeProxyTableV6NFT)
 	}
 
 	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
@@ -555,7 +562,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Based on configuration, some of the above tables should be active and others not.
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
 	var ipSetsV4 dpsets.IPSetsDataplane
-	var cleanupTables []generictables.Table
 	var cleanupIPSets []dpsets.IPSetsDataplane
 	if config.RulesConfig.NFTables {
 		// Enable nftables.
