@@ -17,9 +17,8 @@ type ProfileLister interface {
 	// List lists all Profiles in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*projectcalicov3.Profile, err error)
-	// Get retrieves the Profile from the index for a given name.
-	// Objects returned here must be treated as read-only.
-	Get(name string) (*projectcalicov3.Profile, error)
+	// Profiles returns an object that can list and get Profiles.
+	Profiles(namespace string) ProfileNamespaceLister
 	ProfileListerExpansion
 }
 
@@ -31,4 +30,27 @@ type profileLister struct {
 // NewProfileLister returns a new ProfileLister.
 func NewProfileLister(indexer cache.Indexer) ProfileLister {
 	return &profileLister{listers.New[*projectcalicov3.Profile](indexer, projectcalicov3.Resource("profile"))}
+}
+
+// Profiles returns an object that can list and get Profiles.
+func (s *profileLister) Profiles(namespace string) ProfileNamespaceLister {
+	return profileNamespaceLister{listers.NewNamespaced[*projectcalicov3.Profile](s.ResourceIndexer, namespace)}
+}
+
+// ProfileNamespaceLister helps list and get Profiles.
+// All objects returned here must be treated as read-only.
+type ProfileNamespaceLister interface {
+	// List lists all Profiles in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
+	List(selector labels.Selector) (ret []*projectcalicov3.Profile, err error)
+	// Get retrieves the Profile from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
+	Get(name string) (*projectcalicov3.Profile, error)
+	ProfileNamespaceListerExpansion
+}
+
+// profileNamespaceLister implements the ProfileNamespaceLister
+// interface.
+type profileNamespaceLister struct {
+	listers.ResourceIndexer[*projectcalicov3.Profile]
 }

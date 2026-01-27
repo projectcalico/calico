@@ -16,11 +16,11 @@ type fakeProfiles struct {
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeProfiles(fake *FakeProjectcalicoV3) projectcalicov3.ProfileInterface {
+func newFakeProfiles(fake *FakeProjectcalicoV3, namespace string) projectcalicov3.ProfileInterface {
 	return &fakeProfiles{
 		gentype.NewFakeClientWithList[*v3.Profile, *v3.ProfileList](
 			fake.Fake,
-			"",
+			namespace,
 			v3.SchemeGroupVersion.WithResource("profiles"),
 			v3.SchemeGroupVersion.WithKind("Profile"),
 			func() *v3.Profile { return &v3.Profile{} },
