@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"testing"
 
+	mapsbpf "github.com/projectcalico/calico/felix/bpf/maps"
+
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
@@ -196,4 +198,36 @@ func TestIP4Defrag(t *testing.T) {
 
 		Expect(pktFull.Bytes()).To(Equal(res.dataOut))
 	})
+
+	/* First fragment only - sets timer, it needs to kick in */
+
+	cleanupMap(ipfragsFwdMap)
+
+	ipfragsFwdMapCount := func() int {
+		count := 0
+		ipfragsFwdMap.Iter(func(key, value []byte) mapsbpf.IteratorAction {
+			count++
+			return mapsbpf.IterNone
+		})
+		return count
+	}
+
+	Expect(ipfragsFwdMapCount()).To(Equal(0))
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		bytes := pkt0.Bytes()
+		copy(bytes[40:42], pktFull.Bytes()[40:42]) // patch in the udp csum for the entire packet
+		res, err := bpfrun(bytes)
+		Expect(err).NotTo(HaveOccurred())
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	}, withIPFragTimeout(1))
+
+	Expect(ipfragsFwdMapCount()).To(Equal(1))
+
+	Eventually(func() int {
+		return ipfragsFwdMapCount()
+	}, "2s", "200ms").Should(Equal(0))
 }

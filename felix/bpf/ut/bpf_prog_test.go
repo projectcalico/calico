@@ -323,11 +323,12 @@ func stopBPFLogging(cmd *exec.Cmd) {
 func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rules,
 	runFn func(progName string), opts ...testOption) {
 	topts := testOpts{
-		subtests:  true,
-		logLevel:  log.DebugLevel,
-		psnaStart: 20000,
-		psnatEnd:  30000,
-		dscp:      -1,
+		subtests:      true,
+		logLevel:      log.DebugLevel,
+		psnaStart:     20000,
+		psnatEnd:      30000,
+		dscp:          -1,
+		ipfragTimeout: 30,
 	}
 
 	for _, o := range opts {
@@ -833,6 +834,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					LogFilterJmp:  0xffffffff,
 					IfaceName:     setLogPrefix(ifaceLog),
 					MaglevLUTSize: testMaglevLUTSize,
+					IPFragTimeout: topts.ipfragTimeout,
 				}
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
@@ -1229,6 +1231,7 @@ type testOpts struct {
 	ingressQoSPacketRate bool
 	egressQoSPacketRate  bool
 	dscp                 int8
+	ipfragTimeout        uint32
 }
 
 type testOption func(opts *testOpts)
@@ -1317,6 +1320,12 @@ func withObjName(name string) testOption {
 func withDescription(desc string) testOption {
 	return func(o *testOpts) {
 		o.description = desc
+	}
+}
+
+func withIPFragTimeout(timeout uint32) testOption {
+	return func(o *testOpts) {
+		o.ipfragTimeout = timeout
 	}
 }
 

@@ -368,7 +368,7 @@ static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u3
 	}
 
 	bpf_timer_set_callback(&val->timer, frags4_remove_ct_cb);
-	bpf_timer_start(&val->timer, 30 * 1000000000ULL, 0);
+	bpf_timer_start(&val->timer, IPFRAG_TIMEOUT * 1000000000ULL, 0);
 #endif
 }
 

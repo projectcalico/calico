@@ -35,7 +35,7 @@ const (
 	KeySize      = 12
 	ValueSize    = 2 + 2 + 4 + 1504
 	KeySizeFwd   = 16
-	ValueSizeFwd = 12
+	ValueSizeFwd = 32
 )
 
 func Map() maps.Map {
