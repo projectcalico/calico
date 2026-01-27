@@ -30,7 +30,7 @@ const (
 // IPAMConfigurationList contains a list of IPAMConfiguration resources.
 type IPAMConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []IPAMConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -43,9 +43,9 @@ type IPAMConfigurationList struct {
 // IPAMConfiguration contains information about a block for IP address assignment.
 type IPAMConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec IPAMConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec IPAMConfigurationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // IPAMConfigurationSpec contains the specification for an IPAMConfiguration resource.

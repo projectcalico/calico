@@ -134,6 +134,9 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true

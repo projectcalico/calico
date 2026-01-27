@@ -31,7 +31,7 @@ const (
 // HostEndpointList is a list of HostEndpoint objects.
 type HostEndpointList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []HostEndpoint `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -43,9 +43,9 @@ type HostEndpointList struct {
 
 type HostEndpoint struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec HostEndpointSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec HostEndpointSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // HostEndpointSpec contains the specification for a HostEndpoint resource.

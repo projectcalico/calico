@@ -22,11 +22,9 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // +k8s:openapi-gen=true
 // +kubebuilder:resource:scope=Cluster
 type IPAMHandle struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the IPAMHandle.
-	Spec IPAMHandleSpec `json:"spec,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              IPAMHandleSpec `json:"spec"`
 }
 
 // IPAMHandleSpec contains the specification for an IPAMHandle resource.

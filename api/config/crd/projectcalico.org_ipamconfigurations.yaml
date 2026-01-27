@@ -45,6 +45,9 @@ spec:
                 - autoAllocateBlocks
                 - strictAffinity
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true

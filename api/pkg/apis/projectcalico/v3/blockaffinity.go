@@ -41,11 +41,9 @@ const (
 
 // BlockAffinity maintains a block affinity's state
 type BlockAffinity struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
-	// Specification of the BlockAffinity.
-	Spec BlockAffinitySpec `json:"spec"`
+	Spec              BlockAffinitySpec `json:"spec"`
 }
 
 // BlockAffinitySpec contains the specification for a BlockAffinity resource.

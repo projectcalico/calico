@@ -40,9 +40,9 @@ type BGPFilterList struct {
 // +kubebuilder:resource:scope=Cluster
 type BGPFilter struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec BGPFilterSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec BGPFilterSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.

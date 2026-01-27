@@ -30,7 +30,7 @@ const (
 // KubeControllersConfigurationList contains a list of KubeControllersConfiguration object.
 type KubeControllersConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []KubeControllersConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -42,10 +42,12 @@ type KubeControllersConfigurationList struct {
 
 type KubeControllersConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec   KubeControllersConfigurationSpec   `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
-	Status KubeControllersConfigurationStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+	Spec KubeControllersConfigurationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
+
+	// +optional
+	Status KubeControllersConfigurationStatus `json:"status" protobuf:"bytes,3,opt,name=status"`
 }
 
 // ControllerMode is used to enable or disable a controller.

@@ -31,11 +31,9 @@ const (
 
 // StagedKubernetesNetworkPolicy is a staged GlobalNetworkPolicy.
 type StagedKubernetesNetworkPolicy struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the Policy.
-	Spec StagedKubernetesNetworkPolicySpec `json:"spec,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              StagedKubernetesNetworkPolicySpec `json:"spec"`
 }
 
 type StagedKubernetesNetworkPolicySpec struct {
@@ -48,7 +46,8 @@ type StagedKubernetesNetworkPolicySpec struct {
 	// each are combined additively. This field is NOT optional and follows standard
 	// label selector semantics. An empty podSelector matches all pods in this
 	// namespace.
-	PodSelector metav1.LabelSelector `json:"podSelector,omitempty" protobuf:"bytes,1,opt,name=podSelector"`
+	// +optional
+	PodSelector metav1.LabelSelector `json:"podSelector" protobuf:"bytes,1,opt,name=podSelector"`
 
 	// List of ingress rules to be applied to the selected pods. Traffic is allowed to
 	// a pod if there are no NetworkPolicies selecting the pod

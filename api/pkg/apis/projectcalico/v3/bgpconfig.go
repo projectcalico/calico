@@ -39,7 +39,7 @@ const (
 // BGPConfigurationList is a list of BGPConfiguration resources.
 type BGPConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []BGPConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -50,9 +50,9 @@ type BGPConfigurationList struct {
 // +kubebuilder:resource:scope=Cluster
 type BGPConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec BGPConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec BGPConfigurationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // ServiceLoadBalancerAggregation defines how LoadBalancer service IPs should be aggregated for BGP advertisement.

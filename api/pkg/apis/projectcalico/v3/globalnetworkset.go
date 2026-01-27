@@ -30,7 +30,7 @@ const (
 // GlobalNetworkSetList is a list of NetworkSet objects.
 type GlobalNetworkSetList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []GlobalNetworkSet `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -42,9 +42,9 @@ type GlobalNetworkSetList struct {
 
 type GlobalNetworkSet struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec GlobalNetworkSetSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec GlobalNetworkSetSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // GlobalNetworkSetSpec contains the specification for a NetworkSet resource.

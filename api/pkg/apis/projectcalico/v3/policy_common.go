@@ -63,10 +63,12 @@ type Rule struct {
 	NotICMP *ICMPFields `json:"notICMP,omitempty" validate:"omitempty"`
 
 	// Source contains the match criteria that apply to source entity.
-	Source EntityRule `json:"source,omitzero,omitempty" validate:"omitempty"`
+	// +optional
+	Source EntityRule `json:"source,omitzero" validate:"omitempty"`
 
 	// Destination contains the match criteria that apply to destination entity.
-	Destination EntityRule `json:"destination,omitzero,omitempty" validate:"omitempty"`
+	// +optional
+	Destination EntityRule `json:"destination,omitzero" validate:"omitempty"`
 
 	// HTTP contains match criteria that apply to HTTP requests.
 	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`

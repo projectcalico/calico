@@ -27,11 +27,9 @@ import (
 
 // +k8s:openapi-gen=true
 type IPAMBlock struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
-	// Specification of the IPAMBlock.
-	Spec IPAMBlockSpec `json:"spec"`
+	Spec              IPAMBlockSpec `json:"spec"`
 }
 
 // IPAMBlockSpec contains the specification for an IPAMBlock resource.
