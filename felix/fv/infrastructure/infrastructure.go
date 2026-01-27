@@ -45,9 +45,9 @@ type DatastoreInfra interface {
 	// the datastore.
 	GetCalicoClient() client.Interface
 
-	// UseV3API returns true if the datastore should be accessed using the v3 CRD API instead
+	// UseProjectCalicoV3API returns true if the datastore should be accessed using the v3 CRD API instead
 	// of the crd.projectcalico.org API group.
-	UseV3API() bool
+	UseProjectCalicoV3API() bool
 
 	// GetClusterGUID will return the cluster GUID.
 	GetClusterGUID() string

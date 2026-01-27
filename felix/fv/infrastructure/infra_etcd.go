@@ -130,7 +130,7 @@ func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
 	return eds.client
 }
 
-func (eds *EtcdDatastoreInfra) UseV3API() bool {
+func (eds *EtcdDatastoreInfra) UseProjectCalicoV3API() bool {
 	return false
 }
 
