@@ -1023,15 +1023,9 @@ func (c *Container) BPFNATDump(ipv6 bool) map[string][]string {
 // BPFNATHasBackendForService returns true is the given service has the given backend programmed in NAT tables
 func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
 	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
-	fmtStr := "%s:%d"
-	ipv6 := false
-	ipAddr := net.ParseIP(ip)
-	if ipAddr.To4() == nil {
-		fmtStr = "[%s]:%d"
-		ipv6 = true
-	}
-	back := fmt.Sprintf(fmtStr, ip, port)
+	back := net.JoinHostPort(ip, fmt.Sprint(port))
 
+	ipv6 := net.ParseIP(ip).To4() == nil
 	nat := c.BPFNATDump(ipv6)
 	if natBack, ok := nat[front]; ok {
 		found := false

@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	gonet "net"
 	"net/http"
 
 	. "github.com/onsi/ginkgo"
@@ -410,8 +411,9 @@ func healthStatusFn(ip, port, endpoint string) func() int {
 	}
 }
 
-func healthStatus(ip, port, endpoint string) int {
-	resp, err := http.Get("http://" + ip + ":" + port + "/" + endpoint)
+func healthStatus(ip, port, path string) int {
+	ep := gonet.JoinHostPort(ip, port)
+	resp, err := http.Get("http://" + ep + "/" + path)
 	if err != nil {
 		log.WithError(err).WithField("resp", resp).Warn("HTTP GET failed")
 		return statusErr
