@@ -4760,7 +4760,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.ExpectNone(externalClient, TargetIP(felixIP(1)), npPort)
 							cc.CheckConnectivity()
 
-							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }, 10*time.Second, 200*time.Millisecond).
 								Should(BeNumerically(">", 0), matcher)
 						})
 					})
@@ -4796,7 +4796,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								cc.ExpectNone(externalClient, TargetIP(felixIP(1)), npPort)
 								cc.CheckConnectivity()
-								Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+								Eventually(func() int { return tcpdump.MatchCount("ICMP") }, 10*time.Second, 200*time.Millisecond).
 									Should(BeNumerically(">", 0), matcher)
 							})
 						}
@@ -4819,7 +4819,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							cc.ExpectNone(w[1][1], TargetIP(tgtWorkload.IP), uint16(tgtPort))
 							cc.CheckConnectivity()
-							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }, 10*time.Second, 200*time.Millisecond).
 								Should(BeNumerically(">", 0), matcher)
 						})
 
