@@ -18,8 +18,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-func chartURL(githubOrg, githubRepo, version string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, utils.TigeraOperatorChart, version)
+// chartURLS returns the expected chart URLs for the given org, repo, and version.
+func chartURLs(githubOrg, githubRepo, version string) []string {
+	return []string{
+		fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, utils.TigeraOperatorChart, version),
+		fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, utils.CalicoCRDsChart, version),
+	}
 }
 
 func TestHelmChart(t *testing.T) {
@@ -29,20 +33,22 @@ func TestHelmChart(t *testing.T) {
 
 	t.Run("github", func(t *testing.T) {
 		t.Parallel()
-		resp, err := http.Get(chartURL(githubOrg, githubRepo, releaseVersion))
-		if err != nil {
-			t.Fatalf("failed to fetch helm chart: %v", err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("failed to fetch helm chart: server returned %s", resp.Status)
-		}
-		defer func() { _ = resp.Body.Close() }()
+		for _, u := range chartURLs(githubOrg, githubRepo, releaseVersion) {
+			resp, err := http.Get(u)
+			if err != nil {
+				t.Fatalf("failed to fetch helm chart: %v", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("failed to fetch helm chart: server returned %s", resp.Status)
+			}
+			defer func() { _ = resp.Body.Close() }()
 
-		chart, err := loader.LoadArchive(resp.Body)
-		if err != nil {
-			t.Fatalf("load helm chart: %v", err)
+			chart, err := loader.LoadArchive(resp.Body)
+			if err != nil {
+				t.Fatalf("load helm chart: %v", err)
+			}
+			validateChart(t, chart)
 		}
-		validateChart(t, chart)
 	})
 
 	t.Run("OCI registry", func(t *testing.T) {
@@ -131,7 +137,10 @@ func TestHelmIndex(t *testing.T) {
 	if !ok || len(urls.([]any)) == 0 {
 		t.Fatalf("helm index entry for version %s does not contain urls", releaseVersion)
 	}
-	if !slices.Contains(cast.ToStringSlice(urls), chartURL(githubOrg, githubRepo, releaseVersion)) {
-		t.Fatalf("helm index entry for version %s does not contain expected URL", releaseVersion)
+
+	for _, u := range chartURLs(githubOrg, githubRepo, releaseVersion) {
+		if !slices.Contains(cast.ToStringSlice(urls), u) {
+			t.Fatalf("helm index entry for version %s does not contain expected URL", releaseVersion)
+		}
 	}
 }
