@@ -86,8 +86,8 @@ func (c *FakeProjectcalicoV3) NetworkSets(namespace string) v3.NetworkSetInterfa
 	return newFakeNetworkSets(c, namespace)
 }
 
-func (c *FakeProjectcalicoV3) Profiles(namespace string) v3.ProfileInterface {
-	return newFakeProfiles(c, namespace)
+func (c *FakeProjectcalicoV3) Profiles() v3.ProfileInterface {
+	return newFakeProfiles(c)
 }
 
 func (c *FakeProjectcalicoV3) StagedGlobalNetworkPolicies() v3.StagedGlobalNetworkPolicyInterface {

@@ -161,7 +161,7 @@ func (v *version) NetworkSets() NetworkSetInformer {
 
 // Profiles returns a ProfileInformer.
 func (v *version) Profiles() ProfileInformer {
-	return &profileInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &profileInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // StagedGlobalNetworkPolicies returns a StagedGlobalNetworkPolicyInformer.

@@ -18,7 +18,7 @@ import (
 // ProfilesGetter has a method to return a ProfileInterface.
 // A group's client should implement this interface.
 type ProfilesGetter interface {
-	Profiles(namespace string) ProfileInterface
+	Profiles() ProfileInterface
 }
 
 // ProfileInterface has methods to work with Profile resources.
@@ -40,13 +40,13 @@ type profiles struct {
 }
 
 // newProfiles returns a Profiles
-func newProfiles(c *ProjectcalicoV3Client, namespace string) *profiles {
+func newProfiles(c *ProjectcalicoV3Client) *profiles {
 	return &profiles{
 		gentype.NewClientWithList[*projectcalicov3.Profile, *projectcalicov3.ProfileList](
 			"profiles",
 			c.RESTClient(),
 			scheme.ParameterCodec,
-			namespace,
+			"",
 			func() *projectcalicov3.Profile { return &projectcalicov3.Profile{} },
 			func() *projectcalicov3.ProfileList { return &projectcalicov3.ProfileList{} },
 		),

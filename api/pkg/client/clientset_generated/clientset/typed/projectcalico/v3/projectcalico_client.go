@@ -116,8 +116,8 @@ func (c *ProjectcalicoV3Client) NetworkSets(namespace string) NetworkSetInterfac
 	return newNetworkSets(c, namespace)
 }
 
-func (c *ProjectcalicoV3Client) Profiles(namespace string) ProfileInterface {
-	return newProfiles(c, namespace)
+func (c *ProjectcalicoV3Client) Profiles() ProfileInterface {
+	return newProfiles(c)
 }
 
 func (c *ProjectcalicoV3Client) StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInterface {

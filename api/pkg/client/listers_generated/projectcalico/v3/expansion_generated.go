@@ -92,10 +92,6 @@ type NetworkSetNamespaceListerExpansion interface{}
 // ProfileLister.
 type ProfileListerExpansion interface{}
 
-// ProfileNamespaceListerExpansion allows custom methods to be added to
-// ProfileNamespaceLister.
-type ProfileNamespaceListerExpansion interface{}
-
 // StagedGlobalNetworkPolicyListerExpansion allows custom methods to be added to
 // StagedGlobalNetworkPolicyLister.
 type StagedGlobalNetworkPolicyListerExpansion interface{}
