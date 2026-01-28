@@ -1006,6 +1006,16 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfIPFragTimeout:
+                  description: |-
+                    BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
+                    This is the maximum time that the BPF dataplane will wait for all fragments of a
+                    fragmented IP packet to arrive before discarding them.  If left unset, the value
+                    is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+                    seconds).
+                    [Default: unset - read from net.ipv4.ipfrag_time]
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 bpfJITHardening:
                   allOf:
                     - enum:
