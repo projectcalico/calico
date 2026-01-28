@@ -857,16 +857,6 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	case *proto.ActiveProfileRemove:
 		m.onProfileRemove(msg)
 
-	case *proto.HostMetadataUpdate:
-		if m.v4 != nil && msg.Hostname == m.hostname {
-			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(msg.Ipv4Addr, 4)
-		}
-	case *proto.HostMetadataV6Update:
-		if m.v6 != nil && msg.Hostname == m.hostname {
-			logrus.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(msg.Ipv6Addr, 6)
-		}
 	case *proto.HostMetadataV4V6Update:
 		if msg.Hostname != m.hostname {
 			break
