@@ -25,8 +25,10 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:resource:shortName={gnp,cgnp}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 
 // GlobalNetworkPolicyList is a list of Policy objects.
 type GlobalNetworkPolicyList struct {

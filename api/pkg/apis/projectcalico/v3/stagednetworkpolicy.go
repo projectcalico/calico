@@ -26,6 +26,7 @@ const (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:resource:shortName={scnp,snp}
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 

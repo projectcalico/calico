@@ -12642,15 +12642,19 @@ spec:
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-node-windows DaemonSet container by name.
-                                          Supported values are: calico-node-windows
+                                          Supported values are: node, felix, confd
+                                          calico-node-windows is allowed because it was previously allowed.
                                         enum:
                                           - calico-node-windows
+                                          - node
+                                          - felix
+                                          - confd
                                         type: string
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
-                                          If specified, this overrides the named calico-node-windows DaemonSet container's resources.
-                                          If omitted, the calico-node-windows DaemonSet will use its default value for this container's resources.
+                                          If specified, this overrides the named DaemonSet container's resources.
+                                          If omitted, the DaemonSet will use its default value for this container's resources.
                                           If used in conjunction with the deprecated ComponentResources, then this value takes precedence.
                                         properties:
                                           claims:
@@ -14182,6 +14186,9 @@ spec:
                           - Node
                           - Typha
                           - KubeControllers
+                          - NodeWindows
+                          - FelixWindows
+                          - ConfdWindows
                         type: string
                       resourceRequirements:
                         description:
@@ -21497,15 +21504,19 @@ spec:
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-node-windows DaemonSet container by name.
-                                              Supported values are: calico-node-windows
+                                              Supported values are: node, felix, confd
+                                              calico-node-windows is allowed because it was previously allowed.
                                             enum:
                                               - calico-node-windows
+                                              - node
+                                              - felix
+                                              - confd
                                             type: string
                                           resources:
                                             description: |-
                                               Resources allows customization of limits and requests for compute resources such as cpu and memory.
-                                              If specified, this overrides the named calico-node-windows DaemonSet container's resources.
-                                              If omitted, the calico-node-windows DaemonSet will use its default value for this container's resources.
+                                              If specified, this overrides the named DaemonSet container's resources.
+                                              If omitted, the DaemonSet will use its default value for this container's resources.
                                               If used in conjunction with the deprecated ComponentResources, then this value takes precedence.
                                             properties:
                                               claims:
@@ -23062,6 +23073,9 @@ spec:
                               - Node
                               - Typha
                               - KubeControllers
+                              - NodeWindows
+                              - FelixWindows
+                              - ConfdWindows
                             type: string
                           resourceRequirements:
                             description:

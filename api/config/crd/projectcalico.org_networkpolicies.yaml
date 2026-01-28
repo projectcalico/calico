@@ -416,6 +416,8 @@ spec:
             - metadata
             - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
       subresources: {}
