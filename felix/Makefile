@@ -380,6 +380,8 @@ fv-no-prereqs:
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
+	  CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	  CALICO_CRD_PATH=$(CALICO_CRD_PATH) \
 	  EXTRA_REPORT_SUFFIX=$(FV_EXTRA_REPORT_SUFFIX) \
 	  FELIX_FV_WIREGUARD_AVAILABLE=`./wireguard-available >/dev/null && echo true || echo false` \
 	  ./run-batches
@@ -639,9 +641,9 @@ bin/calico-felix.exe: $(SRC_FILES)
 docs/calc.pdf: docs/calc.dot
 	cd docs/ && dot -Tpdf calc.dot -o calc.pdf
 
-CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml
+CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../$(CALICO_CRD_PATH)crd.projectcalico.org_felixconfigurations.yaml
 
-../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
+../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml ../api/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
 	$(MAKE) -C ../libcalico-go gen-crds
 
 docs/config-params.json: $(CONFIG_PARAM_DEPS)
