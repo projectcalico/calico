@@ -25,13 +25,13 @@ const (
 	ClusterInfoResourceName = "ClusterInformations"
 )
 
-func NewClusterInfoClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewClusterInfoClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        ClusterInfoResourceName,
 		k8sResourceType: reflect.TypeOf(apiv3.ClusterInformation{}),
 		k8sListType:     reflect.TypeOf(apiv3.ClusterInformationList{}),
 		kind:            apiv3.KindClusterInformation,
-		noTransform:     v3,
+		apiGroup:        group,
 	}
 }

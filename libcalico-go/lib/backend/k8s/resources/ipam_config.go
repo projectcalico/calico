@@ -25,9 +25,9 @@ import (
 
 // ipamConfigResourceClient returns a customResourceClient for IPAMConfig resources based on the
 // specified REST client and whether to use v3 CRDs.
-func ipamConfigResourceClient(r rest.Interface, useV3 bool) customResourceClient {
+func ipamConfigResourceClient(r rest.Interface, group BackingAPIGroup) customResourceClient {
 	resource := IPAMConfigResourceName
-	if useV3 {
+	if group == BackingAPIGroupV3 {
 		resource = IPAMConfigResourceNameV3
 	}
 
@@ -37,10 +37,10 @@ func ipamConfigResourceClient(r rest.Interface, useV3 bool) customResourceClient
 		k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfig{}),
 		k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigList{}),
 		kind:            v3.KindIPAMConfiguration,
-		noTransform:     useV3,
+		apiGroup:        group,
 	}
 
-	if useV3 {
+	if group == BackingAPIGroupV3 {
 		// If this is a v3 resource, then we need to use the v3 API types, as they differ.
 		rc.k8sResourceType = reflect.TypeOf(v3.IPAMConfiguration{})
 		rc.k8sListType = reflect.TypeOf(v3.IPAMConfigurationList{})

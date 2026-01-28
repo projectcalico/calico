@@ -25,7 +25,7 @@ const (
 	StagedNetworkPolicyResourceName = "StagedNetworkPolicies"
 )
 
-func NewStagedNetworkPolicyClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewStagedNetworkPolicyClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        StagedNetworkPolicyResourceName,
@@ -33,6 +33,6 @@ func NewStagedNetworkPolicyClient(r rest.Interface, v3 bool) K8sResourceClient {
 		k8sListType:     reflect.TypeOf(apiv3.StagedNetworkPolicyList{}),
 		kind:            apiv3.KindStagedNetworkPolicy,
 		namespaced:      true,
-		noTransform:     v3,
+		apiGroup:        group,
 	}
 }

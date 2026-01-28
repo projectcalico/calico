@@ -35,13 +35,13 @@ const (
 
 // NewIPAMConfigClientV3 returns a new client for managing IPAMConfiguration resources, as used by the
 // libcalico-go/lib/clientv3 code.
-func NewIPAMConfigClientV3(r rest.Interface, v3CRDs bool) K8sResourceClient {
-	rc := ipamConfigResourceClient(r, v3CRDs)
+func NewIPAMConfigClientV3(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	rc := ipamConfigResourceClient(r, group)
 	rc.versionconverter = ipamConfigurationVersionConverter{}
 
 	return &v3IPAMConfigurationClient{
 		rc: rc,
-		v3: v3CRDs,
+		v3: group == BackingAPIGroupV3,
 	}
 }
 

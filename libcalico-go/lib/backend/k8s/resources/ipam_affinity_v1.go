@@ -39,7 +39,7 @@ import (
 
 // NewBlockAffinityClientV3 returns a new client for managing BlockAffinity resources, as used by the
 // libcalico-go/lib/ipam code.
-func NewBlockAffinityClientV1(r rest.Interface, useV3 bool) K8sResourceClient {
+func NewBlockAffinityClientV1(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customResourceClient{
 		restClient:      r,
@@ -47,10 +47,10 @@ func NewBlockAffinityClientV1(r rest.Interface, useV3 bool) K8sResourceClient {
 		k8sResourceType: reflect.TypeOf(libapiv3.BlockAffinity{}),
 		k8sListType:     reflect.TypeOf(libapiv3.BlockAffinityList{}),
 		kind:            v3.KindBlockAffinity,
-		noTransform:     useV3,
+		apiGroup:        group,
 	}
 
-	if useV3 {
+	if group == BackingAPIGroupV3 {
 		// If this is a v3 resource, then we need to use the v3 API types, as they
 		// differ.
 		rc.k8sResourceType = reflect.TypeOf(v3.BlockAffinity{})
@@ -59,7 +59,7 @@ func NewBlockAffinityClientV1(r rest.Interface, useV3 bool) K8sResourceClient {
 
 	return &blockAffinityClientV1{
 		rc:      rc,
-		crdIsV3: useV3,
+		crdIsV3: group == BackingAPIGroupV3,
 	}
 }
 

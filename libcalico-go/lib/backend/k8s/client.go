@@ -79,19 +79,15 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	// Whether or not we are writing to projectcalico.org/v3 resources. If true, we're running in
 	// "no API server" mode where the v3 resources are backed by CRDs directly. Otherwise, we're running
 	// with the Calico API server and should instead use crd.projectcalico.org/v1 resources directly.
-	v3 := UsingV3CRDs(ca)
-	if v3 {
-		log.Info("Using API group projectcalico.org/v3 for CRDs")
-	} else {
-		log.Info("Using API group crd.projectcalico.org/v1 for CRDs")
-	}
+	group := BackendAPIGroup(ca)
+	log.WithField("apiGroup", group).Info("Using API group for CRD backend")
 
 	config, cs, err := CreateKubernetesClientset(ca)
 	if err != nil {
 		return nil, err
 	}
 
-	restClient, err := restClient(*config, v3)
+	restClient, err := restClient(*config, group)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build CRD client: %v", err)
 	}
@@ -114,115 +110,115 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindIPPool,
-		resources.NewIPPoolClient(restClient, v3),
+		resources.NewIPPoolClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindIPReservation,
-		resources.NewIPReservationClient(restClient, v3),
+		resources.NewIPReservationClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindGlobalNetworkPolicy,
-		resources.NewGlobalNetworkPolicyClient(restClient, v3),
+		resources.NewGlobalNetworkPolicyClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindStagedGlobalNetworkPolicy,
-		resources.NewStagedGlobalNetworkPolicyClient(restClient, v3),
+		resources.NewStagedGlobalNetworkPolicyClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindGlobalNetworkSet,
-		resources.NewGlobalNetworkSetClient(restClient, v3),
+		resources.NewGlobalNetworkSetClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindNetworkPolicy,
-		resources.NewNetworkPolicyClient(restClient, v3),
+		resources.NewNetworkPolicyClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindStagedNetworkPolicy,
-		resources.NewStagedNetworkPolicyClient(restClient, v3),
+		resources.NewStagedNetworkPolicyClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindStagedKubernetesNetworkPolicy,
-		resources.NewStagedKubernetesNetworkPolicyClient(restClient, v3),
+		resources.NewStagedKubernetesNetworkPolicyClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindNetworkSet,
-		resources.NewNetworkSetClient(restClient, v3),
+		resources.NewNetworkSetClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindTier,
-		resources.NewTierClient(restClient, v3),
+		resources.NewTierClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBGPPeer,
-		resources.NewBGPPeerClient(restClient, v3),
+		resources.NewBGPPeerClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBGPConfiguration,
-		resources.NewBGPConfigClient(restClient, v3),
+		resources.NewBGPConfigClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindFelixConfiguration,
-		resources.NewFelixConfigClient(restClient, v3),
+		resources.NewFelixConfigClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindClusterInformation,
-		resources.NewClusterInfoClient(restClient, v3),
+		resources.NewClusterInfoClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindHostEndpoint,
-		resources.NewHostEndpointClient(restClient, v3),
+		resources.NewHostEndpointClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindKubeControllersConfiguration,
-		resources.NewKubeControllersConfigClient(restClient, v3),
+		resources.NewKubeControllersConfigClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindCalicoNodeStatus,
-		resources.NewCalicoNodeStatusClient(restClient, v3),
+		resources.NewCalicoNodeStatusClient(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBlockAffinity,
-		resources.NewBlockAffinityClientV3(restClient, v3),
+		resources.NewBlockAffinityClientV3(restClient, group),
 	)
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBGPFilter,
-		resources.NewBGPFilterClient(restClient, v3),
+		resources.NewBGPFilterClient(restClient, group),
 	)
 
 	// IPAMConfig can come to us from two places:
@@ -234,7 +230,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindIPAMConfiguration,
-		resources.NewIPAMConfigClientV3(restClient, v3),
+		resources.NewIPAMConfigClientV3(restClient, group),
 	)
 
 	// These resources are backed directly by core Kubernetes APIs, and do not
@@ -293,13 +289,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 			reflect.TypeOf(model.BlockAffinityKey{}),
 			reflect.TypeOf(model.BlockAffinityListOptions{}),
 			libapiv3.KindBlockAffinity,
-			resources.NewBlockAffinityClientV1(restClient, v3),
+			resources.NewBlockAffinityClientV1(restClient, group),
 		)
 		c.registerResourceClient(
 			reflect.TypeOf(model.IPAMConfigKey{}),
 			nil,
 			libapiv3.KindIPAMConfig,
-			resources.NewIPAMConfigClientV1(restClient, v3),
+			resources.NewIPAMConfigClientV1(restClient, group),
 		)
 
 		// These do not get registered as part of the v3 API, and are only
@@ -308,13 +304,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 			reflect.TypeOf(model.BlockKey{}),
 			reflect.TypeOf(model.BlockListOptions{}),
 			libapiv3.KindIPAMBlock,
-			resources.NewIPAMBlockClient(restClient, v3),
+			resources.NewIPAMBlockClient(restClient, group),
 		)
 		c.registerResourceClient(
 			reflect.TypeOf(model.IPAMHandleKey{}),
 			reflect.TypeOf(model.IPAMHandleListOptions{}),
 			libapiv3.KindIPAMHandle,
-			resources.NewIPAMHandleClient(restClient, v3),
+			resources.NewIPAMHandleClient(restClient, group),
 		)
 	}
 
@@ -653,13 +649,19 @@ func clusterNetworkPolicyClient(cfg *rest.Config) (*netpolicyclient.PolicyV1alph
 }
 
 // restClient builds a RESTClient configured to interact with Calico CustomResourceDefinitions
-func restClient(cfg rest.Config, v3 bool) (*rest.RESTClient, error) {
+func restClient(cfg rest.Config, group resources.BackingAPIGroup) (*rest.RESTClient, error) {
 	// Generate config using the base config.
-	if v3 {
+	switch group {
+	case resources.BackingAPIGroupV3:
 		cfg.GroupVersion = &schema.GroupVersion{Group: "projectcalico.org", Version: "v3"}
-	} else {
+		apiv3.AddToGlobalScheme()
+	case resources.BackingAPIGroupV1:
 		cfg.GroupVersion = &schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"}
+		v1scheme.AddCalicoResourcesToGlobalScheme()
+	default:
+		return nil, fmt.Errorf("unknown backing API group: %v", group)
 	}
+
 	cfg.APIPath = "/apis"
 	cfg.ContentType = k8sruntime.ContentTypeJSON
 	cfg.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
@@ -667,13 +669,6 @@ func restClient(cfg rest.Config, v3 bool) (*rest.RESTClient, error) {
 	cli, err := rest.RESTClientFor(&cfg)
 	if err != nil {
 		return nil, err
-	}
-
-	// Add the correct scheme mappings to the client.
-	if v3 {
-		apiv3.AddToGlobalScheme()
-	} else {
-		v1scheme.AddCalicoResourcesToGlobalScheme()
 	}
 
 	return cli, nil

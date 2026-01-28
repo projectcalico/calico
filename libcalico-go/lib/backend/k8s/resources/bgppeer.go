@@ -25,13 +25,13 @@ const (
 	BGPPeerResourceName = "BGPPeers"
 )
 
-func NewBGPPeerClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewBGPPeerClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        BGPPeerResourceName,
 		k8sResourceType: reflect.TypeOf(apiv3.BGPPeer{}),
 		k8sListType:     reflect.TypeOf(apiv3.BGPPeerList{}),
 		kind:            apiv3.KindBGPPeer,
-		noTransform:     v3,
+		apiGroup:        group,
 	}
 }

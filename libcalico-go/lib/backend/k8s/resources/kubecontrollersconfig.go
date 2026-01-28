@@ -27,7 +27,7 @@ const (
 	KubeControllersConfigResourceName = "KubeControllersConfigurations"
 )
 
-func NewKubeControllersConfigClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewKubeControllersConfigClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        KubeControllersConfigResourceName,
@@ -35,7 +35,7 @@ func NewKubeControllersConfigClient(r rest.Interface, v3 bool) K8sResourceClient
 		k8sListType:     reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
 		kind:            apiv3.KindKubeControllersConfiguration,
 		validator:       kubeControllersConfigValidator{},
-		noTransform:     v3,
+		apiGroup:        group,
 	}
 }
 

@@ -30,7 +30,7 @@ const (
 	IPPoolResourceName = "IPPools"
 )
 
-func NewIPPoolClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewIPPoolClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:       r,
 		resource:         IPPoolResourceName,
@@ -38,7 +38,7 @@ func NewIPPoolClient(r rest.Interface, v3 bool) K8sResourceClient {
 		k8sListType:      reflect.TypeOf(apiv3.IPPoolList{}),
 		kind:             apiv3.KindIPPool,
 		versionconverter: IPPoolv1v3Converter{},
-		noTransform:      v3,
+		apiGroup:         group,
 	}
 }
 
