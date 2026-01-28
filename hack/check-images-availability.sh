@@ -33,10 +33,10 @@ fi
 #########################################
 # Get registry and version info
 #########################################
-defaultRegistry="$($YQ .node.registry < "$SCRIPT_DIR/../charts/calico/values.yaml" | cut -d'/' -f1)"
+defaultRegistry="$($YQ .node.registry < "$SCRIPT_DIR/../charts/calico-manifests/values.yaml" | cut -d'/' -f1)"
 REGISTRY="${REGISTRY:-$defaultRegistry}"
 
-defaultCalicoVersion="$($YQ .version < "$SCRIPT_DIR/../charts/calico/values.yaml")"
+defaultCalicoVersion="$($YQ .version < "$SCRIPT_DIR/../charts/calico-manifests/values.yaml")"
 CALICO_VERSION="${PRODUCT_VERSION:-$defaultCalicoVersion}"
 
 echo "Using REGISTRY: $REGISTRY"

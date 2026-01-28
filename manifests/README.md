@@ -8,7 +8,7 @@ in the repository root.
 
 To make changes to the auto-generated manifests:
 
-1. Modify the source content in either `charts/tigera-operator/` or `charts/calico` 
+1. Modify the source content in either `charts/calico/` or `charts/calico-manifests/`
 
 2. Re-run code generation from the top level of this repository
 
@@ -16,7 +16,7 @@ To make changes to the auto-generated manifests:
    make gen-manifests
    ```
 
-Some of these manifests are not automatically generated. To edit these, modify the manifests directly and 
+Some of these manifests are not automatically generated. To edit these, modify the manifests directly and
 commit your changes. **The following manifests are not auto generated:**
 
 - alp/istio-inject-configmap-X.yaml
