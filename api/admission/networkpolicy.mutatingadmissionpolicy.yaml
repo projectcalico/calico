@@ -1,0 +1,44 @@
+# This MutatingAdmissionPolicy performs defaulting for Calico policy types.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "policy.projectcalico.org"
+spec:
+  paramKind:
+    kind: NetworkPolicy
+    apiVersion: projectcalico.org/v3
+  matchConditions:
+    # Apply this mutation only if the 'types' field is missing.
+    - name: missing-types
+      expression: "!has(object.spec.types)"
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+        - networkpolicies
+        - globalnetworkpolicies
+        - stagednetworkpolicies
+        - stagedglobalnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Determine the policy types based on the presence of ingress and egress rules.
+    - name: defaultTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.ingress) ? ["Ingress"] :
+        has(object.spec.egress) ? ["Egress"] : []
+  mutations:
+    # Add the calculated 'types' field to the spec.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          [
+            JSONPatch{
+              op: "add",
+              path: "/spec/types",
+              value: variables.defaultTypes
+            }
+          ]

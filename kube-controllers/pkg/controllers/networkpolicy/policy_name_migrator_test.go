@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,8 +31,9 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -387,6 +388,12 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
+		// Determine if we should use v3 CRDs based on the test config.
+		var cfg *apiconfig.CalicoAPIConfig
+		cfg, err = apiconfig.LoadClientConfigFromEnvironment()
+		Expect(err).NotTo(HaveOccurred())
+		useV3CRDs := k8s.UsingV3CRDs(&cfg.Spec)
+
 		// Run apiserver.
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 		kubeconfig, cleanup := testutils.BuildKubeconfig(apiserver.IP)
@@ -401,7 +408,11 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Register Calico CRD types with the scheme.
-		scheme.AddCalicoResourcesToGlobalScheme()
+		if useV3CRDs {
+			Expect(v3.AddToGlobalScheme()).NotTo(HaveOccurred())
+		} else {
+			v1scheme.AddCalicoResourcesToGlobalScheme()
+		}
 
 		// Create a client for interacting with CRDs directly.
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
