@@ -25,13 +25,13 @@ const (
 	FelixConfigResourceName = "FelixConfigurations"
 )
 
-func NewFelixConfigClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewFelixConfigClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        FelixConfigResourceName,
 		k8sResourceType: reflect.TypeOf(apiv3.FelixConfiguration{}),
 		k8sListType:     reflect.TypeOf(apiv3.FelixConfigurationList{}),
 		kind:            apiv3.KindFelixConfiguration,
-		noTransform:     v3,
+		apiGroup:        group,
 	}
 }

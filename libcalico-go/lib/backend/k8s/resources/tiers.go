@@ -28,15 +28,15 @@ const (
 	TierResourceName = "Tiers"
 )
 
-func NewTierClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewTierClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:       r,
 		resource:         TierResourceName,
 		k8sResourceType:  reflect.TypeOf(apiv3.Tier{}),
 		k8sListType:      reflect.TypeOf(apiv3.TierList{}),
 		kind:             apiv3.KindTier,
-		noTransform:      v3,
 		versionconverter: tierDefaulter{},
+		apiGroup:         group,
 	}
 }
 

@@ -21,15 +21,16 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
 // BackendAPIGroup returns the API group that should be used for the Calico CRD
 // backend, based on the configuration and/or auto-discovery of the API server.
-func BackendAPIGroup(cfg *apiconfig.CalicoAPIConfigSpec) string {
+func BackendAPIGroup(cfg *apiconfig.CalicoAPIConfigSpec) resources.BackingAPIGroup {
 	if UsingV3CRDs(cfg) {
-		return apiv3.GroupVersionCurrent
+		return resources.BackingAPIGroupV3
 	}
-	return v1scheme.GroupVersion
+	return resources.BackingAPIGroupV1
 }
 
 // UsingV3CRDs determines whether or not we should be using the projectcalico.org/v3 API group

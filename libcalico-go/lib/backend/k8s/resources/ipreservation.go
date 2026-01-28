@@ -25,13 +25,13 @@ const (
 	IPReservationResourceName = "IPReservations"
 )
 
-func NewIPReservationClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewIPReservationClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        IPReservationResourceName,
 		k8sResourceType: reflect.TypeOf(apiv3.IPReservation{}),
 		k8sListType:     reflect.TypeOf(apiv3.IPReservationList{}),
 		kind:            apiv3.KindIPReservation,
-		noTransform:     v3,
+		apiGroup:        group,
 	}
 }

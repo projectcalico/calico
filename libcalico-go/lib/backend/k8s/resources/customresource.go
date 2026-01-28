@@ -63,10 +63,8 @@ type customResourceClient struct {
 	// validator used to validate resources.
 	validator Validator
 
-	// noTransform indicates that the KVPair should be written as-is to the API server. This
-	// is used when we are writing directly to projectcalico.org/v3 CRDs. The default value of "false"
-	// indicates that the KVPair should be transformed from v3 to crd.projectcalico.org/v1 before writing to the API server.
-	noTransform bool
+	// apiGroup indicates which backing API group to use for CRDs managed by this client.
+	apiGroup BackingAPIGroup
 }
 
 // VersionConverter converts v1 or v3 k8s resources into v3 resources.
@@ -264,7 +262,8 @@ func (c *customResourceClient) Delete(ctx context.Context, k model.Key, revision
 
 	opts := &metav1.DeleteOptions{}
 	if uid != nil {
-		if !c.noTransform {
+		switch c.apiGroup {
+		case BackingAPIGroupV1:
 			// The UID in the v3 resources is a translation of the UID in the CR. Translate it
 			// before passing as a precondition.
 			uid, err := conversion.ConvertUID(*uid)
@@ -272,9 +271,11 @@ func (c *customResourceClient) Delete(ctx context.Context, k model.Key, revision
 				return nil, err
 			}
 			opts.Preconditions = &metav1.Preconditions{UID: &uid}
-		} else {
+		case BackingAPIGroupV3:
 			// If no transform is required, then we can pass the UID as-is.
 			opts.Preconditions = &metav1.Preconditions{UID: uid}
+		default:
+			return nil, fmt.Errorf("unknown backing API group: %v", c.apiGroup)
 		}
 	}
 
@@ -483,7 +484,7 @@ func (c *customResourceClient) convertResourceToKVPair(r Resource) (*model.KVPai
 		Revision: r.GetObjectMeta().GetResourceVersion(),
 	}
 
-	if !c.noTransform {
+	if c.apiGroup == BackingAPIGroupV1 {
 		// Convert the resource from crd.projectcalico.org/v1 to projectcalico.org/v3.
 		if err := ConvertK8sResourceToCalicoResource(r); err != nil {
 			return kvp, err
@@ -498,11 +499,11 @@ func (c *customResourceClient) convertKVPairToResource(kvp *model.KVPair) (Resou
 	resource := kvp.Value.(Resource)
 	resource.GetObjectMeta().SetResourceVersion(kvp.Revision)
 
-	if c.noTransform {
+	if c.apiGroup == BackingAPIGroupV3 {
 		// Use the input resource as-is, no transformation needed.
 		return resource, nil
-	} else {
-		// Perform the transform from projectcalico.org/v3 to crd.projectcalico.org/v1
-		return ConvertCalicoResourceToK8sResource(resource)
 	}
+
+	// Perform the transform from projectcalico.org/v3 to crd.projectcalico.org/v1
+	return ConvertCalicoResourceToK8sResource(resource)
 }

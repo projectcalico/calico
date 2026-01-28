@@ -25,13 +25,13 @@ const (
 	GlobalNetworkSetResourceName = "GlobalNetworkSets"
 )
 
-func NewGlobalNetworkSetClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewGlobalNetworkSetClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        GlobalNetworkSetResourceName,
 		k8sResourceType: reflect.TypeOf(apiv3.GlobalNetworkSet{}),
 		k8sListType:     reflect.TypeOf(apiv3.GlobalNetworkSetList{}),
 		kind:            apiv3.KindGlobalNetworkSet,
-		noTransform:     v3,
+		apiGroup:        group,
 	}
 }

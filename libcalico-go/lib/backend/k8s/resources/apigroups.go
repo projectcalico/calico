@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,24 +15,18 @@
 package resources
 
 import (
-	"reflect"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/client-go/rest"
+
+	crdv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 )
+
+// BackingAPIGroup represents the API group used for Calico CRD backend.
+type BackingAPIGroup string
 
 const (
-	NetworkPolicyResourceName = "NetworkPolicies"
-)
+	// BackingAPIGroupV1 represents the use of crd.projectcalico.org/v1 custom resource definitions.
+	BackingAPIGroupV1 BackingAPIGroup = apiv3.GroupVersionCurrent
 
-func NewNetworkPolicyClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
-	return &customResourceClient{
-		restClient:      r,
-		resource:        NetworkPolicyResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.NetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(apiv3.NetworkPolicyList{}),
-		kind:            apiv3.KindNetworkPolicy,
-		namespaced:      true,
-		apiGroup:        group,
-	}
-}
+	// BackingAPIGroupV3 represents the use of projectcalico.org/v3 custom resource definitions.
+	BackingAPIGroupV3 BackingAPIGroup = crdv1.GroupVersion
+)

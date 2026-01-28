@@ -25,14 +25,14 @@ const (
 	NetworkSetResourceName = "NetworkSets"
 )
 
-func NewNetworkSetClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewNetworkSetClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        NetworkSetResourceName,
 		k8sResourceType: reflect.TypeOf(apiv3.NetworkSet{}),
 		k8sListType:     reflect.TypeOf(apiv3.NetworkSetList{}),
 		kind:            apiv3.KindNetworkSet,
-		noTransform:     v3,
 		namespaced:      true,
+		apiGroup:        group,
 	}
 }

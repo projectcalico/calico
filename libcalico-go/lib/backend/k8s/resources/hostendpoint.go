@@ -25,13 +25,13 @@ const (
 	HostEndpointResourceName = "HostEndpoints"
 )
 
-func NewHostEndpointClient(r rest.Interface, v3 bool) K8sResourceClient {
+func NewHostEndpointClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:      r,
 		resource:        HostEndpointResourceName,
 		k8sResourceType: reflect.TypeOf(apiv3.HostEndpoint{}),
 		k8sListType:     reflect.TypeOf(apiv3.HostEndpointList{}),
 		kind:            apiv3.KindHostEndpoint,
-		noTransform:     v3,
+		apiGroup:        group,
 	}
 }
