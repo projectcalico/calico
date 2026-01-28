@@ -145,7 +145,7 @@ ${HELM} template \
 	--set calicoctl.image=$REGISTRY/ctl \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.
-find ocp/tigera-operator -name "*.yaml" -print0 | xargs -0 sed -i -e 1,2d
+find ocp/tigera-operator -name "*.yaml" -print0 | xargs -0 sed -i '' -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
 
 # Generating the upgrade manifest for OCP.
@@ -165,5 +165,5 @@ for img in $NON_HELM_MANIFEST_IMAGES; do
   curr_img=${defaultRegistry}/${img}
   new_img=${REGISTRY}/${img}
   echo "$curr_img:$defaultCalicoVersion --> $new_img:$CALICO_VERSION"
-  find . -type f -exec sed -i "s|${curr_img}:[A-Za-z0-9_.-]*|${new_img}:$CALICO_VERSION|g" {} \;
+  find . -type f -exec sed -i '' "s|${curr_img}:[A-Za-z0-9_.-]*|${new_img}:$CALICO_VERSION|g" {} \;
 done

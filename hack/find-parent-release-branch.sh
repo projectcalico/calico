@@ -22,8 +22,21 @@ echo "[debug] Trying to detect base branch by looking for most similar branch" >
 remote=$(git remote -v | grep "[:/]${git_repo_slug}.*fetch" | cut -f1 )
 
 if [[ -z "${remote}" ]]; then
-  echo "[error] Could not detect a git remote for ${git_repo_slug}; stop" >&2
-  exit 1
+  echo "[warning] Could not detect a git remote for ${git_repo_slug}, trying to use 'origin' as fallback" >&2
+  # Fallback to 'origin' if the exact repo slug is not found (useful for forks)
+  if git remote | grep -q "^origin$"; then
+    remote="origin"
+    echo "[debug] Using 'origin' remote as fallback" >&2
+  else
+    # Use the first available remote as last resort
+    remote=$(git remote | head -n 1)
+    if [[ -n "${remote}" ]]; then
+      echo "[debug] Using first available remote '${remote}' as fallback" >&2
+    else
+      echo "[error] No git remotes found; stop" >&2
+      exit 1
+    fi
+  fi
 fi
 
 # If we're running in a CI environment...
@@ -45,7 +58,7 @@ fi # -v CI
 echo "[debug] Git remote: ${git_repo_slug} -> ${remote}" >&2
 
 for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/${remote} | \
-             grep --perl "${remote}/master$|${remote}/${release_prefix}[3-9]\.[2-9].*" ); do
+             grep -E "${remote}/master$|${remote}/${release_prefix}[3-9]\.[2-9].*" ); do
   count=$(git rev-list --count $(git merge-base $ref HEAD)..HEAD)
   if [[ "$count" -lt "$best_count" ]]; then
     best_count=$count
