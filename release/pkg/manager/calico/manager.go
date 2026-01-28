@@ -556,8 +556,8 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 	}
 
 	// Copy the tigera-operator chart to the temp dir.
-	srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
-	destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
+	srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoChart, r.helmChartVersion()))
+	destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoChart, r.helmChartVersion()))
 	if err := utils.CopyFile(srcChart, destChart); err != nil {
 		return fmt.Errorf("error copying tigera-operator chart to temp dir for building helm index: %w", err)
 	}
@@ -1184,7 +1184,8 @@ Attached to this release are the following artifacts:
 
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
-- {helm_chart}: Calico Helm 3 chart (also hosted at oci://quay.io/calico/charts/tigera-operator).
+- {helm_chart}: Calico Helm 3 chart (also hosted at oci://quay.io/calico/charts/calico).
+- {crd_v1_chart}: CRDs for Calico.
 - ocp.tgz: Manifest bundle for OpenShift.
 
 Additional links:
@@ -1202,7 +1203,8 @@ Additional links:
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
-		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.calicoVersion),
+		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.CalicoChart, r.calicoVersion),
+		"{crd_v1_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.CalicoCRDsChart, r.calicoVersion),
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -1287,7 +1289,7 @@ func (r *CalicoManager) publishHelmCharts() error {
 		return nil
 	}
 	for _, reg := range r.helmRegistries {
-		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion())), reg); err != nil {
+		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.CalicoChart, r.helmChartVersion())), reg); err != nil {
 			return err
 		}
 		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion())), reg); err != nil {

@@ -19,7 +19,7 @@ import (
 )
 
 func chartURL(githubOrg, githubRepo, version string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, utils.TigeraOperatorChart, version)
+	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, utils.CalicoChart, version)
 }
 
 func TestHelmChart(t *testing.T) {
@@ -55,14 +55,14 @@ func TestHelmChart(t *testing.T) {
 
 				dir := t.TempDir()
 				args := []string{
-					"pull", fmt.Sprintf("oci://%s/%s", reg, utils.TigeraOperatorChart),
+					"pull", fmt.Sprintf("oci://%s/%s", reg, utils.CalicoChart),
 					"--version", releaseVersion,
 				}
 				out, err := command.RunInDir(dir, "helm", args)
 				if err != nil {
-					t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.TigeraOperatorChart, releaseVersion, reg, err, out)
+					t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.CalicoChart, releaseVersion, reg, err, out)
 				}
-				chart, err := loader.Load(filepath.Join(dir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, releaseVersion)))
+				chart, err := loader.Load(filepath.Join(dir, fmt.Sprintf("%s-%s.tgz", utils.CalicoChart, releaseVersion)))
 				if err != nil {
 					t.Fatalf("load helm chart from %s: %v", reg, err)
 				}
