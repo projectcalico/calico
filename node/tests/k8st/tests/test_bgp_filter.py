@@ -85,11 +85,15 @@ EOF
 """ % self.external_node_ip6)
 
     def tearDown(self):
+        # Ensure that we always attempt to run the base class tearDown, storing the
+        # exception if it fails and re-raising it after we've done our own teardown.
+        teardown_exception = None
         try:
             super(TestBGPFilter, self).tearDown()
         except Exception as e:
             # Log the error, but don't block further teardown steps.
             _log.error("Exception during tearDown: %s", e)
+            teardown_exception = e
 
         self.delete_and_confirm(self.ns, "ns")
 
@@ -108,6 +112,9 @@ EOF
         # Delete BGPPeers.
         kubectl("delete bgppeer node-extra.peer", allow_fail=True)
         kubectl("delete bgppeer node-extra-v6.peer", allow_fail=True)
+
+        if teardown_exception:
+            raise teardown_exception
 
     def _get_bird_conf(self, ipv6=False):
         if ipv6:
