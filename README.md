@@ -31,7 +31,7 @@ Project Calico, created and maintained by [Tigera][tigera], is an open-source pr
 - **Flexible networking**: An array of networking tools at your disposal, including BGP, VXLAN, service advertisement, and more.
 
 <div align=center>
-<img src="https://www.tigera.io/app/uploads/2024/02/Ecosystem_shrunken_2023.svg">
+<img src="https://www.tigera.io/app/uploads/2026/01/Ecosystem_2026.svg">
 </div>
 
 ## 🤝 Join the Calico Community

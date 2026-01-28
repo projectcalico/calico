@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"runtime"
 	"slices"
@@ -488,27 +489,29 @@ kind: Config
 clusters:
 - name: local
   cluster:
-    server: __KUBERNETES_SERVICE_PROTOCOL__://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__
+    server: __KUBERNETES_SERVICE_PROTOCOL__://__KUBERNETES_SERVICE_ENDPOINT__
     __TLS_CFG__
 users:
 - name: calico
   user:
-    token: TOKEN
+    token: __TOKEN__
 contexts:
 - name: calico-context
   context:
     cluster: local
     user: calico
-current-context: calico-context`
-	data = strings.Replace(data, "TOKEN", token, 1)
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"))
-	k8sHost := getEnv("KUBERNETES_SERVICE_HOST", "")
-	if strings.Contains(k8sHost, ":") && !strings.HasPrefix(k8sHost, "[") {
-		// IPv6 address needs to be enclosed in brackets.
-		k8sHost = "[" + k8sHost + "]"
+current-context: calico-context
+`
+	data = strings.ReplaceAll(data, "__TOKEN__", token)
+	k8sProto := getEnv("KUBERNETES_SERVICE_PROTOCOL", "https")
+	if k8sProto == "" {
+		k8sProto = "https"
 	}
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_HOST__", k8sHost)
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""))
+	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PROTOCOL__", k8sProto)
+	k8sHost := getEnv("KUBERNETES_SERVICE_HOST", "")
+	k8sPort := getEnv("KUBERNETES_SERVICE_PORT", "")
+	k8sEndpoint := net.JoinHostPort(k8sHost, k8sPort)
+	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_ENDPOINT__", k8sEndpoint)
 
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 	if skipTLSVerify == "true" {

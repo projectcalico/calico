@@ -135,7 +135,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 
 			Context("with normal config", func() {
 				BeforeEach(func() {
-					renderer = NewRenderer(rrConfigNormalMangleReturn)
+					renderer = NewRenderer(rrConfigNormalMangleReturn, false)
 					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 				})
@@ -766,7 +766,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 
 			Describe("with ctstate=INVALID disabled", func() {
 				BeforeEach(func() {
-					renderer = NewRenderer(rrConfigConntrackDisabledReturnAction)
+					renderer = NewRenderer(rrConfigConntrackDisabledReturnAction, false)
 					epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.MarkEndpoint,
 						rrConfigConntrackDisabledReturnAction.MarkNonCaliEndpoint)
 				})
@@ -837,7 +837,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				Context("VXLAN allowed, IPIP dropped", func() {
 					It("should render a minimal workload endpoint without VXLAN drop encap rule and with IPIP drop encap rule", func() {
 						rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
-						renderer = NewRenderer(rrConfigNormalMangleReturn)
+						renderer = NewRenderer(rrConfigNormalMangleReturn, false)
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
@@ -875,7 +875,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				Context("VXLAN dropped, IPIP allowed", func() {
 					It("should render a minimal workload endpoint with VXLAN drop encap rule and without IPIP drop encap rule", func() {
 						rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
-						renderer = NewRenderer(rrConfigNormalMangleReturn)
+						renderer = NewRenderer(rrConfigNormalMangleReturn, false)
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
@@ -916,7 +916,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 					It("should render a minimal workload endpoint without both VXLAN and IPIP drop encap rule", func() {
 						rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
 						rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
-						renderer = NewRenderer(rrConfigNormalMangleReturn)
+						renderer = NewRenderer(rrConfigNormalMangleReturn, false)
 						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
@@ -1135,7 +1135,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			MarkDrop:            0x80,
 			MarkEndpoint:        0xff00,
 			MarkNonCaliEndpoint: 0x0100,
-		})
+		}, false)
 		chains := renderer.PolicyGroupToIptablesChains(&group)
 		Expect(chains).To(HaveLen(1))
 		Expect(chains[0].Name).ToNot(BeEmpty())

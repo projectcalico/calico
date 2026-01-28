@@ -413,7 +413,7 @@ func (r *CalicoManager) checkCodeGeneration() error {
 }
 
 func (r *CalicoManager) PreReleaseValidate() error {
-	// Cheeck that we are on a release branch
+	// Check that we are on a release branch
 	if r.validateBranch {
 		branch, err := utils.GitBranch(r.repoRoot)
 		if err != nil {

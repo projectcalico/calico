@@ -703,6 +703,18 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 		}
 	}
 
+	if conf.QPS != 0 {
+		if err := os.Setenv("K8S_CLIENT_QPS", fmt.Sprintf("%d", conf.QPS)); err != nil {
+			return nil, err
+		}
+	}
+
+	if conf.Burst != 0 {
+		if err := os.Setenv("K8S_CLIENT_BURST", fmt.Sprintf("%d", conf.Burst)); err != nil {
+			return nil, err
+		}
+	}
+
 	// Load the client config from the current environment.
 	clientConfig, err := apiconfig.LoadClientConfig("")
 	if err != nil {

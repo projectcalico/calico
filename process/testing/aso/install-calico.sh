@@ -192,9 +192,9 @@ echo "calico-node-windows pods are ready"
 
 if [[ ${PRODUCT} == 'calient' ]]; then
     echo "Wait for fluentd-node-windows pods to be ready..."
-    echo "It takes a long time for fluentd-node-windows pods to pull images and start.Sleeping for 8 minutes..."
+    echo "It takes a long time for fluentd-node-windows pods to pull images and start. Sleeping for 8 minutes..."
     sleep 480
-    timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=fluentd-node-windows --for=condition=Ready -n tigera-fluentd --timeout=30s; do sleep 5; done"
+    timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=fluentd-node-windows --for=condition=Ready -n tigera-fluentd --timeout=30s; do sleep 5; done"
     echo "fluentd-node-windows pods are ready"
 fi
 
