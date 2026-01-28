@@ -152,6 +152,22 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 	}
 }
 
+func EnsureBlockAffinityLabelsV3(ba *apiv3.BlockAffinity) {
+	if ba.Labels == nil {
+		ba.Labels = make(map[string]string)
+	}
+	// Hostnames can be longer than labels are allowed to be, so we hash it down.
+	ba.Labels[apiv3.LabelHostnameHash] = hashHostnameForLabel(ba.Spec.Node)
+	ba.Labels[apiv3.LabelAffinityType] = ba.Spec.Type
+	var ipVersion string
+	if strings.Contains(ba.Spec.CIDR, ":") {
+		ipVersion = "6"
+	} else {
+		ipVersion = "4"
+	}
+	ba.Labels[apiv3.LabelIPVersion] = ipVersion
+}
+
 func EnsureBlockAffinityLabels(ba *libapiv3.BlockAffinity) {
 	if ba.Labels == nil {
 		ba.Labels = make(map[string]string)
