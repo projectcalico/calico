@@ -75,15 +75,15 @@ for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
-	        --set node.registry=$REGISTRY \
-	        --set calicoctl.registry=$REGISTRY \
-	        --set typha.registry=$REGISTRY \
-	        --set cni.registry=$REGISTRY \
-	        --set kubeControllers.registry=$REGISTRY \
-	        --set flannelMigration.registry=$REGISTRY \
-	        --set dikastes.registry=$REGISTRY \
-	        --set csi-driver.registry=$REGISTRY \
+		--set version=$CALICO_VERSION \
+		--set node.registry=$REGISTRY \
+		--set calicoctl.registry=$REGISTRY \
+		--set typha.registry=$REGISTRY \
+		--set cni.registry=$REGISTRY \
+		--set kubeControllers.registry=$REGISTRY \
+		--set flannelMigration.registry=$REGISTRY \
+		--set dikastes.registry=$REGISTRY \
+		--set csi-driver.registry=$REGISTRY \
 		-f ../charts/values/calico.yaml >> crds.yaml
 done
 
@@ -95,14 +95,14 @@ for FILE in $(ls ../charts/crd.projectcalico.org.v1/crds/*.yaml | xargs -n1 base
 	${HELM} template \
 		--include-crds \
 		--show-only $FILE \
-	  --set version=$CALICO_VERSION \
-	  ../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
+		--set version=$CALICO_VERSION \
+		../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
 done
 for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only $FILE \
-	  --set version=$CALICO_VERSION \
+		--set version=$CALICO_VERSION \
 		-f ../charts/values/calico.yaml >> operator-crds.yaml
 done
 
@@ -119,7 +119,7 @@ for FILE in $VALUES_FILES; do
 	echo "Generating manifest from charts/values/$FILE"
 	${HELM} -n kube-system template \
 		../charts/calico \
-	        --set version=$CALICO_VERSION \
+		--set version=$CALICO_VERSION \
 		-f ../charts/values/$FILE > $FILE
 done
 

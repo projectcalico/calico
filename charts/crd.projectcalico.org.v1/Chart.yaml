@@ -1,6 +1,6 @@
 apiVersion: v2
 name: crd.projectcalico.org.v1
-description: Installs Calico and operator.tigera.io Custom Resource Definitions (CRDs)
+description: Installs crd.projectcalico.org and operator.tigera.io Custom Resource Definitions (CRDs)
 home: https://docs.tigera.io/calico
 icon: https://docs.tigera.io/img/calico-logo.png
 sources:
