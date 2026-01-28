@@ -26,15 +26,16 @@ const (
 
 // +genclient
 // +genclient:nonNamespaced
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster,shortName={sgnp}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 
 // StagedGlobalNetworkPolicy is a staged GlobalNetworkPolicy.
 type StagedGlobalNetworkPolicy struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the Policy.
-	Spec StagedGlobalNetworkPolicySpec `json:"spec,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              StagedGlobalNetworkPolicySpec `json:"spec"`
 }
 
 type StagedGlobalNetworkPolicySpec struct {
