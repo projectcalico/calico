@@ -1,5 +1,12 @@
-apiVersion: v1
-description: Calico
-name: calico
-version: 0.1.0
-appVersion: master
+apiVersion: v2
+name: Calico
+description: Installs Calico using the Tigera operator.
+home: https://docs.tigera.io/calico
+icon: https://docs.tigera.io/img/calico-logo.png
+sources:
+  - https://github.com/projectcalico/calico/tree/master/charts/calico
+  - https://github.com/tigera/operator
+  - https://github.com/projectcalico/calico
+
+# version will be overridden at chart compilation time via args, but still must exist in chart.yaml
+version: v0.0

@@ -73,8 +73,8 @@ func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 	}
 
 	// Add copy of the Tigera operator chart without version in name.
-	operatorTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, versions.HelmChartVersion()))
-	operatorTarballDst := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s.tgz", utils.TigeraOperatorChart))
+	operatorTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoChart, versions.HelmChartVersion()))
+	operatorTarballDst := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s.tgz", utils.CalicoChart))
 	if err := utils.CopyFile(operatorTarball, operatorTarballDst); err != nil {
 		return err
 	}
