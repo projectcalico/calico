@@ -1,10 +1,10 @@
 apiVersion: v2
-name: tigera-operator
-description: Installs the Tigera operator for Calico
+name: crd.projectcalico.org.v1
+description: Installs crd.projectcalico.org and operator.tigera.io Custom Resource Definitions (CRDs)
 home: https://docs.tigera.io/calico
 icon: https://docs.tigera.io/img/calico-logo.png
 sources:
-  - https://github.com/projectcalico/calico/tree/master/charts/tigera-operator
+  - https://github.com/projectcalico/calico/tree/master/charts/crd.projectcalico.org.v1
   - https://github.com/tigera/operator
   - https://github.com/projectcalico/calico
 
