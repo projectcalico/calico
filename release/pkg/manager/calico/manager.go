@@ -554,10 +554,19 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 	if err := os.MkdirAll(tmpChartsDir, utils.DirPerms); err != nil {
 		return fmt.Errorf("create temp dir for building helm index: %w", err)
 	}
+
+	// Copy the tigera-operator chart to the temp dir.
 	srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
 	destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
 	if err := utils.CopyFile(srcChart, destChart); err != nil {
-		return fmt.Errorf("copy chart to temp dir for building helm index: %w", err)
+		return fmt.Errorf("error copying tigera-operator chart to temp dir for building helm index: %w", err)
+	}
+
+	// Copy the crd.projectcalico.org.v1 chart to the temp dir.
+	srcCRDsChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion()))
+	destCRDsChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion()))
+	if err := utils.CopyFile(srcCRDsChart, destCRDsChart); err != nil {
+		return fmt.Errorf("error copying CRD chart to temp dir for building helm index: %w", err)
 	}
 
 	// Build the new helm index.
@@ -576,6 +585,7 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 		// For hashreleases, copy the helm index to the upload dir.
 		srcIndex := filepath.Join(tmpChartsDir, helmIndexFileName)
 		destIndex := filepath.Join(r.uploadDir(), "charts", helmIndexFileName)
+
 		// Ensure destination directory exists.
 		if err := os.MkdirAll(filepath.Dir(destIndex), utils.DirPerms); err != nil {
 			return fmt.Errorf("create dest dir for helm index: %w", err)
@@ -1280,6 +1290,9 @@ func (r *CalicoManager) publishHelmCharts() error {
 		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion())), reg); err != nil {
 			return err
 		}
+		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion())), reg); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1326,13 +1339,12 @@ func (r *CalicoManager) updateHelmChartIndex() error {
 func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
 	// Validate that the release notes for this version are present,
 	// fail if not.
-
 	releaseNotesPath := filepath.Join(r.repoRoot, "release-notes", fmt.Sprintf("%s-release-notes.md", ver))
 	releaseNotesStat, err := os.Stat(releaseNotesPath)
-	// If we got an error, handle that?
 	if err != nil {
 		return fmt.Errorf("release notes file is invalid: %s", err.Error())
 	}
+
 	if releaseNotesStat.Size() == 0 {
 		return fmt.Errorf("release notes file is invalid: file is 0 bytes")
 	} else if releaseNotesStat.IsDir() {
