@@ -20,10 +20,10 @@ if [[ ! -f $YQ ]]; then
 fi
 
 # Get versions to install.
-defaultCalicoVersion=$($YQ .version <../charts/calico/values.yaml)
+defaultCalicoVersion=$($YQ .version <../charts/calico-manifests/values.yaml)
 CALICO_VERSION=${PRODUCT_VERSION:-$defaultCalicoVersion}
 
-defaultRegistry=$($YQ .node.registry <../charts/calico/values.yaml)
+defaultRegistry=$($YQ .node.registry <../charts/calico-manifests/values.yaml)
 REGISTRY=${REGISTRY:-$defaultRegistry}
 
 defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/tigera-operator/values.yaml)
@@ -71,8 +71,8 @@ ${HELM} -n tigera-operator template \
 # This manifest is used in "Calico the hard way" documentation.
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
-for FILE in $(ls ../charts/calico/crds); do
-	${HELM} template ../charts/calico \
+for FILE in $(ls ../charts/calico-manifests/crds); do
+	${HELM} template ../charts/calico-manifests \
 		--include-crds \
 		--show-only $FILE \
 		--set version=$CALICO_VERSION \
@@ -98,8 +98,8 @@ for FILE in $(ls ../charts/crd.projectcalico.org.v1/crds/*.yaml | xargs -n1 base
 		--set version=$CALICO_VERSION \
 		../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
 done
-for FILE in $(ls ../charts/calico/crds); do
-	${HELM} template ../charts/calico \
+for FILE in $(ls ../charts/calico-manifests/crds); do
+	${HELM} template ../charts/calico-manifests \
 		--include-crds \
 		--show-only $FILE \
 		--set version=$CALICO_VERSION \
@@ -118,7 +118,7 @@ VALUES_FILES=$(cd ../charts/values && find . -type f -name "*.yaml")
 for FILE in $VALUES_FILES; do
 	echo "Generating manifest from charts/values/$FILE"
 	${HELM} -n kube-system template \
-		../charts/calico \
+		../charts/calico-manifests \
 		--set version=$CALICO_VERSION \
 		-f ../charts/values/$FILE > $FILE
 done

@@ -98,7 +98,7 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 1. Update version information in the following files:
 
-   - `charts/calico/values.yaml`: Calico version used in manifest generation.
+   - `charts/calico-manifests/values.yaml`: Calico version used in manifest generation.
    - `charts/tigera-operator/values.yaml`: Versions of operator and calicoctl used in the helm chart and manifests.
 
 1. Update manifests (and other auto-generated code) by running the following command in the repository root.

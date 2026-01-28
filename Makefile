@@ -239,12 +239,12 @@ release-test:
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.
 build-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+	$(eval VERSION=$(shell bin/yq '.version' charts/calico-manifests/values.yaml))
 	$(info Building openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release VERSION=$(VERSION)
 
 publish-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+	$(eval VERSION=$(shell bin/yq '.version' charts/calico-manifests/values.yaml))
 	$(info Publishing openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release-publish VERSION=$(VERSION)
 
