@@ -703,7 +703,7 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 		}
 	}
 	if conf.CalicoAPIGroup != "" {
-		if err := os.Setenv("CALICO_API_GROUP", conf.CalicoAPIGroup); err != nil {
+		if err := os.Setenv("CALICO_API_GROUP", string(conf.CalicoAPIGroup)); err != nil {
 			return nil, err
 		}
 	}

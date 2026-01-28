@@ -25,8 +25,8 @@ type BackingAPIGroup string
 
 const (
 	// BackingAPIGroupV1 represents the use of crd.projectcalico.org/v1 custom resource definitions.
-	BackingAPIGroupV1 BackingAPIGroup = apiv3.GroupVersionCurrent
+	BackingAPIGroupV1 BackingAPIGroup = crdv1.GroupVersion
 
 	// BackingAPIGroupV3 represents the use of projectcalico.org/v3 custom resource definitions.
-	BackingAPIGroupV3 BackingAPIGroup = crdv1.GroupVersion
+	BackingAPIGroupV3 BackingAPIGroup = apiv3.GroupVersionCurrent
 )

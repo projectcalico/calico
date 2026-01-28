@@ -15,6 +15,8 @@
 package k8s
 
 import (
+	"strings"
+
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -39,7 +41,7 @@ func BackendAPIGroup(cfg *apiconfig.CalicoAPIConfigSpec) resources.BackingAPIGro
 func UsingV3CRDs(cfg *apiconfig.CalicoAPIConfigSpec) bool {
 	if cfg != nil && cfg.CalicoAPIGroup != "" && cfg.DatastoreType == apiconfig.Kubernetes {
 		logrus.WithField("apiGroup", cfg.CalicoAPIGroup).Info("Using explicitly configured Calico API group")
-		return cfg.CalicoAPIGroup == apiv3.GroupVersionCurrent
+		return strings.EqualFold(cfg.CalicoAPIGroup, apiv3.GroupVersionCurrent)
 	}
 	logrus.Info("No explicit Calico API group configured, attempting to auto-discover")
 

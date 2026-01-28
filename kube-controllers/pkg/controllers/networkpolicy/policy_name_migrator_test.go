@@ -102,7 +102,9 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
+			Ingress: []v3.Rule{{
+				Action: "Allow",
+			}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -122,7 +124,9 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		matchingWithPrefix.Spec = v3.NetworkPolicySpec{
 			Tier:     "custom-tier",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
+			Ingress: []v3.Rule{{
+				Action: "Allow",
+			}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -142,7 +146,9 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		matchingNoPrefix.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
+			Ingress: []v3.Rule{{
+				Action: "Allow",
+			}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -188,7 +194,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.GlobalNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -225,7 +230,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.StagedNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -262,7 +266,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.StagedGlobalNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -299,7 +302,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Create the correct key.
@@ -446,7 +448,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		mismatchedNames.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Set the annotation to indicate the v3 API name.
@@ -493,7 +494,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		mismatchedNames.Spec = v3.GlobalNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Set the annotation to indicate the v3 API name.
@@ -524,7 +524,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		mismatchedNames.Spec = v3.StagedNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Set the annotation to indicate the v3 API name.
@@ -555,7 +554,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		mismatchedNames.Spec = v3.StagedGlobalNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Set the annotation to indicate the v3 API name.
@@ -586,7 +584,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		matchingNames.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 		v3meta := &metav1.ObjectMeta{}
 		v3meta.Name = "policy-name" // Name matches underlying CRD.

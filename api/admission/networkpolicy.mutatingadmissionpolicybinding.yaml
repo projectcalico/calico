@@ -11,7 +11,7 @@ spec:
         apiVersions: ["v3"]
         operations: ["CREATE", "UPDATE"]
         resources:
-        - networkpolicies
-        - globalnetworkpolicies
-        - stagednetworkpolicies
-        - stagedglobalnetworkpolicies
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies

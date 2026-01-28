@@ -89,7 +89,6 @@ var _ = Describe("Test the StagedNetworkPolicy update processor", func() {
 				Selector:       "projectcalico.org/namespace == 'namespace1'",
 				ApplyOnForward: false,
 				StagedAction:   &res.Spec.StagedAction,
-				Types:          []string{"ingress"},
 			},
 			Revision: "abcde",
 		}))
@@ -230,7 +229,6 @@ var _ = Describe("Test the StagedNetworkPolicy update processor", func() {
 				Namespace:      "namespace3",
 				Selector:       "projectcalico.org/namespace == 'namespace3'",
 				ApplyOnForward: false,
-				Types:          []string{"ingress"},
 			},
 			Revision: "xyz",
 		}))

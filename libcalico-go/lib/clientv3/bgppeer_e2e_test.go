@@ -89,6 +89,43 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		},
 	}
 
+	DescribeTable("BGPPeer PeerIP validation", func(peerIP string, shouldError bool) {
+		c, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		be, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		By("Attempting to create a new BGPPeer with PeerIP: " + peerIP)
+		_, outError := c.BGPPeers().Create(ctx, &apiv3.BGPPeer{
+			ObjectMeta: metav1.ObjectMeta{Name: "bgppeer-peerip-validation"},
+			Spec: apiv3.BGPPeerSpec{
+				Node:     "node1",
+				PeerIP:   peerIP,
+				ASNumber: numorstring.ASNumber(6512),
+			},
+		}, options.SetOptions{})
+
+		if shouldError {
+			Expect(outError).To(HaveOccurred())
+		} else {
+			Expect(outError).NotTo(HaveOccurred())
+		}
+	},
+		// Valid
+		Entry("valid IPv4 address", "192.168.1.1", false),
+		Entry("valid IPv4 address with port", "192.168.5.101:179", false),
+		Entry("valid IPv6 address", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", false),
+		Entry("valid IPv6 address, shortened", "fe80::11", false),
+		Entry("valid IPv6 address with port", "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:179", false),
+
+		// Invalid
+		Entry("invalid IPv4 address", "300.168.1.1", true),
+		Entry("invalid IPv4 address with port", "300.168.5.101:179", true),
+		Entry("invalid IPv6 address", "2001:0db8:85a3:0000:0000:8a2e:0370:7334:12345", true),
+	)
+
 	DescribeTable("BGPPeer e2e CRUD tests",
 		func(name1, name2 string, spec1, spec2 apiv3.BGPPeerSpec) {
 			c, err := clientv3.New(config)
