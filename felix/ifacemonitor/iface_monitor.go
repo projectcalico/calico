@@ -47,9 +47,11 @@ const (
 	StateDown       State = "down"
 )
 
-type InterfaceStateCallback func(ifaceName string, ifaceState State, ifIndex int)
-type AddrStateCallback func(ifaceName string, addrs set.Set[string])
-type InSyncCallback func()
+type (
+	InterfaceStateCallback func(ifaceName string, ifaceState State, ifIndex int)
+	AddrStateCallback      func(ifaceName string, addrs set.Set[string])
+	InSyncCallback         func()
+)
 
 type Config struct {
 	// InterfaceExcludes is a list of interface names that we don't want callbacks for.
@@ -65,7 +67,7 @@ type InterfaceMonitor struct {
 	netlinkStub netlinkStub
 	resyncC     <-chan time.Time
 
-	ifaceNameToIdx map[string]int
+	ifaceNameToIdx map[string]set.Adaptive[int]
 	ifaceIdxToInfo map[int]*ifaceInfo
 
 	StateCallback    InterfaceStateCallback
@@ -102,7 +104,7 @@ func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Ti
 		Config:           config,
 		netlinkStub:      netlinkStub,
 		resyncC:          resyncC,
-		ifaceNameToIdx:   map[string]int{},
+		ifaceNameToIdx:   map[string]set.Adaptive[int]{},
 		ifaceIdxToInfo:   map[int]*ifaceInfo{},
 		fatalErrCallback: fatalErrCallback,
 	}
@@ -330,6 +332,8 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		}
 	}
 
+	ids := m.ifaceNameToIdx[ifaceName]
+
 	// Store or remove the information.
 	trackAddrs := !m.isExcludedInterface(ifaceName)
 	if ifaceExists {
@@ -341,11 +345,27 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 				Addrs:      set.New[string](),
 			}
 		}
-		m.ifaceNameToIdx[ifaceName] = ifIndex
+		ids.Add(ifIndex)
 		m.ifaceIdxToInfo[ifIndex].State = newState
 	} else {
 		delete(m.ifaceIdxToInfo, ifIndex)
-		delete(m.ifaceNameToIdx, ifaceName)
+		ids.Discard(ifIndex)
+		if ids.Len() == 0 {
+			delete(m.ifaceNameToIdx, ifaceName)
+		}
+	}
+
+	// In some cases, we can receive a notification for a new link of the same name before
+	// receiving the deletion notification for the old link.  In that case, we want to avoid
+	// notifying of changes until the final state is known. Defer notification if there are
+	// now multiple interface indices associated with the same name.
+	if ids.Len() > 1 {
+		log.WithFields(log.Fields{
+			"ifaceName": ifaceName,
+			"ifIndex":   ifIndex,
+			"numIfaces": ids.Len(),
+		}).Debug("Multiple interfaces with same name exist, deferring notification.")
+		return
 	}
 
 	logCxt := log.WithFields(log.Fields{
@@ -359,6 +379,31 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		m.StateCallback(ifaceName, newState, ifIndex)
 	} else {
 		logCxt.Debug("Interface state hasn't changed, nothing to notify.")
+	}
+
+	// If we sent a notification that the interface is gone, but there is another index associated with
+	// this name, we should notify the state of the newly unmasked interface now.
+	for remainingIdx := range ids.All() {
+		if remainingIdx == ifIndex {
+			// This is the same interface idx that we just sent an update for - we
+			// don't need to notify again.
+			break
+		}
+
+		// At this point, we know that:
+		// - There is one remaining interface with this name (because ids.Len() == 1)
+		// - It does not match the index we just sent an update for.
+		// Thus, we can conclude that we must have just sent an update that the
+		// interface is gone, and now we need to notify the state of the remaining
+		// interface info associated with this ifname.
+		remainingInfo := m.ifaceIdxToInfo[remainingIdx]
+		logCxt := log.WithFields(log.Fields{
+			"ifaceName": ifaceName,
+			"ifIndex":   remainingIdx,
+			"state":     remainingInfo.State,
+		})
+		logCxt.Debug("Notifying remaining interface with same name after deletion.")
+		m.StateCallback(ifaceName, remainingInfo.State, remainingIdx)
 	}
 
 	if !trackAddrs {
@@ -451,7 +496,11 @@ func (m *InterfaceMonitor) resync() error {
 			// We were tracking addresses for this interface before but now it's gone.  Signal that.
 			m.AddrCallback(name, nil)
 		}
-		delete(m.ifaceNameToIdx, name)
+		ids := m.ifaceNameToIdx[name]
+		ids.Discard(ifIndex)
+		if ids.Len() == 0 {
+			delete(m.ifaceNameToIdx, name)
+		}
 		delete(m.ifaceIdxToInfo, ifIndex)
 	}
 	log.Debug("Resync complete")
