@@ -91,18 +91,18 @@ done
 # Build manifest which includes both Calico and Operator CRDs.
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico and Tigera operator" > operator-crds.yaml
-for FILE in $(ls ../charts/tigera-operator/crds/*.yaml | xargs -n1 basename); do
-	${HELM} -n tigera-operator template \
+for FILE in $(ls ../charts/crd.projectcalico.org.v1/crds/*.yaml | xargs -n1 basename); do
+	${HELM} template \
 		--include-crds \
 		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
-	       ../charts/tigera-operator >> operator-crds.yaml
+	  --set version=$CALICO_VERSION \
+	  ../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
 done
 for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
+	  --set version=$CALICO_VERSION \
 		-f ../charts/values/calico.yaml >> operator-crds.yaml
 done
 
