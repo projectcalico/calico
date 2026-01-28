@@ -490,13 +490,6 @@ func (cc *controllerControl) InitControllers(
 			poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
 			cc.controllers["IPPool"] = poolController
 			cc.registerInformers(poolInformer, blockInformer)
-
-			// Register a controller to ensure policies have default fields set.
-			gnpInformer := calicoFactory.Projectcalico().V3().GlobalNetworkPolicies().Informer()
-			npInformer := calicoFactory.Projectcalico().V3().NetworkPolicies().Informer()
-			policyDefaulter := networkpolicy.NewPolicyDefaulter(ctx, v3c, gnpInformer, npInformer)
-			cc.controllers["PolicyDefaulter"] = policyDefaulter
-			cc.registerInformers(gnpInformer, npInformer)
 		}
 	}
 
