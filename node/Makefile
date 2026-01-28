@@ -355,9 +355,9 @@ test_image: .calico_test.created
 	$(DOCKER_BUILD) --build-arg ETCD_VERSION=$(ETCD_VERSION) -f calico_test/Dockerfile -t $(TEST_CONTAINER_NAME) calico_test
 	touch $@
 
-chart: ../bin/tigera-operator-$(GIT_VERSION).tgz ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
-../bin/tigera-operator-$(GIT_VERSION).tgz:
-	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
+chart: ../bin/calico-$(GIT_VERSION).tgz ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+../bin/calico-$(GIT_VERSION).tgz:
+	make -C ../ bin/calico-$(GIT_VERSION).tgz
 ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz:
 	make -C ../ bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
 
@@ -444,7 +444,7 @@ k8s-test:
 	$(MAKE) kind-k8st-cleanup
 
 .PHONY: kind-k8st-setup
-kind-k8st-setup: $(K8ST_IMAGE_TARS) ../bin/tigera-operator-$(GIT_VERSION).tgz ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz kind-cluster-create
+kind-k8st-setup: $(K8ST_IMAGE_TARS) ../bin/calico-$(GIT_VERSION).tgz ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz kind-cluster-create
 	KUBECONFIG=$(KIND_KUBECONFIG) KIND=$(KIND) ARCH=$(ARCH) GIT_VERSION=$(GIT_VERSION) ./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
