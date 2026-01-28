@@ -4978,6 +4978,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				pol = createPolicy(pol)
 
 				pc = nil
+				if NFTMode() && testOpts.ipv6 && !testOpts.dsr && testOpts.tunnel == "none" && testOpts.connTimeEnabled {
+					// In NFT mode, we add the kube-proxy tables.
+					tc.Felixes[0].Exec("nft", "add", "table", "ip", "kube-proxy")
+					tc.Felixes[0].Exec("nft", "add", "chain", "ip", "kube-proxy", "KUBE-TEST", "{ type filter hook forward priority 0 ; }")
+					tc.Felixes[0].Exec("nft", "add", "table", "ip6", "kube-proxy")
+					tc.Felixes[0].Exec("nft", "add", "chain", "ip6", "kube-proxy", "KUBE-TEST", "{ type filter hook forward priority 0 ; }")
+				}
 			})
 
 			AfterEach(func() {
@@ -5006,6 +5013,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				// Wait for BPF to be active.
 				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+				if NFTMode() && testOpts.ipv6 && !testOpts.dsr && testOpts.tunnel == "none" && testOpts.connTimeEnabled {
+					Eventually(func() string {
+						out, _ := tc.Felixes[0].ExecOutput("nft", "list", "tables")
+						return out
+					}, "15s", "1s").ShouldNot(ContainSubstring("kube-proxy"))
+				}
 			}
 
 			expectPongs := func() {
