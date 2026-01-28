@@ -135,12 +135,12 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 CHART_DESTINATION ?= ./bin
 
 # Build helm charts.
-chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz \
+chart: $(CHART_DESTINATION)/calico-$(GIT_VERSION).tgz \
 			 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
 
-$(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+$(CHART_DESTINATION)/calico-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/calico -type f)
 	mkdir -p $(CHART_DESTINATION)
-	bin/helm package ./charts/tigera-operator \
+	bin/helm package ./charts/calico \
 	--destination $(CHART_DESTINATION)/ \
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)

@@ -8,7 +8,7 @@ in the repository root.
 
 To make changes to the auto-generated manifests:
 
-1. Modify the source content in either `charts/tigera-operator/` or `charts/calico-manifests/`
+1. Modify the source content in either `charts/calico/` or `charts/calico-manifests/`
 
 2. Re-run code generation from the top level of this repository
 

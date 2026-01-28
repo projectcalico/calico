@@ -26,13 +26,13 @@ CALICO_VERSION=${PRODUCT_VERSION:-$defaultCalicoVersion}
 defaultRegistry=$($YQ .node.registry <../charts/calico-manifests/values.yaml)
 REGISTRY=${REGISTRY:-$defaultRegistry}
 
-defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/tigera-operator/values.yaml)
+defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/calico/values.yaml)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
-defaultOperatorRegistry=$($YQ .tigeraOperator.registry <../charts/tigera-operator/values.yaml)
+defaultOperatorRegistry=$($YQ .tigeraOperator.registry <../charts/calico/values.yaml)
 OPERATOR_REGISTRY=${OPERATOR_REGISTRY_OVERRIDE:-$defaultOperatorRegistry}
 
-defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
+defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/calico/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE_OVERRIDE:-$defaultOperatorImage}
 
 NON_HELM_MANIFEST_IMAGES="apiserver windows ctl csi node-driver-registrar dikastes flannel-migration-controller"
@@ -63,7 +63,7 @@ ${HELM} -n tigera-operator template \
 	--set tigeraOperator.registry=$OPERATOR_REGISTRY \
 	--set calicoctl.tag=$CALICO_VERSION \
 	--set calicoctl.image=$REGISTRY/ctl \
-	../charts/tigera-operator >> tigera-operator.yaml
+	../charts/calico >> tigera-operator.yaml
 
 ##########################################################################
 # Build CRD manifest.
@@ -131,7 +131,7 @@ done
 ##########################################################################
 ${HELM} template \
 	-n tigera-operator \
-	../charts/tigera-operator/ \
+	../charts/calico/ \
 	--output-dir ocp \
 	--no-hooks \
 	--set installation.kubernetesProvider=OpenShift \
@@ -145,8 +145,8 @@ ${HELM} template \
 	--set calicoctl.image=$REGISTRY/ctl \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.
-find ocp/tigera-operator -name "*.yaml" -print0 | xargs -0 sed -i -e 1,2d
-mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
+find ocp/calico -name "*.yaml" -print0 | xargs -0 sed -i -e 1,2d
+mv $(find ocp/calico -name "*.yaml") ocp/ && rm -r ocp/calico
 
 # Generating the upgrade manifest for OCP.
 # It excludes files specific to configuring the BPF dataplane, CRs (03-cr-*) and CRDs to maintain compatibility and not change the existing configuration in already installed clusters.
