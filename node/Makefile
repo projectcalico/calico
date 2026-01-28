@@ -358,10 +358,8 @@ test_image: .calico_test.created
 chart: ../bin/tigera-operator-$(GIT_VERSION).tgz ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
 ../bin/tigera-operator-$(GIT_VERSION).tgz:
 	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
-
 ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz:
 	make -C ../ bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
-
 
 # Tag to use for images built for e2e testing. This must match the image tag used in
 # tests/k8st/infra/calico_versions.yml
