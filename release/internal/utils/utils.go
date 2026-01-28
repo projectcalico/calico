@@ -51,8 +51,8 @@ const (
 	// TigeraOrg is the name of the Tigera organization.
 	TigeraOrg = "tigera"
 
-	// TigeraOperatorChart is the name of the Tigera Operator Helm chart.
-	TigeraOperatorChart = "tigera-operator"
+	// CalicoChart is the name of the Tigera Operator Helm chart.
+	CalicoChart = "calico"
 
 	// CalicoCRDsChart is the name of the crd.projectcalico.org/v1 CRD helm chart.
 	CalicoCRDsChart = "crd.projectcalico.org.v1"

@@ -49,7 +49,7 @@ TEST_DIR=./tests/k8st
 ARCH=${ARCH:-amd64}
 GIT_VERSION=${GIT_VERSION:-`git describe --tags --dirty --always --abbrev=12`}
 HELM=../bin/helm
-CHART=../bin/tigera-operator-$GIT_VERSION.tgz
+CHART=../bin/calico-$GIT_VERSION.tgz
 CRDS_CHART=../bin/crd.projectcalico.org.v1-$GIT_VERSION.tgz
 
 # kubectl binary.
