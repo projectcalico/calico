@@ -562,11 +562,11 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 		return fmt.Errorf("error copying tigera-operator chart to temp dir for building helm index: %w", err)
 	}
 
-	// Copy the calico-crds chart to the temp dir.
+	// Copy the crd.projectcalico.org.v1 chart to the temp dir.
 	srcCRDsChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion()))
 	destCRDsChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion()))
 	if err := utils.CopyFile(srcCRDsChart, destCRDsChart); err != nil {
-		return fmt.Errorf("error copying calico-crds chart to temp dir for building helm index: %w", err)
+		return fmt.Errorf("error copying CRD chart to temp dir for building helm index: %w", err)
 	}
 
 	// Build the new helm index.
