@@ -18,6 +18,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
 // Policy is a struct to hold policy config (which currently happens to also contain some K8s config)
@@ -152,7 +153,7 @@ type NetConf struct {
 
 	// CalicoAPIGroup specifies the API group to use when connecting to the Kubernetes API server.
 	// If not specified, the default value of "crd.projectcalico.org" is used.
-	CalicoAPIGroup string `json:"calico_api_group,omitempty"`
+	CalicoAPIGroup resources.BackingAPIGroup `json:"calico_api_group,omitempty"`
 }
 
 // Runtime Config is provided by kubernetes

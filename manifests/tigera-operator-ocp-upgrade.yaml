@@ -740,10 +740,10 @@ spec:
         apiVersions: ["v3"]
         operations: ["CREATE", "UPDATE"]
         resources:
-        - networkpolicies
-        - globalnetworkpolicies
-        - stagednetworkpolicies
-        - stagedglobalnetworkpolicies
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
 ---
 # This MutatingAdmissionPolicy performs defaulting for Calico policy types.
 apiVersion: admissionregistration.k8s.io/v1beta1
@@ -764,10 +764,10 @@ spec:
         apiVersions: ["v3"]
         operations: ["CREATE", "UPDATE"]
         resources:
-        - networkpolicies
-        - globalnetworkpolicies
-        - stagednetworkpolicies
-        - stagedglobalnetworkpolicies
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
   failurePolicy: Fail
   reinvocationPolicy: IfNeeded
   variables:

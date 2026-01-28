@@ -90,7 +90,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 				},
 				VersionedAPIPath: "/apis",
 			}
-			client = resources.NewBlockAffinityClientV3(fakeREST, false)
+			client = resources.NewBlockAffinityClientV3(fakeREST, resources.BackingAPIGroupV1)
 		})
 
 		It("should list all", func() {
@@ -180,7 +180,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 				},
 				VersionedAPIPath: "/apis",
 			}
-			client = resources.NewBlockAffinityClientV1(fakeREST, false)
+			client = resources.NewBlockAffinityClientV1(fakeREST, resources.BackingAPIGroupV1)
 		})
 
 		It("should list all", func() {
