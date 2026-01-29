@@ -58,7 +58,7 @@ var (
 	})
 	conntrackGaugeMaglevTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_maglev_entries_total",
-		Help: "Total number of Maglev entries in conntrack table.",
+		Help: "Total number of Maglev entries in conntrack table broken down by IP version, and, whether destination backend is remote (we're acting as a frontend) or local (we're the backend node).",
 	}, []string{"destination", "ip_family"})
 	dummyKeyV6 = NewKeyV6(0, net.IPv6zero, 0, net.IPv6zero, 0)
 	dummyKey   = NewKey(0, net.IPv4zero, 0, net.IPv4zero, 0)
