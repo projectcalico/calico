@@ -6,7 +6,7 @@ metadata:
     name: tigera-operator
     pod-security.kubernetes.io/enforce: privileged
 ---
-# Source: tigera-operator/templates/tigera-operator/02-serviceaccount-tigera-operator.yaml
+# Source: calico/templates/tigera-operator/02-serviceaccount-tigera-operator.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -17,7 +17,7 @@ metadata:
 imagePullSecrets:
   []
 ---
-# Source: tigera-operator/templates/tigera-operator/02-role-tigera-operator-secrets.yaml
+# Source: calico/templates/tigera-operator/02-role-tigera-operator-secrets.yaml
 # Permissions required to manipulate operator secrets for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -35,7 +35,7 @@ rules:
       - update
       - delete
 ---
-# Source: tigera-operator/templates/tigera-operator/02-role-tigera-operator.yaml
+# Source: calico/templates/tigera-operator/02-role-tigera-operator.yaml
 # Permissions required when running the operator for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -520,7 +520,7 @@ rules:
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
 ---
-# Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator.yaml
+# Source: calico/templates/tigera-operator/02-rolebinding-tigera-operator.yaml
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -536,7 +536,7 @@ roleRef:
   name: tigera-operator
   apiGroup: rbac.authorization.k8s.io
 ---
-# Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator-secrets.yaml
+# Source: calico/templates/tigera-operator/02-rolebinding-tigera-operator-secrets.yaml
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -553,7 +553,7 @@ roleRef:
   name: tigera-operator-secrets
   apiGroup: rbac.authorization.k8s.io
 ---
-# Source: tigera-operator/templates/tigera-operator/02-tigera-operator.yaml
+# Source: calico/templates/tigera-operator/02-tigera-operator.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
