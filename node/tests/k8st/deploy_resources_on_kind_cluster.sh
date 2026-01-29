@@ -50,7 +50,6 @@ ARCH=${ARCH:-amd64}
 GIT_VERSION=${GIT_VERSION:-`git describe --tags --dirty --always --abbrev=12`}
 HELM=../bin/helm
 CHART=../bin/tigera-operator-$GIT_VERSION.tgz
-CRDS_CHART=../bin/crd.projectcalico.org.v1-$GIT_VERSION.tgz
 
 # kubectl binary.
 : ${kubectl:=../hack/test/kind/kubectl}
@@ -70,9 +69,8 @@ echo "Install additional permissions for BGP password"
 ${kubectl} apply -f $TEST_DIR/infra/additional-rbac.yaml
 echo
 
-echo "Install Calico CRDs helm chart"
-$HELM install calico-crds $CRDS_CHART -n default
-
+# CRDs are already created prior to reaching this script from within lib.Makefile as part
+# of kind cluster creation.
 echo "Install Calico using the helm chart"
 $HELM install calico $CHART -f $TEST_DIR/infra/values.yaml -n tigera-operator --create-namespace
 
