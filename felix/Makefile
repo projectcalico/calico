@@ -61,9 +61,9 @@ EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/c
 include ../lib.Makefile
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a cross-compilation run.
+ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
+# Required for eBPF support.
+# We need to force target arch build image to be used in a cross-compilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -121,11 +121,16 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
-# Currently CGO can be enabled in ARM64 and AMD64 builds.
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
+# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
 CGO_ENABLED=1
+# Normalize userspace types to ensure consistency across architectures.
+ARCH_CGO_CFLAGS=
+ifeq ($(ARCH),ppc64le)
+	ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
+endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 FV_RACE_DETECTOR_ENABLED?=true
 BUILD_TARGETS+=build-bpf
 else
@@ -152,6 +157,7 @@ clone-libbpf: $(LIBBPF_FILE_CREATED)
 
 $(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
+	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
@@ -167,7 +173,7 @@ bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le ))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
