@@ -18,29 +18,20 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
 	CalicoNodeStatusResourceName = "CalicoNodeStatuses"
-	CalicoNodeStatusCRDName      = "CalicoNodeStatuses.crd.projectcalico.org"
 )
 
-func NewCalicoNodeStatusClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
+func NewCalicoNodeStatusClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
 		restClient:      r,
-		name:            CalicoNodeStatusCRDName,
 		resource:        CalicoNodeStatusResourceName,
-		description:     "CalicoNodeStatus",
 		k8sResourceType: reflect.TypeOf(apiv3.CalicoNodeStatus{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindCalicoNodeStatus,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(apiv3.CalicoNodeStatusList{}),
-		resourceKind: apiv3.KindCalicoNodeStatus,
+		k8sListType:     reflect.TypeOf(apiv3.CalicoNodeStatusList{}),
+		kind:            apiv3.KindCalicoNodeStatus,
+		apiGroup:        group,
 	}
 }
