@@ -2609,7 +2609,7 @@ spec:
                   maxItems: 2
                   minItems: 1
                   type: array
-                  uniqueItems: true
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -3694,7 +3694,7 @@ spec:
                   maxItems: 2
                   minItems: 1
                   type: array
-                  uniqueItems: true
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -4163,7 +4163,7 @@ spec:
                   maxItems: 2
                   minItems: 1
                   type: array
-                  uniqueItems: true
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -4412,7 +4412,7 @@ spec:
                   maxItems: 2
                   minItems: 1
                   type: array
-                  uniqueItems: true
+                  x-kubernetes-list-type: set
                 stagedAction:
                   enum:
                     - Set
@@ -4841,7 +4841,7 @@ spec:
                   maxItems: 2
                   minItems: 1
                   type: array
-                  uniqueItems: true
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
