@@ -109,15 +109,17 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 
 var _ = infrastructure.DatastoreDescribe("NATPortRange rendering test", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		infra  infrastructure.DatastoreInfra
-		tc     infrastructure.TopologyContainers
-		client client.Interface
+		infra       infrastructure.DatastoreInfra
+		tc          infrastructure.TopologyContainers
+		client      client.Interface
+		dumpedDiags bool
 	)
 
 	BeforeEach(func() {
 		var err error
 		infra = getInfra()
 
+		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.IPIPMode = api.IPIPModeNever
 		opts.EnableIPv6 = true
@@ -134,6 +136,31 @@ var _ = infrastructure.DatastoreDescribe("NATPortRange rendering test", []apicon
 		ippool.Spec.NATOutgoing = true
 		ippool, err = client.IPPools().Create(ctx, ippool, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// Utility function to dump diags if the test failed.  Should be called in the inner-most
+	// AfterEach() to dump diags before the test is torn down.  Only the first call for a given
+	// test has any effect.
+	dumpDiags := func() {
+		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
+			return
+		}
+		if NFTMode() {
+			logNFTDiags(tc.Felixes[0])
+		} else {
+			iptSave, err := tc.Felixes[0].ExecOutput("iptables-save", "-c")
+			if err == nil {
+				log.Info("iptables-save:\n" + iptSave)
+			}
+		}
+		dumpedDiags = true
+		infra.DumpErrorData()
+	}
+
+	AfterEach(func() {
+		dumpDiags()
+		tc.Stop()
+		infra.Stop()
 	})
 
 	It("should have expected rendering", func() {
