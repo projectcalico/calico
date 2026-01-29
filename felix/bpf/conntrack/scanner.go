@@ -246,19 +246,21 @@ func (s *Scanner) Scan() {
 		used++
 		conntrackCounterCleaned.Inc()
 
-		if ctFlags&v4.FlagMaglev != 0 {
-			if ctFlags&v4.FlagExtLocal != 0 {
-				maglevEntriesToLocal++
-			} else if ctFlags&v4.FlagNATNPFwd != 0 {
-				maglevEntriesToRemote++
-			}
-		}
-
 		if debug {
 			log.WithFields(log.Fields{
 				"key":   ctKey,
 				"entry": ctVal,
 			}).Debug("Examining conntrack entry")
+		}
+
+		if ctFlags&v4.FlagMaglev != 0 {
+			if ctFlags&v4.FlagExtLocal != 0 {
+				log.Debug("Conntrack is local maglev connection. Incrementing maglev entries counter")
+				maglevEntriesToLocal++
+			} else if ctFlags&v4.FlagNATNPFwd != 0 {
+				log.Debug("Conntrack is remote maglev connection. Incrementing maglev entries counter")
+				maglevEntriesToRemote++
+			}
 		}
 
 		for _, scanner := range s.scanners {
@@ -342,6 +344,7 @@ func (s *Scanner) Scan() {
 	if err != nil {
 		log.WithError(err).Warn("Couldn't get (local) Maglev conntracks metric, will not update it on this iteration")
 	} else {
+		log.WithField("value", maglevEntriesToLocal).Debug("Setting local maglev conntrack entries gauge")
 		maglevConntracksToLocalBackend.Set(float64(maglevEntriesToLocal))
 	}
 
@@ -349,6 +352,7 @@ func (s *Scanner) Scan() {
 	if err != nil {
 		log.WithError(err).Warn("Couldn't get (remote) Maglev conntracks metric, will not update it on this iteration")
 	} else {
+		log.WithField("value", maglevEntriesToRemote).Debug("Setting remote maglev conntrack entries gauge")
 		maglevConntracksToRemoteBackend.Set(float64(maglevEntriesToRemote))
 	}
 
