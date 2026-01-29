@@ -52,6 +52,12 @@ var legacyCiphers = []uint16{
 	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 }
 
+// supported TLS Versions
+var tlsVersions = []uint16{
+	tls.VersionTLS12,
+	tls.VersionTLS13,
+}
+
 // DefaultCiphers returns the ciphers supported by TLS 1.3 and the PFS ciphers supported by TLS 1.2.
 func DefaultCiphers() []uint16 {
 	return append(tls13Ciphers, tls12Ciphers...)
@@ -70,6 +76,20 @@ func supportedCipherMap() map[string]uint16 {
 	addCiphers(legacyCiphers)
 
 	return cipherMap
+}
+
+func SupportedTLSVersionMap() map[string]uint16 {
+	tlsVersionMap := make(map[string]uint16)
+	addTlsVersions := func(versions []uint16) {
+		for _, version := range versions {
+			versionName := tls.VersionName(version)
+			tlsVersionMap[versionName] = version
+		}
+	}
+
+	addTlsVersions(tlsVersions)
+
+	return tlsVersionMap
 }
 
 // ParseTLSCiphers takes a comma-separated string of cipher names and returns a slice of uint16 representing the ciphers.
@@ -94,6 +114,23 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	}
 
 	return result, nil
+}
+
+// ParseTLSVersion takes a comma-separated string of cipher names and returns a uint16 representing the TLS Version.
+// If version is empty, it returns the default TLS Version.
+// It returns an error if any of the tls version names are not supported.
+func ParseTLSVersion(version string) (uint16, error) {
+	if version == "" {
+		return tls.VersionTLS12, nil
+	}
+
+	supportedVersions := SupportedTLSVersionMap()
+
+	if v, ok := supportedVersions[strings.TrimSpace(version)]; ok {
+		return v, nil
+	}
+
+	return 0, fmt.Errorf("unsupported TLS version: %s", version)
 }
 
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
