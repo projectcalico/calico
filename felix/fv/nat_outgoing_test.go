@@ -121,8 +121,6 @@ var _ = infrastructure.DatastoreDescribe("NATPortRange rendering test", []apicon
 
 		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
-		opts.IPIPMode = api.IPIPModeNever
-		opts.EnableIPv6 = true
 
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_NATPortRange": "32768:65535",
