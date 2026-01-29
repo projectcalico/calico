@@ -20,19 +20,19 @@ if [[ ! -f $YQ ]]; then
 fi
 
 # Get versions to install.
-defaultCalicoVersion=$($YQ .version <../charts/calico/values.yaml)
+defaultCalicoVersion=$($YQ .version <../charts/calico-manifests/values.yaml)
 CALICO_VERSION=${PRODUCT_VERSION:-$defaultCalicoVersion}
 
-defaultRegistry=$($YQ .node.registry <../charts/calico/values.yaml)
+defaultRegistry=$($YQ .node.registry <../charts/calico-manifests/values.yaml)
 REGISTRY=${REGISTRY:-$defaultRegistry}
 
-defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/tigera-operator/values.yaml)
+defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/calico/values.yaml)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
-defaultOperatorRegistry=$($YQ .tigeraOperator.registry <../charts/tigera-operator/values.yaml)
+defaultOperatorRegistry=$($YQ .tigeraOperator.registry <../charts/calico/values.yaml)
 OPERATOR_REGISTRY=${OPERATOR_REGISTRY_OVERRIDE:-$defaultOperatorRegistry}
 
-defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
+defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/calico/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE_OVERRIDE:-$defaultOperatorImage}
 
 NON_HELM_MANIFEST_IMAGES="apiserver windows ctl csi node-driver-registrar dikastes flannel-migration-controller"
@@ -63,7 +63,7 @@ ${HELM} -n tigera-operator template \
 	--set tigeraOperator.registry=$OPERATOR_REGISTRY \
 	--set calicoctl.tag=$CALICO_VERSION \
 	--set calicoctl.image=$REGISTRY/ctl \
-	../charts/tigera-operator >> tigera-operator.yaml
+	../charts/calico >> tigera-operator.yaml
 
 ##########################################################################
 # Build CRD manifest.
@@ -71,19 +71,19 @@ ${HELM} -n tigera-operator template \
 # This manifest is used in "Calico the hard way" documentation.
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
-for FILE in $(ls ../charts/calico/crds); do
-	${HELM} template ../charts/calico \
+for FILE in $(ls ../charts/calico-manifests/crds); do
+	${HELM} template ../charts/calico-manifests \
 		--include-crds \
 		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
-	        --set node.registry=$REGISTRY \
-	        --set calicoctl.registry=$REGISTRY \
-	        --set typha.registry=$REGISTRY \
-	        --set cni.registry=$REGISTRY \
-	        --set kubeControllers.registry=$REGISTRY \
-	        --set flannelMigration.registry=$REGISTRY \
-	        --set dikastes.registry=$REGISTRY \
-	        --set csi-driver.registry=$REGISTRY \
+		--set version=$CALICO_VERSION \
+		--set node.registry=$REGISTRY \
+		--set calicoctl.registry=$REGISTRY \
+		--set typha.registry=$REGISTRY \
+		--set cni.registry=$REGISTRY \
+		--set kubeControllers.registry=$REGISTRY \
+		--set flannelMigration.registry=$REGISTRY \
+		--set dikastes.registry=$REGISTRY \
+		--set csi-driver.registry=$REGISTRY \
 		-f ../charts/values/calico.yaml >> crds.yaml
 done
 
@@ -91,18 +91,18 @@ done
 # Build manifest which includes both Calico and Operator CRDs.
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico and Tigera operator" > operator-crds.yaml
-for FILE in $(ls ../charts/tigera-operator/crds/*.yaml | xargs -n1 basename); do
-	${HELM} -n tigera-operator template \
+for FILE in $(ls ../charts/crd.projectcalico.org.v1/crds/*.yaml | xargs -n1 basename); do
+	${HELM} template \
 		--include-crds \
 		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
-	       ../charts/tigera-operator >> operator-crds.yaml
+		--set version=$CALICO_VERSION \
+		../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
 done
-for FILE in $(ls ../charts/calico/crds); do
-	${HELM} template ../charts/calico \
+for FILE in $(ls ../charts/calico-manifests/crds); do
+	${HELM} template ../charts/calico-manifests \
 		--include-crds \
 		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
+		--set version=$CALICO_VERSION \
 		-f ../charts/values/calico.yaml >> operator-crds.yaml
 done
 
@@ -118,8 +118,8 @@ VALUES_FILES=$(cd ../charts/values && find . -type f -name "*.yaml")
 for FILE in $VALUES_FILES; do
 	echo "Generating manifest from charts/values/$FILE"
 	${HELM} -n kube-system template \
-		../charts/calico \
-	        --set version=$CALICO_VERSION \
+		../charts/calico-manifests \
+		--set version=$CALICO_VERSION \
 		-f ../charts/values/$FILE > $FILE
 done
 
@@ -131,7 +131,7 @@ done
 ##########################################################################
 ${HELM} template \
 	-n tigera-operator \
-	../charts/tigera-operator/ \
+	../charts/calico/ \
 	--output-dir ocp \
 	--no-hooks \
 	--set installation.kubernetesProvider=OpenShift \
@@ -145,8 +145,8 @@ ${HELM} template \
 	--set calicoctl.image=$REGISTRY/ctl \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.
-find ocp/tigera-operator -name "*.yaml" -print0 | xargs -0 sed -i -e 1,2d
-mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
+find ocp/calico -name "*.yaml" -print0 | xargs -0 sed -i -e 1,2d
+mv $(find ocp/calico -name "*.yaml") ocp/ && rm -r ocp/calico
 
 # Generating the upgrade manifest for OCP.
 # It excludes files specific to configuring the BPF dataplane, CRs (03-cr-*) and CRDs to maintain compatibility and not change the existing configuration in already installed clusters.
