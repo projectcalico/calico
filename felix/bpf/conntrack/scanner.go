@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/jitter"
@@ -54,6 +56,10 @@ var (
 		Name: "felix_bpf_conntrack_sweep_duration",
 		Help: "Conntrack sweep execution time (ns)",
 	})
+	conntrackGaugeMaglevTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_maglev_entries_total",
+		Help: "Total number of Maglev entries in conntrack table broken down by IP version, and, whether destination backend is remote (we're acting as a frontend) or local (we're the backend node).",
+	}, []string{"destination", "ip_family"})
 	dummyKeyV6 = NewKeyV6(0, net.IPv6zero, 0, net.IPv6zero, 0)
 	dummyKey   = NewKey(0, net.IPv4zero, 0, net.IPv4zero, 0)
 )
@@ -64,6 +70,7 @@ func init() {
 	prometheus.MustRegister(conntrackGaugeCleaned)
 	prometheus.MustRegister(conntrackCounterCleaned)
 	prometheus.MustRegister(conntrackGaugeSweepDuration)
+	prometheus.MustRegister(conntrackGaugeMaglevTotal)
 }
 
 // ScanVerdict represents the set of values returned by EntryScan
@@ -116,6 +123,7 @@ type Scanner struct {
 	bpfCleaner                   Cleaner
 	versionHelper                ipVersionHelper
 	revNATKeyToFwdNATInfo        map[KeyInterface]cleanupv1.ValueInterface
+	ipFamily                     int
 
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
@@ -142,6 +150,7 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
 		bpfCleaner:                   bpfCleaner,
+		ipFamily:                     ipVersion,
 		// revNATKeyToFwdNATInfo stores the opposite direction of the mapping of the cleanup bpf map.
 		// <reverseNATKey> => <forwardNATKey>:<forwardEntryTimeStamp>:<reverseEntryTimestamp>
 		revNATKeyToFwdNATInfo: make(map[KeyInterface]cleanupv1.ValueInterface),
@@ -223,6 +232,7 @@ func (s *Scanner) Scan() {
 	used := 0
 	cleaned := 0
 	numExpired := 0
+	maglevEntriesToLocal, maglevEntriesToRemote := 0, 0
 
 	if s.ctCleanupMap != nil {
 		s.ctCleanupMap.Desired().DeleteAll()
@@ -231,9 +241,18 @@ func (s *Scanner) Scan() {
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
 		ctVal := s.valueFromBytes(v)
+		ctFlags := ctVal.Flags()
 
 		used++
 		conntrackCounterCleaned.Inc()
+
+		if ctFlags&v4.FlagMaglev != 0 {
+			if ctFlags&v4.FlagExtLocal != 0 {
+				maglevEntriesToLocal++
+			} else if ctFlags&v4.FlagNATNPFwd != 0 {
+				maglevEntriesToRemote++
+			}
+		}
 
 		if debug {
 			log.WithFields(log.Fields{
@@ -318,6 +337,20 @@ func (s *Scanner) Scan() {
 
 	// Run the bpf cleaner to process the remaining entries in the cleanup map.
 	cleaned += s.runBPFCleaner()
+
+	maglevConntracksToLocalBackend, err := conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local", strconv.Itoa(s.ipFamily))
+	if err != nil {
+		log.WithError(err).Warn("Couldn't get (local) Maglev conntracks metric, will not update it on this iteration")
+	} else {
+		maglevConntracksToLocalBackend.Set(float64(maglevEntriesToLocal))
+	}
+
+	maglevConntracksToRemoteBackend, err := conntrackGaugeMaglevTotal.GetMetricWithLabelValues("remote", strconv.Itoa(s.ipFamily))
+	if err != nil {
+		log.WithError(err).Warn("Couldn't get (remote) Maglev conntracks metric, will not update it on this iteration")
+	} else {
+		maglevConntracksToRemoteBackend.Set(float64(maglevEntriesToRemote))
+	}
 
 	conntrackCounterSweeps.Inc()
 	conntrackGaugeUsed.Set(float64(used))
