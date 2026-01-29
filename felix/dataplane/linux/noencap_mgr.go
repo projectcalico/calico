@@ -111,11 +111,6 @@ func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 		if msg.Hostname == m.hostname && m.ipVersion == 6 {
 			m.routesNeedUpdate("")
 		}
-	case *proto.HostMetadataV4V6Remove:
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
-		if msg.Hostname == m.hostname {
-			m.routesNeedUpdate("")
-		}
 	default:
 		m.routeMgr.OnUpdate(msg)
 	}
