@@ -21,7 +21,7 @@ import (
 )
 
 var _ = Describe("k8s sync label validation tests", func() {
-	client := NewKubeControllersConfigClient(nil, nil).(*customK8sResourceClient)
+	client := NewKubeControllersConfigClient(nil, BackingAPIGroupV1).(*customResourceClient)
 	It("should accept enabled sync labels", func() {
 		res := &apiv3.KubeControllersConfiguration{
 			Spec: apiv3.KubeControllersConfigurationSpec{

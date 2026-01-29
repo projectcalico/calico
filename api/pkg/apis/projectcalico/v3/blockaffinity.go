@@ -23,6 +23,7 @@ const (
 	KindBlockAffinityList = "BlockAffinityList"
 )
 
+// +kubebuilder:validation:Enum="";confirmed;pending;pendingDeletion
 type BlockAffinityState string
 
 const (
@@ -34,14 +35,15 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster,shortName={affinity,affinities}
+// +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The block CIDR"
+// +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".spec.node",description="The node the block is affine to"
 
 // BlockAffinity maintains a block affinity's state
 type BlockAffinity struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the BlockAffinity.
-	Spec BlockAffinitySpec `json:"spec,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              BlockAffinitySpec `json:"spec"`
 }
 
 // BlockAffinitySpec contains the specification for a BlockAffinity resource.
@@ -52,13 +54,19 @@ type BlockAffinitySpec struct {
 	// The node that this block affinity is assigned to.
 	Node string `json:"node"`
 
+	// The type of affinity.
+	Type string `json:"type,omitempty"`
+
 	// The CIDR range this block affinity references.
+	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:Required
 	CIDR string `json:"cidr"`
 
 	// Deleted indicates whether or not this block affinity is disabled and is
 	// used as part of race-condition prevention. When set to true, clients
 	// should treat this block as if it does not exist.
-	Deleted bool `json:"deleted,omitempty"`
+	// +kubebuilder:default=false
+	Deleted bool `json:"deleted"`
 }
 
 // +genclient:nonNamespaced
