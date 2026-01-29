@@ -4006,6 +4006,11 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"types": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Types indicates whether this policy applies to ingress, or to egress, or to both.  When not explicitly specified (and so the value on creation is empty or nil), Calico defaults Types according to what Ingress and Egress rules are present in the policy.  The default is:\n\n- [ PolicyTypeIngress ], if there are no Egress rules (including the case where there are\n  also no Ingress rules)\n\n- [ PolicyTypeEgress ], if there are Egress rules but no Ingress rules\n\n- [ PolicyTypeIngress, PolicyTypeEgress ], if there are both Ingress and Egress rules.\n\nWhen the policy is read back again, Types will always be one of these values, never empty or nil.",
 							Type:        []string{"array"},
@@ -5708,6 +5713,11 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 						},
 					},
 					"types": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Types indicates whether this policy applies to ingress, or to egress, or to both.  When not explicitly specified (and so the value on creation is empty or nil), Calico defaults Types according to what Ingress and Egress are present in the policy.  The default is:\n\n- [ PolicyTypeIngress ], if there are no Egress rules (including the case where there are\n  also no Ingress rules)\n\n- [ PolicyTypeEgress ], if there are Egress rules but no Ingress rules\n\n- [ PolicyTypeIngress, PolicyTypeEgress ], if there are both Ingress and Egress rules.\n\nWhen the policy is read back again, Types will always be one of these values, never empty or nil.",
 							Type:        []string{"array"},
@@ -6632,6 +6642,11 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 						},
 					},
 					"types": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Types indicates whether this policy applies to ingress, or to egress, or to both.  When not explicitly specified (and so the value on creation is empty or nil), Calico defaults Types according to what Ingress and Egress rules are present in the policy.  The default is:\n\n- [ PolicyTypeIngress ], if there are no Egress rules (including the case where there are\n  also no Ingress rules)\n\n- [ PolicyTypeEgress ], if there are Egress rules but no Ingress rules\n\n- [ PolicyTypeIngress, PolicyTypeEgress ], if there are both Ingress and Egress rules.\n\nWhen the policy is read back again, Types will always be one of these values, never empty or nil.",
 							Type:        []string{"array"},
@@ -6844,6 +6859,11 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref comm
 						},
 					},
 					"policyTypes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "List of rule types that the NetworkPolicy relates to. Valid options are Ingress, Egress, or Ingress,Egress. If this field is not specified, it will default based on the existence of Ingress or Egress rules; policies that contain an Egress section are assumed to affect Egress, and all policies (whether or not they contain an Ingress section) are assumed to affect Ingress. If you want to write an egress-only policy, you must explicitly specify policyTypes [ \"Egress\" ]. Likewise, if you want to write a policy that specifies that no egress is allowed, you must specify a policyTypes value that include \"Egress\" (since such a policy would not include an Egress section and would otherwise default to just [ \"Ingress\" ]). This field is beta-level in 1.8",
 							Type:        []string{"array"},
@@ -7021,6 +7041,11 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"types": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Types indicates whether this policy applies to ingress, or to egress, or to both.  When not explicitly specified (and so the value on creation is empty or nil), Calico defaults Types according to what Ingress and Egress are present in the policy.  The default is:\n\n- [ PolicyTypeIngress ], if there are no Egress rules (including the case where there are\n  also no Ingress rules)\n\n- [ PolicyTypeEgress ], if there are Egress rules but no Ingress rules\n\n- [ PolicyTypeIngress, PolicyTypeEgress ], if there are both Ingress and Egress rules.\n\nWhen the policy is read back again, Types will always be one of these values, never empty or nil.",
 							Type:        []string{"array"},

@@ -1,3 +1,6 @@
+# The tests in this directory use the projectcalico.org/v3 API group for CRDs.
+CALICO_API_GROUP ?= projectcalico.org/v3
+
 # If ../metadata.mk exists, we're running this logic from within the calico repository.
 # If it does not, then we're in the api repo and we should use the local metadata.mk.
 ifneq ("$(wildcard ../metadata.mk)", "")
