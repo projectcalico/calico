@@ -1908,6 +1908,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						familyInt = 6
 					}
 
+					felixWithMaglevBackend := 0
+					initialIngressFelix := 1
+					failoverIngressFelix := 2
+
 					newConntrackKey := func(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, family string) conntrack.KeyInterface {
 						var key conntrack.KeyInterface
 						// cmp := bytes.Compare(srcIP, dstIP)
@@ -1984,7 +1988,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 					}
 
-					probeMaglevConntrackMetric := func(felixes []*infrastructure.Felix, metricName string) []int {
+					probeMaglevConntrackMetric := func(metricName string, felixes ...*infrastructure.Felix) []int {
 						counts := make([]int, 0)
 						for _, f := range felixes {
 							ctCount, err := f.PromMetric(metricName).Int()
@@ -2043,11 +2047,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
 
 						// Create service with maglev annotation
-						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0,
+						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[felixWithMaglevBackend][0], 80, tgtPort, 0,
 							testOpts.protocol, []string{externalIP})
 						testSvc.Annotations = map[string]string{
 							"lb.projectcalico.org/external-traffic-strategy": "maglev",
 						}
+
 						testSvcNamespace = testSvc.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
@@ -2099,30 +2104,37 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cmdCleanRt = append(ipRoute, "route", "del", externalIP)
 						_ = externalClient.ExecMayFail(strings.Join(cmdCleanRt, ""))
 
-						cmdCIP := append(ipRoute, "route", "add", clusterIP, "via", felixIP(1))
+						cmdCIP := append(ipRoute, "route", "add", clusterIP, "via", felixIP(initialIngressFelix))
 						externalClient.Exec(cmdCIP...)
-						cmdEIP := append(ipRoute, "route", "add", externalIP, "via", felixIP(1))
+						cmdEIP := append(ipRoute, "route", "add", externalIP, "via", felixIP(initialIngressFelix))
 						externalClient.Exec(cmdEIP...)
 					})
 
 					It("should have connectivity from external client to maglev backend via cluster IP and external IP", func() {
-						Eventually(func() []int {
-							return probeMaglevConntrackMetric(tc.Felixes, fmt.Sprintf("felix_bpf_conntrack_maglev_entries_total{destination=\"local\",ip_family=\"%d\"}", familyInt))
-						}, "10s", "1s").Should(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev local-conntrack metric to start at 0")
-						Eventually(func() []int {
-							return probeMaglevConntrackMetric(tc.Felixes, fmt.Sprintf("felix_bpf_conntrack_maglev_entries_total{destination=\"remote\",ip_family=\"%d\"}", familyInt))
-						}, "10s", "1s").Should(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev remote-conntrack metric to start at 0")
+						probeMaglevLocalConntrackMetricFunc := func(felixes ...*infrastructure.Felix) func() []int {
+							return func() []int {
+								return probeMaglevConntrackMetric(fmt.Sprintf("felix_bpf_conntrack_maglev_entries_total{destination=\"local\",ip_family=\"%d\"}", familyInt), felixes...)
+							}
+						}
+						probeMaglevRemoteConntrackMetricFunc := func(felixes ...*infrastructure.Felix) func() []int {
+							return func() []int {
+								return probeMaglevConntrackMetric(fmt.Sprintf("felix_bpf_conntrack_maglev_entries_total{destination=\"remote\",ip_family=\"%d\"}", familyInt), felixes...)
+							}
+						}
+
+						Eventually(probeMaglevLocalConntrackMetricFunc(tc.Felixes...), "10s", "1s").Should(Equal([]int{0, 0, 0}), "Expected maglev local-conntrack metric to start at 0 for all Felixes")
+						Eventually(probeMaglevRemoteConntrackMetricFunc(tc.Felixes...), "10s", "1s").Should(Equal([]int{0, 0, 0}), "Expected maglev remote-conntrack metric to start at 0 for all Felixes")
 
 						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
 						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
 
-						Eventually(func() []int {
-							return probeMaglevConntrackMetric(tc.Felixes, fmt.Sprintf("felix_bpf_conntrack_maglev_entries_total{destination=\"local\",ip_family=\"%d\"}", familyInt))
-						}, "10s").ShouldNot(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev local-conntrack metric to have increased")
-						Eventually(func() []int {
-							return probeMaglevConntrackMetric(tc.Felixes, fmt.Sprintf("felix_bpf_conntrack_maglev_entries_total{destination=\"remote\",ip_family=\"%d\"}", familyInt))
-						}, "10s", "1s").ShouldNot(BeEquivalentTo([]int{0, 0, 0}), "Expected maglev remote-conntrack metric to have increased")
+						Eventually(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[initialIngressFelix]), "10s", "1s").Should(Equal([]int{2}), "Expected maglev-ingress felix to increment the remote-conntracks metric")
+						Eventually(probeMaglevLocalConntrackMetricFunc(tc.Felixes[felixWithMaglevBackend]), "10s", "1s").Should(Equal([]int{2}), "Expected felix with maglev backend to increment the local-conntracks metric")
+						Consistently(probeMaglevLocalConntrackMetricFunc(tc.Felixes[initialIngressFelix])).Should(Equal([]int{0}), "Expected ingress-felix to only have remote maglev conntracks, but saw metric for local maglev conntracks go up")
+						Consistently(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[felixWithMaglevBackend])).Should(Equal([]int{0}), "Expected backing felix to only have local maglev conntracks, but saw metric for remote maglev conntracks go up")
+						Consistently(probeMaglevLocalConntrackMetricFunc(tc.Felixes[failoverIngressFelix])).Should(Equal([]int{0}), "No failover occurred, but an unrelated Felix's local maglev prom metrics went up")
+						Consistently(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[failoverIngressFelix])).Should(Equal([]int{0}), "No failover occurred, but an unrelated Felix's remote maglev prom metrics went up")
 					})
 
 					testFailover := func(serviceIP string) {
