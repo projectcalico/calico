@@ -344,7 +344,10 @@ func getOrCreateSnapshot(ctx context.Context, kcc clientv3.KubeControllersConfig
 // mergeConfig takes the environment variables, and resulting config
 func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControllersConfigurationSpec) (RunConfig, v3.KubeControllersConfigurationStatus) {
 	var rCfg RunConfig
-	status := v3.KubeControllersConfigurationStatus{EnvironmentVars: map[string]string{}}
+	status := v3.KubeControllersConfigurationStatus{
+		RunningConfig:   &v3.KubeControllersConfigurationSpec{},
+		EnvironmentVars: map[string]string{},
+	}
 	rc := &rCfg.Controllers
 
 	mergeLogLevel(envVars, &status, &rCfg, apiCfg)
