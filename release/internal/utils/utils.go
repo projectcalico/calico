@@ -54,6 +54,9 @@ const (
 	// TigeraOperatorChart is the name of the Tigera Operator Helm chart.
 	TigeraOperatorChart = "tigera-operator"
 
+	// CalicoCRDsChart is the name of the crd.projectcalico.org/v1 CRD helm chart.
+	CalicoCRDsChart = "crd.projectcalico.org.v1"
+
 	// CalicoHelmRepoURL is the URL for the Calico Helm charts.
 	CalicoHelmRepoURL = "https://docs.tigera.io/calico/charts"
 )

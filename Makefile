@@ -103,7 +103,7 @@ get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERA
 	@echo ==============================================================================================================
 	@echo === Pulling new operator CRDs from $(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) branch $(OPERATOR_BRANCH) ===
 	@echo ==============================================================================================================
-	cd ./charts/tigera-operator/crds/ && \
+	cd ./charts/crd.projectcalico.org.v1/templates/ && \
 	for file in operator.tigera.io_*.yaml; do \
 		echo "downloading $$file from operator repo"; \
 		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; \
@@ -135,10 +135,19 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 CHART_DESTINATION ?= ./bin
 
 # Build helm charts.
-chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz
+chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz \
+			 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+
 $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
 	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/tigera-operator \
+	--destination $(CHART_DESTINATION)/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
+
+$(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/crd.projectcalico.org.v1/ -type f)
+	mkdir -p $(CHART_DESTINATION)
+	bin/helm package ./charts/crd.projectcalico.org.v1/ \
 	--destination $(CHART_DESTINATION)/ \
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
