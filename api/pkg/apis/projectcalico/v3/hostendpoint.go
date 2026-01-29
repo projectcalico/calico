@@ -26,11 +26,12 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster,shortName={hep,heps}
 
 // HostEndpointList is a list of HostEndpoint objects.
 type HostEndpointList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []HostEndpoint `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -38,18 +39,20 @@ type HostEndpointList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type HostEndpoint struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec HostEndpointSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec HostEndpointSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // HostEndpointSpec contains the specification for a HostEndpoint resource.
 type HostEndpointSpec struct {
 	// The node name identifying the Calico node instance.
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
+
 	// Either "*", or the name of a specific Linux interface to apply policy to; or empty.  "*"
 	// indicates that this HostEndpoint governs all traffic to, from or through the default
 	// network namespace of the host named by the "Node" field; entering and leaving that
@@ -65,6 +68,7 @@ type HostEndpointSpec struct {
 	// Note: Only some kinds of policy are implemented for "*" HostEndpoints; initially just
 	// pre-DNAT policy.  Please check Calico documentation for the latest position.
 	InterfaceName string `json:"interfaceName,omitempty" validate:"omitempty,interface"`
+
 	// The expected IP addresses (IPv4 and IPv6) of the endpoint.
 	// If "InterfaceName" is not present, Calico will look for an interface matching any
 	// of the IPs in the list and apply policy to that.
@@ -74,11 +78,15 @@ type HostEndpointSpec struct {
 	// 	endpoints, the ExpectedIPs field is used for that purpose. (If only the interface
 	// 	name is specified, Calico does not learn the IPs of the interface for use in match
 	// 	criteria.)
+	// +listType=set
 	ExpectedIPs []string `json:"expectedIPs,omitempty" validate:"omitempty,dive,ip"`
+
 	// A list of identifiers of security Profile objects that apply to this endpoint. Each
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
 	// after the selector-based security policy.
+	// +listType=set
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
+
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
 }
@@ -86,7 +94,10 @@ type HostEndpointSpec struct {
 type EndpointPort struct {
 	Name     string               `json:"name" validate:"portName"`
 	Protocol numorstring.Protocol `json:"protocol"`
-	Port     uint16               `json:"port" validate:"gt=0"`
+
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	Port uint16 `json:"port" validate:"gt=0"`
 }
 
 // NewHostEndpoint creates a new (zeroed) HostEndpoint struct with the TypeMetadata initialised to the current

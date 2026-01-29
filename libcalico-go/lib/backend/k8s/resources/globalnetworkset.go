@@ -18,29 +18,20 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
 	GlobalNetworkSetResourceName = "GlobalNetworkSets"
-	GlobalNetworkSetCRDName      = "globalnetworksets.crd.projectcalico.org"
 )
 
-func NewGlobalNetworkSetClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
+func NewGlobalNetworkSetClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
 		restClient:      r,
-		name:            GlobalNetworkSetCRDName,
 		resource:        GlobalNetworkSetResourceName,
-		description:     "Calico Global Network Sets",
 		k8sResourceType: reflect.TypeOf(apiv3.GlobalNetworkSet{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindGlobalNetworkSet,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(apiv3.GlobalNetworkSetList{}),
-		resourceKind: apiv3.KindGlobalNetworkSet,
+		k8sListType:     reflect.TypeOf(apiv3.GlobalNetworkSetList{}),
+		kind:            apiv3.KindGlobalNetworkSet,
+		apiGroup:        group,
 	}
 }

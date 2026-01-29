@@ -67,14 +67,39 @@ func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
 		res = ptr.Interface().(runtime.Object)
 	}
 	ma := res.(v1.ObjectMetaAccessor)
-	success = (ma.GetObjectMeta().GetNamespace() == m.namespace) &&
-		(ma.GetObjectMeta().GetName() == m.name) &&
-		(ma.GetObjectMeta().GetResourceVersion() != "") &&
-		(res.GetObjectKind().GroupVersionKind().Kind == m.kind) &&
-		(res.GetObjectKind().GroupVersionKind().Group == apiv3.Group) &&
-		(res.GetObjectKind().GroupVersionKind().Version == apiv3.VersionCurrent) &&
-		(m.spec == nil || reflect.DeepEqual(getSpec(res), m.spec)) &&
-		(m.status == nil || reflect.DeepEqual(getStatus(res), m.status))
+	success = true
+	if ma.GetObjectMeta().GetNamespace() != m.namespace {
+		success = false
+		err = fmt.Errorf("namespace does not match (expected %q, got %q)", m.namespace, ma.GetObjectMeta().GetNamespace())
+	}
+	if ma.GetObjectMeta().GetName() != m.name {
+		success = false
+		err = fmt.Errorf("name does not match (expected %q, got %q)", m.name, ma.GetObjectMeta().GetName())
+	}
+	if ma.GetObjectMeta().GetResourceVersion() == "" {
+		success = false
+		err = fmt.Errorf("resource version is empty")
+	}
+	if res.GetObjectKind().GroupVersionKind().Kind != m.kind {
+		success = false
+		err = fmt.Errorf("kind does not match (expected %q, got %q)", m.kind, res.GetObjectKind().GroupVersionKind().Kind)
+	}
+	if res.GetObjectKind().GroupVersionKind().Group != apiv3.Group {
+		success = false
+		err = fmt.Errorf("group does not match (expected %q, got %q)", apiv3.Group, res.GetObjectKind().GroupVersionKind().Group)
+	}
+	if res.GetObjectKind().GroupVersionKind().Version != apiv3.VersionCurrent {
+		success = false
+		err = fmt.Errorf("version does not match (expected %q, got %q)", apiv3.VersionCurrent, res.GetObjectKind().GroupVersionKind().Version)
+	}
+	if m.spec != nil && !reflect.DeepEqual(getSpec(res), m.spec) {
+		success = false
+		err = fmt.Errorf("spec does not match (expected %+v, got %+v)", m.spec, getSpec(res))
+	}
+	if m.status != nil && !reflect.DeepEqual(getStatus(res), m.status) {
+		success = false
+		err = fmt.Errorf("status does not match (expected %+v, got %+v)", m.status, getStatus(res))
+	}
 	return
 }
 

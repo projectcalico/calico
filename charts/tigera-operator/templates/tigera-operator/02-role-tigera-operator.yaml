@@ -228,6 +228,7 @@ rules:
       - watch
   - apiGroups:
       - crd.projectcalico.org
+      - projectcalico.org
     resources:
       - felixconfigurations
       - ippools
@@ -239,6 +240,7 @@ rules:
       - watch
   - apiGroups:
       - crd.projectcalico.org
+      - projectcalico.org
     resources:
       - kubecontrollersconfigurations
       - bgpconfigurations
@@ -403,6 +405,7 @@ rules:
   # Need these permissions for the calicoctl init container.
   - apiGroups:
       - crd.projectcalico.org
+      - projectcalico.org
     resources:
       - bgpconfigurations
       - bgppeers
@@ -418,6 +421,7 @@ rules:
       - create
   - apiGroups:
       - crd.projectcalico.org
+      - projectcalico.org
     resources:
       - ipamblocks
     verbs:
