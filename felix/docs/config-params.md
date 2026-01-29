@@ -1075,10 +1075,10 @@ Felix always programs VXLAN routes.
 | --- | --- |
 | Environment variable | `FELIX_ProgramClusterRoutes` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
-| Default value (above encoding) | `Disabled` |
+| Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `programClusterRoutes` (YAML) `ProgramClusterRoutes` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Disabled` |
+| Default value (YAML) | `Enabled` |
 
 ### `RemoveExternalRoutes` (config file) / `removeExternalRoutes` (YAML)
 

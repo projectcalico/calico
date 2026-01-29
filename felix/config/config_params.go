@@ -301,7 +301,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
-	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled);Disabled"`
+	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
