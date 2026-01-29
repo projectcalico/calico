@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Spurious change to trigger node CI.
-
 package main
 
 import (
