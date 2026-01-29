@@ -157,6 +157,7 @@ clone-libbpf: $(LIBBPF_FILE_CREATED)
 
 $(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
+	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
