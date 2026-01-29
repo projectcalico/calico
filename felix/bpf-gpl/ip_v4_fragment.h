@@ -232,12 +232,11 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 
 	if (!frag_ct_val) {
 		if (ctx->state->flags & CALI_ST_FIRST_FRAG) {
-			/* First fragment arrived in order, create the CT entry, don't
-			 * store the fragment, remaining fragments, will be allowed by the
-			 * CT entry.
+			/* First fragment arrived in order, don't store the fragment,
+			 * eventually create a fwd frag CT entry, remaining fragments,
+			 * will be allowed by the CT entry.
 			 */
-			frags4_record_ct_flags(ctx, 0);
-			CALI_DEBUG("IP FRAG: first fragment in order, created CT entry");
+			CALI_DEBUG("IP FRAG: first fragment in order will created CT entry");
 			return true;
 		} else {
 			/* Out of order fragment, store the fragment and create a CT entry
