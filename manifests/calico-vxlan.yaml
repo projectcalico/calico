@@ -2601,7 +2601,10 @@ spec:
                       - Ingress
                       - Egress
                     type: string
+                  maxItems: 2
+                  minItems: 1
                   type: array
+                  uniqueItems: true
               type: object
           type: object
       served: true
@@ -3683,7 +3686,10 @@ spec:
                       - Ingress
                       - Egress
                     type: string
+                  maxItems: 2
+                  minItems: 1
                   type: array
+                  uniqueItems: true
               type: object
           type: object
       served: true
@@ -4149,7 +4155,10 @@ spec:
                       - Ingress
                       - Egress
                     type: string
+                  maxItems: 2
+                  minItems: 1
                   type: array
+                  uniqueItems: true
               type: object
           type: object
       served: true
@@ -4395,7 +4404,10 @@ spec:
                 policyTypes:
                   items:
                     type: string
+                  maxItems: 2
+                  minItems: 1
                   type: array
+                  uniqueItems: true
                 stagedAction:
                   enum:
                     - Set
@@ -4821,7 +4833,10 @@ spec:
                       - Ingress
                       - Egress
                     type: string
+                  maxItems: 2
+                  minItems: 1
                   type: array
+                  uniqueItems: true
               type: object
           type: object
       served: true
