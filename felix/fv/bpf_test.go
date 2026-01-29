@@ -2129,8 +2129,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
 
-						Eventually(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[initialIngressFelix]), "10s", "1s").Should(Equal([]int{2}), "Expected maglev-ingress felix to increment the remote-conntracks metric")
-						Eventually(probeMaglevLocalConntrackMetricFunc(tc.Felixes[felixWithMaglevBackend]), "10s", "1s").Should(Equal([]int{2}), "Expected felix with maglev backend to increment the local-conntracks metric")
+						// There is a 10-second interval between iterations of Felix's conntrack scanner (where we export the maglev conntrack metrics).
+						// This means we must be very pessimistic about timeouts when searching for the prom values we're after.
+						Eventually(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[initialIngressFelix]), "12s", "1s").Should(Equal([]int{2}), "Expected maglev-ingress felix to increment the remote-conntracks metric")
+						Eventually(probeMaglevLocalConntrackMetricFunc(tc.Felixes[felixWithMaglevBackend]), "12s", "1s").Should(Equal([]int{2}), "Expected felix with maglev backend to increment the local-conntracks metric")
 						Consistently(probeMaglevLocalConntrackMetricFunc(tc.Felixes[initialIngressFelix])).Should(Equal([]int{0}), "Expected ingress-felix to only have remote maglev conntracks, but saw metric for local maglev conntracks go up")
 						Consistently(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[felixWithMaglevBackend])).Should(Equal([]int{0}), "Expected backing felix to only have local maglev conntracks, but saw metric for remote maglev conntracks go up")
 						Consistently(probeMaglevLocalConntrackMetricFunc(tc.Felixes[failoverIngressFelix])).Should(Equal([]int{0}), "No failover occurred, but an unrelated Felix's local maglev prom metrics went up")
