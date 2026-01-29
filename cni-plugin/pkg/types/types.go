@@ -18,6 +18,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
