@@ -1788,7 +1788,7 @@ spec:
                 programClusterRoutes:
                   description: |-
                     ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
-                    Felix always programs VXLAN routes. [Default: Disabled]
+                    Felix always programs VXLAN routes. [Default: Enabled]
                   enum:
                     - Enabled
                     - Disabled
