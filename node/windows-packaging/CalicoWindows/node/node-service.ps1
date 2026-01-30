@@ -198,7 +198,7 @@ while ($True)
                 {
                     Write-Host "Calico node initialisation succeeded; monitoring kubelet for restarts..."
                     # Token refresher only needs to run in hostprocess containers
-                    if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+                    if ($env:CONTAINER_SANDBOX_MOUNT_POINT -AND ("$env:CNI_PLUGIN_TYPE" -eq "Calico")) {
                         Restart-TokenRefresher
                     }
                     break
@@ -216,7 +216,7 @@ while ($True)
     }
 
     # Token refresher only needs to run in hostprocess containers
-    if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+    if ($env:CONTAINER_SANDBOX_MOUNT_POINT -AND ("$env:CNI_PLUGIN_TYPE" -eq "Calico")) {
         Ensure-TokenRefresher
     }
 
