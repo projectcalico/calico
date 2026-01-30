@@ -481,7 +481,7 @@ func (c *client) OnSyncChange(source string, ready bool) {
 }
 
 func (c *client) inSync() bool {
-	return c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator] && c.sourceReady[SourceLocalBGPPeerWatcher]
+	return c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator] && (c.localBGPPeerWatcher == nil || c.sourceReady[SourceLocalBGPPeerWatcher])
 }
 
 type bgpPeer struct {
