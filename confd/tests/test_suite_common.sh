@@ -967,7 +967,7 @@ test_felix_program_cluster_routes() {
 
     # Run confd as a background process.
     echo "Running confd as background process"
-    CALICO_CLUSTER_ROUTING_BACKEND="felix" BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CALICO_NETWORKING_BACKEND="felix" BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
     CONFD_PID=$!
     echo "Running with PID " $CONFD_PID
 
@@ -1055,7 +1055,7 @@ spec:
 EOF
 
     # Expect no ippool is programmed into kernel.
-	test_confd_templates felix_cluster_routing
+    test_confd_templates felix_cluster_routing
 
     # Kill confd.
     kill -9 $CONFD_PID
