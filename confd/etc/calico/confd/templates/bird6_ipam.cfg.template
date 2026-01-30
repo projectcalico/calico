@@ -27,6 +27,7 @@ function reject_local_routes () {
   }
 }
 
+{{$calico_networking_backend := (getenv "CALICO_NETWORKING_BACKEND")}}
 function calico_export_to_bgp_peers(bool internal_peer) {
   # filter code terminates when it calls `accept;` or `reject;`,
   # call reject_disabled_pools() first, then reject_tunnel_routes(),
@@ -67,7 +68,12 @@ function calico_export_to_bgp_peers(bool internal_peer) {
   # Skip {{$data.cidr}} as BGP export is disabled for it
 {{- else}}
   if ( net ~ {{$data.cidr}} ) then {
+{{- if eq $calico_networking_backend "felix"}}
+    # Don't advertise cluster routes into the kernel - these are handled by Felix.
+    reject;
+{{- else}}
     accept;
+{{- end}}
   }
 {{- end}}
 {{- end}}
@@ -86,12 +92,21 @@ filter calico_kernel_programming {
 
 {{- end}}
 {{range ls "/v1/ipam/v6/pool"}}{{$data := json (getv (printf "/v1/ipam/v6/pool/%s" .))}}
-{{- if $data.vxlan_mode}}
   if ( net ~ {{$data.cidr}} ) then {
+{{- if eq $calico_networking_backend "felix"}}
+	# Don't program cluster routes into the kernel - these are handled by Felix.
+	reject;
+  }
+{{- else}}
+{{- if $data.vxlan_mode}}
     # Don't program VXLAN routes into the kernel - these are handled by Felix.
     reject;
   }
+{{- else}}
+	accept;
+  }
 {{- end}}{{/* End of '$data.vxlan_mode' */}}
+{{- end}}{{/* End of '$calico_networking_backend' */}}
 {{- end}}{{/* End of 'range ls...' */}}
   accept;                                  {{- /* Destination is not in any ipPool, accept  */}}
 }
