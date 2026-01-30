@@ -241,6 +241,8 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 			messagesReceived = append(messagesReceived, message)
 		}
 		conf := config.New()
+		// Disable ProgramClusterRoutes to prevent receiving route updates.
+		conf.ProgramClusterRoutes = "Disabled"
 		lookupsCache := NewLookupsCache()
 		conf.FelixHostname = "hostname"
 		cg = NewCalculationGraph(eb, lookupsCache, conf, func() {}).AllUpdDispatcher
