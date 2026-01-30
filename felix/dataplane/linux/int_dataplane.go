@@ -249,6 +249,7 @@ type Config struct {
 	BPFExportBufferSizeMB              int
 	BPFRedirectToPeer                  string
 	BPFAttachType                      apiv3.BPFAttachOption
+	BPFIPFragTimeout                   time.Duration
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
