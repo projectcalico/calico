@@ -54,12 +54,24 @@ const (
 	// TigeraOperatorChart is the name of the Tigera Operator Helm chart.
 	TigeraOperatorChart = "tigera-operator"
 
-	// CalicoCRDsChart is the name of the crd.projectcalico.org/v1 CRD helm chart.
-	CalicoCRDsChart = "crd.projectcalico.org.v1"
+	// ProjectCalicoV1CRDsChart is the name of the crd.projectcalico.org/v1 CRD helm chart.
+	ProjectCalicoV1CRDsChart = "crd.projectcalico.org.v1"
+
+	// ProjectCalicoV3CRDsChart is the name of the projectcalico.org/v3 CRD helm chart.
+	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
 
 	// CalicoHelmRepoURL is the URL for the Calico Helm charts.
 	CalicoHelmRepoURL = "https://docs.tigera.io/calico/charts"
 )
+
+// AllReleaseCharts returns a list of all Helm charts to be released.
+func AllReleaseCharts() []string {
+	return []string{
+		TigeraOperatorChart,
+		ProjectCalicoV1CRDsChart,
+		ProjectCalicoV3CRDsChart,
+	}
+}
 
 var once sync.Once
 

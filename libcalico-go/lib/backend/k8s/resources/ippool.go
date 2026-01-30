@@ -19,8 +19,6 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -30,24 +28,17 @@ import (
 
 const (
 	IPPoolResourceName = "IPPools"
-	IPPoolCRDName      = "ippools.crd.projectcalico.org"
 )
 
-func NewIPPoolClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
-		restClient:      r,
-		name:            IPPoolCRDName,
-		resource:        IPPoolResourceName,
-		description:     "Calico IP Pools",
-		k8sResourceType: reflect.TypeOf(apiv3.IPPool{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindIPPool,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
+func NewIPPoolClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
+		restClient:       r,
+		resource:         IPPoolResourceName,
+		k8sResourceType:  reflect.TypeOf(apiv3.IPPool{}),
 		k8sListType:      reflect.TypeOf(apiv3.IPPoolList{}),
-		resourceKind:     apiv3.KindIPPool,
+		kind:             apiv3.KindIPPool,
 		versionconverter: IPPoolv1v3Converter{},
+		apiGroup:         group,
 	}
 }
 
@@ -60,28 +51,6 @@ func (c IPPoolv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid type conversion")
 	}
-
-	// If IPIP field is not nil, then it means the resource has v1 IPIP data
-	// and we must convert it to v3 equivalent data.
-	if ipp.Spec.IPIP != nil {
-		if !ipp.Spec.IPIP.Enabled {
-			ipp.Spec.IPIPMode = apiv3.IPIPModeNever
-		} else if ipp.Spec.IPIP.Mode == encap.CrossSubnet {
-			ipp.Spec.IPIPMode = apiv3.IPIPModeCrossSubnet
-		} else {
-			ipp.Spec.IPIPMode = apiv3.IPIPModeAlways
-		}
-
-		// Set IPIP to nil since we've already converted v1 IPIP fields to v3.
-		ipp.Spec.IPIP = nil
-	}
-
-	// Take a logical OR of the v1 NATOutgoing field with the v3 NATOutgoing.
-	ipp.Spec.NATOutgoing = ipp.Spec.NATOutgoingV1 || ipp.Spec.NATOutgoing
-
-	// Set v1 NatOutgoing to false since we've already converted it to v3 NatOutgoing.
-	ipp.Spec.NATOutgoingV1 = false
-
 	return ipp, nil
 }
 
