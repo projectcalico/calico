@@ -53,7 +53,7 @@ func TestTLSVersionParsing(t *testing.T) {
 	}{
 		{"", tlsVersions, false},
 		{
-			"TLS.2,TLS1.3",
+			"TLS1.2,TLS1.3",
 			[]uint16{tls.VersionTLS12, tls.VersionTLS13},
 			false,
 		},
