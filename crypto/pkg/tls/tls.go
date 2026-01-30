@@ -139,11 +139,18 @@ func NewTLSConfig() (*tls.Config, error) {
 	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
 	env := os.Getenv("TLS_CIPHER_SUITES")
 	ciphers, err := ParseTLSCiphers(env)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
 	}
+
+	minTlsVersion, err := ParseTLSVersion(os.Getenv("TLS_MIN_VERSION"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse TLS version: %w", err)
+	}
+
 	return &tls.Config{
-		MinVersion:   tls.VersionTLS12,
+		MinVersion:   minTlsVersion,
 		MaxVersion:   tls.VersionTLS13,
 		CipherSuites: ciphers,
 	}, nil
