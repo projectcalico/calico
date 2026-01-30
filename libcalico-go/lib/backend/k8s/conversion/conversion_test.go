@@ -285,6 +285,7 @@ var _ = Describe("Test Pod conversion", func() {
 			"labelB":                         "valueB",
 			"projectcalico.org/namespace":    "default",
 			"projectcalico.org/orchestrator": "k8s",
+			"projectcalico.org/kind":         libapiv3.KindWorkloadEndpoint,
 		}
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
 
@@ -960,6 +961,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(map[string]string{
 			"projectcalico.org/namespace":    "default",
 			"projectcalico.org/orchestrator": "k8s",
+			"projectcalico.org/kind":         libapiv3.KindWorkloadEndpoint,
 		}))
 
 		// Assert the interface name is fixed.  The calculation of this name should be consistent
@@ -1048,6 +1050,7 @@ var _ = Describe("Test Pod conversion", func() {
 			"labelB":                         "valueB",
 			"projectcalico.org/namespace":    "default",
 			"projectcalico.org/orchestrator": "k8s",
+			"projectcalico.org/kind":         libapiv3.KindWorkloadEndpoint,
 			apiv3.LabelServiceAccount:        "sa-test",
 		}
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
@@ -1122,6 +1125,7 @@ var _ = Describe("Test Pod conversion", func() {
 			"labelB":                         "valueB",
 			"projectcalico.org/namespace":    "default",
 			"projectcalico.org/orchestrator": "k8s",
+			"projectcalico.org/kind":         libapiv3.KindWorkloadEndpoint,
 		}
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.ServiceAccountName).To(Equal(longName))

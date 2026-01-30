@@ -133,11 +133,18 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 	// Update the revision information from the response.
 	kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
 
+	// Add "projectcalico.org/kind" label to certain resources
+	// to assist with selection
+	model.AddKindLabel(kvp)
 	return kvp, nil
 }
 
 // Update updates an existing Custom K8s Resource instance in the k8s API from the supplied KVPair.
 func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	// "projectcalico.org/kind" label should not be updated into the datastore
+	// It only exists for calico
+	defer model.AddKindLabel(kvp)
+	model.RemoveKindLabel(kvp)
 	logContext := log.WithFields(log.Fields{
 		"Key":      kvp.Key,
 		"Value":    kvp.Value,
@@ -327,7 +334,14 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 		return nil, K8sErrorToCalico(err, key)
 	}
 
-	return c.convertResourceToKVPair(resOut)
+	kvp, err := c.convertResourceToKVPair(resOut)
+	if err != nil {
+		return nil, err
+	}
+	// Add "projectcalico.org/kind" label to certain resources
+	// to assist with selection
+	model.AddKindLabel(kvp)
+	return kvp, nil
 }
 
 // List lists configured Custom K8s Resource instances in the k8s API matching the
@@ -385,6 +399,9 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 		if err != nil {
 			return nil, err
 		}
+		// Add "projectcalico.org/kind" label to certain resources
+		// to assist with selection
+		model.AddKindLabel(kvp)
 		return []*model.KVPair{kvp}, nil
 	}
 	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
@@ -414,7 +431,14 @@ func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInte
 		return nil, K8sErrorToCalico(err, list)
 	}
 	toKVPair := func(r Resource) (*model.KVPair, error) {
-		return c.convertResourceToKVPair(r)
+		kvp, err := c.convertResourceToKVPair(r)
+		if err != nil {
+			return nil, err
+		}
+		// Add "projectcalico.org/kind" label to certain resources
+		// to assist with selection
+		model.AddKindLabel(kvp)
+		return kvp, nil
 	}
 
 	return newK8sWatcherConverter(ctx, rlo.Kind+" (custom)", toKVPair, k8sWatch), nil
