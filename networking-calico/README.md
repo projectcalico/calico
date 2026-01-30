@@ -16,11 +16,11 @@ features with Calico, please see http://docs.projectcalico.org/master.
 
 # Version skew
 
-Calico for OpenStack is tested against two recent LTS OpenStack versions, as [defined by
+Calico for OpenStack is tested against one or two recent LTS OpenStack versions, as [defined by
 Canonical](https://canonical-openstack.readthedocs-hosted.com/en/latest/reference/release-cycle-and-supported-versions/).
 For recent Calico versions the corresponding versions of OpenStack are as follows.
 
 | Calico version | OpenStack versions |
 | -------------- | ------------------ |
-| master         | Yoga, Caracal      |
+| master         | Caracal            |
 | v3.30          | Yoga, Caracal      |
