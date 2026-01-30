@@ -78,18 +78,18 @@ func supportedCipherMap() map[string]uint16 {
 	return cipherMap
 }
 
-func SupportedTLSVersionMap() map[string]uint16 {
-	tlsVersionMap := make(map[string]uint16)
+func SupportedTLSVersionsMap() map[string]uint16 {
+	tlsVersionsMap := make(map[string]uint16)
 	addTlsVersions := func(versions []uint16) {
 		for _, version := range versions {
 			versionName := tls.VersionName(version)
-			tlsVersionMap[versionName] = version
+			tlsVersionsMap[versionName] = version
 		}
 	}
 
 	addTlsVersions(tlsVersions)
 
-	return tlsVersionMap
+	return tlsVersionsMap
 }
 
 // ParseTLSCiphers takes a comma-separated string of cipher names and returns a slice of uint16 representing the ciphers.
@@ -116,15 +116,15 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	return result, nil
 }
 
-// ParseTLSVersion takes a comma-separated string of cipher names and returns a uint16 representing the TLS Version.
+// ParseTLSVersion takes a string of the TLS Version name and returns a uint16 representing the TLS Version.
 // If version is empty, it returns the default TLS Version.
-// It returns an error if any of the tls version names are not supported.
+// It returns an error if the tls version name is not supported.
 func ParseTLSVersion(version string) (uint16, error) {
 	if version == "" {
 		return tls.VersionTLS12, nil
 	}
 
-	supportedVersions := SupportedTLSVersionMap()
+	supportedVersions := SupportedTLSVersionsMap()
 
 	if v, ok := supportedVersions[version]; ok {
 		return v, nil
