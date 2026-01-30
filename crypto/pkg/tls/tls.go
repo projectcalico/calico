@@ -126,7 +126,7 @@ func ParseTLSVersion(version string) (uint16, error) {
 
 	supportedVersions := SupportedTLSVersionMap()
 
-	if v, ok := supportedVersions[strings.TrimSpace(version)]; ok {
+	if v, ok := supportedVersions[version]; ok {
 		return v, nil
 	}
 

@@ -46,23 +46,25 @@ func TestTLSCipherParsing(t *testing.T) {
 
 func TestTLSVersionParsing(t *testing.T) {
 	RegisterTestingT(t)
+
 	testCases := []struct {
-		versionName       string
-		expectedersionIds []uint16
-		errorExpected     bool
+		versionName   string
+		expectedID    uint16
+		errorExpected bool
 	}{
-		{"", tlsVersions, false},
-		{
-			"TLS1.2,TLS1.3",
-			[]uint16{tls.VersionTLS12, tls.VersionTLS13},
-			false,
-		},
-		{"madeup-version", nil, true},
+		{"TLS 1.2", tls.VersionTLS12, false},
+		{"TLS 1.3", tls.VersionTLS13, false},
+		{"madeup-version", 0, true},
 	}
 
-	for _, testCase := range testCases {
-		versionID, err := ParseTLSVersion(testCase.versionName)
-		Expect(err != nil).To(Equal(testCase.errorExpected))
-		Expect(versionID).To(Equal(testCase.expectedersionIds))
+	for _, tc := range testCases {
+		id, err := ParseTLSVersion(tc.versionName)
+
+		if tc.errorExpected {
+			Expect(err).To(HaveOccurred())
+		} else {
+			Expect(err).ToNot(HaveOccurred())
+			Expect(id).To(Equal(tc.expectedID))
+		}
 	}
 }
