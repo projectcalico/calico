@@ -29,6 +29,12 @@ import (
 
 var addToSchemeOnce sync.Once
 
+const (
+	GroupName    = "crd.projectcalico.org"
+	Version      = "v1"
+	GroupVersion = GroupName + "/" + Version
+)
+
 func BuilderCRDv1() *runtime.SchemeBuilder {
 	builder := runtime.NewSchemeBuilder(
 		func(scheme *runtime.Scheme) error {
@@ -96,6 +102,8 @@ func AddCalicoResourcesToGlobalScheme() {
 	})
 }
 
+// AddCalicoResourcesToScheme adds resources necessary for the crd.projectcalico.org/v1 API
+// backend to the current scheme, so they can be used by Kubernetes clients.
 func AddCalicoResourcesToScheme(s *runtime.Scheme) error {
 	schemeBuilder := BuilderCRDv1()
 	err := schemeBuilder.AddToScheme(s)

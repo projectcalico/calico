@@ -266,6 +266,7 @@ rules:
       - watch
   - apiGroups:
       - crd.projectcalico.org
+      - projectcalico.org
     resources:
       - felixconfigurations
       - ippools
@@ -277,6 +278,7 @@ rules:
       - watch
   - apiGroups:
       - crd.projectcalico.org
+      - projectcalico.org
     resources:
       - kubecontrollersconfigurations
       - bgpconfigurations
