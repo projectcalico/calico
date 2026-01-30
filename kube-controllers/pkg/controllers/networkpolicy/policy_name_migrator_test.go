@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,8 +31,9 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -101,7 +102,9 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
+			Ingress: []v3.Rule{{
+				Action: "Allow",
+			}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -121,7 +124,9 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		matchingWithPrefix.Spec = v3.NetworkPolicySpec{
 			Tier:     "custom-tier",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
+			Ingress: []v3.Rule{{
+				Action: "Allow",
+			}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -141,7 +146,9 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		matchingNoPrefix.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
+			Ingress: []v3.Rule{{
+				Action: "Allow",
+			}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -187,7 +194,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.GlobalNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -224,7 +230,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.StagedNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -261,7 +266,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.StagedGlobalNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 		_, err = bcli.Create(context.Background(), &model.KVPair{
 			Key: model.ResourceKey{
@@ -298,7 +302,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		mismatchedNames.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Create the correct key.
@@ -387,6 +390,12 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
+		// Determine if we should use v3 CRDs based on the test config.
+		var cfg *apiconfig.CalicoAPIConfig
+		cfg, err = apiconfig.LoadClientConfigFromEnvironment()
+		Expect(err).NotTo(HaveOccurred())
+		useV3CRDs := k8s.UsingV3CRDs(&cfg.Spec)
+
 		// Run apiserver.
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 		kubeconfig, cleanup := testutils.BuildKubeconfig(apiserver.IP)
@@ -401,7 +410,11 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Register Calico CRD types with the scheme.
-		scheme.AddCalicoResourcesToGlobalScheme()
+		if useV3CRDs {
+			Expect(v3.AddToGlobalScheme()).NotTo(HaveOccurred())
+		} else {
+			v1scheme.AddCalicoResourcesToGlobalScheme()
+		}
 
 		// Create a client for interacting with CRDs directly.
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
@@ -435,7 +448,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		mismatchedNames.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Set the annotation to indicate the v3 API name.
@@ -482,7 +494,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		mismatchedNames.Spec = v3.GlobalNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Set the annotation to indicate the v3 API name.
@@ -513,7 +524,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		mismatchedNames.Spec = v3.StagedNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Set the annotation to indicate the v3 API name.
@@ -544,7 +554,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		mismatchedNames.Spec = v3.StagedGlobalNetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 
 		// Set the annotation to indicate the v3 API name.
@@ -575,7 +584,6 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		matchingNames.Spec = v3.NetworkPolicySpec{
 			Tier:     "default",
 			Selector: "all()",
-			Ingress:  []v3.Rule{{}},
 		}
 		v3meta := &metav1.ObjectMeta{}
 		v3meta.Name = "policy-name" // Name matches underlying CRD.

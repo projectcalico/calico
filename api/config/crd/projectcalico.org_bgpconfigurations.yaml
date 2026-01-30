@@ -1,0 +1,142 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: bgpconfigurations.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: BGPConfiguration
+    listKind: BGPConfigurationList
+    plural: bgpconfigurations
+    singular: bgpconfiguration
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                asNumber:
+                  format: int32
+                  type: integer
+                bindMode:
+                  enum:
+                    - None
+                    - NodeIP
+                  type: string
+                communities:
+                  items:
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        pattern: ^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                  x-kubernetes-list-type: set
+                ignoredInterfaces:
+                  items:
+                    type: string
+                  type: array
+                  x-kubernetes-list-type: set
+                listenPort:
+                  maximum: 65535
+                  minimum: 1
+                  type: integer
+                localWorkloadPeeringIPV4:
+                  type: string
+                localWorkloadPeeringIPV6:
+                  type: string
+                logSeverityScreen:
+                  default: Info
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
+                  type: string
+                nodeMeshMaxRestartTime:
+                  type: string
+                nodeMeshPassword:
+                  properties:
+                    secretKeyRef:
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          default: ""
+                          type: string
+                        optional:
+                          type: boolean
+                      required:
+                        - key
+                      type: object
+                      x-kubernetes-map-type: atomic
+                  type: object
+                nodeToNodeMeshEnabled:
+                  type: boolean
+                prefixAdvertisements:
+                  items:
+                    properties:
+                      cidr:
+                        format: cidr
+                        type: string
+                      communities:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                  x-kubernetes-list-type: set
+                serviceClusterIPs:
+                  items:
+                    properties:
+                      cidr:
+                        format: cidr
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                  x-kubernetes-list-type: set
+                serviceExternalIPs:
+                  items:
+                    properties:
+                      cidr:
+                        format: cidr
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                  x-kubernetes-list-type: set
+                serviceLoadBalancerAggregation:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                serviceLoadBalancerIPs:
+                  items:
+                    properties:
+                      cidr:
+                        format: cidr
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                  x-kubernetes-list-type: set
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true

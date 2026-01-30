@@ -285,6 +285,19 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
+# Configure the Calico API group to use. Projects importing this Makefile can override this variable
+# if they need to.
+# Supported values:
+# - crd.projectcalico.org/v1 (default)
+# - projectcalico.org/v3
+CALICO_API_GROUP ?= crd.projectcalico.org/v1
+
+# Where to find Calico CRD files depends on which API group we are using to back them.
+CALICO_CRD_PATH ?= api/config/crd/
+ifneq ($(CALICO_API_GROUP),projectcalico.org/v3)
+CALICO_CRD_PATH = libcalico-go/config/crd/
+endif
+
 # The image to use for building calico/base-dependent modules (e.g. apiserver, typha).
 ifdef USE_UBI_AS_CALICO_BASE
 CALICO_BASE ?= $(UBI_IMAGE)
@@ -315,6 +328,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
+		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
@@ -1331,7 +1345,7 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	while ! docker exec $(APISERVER_NAME) kubectl \
-		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
+		apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
 		do echo "Trying to create CRDs"; \
 		sleep 1; \
 		done
@@ -1387,13 +1401,15 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/charts/crd.projectcalico.org.v1/templates/; do echo "Waiting for operator CRDs to be created"; sleep 2; done
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/charts/crd.projectcalico.org.v1/templates/calico/; do echo "Waiting for calico CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/$(CALICO_CRD_PATH); do echo "Waiting for calico CRDs to be created"; sleep 2; done
+
+	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
-	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force --timeout=10m
 	-$(KIND) delete cluster --name $(KIND_NAME)
 	rm -f $(KIND_KUBECONFIG)
 	rm -f $(REPO_ROOT)/.$(KIND_NAME).created

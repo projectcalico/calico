@@ -84,6 +84,8 @@ type KubeConfig struct {
 	K8sClientBurst int     `json:"k8sClientBurst" envconfig:"K8S_CLIENT_BURST" default:""`
 	// K8sCurrentContext provides a context override for kubeconfig.
 	K8sCurrentContext string `json:"k8sCurrentContext" envconfig:"K8S_CURRENT_CONTEXT" default:""`
+
+	CalicoAPIGroup string `json:"calicoAPIGroup" envconfig:"CALICO_API_GROUP"`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the
@@ -100,7 +102,6 @@ func NewCalicoAPIConfig() *CalicoAPIConfig {
 // IsAlphaFeatureSet checks if the comma separated features have the
 // name set in it.
 func IsAlphaFeatureSet(features, name string) bool {
-
 	fs := strings.Split(features, ",")
 	for _, f := range fs {
 		if f == name {
