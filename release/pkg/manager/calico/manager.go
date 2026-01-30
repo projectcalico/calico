@@ -555,18 +555,13 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 		return fmt.Errorf("create temp dir for building helm index: %w", err)
 	}
 
-	// Copy the tigera-operator chart to the temp dir.
-	srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
-	destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
-	if err := utils.CopyFile(srcChart, destChart); err != nil {
-		return fmt.Errorf("error copying tigera-operator chart to temp dir for building helm index: %w", err)
-	}
-
-	// Copy the crd.projectcalico.org.v1 chart to the temp dir.
-	srcCRDsChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion()))
-	destCRDsChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion()))
-	if err := utils.CopyFile(srcCRDsChart, destCRDsChart); err != nil {
-		return fmt.Errorf("error copying CRD chart to temp dir for building helm index: %w", err)
+	// Copy charts to temp dir.
+	for _, chart := range utils.AllReleaseCharts() {
+		srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
+		destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
+		if err := utils.CopyFile(srcChart, destChart); err != nil {
+			return fmt.Errorf("error copying %s chart to temp dir for building helm index: %w", chart, err)
+		}
 	}
 
 	// Build the new helm index.
@@ -1287,11 +1282,10 @@ func (r *CalicoManager) publishHelmCharts() error {
 		return nil
 	}
 	for _, reg := range r.helmRegistries {
-		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion())), reg); err != nil {
-			return err
-		}
-		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.CalicoCRDsChart, r.helmChartVersion())), reg); err != nil {
-			return err
+		for _, chart := range utils.AllReleaseCharts() {
+			if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion())), reg); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
