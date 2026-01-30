@@ -26,15 +26,16 @@ const (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
+// +kubebuilder:resource:shortName={scnp,snp}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 
 // StagedNetworkPolicy is a staged NetworkPolicy.
 // StagedNetworkPolicy is the Namespaced-equivalent of the StagedGlobalNetworkPolicy.
 type StagedNetworkPolicy struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the Policy.
-	Spec StagedNetworkPolicySpec `json:"spec,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              StagedNetworkPolicySpec `json:"spec"`
 }
 
 type StagedNetworkPolicySpec struct {
@@ -100,6 +101,9 @@ type StagedNetworkPolicySpec struct {
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=2
+	// +listType=set
 	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.

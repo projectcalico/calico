@@ -28,19 +28,22 @@ const (
 // NetworkPolicyList is a list of Policy objects.
 type NetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []NetworkPolicy `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
+// +kubebuilder:resource:shortName={cnp,caliconetworkpolicy}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec NetworkPolicySpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec NetworkPolicySpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 type NetworkPolicySpec struct {
@@ -51,18 +54,22 @@ type NetworkPolicySpec struct {
 	// may be omitted on all policy management requests.
 	// +kubebuilder:default=default
 	Tier string `json:"tier,omitempty" validate:"omitempty,name"`
+
 	// Order is an optional field that specifies the order in which the policy is applied.
 	// Policies with higher "order" are applied after those with lower
 	// order within the same tier.  If the order is omitted, it may be considered to be "infinite" - i.e. the
 	// policy will be applied last.  Policies with identical order will be applied in
 	// alphanumerical order based on the Policy "Name" within the tier.
 	Order *float64 `json:"order,omitempty"`
+
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
+
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
+
 	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
 	//
@@ -89,6 +96,7 @@ type NetworkPolicySpec struct {
 	// 	deployment != "dev"
 	// 	! has(label_name)
 	Selector string `json:"selector,omitempty" validate:"selector"`
+
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
 	// Types according to what Ingress and Egress are present in the policy.  The
@@ -103,6 +111,9 @@ type NetworkPolicySpec struct {
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=2
+	// +listType=set
 	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
@@ -121,6 +132,7 @@ type NetworkPolicySpec struct {
 	PerformanceHints []PolicyPerformanceHint `json:"performanceHints,omitempty" validate:"omitempty,unique,dive,oneof=AssumeNeededOnEveryNode"`
 }
 
+// +kubebuilder:validation:Enum=AssumeNeededOnEveryNode
 type PolicyPerformanceHint string
 
 const (
