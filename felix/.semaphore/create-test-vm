@@ -23,7 +23,7 @@ zone=europe-west3-c
 
 : ${IMAGE:=ubuntu-2204-jammy-v20250312}
 : ${DOCKER_VERSION=5:20.10.14~3-0~ubuntu-jammy}
-: ${BUILDX_VERSION="=0.29.0-0~ubuntu.22.04~jammy"}
+: ${BUILDX_VERSION=0.29.0-0~ubuntu.22.04~jammy}
 : ${UBUNTU_VERSION=jammy}
 
 gcloud config set project $project
@@ -46,7 +46,7 @@ function create-vm() {
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg" && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${UBUNTU_VERSION} stable' | sudo tee /etc/apt/sources.list.d/docker.list" && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt update -y && \
-  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt install -y --no-install-recommends git docker-ce=${DOCKER_VERSION} docker-ce-cli=${DOCKER_VERSION} docker-buildx-plugin${BUILDX_VERSION} containerd.io make iproute2 wireguard && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt install -y --no-install-recommends git docker-ce=${DOCKER_VERSION} docker-ce-cli=${DOCKER_VERSION} docker-buildx-plugin=${BUILDX_VERSION} containerd.io make iproute2 wireguard && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo usermod -a -G docker ubuntu && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo modprobe ipip && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- 'if [ -s /etc/docker/daemon.json ] ; then cat /etc/docker/daemon.json | sed "\$d" | sed "\$s/\$/,/" > /tmp/daemon.json ; else echo -en {\\n > /tmp/daemon.json ; fi' && \
