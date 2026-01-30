@@ -106,3 +106,72 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 		}
 	})
 })
+
+var _ = infrastructure.DatastoreDescribe("NATPortRange rendering test", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	var (
+		infra       infrastructure.DatastoreInfra
+		tc          infrastructure.TopologyContainers
+		client      client.Interface
+		dumpedDiags bool
+	)
+
+	BeforeEach(func() {
+		var err error
+		infra = getInfra()
+
+		dumpedDiags = false
+		opts := infrastructure.DefaultTopologyOptions()
+
+		opts.ExtraEnvVars = map[string]string{
+			"FELIX_NATPortRange": "32768:65535",
+		}
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
+
+		ctx := context.Background()
+		ippool := api.NewIPPool()
+		ippool.Name = "nat-pool"
+		ippool.Spec.CIDR = "10.244.255.0/24"
+		ippool.Spec.NATOutgoing = true
+		ippool, err = client.IPPools().Create(ctx, ippool, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// Utility function to dump diags if the test failed.  Should be called in the inner-most
+	// AfterEach() to dump diags before the test is torn down.  Only the first call for a given
+	// test has any effect.
+	dumpDiags := func() {
+		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
+			return
+		}
+		if NFTMode() {
+			logNFTDiags(tc.Felixes[0])
+		} else {
+			iptSave, err := tc.Felixes[0].ExecOutput("iptables-save", "-c")
+			if err == nil {
+				log.Info("iptables-save:\n" + iptSave)
+			}
+		}
+		dumpedDiags = true
+		infra.DumpErrorData()
+	}
+
+	AfterEach(func() {
+		dumpDiags()
+		tc.Stop()
+		infra.Stop()
+	})
+
+	It("should have expected rendering", func() {
+		if NFTMode() {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "nat-cali-nat-outgoing")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("32768-65535"))
+		} else {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("32768-65535"))
+		}
+	})
+})
