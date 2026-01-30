@@ -93,7 +93,7 @@ else
       echo "[INFO] starting e2e testing from local binary..."
       pushd ${HOME}/calico
       make -C e2e build |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
-      KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig PRODUCT=calico ./e2e/bin/k8s/e2e.test |& tee -a >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
+      KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig PRODUCT=calico ./e2e/bin/k8s/e2e.test ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
       popd
     else
       echo "[INFO] starting bz testing..."
