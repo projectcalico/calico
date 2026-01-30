@@ -18,7 +18,7 @@ include ../lib.Makefile
 ###############################################################################
 
 
-SRC_FILES=$(shell find -name '*.go')
+SRC_FILES=$(shell find . -name '*.go')
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
