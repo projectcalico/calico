@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -60,15 +61,6 @@ type config struct {
 	ShouldSleep bool `envconfig:"SLEEP" default:"true"`
 
 	ServiceAccountToken []byte
-}
-
-func (c config) skipBinary(binary string) bool {
-	for _, name := range c.SkipCNIBinaries {
-		if name == binary {
-			return true
-		}
-	}
-	return false
 }
 
 func getEnv(env, def string) string {
@@ -201,7 +193,7 @@ func Install(version string) error {
 			if binary.Name() == "install" || binary.Name() == "install.exe" {
 				continue
 			}
-			if c.skipBinary(binary.Name()) {
+			if slices.Contains(c.SkipCNIBinaries, binary.Name()) {
 				continue
 			}
 			if fileExists(target) && !c.UpdateCNIBinaries {
