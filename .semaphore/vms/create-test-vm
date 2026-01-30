@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
+# Copyright (c) 2023 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ function create-vm() {
   ${ssh_cmd} -- "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg" && \
   ${ssh_cmd} -- "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu focal stable' | sudo tee /etc/apt/sources.list.d/docker.list" && \
   ${ssh_cmd} -- sudo apt update -y && \
-  ${ssh_cmd} -- sudo apt install -y --no-install-recommends git docker-ce=5:28.1.1-1~ubuntu.20.04~focal docker-ce-cli=5:28.1.1-1~ubuntu.20.04~focal docker-buildx-plugin=0.29.0-0~ubuntu.20.04~focal containerd.io make iproute2 wireguard && \
+  ${ssh_cmd} -- sudo apt install -y --no-install-recommends git docker-ce=5:28.1.1-1~ubuntu.20.04~focal docker-ce-cli=5:28.1.1-1~ubuntu.20.04~focal docker-buildx-plugin containerd.io make iproute2 wireguard && \
   ${ssh_cmd} -- sudo usermod -a -G docker ubuntu && \
   ${ssh_cmd} -- sudo modprobe ipip && \
   ${ssh_cmd} -- 'if [ -s /etc/docker/daemon.json ] ; then cat /etc/docker/daemon.json | sed "\$d" | sed "\$s/\$/,/" > /tmp/daemon.json ; else echo -en {\\n > /tmp/daemon.json ; fi' && \
