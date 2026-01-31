@@ -83,7 +83,7 @@ func SupportedTLSVersionsMap() map[string]uint16 {
 	addTlsVersions := func(versions []uint16) {
 		for _, version := range versions {
 			versionName := tls.VersionName(version)
-			tlsVersionsMap[versionName] = version
+			tlsVersionsMap[strings.TrimSpace(versionName)] = version
 		}
 	}
 
@@ -126,7 +126,7 @@ func ParseTLSVersion(version string) (uint16, error) {
 
 	supportedVersions := SupportedTLSVersionsMap()
 
-	if v, ok := supportedVersions[version]; ok {
+	if v, ok := supportedVersions[strings.TrimSpace(version)]; ok {
 		return v, nil
 	}
 
