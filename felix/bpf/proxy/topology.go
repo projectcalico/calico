@@ -49,7 +49,7 @@ func FilterEpsByTopologyAwareRouting(endpoints []k8sp.Endpoint, topologyMode, no
 	eps := make([]k8sp.Endpoint, 0, len(endpoints))
 	for _, ep := range endpoints {
 		zoneHints := ep.ZoneHints()
-		if !(ep.IsReady() || ep.IsTerminating()) {
+		if !ep.IsReady() && !ep.IsTerminating() {
 			log.Debugf("Topology Aware Routing: ignoring Endpoint '%s' since its status is not Ready or Terminating'\n", ep.IP())
 			continue
 		}
@@ -87,7 +87,7 @@ func filterEndpointsByHints(endpoints []k8sp.Endpoint, targetHint string, getHin
 	eps := make([]k8sp.Endpoint, 0, len(endpoints))
 	for _, ep := range endpoints {
 		epHints := getHints(ep)
-		if !(ep.IsReady() || ep.IsTerminating()) {
+		if !ep.IsReady() && !ep.IsTerminating() {
 			log.Debugf("Traffic Distribution: ignoring Endpoint '%s' since its status is not Ready or Terminating'\n", ep.IP())
 			continue
 		}
