@@ -577,22 +577,24 @@ const (
 )
 
 func (leg matchLeg) offsetToStateIPAddressField() (offset FieldOffset) {
-	if leg == legSource {
+	switch leg {
+	case legSource:
 		offset = stateOffIPSrc
-	} else if leg == legDestPreNAT {
+	case legDestPreNAT:
 		offset = stateOffPreNATIPDst
-	} else {
+	default:
 		offset = stateOffPostNATIPDst
 	}
 	return
 }
 
 func (leg matchLeg) offsetToStatePortField() (portOffset FieldOffset) {
-	if leg == legSource {
+	switch leg {
+	case legSource:
 		portOffset = stateOffSrcPort
-	} else if leg == legDestPreNAT {
+	case legDestPreNAT:
 		portOffset = stateOffPreNATDstPort
-	} else {
+	default:
 		portOffset = stateOffPostNATDstPort
 	}
 	return

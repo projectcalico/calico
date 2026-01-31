@@ -74,6 +74,10 @@ func (i IPNet) Covers(n net.IPNet) bool {
 }
 
 func (i IPNet) NthIP(n int) IP {
+	return i.nthIP(int64(n))
+}
+
+func (i IPNet) nthIP(n int64) IP {
 	bigN := big.NewInt(int64(n))
 	return IncrementIP(IP{i.IP}, bigN)
 }

@@ -751,11 +751,12 @@ func (c *listCmd) main() {
 	writef("Name: %s\n", c.SetName)
 	writef("Type: %s\n", meta.Type)
 	writef("Revision: %d\n", meta.Revision)
-	if meta.Type == IPSetTypeBitmapPort {
+	switch meta.Type {
+	case IPSetTypeBitmapPort:
 		writef("Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
-	} else if meta.Type == "unknown:type" {
+	case "unknown:type":
 		writef("Header: floop\n")
-	} else {
+	default:
 		writef("Header: family %s hashsize 1024 maxelem %d\n", meta.Family, meta.MaxSize)
 	}
 	writef("Field: foobar\n") // Dummy field, should get ignored.
