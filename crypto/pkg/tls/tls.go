@@ -52,7 +52,7 @@ var legacyCiphers = []uint16{
 	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 }
 
-// supported TLS Versions
+// Supported TLS Versions
 var tlsVersions = []uint16{
 	tls.VersionTLS12,
 	tls.VersionTLS13,
