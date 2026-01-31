@@ -78,7 +78,7 @@ func supportedCipherMap() map[string]uint16 {
 	return cipherMap
 }
 
-func SupportedTLSVersionsMap() map[string]uint16 {
+func supportedTLSVersionsMap() map[string]uint16 {
 	tlsVersionsMap := make(map[string]uint16)
 	addTlsVersions := func(versions []uint16) {
 		for _, version := range versions {
@@ -124,7 +124,7 @@ func ParseTLSVersion(version string) (uint16, error) {
 		return tls.VersionTLS12, nil
 	}
 
-	supportedVersions := SupportedTLSVersionsMap()
+	supportedVersions := supportedTLSVersionsMap()
 
 	if v, ok := supportedVersions[strings.TrimSpace(version)]; ok {
 		return v, nil
