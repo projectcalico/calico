@@ -321,12 +321,17 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	-e GINKGO_ARGS="$(GINKGO_ARGS)" \
 	$(CALICO_BUILD) ./run-uts $(WHAT)
 
 ###############################################################################
 # System tests
 ###############################################################################
+CHARTS=../bin/tigera-operator-$(GIT_VERSION).tgz \
+			 ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz \
+			 ../bin/projectcalico.org.v3-$(GIT_VERSION).tgz
+
 dist/calicoctl:
 	mkdir -p dist
 	make -C ../calicoctl build
@@ -355,11 +360,13 @@ test_image: .calico_test.created
 	$(DOCKER_BUILD) --build-arg ETCD_VERSION=$(ETCD_VERSION) -f calico_test/Dockerfile -t $(TEST_CONTAINER_NAME) calico_test
 	touch $@
 
-chart: ../bin/tigera-operator-$(GIT_VERSION).tgz ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+chart: $(CHARTS)
 ../bin/tigera-operator-$(GIT_VERSION).tgz:
 	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
 ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz:
 	make -C ../ bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+../bin/projectcalico.org.v3-$(GIT_VERSION).tgz:
+	make -C ../ bin/projectcalico.org.v3-$(GIT_VERSION).tgz
 
 # Tag to use for images built for e2e testing. This must match the image tag used in
 # tests/k8st/infra/calico_versions.yml
@@ -444,8 +451,13 @@ k8s-test:
 	$(MAKE) kind-k8st-cleanup
 
 .PHONY: kind-k8st-setup
-kind-k8st-setup: $(K8ST_IMAGE_TARS) ../bin/tigera-operator-$(GIT_VERSION).tgz ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz kind-cluster-create
-	KUBECONFIG=$(KIND_KUBECONFIG) KIND=$(KIND) ARCH=$(ARCH) GIT_VERSION=$(GIT_VERSION) ./tests/k8st/deploy_resources_on_kind_cluster.sh
+kind-k8st-setup: $(K8ST_IMAGE_TARS) $(CHARTS) kind-cluster-create
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	KIND=$(KIND) \
+	ARCH=$(ARCH) \
+	GIT_VERSION=$(GIT_VERSION) \
+	CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)

@@ -80,154 +80,172 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 	var client resources.K8sResourceClient
 	var fakeREST *fake.RESTClient
 
-	BeforeEach(func() {
-		fakeREST = &fake.RESTClient{
-			NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
-			GroupVersion: schema.GroupVersion{
-				Group:   "crd.projectcalico.org",
-				Version: "v1",
-			},
-			VersionedAPIPath: "/apis",
-		}
-		client = resources.NewBlockAffinityClient(nil, fakeREST)
+	Context("v3.BlockAffinity tests", func() {
+		BeforeEach(func() {
+			fakeREST = &fake.RESTClient{
+				NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
+				GroupVersion: schema.GroupVersion{
+					Group:   "crd.projectcalico.org",
+					Version: "v1",
+				},
+				VersionedAPIPath: "/apis",
+			}
+			client = resources.NewBlockAffinityClientV3(fakeREST, resources.BackingAPIGroupV1)
+		})
+
+		It("should list all", func() {
+			l, err := client.List(context.TODO(), model.ResourceListOptions{
+				Kind: apiv3.KindBlockAffinity,
+			}, "")
+
+			// Expect an error since the client is not implemented.
+			Expect(err).To(HaveOccurred())
+			Expect(l).To(BeNil())
+
+			// But we should be able to check the request...
+			url := fakeREST.Req.URL
+			logrus.Debug("URL: ", url)
+			Expect(url.Path).To(Equal("/apis/blockaffinities"))
+			Expect(url.Query()).NotTo(HaveKey("metadata.name"))
+		})
+
+		It("should use a fieldSelector for a list name match", func() {
+			l, err := client.List(context.TODO(), model.ResourceListOptions{
+				Name: "foo",
+				Kind: apiv3.KindBlockAffinity,
+			}, "")
+
+			// Expect an error since the client is not implemented.
+			Expect(err).To(HaveOccurred())
+			Expect(l).To(BeNil())
+
+			// But we should be able to check the request...
+			url := fakeREST.Req.URL
+			logrus.Debug("URL: ", url)
+			Expect(url.Path).To(Equal("/apis/blockaffinities"))
+			Expect(url.Query().Get("fieldSelector")).To(Equal("metadata.name=foo"))
+		})
+
+		It("should auto-label v3 BlockAffinity on create", func() {
+			val := &apiv3.BlockAffinity{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindBlockAffinity,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "ba1",
+					Labels: map[string]string{},
+				},
+				Spec: apiv3.BlockAffinitySpec{
+					State:   apiv3.StateConfirmed,
+					Node:    "v3-host",
+					Type:    string(ipam.AffinityTypeHost),
+					CIDR:    "10.20.0.0/24",
+					Deleted: false,
+				},
+			}
+
+			kvp := &model.KVPair{
+				Key:   model.ResourceKey{Name: "ba1", Kind: apiv3.KindBlockAffinity},
+				Value: val,
+			}
+
+			// We expect an error since fake REST doesn't return a response, but the request will be captured.
+			_, _ = client.Create(context.TODO(), kvp)
+
+			// Inspect the request body for labels.
+			req := fakeREST.Req
+			Expect(req).ToNot(BeNil())
+			Expect(req.URL.Path).To(Equal("/apis/blockaffinities"))
+			bodyBytes, err := io.ReadAll(req.Body)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The posted object should be in the backend libapiv3 format.
+			var posted libapiv3.BlockAffinity
+			Expect(json.Unmarshal(bodyBytes, &posted)).To(Succeed(), string(bodyBytes))
+			Expect(posted.Labels).To(HaveKey(apiv3.LabelHostnameHash))
+			Expect(posted.Labels[apiv3.LabelHostnameHash]).NotTo(BeEmpty())
+			Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelAffinityType, string(ipam.AffinityTypeHost)))
+			Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelIPVersion, "4"))
+		})
 	})
 
-	It("should list all (v3)", func() {
-		l, err := client.List(context.TODO(), model.ResourceListOptions{
-			Kind: apiv3.KindBlockAffinity,
-		}, "")
+	Context("v1.BlockAffinity tests", func() {
+		BeforeEach(func() {
+			fakeREST = &fake.RESTClient{
+				NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
+				GroupVersion: schema.GroupVersion{
+					Group:   "crd.projectcalico.org",
+					Version: "v1",
+				},
+				VersionedAPIPath: "/apis",
+			}
+			client = resources.NewBlockAffinityClientV1(fakeREST, resources.BackingAPIGroupV1)
+		})
 
-		// Expect an error since the client is not implemented.
-		Expect(err).To(HaveOccurred())
-		Expect(l).To(BeNil())
+		It("should list all", func() {
+			l, err := client.List(context.TODO(), model.BlockAffinityListOptions{}, "")
 
-		// But we should be able to check the request...
-		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
-		Expect(url.Path).To(Equal("/apis/blockaffinities"))
-		Expect(url.Query()).NotTo(HaveKey("metadata.name"))
-	})
+			// Expect an error since the client is not implemented.
+			Expect(err).To(HaveOccurred())
+			Expect(l).To(BeNil())
 
-	It("should list all (v1)", func() {
-		l, err := client.List(context.TODO(), model.BlockAffinityListOptions{}, "")
+			// But we should be able to check the request...
+			url := fakeREST.Req.URL
+			logrus.Debug("URL: ", url)
+			Expect(url.Path).To(Equal("/apis/blockaffinities"))
+			Expect(url.Query()).NotTo(HaveKey("metadata.name"))
+		})
 
-		// Expect an error since the client is not implemented.
-		Expect(err).To(HaveOccurred())
-		Expect(l).To(BeNil())
+		It("should _not_ use a fieldSelector for a list name match", func() {
+			l, err := client.List(context.TODO(), model.BlockAffinityListOptions{
+				Host:         "host",
+				AffinityType: "",
+				IPVersion:    0,
+			}, "")
 
-		// But we should be able to check the request...
-		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
-		Expect(url.Path).To(Equal("/apis/blockaffinities"))
-		Expect(url.Query()).NotTo(HaveKey("metadata.name"))
-	})
+			// Expect an error since the client is not implemented.
+			Expect(err).To(HaveOccurred())
+			Expect(l).To(BeNil())
 
-	It("should use a fieldSelector for a list name match (v3)", func() {
-		l, err := client.List(context.TODO(), model.ResourceListOptions{
-			Name: "foo",
-			Kind: apiv3.KindBlockAffinity,
-		}, "")
+			// But we should be able to check the request...
+			url := fakeREST.Req.URL
+			logrus.Debug("URL: ", url)
+			Expect(url.Path).To(Equal("/apis/blockaffinities"))
 
-		// Expect an error since the client is not implemented.
-		Expect(err).To(HaveOccurred())
-		Expect(l).To(BeNil())
+			// TODO We can't currently use a field selector here but we'd like to!
+			//      The name of the resource combines the host and CIDR, so we can't
+			//      filter on just the host.  Possible fix: put the host in a label
+			//      so we can filter on that.
+			Expect(url.Query()).NotTo(HaveKey("metadata.name"))
+		})
 
-		// But we should be able to check the request...
-		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
-		Expect(url.Path).To(Equal("/apis/blockaffinities"))
-		Expect(url.Query().Get("fieldSelector")).To(Equal("metadata.name=foo"))
-	})
+		It("should auto-label v1 BlockAffinity on create", func() {
+			kvp := &model.KVPair{
+				Key: model.BlockAffinityKey{
+					Host:         "my-host",
+					CIDR:         net.MustParseCIDR("192.168.1.0/24"),
+					AffinityType: string(ipam.AffinityTypeHost),
+				},
+				Value: &model.BlockAffinity{State: model.StateConfirmed},
+			}
 
-	It("should _not_ use a fieldSelector for a list name match (v1)", func() {
-		l, err := client.List(context.TODO(), model.BlockAffinityListOptions{
-			Host:         "host",
-			AffinityType: "",
-			IPVersion:    0,
-		}, "")
+			// We expect an error since fake REST doesn't return a response, but the request will be captured.
+			_, _ = client.Create(context.TODO(), kvp)
 
-		// Expect an error since the client is not implemented.
-		Expect(err).To(HaveOccurred())
-		Expect(l).To(BeNil())
+			// Inspect the request body for labels.
+			req := fakeREST.Req
+			Expect(req).ToNot(BeNil())
+			Expect(req.URL.Path).To(Equal("/apis/blockaffinities"))
+			bodyBytes, err := io.ReadAll(req.Body)
+			Expect(err).NotTo(HaveOccurred())
 
-		// But we should be able to check the request...
-		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
-		Expect(url.Path).To(Equal("/apis/blockaffinities"))
-
-		// TODO We can't currently use a field selector here but we'd like to!
-		//      The name of the resource combines the host and CIDR, so we can't
-		//      filter on just the host.  Possible fix: put the host in a label
-		//      so we can filter on that.
-		Expect(url.Query()).NotTo(HaveKey("metadata.name"))
-	})
-
-	It("should auto-label v1 BlockAffinity on create", func() {
-		kvp := &model.KVPair{
-			Key: model.BlockAffinityKey{
-				Host:         "my-host",
-				CIDR:         net.MustParseCIDR("192.168.1.0/24"),
-				AffinityType: string(ipam.AffinityTypeHost),
-			},
-			Value: &model.BlockAffinity{State: model.StateConfirmed},
-		}
-
-		// We expect an error since fake REST doesn't return a response, but the request will be captured.
-		_, _ = client.Create(context.TODO(), kvp)
-
-		// Inspect the request body for labels.
-		req := fakeREST.Req
-		Expect(req).ToNot(BeNil())
-		Expect(req.URL.Path).To(Equal("/apis/blockaffinities"))
-		bodyBytes, err := io.ReadAll(req.Body)
-		Expect(err).NotTo(HaveOccurred())
-
-		var posted libapiv3.BlockAffinity
-		Expect(json.Unmarshal(bodyBytes, &posted)).To(Succeed())
-		Expect(posted.Labels).To(HaveKey(apiv3.LabelHostnameHash))
-		Expect(posted.Labels[apiv3.LabelHostnameHash]).NotTo(BeEmpty())
-		Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelAffinityType, string(ipam.AffinityTypeHost)))
-		Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelIPVersion, "4"))
-	})
-
-	It("should auto-label v3 BlockAffinity on create", func() {
-		val := &libapiv3.BlockAffinity{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindBlockAffinity,
-				APIVersion: apiv3.GroupVersionCurrent,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   "ba1",
-				Labels: map[string]string{},
-			},
-			Spec: libapiv3.BlockAffinitySpec{
-				State:   string(model.StateConfirmed),
-				Node:    "v3-host",
-				Type:    string(ipam.AffinityTypeHost),
-				CIDR:    "10.20.0.0/24",
-				Deleted: "false",
-			},
-		}
-		kvp := &model.KVPair{
-			Key:   model.ResourceKey{Name: "ba1", Kind: libapiv3.KindBlockAffinity},
-			Value: val,
-		}
-
-		// We expect an error since fake REST doesn't return a response, but the request will be captured.
-		_, _ = client.Create(context.TODO(), kvp)
-
-		// Inspect the request body for labels.
-		req := fakeREST.Req
-		Expect(req).ToNot(BeNil())
-		Expect(req.URL.Path).To(Equal("/apis/blockaffinities"))
-		bodyBytes, err := io.ReadAll(req.Body)
-		Expect(err).NotTo(HaveOccurred())
-
-		var posted libapiv3.BlockAffinity
-		Expect(json.Unmarshal(bodyBytes, &posted)).To(Succeed())
-		Expect(posted.Labels).To(HaveKey(apiv3.LabelHostnameHash))
-		Expect(posted.Labels[apiv3.LabelHostnameHash]).NotTo(BeEmpty())
-		Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelAffinityType, string(ipam.AffinityTypeHost)))
-		Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelIPVersion, "4"))
+			var posted libapiv3.BlockAffinity
+			Expect(json.Unmarshal(bodyBytes, &posted)).To(Succeed(), string(bodyBytes))
+			Expect(posted.Labels).To(HaveKey(apiv3.LabelHostnameHash))
+			Expect(posted.Labels[apiv3.LabelHostnameHash]).NotTo(BeEmpty())
+			Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelAffinityType, string(ipam.AffinityTypeHost)))
+			Expect(posted.Labels).To(HaveKeyWithValue(apiv3.LabelIPVersion, "4"))
+		})
 	})
 })

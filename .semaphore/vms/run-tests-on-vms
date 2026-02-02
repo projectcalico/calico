@@ -76,6 +76,8 @@ fi
 # Do a bulk create; this is faster and it saves API quota.
 echo "Creating test VMs in bulk..."
 gcloud --quiet compute instances bulk create \
+       --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com" \
+       --scopes="https://www.googleapis.com/auth/cloud-platform" \
        --predefined-names="$names" \
        --zone=${zone} \
        --machine-type=${VM_MACHINE_TYPE} \
