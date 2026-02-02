@@ -18,6 +18,8 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
 // Policy is a struct to hold policy config (which currently happens to also contain some K8s config)
@@ -149,6 +151,10 @@ type NetConf struct {
 
 	// RequireMTUFile specifies whether mtu file is required to execute the cni-plugin
 	RequireMTUFile bool `json:"require_mtu_file,omitempty"`
+
+	// CalicoAPIGroup specifies the API group to use when connecting to the Kubernetes API server.
+	// If not specified, the default value of "crd.projectcalico.org" is used.
+	CalicoAPIGroup resources.BackingAPIGroup `json:"calico_api_group,omitempty"`
 }
 
 // Runtime Config is provided by kubernetes

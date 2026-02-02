@@ -42,8 +42,7 @@ import (
 const (
 	// Number of retries when we have an error writing data
 	// to etcd.
-	datastoreRetries  = 100
-	ipamKeyErrRetries = 3
+	datastoreRetries = 100
 
 	// Common attributes which may be set on allocations by clients.  Moved to the model package so they can be used
 	// by the AllocationBlock code too.
@@ -2354,9 +2353,9 @@ func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
 	}
 	var cidrs cidrSliceFilter
 	for _, r := range reservations.Items {
-		for _, cidrStr := range r.Spec.ReservedCIDRs {
-			cidrStr = strings.TrimSpace(cidrStr)
-			if len(cidrStr) == 0 {
+		for _, cidrVal := range r.Spec.ReservedCIDRs {
+			cidrStr := strings.TrimSpace(string(cidrVal))
+			if len(cidrVal) == 0 {
 				// Defensive, validation should prevent.
 				continue
 			}
@@ -2422,6 +2421,22 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 				continue
 			}
 			model.EnsureBlockAffinityLabels(val)
+			_, err := c.client.Update(ctx, kv)
+			if err != nil {
+				errs = append(errs, err)
+				if errors.Is(err, context.DeadlineExceeded) {
+					break
+				}
+				continue
+			}
+			numUpgraded++
+		} else if val, ok := kv.Value.(*v3.BlockAffinity); ok {
+			if val.Spec.Node != nodeName {
+				// Only do _our_ affinities to avoid n x n conflicts with other
+				// nodes also doing this operation.
+				continue
+			}
+			model.EnsureBlockAffinityLabelsV3(val)
 			_, err := c.client.Update(ctx, kv)
 			if err != nil {
 				errs = append(errs, err)
