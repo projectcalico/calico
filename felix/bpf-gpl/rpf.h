@@ -24,6 +24,7 @@ static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt
                 return RPF_RES_FAIL;
 		} else if (!r) {
 				CALI_INFO("Workload RPF bypass: allowing spoofed source IP");
+				ctx->state->flags |= CALI_ST_SUPPRESS_CT_STATE;
 				return RPF_RES_STRICT;
 		}
 #ifdef IPVER6
