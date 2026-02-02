@@ -7,7 +7,7 @@ installation:
   # Disable HA control plane.
   controlPlaneReplicas: 1
 
-  # Diable CSI / flexVolume as they are not used by these tests.
+  # Disable CSI / flexVolume as they are not used by these tests.
   kubeletVolumePluginPath: "None"
   flexVolumePath: "None"
 

@@ -67,7 +67,7 @@ LIBBPF_VERSION=v1.6.2
 BPFTOOL_IMAGE=calico/bpftool:v7.5.0
 
 # The operator branch corresponding to this branch.
-OPERATOR_BRANCH ?= master
+OPERATOR_BRANCH ?= felix-routing
 OPERATOR_ORGANIZATION ?= tigera
 OPERATOR_GIT_REPO     ?= operator
 
