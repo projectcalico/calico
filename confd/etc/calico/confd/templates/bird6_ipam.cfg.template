@@ -27,6 +27,17 @@ function reject_local_routes () {
   }
 }
 
+{{$calico_cluster_routing_backend := (getenv "CALICO_NETWORKING_BACKEND")}}
+function reject_ippools() {
+{{- if eq $calico_cluster_routing_backend "felix"}}
+  # Don't advertise cluster routes - these are handled by Felix.
+{{- range ls "/v1/ipam/v6/pool"}}{{$data := json (getv (printf "/v1/ipam/v6/pool/%s" .))}}
+  if ( net ~ {{$data.cidr}} ) then { reject; }
+{{- end}}
+{{- end}}
+}
+
+{{$calico_networking_backend := (getenv "CALICO_NETWORKING_BACKEND")}}
 function calico_export_to_bgp_peers(bool internal_peer) {
   # filter code terminates when it calls `accept;` or `reject;`,
   # call reject_disabled_pools() first, then reject_tunnel_routes(),
@@ -34,6 +45,7 @@ function calico_export_to_bgp_peers(bool internal_peer) {
   reject_disabled_pools();
   if (internal_peer) then {
     reject_tunnel_routes();
+	reject_ippools();
   }
   reject_local_routes();
   apply_communities();
@@ -86,12 +98,21 @@ filter calico_kernel_programming {
 
 {{- end}}
 {{range ls "/v1/ipam/v6/pool"}}{{$data := json (getv (printf "/v1/ipam/v6/pool/%s" .))}}
-{{- if $data.vxlan_mode}}
   if ( net ~ {{$data.cidr}} ) then {
+{{- if eq $calico_networking_backend "felix"}}
+	# Don't program cluster routes into the kernel - these are handled by Felix.
+	reject;
+  }
+{{- else}}
+{{- if $data.vxlan_mode}}
     # Don't program VXLAN routes into the kernel - these are handled by Felix.
     reject;
   }
+{{- else}}
+	accept;
+  }
 {{- end}}{{/* End of '$data.vxlan_mode' */}}
+{{- end}}{{/* End of '$calico_networking_backend' */}}
 {{- end}}{{/* End of 'range ls...' */}}
   accept;                                  {{- /* Destination is not in any ipPool, accept  */}}
 }
