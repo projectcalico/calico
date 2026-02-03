@@ -28,6 +28,9 @@ REMOTE_DEPS = $(LIBBPF_A) \
 	      filesystem/etc/calico/confd/conf.d \
 	      filesystem/etc/calico/confd/templates
 
+# Run these tests against the projectcalico.org/v3 API group by default.
+CALICO_API_GROUP ?= projectcalico.org/v3
+
 ###############################################################################
 # Include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
