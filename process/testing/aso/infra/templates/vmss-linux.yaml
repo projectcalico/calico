@@ -92,7 +92,7 @@ spec:
       # Verify installations
       containerd --version
 
-      echo "Containerd and installation completed successfully"
+      echo "Containerd installation completed successfully"
       '
 ---
 apiVersion: network.azure.com/v1api20240301

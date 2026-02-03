@@ -127,10 +127,13 @@ function setup_kubeadm_cluster() {
   fi
 
   cat <<EOF > ./kubeadm-config.yaml
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: ClusterConfiguration
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
 localAPIEndpoint:
   advertiseAddress: "${ADVERTISE_ADDRESS}"
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
 apiServer:
   certSANs:
 $(echo "${CERT_SANS}" | tr ',' '\n' | sed 's/^/  - /')
