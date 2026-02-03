@@ -75,6 +75,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
+	CALI_DEBUG("forward_or_drop fib %d", fwd_fib(&ctx->fwd));
+	CALI_DEBUG("forward_or_drop mark 0x%x", ctx->fwd.mark);
+	CALI_DEBUG("forward_or_drop state flags 0x%llx", state->flags);
+
 	if (!bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
 		if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK && ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			/* needs to go via routing in netfilter unless we have access
@@ -87,7 +91,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 	}
 
 #ifndef IPVER6
-        if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && (ctx->state->flags & CALI_ST_FIRST_FRAG)) {
+        if (ctx->state->flags & CALI_ST_FIRST_FRAG) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
