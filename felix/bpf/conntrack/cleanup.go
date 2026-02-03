@@ -330,6 +330,10 @@ again:
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATReverse is stale")
 			}
+			if proto == ProtoTCP {
+				// For TCP, we send RST to speed up cleanup on both ends.
+				return ScanVerdictSendRST, lastSeen
+			}
 			sns.cleaned++
 			conntrackCounterStaleNAT.Inc()
 			return ScanVerdictDeleteImmediate, lastSeen
@@ -464,6 +468,10 @@ again:
 		if !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATForward is stale")
+			}
+			if proto == ProtoTCP {
+				// For TCP, we send RST to speed up cleanup on both ends.
+				return ScanVerdictSendRST, lastSeen
 			}
 			sns.cleaned++
 			conntrackCounterStaleNAT.Inc()

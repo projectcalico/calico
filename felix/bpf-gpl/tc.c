@@ -453,6 +453,13 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			ctx->state->flags |= CALI_ST_SKIP_FIB;
 		}
 		CALI_DEBUG("CT Hit");
+		/* Check for TCP RST injection */
+		if (CALI_F_TO_HOST && ctx->state->ct_result.flags & CALI_CT_FLAG_SEND_RESET) {
+			CALI_DEBUG("Sending TCP RST due to CT state");
+			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
+			goto deny;
+		}
 
 		if (ctx->state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx->state->ct_result.rc)) {
 			CALI_DEBUG("Forcing policy on SYN");

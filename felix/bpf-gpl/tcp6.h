@@ -44,7 +44,7 @@ static CALI_BPF_INLINE int tcp_v6_rst(struct cali_tc_ctx *ctx) {
 	ip_hdr(ctx)->nexthdr = IPPROTO_TCP;
 	ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->daddr, &orig_src);
 	ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, &orig_dst);
-	ip_hdr(ctx)->payload_len = bpf_htons(len - (CALI_F_L3_DEV ? 0 : ETH_SIZE));
+	ip_hdr(ctx)->payload_len = bpf_htons(TCP_SIZE);
 	ctx->ipheader_len = IP_SIZE;
 
 	struct tcphdr *th = ((void *)ip_hdr(ctx)) + IP_SIZE;
@@ -64,7 +64,7 @@ static CALI_BPF_INLINE int tcp_v6_rst(struct cali_tc_ctx *ctx) {
 	th->check = 0;
 
 	__wsum tcp_csum = bpf_csum_diff(0, 0, (__u32 *)th, len - sizeof(struct ipv6hdr) - skb_iphdr_offset(ctx), 0);
-	if (bpf_l4_csum_replace(ctx->skb, sizeof(struct ethhdr) + sizeof(struct ipv6hdr) +
+	if (bpf_l4_csum_replace(ctx->skb, skb_l4hdr_offset(ctx) +
 			offsetof(struct tcphdr, check), 0, tcp_csum, 0)) {
 		CALI_DEBUG("TCP reset v6 reply: set tcp csum failed");
 		return -1;
