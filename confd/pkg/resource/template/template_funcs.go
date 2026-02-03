@@ -40,6 +40,7 @@ func newFuncMap() map[string]interface{} {
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
 	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
+	m["ippoolsFilterBIRDFunc"] = IPPoolsFilterBIRDFunc
 	return m
 }
 
@@ -401,6 +402,90 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 		lines = append(lines, line)
 	}
 	return lines, nil
+}
+
+func IPPoolsFilterBIRDFunc(
+	pairs memkv.KVPairs,
+	forProgrammingKernel bool,
+	version int,
+) ([]string, error) {
+	lines := []string{}
+	var line string
+	var versionStr string
+
+	if version == 4 || version == 6 {
+		versionStr = fmt.Sprintf("%d", version)
+	} else {
+		return []string{}, fmt.Errorf("version must be either 4 or 6")
+	}
+
+	for _, kvp := range pairs {
+		var ippool v3.IPPool
+		err := json.Unmarshal([]byte(kvp.Value), &ippool)
+		if err != nil {
+			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
+		}
+
+		cidr := ippool.Spec.CIDR
+		action := "accept"
+		comment := ""
+		extraStatement := ""
+		if forProgrammingKernel && version == 4 && ippool.Spec.VXLANMode == v3.VXLANModeNever {
+			extraStatement = emitFilterForKernelProgrammingIPIPNoEncap(ippool.Spec.IPIPMode, cidr)
+		}
+
+		if ippool.Spec.DisableBGPExport && !forProgrammingKernel {
+			action = "reject"
+			comment = "BGP export is disabled."
+		} else if ippool.Spec.VXLANMode != v3.VXLANModeNever {
+			action = "reject"
+			comment = "VXLAN routes are handled by Felix."
+		}
+
+		lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment)...)
+	}
+	if len(lines) == 0 {
+		line = fmt.Sprintf("# No v%s IPPool configured", versionStr)
+		lines = append(lines, line)
+	}
+	return lines, nil
+}
+
+func emitFilterForKernelProgrammingIPIPNoEncap(ipipMode v3.IPIPMode, cidr string) string {
+	switch ipipMode {
+	case v3.IPIPModeAlways:
+		return `krt_tunnel = "tunl0";`
+	case v3.IPIPModeCrossSubnet:
+		format := `if (defined(bgp_next_hop) && bgp_next_hop ~ %s) then krt_tunnel = ""; else krt_tunnel = "tunl0";`
+		return fmt.Sprintf(format, cidr)
+	case v3.IPIPModeNever:
+		return `krt_tunnel = "";`
+	default:
+		return ``
+	}
+}
+
+func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string) []string {
+	/*if len(extraStatement) != 0 {
+		lines := []string{fmt.Sprintf("if ( net ~ %s ) then {", cidr)}
+		if len(comment) != 0 {
+			lines = append(lines, "  # %s", comment)
+		}
+		lines = append(lines, fmt.Sprintf("%s", extraStatement))
+		lines = append(lines, fmt.Sprintf("%s;", action))
+		lines = append(lines, "}")
+		logrus.Infof("pepper %v", lines)
+		return lines
+	}*/
+	statement := action
+	if len(extraStatement) != 0 && action == "accept" {
+		statement = fmt.Sprintf("%s %s", extraStatement, statement)
+	}
+
+	if len(comment) != 0 {
+		return []string{fmt.Sprintf("if ( net ~ %s ) then { %s; } # %s", cidr, statement, comment)}
+	}
+	return []string{fmt.Sprintf("if ( net ~ %s ) then { %s; }", cidr, statement)}
 }
 
 // Getenv retrieves the value of the environment variable named by the key.
