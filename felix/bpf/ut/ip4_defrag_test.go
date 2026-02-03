@@ -205,7 +205,7 @@ func TestIP4Defrag(t *testing.T) {
 
 	ipfragsFwdMapCount := func() int {
 		count := 0
-		ipfragsFwdMap.Iter(func(key, value []byte) mapsbpf.IteratorAction {
+		_ = ipfragsFwdMap.Iter(func(key, value []byte) mapsbpf.IteratorAction {
 			count++
 			return mapsbpf.IterNone
 		})
