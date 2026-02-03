@@ -125,6 +125,9 @@ type Scanner struct {
 	revNATKeyToFwdNATInfo        map[KeyInterface]cleanupv1.ValueInterface
 	ipFamily                     int
 
+	conntrackGaugeMaglevToLocalBackend  prometheus.Gauge
+	conntrackGaugeMaglevToRemoteBackend prometheus.Gauge
+
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	stopOnce sync.Once
@@ -171,6 +174,19 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 
 		}
 	}
+
+	var err error
+
+	s.conntrackGaugeMaglevToLocalBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local", strconv.Itoa(s.ipFamily))
+	if err != nil {
+		log.WithError(err).Panic("Couldn't init (local) Maglev conntrack metric gauge")
+	}
+
+	s.conntrackGaugeMaglevToRemoteBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("remote", strconv.Itoa(s.ipFamily))
+	if err != nil {
+		log.WithError(err).Panic("Couldn't get (remote) Maglev conntrack metric gauge")
+	}
+
 	return s
 }
 
@@ -340,21 +356,10 @@ func (s *Scanner) Scan() {
 	// Run the bpf cleaner to process the remaining entries in the cleanup map.
 	cleaned += s.runBPFCleaner()
 
-	maglevConntracksToLocalBackend, err := conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local", strconv.Itoa(s.ipFamily))
-	if err != nil {
-		log.WithError(err).Warn("Couldn't get (local) Maglev conntracks metric, will not update it on this iteration")
-	} else {
-		log.WithField("value", maglevEntriesToLocal).Debug("Setting local maglev conntrack entries gauge")
-		maglevConntracksToLocalBackend.Set(float64(maglevEntriesToLocal))
-	}
-
-	maglevConntracksToRemoteBackend, err := conntrackGaugeMaglevTotal.GetMetricWithLabelValues("remote", strconv.Itoa(s.ipFamily))
-	if err != nil {
-		log.WithError(err).Warn("Couldn't get (remote) Maglev conntracks metric, will not update it on this iteration")
-	} else {
-		log.WithField("value", maglevEntriesToRemote).Debug("Setting remote maglev conntrack entries gauge")
-		maglevConntracksToRemoteBackend.Set(float64(maglevEntriesToRemote))
-	}
+	log.WithField("value", maglevEntriesToLocal).Debug("Setting local maglev conntrack entries gauge")
+	s.conntrackGaugeMaglevToLocalBackend.Set(float64(maglevEntriesToLocal))
+	log.WithField("value", maglevEntriesToRemote).Debug("Setting remote maglev conntrack entries gauge")
+	s.conntrackGaugeMaglevToRemoteBackend.Set(float64(maglevEntriesToRemote))
 
 	conntrackCounterSweeps.Inc()
 	conntrackGaugeUsed.Set(float64(used))
