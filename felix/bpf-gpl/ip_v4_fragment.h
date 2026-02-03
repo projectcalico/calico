@@ -213,21 +213,16 @@ static int frags4_remove_ct_cb(void *map, struct frags4_fwd_key *key, __unused s
 }
 #endif
 
-static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
+#define FRAGS4_HANDLE_UNSUPPORTED	0
+#define FRAGS4_HANDLE_FIRST_IN_ORDER 	1
+#define FRAGS4_HANDLE_STORE_ONLY	2
+#define FRAGS4_HANDLE_REASSEMBLED	3
+
+static CALI_BPF_INLINE int frags4_handle(struct cali_tc_ctx *ctx)
 {
 #ifndef BPF_CORE_SUPPORTED
 	return false;
 #else
-	/* We do not really use bpf_loop() here, but we need to check if the kernel
-	 * supports it. If it does not, we cannot handle fragments as the
-	 * verifier would not verify the code correctly and woul dnot accept it.
-	 */
-	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
-		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
-		return false;
-	}
-
-
 	struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
 
 	if (!frag_ct_val) {
@@ -237,7 +232,7 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 			 * will be allowed by the CT entry.
 			 */
 			CALI_DEBUG("IP FRAG: first fragment in order will created CT entry");
-			return true;
+			return FRAGS4_HANDLE_FIRST_IN_ORDER;
 		} else {
 			/* Out of order fragment, store the fragment and create a CT entry
 			 * to remember that we had an out-of-order fragment.
@@ -249,12 +244,21 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 			/* We have a CT entry and the first fragment arrived in order,
 			 * so all subsequent fragments are allowed.
 			 */
-			return true;
+			return FRAGS4_HANDLE_FIRST_IN_ORDER;
 		}
 		/* We had an out-of-order fragment before, continue storing fragments. */
 	}
 
 	/* Out of order fragment, we haven't seen the first yet, store it. */
+
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return FRAGS4_HANDLE_UNSUPPORTED;
+	}
 
 	struct frags4_value *v = frags4_get_scratch();
 
@@ -315,10 +319,10 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 	}
 
 
-	return true;
+	return FRAGS4_HANDLE_REASSEMBLED;
 
 out:
-	return false;
+	return FRAGS4_HANDLE_STORE_ONLY;
 #endif /* BPF_CORE_SUPPORTED */
 }
 
@@ -335,22 +339,24 @@ static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u3
 	}
 
 	struct frags4_fwd_key k = {
-		.src = ip_hdr(ctx)->saddr,
-		.dst = ip_hdr(ctx)->daddr,
+		.src = ctx->state->ip_src,
+		.dst = ctx->state->pre_nat_ip_dst,
 		.ifindex = ctx->skb->ifindex,
 		.id = ip_hdr(ctx)->id,
 	};
 
 	struct frags4_fwd_value vinit = {
 		.sport = ctx->state->sport,
-		.dport = ctx->state->dport,
+		.dport = ctx->state->pre_nat_dport,
 		.marks = ctx->fwd.mark,
 		.flags = flags,
 	};
 
 	cali_v4_frgfwd_update_elem(&k, &vinit, 0);
 	CALI_DEBUG("IP FRAG: created ct from " IP_FMT " to " IP_FMT,
-			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
+			debug_ip(k.src), debug_ip(k.dst));
+	CALI_DEBUG("IP FRAG: created ct from %d to %d",
+			vinit.sport, vinit.dport);
 
 
 	struct frags4_fwd_value *val = cali_v4_frgfwd_lookup_elem(&k);

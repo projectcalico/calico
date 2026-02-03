@@ -1750,14 +1750,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						tcpdump1.SetLogEnabled(true)
 						tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
 							fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
-						tcpdump1.Start("-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
+						tcpdump1.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
 						defer tcpdump1.Stop()
 
 						tcpdump0 := w[0][0].AttachTCPDump()
 						tcpdump0.SetLogEnabled(true)
 						tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
 							fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
-						tcpdump0.Start("-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
+						tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
 						defer tcpdump1.Stop()
 
 						externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
