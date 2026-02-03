@@ -10,7 +10,7 @@ KIND_CLUSTER_NAME?=kind
 ###############################################################################
 # ASO management
 ###############################################################################
-ASO_INSTALLED_MARKER:=.aso_installed
+ASO_INSTALLED_MARKER:=.aso-installed
 
 .PHONY: install-aso
 install-aso: $(ASO_INSTALLED_MARKER)
@@ -42,7 +42,7 @@ VMSS_MARKER:=.vmss-created
 .PHONY: create-vmss
 create-vmss: $(VMSS_MARKER)
 
-$(VMSS_MARKER): $(BINDIR)/kubectl $(BINDIR)/gomplate
+$(VMSS_MARKER): $(BINDIR)/kubectl $(BINDIR)/gomplate $(ASO_INSTALLED_MARKER)
 	@echo "Creating azure resources include vmss-linux and vmss-windows ..."
 	./vmss.sh create
 	./vmss.sh confirm-ssh
@@ -52,17 +52,27 @@ $(VMSS_MARKER): $(BINDIR)/kubectl $(BINDIR)/gomplate
 delete-vmss: $(BINDIR)/kubectl
 	@echo "Azure resources for cluster will be deleted..."
 	./vmss.sh delete
-	-rm -f $(VMSS_MARKER)
+	-rm -f $(VMSS_MARKER) $(KUBEADM_MARKER) $(CALICO_MARKER)
+
+KUBEADM_MARKER:=.kubeadm-set-up
 
 .PHONY: setup-kubeadm
-setup-kubeadm: $(ASO_INSTALLED_MARKER) $(VMSS_MARKER)
+setup-kubeadm: $(KUBEADM_MARKER)
+
+$(KUBEADM_MARKER): $(ASO_INSTALLED_MARKER) $(VMSS_MARKER)
 	@echo "Running setup-kubeadm ..."
 	./install-kubeadm.sh
+	touch $@
+
+CALICO_MARKER:=.calico-installed
 
 .PHONY: install-calico
-install-calico:
+install-calico: $(CALICO_MARKER)
+
+$(CALICO_MARKER): $(KUBEADM_MARKER)
 	@echo "Installing Calico ..."
 	./install-calico.sh
+	touch $@
 
 ###############################################################################
 # Utilities management
@@ -116,12 +126,15 @@ clean: delete-vmss uninstall-aso
 	-rm -rf ./report
 	-rm -f .sshkey .sshkey.pub
 	-rm -f $(HELPERS)
+	-rm -f kubeadm-config.yaml
 	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml cert-manager.yaml
 	-rm -rf infra/manifests/
+	-rm -rf EE/manifests/
+	-rm -rf OSS/manifests/
 	-rm -rf windows/kubeadm/
 	-rm -f windows/config
 
 .PHONY: dist-clean
 dist-clean: clean
 	-rm -rf $(BINDIR)
-	-rm -f $(VMSS_MARKER) $(ASO_INSTALLED_MARKER)
+	-rm -f $(VMSS_MARKER) $(ASO_INSTALLED_MARKER) $(KUBEADM_MARKER) $(CALICO_MARKER)
