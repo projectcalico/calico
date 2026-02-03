@@ -68,6 +68,8 @@ blocks:
         #       value: CalicoBPF
         #     - name: ENCAPSULATION_TYPE
         #       value: VXLAN
+        #     - name: WINDOWS_OS
+        #       value: 2022
 
         # - name: azr-aso, 2022, stable-1, nftables, vxlan
         #   execution_time_limit:
@@ -83,6 +85,8 @@ blocks:
         #       value: CalicoNftables
         #     - name: ENCAPSULATION_TYPE
         #       value: VXLAN
+        #     - name: WINDOWS_OS
+        #       value: 2022
 
         - name: azr-aso, 2022, stable-1, iptables, vxlan
           execution_time_limit:
@@ -99,6 +103,8 @@ blocks:
               value: CalicoIptables
             - name: ENCAPSULATION_TYPE
               value: VXLAN
+            - name: WINDOWS_OS
+              value: 2022
             # - name: USE_VENDORED_CNI
             #   value: true
 
