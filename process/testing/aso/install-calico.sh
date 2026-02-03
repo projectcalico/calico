@@ -24,7 +24,8 @@ set -o pipefail
 trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "========================================"; echo "Script failed! Showing pod status for debugging:"; echo "========================================"; ./bin/kubectl get pod -A -o wide --kubeconfig=./kubeconfig 2>/dev/null || true; fi; exit $exit_code' EXIT
 
 # Use kubectl with kubeconfig from install-kubeadm.sh
-: ${KUBECTL:=./bin/kubectl}
+: "${KUBECTL:=./bin/kubectl}"
+: "${GOMPLATE:=./bin/gomplate}"
 
 # Use the kubeconfig that was copied from master node
 KUBECONFIG_FILE="./kubeconfig"
@@ -49,12 +50,21 @@ echo '  RELEASE_STREAM='${RELEASE_STREAM}
 echo '  HASH_RELEASE='${HASH_RELEASE}
 echo '  KUBE_VERSION='${KUBE_VERSION}
 
+
+if [ ${PRODUCT} == 'calient' ]; then
+    rm -rf "${ASO_DIR}/EE/manifests" || true
+    ${GOMPLATE} --input-dir "${ASO_DIR}/EE/templates" --output-dir "${ASO_DIR}/EE/manifests"
+else
+    rm -rf "${ASO_DIR}/OSS/manifests" || true
+    ${GOMPLATE} --input-dir "${ASO_DIR}/OSS/templates" --output-dir "${ASO_DIR}/OSS/manifests"
+fi
+
 if [ ${PRODUCT} == 'calient' ]; then
     # Verify if the required variables are set for Calico EE
     : "${GCR_IO_PULL_SECRET:?Environment variable empty or not defined.}"
     : "${TSEE_TEST_LICENSE:?Environment variable empty or not defined.}"
-    echo '  GCR_IO_PULL_SECRET='${GCR_IO_PULL_SECRET}
-    echo '  TSEE_TEST_LICENSE='${TSEE_TEST_LICENSE}
+    echo '  GCR_IO_PULL_SECRET='"${GCR_IO_PULL_SECRET}"
+    echo '  TSEE_TEST_LICENSE='"${TSEE_TEST_LICENSE}"
 fi
 
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
@@ -86,8 +96,8 @@ fi
 
 # Create a storage class and persistent volume for Calico Enterprise.
 if [ ${PRODUCT} == 'calient' ]; then
-    ${KUBECTL} create -f ./EE/storage-class-azure-file.yaml
-    ${KUBECTL} create -f ./EE/persistent-volume.yaml
+    ${KUBECTL} create -f ./EE/manifests/storage-class-azure-file.yaml
+    ${KUBECTL} create -f ./EE/manifests/persistent-volume.yaml
 fi
 
 # Install Calico on Linux nodes
@@ -124,7 +134,7 @@ if [[ ${PRODUCT} == 'calient' ]]; then
     fi
 
     # Create custom resources
-    ${KUBECTL} create -f ./EE/custom-resources.yaml
+    ${KUBECTL} create -f ./EE/manifests/custom-resources.yaml
 
     # Install Calico EE license (after the Calico apiserver comes up)
     echo "Wait for the Calico apiserver to be ready..."
@@ -134,12 +144,17 @@ if [[ ${PRODUCT} == 'calient' ]]; then
     retry_command 60 "${KUBECTL} create -f ${TSEE_TEST_LICENSE}"
 else
     # Create custom resources
-    ${KUBECTL} create -f ./OSS/custom-resources.yaml
+    ${KUBECTL} create -f ./OSS/manifests/custom-resources.yaml
 fi
 
 echo "Wait for Calico to be ready on Linux nodes..."
 timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Linux nodes"
+
+if [[ ${CALICO_LINUX_DATAPLANE} == 'BPF' ]]; then
+    echo "Disabling kube-proxy since Calico is running on the BPF dataplane"
+    ${KUBECTL} patch ds -n kube-system kube-proxy -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": "true"}}}}}'
+fi
 
 # Install Calico on Windows nodes
 echo ""
@@ -152,8 +167,8 @@ ${KUBECTL} patch ipamconfig default --type merge --patch='{"spec": {"strictAffin
 
 echo "Creating kubernetes-services-endpoint ConfigMap..."
 APISERVER=$(${KUBECTL} get configmap -n kube-system kube-proxy -o yaml | awk -F'://' '/server: https:\/\// { print $2 }')
-APISERVER_ADDR=$(echo ${APISERVER} | awk -F':' '{ print $1 }')
-APISERVER_PORT=$(echo ${APISERVER} | awk -F':' '{ print $2 }')
+APISERVER_ADDR=$(echo "${APISERVER}" | awk -F':' '{ print $1 }')
+APISERVER_PORT=$(echo "${APISERVER}" | awk -F':' '{ print $2 }')
 ${KUBECTL} apply -f - << EOF
 kind: ConfigMap
 apiVersion: v1
