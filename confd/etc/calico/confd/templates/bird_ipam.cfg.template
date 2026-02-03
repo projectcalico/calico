@@ -27,6 +27,24 @@ function reject_local_routes () {
   }
 }
 
+function ippools_export_filter() {
+{{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}
+{{- if exists $network_key}}{{$network := getv $network_key}}
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") false 4 }}
+{{ $line }}
+{{- end }}
+{{- end }}
+}
+
+function ippools_kernel_programming_filter() {
+{{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}
+{{- if exists $network_key}}{{$network := getv $network_key}}
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") true 4 }}
+{{ $line }}
+{{- end }}
+{{- end }}
+}
+
 function calico_export_to_bgp_peers(bool internal_peer) {
   # filter code terminates when it calls `accept;` or `reject;`,
   # call reject_disabled_pools() first, then reject_tunnel_routes(),

@@ -2,6 +2,7 @@ package template
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -188,6 +189,137 @@ func Test_BGPFilterBIRDFuncs(t *testing.T) {
 	if !reflect.DeepEqual(v6BIRDCfgResult, expectedBIRDCfgStrV6) {
 		t.Errorf("Generated v6 BIRD config differs from expectation:\n Generated = %s,\n Expected = %s",
 			v6BIRDCfgResult, expectedBIRDCfgStrV6)
+	}
+}
+
+func Test_IPPoolsFilterBIRDFunc(t *testing.T) {
+	tcsv4 := []struct {
+		cidr                 string
+		exportDisabled       bool
+		ipipMode             v3.IPIPMode
+		vxlanMode            v3.VXLANMode
+		expectedExportFilter []string
+		expectedKernelFilter []string
+	}{
+		// IPIP Encapsulation cases.
+		{
+			cidr:                 "10.11.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             v3.IPIPModeAlways,
+			vxlanMode:            v3.VXLANModeNever,
+			expectedExportFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { accept; }`},
+			expectedKernelFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { krt_tunnel = "tunl0"; accept; }`},
+		},
+		{
+			cidr:                 "10.11.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             v3.IPIPModeAlways,
+			vxlanMode:            v3.VXLANModeNever,
+			expectedExportFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { reject; } # BGP export is disabled.`},
+			expectedKernelFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { krt_tunnel = "tunl0"; accept; }`},
+		},
+		{
+			cidr:                 "10.10.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             v3.IPIPModeCrossSubnet,
+			vxlanMode:            v3.VXLANModeNever,
+			expectedExportFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { accept; }`},
+			expectedKernelFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { if (defined(bgp_next_hop) && bgp_next_hop ~ 10.10.0.0/16) then krt_tunnel = ""; else krt_tunnel = "tunl0"; accept; }`},
+		},
+		{
+			cidr:                 "10.10.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             v3.IPIPModeCrossSubnet,
+			vxlanMode:            v3.VXLANModeNever,
+			expectedExportFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { reject; } # BGP export is disabled.`},
+			expectedKernelFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { if (defined(bgp_next_hop) && bgp_next_hop ~ 10.10.0.0/16) then krt_tunnel = ""; else krt_tunnel = "tunl0"; accept; }`},
+		},
+		// No-Encapsulation case.
+		{
+			cidr:                 "10.12.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             v3.IPIPModeNever,
+			vxlanMode:            v3.VXLANModeNever,
+			expectedExportFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { accept; }`},
+			expectedKernelFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { krt_tunnel = ""; accept; }`},
+		},
+		{
+			cidr:                 "10.12.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             v3.IPIPModeNever,
+			vxlanMode:            v3.VXLANModeNever,
+			expectedExportFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { reject; } # BGP export is disabled.`},
+			expectedKernelFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { krt_tunnel = ""; accept; }`},
+		},
+		// VXLAN Encapsulation cases.
+		{
+			cidr:                 "192.168.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             v3.IPIPModeNever,
+			vxlanMode:            v3.VXLANModeAlways,
+			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
+			expectedKernelFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
+		},
+		{
+			cidr:                 "192.168.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             v3.IPIPModeNever,
+			vxlanMode:            v3.VXLANModeAlways,
+			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # BGP export is disabled.`},
+			expectedKernelFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
+		},
+		{
+			cidr:                 "192.168.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             v3.IPIPModeNever,
+			vxlanMode:            v3.VXLANModeCrossSubnet,
+			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
+			expectedKernelFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
+		},
+		{
+			cidr:                 "192.168.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             v3.IPIPModeNever,
+			vxlanMode:            v3.VXLANModeCrossSubnet,
+			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # BGP export is disabled.`},
+			expectedKernelFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
+		},
+	}
+
+	for _, tc := range tcsv4 {
+		ippool := v3.NewIPPool()
+		name := fmt.Sprintf("ippool-%s", tc.cidr)
+		ippool.Name = name
+		ippool.Spec.CIDR = tc.cidr
+		ippool.Spec.IPIPMode = tc.ipipMode
+		ippool.Spec.VXLANMode = tc.vxlanMode //conditional
+		ippool.Spec.DisableBGPExport = tc.exportDisabled
+
+		jsonIPPool, err := json.Marshal(ippool)
+		if err != nil {
+			t.Errorf("Error formatting IPPool into JSON: %s", err)
+		}
+		kvps := []memkv.KVPair{
+			{Key: name, Value: string(jsonIPPool)},
+		}
+
+		v4BIRDFilterResult, err := IPPoolsFilterBIRDFunc(kvps, false, 4)
+		if err != nil {
+			t.Errorf("Unexpected error while generating v4 BIRD IPPool filter: %s", err)
+		}
+		if !reflect.DeepEqual(v4BIRDFilterResult, tc.expectedExportFilter) {
+			t.Errorf("Generated v4 BIRD config differs from expectation:\n Generated = %s,\n Expected = %s",
+				v4BIRDFilterResult, tc.expectedExportFilter)
+		}
+
+		v4BIRDKernelFilterResult, err := IPPoolsFilterBIRDFunc(kvps, true, 4)
+		if err != nil {
+			t.Errorf("Unexpected error while generating v4 BIRD IPPool filter: %s", err)
+		}
+		if !reflect.DeepEqual(v4BIRDKernelFilterResult, tc.expectedKernelFilter) {
+			t.Errorf("Generated v4 BIRD config differs from expectation:\n Generated = %s,\n Expected = %s",
+				v4BIRDKernelFilterResult, tc.expectedKernelFilter)
+		}
 	}
 }
 
