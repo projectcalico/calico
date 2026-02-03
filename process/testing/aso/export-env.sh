@@ -42,6 +42,9 @@ export SSH_KEY_FILE="${ASO_DIR}/.sshkey"
 export GCR_IO_PULL_SECRET="${GCR_IO_PULL_SECRET:="${HOME}/secrets/docker_cfg.json"}"
 export TSEE_TEST_LICENSE="${TSEE_TEST_LICENSE:="${HOME}/secrets/license.yaml"}"
 
+export CALICO_LINUX_DATAPLANE="${CALICO_LINUX_DATAPLANE:="Iptables"}" # 'Iptables', 'Nftables' or 'BPF'
+export KUBE_PROXY_MODE="${KUBE_PROXY_MODE:="iptables"}" # 'iptables' or 'nftables', use 'nftables' with BPF
+
 export PRODUCT="calico"
 export RELEASE_STREAM="master"
 export HASH_RELEASE="true"
