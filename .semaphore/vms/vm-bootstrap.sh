@@ -58,10 +58,6 @@ if [ "$ubuntu_codename" = "jammy" ]; then
   # Need to pin because download.docker.com now has a newer buildx that tries to use an API version
   # that is too new for the Docker daemon.
   buildx_version="=0.29.0-0~ubuntu.22.04~jammy"
-elif [ "$ubuntu_codename" = "noble" ]; then
-  docker_version="=5:27.5.1-1~ubuntu.24.04~noble"
-elif [ "$ubuntu_codename" = "plucky" ]; then
-  docker_version="=5:28.3.3-1~ubuntu.25.04~plucky"
 else
   docker_version=""
 fi
