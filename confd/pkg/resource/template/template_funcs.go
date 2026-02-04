@@ -427,7 +427,7 @@ func IPPoolsFilterBIRDFunc(
 		}
 
 		cidr := ippoolspec.CIDR
-		action := "accept"
+		/*action := "accept"
 		comment := ""
 		extraStatement := ""
 		if forProgrammingKernel && version == 4 && ippoolspec.VXLANMode == v3.VXLANModeNever {
@@ -440,6 +440,24 @@ func IPPoolsFilterBIRDFunc(
 		} else if ippoolspec.VXLANMode != v3.VXLANModeNever {
 			action = "reject"
 			comment = "VXLAN routes are handled by Felix."
+		}*/
+
+		var action, comment, extraStatement string
+		switch {
+		case ippoolspec.DisableBGPExport && !forProgrammingKernel:
+			// IPPool's BGP export is disabled, and filter is for exporting to other peers.
+			action = "reject"
+			comment = "BGP export is disabled."
+		case ippoolspec.VXLANMode == v3.VXLANModeAlways || ippoolspec.VXLANMode == v3.VXLANModeCrossSubnet:
+			// VXLAN encapsulation.
+			action = "reject"
+			comment = "VXLAN routes are handled by Felix."
+		default:
+			// IPIP encapsulation or No-Encap.
+			if forProgrammingKernel && version == 4 {
+				extraStatement = emitFilterForKernelProgrammingIPIPNoEncap(ippoolspec.IPIPMode, cidr)
+			}
+			action = "accept"
 		}
 
 		lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment)...)
