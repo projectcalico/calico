@@ -22,6 +22,8 @@ set -e
 : "${KUBECTL:=./bin/kubectl}"
 : "${GOMPLATE:=./bin/gomplate}"
 
+: "${KUBE_PROXY_MODE:="iptables"}"
+
 # Reconstruct arrays from exported string variables
 # Bash arrays cannot be exported across shells, so we export them as space-separated strings
 read -ra LINUX_EIPS <<< "${LINUX_EIPS_STR}"
@@ -113,7 +115,45 @@ function setup_kubeadm_cluster() {
   echo "  Pod Network CIDR: 192.168.0.0/16"
   echo "  Service CIDR: 10.96.0.0/12"
 
-  ${MASTER_CONNECT_COMMAND} "~/init-cluster.sh ${LOCAL_IP_ENV} 192.168.0.0/16 10.96.0.0/12 ${EXTERNAL_IP_ENV}"
+  echo "Generating kubeadm config yaml..."
+  ADVERTISE_ADDRESS=${LOCAL_IP_ENV}
+  POD_NETWORK_CIDR="192.168.0.0/16"
+  SERVICE_CIDR="10.96.0.0/12"
+  EXTERNAL_IP=${EXTERNAL_IP_ENV}
+  CERT_SANS="${ADVERTISE_ADDRESS}"
+  if [ -n "$EXTERNAL_IP" ]; then
+    CERT_SANS="${CERT_SANS},${EXTERNAL_IP}"
+    echo "  Certificate will include both internal and external IPs"
+  fi
+
+  cat <<EOF > ./kubeadm-config.yaml
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "${ADVERTISE_ADDRESS}"
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+apiServer:
+  certSANs:
+$(echo "${CERT_SANS}" | tr ',' '\n' | sed 's/^/  - /')
+networking:
+  podSubnet: "${POD_NETWORK_CIDR}"
+  serviceSubnet: "${SERVICE_CIDR}"
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: "${KUBE_PROXY_MODE}"
+EOF
+
+  echo "Copying kubeadm config yaml to Linux node 0 (${LINUX_EIPS[0]})..."
+  scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    ./kubeadm-config.yaml "aso@${LINUX_EIPS[0]}:~/" || {
+    echo "ERROR: Failed to copy kubeadm config yaml to Linux node 0"
+    return 1
+  }
+
+  ${MASTER_CONNECT_COMMAND} "~/init-cluster.sh ~/kubeadm-config.yaml"
 
   # Get the API server port (default is 6443 for kubeadm)
   APISERVER_PORT=6443

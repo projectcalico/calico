@@ -18,10 +18,11 @@ spec:
   cni:
     type: Calico
   calicoNetwork:
-    bgp: Disabled
+    bgp: Enabled
+    linuxDataplane: {{$.Env.CALICO_LINUX_DATAPLANE}}
     ipPools:
       - cidr: 192.168.0.0/16
-        encapsulation: VXLAN
+        encapsulation: None
     windowsDataplane: HNS
   serviceCIDRs:
     - 10.96.0.0/12
