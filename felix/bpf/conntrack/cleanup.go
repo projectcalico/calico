@@ -16,6 +16,7 @@ package conntrack
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,6 +27,7 @@ import (
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (
@@ -52,6 +54,63 @@ func init() {
 	prometheus.MustRegister(conntrackCountersExpired)
 	prometheus.MustRegister(conntrackGaugeStaleNAT)
 	prometheus.MustRegister(conntrackCounterStaleNAT)
+}
+
+type WorkloadRemoveScanner struct {
+	mutex     sync.Mutex
+	cidrs     set.Set[string]
+	cidrsCopy set.Set[string]
+	ipCh      chan string
+}
+
+func NewWorkloadRemoveScanner(ipCh chan string) *WorkloadRemoveScanner {
+	wrs := &WorkloadRemoveScanner{
+		cidrs:     set.New[string](),
+		cidrsCopy: set.New[string](),
+		ipCh:      ipCh,
+	}
+	go wrs.run()
+	return wrs
+}
+
+func (w *WorkloadRemoveScanner) run() {
+	for {
+		ip, ok := <-w.ipCh
+		if !ok {
+			return
+		}
+		w.mutex.Lock()
+		w.cidrs.Add(ip)
+		log.Infof("WorkloadRemoveScanner added %s to IPs to check", ip)
+		w.mutex.Unlock()
+	}
+}
+
+func (w *WorkloadRemoveScanner) IterationStart() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	w.cidrsCopy = w.cidrs.Copy()
+	w.cidrs = set.New[string]()
+}
+
+// IterationEnd satisfies EntryScannerSynced
+func (w *WorkloadRemoveScanner) IterationEnd() {
+	w.mutex.Lock()
+	w.cidrsCopy = set.New[string]()
+	w.mutex.Unlock()
+}
+
+func (w *WorkloadRemoveScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get EntryGet) (ScanVerdict, int64) {
+	srcIP := ctKey.AddrA().String()
+	dstIP := ctKey.AddrB().String()
+	if ctKey.Proto() == ProtoTCP &&
+		(w.cidrsCopy.Contains(srcIP) || w.cidrsCopy.Contains(dstIP)) {
+		log.WithField("key", ctKey).Debug("Marking conntrack entry for sending RST due to workload removal")
+		// We found a conntrack entry that has the workload IP as source or destination.
+		// Mark it for RST sending.
+		return ScanVerdictSendRST, ctVal.LastSeen()
+	}
+	return ScanVerdictOK, ctVal.LastSeen()
 }
 
 type LivenessScanner struct {
@@ -215,17 +274,21 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) *StaleNATScanner {
 func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, get EntryGet) (ScanVerdict, int64) {
 	debug := log.GetLevel() >= log.DebugLevel
 
+	lastSeen := v.LastSeen()
+	if k.Proto() == ProtoTCP {
+		// we do not handle TCP for the below reasons.
+		// sns.natChecker.ConntrackFrontendHasBackend returns false if the service gets deleted
+		// or there are no backends. For TCP, we can still let the connection flow even if the service
+		// gets deleted as long as the backend is alive. When the backend is removed, We add a flag to the
+		// conntrack entry to send a RST, so the connection will be closed properly.
+		return ScanVerdictOK, lastSeen
+	}
+
 again:
 
-	lastSeen := v.LastSeen()
 	switch v.Type() {
 	case TypeNormal:
 		proto := k.Proto()
-		if proto != ProtoUDP {
-			// skip non-NAT entry
-			break
-		}
-
 		// Check if we have an entry to a service IP:port without it being
 		// NATed. Remove such entry as it was created when the service wasn't
 		// programmed yet and there was a NAT miss.
