@@ -14,6 +14,7 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
 )
@@ -426,22 +427,9 @@ func IPPoolsFilterBIRDFunc(
 			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
 		}
 
+		logrus.Infof("pepper1 %#v", ippoolspec)
+
 		cidr := ippoolspec.CIDR
-		/*action := "accept"
-		comment := ""
-		extraStatement := ""
-		if forProgrammingKernel && version == 4 && ippoolspec.VXLANMode == v3.VXLANModeNever {
-			extraStatement = emitFilterForKernelProgrammingIPIPNoEncap(ippoolspec.IPIPMode, cidr)
-		}
-
-		if ippoolspec.DisableBGPExport && !forProgrammingKernel {
-			action = "reject"
-			comment = "BGP export is disabled."
-		} else if ippoolspec.VXLANMode != v3.VXLANModeNever {
-			action = "reject"
-			comment = "VXLAN routes are handled by Felix."
-		}*/
-
 		var action, comment, extraStatement string
 		switch {
 		case ippoolspec.DisableBGPExport && !forProgrammingKernel:
@@ -470,31 +458,19 @@ func IPPoolsFilterBIRDFunc(
 }
 
 func emitFilterForKernelProgrammingIPIPNoEncap(ipipMode v3.IPIPMode, cidr string) string {
-	switch ipipMode {
-	case v3.IPIPModeAlways:
+	switch v3.EncapMode(ipipMode) {
+	case v3.Always, v3.EncapMode(v3.IPIPModeAlways):
 		return `krt_tunnel = "tunl0";`
-	case v3.IPIPModeCrossSubnet:
+	case v3.CrossSubnet, v3.EncapMode(v3.IPIPModeCrossSubnet):
 		format := `if (defined(bgp_next_hop) && bgp_next_hop ~ %s) then krt_tunnel = ""; else krt_tunnel = "tunl0";`
 		return fmt.Sprintf(format, cidr)
-	case v3.IPIPModeNever:
-		return `krt_tunnel = "";`
 	default:
-		return ``
+		// No-encap case.
+		return `krt_tunnel = "";`
 	}
 }
 
 func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string) []string {
-	/*if len(extraStatement) != 0 {
-		lines := []string{fmt.Sprintf("if ( net ~ %s ) then {", cidr)}
-		if len(comment) != 0 {
-			lines = append(lines, "  # %s", comment)
-		}
-		lines = append(lines, fmt.Sprintf("%s", extraStatement))
-		lines = append(lines, fmt.Sprintf("%s;", action))
-		lines = append(lines, "}")
-		logrus.Infof("pepper %v", lines)
-		return lines
-	}*/
 	statement := action
 	if len(extraStatement) != 0 && action == "accept" {
 		statement = fmt.Sprintf("%s %s", extraStatement, statement)
