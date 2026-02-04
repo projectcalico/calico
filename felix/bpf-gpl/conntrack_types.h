@@ -41,6 +41,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
 #define CALI_CT_FLAG_SET_DSCP	0x8000 /* marks connections that needs to set DSCP */
 #define CALI_CT_FLAG_MAGLEV	0X10000 /* marks Maglev connections. Allows packets of an existing to arrive via a different tunnel after failover. */
+#define CALI_CT_FLAG_SEND_RESET	0x20000 /* marks connections where we have sent a TCP RST on behalf of the workload */
 
 struct calico_ct_leg {
 	__u64 bytes;

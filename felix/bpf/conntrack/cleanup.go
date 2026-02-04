@@ -16,6 +16,7 @@ package conntrack
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,6 +27,7 @@ import (
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (
@@ -52,6 +54,63 @@ func init() {
 	prometheus.MustRegister(conntrackCountersExpired)
 	prometheus.MustRegister(conntrackGaugeStaleNAT)
 	prometheus.MustRegister(conntrackCounterStaleNAT)
+}
+
+type WorkloadRemoveScanner struct {
+	mutex     sync.Mutex
+	cidrs     set.Set[string]
+	cidrsCopy set.Set[string]
+	ipCh      chan string
+}
+
+func NewWorkloadRemoveScanner(ipCh chan string) *WorkloadRemoveScanner {
+	wrs := &WorkloadRemoveScanner{
+		cidrs:     set.New[string](),
+		cidrsCopy: set.New[string](),
+		ipCh:      ipCh,
+	}
+	go wrs.run()
+	return wrs
+}
+
+func (w *WorkloadRemoveScanner) run() {
+	for {
+		ip, ok := <-w.ipCh
+		if !ok {
+			return
+		}
+		w.mutex.Lock()
+		w.cidrs.Add(ip)
+		log.Infof("WorkloadRemoveScanner added %s to IPs to check", ip)
+		w.mutex.Unlock()
+	}
+}
+
+func (w *WorkloadRemoveScanner) IterationStart() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	w.cidrsCopy = w.cidrs.Copy()
+	w.cidrs = set.New[string]()
+}
+
+// IterationEnd satisfies EntryScannerSynced
+func (w *WorkloadRemoveScanner) IterationEnd() {
+	w.mutex.Lock()
+	w.cidrsCopy = set.New[string]()
+	w.mutex.Unlock()
+}
+
+func (w *WorkloadRemoveScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get EntryGet) (ScanVerdict, int64) {
+	srcIP := ctKey.AddrA().String()
+	dstIP := ctKey.AddrB().String()
+	if ctKey.Proto() == ProtoTCP &&
+		(w.cidrsCopy.Contains(srcIP) || w.cidrsCopy.Contains(dstIP)) {
+		log.WithField("key", ctKey).Debug("Marking conntrack entry for sending RST due to workload removal")
+		// We found a conntrack entry that has the workload IP as source or destination.
+		// Mark it for RST sending.
+		return ScanVerdictSendRST, ctVal.LastSeen()
+	}
+	return ScanVerdictOK, ctVal.LastSeen()
 }
 
 type LivenessScanner struct {
@@ -221,11 +280,6 @@ again:
 	switch v.Type() {
 	case TypeNormal:
 		proto := k.Proto()
-		if proto != ProtoUDP {
-			// skip non-NAT entry
-			break
-		}
-
 		// Check if we have an entry to a service IP:port without it being
 		// NATed. Remove such entry as it was created when the service wasn't
 		// programmed yet and there was a NAT miss.
@@ -263,10 +317,23 @@ again:
 		svcIP := v.OrigIP()
 		svcPort := v.OrigPort()
 
+		// If the service is deleted.
+		if !sns.natChecker.ConntrackDestIsService(svcIP, svcPort, proto) {
+			if debug {
+				log.WithField("key", k).Debugf("TypeNATReverse to deleted service is stale")
+			}
+			if proto == ProtoTCP {
+				// For TCP we send RST to speed up the cleanup on the client side.
+				return ScanVerdictSendRST, lastSeen
+			}
+			sns.cleaned++
+			conntrackCounterStaleNAT.Inc()
+			return ScanVerdictDeleteImmediate, lastSeen
+		}
 		// We cannot tell which leg is EP and which is the client, we must
 		// try both. If there is a record for one of them, it is still most
 		// likely an active entry.
-		if !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
+		if proto != ProtoTCP && !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
 			!sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipB, portB, proto) {
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATReverse is stale")
@@ -402,7 +469,20 @@ again:
 			}
 		}
 
-		if !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
+		// If the service is deleted.
+		if !sns.natChecker.ConntrackDestIsService(svcIP, svcPort, proto) {
+			if debug {
+				log.WithField("key", k).Debugf("TypeNATForward to deleted service is stale")
+			}
+			if proto == ProtoTCP {
+				// For TCP we send RST to speed up the cleanup on the client side.
+				return ScanVerdictSendRST, lastSeen
+			}
+			sns.cleaned++
+			conntrackCounterStaleNAT.Inc()
+			return ScanVerdictDeleteImmediate, lastSeen
+		}
+		if proto != ProtoTCP && !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATForward is stale")
 			}
