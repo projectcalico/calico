@@ -52,6 +52,7 @@ EOF
 
 # Pin the docker version; the node tests use an older docker client so we can't
 # let it float.
+docker_version=""
 buildx_version=""
 if [ "$ubuntu_codename" = "jammy" ]; then
   docker_version="=5:20.10.14~3-0~ubuntu-jammy"
@@ -62,8 +63,6 @@ elif [ "$ubuntu_codename" = "noble" ]; then
   docker_version="=5:27.5.1-1~ubuntu.24.04~noble"
 elif [ "$ubuntu_codename" = "plucky" ]; then
   docker_version="=5:28.3.3-1~ubuntu.25.04~plucky"
-else
-  docker_version=""
 fi
 
 retry apt-get update -y
