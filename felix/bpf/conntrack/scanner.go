@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +56,10 @@ var (
 		Name: "felix_bpf_conntrack_sweep_duration",
 		Help: "Conntrack sweep execution time (ns)",
 	})
+	conntrackGaugeMaglevTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_maglev_entries_total",
+		Help: "Total number of Maglev entries in conntrack table broken down by IP version, and, whether destination backend is remote (we're acting as a frontend) or local (we're the backend node).",
+	}, []string{"destination", "ip_family"})
 	dummyKeyV6 = NewKeyV6(0, net.IPv6zero, 0, net.IPv6zero, 0)
 	dummyKey   = NewKey(0, net.IPv4zero, 0, net.IPv4zero, 0)
 )
@@ -65,6 +70,7 @@ func init() {
 	prometheus.MustRegister(conntrackGaugeCleaned)
 	prometheus.MustRegister(conntrackCounterCleaned)
 	prometheus.MustRegister(conntrackGaugeSweepDuration)
+	prometheus.MustRegister(conntrackGaugeMaglevTotal)
 }
 
 // ScanVerdict represents the set of values returned by EntryScan
@@ -119,6 +125,10 @@ type Scanner struct {
 	bpfCleaner                   Cleaner
 	versionHelper                ipVersionHelper
 	revNATKeyToFwdNATInfo        map[KeyInterface]cleanupv1.ValueInterface
+	ipFamily                     int
+
+	conntrackGaugeMaglevToLocalBackend  prometheus.Gauge
+	conntrackGaugeMaglevToRemoteBackend prometheus.Gauge
 
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
@@ -145,6 +155,7 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
 		bpfCleaner:                   bpfCleaner,
+		ipFamily:                     ipVersion,
 		// revNATKeyToFwdNATInfo stores the opposite direction of the mapping of the cleanup bpf map.
 		// <reverseNATKey> => <forwardNATKey>:<forwardEntryTimeStamp>:<reverseEntryTimestamp>
 		revNATKeyToFwdNATInfo: make(map[KeyInterface]cleanupv1.ValueInterface),
@@ -172,6 +183,19 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 
 		}
 	}
+
+	var err error
+
+	s.conntrackGaugeMaglevToLocalBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local", strconv.Itoa(s.ipFamily))
+	if err != nil {
+		log.WithError(err).Panic("Couldn't init (local) Maglev conntrack metric gauge")
+	}
+
+	s.conntrackGaugeMaglevToRemoteBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("remote", strconv.Itoa(s.ipFamily))
+	if err != nil {
+		log.WithError(err).Panic("Couldn't get (remote) Maglev conntrack metric gauge")
+	}
+
 	return s
 }
 
@@ -233,6 +257,7 @@ func (s *Scanner) Scan() {
 	used := 0
 	cleaned := 0
 	numExpired := 0
+	maglevEntriesToLocal, maglevEntriesToRemote := 0, 0
 
 	batchK := make([][]byte, 0, rstBatchSize)
 	batchV := make([][]byte, 0, rstBatchSize)
@@ -244,6 +269,7 @@ func (s *Scanner) Scan() {
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
 		ctVal := s.valueFromBytes(v)
+		ctFlags := ctVal.Flags()
 
 		used++
 		conntrackCounterCleaned.Inc()
@@ -253,6 +279,16 @@ func (s *Scanner) Scan() {
 				"key":   ctKey,
 				"entry": ctVal,
 			}).Debug("Examining conntrack entry")
+		}
+
+		if ctFlags&v4.FlagMaglev != 0 {
+			if ctFlags&v4.FlagExtLocal != 0 {
+				log.Debug("Conntrack is local maglev connection. Incrementing maglev entries counter")
+				maglevEntriesToLocal++
+			} else if ctFlags&v4.FlagNATNPFwd != 0 {
+				log.Debug("Conntrack is remote maglev connection. Incrementing maglev entries counter")
+				maglevEntriesToRemote++
+			}
 		}
 
 		for _, scanner := range s.scanners {
@@ -361,6 +397,12 @@ func (s *Scanner) Scan() {
 
 	batchK = nil
 	batchV = nil
+
+	log.WithField("value", maglevEntriesToLocal).Debug("Setting local maglev conntrack entries gauge")
+	s.conntrackGaugeMaglevToLocalBackend.Set(float64(maglevEntriesToLocal))
+	log.WithField("value", maglevEntriesToRemote).Debug("Setting remote maglev conntrack entries gauge")
+	s.conntrackGaugeMaglevToRemoteBackend.Set(float64(maglevEntriesToRemote))
+
 	conntrackCounterSweeps.Inc()
 	conntrackGaugeUsed.Set(float64(used))
 	conntrackGaugeCleaned.Set(float64(cleaned))
