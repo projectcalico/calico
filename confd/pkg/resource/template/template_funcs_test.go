@@ -287,20 +287,18 @@ func Test_IPPoolsFilterBIRDFunc(t *testing.T) {
 	}
 
 	for _, tc := range tcsv4 {
-		ippool := v3.NewIPPool()
-		name := fmt.Sprintf("ippool-%s", tc.cidr)
-		ippool.Name = name
-		ippool.Spec.CIDR = tc.cidr
-		ippool.Spec.IPIPMode = tc.ipipMode
-		ippool.Spec.VXLANMode = tc.vxlanMode //conditional
-		ippool.Spec.DisableBGPExport = tc.exportDisabled
+		ippoolspec := v3.IPPoolSpec{}
+		ippoolspec.CIDR = tc.cidr
+		ippoolspec.IPIPMode = tc.ipipMode
+		ippoolspec.VXLANMode = tc.vxlanMode //conditional
+		ippoolspec.DisableBGPExport = tc.exportDisabled
 
-		jsonIPPool, err := json.Marshal(ippool)
+		jsonIPPool, err := json.Marshal(ippoolspec)
 		if err != nil {
 			t.Errorf("Error formatting IPPool into JSON: %s", err)
 		}
 		kvps := []memkv.KVPair{
-			{Key: name, Value: string(jsonIPPool)},
+			{Key: fmt.Sprintf("ippool-%s", tc.cidr), Value: string(jsonIPPool)},
 		}
 
 		v4BIRDFilterResult, err := IPPoolsFilterBIRDFunc(kvps, false, 4)

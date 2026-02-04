@@ -420,24 +420,24 @@ func IPPoolsFilterBIRDFunc(
 	}
 
 	for _, kvp := range pairs {
-		var ippool v3.IPPool
-		err := json.Unmarshal([]byte(kvp.Value), &ippool)
+		var ippoolspec v3.IPPoolSpec
+		err := json.Unmarshal([]byte(kvp.Value), &ippoolspec)
 		if err != nil {
 			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
 		}
 
-		cidr := ippool.Spec.CIDR
+		cidr := ippoolspec.CIDR
 		action := "accept"
 		comment := ""
 		extraStatement := ""
-		if forProgrammingKernel && version == 4 && ippool.Spec.VXLANMode == v3.VXLANModeNever {
-			extraStatement = emitFilterForKernelProgrammingIPIPNoEncap(ippool.Spec.IPIPMode, cidr)
+		if forProgrammingKernel && version == 4 && ippoolspec.VXLANMode == v3.VXLANModeNever {
+			extraStatement = emitFilterForKernelProgrammingIPIPNoEncap(ippoolspec.IPIPMode, cidr)
 		}
 
-		if ippool.Spec.DisableBGPExport && !forProgrammingKernel {
+		if ippoolspec.DisableBGPExport && !forProgrammingKernel {
 			action = "reject"
 			comment = "BGP export is disabled."
-		} else if ippool.Spec.VXLANMode != v3.VXLANModeNever {
+		} else if ippoolspec.VXLANMode != v3.VXLANModeNever {
 			action = "reject"
 			comment = "VXLAN routes are handled by Felix."
 		}

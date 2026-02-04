@@ -24,30 +24,30 @@ execute_test_suite() {
     rm $LOGPATH/rendered/*.cfg || true
 
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
-        #run_extra_test test_node_mesh_bgp_password
-        #run_extra_test test_bgp_password_deadlock
-        #run_extra_test test_bgp_ttl_security
-        #run_extra_test test_bgp_ignored_interfaces
-        #run_extra_test test_bgp_reachable_by
-        #run_extra_test test_bgp_filters
-        #run_extra_test test_bgp_local_bgp_peer
-        #run_extra_test test_bgp_next_hop_mode
-        #run_extra_test test_bgp_reverse_peering
+        run_extra_test test_node_mesh_bgp_password
+        run_extra_test test_bgp_password_deadlock
+        run_extra_test test_bgp_ttl_security
+        run_extra_test test_bgp_ignored_interfaces
+        run_extra_test test_bgp_reachable_by
+        run_extra_test test_bgp_filters
+        run_extra_test test_bgp_local_bgp_peer
+        run_extra_test test_bgp_next_hop_mode
+        run_extra_test test_bgp_reverse_peering
     fi
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
-        #run_extra_test test_node_mesh_bgp_password
-        #run_extra_test test_bgp_password
-        #run_extra_test test_bgp_sourceaddr_gracefulrestart
-        #run_extra_test test_node_deletion
-        #run_extra_test test_idle_peers
-        #run_extra_test test_router_id_hash
-        #run_extra_test test_bgp_ttl_security
-        #run_extra_test test_bgp_ignored_interfaces
-        #run_extra_test test_bgp_reachable_by
-        #run_extra_test test_bgp_filters
-        #run_extra_test test_bgp_next_hop_mode
-        #echo "Extra etcdv3 tests passed"
+        run_extra_test test_node_mesh_bgp_password
+        run_extra_test test_bgp_password
+        run_extra_test test_bgp_sourceaddr_gracefulrestart
+        run_extra_test test_node_deletion
+        run_extra_test test_idle_peers
+        run_extra_test test_router_id_hash
+        run_extra_test test_bgp_ttl_security
+        run_extra_test test_bgp_ignored_interfaces
+        run_extra_test test_bgp_reachable_by
+        run_extra_test test_bgp_filters
+        run_extra_test test_bgp_next_hop_mode
+        echo "Extra etcdv3 tests passed"
     fi
 
     # Run the set of tests using confd in oneshot mode.
