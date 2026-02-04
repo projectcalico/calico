@@ -228,6 +228,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexNewFlow,
 		tcdefs.ProgIndexIPFrag,
 		tcdefs.ProgIndexMaglev,
+		tcdefs.ProgIndexTCPRst,
 	},
 	"IPv4 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -240,6 +241,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexNewFlowDebug,
 		tcdefs.ProgIndexIPFragDebug,
 		tcdefs.ProgIndexMaglevDebug,
+		tcdefs.ProgIndexTCPRstDebug,
 	},
 	"IPv6": []int{
 		tcdefs.ProgIndexMain,
@@ -251,6 +253,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpInnerNat,
 		tcdefs.ProgIndexNewFlow,
 		tcdefs.ProgIndexMaglev,
+		tcdefs.ProgIndexTCPRst,
 	},
 	"IPv6 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -262,6 +265,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpInnerNatDebug,
 		tcdefs.ProgIndexNewFlowDebug,
 		tcdefs.ProgIndexMaglevDebug,
+		tcdefs.ProgIndexTCPRstDebug,
 	},
 }
 

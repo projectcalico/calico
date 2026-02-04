@@ -515,6 +515,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			nil,
 			environment.NewFeatureDetector(nil).GetFeatures(),
 			1250,
+			nil,
+			nil,
 		)
 		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
