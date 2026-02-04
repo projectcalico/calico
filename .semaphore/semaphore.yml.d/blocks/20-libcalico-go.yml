@@ -11,9 +11,21 @@
       commands:
         - cd libcalico-go
     jobs:
-      - name: "libcalico-go: CI"
+      # Run the tests twice, once for each backing API version.
+      - name: "libcalico-go: CI (crd.projectcalico.org/v1)"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
         env_vars:
           - name: STORE_BUILD_CACHE
             value: "true"
+
+      - name: "libcalico-go: FV (projectcalico.org/v3)"
+        commands:
+          - ../.semaphore/run-and-monitor fv-pcv3.log make fv
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+          - name: CALICO_API_GROUP
+            value: projectcalico.org/v3
+          - name: GINKGO_SKIP
+            value: "etcdv3 backend"
