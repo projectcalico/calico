@@ -87,7 +87,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 		})
 
 		JustBeforeEach(func() {
-			renderer := rules.NewRenderer(rrConfigNormal)
+			renderer := rules.NewRenderer(rrConfigNormal, false)
 			natTable = newMockTable("nat")
 			fipMgr = newFloatingIPManager(natTable, renderer, ipVersion, true)
 		})

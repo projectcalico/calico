@@ -17,9 +17,6 @@ tox: build-test-container
 tox-%: upper-constraints-%.txt
 	$(MAKE) tox PIP_CONSTRAINT=/code/upper-constraints-$*.txt
 
-upper-constraints-yoga.txt:
-	curl -fsSL --retry 5 https://releases.openstack.org/constraints/upper/yoga -o $@
-
 upper-constraints-caracal.txt:
 	curl -fsSL --retry 5 https://raw.githubusercontent.com/openstack/requirements/refs/heads/$$(./infer-openstack-branch.sh caracal requirements)/upper-constraints.txt -o $@
 

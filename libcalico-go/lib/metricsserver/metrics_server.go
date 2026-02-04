@@ -17,6 +17,7 @@ package metricsserver
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -31,7 +32,7 @@ func ServePrometheusMetricsHTTP(gatherer prometheus.Gatherer, host string, port 
 	mux := http.NewServeMux()
 	handler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
 	mux.Handle("/metrics", handler)
-	addr := fmt.Sprintf("[%v]:%v", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprint(port))
 
 	for {
 		logrus.WithFields(logrus.Fields{
@@ -50,7 +51,7 @@ func ServePrometheusMetricsHTTPS(gatherer prometheus.Gatherer, host string, port
 	mux := http.NewServeMux()
 	handler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
 	mux.Handle("/metrics", handler)
-	addr := fmt.Sprintf("[%v]:%v", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprint(port))
 
 	// Initial TLS config loading to catch errors early.
 	tlsConfig, err := calicotls.NewMutualTLSConfig(certFile, keyFile, caFile)

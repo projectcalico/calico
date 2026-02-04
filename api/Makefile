@@ -1,3 +1,6 @@
+# The tests in this directory use the projectcalico.org/v3 API group for CRDs.
+CALICO_API_GROUP ?= projectcalico.org/v3
+
 # If ../metadata.mk exists, we're running this logic from within the calico repository.
 # If it does not, then we're in the api repo and we should use the local metadata.mk.
 ifneq ("$(wildcard ../metadata.mk)", "")
@@ -12,6 +15,7 @@ LOCAL_CHECKS     = lint-cache-dir check-copyright
 BINDIR ?= bin
 BUILD_DIR ?= build
 TOP_SRC_DIRS = pkg
+KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -52,6 +56,15 @@ build: gen-files examples
 # Regenerate all files if the gen exes changed or any "types.go" files changed
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
+	# Generate CRDs without descriptions
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./pkg/apis/... output:crd:dir=config/crd/'
+	# Remove the first yaml separator line.
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
+	# Run prettier to fix indentation
+	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+	# Patch in manual tweaks to the generated CRDs.
+	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
+
 	# Generate defaults
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) defaulter-gen \
@@ -133,8 +146,12 @@ WHAT?=.
 GINKGO_FOCUS?=.*
 
 .PHONY:ut
-ut:
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
+ut: kind-cluster-create
+	$(DOCKER_RUN) \
+		--privileged \
+		-e KUBECONFIG=/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
+		$(CALICO_BUILD) \
 		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus="$(GINKGO_FOCUS)" $(WHAT)'
 
 ## Check if generated files are out of date

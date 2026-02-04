@@ -80,9 +80,12 @@ type KubeConfig struct {
 	// This contains the contents that would normally be in the file pointed at by Kubeconfig.
 	KubeconfigInline string `json:"kubeconfigInline" ignored:"true"`
 	// K8sClientQPS overrides the QPS for the Kube client.
-	K8sClientQPS float32 `json:"k8sClientQPS"`
+	K8sClientQPS   float32 `json:"k8sClientQPS" envconfig:"K8S_CLIENT_QPS" default:""`
+	K8sClientBurst int     `json:"k8sClientBurst" envconfig:"K8S_CLIENT_BURST" default:""`
 	// K8sCurrentContext provides a context override for kubeconfig.
 	K8sCurrentContext string `json:"k8sCurrentContext" envconfig:"K8S_CURRENT_CONTEXT" default:""`
+
+	CalicoAPIGroup string `json:"calicoAPIGroup" envconfig:"CALICO_API_GROUP"`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the
@@ -99,7 +102,6 @@ func NewCalicoAPIConfig() *CalicoAPIConfig {
 // IsAlphaFeatureSet checks if the comma separated features have the
 // name set in it.
 func IsAlphaFeatureSet(features, name string) bool {
-
 	fs := strings.Split(features, ",")
 	for _, f := range fs {
 		if f == name {

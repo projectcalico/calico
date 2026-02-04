@@ -1432,47 +1432,124 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 
 	skbMark = 0
 	// Response arriving at node 1 through 10.10.0.x
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		// Initially, blocked by the VXLAN source policing.
-		res, err := bpfrun(respPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	runBpfTest(t, "calico_from_host_ep",
+		&polprog.Rules{
+			ForHostInterface: true,
+			HostNormalTiers: []polprog.Tier{{
+				Name: "base tier",
+				Policies: []polprog.Policy{{
+					Name: "deny vxlan",
+					Rules: []polprog.Rule{{Rule: &proto.Rule{
+						Action:   "Deny",
+						Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+						DstPorts: []*proto.PortRange{{First: 4789, Last: 4789}},
+					}}},
+				}},
+			}},
+		},
+		func(bpfrun bpfProgRunFn) {
+			// Test for allowing/denying VXLAN packets - blocked by the VXLAN source policing, from unknown host
+			res, err := bpfrun(respPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
 
-		// Add the route for the remote node.  Should now be allowed...
-		err = rtMap.Update(
-			routes.NewKey(ip.FromNetIP(node2ip).AsCIDR().(ip.V4CIDR)).AsBytes(),
-			routes.NewValueWithNextHop(routes.FlagsRemoteHost, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
-		)
-		Expect(err).NotTo(HaveOccurred())
-		res, err = bpfrun(respPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+			// Add the route for the remote node.  Should now be allowed...
+			err = rtMap.Update(
+				routes.NewKey(ip.FromNetIP(node2ip).AsCIDR().(ip.V4CIDR)).AsBytes(),
+				routes.NewValueWithNextHop(routes.FlagsRemoteHost, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			res, err = bpfrun(respPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
-		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
-		fmt.Printf("pktR = %+v\n", pktR)
+			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+			fmt.Printf("pktR = %+v\n", pktR)
 
-		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
-		Expect(ipv4L).NotTo(BeNil())
-		ipv4R := ipv4L.(*layers.IPv4)
-		Expect(ipv4R.DstIP.String()).To(Equal(ipv4.SrcIP.String()))
-		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.DstIP.String()))
+			ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+			Expect(ipv4L).NotTo(BeNil())
+			ipv4R := ipv4L.(*layers.IPv4)
+			Expect(ipv4R.DstIP.String()).To(Equal(ipv4.SrcIP.String()))
+			Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.DstIP.String()))
 
-		udpL := pktR.Layer(layers.LayerTypeUDP)
-		Expect(udpL).NotTo(BeNil())
-		udpR := udpL.(*layers.UDP)
-		Expect(udpR.SrcPort).To(Equal(udp.DstPort))
-		Expect(udpR.DstPort).To(Equal(udp.SrcPort))
+			udpL := pktR.Layer(layers.LayerTypeUDP)
+			Expect(udpL).NotTo(BeNil())
+			udpR := udpL.(*layers.UDP)
+			Expect(udpR.SrcPort).To(Equal(udp.DstPort))
+			Expect(udpR.DstPort).To(Equal(udp.SrcPort))
 
-		payloadL := pktR.ApplicationLayer()
-		Expect(payloadL).NotTo(BeNil())
-		Expect(payload).To(Equal(payloadL.Payload()))
+			payloadL := pktR.ApplicationLayer()
+			Expect(payloadL).NotTo(BeNil())
+			Expect(payload).To(Equal(payloadL.Payload()))
 
-		recvPkt = res.dataOut
-	})
+			recvPkt = res.dataOut
+
+			expectMark(tcdefs.MarkSeenBypassForward)
+
+			// Test for allowing/denying VXLAN packets - blocked by the VXLAN VNI policing, unknown VNI
+			vxlanPkt := func() []byte {
+				// 1. Create the Ethernet Layer (Outer)
+				eth := &layers.Ethernet{
+					SrcMAC:       net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+					DstMAC:       net.HardwareAddr{0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB},
+					EthernetType: layers.EthernetTypeIPv4,
+				}
+
+				// 2. Create the IP Layer (Outer)
+				ip := &layers.IPv4{
+					Version:  4,
+					TTL:      64,
+					Protocol: layers.IPProtocolUDP,
+					SrcIP:    node2ip,
+					DstIP:    node1ip,
+				}
+
+				// 3. Create the UDP Layer (Outer)
+				// IANA assigned port for VXLAN is 4789
+				udp := &layers.UDP{
+					SrcPort: layers.UDPPort(testVxlanPort),
+					DstPort: layers.UDPPort(testVxlanPort),
+				}
+				_ = udp.SetNetworkLayerForChecksum(ip)
+
+				// 4. Create the VXLAN Layer
+				vxlan := &layers.VXLAN{
+					VNI:         666,
+					ValidIDFlag: true, // Required for the VNI to be considered valid
+				}
+
+				// 5. Create a dummy Payload (Inner Ethernet or Raw Data)
+				payload := gopacket.Payload([]byte("Hello, VXLAN world!"))
+
+				// 6. Serialize the packet
+				buf := gopacket.NewSerializeBuffer()
+				opts := gopacket.SerializeOptions{
+					ComputeChecksums: true,
+					FixLengths:       true,
+				}
+
+				err := gopacket.SerializeLayers(buf, opts,
+					eth,
+					ip,
+					udp,
+					vxlan,
+					payload,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Output the resulting bytes
+				return buf.Bytes()
+			}()
+
+			// Packet get rejected because of unknown VNI
+			res, err = bpfrun(vxlanPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		})
 
 	dumpCTMap(ctMap)
 
-	expectMark(tcdefs.MarkSeenBypassForward)
+	skbMark = tcdefs.MarkSeenBypassForward
 
 	// Response leaving to original source
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {

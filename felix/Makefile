@@ -226,6 +226,9 @@ $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]')
 	$(DOCKER_GO_BUILD) make -j 16 -C bpf-gpl all ut-objs map-objs
 	touch -c $@
 
+bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
+	$(MAKE) -C bpf-gpl $(@F)
+
 clean-bpf:
 	rm -rf bpf-gpl/*.d bpf-apache/*.d bin/bpf
 	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
@@ -377,6 +380,8 @@ fv-no-prereqs:
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
+	  CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	  CALICO_CRD_PATH=$(CALICO_CRD_PATH) \
 	  EXTRA_REPORT_SUFFIX=$(FV_EXTRA_REPORT_SUFFIX) \
 	  FELIX_FV_WIREGUARD_AVAILABLE=`./wireguard-available >/dev/null && echo true || echo false` \
 	  ./run-batches
@@ -477,7 +482,7 @@ stop-grafana:
 	@-docker rm -f k8sfv-grafana
 	sleep 2
 
-bin/calico-bpf: $(SRC_FILES)
+bin/calico-bpf: $(LIBBPF_A) $(SRC_FILES)
 	@echo Building calico-bpf...
 	$(call build_cgo_binary, "$(PACKAGE_NAME)/cmd/calico-bpf", $@)
 
@@ -561,6 +566,13 @@ ut-bpf-prereqs: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 ut-bpf: ut-bpf-prereqs
 	$(MAKE) ut-bpf-no-prereqs
 
+# Set format for gotestsum based on VERBOSE environment variable
+ifeq ($(VERBOSE),1)
+  GOTESTSUM_FORMAT := standard-verbose
+else
+  GOTESTSUM_FORMAT := testname
+endif
+
 ut-bpf-no-prereqs:
 	mkdir -p report
 	$(DOCKER_RUN) \
@@ -571,7 +583,7 @@ ut-bpf-no-prereqs:
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		gotestsum --format testname --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
+		gotestsum --format $(GOTESTSUM_FORMAT) --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
 	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
 		-e $(ACK_GINKGO) \
@@ -582,7 +594,7 @@ ut-bpf-no-prereqs:
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
 		../../bin/bpf_ut.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		gotestsum --format testname --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
+		gotestsum --format $(GOTESTSUM_FORMAT) --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
 
 .PHONY: bench-bpf
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
@@ -629,9 +641,9 @@ bin/calico-felix.exe: $(SRC_FILES)
 docs/calc.pdf: docs/calc.dot
 	cd docs/ && dot -Tpdf calc.dot -o calc.pdf
 
-CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml
+CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../$(CALICO_CRD_PATH)crd.projectcalico.org_felixconfigurations.yaml
 
-../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
+../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml ../api/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
 	$(MAKE) -C ../libcalico-go gen-crds
 
 docs/config-params.json: $(CONFIG_PARAM_DEPS)
