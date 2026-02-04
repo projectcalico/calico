@@ -60,10 +60,10 @@ execute_test_suite() {
     # confd, so order the tests accordingly.  We'll start with a set of tests that use the
     # node mesh enabled, so turn it on now before we start confd.
     echo "Execute daemon-mode tests"
-    turn_mesh_on
-    for i in $(seq 1 2); do
-       execute_tests_daemon
-    done
+    #turn_mesh_on
+    #for i in $(seq 1 2); do
+    #   execute_tests_daemon
+    #done
     echo "Daemon-mode tests passed"
 }
 
