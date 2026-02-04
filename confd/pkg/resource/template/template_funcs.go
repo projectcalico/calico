@@ -14,6 +14,7 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
 )
@@ -40,6 +41,7 @@ func newFuncMap() map[string]interface{} {
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
 	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
+	m["ippoolsFilterBIRDFunc"] = IPPoolsFilterBIRDFunc
 	return m
 }
 
@@ -401,6 +403,83 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 		lines = append(lines, line)
 	}
 	return lines, nil
+}
+
+func IPPoolsFilterBIRDFunc(
+	pairs memkv.KVPairs,
+	forProgrammingKernel bool,
+	version int,
+) ([]string, error) {
+	lines := []string{}
+	var line string
+	var versionStr string
+
+	if version == 4 || version == 6 {
+		versionStr = fmt.Sprintf("%d", version)
+	} else {
+		return []string{}, fmt.Errorf("version must be either 4 or 6")
+	}
+
+	for _, kvp := range pairs {
+		var ippoolspec v3.IPPoolSpec
+		err := json.Unmarshal([]byte(kvp.Value), &ippoolspec)
+		if err != nil {
+			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
+		}
+
+		logrus.Infof("pepper1 %#v", ippoolspec)
+
+		cidr := ippoolspec.CIDR
+		var action, comment, extraStatement string
+		switch {
+		case ippoolspec.DisableBGPExport && !forProgrammingKernel:
+			// IPPool's BGP export is disabled, and filter is for exporting to other peers.
+			action = "reject"
+			comment = "BGP export is disabled."
+		case ippoolspec.VXLANMode == v3.VXLANModeAlways || ippoolspec.VXLANMode == v3.VXLANModeCrossSubnet:
+			// VXLAN encapsulation.
+			action = "reject"
+			comment = "VXLAN routes are handled by Felix."
+		default:
+			// IPIP encapsulation or No-Encap.
+			if forProgrammingKernel && version == 4 {
+				extraStatement = emitFilterForKernelProgrammingIPIPNoEncap(ippoolspec.IPIPMode, cidr)
+			}
+			action = "accept"
+		}
+
+		lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment)...)
+	}
+	if len(lines) == 0 {
+		line = fmt.Sprintf("# No v%s IPPool configured", versionStr)
+		lines = append(lines, line)
+	}
+	return lines, nil
+}
+
+func emitFilterForKernelProgrammingIPIPNoEncap(ipipMode v3.IPIPMode, cidr string) string {
+	switch v3.EncapMode(ipipMode) {
+	case v3.Always, v3.EncapMode(v3.IPIPModeAlways):
+		return `krt_tunnel = "tunl0";`
+	case v3.CrossSubnet, v3.EncapMode(v3.IPIPModeCrossSubnet):
+		format := `if (defined(bgp_next_hop) && bgp_next_hop ~ %s) then krt_tunnel = ""; else krt_tunnel = "tunl0";`
+		return fmt.Sprintf(format, cidr)
+	default:
+		// No-encap case.
+		return `krt_tunnel = "";`
+	}
+}
+
+func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string) []string {
+	statement := action
+	if len(extraStatement) != 0 && action == "accept" {
+		statement = fmt.Sprintf("%s %s", extraStatement, statement)
+	}
+
+	if len(comment) != 0 {
+		return []string{fmt.Sprintf("if ( net ~ %s ) then { %s; } # %s", cidr, statement, comment)}
+	}
+	return []string{fmt.Sprintf("if ( net ~ %s ) then { %s; }", cidr, statement)}
 }
 
 // Getenv retrieves the value of the environment variable named by the key.
