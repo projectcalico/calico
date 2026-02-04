@@ -3455,7 +3455,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}
 							tcpd.AddMatcher("tcp-rst",
 								regexp.MustCompile(fmt.Sprintf(`%s %s\.\d+ > %s\.\d+: Flags \[[^\]]*R[^\]]*\]`, ipRegex, srcIP, w[1][1].IP)))
-							tcpd.Start()
+							tcpd.Start(infra)
 							defer tcpd.Stop()
 						}
 
