@@ -280,11 +280,6 @@ again:
 	switch v.Type() {
 	case TypeNormal:
 		proto := k.Proto()
-		if proto != ProtoUDP {
-			// skip non-NAT entry
-			break
-		}
-
 		// Check if we have an entry to a service IP:port without it being
 		// NATed. Remove such entry as it was created when the service wasn't
 		// programmed yet and there was a NAT miss.
@@ -322,17 +317,26 @@ again:
 		svcIP := v.OrigIP()
 		svcPort := v.OrigPort()
 
+		// If the service is deleted.
+		if !sns.natChecker.ConntrackDestIsService(svcIP, svcPort, proto) {
+			if debug {
+				log.WithField("key", k).Debugf("TypeNATReverse to deleted service is stale")
+			}
+			if proto == ProtoTCP {
+				// For TCP we send RST to speed up the cleanup on the client side.
+				return ScanVerdictSendRST, lastSeen
+			}
+			sns.cleaned++
+			conntrackCounterStaleNAT.Inc()
+			return ScanVerdictDeleteImmediate, lastSeen
+		}
 		// We cannot tell which leg is EP and which is the client, we must
 		// try both. If there is a record for one of them, it is still most
 		// likely an active entry.
-		if !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
+		if proto != ProtoTCP && !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
 			!sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipB, portB, proto) {
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATReverse is stale")
-			}
-			if proto == ProtoTCP {
-				// For TCP, we send RST to speed up cleanup on both ends.
-				return ScanVerdictSendRST, lastSeen
 			}
 			sns.cleaned++
 			conntrackCounterStaleNAT.Inc()
@@ -465,13 +469,22 @@ again:
 			}
 		}
 
-		if !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
+		// If the service is deleted.
+		if !sns.natChecker.ConntrackDestIsService(svcIP, svcPort, proto) {
 			if debug {
-				log.WithField("key", k).Debugf("TypeNATForward is stale")
+				log.WithField("key", k).Debugf("TypeNATForward to deleted service is stale")
 			}
 			if proto == ProtoTCP {
-				// For TCP, we send RST to speed up cleanup on both ends.
+				// For TCP we send RST to speed up the cleanup on the client side.
 				return ScanVerdictSendRST, lastSeen
+			}
+			sns.cleaned++
+			conntrackCounterStaleNAT.Inc()
+			return ScanVerdictDeleteImmediate, lastSeen
+		}
+		if proto != ProtoTCP && !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
+			if debug {
+				log.WithField("key", k).Debugf("TypeNATForward is stale")
 			}
 			sns.cleaned++
 			conntrackCounterStaleNAT.Inc()
