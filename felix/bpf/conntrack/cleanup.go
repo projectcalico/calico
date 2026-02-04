@@ -274,9 +274,18 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) *StaleNATScanner {
 func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, get EntryGet) (ScanVerdict, int64) {
 	debug := log.GetLevel() >= log.DebugLevel
 
+	lastSeen := v.LastSeen()
+	if k.Proto() == ProtoTCP {
+		// we do not handle TCP for the below reasons.
+		// sns.natChecker.ConntrackFrontendHasBackend returns false if the service gets deleted
+		// or there are no backends. For TCP, we can still let the connection flow even if the service
+		// gets deleted as long as the backend is alive. When the backend is removed, We add a flag to the
+		// conntrack entry to send a RST, so the connection will be closed properly.
+		return ScanVerdictOK, lastSeen
+	}
+
 again:
 
-	lastSeen := v.LastSeen()
 	switch v.Type() {
 	case TypeNormal:
 		proto := k.Proto()
@@ -317,23 +326,10 @@ again:
 		svcIP := v.OrigIP()
 		svcPort := v.OrigPort()
 
-		// If the service is deleted.
-		if !sns.natChecker.ConntrackDestIsService(svcIP, svcPort, proto) {
-			if debug {
-				log.WithField("key", k).Debugf("TypeNATReverse to deleted service is stale")
-			}
-			if proto == ProtoTCP {
-				// For TCP we send RST to speed up the cleanup on the client side.
-				return ScanVerdictSendRST, lastSeen
-			}
-			sns.cleaned++
-			conntrackCounterStaleNAT.Inc()
-			return ScanVerdictDeleteImmediate, lastSeen
-		}
 		// We cannot tell which leg is EP and which is the client, we must
 		// try both. If there is a record for one of them, it is still most
 		// likely an active entry.
-		if proto != ProtoTCP && !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
+		if !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
 			!sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, ipB, portB, proto) {
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATReverse is stale")
@@ -469,20 +465,7 @@ again:
 			}
 		}
 
-		// If the service is deleted.
-		if !sns.natChecker.ConntrackDestIsService(svcIP, svcPort, proto) {
-			if debug {
-				log.WithField("key", k).Debugf("TypeNATForward to deleted service is stale")
-			}
-			if proto == ProtoTCP {
-				// For TCP we send RST to speed up the cleanup on the client side.
-				return ScanVerdictSendRST, lastSeen
-			}
-			sns.cleaned++
-			conntrackCounterStaleNAT.Inc()
-			return ScanVerdictDeleteImmediate, lastSeen
-		}
-		if proto != ProtoTCP && !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
+		if !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATForward is stale")
 			}
