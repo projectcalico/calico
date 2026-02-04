@@ -16,6 +16,7 @@ package utils
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -116,8 +117,12 @@ func ReleaseImages() []string {
 
 // buildImages returns the list of images built by the given directory.
 // It does this by calling a make target that returns the values of BUILD_IMAGES and WINDOWS_IMAGE (if set).
-func buildImages(dir string) ([]string, error) {
-	out, err := command.MakeInDir(dir, []string{"-s", "build-images"}, nil)
+func buildImages(dir string, release bool) ([]string, error) {
+	env := os.Environ()
+	if release {
+		env = append(env, "RELEASE=true")
+	}
+	out, err := command.MakeInDir(dir, []string{"-s", "build-images"}, env)
 	if err != nil {
 		logrus.Error(out)
 		return nil, fmt.Errorf("failed to get images for release dir %s: %w", dir, err)
@@ -129,12 +134,12 @@ func buildImages(dir string) ([]string, error) {
 func BuildReleaseImageList(rootDir string, dirs ...string) ([]string, error) {
 	if len(dirs) == 0 {
 		logrus.WithField("root_dir", rootDir).Warnf("No image release dirs specified, will get images from root dir instead")
-		return buildImages(rootDir)
+		return buildImages(rootDir, true)
 	}
 	combinedImages := []string{}
 	for _, d := range dirs {
 		dir := filepath.Join(rootDir, d)
-		images, err := buildImages(dir)
+		images, err := buildImages(dir, true)
 		if err != nil {
 			return nil, err
 		}
