@@ -171,7 +171,68 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		// Expect the IP pool to be removed from the API server.
 		waitForPoolDeleted(cli, pool.Name)
 	})
+
+	It("should mark overlapping IP pools with a status condition", func() {
+		// Create the first IP pool.
+		err = cli.Create(context.Background(), pool)
+		Expect(err).NotTo(HaveOccurred())
+		waitForFinalizerAddition(cli, pool.Name)
+
+		// Create a second IP pool that overlaps with the first.
+		overlappingPool := &v3.IPPool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "overlapping-pool",
+			},
+			Spec: v3.IPPoolSpec{
+				CIDR: "192.168.0.0/24",
+			},
+		}
+		err = cli.Create(context.Background(), overlappingPool)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect the second pool to have a status condition indicating it overlaps with another pool.
+		expectPoolDisabledCondition(cli, overlappingPool.Name)
+
+		// Delete the first pool.
+		err = cli.Delete(context.Background(), pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect the second pool to have its status updated to remove the disabled condition.
+		expectPoolActiveCondition(cli, overlappingPool.Name)
+	})
 })
+
+func expectPoolActiveCondition(cli ctrlclient.Client, poolName string) {
+	pool := &v3.IPPool{}
+	EventuallyWithOffset(1, func() error {
+		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool)
+		if err != nil {
+			return err
+		}
+		for _, condition := range pool.Status.Conditions {
+			if condition.Type == "Disabled" && condition.Status == metav1.ConditionTrue {
+				return fmt.Errorf("pool is disabled")
+			}
+		}
+		return nil
+	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should be active without disabled condition")
+}
+
+func expectPoolDisabledCondition(cli ctrlclient.Client, poolName string) {
+	pool := &v3.IPPool{}
+	EventuallyWithOffset(1, func() error {
+		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool)
+		if err != nil {
+			return err
+		}
+		for _, condition := range pool.Status.Conditions {
+			if condition.Type == "Disabled" && condition.Status == metav1.ConditionTrue {
+				return nil
+			}
+		}
+		return fmt.Errorf("disabled condition not found")
+	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should have disabled condition")
+}
 
 func waitForPoolDeleted(cli ctrlclient.Client, poolName string) {
 	pool := &v3.IPPool{}
