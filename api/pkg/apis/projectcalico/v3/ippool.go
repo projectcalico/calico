@@ -52,6 +52,12 @@ type IPPool struct {
 	Status *IPPoolStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
+const (
+	// IPPoolDisabled is a condition type that indicates the IP pool has been operationally disabled
+	// by Calico due to an issue with the pool, such as an invalid CIDR.
+	IPPoolConditionDisabled = "Disabled"
+)
+
 type IPPoolStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" protobuf:"bytes,1,rep,name=conditions"`
 }
