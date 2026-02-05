@@ -96,12 +96,12 @@ protocol bgp RR_with_master_node from bgp_template {
 """
 
 
-class _BaseTestLocalBGPPeer(TestBase):
+class _TestLocalBGPPeer(TestBase):
     def set_topology(self, value):
         self.topology = value
 
     def setUp(self):
-        super(_BaseTestLocalBGPPeer, self).setUp()
+        super(_TestLocalBGPPeer, self).setUp()
 
         if self.topology == TopologyMode.MESH:
           _log.info("Topology MESH")
@@ -454,7 +454,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
         output = run("kubectl exec -t %s -n %s -- birdcl6 show protocols" % (pod.name, pod.ns))
         self.assertNotRegex(output, regexp, "IPv6 BGP connection unexpectedly established, pod " + pod.name)
 
-    def test_local_bgp_peers(self):
+    def _test_local_bgp_peers(self):
         """
         Runs the tests for local bgp peers
         """
@@ -528,7 +528,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
         output = run("docker exec kind-node-tor ping -c3 10.123.0.1")
         self.assertRegex(output, "3 packets transmitted, 3 packets received")
 
-class TestLocalBGPPeerRR(_BaseTestLocalBGPPeer):
+class TestLocalBGPPeerRR(_TestLocalBGPPeer):
 
     # In the tests of this class we have BGP peers between the
     # cluster nodes (kind-control-plane, kind-worker, kind-worker2, kind-worker3, kind-control-plane acting as a RR) with ASNumber 64512
@@ -548,7 +548,11 @@ class TestLocalBGPPeerRR(_BaseTestLocalBGPPeer):
         self.set_topology(TopologyMode.RR)
         super(TestLocalBGPPeerRR, self).setUp()
 
-class TestLocalBGPPeerMesh(_BaseTestLocalBGPPeer):
+    def test_local_bgp_peers(self):
+        self._test_local_bgp_peers()
+
+
+class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
 
     # In the tests of this class we have BGP peers between the
     # cluster nodes (kind-control-plane, kind-worker, kind-worker2, kind-worker3) with ASNumber 64512
@@ -567,6 +571,10 @@ class TestLocalBGPPeerMesh(_BaseTestLocalBGPPeer):
     def setUp(self):
         self.set_topology(TopologyMode.MESH)
         super(TestLocalBGPPeerMesh, self).setUp()
+
+    def test_local_bgp_peers(self):
+        self._test_local_bgp_peers()
+
 
 def stop_for_debug():
     # Touch debug file under projectcalico/calico/node to stop the process
