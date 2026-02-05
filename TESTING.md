@@ -71,7 +71,12 @@ make -C calicoctl ut WHAT="commands"
 - `GINKGO_FOCUS` maps to the `-run` flag for test selection
 - `GINKGO_SKIP` is **not supported** (go test doesn't have an equivalent skip flag)
 - `GINKGO_ARGS` passes additional flags to `go test` (not ginkgo-specific flags)
-- `WHAT` is **not supported** (always runs `./...`)
+- `WHAT` specifies which packages to test (default: `./...`)
+
+Example:
+```bash
+make -C app-policy ut WHAT="./pkg/..."
+```
 
 ### Affected Makefiles
 
