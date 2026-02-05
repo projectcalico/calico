@@ -216,7 +216,7 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 		for i, pool := range overlappingPools {
 			if i == 0 {
 				// Enable the first (i.e., the oldest) pool by removing the disabled condition if it exists.
-				if removeCondition(pool, "Disabled") {
+				if removeCondition(pool, v3.IPPoolConditionDisabled) {
 					if _, err = c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
 						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
 					}
@@ -224,7 +224,7 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 			} else {
 				// Disable any other overlapping pools by setting a condition on them, which will prevent IPAM from allocating from those pools.
 				cond := metav1.Condition{
-					Type:   "Disabled",
+					Type:   v3.IPPoolConditionDisabled,
 					Status: metav1.ConditionTrue,
 					Reason: "OverlappingPool",
 					Message: fmt.Sprintf(
@@ -254,7 +254,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 	}
 
 	if p.DeletionTimestamp == nil {
-		if hasCondition(p, "Disabled") {
+		if hasCondition(p, v3.IPPoolConditionDisabled) {
 			// If this pool is disabled due to CIDR overlaps or other validation issues, we should not add a finalizer to it
 			// since it won't have any IPAM blocks associated with it and we don't want to block deletion of the pool.
 			if hasFinalizer(p) {

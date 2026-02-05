@@ -226,7 +226,7 @@ func expectPoolDisabledCondition(cli ctrlclient.Client, poolName string) {
 			return err
 		}
 		for _, condition := range pool.Status.Conditions {
-			if condition.Type == "Disabled" && condition.Status == metav1.ConditionTrue {
+			if condition.Type == v3.IPPoolConditionDisabled && condition.Status == metav1.ConditionTrue {
 				return nil
 			}
 		}
