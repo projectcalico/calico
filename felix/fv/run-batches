@@ -37,8 +37,8 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
+               -ginkgo.skip="${GINKGO_SKIP}" \
                -ginkgo.focus="${GINKGO_FOCUS}" \
-               ${GINKGO_SKIP:+-ginkgo.skip="${GINKGO_SKIP}"} \
                ${GINKGO_ARGS} \
                -ginkgo.v \
                -ginkgo.noColor \
@@ -50,8 +50,8 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
+               -ginkgo.skip="${GINKGO_SKIP}" \
                -ginkgo.focus="${GINKGO_FOCUS}" \
-               ${GINKGO_SKIP:+-ginkgo.skip="${GINKGO_SKIP}"} \
                ${GINKGO_ARGS}
      status=$?
      echo "Test batch $batch completed with status $status"
