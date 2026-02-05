@@ -31,6 +31,8 @@ clean:
 
 WHAT?=.
 GINKGO_FOCUS?=.*
+GINKGO_SKIP?=
+GINKGO_ARGS?=
 
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
