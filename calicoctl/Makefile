@@ -99,6 +99,8 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 ###############################################################################
 # UTs
 ###############################################################################
+# WHAT defaults to * (not .) because the command runs 'ginkgo ... calicoctl/*'
+# to match the original behavior of testing all subdirectories under calicoctl/
 WHAT?=*
 GINKGO_FOCUS?=.*
 GINKGO_SKIP?=
