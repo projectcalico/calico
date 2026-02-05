@@ -444,6 +444,10 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp2.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences).To(Equal(kvp.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences))
 
+		l := apiv3.NetworkPolicyList{}
+		cli.List(ctx, &l, ctrlclient.InNamespace("default"))
+		Expect(l.Items).To(HaveLen(1))
+
 		// Query the underlying custom resource and check that the UID is as expected.
 		// The Pod UID should be unchanged, but the NetworkPolicy UID behavior varies based on API group:
 		// - crd.projectcalico.org: UID belonging to the Calico resource has been translated.
