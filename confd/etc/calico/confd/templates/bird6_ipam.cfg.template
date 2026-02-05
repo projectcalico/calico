@@ -18,14 +18,20 @@ function reject_local_routes () {
   }
 }
 
-function ippools_export_filter() {
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") false 6 }}
+function reject_disabled_pools() {
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") reject false 6 }}
+{{ $line }}
+{{- end }}
+} 
+
+function accept_enabled_pools() {
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") accept false 6 }}
 {{ $line }}
 {{- end }}
 }
 
-function ippools_kernel_programming_filter() {
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") true 6 }}
+function program_pools_to_kernel() {
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") "" true 6 }}
 {{ $line }}
 {{- end }}
 }
@@ -39,7 +45,7 @@ function calico_export_to_bgp_peers(bool internal_peer) {
   reject_local_routes();
   apply_communities();
   calico_aggr();
-  ippools_export_filter();
+  accept_enabled_pools();
 
 {{- $static_key := "/staticroutesv6"}}
 {{- if ls $static_key}}
@@ -77,6 +83,6 @@ filter calico_kernel_programming {
   if ( net ~ {{$cidr}} ) then { reject; }
   {{- end}}
 {{- end}}
-  ippools_kernel_programming_filter();
+  program_pools_to_kernel();
   accept;  {{- /* Destination is not in any ipPool, accept */}}
 }

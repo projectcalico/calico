@@ -408,13 +408,13 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 
 func IPPoolsFilterBIRDFunc(
 	pairs memkv.KVPairs,
+	targetAction string,
 	forProgrammingKernel bool,
 	version int,
 ) ([]string, error) {
 	lines := []string{}
-	var line string
-	var versionStr string
 
+	var versionStr string
 	if version == 4 || version == 6 {
 		versionStr = fmt.Sprintf("%d", version)
 	} else {
@@ -447,10 +447,22 @@ func IPPoolsFilterBIRDFunc(
 			action = "accept"
 		}
 
-		lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment)...)
+		if forProgrammingKernel {
+			lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment)...)
+		} else {
+			if len(targetAction) == 0 || targetAction == action {
+				lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment)...)
+			}
+		}
 	}
 	if len(lines) == 0 {
-		line = fmt.Sprintf("# No v%s IPPool configured", versionStr)
+		var line string
+		switch targetAction {
+		case "accept", "reject":
+			line = fmt.Sprintf("# No v%s %s filter generated", versionStr, targetAction)
+		default:
+			line = fmt.Sprintf("# No v%s IPPool configured", versionStr)
+		}
 		lines = append(lines, line)
 	}
 	return lines, nil

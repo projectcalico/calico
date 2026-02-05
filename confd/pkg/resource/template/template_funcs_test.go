@@ -195,202 +195,6 @@ func Test_BGPFilterBIRDFuncs(t *testing.T) {
 	}
 }
 
-func Test_IPPoolsFilterBIRDFunc(t *testing.T) {
-	tcs := []struct {
-		ipFamily             int
-		cidr                 string
-		exportDisabled       bool
-		ipipMode             encap.Mode
-		vxlanMode            encap.Mode
-		expectedExportFilter []string
-		expectedKernelFilter []string
-	}{
-		// IPv4 IPIP Encapsulation cases.
-		{
-			ipFamily:             4,
-			cidr:                 "10.11.0.0/16",
-			exportDisabled:       false,
-			ipipMode:             encap.Always,
-			vxlanMode:            encap.Undefined,
-			expectedExportFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { accept; }`},
-			expectedKernelFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { krt_tunnel = "tunl0"; accept; }`},
-		},
-		{
-			ipFamily:             4,
-			cidr:                 "10.11.0.0/16",
-			exportDisabled:       true, // BGP export disabled.
-			ipipMode:             encap.Always,
-			vxlanMode:            encap.Undefined,
-			expectedExportFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { reject; } # BGP export is disabled.`},
-			expectedKernelFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { krt_tunnel = "tunl0"; accept; }`},
-		},
-		{
-			ipFamily:             4,
-			cidr:                 "10.10.0.0/16",
-			exportDisabled:       false,
-			ipipMode:             encap.CrossSubnet,
-			vxlanMode:            encap.Undefined,
-			expectedExportFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { accept; }`},
-			expectedKernelFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { if (defined(bgp_next_hop) && bgp_next_hop ~ 10.10.0.0/16) then krt_tunnel = ""; else krt_tunnel = "tunl0"; accept; }`},
-		},
-		{
-			ipFamily:             4,
-			cidr:                 "10.10.0.0/16",
-			exportDisabled:       true, // BGP export disabled.
-			ipipMode:             encap.CrossSubnet,
-			vxlanMode:            encap.Undefined,
-			expectedExportFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { reject; } # BGP export is disabled.`},
-			expectedKernelFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { if (defined(bgp_next_hop) && bgp_next_hop ~ 10.10.0.0/16) then krt_tunnel = ""; else krt_tunnel = "tunl0"; accept; }`},
-		},
-		// IPv4 No-Encapsulation case.
-		{
-			ipFamily:             4,
-			cidr:                 "10.12.0.0/16",
-			exportDisabled:       false,
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.Undefined,
-			expectedExportFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { accept; }`},
-			expectedKernelFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { krt_tunnel = ""; accept; }`},
-		},
-		{
-			ipFamily:             4,
-			cidr:                 "10.12.0.0/16",
-			exportDisabled:       true, // BGP export disabled.
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.Undefined,
-			expectedExportFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { reject; } # BGP export is disabled.`},
-			expectedKernelFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { krt_tunnel = ""; accept; }`},
-		},
-		// IPv6 No-Encapsulation case.
-		{
-			ipFamily:             6,
-			cidr:                 "ffee::/64",
-			exportDisabled:       false,
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.Undefined,
-			expectedExportFilter: []string{`if ( net ~ ffee::/64 ) then { accept; }`},
-			expectedKernelFilter: []string{`if ( net ~ ffee::/64 ) then { accept; }`},
-		},
-		{
-			ipFamily:             6,
-			cidr:                 "dead:beef::/64",
-			exportDisabled:       true, // BGP export disabled.
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.Undefined,
-			expectedExportFilter: []string{`if ( net ~ dead:beef::/64 ) then { reject; } # BGP export is disabled.`},
-			expectedKernelFilter: []string{`if ( net ~ dead:beef::/64 ) then { accept; }`},
-		},
-		// IPv4 VXLAN Encapsulation cases.
-		{
-			ipFamily:             4,
-			cidr:                 "192.168.0.0/16",
-			exportDisabled:       false,
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.Always,
-			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
-			expectedKernelFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
-		},
-		{
-			ipFamily:             4,
-			cidr:                 "192.168.0.0/16",
-			exportDisabled:       true, // BGP export disabled.
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.Always,
-			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # BGP export is disabled.`},
-			expectedKernelFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
-		},
-		{
-			ipFamily:             4,
-			cidr:                 "192.168.0.0/16",
-			exportDisabled:       false,
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.CrossSubnet,
-			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
-			expectedKernelFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
-		},
-		{
-			ipFamily:             4,
-			cidr:                 "192.168.0.0/16",
-			exportDisabled:       true, // BGP export disabled.
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.CrossSubnet,
-			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # BGP export is disabled.`},
-			expectedKernelFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
-		},
-		// IPv6 VXLAN Encapsulation cases.
-		{
-			ipFamily:             6,
-			cidr:                 "dead:cafe::/64",
-			exportDisabled:       false,
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.Always,
-			expectedExportFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # VXLAN routes are handled by Felix.`},
-			expectedKernelFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # VXLAN routes are handled by Felix.`},
-		},
-		{
-			ipFamily:             6,
-			cidr:                 "dead:cafe::/64",
-			exportDisabled:       true, // BGP export disabled.
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.Always,
-			expectedExportFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # BGP export is disabled.`},
-			expectedKernelFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # VXLAN routes are handled by Felix.`},
-		},
-		{
-			ipFamily:             6,
-			cidr:                 "dead:cafe::/64",
-			exportDisabled:       false,
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.CrossSubnet,
-			expectedExportFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # VXLAN routes are handled by Felix.`},
-			expectedKernelFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # VXLAN routes are handled by Felix.`},
-		},
-		{
-			ipFamily:             6,
-			cidr:                 "dead:cafe::/64",
-			exportDisabled:       true, // BGP export disabled.
-			ipipMode:             encap.Undefined,
-			vxlanMode:            encap.CrossSubnet,
-			expectedExportFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # BGP export is disabled.`},
-			expectedKernelFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # VXLAN routes are handled by Felix.`},
-		},
-	}
-
-	for i, tc := range tcs {
-		ippool := model.IPPool{}
-		ippool.CIDR = net.MustParseCIDR(tc.cidr)
-		ippool.IPIPMode = tc.ipipMode
-		ippool.VXLANMode = tc.vxlanMode
-		ippool.DisableBGPExport = tc.exportDisabled
-
-		jsonIPPool, err := json.Marshal(ippool)
-		if err != nil {
-			t.Errorf("Error formatting IPPool into JSON: %s", err)
-		}
-		kvps := []memkv.KVPair{
-			{Key: fmt.Sprintf("ippool-%s", tc.cidr), Value: string(jsonIPPool)},
-		}
-
-		generated, err := IPPoolsFilterBIRDFunc(kvps, false, tc.ipFamily)
-		if err != nil {
-			t.Errorf("Unexpected error while generating BIRD IPPool filter for test case %d: %s", i, err)
-		}
-		if !reflect.DeepEqual(generated, tc.expectedExportFilter) {
-			t.Errorf("Generated BIRD config differs from expectation for test case %d:\n Generated=%s,\n Expected=%s",
-				i, generated, tc.expectedExportFilter)
-		}
-
-		generated, err = IPPoolsFilterBIRDFunc(kvps, true, tc.ipFamily)
-		if err != nil {
-			t.Errorf("Unexpected error while generating BIRD IPPool filter for test case %d: %s", i, err)
-		}
-		if !reflect.DeepEqual(generated, tc.expectedKernelFilter) {
-			t.Errorf("Generated BIRD config differs from expectation for test case %d:\n Generated=%s,\n Expected=%s",
-				i, generated, tc.expectedKernelFilter)
-		}
-	}
-}
-
 func Test_ValidateHashToIpv4Method(t *testing.T) {
 	expectedRouterId := "207.94.5.27"
 	nodeName := "Testrobin123"
@@ -415,4 +219,343 @@ func Test_ValidateHashToIpv4Method(t *testing.T) {
 
 func int32Helper(i int32) *int32 {
 	return &i
+}
+
+type ippoolTestCase struct {
+	cidr           string
+	exportDisabled bool
+	ipipMode       encap.Mode
+	vxlanMode      encap.Mode
+}
+
+var (
+	poolsTestsV4 []ippoolTestCase = []ippoolTestCase{
+		// IPv4 IPIP Encapsulation cases.
+		{cidr: "10.10.0.0/16", exportDisabled: false, ipipMode: encap.Always},
+		{cidr: "10.11.0.0/16", exportDisabled: true, ipipMode: encap.Always},
+		{cidr: "10.12.0.0/16", exportDisabled: false, ipipMode: encap.CrossSubnet},
+		{cidr: "10.13.0.0/16", exportDisabled: true, ipipMode: encap.CrossSubnet},
+		// IPv4 No-Encapsulation case.
+		{cidr: "10.14.0.0/16", exportDisabled: false},
+		{cidr: "10.15.0.0/16", exportDisabled: true},
+		// IPv4 VXLAN Encapsulation cases.
+		{cidr: "10.16.0.0/16", exportDisabled: false, vxlanMode: encap.Always},
+		{cidr: "10.17.0.0/16", exportDisabled: true, vxlanMode: encap.Always},
+		{cidr: "10.18.0.0/16", exportDisabled: false, vxlanMode: encap.CrossSubnet},
+		{cidr: "10.19.0.0/16", exportDisabled: true, vxlanMode: encap.CrossSubnet},
+	}
+
+	poolsTestsV6 []ippoolTestCase = []ippoolTestCase{
+		// IPv4 IPIP Encapsulation cases.
+		{cidr: "dead:beef:1::/64", exportDisabled: false, ipipMode: encap.Always},
+		{cidr: "dead:beef:2::/64", exportDisabled: true, ipipMode: encap.Always},
+		{cidr: "dead:beef:3::/64", exportDisabled: false, ipipMode: encap.CrossSubnet},
+		{cidr: "dead:beef:4::/64", exportDisabled: true, ipipMode: encap.CrossSubnet},
+		// IPv4 No-Encapsulation case.
+		{cidr: "dead:beef:5::/64", exportDisabled: false},
+		{cidr: "dead:beef:6::/64", exportDisabled: true},
+		// IPv4 VXLAN Encapsulation cases.
+		{cidr: "dead:beef:7::/64", exportDisabled: false, vxlanMode: encap.Always},
+		{cidr: "dead:beef:8::/64", exportDisabled: true, vxlanMode: encap.Always},
+		{cidr: "dead:beef:9::/64", exportDisabled: false, vxlanMode: encap.CrossSubnet},
+		{cidr: "dead:beef:10::/64", exportDisabled: true, vxlanMode: encap.CrossSubnet},
+	}
+)
+
+func Test_IPPoolsFilterBIRDFuncForBGPPeers(t *testing.T) {
+	tcs := []struct {
+		ipFamily             int
+		cidr                 string
+		exportDisabled       bool
+		ipipMode             encap.Mode
+		vxlanMode            encap.Mode
+		expectedExportFilter []string
+	}{
+		// IPv4 IPIP Encapsulation cases.
+		{
+			ipFamily:             4,
+			cidr:                 "10.11.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             encap.Always,
+			vxlanMode:            encap.Undefined,
+			expectedExportFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { accept; }`},
+		},
+		{
+			ipFamily:             4,
+			cidr:                 "10.11.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             encap.Always,
+			vxlanMode:            encap.Undefined,
+			expectedExportFilter: []string{`if ( net ~ 10.11.0.0/16 ) then { reject; } # BGP export is disabled.`},
+		},
+		{
+			ipFamily:             4,
+			cidr:                 "10.10.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             encap.CrossSubnet,
+			vxlanMode:            encap.Undefined,
+			expectedExportFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { accept; }`},
+		},
+		{
+			ipFamily:             4,
+			cidr:                 "10.10.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             encap.CrossSubnet,
+			vxlanMode:            encap.Undefined,
+			expectedExportFilter: []string{`if ( net ~ 10.10.0.0/16 ) then { reject; } # BGP export is disabled.`},
+		},
+		// IPv4 No-Encapsulation case.
+		{
+			ipFamily:             4,
+			cidr:                 "10.12.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.Undefined,
+			expectedExportFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { accept; }`},
+		},
+		{
+			ipFamily:             4,
+			cidr:                 "10.12.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.Undefined,
+			expectedExportFilter: []string{`if ( net ~ 10.12.0.0/16 ) then { reject; } # BGP export is disabled.`},
+		},
+		// IPv6 No-Encapsulation case.
+		{
+			ipFamily:             6,
+			cidr:                 "ffee::/64",
+			exportDisabled:       false,
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.Undefined,
+			expectedExportFilter: []string{`if ( net ~ ffee::/64 ) then { accept; }`},
+		},
+		{
+			ipFamily:             6,
+			cidr:                 "dead:beef::/64",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.Undefined,
+			expectedExportFilter: []string{`if ( net ~ dead:beef::/64 ) then { reject; } # BGP export is disabled.`},
+		},
+		// IPv4 VXLAN Encapsulation cases.
+		{
+			ipFamily:             4,
+			cidr:                 "192.168.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.Always,
+			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
+		},
+		{
+			ipFamily:             4,
+			cidr:                 "192.168.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.Always,
+			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # BGP export is disabled.`},
+		},
+		{
+			ipFamily:             4,
+			cidr:                 "192.168.0.0/16",
+			exportDisabled:       false,
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.CrossSubnet,
+			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`},
+		},
+		{
+			ipFamily:             4,
+			cidr:                 "192.168.0.0/16",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.CrossSubnet,
+			expectedExportFilter: []string{`if ( net ~ 192.168.0.0/16 ) then { reject; } # BGP export is disabled.`},
+		},
+		// IPv6 VXLAN Encapsulation cases.
+		{
+			ipFamily:             6,
+			cidr:                 "dead:cafe::/64",
+			exportDisabled:       false,
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.Always,
+			expectedExportFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # VXLAN routes are handled by Felix.`},
+		},
+		{
+			ipFamily:             6,
+			cidr:                 "dead:cafe::/64",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.Always,
+			expectedExportFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # BGP export is disabled.`},
+		},
+		{
+			ipFamily:             6,
+			cidr:                 "dead:cafe::/64",
+			exportDisabled:       false,
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.CrossSubnet,
+			expectedExportFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # VXLAN routes are handled by Felix.`},
+		},
+		{
+			ipFamily:             6,
+			cidr:                 "dead:cafe::/64",
+			exportDisabled:       true, // BGP export disabled.
+			ipipMode:             encap.Undefined,
+			vxlanMode:            encap.CrossSubnet,
+			expectedExportFilter: []string{`if ( net ~ dead:cafe::/64 ) then { reject; } # BGP export is disabled.`},
+		},
+	}
+
+	for i, tc := range tcs {
+		ippool := model.IPPool{}
+		ippool.CIDR = net.MustParseCIDR(tc.cidr)
+		ippool.IPIPMode = tc.ipipMode
+		ippool.VXLANMode = tc.vxlanMode
+		ippool.DisableBGPExport = tc.exportDisabled
+
+		jsonIPPool, err := json.Marshal(ippool)
+		if err != nil {
+			t.Errorf("Error formatting IPPool into JSON: %s", err)
+		}
+		kvps := []memkv.KVPair{
+			{Key: fmt.Sprintf("ippool-%s", tc.cidr), Value: string(jsonIPPool)},
+		}
+
+		generated, err := IPPoolsFilterBIRDFunc(kvps, "", false, tc.ipFamily)
+		if err != nil {
+			t.Errorf("Unexpected error while generating BIRD IPPool filter for test case %d: %s", i, err)
+		}
+		if !reflect.DeepEqual(generated, tc.expectedExportFilter) {
+			t.Errorf("Generated BIRD config differs from expectation for test case %d:\n Generated=%s,\n Expected=%s",
+				i, generated, tc.expectedExportFilter)
+		}
+	}
+}
+
+func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV4(t *testing.T) {
+	kvps := []memkv.KVPair{}
+	for _, tc := range poolsTestsV4 {
+		ippool := model.IPPool{}
+		ippool.CIDR = net.MustParseCIDR(tc.cidr)
+		ippool.IPIPMode = tc.ipipMode
+		ippool.VXLANMode = tc.vxlanMode
+		ippool.DisableBGPExport = tc.exportDisabled
+
+		jsonIPPool, err := json.Marshal(ippool)
+		if err != nil {
+			t.Errorf("Error formatting IPPool into JSON: %s", err)
+		}
+		kvps = append(kvps, memkv.KVPair{
+			Key:   fmt.Sprintf("ippool-%s", tc.cidr),
+			Value: string(jsonIPPool),
+		})
+	}
+
+	expectedStatements := []string{
+		// IPv4 IPIP Encapsulation cases.
+		`if ( net ~ 10.10.0.0/16 ) then { krt_tunnel = "tunl0"; accept; }`,
+		`if ( net ~ 10.11.0.0/16 ) then { krt_tunnel = "tunl0"; accept; }`,
+		`if ( net ~ 10.12.0.0/16 ) then { if (defined(bgp_next_hop) && bgp_next_hop ~ 10.12.0.0/16) then krt_tunnel = ""; else krt_tunnel = "tunl0"; accept; }`,
+		`if ( net ~ 10.13.0.0/16 ) then { if (defined(bgp_next_hop) && bgp_next_hop ~ 10.13.0.0/16) then krt_tunnel = ""; else krt_tunnel = "tunl0"; accept; }`,
+		// IPv4 No-Encapsulation case.
+		`if ( net ~ 10.14.0.0/16 ) then { krt_tunnel = ""; accept; }`,
+		`if ( net ~ 10.15.0.0/16 ) then { krt_tunnel = ""; accept; }`,
+		// IPv4 VXLAN Encapsulation cases.
+		`if ( net ~ 10.16.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if ( net ~ 10.17.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if ( net ~ 10.18.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if ( net ~ 10.19.0.0/16 ) then { reject; } # VXLAN routes are handled by Felix.`,
+	}
+
+	generated, err := IPPoolsFilterBIRDFunc(kvps, "", true, 4)
+	if err != nil {
+		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
+	}
+	if !reflect.DeepEqual(generated, expectedStatements) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			generated, expectedStatements)
+	}
+
+	// Generated statemetns for kernel programming should not differ based on different target action.
+	generated, err = IPPoolsFilterBIRDFunc(kvps, "accept", true, 4)
+	if err != nil {
+		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
+	}
+	if !reflect.DeepEqual(generated, expectedStatements) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			generated, expectedStatements)
+	}
+
+	generated, err = IPPoolsFilterBIRDFunc(kvps, "reject", true, 4)
+	if err != nil {
+		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
+	}
+	if !reflect.DeepEqual(generated, expectedStatements) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			generated, expectedStatements)
+	}
+}
+
+func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
+	kvps := []memkv.KVPair{}
+	for _, tc := range poolsTestsV6 {
+		ippool := model.IPPool{}
+		ippool.CIDR = net.MustParseCIDR(tc.cidr)
+		ippool.IPIPMode = tc.ipipMode
+		ippool.VXLANMode = tc.vxlanMode
+		ippool.DisableBGPExport = tc.exportDisabled
+
+		jsonIPPool, err := json.Marshal(ippool)
+		if err != nil {
+			t.Errorf("Error formatting IPPool into JSON: %s", err)
+		}
+		kvps = append(kvps, memkv.KVPair{
+			Key:   fmt.Sprintf("ippool-%s", tc.cidr),
+			Value: string(jsonIPPool),
+		})
+	}
+
+	expectedStatements := []string{
+		// IPv4 IPIP Encapsulation cases.
+		`if ( net ~ dead:beef:1::/64 ) then { accept; }`,
+		`if ( net ~ dead:beef:2::/64 ) then { accept; }`,
+		`if ( net ~ dead:beef:3::/64 ) then { accept; }`,
+		`if ( net ~ dead:beef:4::/64 ) then { accept; }`,
+		// IPv4 No-Encapsulation case.
+		`if ( net ~ dead:beef:5::/64 ) then { accept; }`,
+		`if ( net ~ dead:beef:6::/64 ) then { accept; }`,
+		// IPv4 VXLAN Encapsulation cases.
+		`if ( net ~ dead:beef:7::/64 ) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if ( net ~ dead:beef:8::/64 ) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if ( net ~ dead:beef:9::/64 ) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if ( net ~ dead:beef:10::/64 ) then { reject; } # VXLAN routes are handled by Felix.`,
+	}
+
+	generated, err := IPPoolsFilterBIRDFunc(kvps, "", true, 6)
+	if err != nil {
+		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
+	}
+	if !reflect.DeepEqual(generated, expectedStatements) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			generated, expectedStatements)
+	}
+
+	// Generated statemetns for kernel programming should not differ based on different target action.
+	generated, err = IPPoolsFilterBIRDFunc(kvps, "accept", true, 6)
+	if err != nil {
+		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
+	}
+	if !reflect.DeepEqual(generated, expectedStatements) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			generated, expectedStatements)
+	}
+
+	generated, err = IPPoolsFilterBIRDFunc(kvps, "reject", true, 6)
+	if err != nil {
+		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
+	}
+	if !reflect.DeepEqual(generated, expectedStatements) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			generated, expectedStatements)
+	}
 }
