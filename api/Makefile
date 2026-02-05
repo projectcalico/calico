@@ -144,6 +144,8 @@ bin/list-gnp: examples/list-gnp/main.go
 
 WHAT?=.
 GINKGO_FOCUS?=.*
+GINKGO_SKIP?=
+GINKGO_ARGS?=
 
 .PHONY:ut
 ut: kind-cluster-create
@@ -152,7 +154,7 @@ ut: kind-cluster-create
 		-e KUBECONFIG=/kubeconfig.yaml \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		$(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r $${GINKGO_FOCUS:+-focus="$$GINKGO_FOCUS"} $${GINKGO_SKIP:+-skip="$$GINKGO_SKIP"} $(GINKGO_ARGS) $(WHAT)'
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files
