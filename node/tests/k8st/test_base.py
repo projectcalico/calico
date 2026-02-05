@@ -22,7 +22,7 @@ from unittest import TestCase
 from deepdiff import DeepDiff
 from kubernetes import client, config
 
-from utils.utils import retry_until_success, run, kubectl
+from tests.k8st.utils.utils import retry_until_success, run, kubectl
 
 logger = logging.getLogger(__name__)
 

@@ -96,12 +96,12 @@ protocol bgp RR_with_master_node from bgp_template {
 """
 
 
-class _TestLocalBGPPeer(TestBase):
+class _BaseTestLocalBGPPeer(TestBase):
     def set_topology(self, value):
         self.topology = value
 
     def setUp(self):
-        super(_TestLocalBGPPeer, self).setUp()
+        super(_BaseTestLocalBGPPeer, self).setUp()
 
         if self.topology == TopologyMode.MESH:
           _log.info("Topology MESH")
@@ -528,7 +528,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
         output = run("docker exec kind-node-tor ping -c3 10.123.0.1")
         self.assertRegex(output, "3 packets transmitted, 3 packets received")
 
-class TestLocalBGPPeerRR(_TestLocalBGPPeer):
+class TestLocalBGPPeerRR(_BaseTestLocalBGPPeer):
 
     # In the tests of this class we have BGP peers between the
     # cluster nodes (kind-control-plane, kind-worker, kind-worker2, kind-worker3, kind-control-plane acting as a RR) with ASNumber 64512
@@ -548,7 +548,7 @@ class TestLocalBGPPeerRR(_TestLocalBGPPeer):
         self.set_topology(TopologyMode.RR)
         super(TestLocalBGPPeerRR, self).setUp()
 
-class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
+class TestLocalBGPPeerMesh(_BaseTestLocalBGPPeer):
 
     # In the tests of this class we have BGP peers between the
     # cluster nodes (kind-control-plane, kind-worker, kind-worker2, kind-worker3) with ASNumber 64512
