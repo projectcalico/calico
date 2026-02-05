@@ -218,7 +218,7 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		err = cli.Create(context.Background(), nonOverlappingPool)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Expect the second pool to also have a status condition indicating it overlaps with another pool.
+		// Expect the third pool to also have a status condition indicating it overlaps with another pool.
 		expectPoolDisabledCondition(cli, anotherOverlappingPool.Name)
 
 		// Expect the non-overlapping pool to be active without any disabled condition.

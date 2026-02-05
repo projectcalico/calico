@@ -277,7 +277,6 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 
 	// Make sure non-overlapping pools are enabled by removing the disabled condition if it exists.
 	for _, pool := range active {
-		// Enable the first (i.e., the oldest) pool by removing the disabled condition if it exists.
 		if removeCondition(pool, v3.IPPoolConditionDisabled) {
 			logrus.WithField("pool", pool.Name).Info("Enabling IPPool")
 			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
