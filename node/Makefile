@@ -28,6 +28,9 @@ REMOTE_DEPS = $(LIBBPF_A) \
 	      filesystem/etc/calico/confd/conf.d \
 	      filesystem/etc/calico/confd/templates
 
+# Run these tests against the projectcalico.org/v3 API group by default.
+CALICO_API_GROUP ?= projectcalico.org/v3
+
 ###############################################################################
 # Include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -471,7 +474,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
-	     cd /code/tests/k8st && nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/$(K8ST_REPORT_FILENAME)" --with-timer'
+	     cd /code/tests/k8st && pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
 
 .PHONY: kind-k8st-cleanup
 kind-k8st-cleanup: kind-cluster-destroy

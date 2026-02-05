@@ -10,7 +10,7 @@ spec:
     type: Calico
   calicoNetwork:
     bgp: Disabled
-    linuxDataplane: {{$.Env.CALICO_LINUX_DATAPLANE}}
+    linuxDataplane: {{$.Env.ASO_LINUX_DATAPLANE}}
     ipPools:
       - cidr: 192.168.0.0/16
         encapsulation: VXLAN
