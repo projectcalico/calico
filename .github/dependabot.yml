@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    target-branch: "release-v3.31"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "golang.org/x/*"
+    labels:
+      - "docs-not-required"
+      - "release-note-not-required"
+      - "dependencies"
