@@ -16,11 +16,14 @@ package ippool
 
 import (
 	"context"
+	"fmt"
 	"slices"
+	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -152,17 +155,121 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 	logCtx := logrus.WithFields(logrus.Fields{
 		"name":         p.Name,
 		"cidr":         p.Spec.CIDR,
-		"hasFinalizer": HasFinalizer(p),
+		"hasFinalizer": hasFinalizer(p),
 	})
 	logCtx.Debug("Reconciling IPPool")
+
+	// First, check for overlapping IP pools and update their status accordingly.
+	if err := c.reconcilePoolOverlaps(ctx); err != nil {
+		logCtx.WithError(err).Warn("Failed to reconcile pool overlaps")
+	}
+
+	// Next, ensure that the finalizer is added / removed as needed.
+	if err := c.reconcileFinalizer(ctx, logCtx, p); err != nil {
+		return fmt.Errorf("failed to reconcile finalizer for IPPool: %w", err)
+	}
+	return nil
+}
+
+// reconcilePoolOverlaps checks for overlapping pools and ensures that only a single pool covering a given CIDR is active at a time.
+// Every time an IP pool is added, updated, or deleted, we need to check if it changes the active set of pools. We only
+// allow a single IP pool covering a given CIDR to be active at a time, and so we need to ensure that:
+// - When a pool is added / updated, if it overlaps with an existing active pool, we should not enable the new pool.
+// - When a pool is deleted, if it was the only active pool covering its CIDR, we should enable another overlapping pool if there is one.
+func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
+	logCtx := logrus.WithField("function", "reconcilePoolOverlaps")
+
+	// Build a mapping of base IP to pools that cover that base IP.
+	var err error
+	pools := map[string][]*v3.IPPool{}
+	for _, i := range c.poolInformer.GetIndexer().List() {
+		_, net, err := cnet.ParseCIDR(i.(*v3.IPPool).Spec.CIDR)
+		if err != nil {
+			logCtx.WithError(err).WithField("cidr", i.(*v3.IPPool).Spec.CIDR).Error("Failed to parse CIDR from IPPool")
+			continue
+		}
+		baseIP := net.IP.String()
+		if _, ok := pools[baseIP]; !ok {
+			pools[baseIP] = []*v3.IPPool{}
+		}
+		pools[baseIP] = append(pools[baseIP], i.(*v3.IPPool))
+	}
+
+	// Sort each list of pools so that we have a consistent order when checking for overlaps.
+	// We sort by creation timestamp, then by name, in order to prioritize older pools over newer ones
+	// and to have a deterministic order.
+	for baseIP := range pools {
+		slices.SortFunc(pools[baseIP], func(a, b *v3.IPPool) int {
+			if a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+				return strings.Compare(a.Name, b.Name)
+			}
+			if a.CreationTimestamp.Before(&b.CreationTimestamp) {
+				return -1
+			}
+			return 1
+		})
+	}
+
+	// Check for overlapping pools. Any entry with more than one pool in it indicates an overlap. If there is
+	// an overlap, we enable the first active pool in the list and disable all others.
+	for _, overlappingPools := range pools {
+		for i, pool := range overlappingPools {
+			if i == 0 {
+				// Enable the first (i.e., the oldest) pool by removing the disabled condition if it exists.
+				if removeCondition(pool, v3.IPPoolConditionDisabled) {
+					if _, err = c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
+					}
+				}
+			} else {
+				// Disable any other overlapping pools by setting a condition on them, which will prevent IPAM from allocating from those pools.
+				cond := metav1.Condition{
+					Type:   v3.IPPoolConditionDisabled,
+					Status: metav1.ConditionTrue,
+					Reason: "OverlappingPool",
+					Message: fmt.Sprintf(
+						"CIDR overlaps %s; disabled to prevent IP allocation conflicts.",
+						overlappingPools[0].Name,
+					),
+					LastTransitionTime: metav1.Now(),
+				}
+				if setCondition(pool, cond) {
+					if _, err = c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// reconcileFinalizer ensures that a finalizer is added to the pool when it is created, and that when the pool is deleted, all associated
+// IPAM blocks are released before the finalizer is removed and the pool can be fully deleted.
+func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logrus.Entry, p *v3.IPPool) error {
+	var err error
 
 	if p.DeletionTimestamp != nil {
 		logCtx = logCtx.WithField("deletionTimestamp", p.DeletionTimestamp.String())
 	}
-	var err error
+
 	if p.DeletionTimestamp == nil {
+		if hasCondition(p, v3.IPPoolConditionDisabled) {
+			// If this pool is disabled due to CIDR overlaps or other validation issues, we should not add a finalizer to it
+			// since it won't have any IPAM blocks associated with it and we don't want to block deletion of the pool.
+			if hasFinalizer(p) {
+				logCtx.Info("IPPool is not active, removing finalizer")
+				p.Finalizers = slices.Delete(p.Finalizers, slices.Index(p.Finalizers, IPPoolFinalizer), slices.Index(p.Finalizers, IPPoolFinalizer)+1)
+				if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
+					logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
+					return err
+				}
+			}
+			return nil
+		}
+
 		// If the IP pool is not being deleted, add a finalizer to it so we can insert ourselves into the deletion flow.
-		if !HasFinalizer(p) {
+		if !hasFinalizer(p) {
 			logCtx.Info("Adding finalizer to IPPool")
 			p.SetFinalizers(append(p.Finalizers, IPPoolFinalizer))
 			if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
@@ -173,7 +280,7 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 		return nil
 	}
 
-	if !HasFinalizer(p) {
+	if !hasFinalizer(p) {
 		logCtx.Info("IPPool is being deleted, but no finalizer is present, skipping finalization")
 		return nil
 	}
@@ -202,7 +309,6 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 		logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
 		return err
 	}
-
 	return nil
 }
 
@@ -224,6 +330,60 @@ func (c *IPPoolController) blocksInPool(cidr cnet.IPNet) bool {
 	return false
 }
 
-func HasFinalizer(p *v3.IPPool) bool {
+func hasFinalizer(p *v3.IPPool) bool {
 	return slices.Contains(p.Finalizers, IPPoolFinalizer)
+}
+
+func hasCondition(p *v3.IPPool, conditionType string) bool {
+	if p.Status == nil {
+		return false
+	}
+	for _, c := range p.Status.Conditions {
+		if c.Type == conditionType {
+			return true
+		}
+	}
+	return false
+}
+
+// setCondition sets the given condition on the IP pool, replacing any existing condition of the same type.
+// Returns true if the condition was added or updated, false if no change was made.
+func setCondition(p *v3.IPPool, condition metav1.Condition) bool {
+	if p.Status == nil {
+		p.Status = &v3.IPPoolStatus{
+			Conditions: []metav1.Condition{condition},
+		}
+		return true
+	}
+	conditions := p.Status.Conditions
+	for i, c := range conditions {
+		if c.Type == condition.Type {
+			if c.Status == condition.Status && c.Reason == condition.Reason && c.Message == condition.Message {
+				// No change, return false.
+				return false
+			}
+
+			// Update existing condition.
+			p.Status.Conditions[i] = condition
+			return true
+		}
+	}
+
+	// Condition not found, add it.
+	p.Status.Conditions = append(p.Status.Conditions, condition)
+	return true
+}
+
+func removeCondition(p *v3.IPPool, conditionType string) bool {
+	if p.Status == nil {
+		return false
+	}
+	conditions := p.Status.Conditions
+	for i, c := range conditions {
+		if c.Type == conditionType {
+			p.Status.Conditions = slices.Delete(conditions, i, i+1)
+			return true
+		}
+	}
+	return false
 }
