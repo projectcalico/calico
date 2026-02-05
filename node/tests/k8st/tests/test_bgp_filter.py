@@ -487,7 +487,6 @@ EOF
             export_filter_cidr_v4 = "192.168.0.0/16"
 
             external_route_v6 = "fd00:1111:1111:1111::/64"
-            cluster_route_regex_v6 = r"fd00:10:244:.*/\d+"
             export_filter_cidr_v6 = "fd00:10:244::/64"
 
             # Add static route bird config
