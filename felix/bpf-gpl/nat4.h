@@ -27,10 +27,15 @@ static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx,  __be32 *ip_src,
 	__u32 new_hdrsz = sizeof(struct ethhdr) + sizeof(struct iphdr) +
 			sizeof(struct udphdr) + sizeof(struct vxlanhdr);
 
-	ret = bpf_skb_adjust_room(ctx->skb, new_hdrsz, BPF_ADJ_ROOM_MAC,
-						  BPF_F_ADJ_ROOM_ENCAP_L4_UDP |
-						  BPF_F_ADJ_ROOM_ENCAP_L3_IPV4 |
-						  BPF_F_ADJ_ROOM_ENCAP_L2(sizeof(struct ethhdr)));
+	__u64 flags = BPF_F_ADJ_ROOM_ENCAP_L4_UDP |
+			BPF_F_ADJ_ROOM_ENCAP_L3_IPV4 |
+			BPF_F_ADJ_ROOM_ENCAP_L2(sizeof(struct ethhdr));
+
+	if (ctx->state->ip_proto == IPPROTO_UDP) {
+		flags |= BPF_F_ADJ_ROOM_FIXED_GSO;
+	}
+
+	ret = bpf_skb_adjust_room(ctx->skb, new_hdrsz, BPF_ADJ_ROOM_MAC, flags);
 
 	if (ret) {
 		goto out;
