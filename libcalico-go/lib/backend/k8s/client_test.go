@@ -65,6 +65,7 @@ var (
 	calicoAllowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 		Ingress: []apiv3.Rule{
 			{
 				Action: "Allow",
@@ -79,6 +80,7 @@ var (
 	calicoDisallowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 		Ingress: []apiv3.Rule{
 			{
 				Action: "Deny",
@@ -95,6 +97,7 @@ var (
 	calicoAllowPolicyModelV1 = model.Policy{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []string{"ingress", "egress"},
 		InboundRules: []model.Rule{
 			{
 				Action: "allow",
@@ -109,6 +112,7 @@ var (
 	calicoDisallowPolicyModelV1 = model.Policy{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []string{"ingress", "egress"},
 		InboundRules: []model.Rule{
 			{
 				Action: "deny",
@@ -439,6 +443,10 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		kvp2, err := c.Get(ctx, kvp.Key, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp2.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences).To(Equal(kvp.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences))
+
+		l := apiv3.NetworkPolicyList{}
+		cli.List(ctx, &l, ctrlclient.InNamespace("default"))
+		Expect(l.Items).To(HaveLen(1))
 
 		// Query the underlying custom resource and check that the UID is as expected.
 		// The Pod UID should be unchanged, but the NetworkPolicy UID behavior varies based on API group:
@@ -1290,6 +1298,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Tier:         "default",
 			StagedAction: apiv3.StagedActionSet,
 			Order:        &zeroOrder,
+			Types:        []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 			Ingress: []apiv3.Rule{
 				{
 					Action: "Allow",
@@ -1305,6 +1314,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Tier:         "default",
 			StagedAction: apiv3.StagedActionSet,
 			Order:        &zeroOrder,
+			Types:        []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 			Ingress: []apiv3.Rule{
 				{
 					Action: "Deny",
