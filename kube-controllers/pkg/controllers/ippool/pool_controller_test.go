@@ -193,25 +193,26 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		// Expect the second pool to have a status condition indicating it overlaps with another pool.
 		expectPoolDisabledCondition(cli, overlappingPool.Name)
 
-		// Create a third pool that also overlaps with the first.
+		// Create a third pool that also overlaps with both the first and second pools.
 		anotherOverlappingPool := &v3.IPPool{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "another-overlapping-pool",
 			},
 			Spec: v3.IPPoolSpec{
-				CIDR: "192.168.0.0/24",
+				CIDR: "192.168.0.0/16",
 			},
 		}
 		err = cli.Create(context.Background(), anotherOverlappingPool)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Create a fourth pool that does NOT overlap with any of the existing pools.
+		// Create a fourth pool that does NOT overlap with the first pool, but does
+		// overlap with the second pool. We expect this pool to be allowed.
 		nonOverlappingPool := &v3.IPPool{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "non-overlapping-pool",
 			},
 			Spec: v3.IPPoolSpec{
-				CIDR: "10.0.0.0/16",
+				CIDR: "192.168.2.0/24",
 			},
 		}
 		err = cli.Create(context.Background(), nonOverlappingPool)
@@ -228,6 +229,15 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		err = cli.Delete(context.Background(), pool)
 		Expect(err).NotTo(HaveOccurred())
 
+		// The second pool should still be masked by the non-overlapping pool, even though it was created before the non-overlapping pool,
+		// because we prioritize pools that are already active.
+		expectPoolDisabledCondition(cli, overlappingPool.Name)
+		expectPoolDisabledCondition(cli, anotherOverlappingPool.Name)
+
+		// Delete the non-overlapping pool, which should allow the second pool to become active since it was created before the third pool.
+		err = cli.Delete(context.Background(), nonOverlappingPool)
+		Expect(err).NotTo(HaveOccurred())
+
 		// Expect the second pool to have its status updated to remove the disabled condition, but the
 		// third pool should still be disabled because it overlaps with the second pool.
 		expectPoolActiveCondition(cli, overlappingPool.Name)
@@ -237,6 +247,13 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		// but the third pool should not have a finalizer since it's still disabled.
 		expectFinalizerPresent(cli, overlappingPool.Name)
 		expectFinalizerMissing(cli, anotherOverlappingPool.Name)
+
+		// Delete the second pool, which should allow the third pool to become active.
+		err = cli.Delete(context.Background(), overlappingPool)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect the third pool to have its status updated to remove the disabled condition.
+		expectPoolActiveCondition(cli, anotherOverlappingPool.Name)
 	})
 })
 
@@ -247,9 +264,13 @@ func expectPoolActiveCondition(cli ctrlclient.Client, poolName string) {
 		if err != nil {
 			return err
 		}
+		if pool.Status == nil {
+			// If status is nil, we consider the pool active since it has no conditions.
+			return nil
+		}
 		for _, condition := range pool.Status.Conditions {
 			if condition.Type == "Disabled" && condition.Status == metav1.ConditionTrue {
-				return fmt.Errorf("pool is disabled")
+				return fmt.Errorf("pool %s is disabled", poolName)
 			}
 		}
 		return nil
@@ -263,12 +284,15 @@ func expectPoolDisabledCondition(cli ctrlclient.Client, poolName string) {
 		if err != nil {
 			return err
 		}
+		if pool.Status == nil {
+			return fmt.Errorf("%s status is nil", poolName)
+		}
 		for _, condition := range pool.Status.Conditions {
 			if condition.Type == v3.IPPoolConditionDisabled && condition.Status == metav1.ConditionTrue {
 				return nil
 			}
 		}
-		return fmt.Errorf("disabled condition not found")
+		return fmt.Errorf("disabled condition not found on pool %s", poolName)
 	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should have disabled condition")
 }
 
@@ -283,7 +307,7 @@ func expectPoolDeleted(cli ctrlclient.Client, poolName string) {
 			// Some other error occurred.
 			return err
 		}
-		return fmt.Errorf("pool still exists")
+		return fmt.Errorf("pool %s still exists", poolName)
 	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should be deleted")
 }
 

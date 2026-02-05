@@ -178,85 +178,116 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 // - When a pool is added / updated, if it overlaps with an existing active pool, we should not enable the new pool.
 // - When a pool is deleted, if it was the only active pool covering its CIDR, we should enable another overlapping pool if there is one.
 func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
-	logCtx := logrus.WithField("function", "reconcilePoolOverlaps")
+	// Get all of the IP pools, and sort each list of pools so that we have a consistent order when checking for overlaps.
+	// We sort by:
+	// - previous active / disabled decision.
+	// - creation timestamp
+	// - then by name
+	// In order to ensure we always prefer to keep the same pool active when there are overlaps, prioritizing
+	// the oldest pool where possible.
+	pools := c.poolInformer.GetIndexer().List()
+	slices.SortFunc(pools, func(a, b any) int {
+		poolA := a.(*v3.IPPool)
+		poolB := b.(*v3.IPPool)
 
-	// Build a mapping of base IP to pools that cover that base IP.
-	poolGroups := [][]*v3.IPPool{}
-	for _, i := range c.poolInformer.GetIndexer().List() {
-		_, net, err := cnet.ParseCIDR(i.(*v3.IPPool).Spec.CIDR)
+		// Disabled pools should be sorted after active pools, so that we prefer to keep
+		// existing active pools active when there are overlaps.
+		aDisabled := hasCondition(poolA, v3.IPPoolConditionDisabled)
+		bDisabled := hasCondition(poolB, v3.IPPoolConditionDisabled)
+		if aDisabled && !bDisabled {
+			return 1
+		}
+		if !aDisabled && bDisabled {
+			return -1
+		}
+
+		// If both pools are in the same state (both active or both disabled), sort by creation timestamp,
+		// sorting older pools first.
+		if poolA.CreationTimestamp.Before(&poolB.CreationTimestamp) {
+			return -1
+		}
+		if poolB.CreationTimestamp.Before(&poolA.CreationTimestamp) {
+			return 1
+		}
+
+		// If creation timestamps are equal, sort by name to ensure a deterministic order.
+		return strings.Compare(poolA.Name, poolB.Name)
+	})
+
+	// Go through each pool and find any overlaps.
+	active := map[string]*v3.IPPool{}
+	disabled := map[string]*v3.IPPool{}
+	overlaps := map[string]string{}
+
+	for i, p := range pools {
+		pool := p.(*v3.IPPool)
+
+		logrus.WithFields(logrus.Fields{
+			"pool":         pool.Name,
+			"cidr":         pool.Spec.CIDR,
+			"creationTime": pool.CreationTimestamp.String(),
+			"index":        i,
+		}).Debug("Checking pool for overlaps")
+
+		_, net, err := cnet.ParseCIDR(pool.Spec.CIDR)
 		if err != nil {
-			logCtx.WithError(err).WithField("cidr", i.(*v3.IPPool).Spec.CIDR).Error("Failed to parse CIDR from IPPool")
+			logrus.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
 			continue
 		}
 
-		overlaps := false
-		for _, checkedPools := range poolGroups {
-			// Check if this pool overlaps with any of the pools we've already seen. If it does, we can just add it to that list and move on to the next pool.
-			_, checkedNet, err := cnet.ParseCIDR(checkedPools[0].Spec.CIDR)
+		for _, activePool := range active {
+			_, activeNet, err := cnet.ParseCIDR(activePool.Spec.CIDR)
 			if err != nil {
-				logCtx.WithError(err).WithField("cidr", checkedPools[0].Spec.CIDR).Error("Failed to parse CIDR from IPPool")
+				logrus.WithError(err).WithField("cidr", activePool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
 				continue
 			}
-			if net.IsNetOverlap(checkedNet.IPNet) {
-				checkedPools = append(checkedPools, i.(*v3.IPPool))
-				overlaps = true
+			if net.IsNetOverlap(activeNet.IPNet) {
+				logrus.WithField("overlap", pool.Name).WithField("active", activePool.Name).Debug("Found overlapping pools")
+				disabled[pool.Name] = pool
+				overlaps[pool.Name] = activePool.Name
 			}
 		}
 
-		if !overlaps {
-			// This pool does not overlap with any of the pools we've already seen, so we need to add it as a new entry in the map.
-			poolGroups = append(poolGroups, []*v3.IPPool{i.(*v3.IPPool)})
+		if _, ok := disabled[pool.Name]; !ok {
+			// This pool does not overlap with any existing active pools, so we can add it to the active set.
+			logrus.WithField("pool", pool.Name).Debug("Found non-overlapping pool, adding to active set")
+			active[pool.Name] = pool
 		}
 	}
 
-	// Sort each list of pools so that we have a consistent order when checking for overlaps.
-	// We sort by creation timestamp, then by name, in order to prioritize older pools over newer ones
-	// and to have a deterministic order.
-	for _, overlapping := range poolGroups {
-		slices.SortFunc(overlapping, func(a, b *v3.IPPool) int {
-			if a.CreationTimestamp.Equal(&b.CreationTimestamp) {
-				return strings.Compare(a.Name, b.Name)
+	// Mark any overlapping pools as disabled.
+	for _, pool := range disabled {
+		// Disable any other overlapping pools by setting a condition on them, which will prevent IPAM from allocating from those pools.
+		cond := metav1.Condition{
+			Type:   v3.IPPoolConditionDisabled,
+			Status: metav1.ConditionTrue,
+			Reason: "OverlappingPool",
+			Message: fmt.Sprintf(
+				"CIDR overlaps %s; disabled to prevent IP allocation conflicts.",
+				overlaps[pool.Name],
+			),
+		}
+		if setCondition(pool, cond) {
+			logrus.WithField("otherPool", pool.Name).Info("Disabling IPPool due to overlap")
+			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
 			}
-			if a.CreationTimestamp.Before(&b.CreationTimestamp) {
-				return -1
-			}
-			return 1
-		})
+		}
 	}
 
-	// Check for overlapping pools. Any entry with more than one pool in it indicates an overlap. If there is
-	// an overlap, we enable the first active pool in the list and disable all others.
-	for _, overlappingPools := range poolGroups {
-		for i, pool := range overlappingPools {
-			if i == 0 {
-				// Enable the first (i.e., the oldest) pool by removing the disabled condition if it exists.
-				if removeCondition(pool, v3.IPPoolConditionDisabled) {
-					if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
-						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
-					}
+	// Make sure non-overlapping pools are enabled by removing the disabled condition if it exists.
+	for _, pool := range active {
+		// Enable the first (i.e., the oldest) pool by removing the disabled condition if it exists.
+		if removeCondition(pool, v3.IPPoolConditionDisabled) {
+			logrus.WithField("pool", pool.Name).Info("Enabling IPPool")
+			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
+			}
 
-					// If this pool was previously disabled, we need to ensure the finalizer is correctly set on it since
-					// it would not have had one applied when it was disabled.
-					if err := c.reconcileFinalizer(ctx, logCtx, pool); err != nil {
-						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to reconcile finalizer for IPPool")
-					}
-				}
-			} else {
-				// Disable any other overlapping pools by setting a condition on them, which will prevent IPAM from allocating from those pools.
-				cond := metav1.Condition{
-					Type:   v3.IPPoolConditionDisabled,
-					Status: metav1.ConditionTrue,
-					Reason: "OverlappingPool",
-					Message: fmt.Sprintf(
-						"CIDR overlaps %s; disabled to prevent IP allocation conflicts.",
-						overlappingPools[0].Name,
-					),
-				}
-				if setCondition(pool, cond) {
-					if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
-						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
-					}
-				}
+			// If this pool was previously disabled, we need to ensure the finalizer is correctly set on it since
+			// it would not have had one applied when it was disabled.
+			if err := c.reconcileFinalizer(ctx, logrus.WithField("pool", pool.Name), pool); err != nil {
+				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to reconcile finalizer for IPPool")
 			}
 		}
 	}
