@@ -14,9 +14,10 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 func newFuncMap() map[string]interface{} {
@@ -421,29 +422,27 @@ func IPPoolsFilterBIRDFunc(
 	}
 
 	for _, kvp := range pairs {
-		var ippoolspec v3.IPPoolSpec
-		err := json.Unmarshal([]byte(kvp.Value), &ippoolspec)
+		var ippool model.IPPool
+		err := json.Unmarshal([]byte(kvp.Value), &ippool)
 		if err != nil {
 			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
 		}
 
-		logrus.Infof("pepper1 %#v", ippoolspec)
-
-		cidr := ippoolspec.CIDR
+		cidr := ippool.CIDR.String()
 		var action, comment, extraStatement string
 		switch {
-		case ippoolspec.DisableBGPExport && !forProgrammingKernel:
+		case ippool.DisableBGPExport && !forProgrammingKernel:
 			// IPPool's BGP export is disabled, and filter is for exporting to other peers.
 			action = "reject"
 			comment = "BGP export is disabled."
-		case ippoolspec.VXLANMode == v3.VXLANModeAlways || ippoolspec.VXLANMode == v3.VXLANModeCrossSubnet:
+		case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
 			// VXLAN encapsulation.
 			action = "reject"
 			comment = "VXLAN routes are handled by Felix."
 		default:
 			// IPIP encapsulation or No-Encap.
 			if forProgrammingKernel && version == 4 {
-				extraStatement = emitFilterForKernelProgrammingIPIPNoEncap(ippoolspec.IPIPMode, cidr)
+				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, cidr)
 			}
 			action = "accept"
 		}
@@ -457,11 +456,11 @@ func IPPoolsFilterBIRDFunc(
 	return lines, nil
 }
 
-func emitFilterForKernelProgrammingIPIPNoEncap(ipipMode v3.IPIPMode, cidr string) string {
+func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, cidr string) string {
 	switch v3.EncapMode(ipipMode) {
-	case v3.Always, v3.EncapMode(v3.IPIPModeAlways):
+	case v3.Always:
 		return `krt_tunnel = "tunl0";`
-	case v3.CrossSubnet, v3.EncapMode(v3.IPIPModeCrossSubnet):
+	case v3.CrossSubnet:
 		format := `if (defined(bgp_next_hop) && bgp_next_hop ~ %s) then krt_tunnel = ""; else krt_tunnel = "tunl0";`
 		return fmt.Sprintf(format, cidr)
 	default:
