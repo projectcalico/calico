@@ -70,7 +70,7 @@ make -C calicoctl ut WHAT="commands"
 - `GINKGO_FOCUS` maps to the `-run` flag for test selection
 - `GINKGO_SKIP` is **not supported** (go test doesn't have an equivalent skip flag)
 - `GINKGO_ARGS` passes additional flags to `go test`
-- `WHAT` is not used (always runs `./...`)
+- `WHAT` is **not supported** (always runs `./...`)
 
 ### Affected Makefiles
 
