@@ -444,17 +444,16 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp2.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences).To(Equal(kvp.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences))
 
-		l := apiv3.NetworkPolicyList{}
-		cli.List(ctx, &l, ctrlclient.InNamespace("default"))
-		Expect(l.Items).To(HaveLen(1))
-
 		// Query the underlying custom resource and check that the UID is as expected.
 		// The Pod UID should be unchanged, but the NetworkPolicy UID behavior varies based on API group:
 		// - crd.projectcalico.org: UID belonging to the Calico resource has been translated.
 		// - projectcalico.org/v3: UID belonging to the Calico resource is unchanged.
+		// Do this in a retry since the controller runtime client is cache driven and may not have
+		// received the update yet.
 		crd := &apiv3.NetworkPolicy{}
-		err = cli.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, crd)
-		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			return cli.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, crd)
+		}, "5s", "100ms").ShouldNot(HaveOccurred())
 
 		var meta metav1.ObjectMeta
 		if v3CRD {
