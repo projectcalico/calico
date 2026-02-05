@@ -59,8 +59,18 @@ The CNI plugin tests run against different datastores:
 make -C cni-plugin ut DATASTORE_TYPE=etcdv3 GINKGO_FOCUS="IPAM"
 ```
 
+#### Calicoctl
+The calicoctl tests use `WHAT` with a default of `*` to match the original behavior:
+```bash
+make -C calicoctl ut WHAT="commands"
+```
+
 #### App Policy
-Note: app-policy uses standard `go test` instead of ginkgo, so `GINKGO_FOCUS` maps to `-run` flag.
+**Important:** app-policy uses standard `go test` instead of ginkgo:
+- `GINKGO_FOCUS` maps to the `-run` flag for test selection
+- `GINKGO_SKIP` is **not supported** (go test doesn't have an equivalent skip flag)
+- `GINKGO_ARGS` passes additional flags to `go test`
+- `WHAT` is not used (always runs `./...`)
 
 ### Affected Makefiles
 
