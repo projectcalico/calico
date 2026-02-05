@@ -16,11 +16,14 @@ package ippool
 
 import (
 	"context"
+	"fmt"
 	"slices"
+	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -147,6 +150,32 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 	logrus.Info("Stopping IPPool controller")
 }
 
+func poolActive(p *v3.IPPool) bool {
+	if p.DeletionTimestamp != nil {
+		return false
+	}
+	if p.Status != nil {
+		for _, cond := range p.Status.Conditions {
+			if cond.Type == "Disabled" && cond.Status == metav1.ConditionTrue {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func poolsOverlap(p1, p2 *v3.IPPool) (bool, error) {
+	_, net1, err := cnet.ParseCIDR(p1.Spec.CIDR)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse CIDR from IPPool %s: %w", p1.Name, err)
+	}
+	_, net2, err := cnet.ParseCIDR(p2.Spec.CIDR)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse CIDR from IPPool %s: %w", p2.Name, err)
+	}
+	return net1.IsNetOverlap(net2.IPNet), nil
+}
+
 func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 	ctx := context.TODO()
 	logCtx := logrus.WithFields(logrus.Fields{
@@ -160,6 +189,85 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 		logCtx = logCtx.WithField("deletionTimestamp", p.DeletionTimestamp.String())
 	}
 	var err error
+
+	// Every time an IP pool is added, updated, or deleted, we need to check if it changes the active set of pools. We only
+	// allow a single IP pool covering a given CIDR to be active at a time, and so we need to ensure that:
+	// - When a pool is added / updated, if it overlaps with an existing active pool, we should not enable the new pool.
+	// - When a pool is deleted, if it was the only active pool covering its CIDR, we should enable another overlapping pool if there is one.
+
+	// Build a mapping of base IP to pools that cover that base IP.
+	pools := map[string][]*v3.IPPool{}
+	for _, i := range c.poolInformer.GetIndexer().List() {
+		_, net, err := cnet.ParseCIDR(i.(*v3.IPPool).Spec.CIDR)
+		if err != nil {
+			logCtx.WithError(err).WithField("cidr", i.(*v3.IPPool).Spec.CIDR).Error("Failed to parse CIDR from IPPool")
+			continue
+		}
+		baseIP := net.IP.String()
+		if _, ok := pools[baseIP]; !ok {
+			pools[baseIP] = []*v3.IPPool{}
+		}
+		pools[baseIP] = append(pools[baseIP], i.(*v3.IPPool))
+	}
+
+	// Sort each list of pools so that we have a consistent order when checking for overlaps.
+	// We sort by creation timestamp, then by name to ensure a consistent order.
+	for baseIP := range pools {
+		slices.SortFunc(pools[baseIP], func(a, b *v3.IPPool) int {
+			if a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+				return strings.Compare(a.Name, b.Name)
+			}
+			if a.CreationTimestamp.Before(&b.CreationTimestamp) {
+				return -1
+			}
+			return 1
+		})
+	}
+
+	// Check for overlapping pools. Any entry with more than one pool in it indicates an overlap. If there is
+	// an overlap, we enable the first active pool in the list and disable all others.
+	for _, overlappingPools := range pools {
+		if len(overlappingPools) > 1 {
+			// There is overlap - ensure only the first active pool is enabled.
+			for i, pool := range overlappingPools {
+				if i == 0 {
+					// Enable the first (i.e., the oldest) pool.
+					pool.Status = &v3.IPPoolStatus{
+						Conditions: []metav1.Condition{},
+					}
+				} else {
+					// Disable all other pools.
+					pool.Status = &v3.IPPoolStatus{
+						Conditions: []metav1.Condition{{
+							Type:   "Disabled",
+							Status: metav1.ConditionTrue,
+							Reason: "OverlappingPool",
+							Message: fmt.Sprintf(
+								"CIDR overlaps %s; disabled to prevent IP address allocation conflicts.",
+								overlappingPools[0].Name,
+							),
+							LastTransitionTime: metav1.Now(),
+						}},
+					}
+				}
+				if _, err = c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+					logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
+					return err
+				}
+			}
+			continue
+		}
+
+		// Only a single pool covers this base IP - ensure it is enabled.
+		pool := overlappingPools[0]
+		pool.Status = &v3.IPPoolStatus{
+			Conditions: []metav1.Condition{},
+		}
+		if _, err = c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+			logCtx.WithError(err).Error("Failed to update status of IPPool")
+		}
+	}
+
 	if p.DeletionTimestamp == nil {
 		// If the IP pool is not being deleted, add a finalizer to it so we can insert ourselves into the deletion flow.
 		if !HasFinalizer(p) {
