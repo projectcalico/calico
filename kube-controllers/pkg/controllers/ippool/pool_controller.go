@@ -171,7 +171,8 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 	return nil
 }
 
-// reconcilePoolOverlaps checks for overlapping pools and ensures that only a single pool covering a given CIDR is active at a time.
+// reconcilePoolOverlaps checks for overlapping pools and ensures that any overlapping IP pools are not both active at the same time.
+//
 // Every time an IP pool is added, updated, or deleted, we need to check if it changes the active set of pools. We only
 // allow a single IP pool covering a given CIDR to be active at a time, and so we need to ensure that:
 // - When a pool is added / updated, if it overlaps with an existing active pool, we should not enable the new pool.
@@ -180,26 +181,39 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 	logCtx := logrus.WithField("function", "reconcilePoolOverlaps")
 
 	// Build a mapping of base IP to pools that cover that base IP.
-	var err error
-	pools := map[string][]*v3.IPPool{}
+	poolGroups := [][]*v3.IPPool{}
 	for _, i := range c.poolInformer.GetIndexer().List() {
 		_, net, err := cnet.ParseCIDR(i.(*v3.IPPool).Spec.CIDR)
 		if err != nil {
 			logCtx.WithError(err).WithField("cidr", i.(*v3.IPPool).Spec.CIDR).Error("Failed to parse CIDR from IPPool")
 			continue
 		}
-		baseIP := net.IP.String()
-		if _, ok := pools[baseIP]; !ok {
-			pools[baseIP] = []*v3.IPPool{}
+
+		overlaps := false
+		for _, checkedPools := range poolGroups {
+			// Check if this pool overlaps with any of the pools we've already seen. If it does, we can just add it to that list and move on to the next pool.
+			_, checkedNet, err := cnet.ParseCIDR(checkedPools[0].Spec.CIDR)
+			if err != nil {
+				logCtx.WithError(err).WithField("cidr", checkedPools[0].Spec.CIDR).Error("Failed to parse CIDR from IPPool")
+				continue
+			}
+			if net.IsNetOverlap(checkedNet.IPNet) {
+				checkedPools = append(checkedPools, i.(*v3.IPPool))
+				overlaps = true
+			}
 		}
-		pools[baseIP] = append(pools[baseIP], i.(*v3.IPPool))
+
+		if !overlaps {
+			// This pool does not overlap with any of the pools we've already seen, so we need to add it as a new entry in the map.
+			poolGroups = append(poolGroups, []*v3.IPPool{i.(*v3.IPPool)})
+		}
 	}
 
 	// Sort each list of pools so that we have a consistent order when checking for overlaps.
 	// We sort by creation timestamp, then by name, in order to prioritize older pools over newer ones
 	// and to have a deterministic order.
-	for baseIP := range pools {
-		slices.SortFunc(pools[baseIP], func(a, b *v3.IPPool) int {
+	for _, overlapping := range poolGroups {
+		slices.SortFunc(overlapping, func(a, b *v3.IPPool) int {
 			if a.CreationTimestamp.Equal(&b.CreationTimestamp) {
 				return strings.Compare(a.Name, b.Name)
 			}
@@ -212,13 +226,19 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 
 	// Check for overlapping pools. Any entry with more than one pool in it indicates an overlap. If there is
 	// an overlap, we enable the first active pool in the list and disable all others.
-	for _, overlappingPools := range pools {
+	for _, overlappingPools := range poolGroups {
 		for i, pool := range overlappingPools {
 			if i == 0 {
 				// Enable the first (i.e., the oldest) pool by removing the disabled condition if it exists.
 				if removeCondition(pool, v3.IPPoolConditionDisabled) {
-					if _, err = c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+					if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
 						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
+					}
+
+					// If this pool was previously disabled, we need to ensure the finalizer is correctly set on it since
+					// it would not have had one applied when it was disabled.
+					if err := c.reconcileFinalizer(ctx, logCtx, pool); err != nil {
+						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to reconcile finalizer for IPPool")
 					}
 				}
 			} else {
@@ -231,10 +251,9 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 						"CIDR overlaps %s; disabled to prevent IP allocation conflicts.",
 						overlappingPools[0].Name,
 					),
-					LastTransitionTime: metav1.Now(),
 				}
 				if setCondition(pool, cond) {
-					if _, err = c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+					if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
 						logCtx.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
 					}
 				}
@@ -256,7 +275,8 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 	if p.DeletionTimestamp == nil {
 		if hasCondition(p, v3.IPPoolConditionDisabled) {
 			// If this pool is disabled due to CIDR overlaps or other validation issues, we should not add a finalizer to it
-			// since it won't have any IPAM blocks associated with it and we don't want to block deletion of the pool.
+			// since any IPAM blocks within this CIDR belong to the active pool and we don't want to interfere with the deletion of this
+			// pool if the user tries to delete it to resolve the overlap.
 			if hasFinalizer(p) {
 				logCtx.Info("IPPool is not active, removing finalizer")
 				p.Finalizers = slices.Delete(p.Finalizers, slices.Index(p.Finalizers, IPPoolFinalizer), slices.Index(p.Finalizers, IPPoolFinalizer)+1)
@@ -350,11 +370,14 @@ func hasCondition(p *v3.IPPool, conditionType string) bool {
 // Returns true if the condition was added or updated, false if no change was made.
 func setCondition(p *v3.IPPool, condition metav1.Condition) bool {
 	if p.Status == nil {
+		// If there is no status, we need to create one and add the condition to it.
+		condition.LastTransitionTime = metav1.Now()
 		p.Status = &v3.IPPoolStatus{
 			Conditions: []metav1.Condition{condition},
 		}
 		return true
 	}
+
 	conditions := p.Status.Conditions
 	for i, c := range conditions {
 		if c.Type == condition.Type {
@@ -364,12 +387,14 @@ func setCondition(p *v3.IPPool, condition metav1.Condition) bool {
 			}
 
 			// Update existing condition.
+			condition.LastTransitionTime = metav1.Now()
 			p.Status.Conditions[i] = condition
 			return true
 		}
 	}
 
 	// Condition not found, add it.
+	condition.LastTransitionTime = metav1.Now()
 	p.Status.Conditions = append(p.Status.Conditions, condition)
 	return true
 }

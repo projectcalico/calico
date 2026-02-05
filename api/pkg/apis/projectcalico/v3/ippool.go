@@ -54,7 +54,7 @@ type IPPool struct {
 
 const (
 	// IPPoolDisabled is a condition type that indicates the IP pool has been operationally disabled
-	// by Calico due to an issue with the pool, such as an invalid CIDR.
+	// by Calico due to an issue with the pool.
 	IPPoolConditionDisabled = "Disabled"
 )
 
