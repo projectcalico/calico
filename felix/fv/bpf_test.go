@@ -3403,14 +3403,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					ifUDPnoCTLB := func(desc string, body func()) {
-						if testOpts.protocol != "udp" || testOpts.connTimeEnabled {
+					It("should have connectivity after a backend is replaced by a new one", func() {
+						if testOpts.protocol == "udp" && testOpts.connTimeEnabled {
 							return
 						}
-						It(desc, body)
-					}
-
-					ifUDPnoCTLB("should have connectivity after a backend is replaced by a new one", func() {
 						var (
 							testSvc          *v1.Service
 							testSvcNamespace string
@@ -3472,7 +3468,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Timeout:             60 * time.Second,
 							},
 						)
-						defer pc.Stop()
+						if testOpts.protocol != "tcp" {
+							defer pc.Stop()
+						}
 
 						By("Testing connectivity")
 						prevCount := pc.PongCount()
@@ -3483,15 +3481,54 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testSvc2 := k8sService(testSvcName, clusterIP, w[1][0], 80, 8055, 0, testOpts.protocol)
 						k8sUpdateService(k8sClient, testSvcNamespace, testSvcName, testSvc, testSvc2)
 
-						By("Stoping the original backend to make sure it is not reachable")
+						var tcpd *tcpdump.TCPDump
+						if testOpts.protocol == "tcp" {
+							iface := w[1][1].InterfaceName
+							srcIP := clusterIP
+							tcpdHost := tc.Felixes[1]
+							if testOpts.connTimeEnabled {
+								iface = "eth0"
+								switch testOpts.tunnel {
+								case "vxlan":
+									iface = "vxlan.calico"
+								case "wireguard":
+									iface = "wireguard.cali"
+									if testOpts.ipv6 {
+										iface = "wireguard.cali-v6"
+									}
+								case "ipip":
+									iface = "tunl0"
+								}
+								srcIP = w[0][0].IP
+								tcpdHost = tc.Felixes[0]
+							}
+							tcpd = tcpdHost.AttachTCPDump(iface)
+							tcpd.SetLogEnabled(true)
+
+							ipRegex := "IP"
+							if testOpts.ipv6 {
+								ipRegex = "IP6"
+							}
+							tcpd.AddMatcher("tcp-rst",
+								regexp.MustCompile(fmt.Sprintf(`%s %s\.\d+ > %s\.\d+: Flags \[[^\]]*R[^\]]*\]`, ipRegex, srcIP, w[1][1].IP)))
+							tcpd.Start(infra)
+							defer tcpd.Stop()
+						}
+
+						By("Stopping the original backend to make sure it is not reachable")
 						w[0][0].Stop()
 						By("removing the old workload from infra")
 						w[0][0].RemoveFromInfra(infra)
 
 						By("Testing connectivity continues")
-						prevCount = pc.PongCount()
-						Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
-							"Expected to see pong responses on the connection but didn't receive any")
+						if testOpts.protocol == "tcp" {
+							Eventually(func() int { return tcpd.MatchCount("tcp-rst") }, "25s").ShouldNot(BeZero(),
+								"Expected to see TCP RSTs on the connection after backend change")
+						} else {
+							prevCount = pc.PongCount()
+							Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
+								"Expected to see pong responses on the connection but didn't receive any")
+						}
 					})
 				})
 

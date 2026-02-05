@@ -209,7 +209,9 @@ func initValueV6(v *ValueV6, lastSeen time.Duration, typ uint8, flags uint32) {
 	binary.LittleEndian.PutUint64(v[VoLastSeenV6:VoLastSeenV6+8], uint64(lastSeen))
 	v[VoTypeV6] = typ
 	v[VoFlagsV6] = byte(flags & 0xff)
-	v[VoFlags2] = byte((flags >> 8) & 0xff)
+	v[VoFlags2V6] = byte((flags >> 8) & 0xff)
+	v[VoFlags3V6] = byte((flags >> 16) & 0xff)
+	v[VoFlags4V6] = byte((flags >> 24) & 0xff)
 }
 
 // NewValueV6Normal creates a new ValueV6 of type TypeNormal based on the given parameters
@@ -231,7 +233,7 @@ func NewValueV6NATForward(lastSeen time.Duration, flags uint32, revKey KeyV6) Va
 
 	initValueV6(&v, lastSeen, TypeNATForward, flags)
 
-	copy(v[VoRevKeyV6:VoRevKeyV6+KeySize], revKey.AsBytes())
+	copy(v[VoRevKeyV6:VoRevKeyV6+KeyV6Size], revKey.AsBytes())
 
 	return v
 }
