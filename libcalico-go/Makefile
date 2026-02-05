@@ -136,6 +136,7 @@ GINKGO_ARGS?=
 
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
+# Note: UTs always skip tests tagged [Datastore] as these are run in the fv target
 ut:
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
 		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip "\[Datastore\]$${GINKGO_SKIP:+|$$GINKGO_SKIP}" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'

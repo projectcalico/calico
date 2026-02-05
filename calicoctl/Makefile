@@ -101,6 +101,7 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 ###############################################################################
 # WHAT defaults to * (not .) because the command runs 'ginkgo ... calicoctl/*'
 # to match the original behavior of testing all subdirectories under calicoctl/
+# Users should provide subdirectory names like "commands" not paths like "./commands"
 WHAT?=*
 GINKGO_FOCUS?=.*
 GINKGO_SKIP?=

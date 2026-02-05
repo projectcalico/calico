@@ -62,6 +62,7 @@ make -C cni-plugin ut DATASTORE_TYPE=etcdv3 GINKGO_FOCUS="IPAM"
 #### Calicoctl
 The calicoctl tests use `WHAT` with a default of `*` to match the original behavior:
 ```bash
+# Test a specific subdirectory (use directory name, not path with ./)
 make -C calicoctl ut WHAT="commands"
 ```
 
@@ -69,7 +70,7 @@ make -C calicoctl ut WHAT="commands"
 **Important:** app-policy uses standard `go test` instead of ginkgo:
 - `GINKGO_FOCUS` maps to the `-run` flag for test selection
 - `GINKGO_SKIP` is **not supported** (go test doesn't have an equivalent skip flag)
-- `GINKGO_ARGS` passes additional flags to `go test`
+- `GINKGO_ARGS` passes additional flags to `go test` (not ginkgo-specific flags)
 - `WHAT` is **not supported** (always runs `./...`)
 
 ### Affected Makefiles
