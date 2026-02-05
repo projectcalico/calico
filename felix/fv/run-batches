@@ -21,6 +21,7 @@
 : ${PRIVATE_KEY:=`pwd`/private.key}
 : ${GINKGO_ARGS:=}
 : ${GINKGO_FOCUS:=.*}
+: ${GINKGO_SKIP:=}
 
 mkdir -p cwlogs
 export FV_CWLOGDIR=`pwd`/cwlogs
@@ -37,6 +38,7 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
                -ginkgo.focus="${GINKGO_FOCUS}" \
+               ${GINKGO_SKIP:+-ginkgo.skip="${GINKGO_SKIP}"} \
                ${GINKGO_ARGS} \
                -ginkgo.v \
                -ginkgo.noColor \
@@ -49,6 +51,7 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
                -ginkgo.focus="${GINKGO_FOCUS}" \
+               ${GINKGO_SKIP:+-ginkgo.skip="${GINKGO_SKIP}"} \
                ${GINKGO_ARGS}
      status=$?
      echo "Test batch $batch completed with status $status"

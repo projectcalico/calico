@@ -99,10 +99,15 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 ###############################################################################
 # UTs
 ###############################################################################
+WHAT?=*
+GINKGO_FOCUS?=.*
+GINKGO_SKIP?=
+GINKGO_ARGS?=
+
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut: bin/calicoctl-linux-$(ARCH)
-	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r $(GINKGO_ARGS) calicoctl/*'
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r -focus="$(GINKGO_FOCUS)" $${GINKGO_SKIP:+-skip="$$GINKGO_SKIP"} $(GINKGO_ARGS) calicoctl/$(WHAT)'
 
 ###############################################################################
 # FVs
