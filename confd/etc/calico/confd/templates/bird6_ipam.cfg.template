@@ -19,13 +19,13 @@ function reject_local_routes () {
 }
 
 function reject_disabled_pools() {
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") reject false 6 }}
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") "reject" false 6 }}
 {{ $line }}
 {{- end }}
 } 
 
 function accept_enabled_pools() {
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") accept false 6 }}
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") "accept" false 6 }}
 {{ $line }}
 {{- end }}
 }
