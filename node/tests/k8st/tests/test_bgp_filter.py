@@ -306,7 +306,6 @@ EOF
         exhaust matchOperators and actions"""
         with DiagsCollector():
             external_route_v4 = "10.111.111.0/24"
-            cluster_route_regex_v4 = r"192\.168\.\d+\.\d+/\d+"
             export_filter_cidr_v4 = "192.168.0.0/16"
 
             external_route_v6 = "fd00:1111:1111:1111::/64"
