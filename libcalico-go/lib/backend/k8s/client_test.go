@@ -65,6 +65,7 @@ var (
 	calicoAllowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 		Ingress: []apiv3.Rule{
 			{
 				Action: "Allow",
@@ -79,6 +80,7 @@ var (
 	calicoDisallowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 		Ingress: []apiv3.Rule{
 			{
 				Action: "Deny",
@@ -95,6 +97,7 @@ var (
 	calicoAllowPolicyModelV1 = model.Policy{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []string{"ingress", "egress"},
 		InboundRules: []model.Rule{
 			{
 				Action: "allow",
@@ -109,6 +112,7 @@ var (
 	calicoDisallowPolicyModelV1 = model.Policy{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []string{"ingress", "egress"},
 		InboundRules: []model.Rule{
 			{
 				Action: "deny",
@@ -1290,6 +1294,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Tier:         "default",
 			StagedAction: apiv3.StagedActionSet,
 			Order:        &zeroOrder,
+			Types:        []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 			Ingress: []apiv3.Rule{
 				{
 					Action: "Allow",
@@ -1305,6 +1310,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Tier:         "default",
 			StagedAction: apiv3.StagedActionSet,
 			Order:        &zeroOrder,
+			Types:        []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 			Ingress: []apiv3.Rule{
 				{
 					Action: "Deny",

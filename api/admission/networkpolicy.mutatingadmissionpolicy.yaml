@@ -8,9 +8,9 @@ spec:
     kind: NetworkPolicy
     apiVersion: projectcalico.org/v3
   matchConditions:
-    # Apply this mutation only if the 'types' field is missing.
+    # Apply this mutation only if the 'types' field is missing (or policyTypes for stagednetworkpolicies).
     - name: missing-types
-      expression: "!has(object.spec.types)"
+      expression: "!has(object.spec.types) && !has(object.spec.policyTypes)"
   matchConstraints:
     resourceRules:
       - apiGroups: ["projectcalico.org"]
@@ -53,7 +53,6 @@ spec:
           [
             JSONPatch{
               op: "add",
-              path: "/spec/types",
               path: object.kind == "StagedKubernetesNetworkPolicy" ? "/spec/policyTypes" : "/spec/types",
               value: object.kind == "StagedKubernetesNetworkPolicy" ? variables.defaultKubeTypes : variables.defaultTypes
             }
