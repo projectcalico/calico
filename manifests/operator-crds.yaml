@@ -36964,7 +36964,7 @@ spec:
                                       type: integer
                                     range:
                                       description:
-                                        Range defines a continguous range
+                                        Range defines a contiguous range
                                         of ports.
                                       properties:
                                         end:
@@ -37009,7 +37009,7 @@ spec:
                                       type: integer
                                     range:
                                       description:
-                                        Range defines a continguous range
+                                        Range defines a contiguous range
                                         of ports.
                                       properties:
                                         end:
@@ -37054,7 +37054,7 @@ spec:
                                       type: integer
                                     range:
                                       description:
-                                        Range defines a continguous range
+                                        Range defines a contiguous range
                                         of ports.
                                       properties:
                                         end:
@@ -37579,7 +37579,7 @@ spec:
                                       type: integer
                                     range:
                                       description:
-                                        Range defines a continguous range
+                                        Range defines a contiguous range
                                         of ports.
                                       properties:
                                         end:
@@ -37624,7 +37624,7 @@ spec:
                                       type: integer
                                     range:
                                       description:
-                                        Range defines a continguous range
+                                        Range defines a contiguous range
                                         of ports.
                                       properties:
                                         end:
@@ -37669,7 +37669,7 @@ spec:
                                       type: integer
                                     range:
                                       description:
-                                        Range defines a continguous range
+                                        Range defines a contiguous range
                                         of ports.
                                       properties:
                                         end:
