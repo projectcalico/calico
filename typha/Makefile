@@ -138,6 +138,11 @@ $(TYPHA_IMAGE): $(TYPHA_CONTAINER_MARKER)
 ###############################################################################
 # Unit Tests
 ###############################################################################
+WHAT?=.
+GINKGO_FOCUS?=.*
+GINKGO_SKIP?=
+GINKGO_ARGS?=
+
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
@@ -202,12 +207,12 @@ release-publish-latest: release-prereqs
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r -focus="$(GINKGO_FOCUS)" $${GINKGO_SKIP:+-skip="$$GINKGO_SKIP"} $(GINKGO_ARGS) $(WHAT)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r -focus="$(GINKGO_FOCUS)" $${GINKGO_SKIP:+-skip="$$GINKGO_SKIP"} $(GINKGO_ARGS) $(WHAT)
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
