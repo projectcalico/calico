@@ -29,11 +29,13 @@ clean:
 # Tests
 ###############################################################################
 
+WHAT?=./...
+
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
 ut:
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && go test ./...'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && go test $(WHAT)'
 
 fv:
 	$(DOCKER_RUN) $(CALICO_BUILD) \
