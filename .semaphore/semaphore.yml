@@ -1042,6 +1042,17 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+        # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
+        - name: "kube-controllers: CI (projectcalico.org/v3)"
+          commands:
+            - ../.semaphore/run-and-monitor ut.log make ut
+          env_vars:
+            - name: CALICO_API_GROUP
+              value: "projectcalico.org/v3"
+            - name: WHAT
+              value: "/pkg/controllers/ippool /pkg/controllers/node"
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Libraries (lib)
     run:
       when: "false or change_in(['/lib/'], {pipeline_file: 'ignore'})"
