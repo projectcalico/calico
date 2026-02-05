@@ -15,13 +15,13 @@
 #
 ### calico/test
 # This image is used by various calico repositories and components to run UTs
-# and STs. It has libcalico, nose, and other common python libraries
+# and STs. It has libcalico, pytest, and other common python libraries
 # already installed
 #
 # For UTs:
 #  - volume mount in python code that uses libcalico
 #  - volume mount in your unit tests for this code
-#  - run 'nosetests'
+#  - run 'pytest'
 #
 # This container can also be used for running STs written in python. This
 # eliminates all dependencies besides docker on the host system to enable
@@ -31,7 +31,7 @@
 #   containers alongside itself.
 # - eliminate most isolation, (--uts=host --pid=host --net=host --privileged)
 # - volume mount your ST source code
-# - run 'nosetests'
+# - run 'pytest'
 
 FROM docker:25
 
