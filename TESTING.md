@@ -48,9 +48,15 @@ make -C felix fv GINKGO_FOCUS="My Test" GINKGO_SKIP="Slow" GINKGO_ARGS="-ginkgo.
 ### Component-Specific Notes
 
 #### Felix
-Felix has additional FV test batching support:
+Felix has different levels of support across its test targets:
+- **fv** target: Supports all parameters (GINKGO_FOCUS, GINKGO_SKIP, GINKGO_ARGS, WHAT via run-batches script)
+- **ut** target: Only supports GINKGO_ARGS (passed to run-coverage script)
+- **ut-no-cover, ut-watch** targets: Support all parameters
+
+Felix also has additional FV test batching support:
 ```bash
 make -C felix fv FV_NUM_BATCHES=5 FV_BATCHES_TO_RUN="1 2" GINKGO_FOCUS="BPF"
+make -C felix ut-no-cover GINKGO_FOCUS="Wireguard" GINKGO_SKIP="Slow"
 ```
 
 #### CNI Plugin
@@ -66,30 +72,17 @@ The calicoctl tests use `WHAT` with a default of `*` to match the original behav
 make -C calicoctl ut WHAT="commands"
 ```
 
-#### App Policy
-**Important:** app-policy uses standard `go test` instead of ginkgo:
-- `GINKGO_FOCUS` maps to the `-run` flag for test selection
-- `GINKGO_SKIP` is **not supported** (go test doesn't have an equivalent skip flag)
-- `GINKGO_ARGS` passes additional flags to `go test` (not ginkgo-specific flags)
-- `WHAT` specifies which packages to test (default: `./...`)
-
-Example:
-```bash
-make -C app-policy ut WHAT="./pkg/..."
-```
-
 ### Affected Makefiles
 
 The following Makefiles have been updated to support these standardized parameters:
 
 - `libcalico-go/Makefile` (ut, fv targets)
-- `felix/Makefile` (ut, fv targets)
+- `felix/Makefile` (fv, ut-no-cover, ut-watch targets; ut only supports GINKGO_ARGS)
 - `calicoctl/Makefile` (ut target)
-- `typha/Makefile` (ut target)
+- `typha/Makefile` (ut, ut-no-cover, ut-watch targets)
 - `api/Makefile` (ut target)
 - `cni-plugin/Makefile` (ut target)
 - `app-policy/Makefile` (ut target)
-- `hack/Makefile` (ut target)
 
 ### Legacy Support
 
