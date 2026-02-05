@@ -25,6 +25,8 @@ type IPPoolsGetter interface {
 type IPPoolInterface interface {
 	Create(ctx context.Context, iPPool *projectcalicov3.IPPool, opts v1.CreateOptions) (*projectcalicov3.IPPool, error)
 	Update(ctx context.Context, iPPool *projectcalicov3.IPPool, opts v1.UpdateOptions) (*projectcalicov3.IPPool, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, iPPool *projectcalicov3.IPPool, opts v1.UpdateOptions) (*projectcalicov3.IPPool, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.IPPool, error)
