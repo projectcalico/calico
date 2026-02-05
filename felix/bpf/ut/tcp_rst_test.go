@@ -45,7 +45,7 @@ func TestTCPReset(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(0))
 
-		Expect(res.dataOut).To(HaveLen(54)) // eth + ip (60) + tcp(20)
+		Expect(res.dataOut).To(HaveLen(54)) // eth(14) + ip(20) + tcp(20)
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -76,7 +76,7 @@ func TestTCPResetIPv6(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(0))
 
-		Expect(res.dataOut).To(HaveLen(74)) // eth + ip (60) + tcp(20)
+		Expect(res.dataOut).To(HaveLen(74)) // Ethernet (14) + IPv6 (40) + TCP (20)
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)

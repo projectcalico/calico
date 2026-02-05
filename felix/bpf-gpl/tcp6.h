@@ -65,7 +65,7 @@ static CALI_BPF_INLINE int tcp_v6_rst(struct cali_tc_ctx *ctx) {
 
 	__wsum tcp_csum = bpf_csum_diff(0, 0, (__u32 *)th, len - sizeof(struct ipv6hdr) - skb_iphdr_offset(ctx), 0);
 	if (bpf_l4_csum_replace(ctx->skb, skb_l4hdr_offset(ctx) +
-			offsetof(struct tcphdr, check), 0, tcp_csum, 0)) {
+			offsetof(struct tcphdr, check), 0, tcp_csum, BPF_F_PSEUDO_HDR)) {
 		CALI_DEBUG("TCP reset v6 reply: set tcp csum failed");
 		return -1;
 	}

@@ -73,7 +73,7 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 
 
 	err = bpf_l4_csum_replace(ctx->skb, skb_l4hdr_offset(ctx) +
-			offsetof(struct tcphdr, check), 0, tcp_csum, 0);
+			offsetof(struct tcphdr, check), 0, tcp_csum, BPF_F_PSEUDO_HDR);
 	if (err) {
 		CALI_DEBUG("TCP reset v4 reply: set tcp csum failed %d", err);
 		return -1;

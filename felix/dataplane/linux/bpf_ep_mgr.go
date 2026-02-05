@@ -1304,13 +1304,13 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 	})
 	// Remove policy debug info if any
 	m.removeIfaceAllPolicyDebugInfo(oldWEP.Name)
-	if m.v4 != nil {
+	if m.v4 != nil && m.v4.workloadRemoveChan != nil {
 		for _, addr := range oldWEP.GetIpv4Nets() {
 			addr = strings.SplitN(addr, "/", 2)[0]
 			m.v4.workloadRemoveChan <- addr
 		}
 	}
-	if m.v6 != nil {
+	if m.v6 != nil && m.v6.workloadRemoveChan != nil {
 		for _, addr := range oldWEP.GetIpv6Nets() {
 			addr = strings.SplitN(addr, "/", 2)[0]
 			m.v6.workloadRemoveChan <- addr

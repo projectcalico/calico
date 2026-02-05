@@ -57,31 +57,34 @@ func init() {
 }
 
 type WorkloadRemoveScanner struct {
-	mutex     sync.Mutex
-	cidrs     set.Set[string]
-	cidrsCopy set.Set[string]
-	ipCh      chan string
+	mutex      sync.Mutex
+	ips        set.Set[string]
+	removedIPs set.Set[string]
+	ipCh       chan string
+	done       chan struct{}
 }
 
 func NewWorkloadRemoveScanner(ipCh chan string) *WorkloadRemoveScanner {
 	wrs := &WorkloadRemoveScanner{
-		cidrs:     set.New[string](),
-		cidrsCopy: set.New[string](),
-		ipCh:      ipCh,
+		ips:        set.New[string](),
+		removedIPs: set.New[string](),
+		ipCh:       ipCh,
+		done:       make(chan struct{}),
 	}
 	go wrs.run()
 	return wrs
 }
 
 func (w *WorkloadRemoveScanner) run() {
+	defer close(w.done)
 	for {
 		ip, ok := <-w.ipCh
 		if !ok {
 			return
 		}
 		w.mutex.Lock()
-		w.cidrs.Add(ip)
-		log.Infof("WorkloadRemoveScanner added %s to IPs to check", ip)
+		w.ips.Add(ip)
+		log.Debugf("WorkloadRemoveScanner added %s to IPs to check", ip)
 		w.mutex.Unlock()
 	}
 }
@@ -89,22 +92,27 @@ func (w *WorkloadRemoveScanner) run() {
 func (w *WorkloadRemoveScanner) IterationStart() {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	w.cidrsCopy = w.cidrs.Copy()
-	w.cidrs = set.New[string]()
+	w.removedIPs = w.ips.Copy()
+	w.ips = set.New[string]()
 }
 
 // IterationEnd satisfies EntryScannerSynced
 func (w *WorkloadRemoveScanner) IterationEnd() {
 	w.mutex.Lock()
-	w.cidrsCopy = set.New[string]()
+	w.removedIPs = set.New[string]()
 	w.mutex.Unlock()
+}
+
+func (w *WorkloadRemoveScanner) Stop() {
+	close(w.ipCh) // This breaks the 'for range' loop in run()
+	<-w.done      // Wait for the goroutine to actually finish
 }
 
 func (w *WorkloadRemoveScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get EntryGet) (ScanVerdict, int64) {
 	srcIP := ctKey.AddrA().String()
 	dstIP := ctKey.AddrB().String()
 	if ctKey.Proto() == ProtoTCP &&
-		(w.cidrsCopy.Contains(srcIP) || w.cidrsCopy.Contains(dstIP)) {
+		(w.removedIPs.Contains(srcIP) || w.removedIPs.Contains(dstIP)) {
 		log.WithField("key", ctKey).Debug("Marking conntrack entry for sending RST due to workload removal")
 		// We found a conntrack entry that has the workload IP as source or destination.
 		// Mark it for RST sending.

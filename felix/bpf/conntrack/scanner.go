@@ -503,7 +503,6 @@ func createNewV6Value(v ValueInterface, flags uint32) ValueInterface {
 			v.Data().A2B, v.Data().B2A, v.Data().TunIP, v.OrigIP(), v.OrigPort())
 	} else {
 		newVal = v4.NewValueV6Normal(time.Duration(v.LastSeen()), flags, v.Data().A2B, v.Data().B2A)
-		log.Infof("Sridhar : createNewV6Value: created new v6 normal value: %v", newVal)
 	}
 	return newVal
 }

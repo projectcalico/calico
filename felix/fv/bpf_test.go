@@ -3515,7 +3515,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							defer tcpd.Stop()
 						}
 
-						By("Stoping the original backend to make sure it is not reachable")
+						By("Stopping the original backend to make sure it is not reachable")
 						w[0][0].Stop()
 						By("removing the old workload from infra")
 						w[0][0].RemoveFromInfra(infra)
@@ -3523,7 +3523,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Testing connectivity continues")
 						if testOpts.protocol == "tcp" {
 							Eventually(func() int { return tcpd.MatchCount("tcp-rst") }, "25s").ShouldNot(BeZero(),
-								"Did not expect to see TCP RSTs on the connection after backend change")
+								"Expected to see TCP RSTs on the connection after backend change")
 						} else {
 							prevCount = pc.PongCount()
 							Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
