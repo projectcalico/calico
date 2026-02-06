@@ -993,7 +993,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
         rc.assert_no_error()
         # Check the GUID is populated.
-        self.assertRegexpMatches(rc.decoded["spec"]["clusterGUID"], "^[a-f0-9]{32}$")
+        self.assertRegex(rc.decoded["spec"]["clusterGUID"], r"^[a-f0-9]{32}$")
         # The GUID is unpredictable so tweak our test data to match it.
         ci = copy.deepcopy(clusterinfo_name1_rev1)
         ci["spec"]["clusterGUID"] = rc.decoded["spec"]["clusterGUID"]
@@ -1273,7 +1273,7 @@ class TestCalicoctlCommands(TestBase):
         ]:
             with self.subTest(update_cmd=update_cmd):
                 self.setUp()
-                self.test_disallow_update_old_resource_version(update_cmd)
+                self._test_disallow_update_old_resource_version(update_cmd)
 
     def _test_disallow_update_old_resource_version(self, update_cmd):
         """
@@ -2797,7 +2797,7 @@ class InvalidData(TestBase):
         super(InvalidData, self).setUp()
 
     def test_invalid_profiles_rejected(self):
-        for name, testdata, error in testdata:
+        for name, testdata, error in self.testdata:
             with self.subTest(name=name, testdata=testdata, error=error):
                 self.setUp()
                 self._test_invalid_profiles_rejected(name, testdata, error)
@@ -2817,7 +2817,7 @@ class InvalidData(TestBase):
         ctl.assert_error(error)
 
     def test_invalid_compound_profiles_rejected(self):
-        for name, testdata, errors in compound_test_data:
+        for name, testdata, errors in self.compound_test_data:
             with self.subTest(name=name, testdata=testdata, errors=errors):
                 self.setUp()
                 self._test_invalid_compound_profiles_rejected(name, testdata, errors)
