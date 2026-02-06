@@ -17,9 +17,8 @@ package serviceaccount_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -31,7 +30,8 @@ func init() {
 }
 
 func Test(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/serviceaccount_controller_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "ServiceAccount controller suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/serviceaccount_controller_suite.xml"
+	ginkgo.RunSpecs(t, "ServiceAccount controller suite", suiteConfig, reporterConfig)
 }

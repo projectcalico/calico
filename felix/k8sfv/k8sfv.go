@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
@@ -90,7 +90,7 @@ var (
 
 var _ = ginkgo.JustBeforeEach(func() {
 	log.Info(">>> JustBeforeEach <<<")
-	testName = ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName = ginkgo.CurrentSpecReport().FullText()
 })
 
 var _ = ginkgo.AfterEach(func() {
@@ -104,7 +104,7 @@ var _ = ginkgo.AfterEach(func() {
 
 	// Store the result of each test in a Prometheus metric.
 	result := float64(1)
-	if ginkgo.CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentSpecReport().Failed() {
 		result = 0
 	}
 	gaugeVecTestResult.WithLabelValues(testName, codeLevel).Set(result)
