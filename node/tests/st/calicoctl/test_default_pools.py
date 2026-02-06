@@ -16,7 +16,7 @@ import logging
 
 import netaddr
 import yaml
-from nose_parameterized import parameterized
+import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS, NODE_CONTAINER_NAME
@@ -48,7 +48,7 @@ class TestDefaultPools(TestBase):
     def tearDownClass(cls):
             cls.host.cleanup()
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("success_expected,param,value,exp_num_pools,ipip,nat_outgoing,description", [
         (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/27", 0, None, True, "Too small"),
         (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/32", 0, None, True, "Too small, but legal CIDR"),
         (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/33", 0, None, True, "Impossible CIDR"),

@@ -27,7 +27,7 @@ from log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
 from network import DummyNetwork
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
 from tests.st.utils.exceptions import CommandExecError
-from utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
+from tests.st.utils.utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
     ETCD_CA, ETCD_KEY, ETCD_CERT, ETCD_HOSTNAME_SSL
 from workload import Workload
 
@@ -375,7 +375,7 @@ class DockerHost(object):
         pools_output = self.calicoctl("get ippool -o yaml")
         pools_dict = yaml.safe_load(pools_output)
         for pool in pools_dict['items']:
-            print "Pool is %s" % pool
+            print("Pool is %s" % pool)
             if ':' not in pool['spec']['cidr']:
                 pool['spec']['ipipMode'] = 'Always' if enabled else 'Never'
             if 'creationTimestamp' in pool['metadata']:
