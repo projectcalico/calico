@@ -396,7 +396,7 @@ class TestIPIP(TestBase):
         Remove the host tunl IP address if assigned.
         """
         try:
-            output = subprocess.check_output(["ip", "addr", "show", "tunl0"])
+            output = subprocess.check_output(["ip", "addr", "show", "tunl0"]).decode()
         except subprocess.CalledProcessError:
             return
 

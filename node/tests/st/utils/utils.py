@@ -94,13 +94,14 @@ def log_and_run(command, raise_exception_on_failure=True):
     try:
         logger.info("[%s] %s", datetime.datetime.now(), command)
         results = check_output(command, shell=True, stderr=STDOUT).rstrip()
+        results = results.decode()
         log_output(results)
         return results
     except CalledProcessError as e:
         # Wrap the original exception with one that gives a better error
         # message (including command output).
         logger.info("  # Return code: %s", e.returncode)
-        log_output(e.output)
+        log_output(e.output.decode())
         if raise_exception_on_failure:
             raise CommandExecError(e)
 
