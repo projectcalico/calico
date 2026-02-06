@@ -266,7 +266,7 @@ var (
 func Test_IPPoolsFilterBIRDFunc_NoIPPool(t *testing.T) {
 	kvps := ippoolTestCasesToKVPairs(t, nil)
 	for _, ipfamily := range []int{4, 6} {
-		for _, action := range []string{"", "accept", "reject", "something"} {
+		for _, action := range []string{"", "accept", "reject"} {
 			for _, forKernel := range []bool{true, false} {
 				generated, err := IPPoolsFilterBIRDFunc(kvps, action, forKernel, ipfamily)
 				if err != nil {
@@ -325,16 +325,6 @@ func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV4(t *testing.T) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			generated, expectedStatements)
 	}
-
-	// Also passing unknown target action should make no difference.
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "something", true, 4)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
 }
 
 func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
@@ -381,16 +371,6 @@ func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			generated, expectedStatements)
 	}
-
-	// Also passing unknown target action should make no difference.
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "something", true, 6)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
 }
 
 func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
@@ -419,7 +399,7 @@ func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
 			generated, expectedStatements)
 	}
 
-	// Check with reject target
+	// Check with reject action
 	rejectStatements := filterExpextedStatements(expectedStatements, "reject")
 	generated, err = IPPoolsFilterBIRDFunc(kvps, "reject", false, 4)
 	if err != nil {
@@ -430,7 +410,7 @@ func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
 			generated, rejectStatements)
 	}
 
-	// Check with reject target
+	// Check with reject action
 	acceptStatements := filterExpextedStatements(expectedStatements, "accept")
 	generated, err = IPPoolsFilterBIRDFunc(kvps, "accept", false, 4)
 	if err != nil {
@@ -468,7 +448,7 @@ func Test_IPPoolsFilterBIRDFunc_BGPPeeringV6(t *testing.T) {
 			generated, expectedStatements)
 	}
 
-	// Check with reject target
+	// Check with reject action
 	rejectStatements := filterExpextedStatements(expectedStatements, "reject")
 	generated, err = IPPoolsFilterBIRDFunc(kvps, "reject", false, 6)
 	if err != nil {
@@ -479,7 +459,7 @@ func Test_IPPoolsFilterBIRDFunc_BGPPeeringV6(t *testing.T) {
 			generated, rejectStatements)
 	}
 
-	// Check with reject target
+	// Check with accept action
 	acceptStatements := filterExpextedStatements(expectedStatements, "accept")
 	generated, err = IPPoolsFilterBIRDFunc(kvps, "accept", false, 6)
 	if err != nil {

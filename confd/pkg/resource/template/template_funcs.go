@@ -460,8 +460,10 @@ func IPPoolsFilterBIRDFunc(
 		switch targetAction {
 		case "accept", "reject":
 			line = fmt.Sprintf("# No v%s %s filter generated", versionStr, targetAction)
-		default:
+		case "":
 			line = fmt.Sprintf("# No v%s IPPool configured", versionStr)
+		default:
+			return nil, fmt.Errorf("unknown target action %s", targetAction)
 		}
 		lines = append(lines, line)
 	}
@@ -486,7 +488,6 @@ func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string)
 	if len(extraStatement) != 0 && action == "accept" {
 		statement = fmt.Sprintf("%s %s", extraStatement, statement)
 	}
-
 	if len(comment) != 0 {
 		return []string{fmt.Sprintf("if ( net ~ %s ) then { %s; } # %s", cidr, statement, comment)}
 	}
