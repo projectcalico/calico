@@ -496,7 +496,7 @@ class DockerHost(object):
         try:
             if self.log_analyzer is not None:
                 self.log_analyzer.check_logs_for_exceptions(err_words, ignore_list)
-        except Exception, e:
+        except Exception as e:
             log_exception = e
             log_extra_diags = True
 
