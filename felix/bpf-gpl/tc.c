@@ -50,7 +50,6 @@
 #include "fib.h"
 #include "rpf.h"
 #include "parsing.h"
-#include "tc.h"
 #include "failsafe.h"
 #include "metadata.h"
 #include "bpf_helpers.h"
@@ -62,7 +61,39 @@
 #include "ip_v4_fragment.h"
 #endif
 
+#include "tc.h"
+
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
+
+/* Parse L4 header and fill in state ports. Handles fragments, skips filling
+ * ports for non-first fragments unless we have a stored entry for the
+ * fragment stream.
+ */
+static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool decap)
+{
+#ifndef IPVER6
+	if ((CALI_F_TO_HOST || CALI_F_FROM_HEP) && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
+		struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
+		if (frag_ct_val) {
+			ctx->state->sport = frag_ct_val->sport;
+			ctx->state->dport = frag_ct_val->dport;
+			CALI_DEBUG("IP FRAG: hit ports %d -> %d", ctx->state->sport, ctx->state->dport);
+			ctx->fwd.mark = frag_ct_val->marks;
+			if (ip_is_last_frag(ip_hdr(ctx))) {
+				frags4_remove_ct(ctx);
+			}
+			ctx->state->flags |= CALI_ST_NO_L4_NAT;
+			return PARSING_OK;
+		} else {
+			CALI_DEBUG("IP FRAG: no first fragment");
+			deny_reason(ctx, CALI_REASON_FRAG_REORDER);
+			return PARSING_ERROR;
+		}
+	}
+#endif
+
+	return tc_state_fill_from_nexthdr(ctx, decap);
+}
 
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -251,7 +282,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	}
 
 	/* Parse out the source/dest ports (or type/code for ICMP). */
-	switch (tc_state_fill_from_nexthdr(ctx, dnat_should_decap())) {
+	switch (state_fill_from_l4(ctx, dnat_should_decap())) {
 	case PARSING_ERROR:
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
@@ -283,31 +314,13 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 		 */
 		tc_state_fill_from_iphdr(ctx);
 		/* Parse out the source/dest ports (or type/code for ICMP). */
-		switch (tc_state_fill_from_nexthdr(ctx, dnat_should_decap())) {
+		switch (state_fill_from_l4(ctx, dnat_should_decap())) {
 		case PARSING_ERROR:
 			goto deny;
 		case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 			goto allow;
 		}
 	}
-
-#ifndef IPVER6
-	if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
-		struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
-		if (frag_ct_val) {
-			ctx->state->sport = frag_ct_val->sport;
-			ctx->state->dport = frag_ct_val->dport;
-			ctx->fwd.mark = frag_ct_val->seen_mark;
-			if (ip_is_last_frag(ip_hdr(ctx))) {
-				frags4_remove_ct(ctx);
-			}
-			goto allow;
-		}
-
-		deny_reason(ctx, CALI_REASON_FRAG_REORDER);
-		goto deny;
-	}
-#endif
 
 	ctx->state->pol_rc = CALI_POL_NO_MATCH;
 
@@ -953,6 +966,11 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		ip_hdr_set_ip(ctx, saddr, STATE->ct_result.nat_sip);
 		ip_hdr_set_ip(ctx, daddr, STATE->post_nat_ip_dst);
 
+		if (STATE->flags & CALI_ST_NO_L4_NAT) {
+			CALI_DEBUG("Skipping L4 DNAT");
+			goto skip_l4_dnat;
+		}
+
 		switch (STATE->ip_proto) {
 		case IPPROTO_TCP:
 			if (STATE->ct_result.nat_sport) {
@@ -990,6 +1008,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 			}
 		}
 
+skip_l4_dnat:
 		if (inner_icmp) {
 			/* updating related icmp inner header. Because it can be anywhere
 			 * and we are not updating in-place, we need to write it back
@@ -1081,6 +1100,12 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		ip_hdr_set_ip(ctx, saddr, STATE->ct_result.nat_ip);
 		ip_hdr_set_ip(ctx, daddr, STATE->ct_result.nat_sip);
 
+		if (STATE->flags & CALI_ST_NO_L4_NAT) {
+			CALI_DEBUG("Skipping L4 DNAT");
+			goto skip_l4_snat;
+		}
+
+
 		switch (ctx->state->ip_proto) {
 		case IPPROTO_TCP:
 			tcp_hdr(ctx)->source = bpf_htons(STATE->ct_result.nat_port);
@@ -1114,6 +1139,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 			goto deny;
 		}
 
+skip_l4_snat:
 		if (inner_icmp) {
 			/* updating related icmp inner header. Because it can be anywhere
 			 * and we are not updating in-place, we need to write it back
@@ -2191,16 +2217,21 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 
 	tc_state_fill_from_iphdr_v4(ctx);
 
-	if (!frags4_handle(ctx)) {
-		if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
-			deny_reason(ctx, CALI_REASON_FRAG_UNSUPPORTED);
-		} else {
-			deny_reason(ctx, CALI_REASON_FRAG_WAIT);
-		}
+	switch (frags4_handle(ctx)) {
+	case FRAGS4_HANDLE_UNSUPPORTED:
+		deny_reason(ctx, CALI_REASON_FRAG_UNSUPPORTED);
 		goto deny;
+	case FRAGS4_HANDLE_STORE_ONLY:
+		deny_reason(ctx, CALI_REASON_FRAG_WAIT);
+		goto deny;
+	case FRAGS4_HANDLE_REASSEMBLED:
+		/* force it through stack to trigger any further necessary fragmentation */
+		ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
+		break;
+	case FRAGS4_HANDLE_FIRST_IN_ORDER:
+		/* Carry on as normal packet */
+		break;
 	}
-	/* force it through stack to trigger any further necessary fragmentation */
-	ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
 
 	return pre_policy_processing(ctx);
 #endif /* !BPF_CORE_SUPPORTED */
