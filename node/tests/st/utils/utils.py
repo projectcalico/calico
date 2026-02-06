@@ -348,7 +348,7 @@ def get_host_ips(version=4, exclude=None):
 
     # Call `ip addr`.
     try:
-        ip_addr_output = check_output(["ip", "-%d" % version, "addr"])
+        ip_addr_output = check_output(["ip", "-%d" % version, "addr"]).decode()
     except (CalledProcessError, OSError):
         print("Call to 'ip addr' Failed")
         sys.exit(1)
@@ -385,12 +385,12 @@ def curl_etcd(path, options=None, recursive=True, ip=None):
             "-sL https://%s:2379/v2/keys/%s?recursive=%s %s"
             % (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL,
                path, str(recursive).lower(), " ".join(options)),
-            shell=True)
+            shell=True).decode()
     else:
         rc = check_output(
             "curl -sL http://%s:2379/v2/keys/%s?recursive=%s %s"
             % (ip, path, str(recursive).lower(), " ".join(options)),
-            shell=True)
+            shell=True).decode()
 
     return json.loads(rc.strip())
 

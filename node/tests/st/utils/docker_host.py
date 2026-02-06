@@ -262,7 +262,7 @@ class DockerHost(object):
             command = command % filename
 
         logger.debug("Final command: %s", command.split(" "))
-        out = check_output(command.split(" "))
+        out = check_output(command.split(" ")).decode()
         return out.split("\n")
 
     def calicoctl(self, command, version=None, raise_exception_on_failure=True):
