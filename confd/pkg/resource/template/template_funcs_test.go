@@ -284,18 +284,18 @@ func Test_IPPoolsFilterBIRDFunc_NoIPPool(t *testing.T) {
 func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV4(t *testing.T) {
 	expectedStatements := []string{
 		// IPv4 IPIP Encapsulation cases.
-		`if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
-		`if (net ~ 10.11.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
-		`if (net ~ 10.12.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 10.12.0.0/16)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
-		`if (net ~ 10.13.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 10.13.0.0/16)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
+		`  if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
+		`  if (net ~ 10.11.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
+		`  if (net ~ 10.12.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 10.12.0.0/16)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
+		`  if (net ~ 10.13.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 10.13.0.0/16)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
 		// IPv4 No-Encapsulation case.
-		`if (net ~ 10.14.0.0/16) then { krt_tunnel=""; accept; }`,
-		`if (net ~ 10.15.0.0/16) then { krt_tunnel=""; accept; }`,
+		`  if (net ~ 10.14.0.0/16) then { krt_tunnel=""; accept; }`,
+		`  if (net ~ 10.15.0.0/16) then { krt_tunnel=""; accept; }`,
 		// IPv4 VXLAN Encapsulation cases.
-		`if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 	}
 	testExpectedIPPoolStatments(t, poolsTestsV4, expectedStatements, true, 4)
 }
@@ -303,18 +303,18 @@ func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV4(t *testing.T) {
 func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
 	expectedStatements := []string{
 		// IPv6 IPIP Encapsulation cases.
-		`if (net ~ dead:beef:1::/64) then { accept; }`,
-		`if (net ~ dead:beef:2::/64) then { accept; }`,
-		`if (net ~ dead:beef:3::/64) then { accept; }`,
-		`if (net ~ dead:beef:4::/64) then { accept; }`,
+		`  if (net ~ dead:beef:1::/64) then { accept; }`,
+		`  if (net ~ dead:beef:2::/64) then { accept; }`,
+		`  if (net ~ dead:beef:3::/64) then { accept; }`,
+		`  if (net ~ dead:beef:4::/64) then { accept; }`,
 		// IPv6 No-Encapsulation case.
-		`if (net ~ dead:beef:5::/64) then { accept; }`,
-		`if (net ~ dead:beef:6::/64) then { accept; }`,
+		`  if (net ~ dead:beef:5::/64) then { accept; }`,
+		`  if (net ~ dead:beef:6::/64) then { accept; }`,
 		// IPv6 VXLAN Encapsulation cases.
-		`if (net ~ dead:beef:7::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`if (net ~ dead:beef:8::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`if (net ~ dead:beef:9::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`if (net ~ dead:beef:10::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ dead:beef:7::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ dead:beef:8::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ dead:beef:9::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ dead:beef:10::/64) then { reject; } # VXLAN routes are handled by Felix.`,
 	}
 	testExpectedIPPoolStatments(t, poolsTestsV6, expectedStatements, true, 6)
 }
@@ -322,18 +322,18 @@ func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
 func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
 	expectedStatements := []string{
 		// IPv4 IPIP Encapsulation cases.
-		`if (net ~ 10.10.0.0/16) then { accept; }`,
-		`if (net ~ 10.11.0.0/16) then { reject; } # BGP export is disabled.`,
-		`if (net ~ 10.12.0.0/16) then { accept; }`,
-		`if (net ~ 10.13.0.0/16) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ 10.10.0.0/16) then { accept; }`,
+		`  if (net ~ 10.11.0.0/16) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ 10.12.0.0/16) then { accept; }`,
+		`  if (net ~ 10.13.0.0/16) then { reject; } # BGP export is disabled.`,
 		// IPv4 No-Encapsulation case.
-		`if (net ~ 10.14.0.0/16) then { accept; }`,
-		`if (net ~ 10.15.0.0/16) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ 10.14.0.0/16) then { accept; }`,
+		`  if (net ~ 10.15.0.0/16) then { reject; } # BGP export is disabled.`,
 		// IPv4 VXLAN Encapsulation cases.
-		`if (net ~ 10.16.0.0/16) then { accept; }`,
-		`if (net ~ 10.17.0.0/16) then { reject; } # BGP export is disabled.`,
-		`if (net ~ 10.18.0.0/16) then { accept; }`,
-		`if (net ~ 10.19.0.0/16) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ 10.16.0.0/16) then { accept; }`,
+		`  if (net ~ 10.17.0.0/16) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ 10.18.0.0/16) then { accept; }`,
+		`  if (net ~ 10.19.0.0/16) then { reject; } # BGP export is disabled.`,
 	}
 	testExpectedIPPoolStatments(t, poolsTestsV4, expectedStatements, false, 4)
 }
@@ -341,18 +341,18 @@ func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
 func Test_IPPoolsFilterBIRDFunc_BGPPeeringV6(t *testing.T) {
 	expectedStatements := []string{
 		// IPv6 IPIP Encapsulation cases.
-		`if (net ~ dead:beef:1::/64) then { accept; }`,
-		`if (net ~ dead:beef:2::/64) then { reject; } # BGP export is disabled.`,
-		`if (net ~ dead:beef:3::/64) then { accept; }`,
-		`if (net ~ dead:beef:4::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:1::/64) then { accept; }`,
+		`  if (net ~ dead:beef:2::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:3::/64) then { accept; }`,
+		`  if (net ~ dead:beef:4::/64) then { reject; } # BGP export is disabled.`,
 		// IPv6 No-Encapsulation case.
-		`if (net ~ dead:beef:5::/64) then { accept; }`,
-		`if (net ~ dead:beef:6::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:5::/64) then { accept; }`,
+		`  if (net ~ dead:beef:6::/64) then { reject; } # BGP export is disabled.`,
 		// IPv6 VXLAN Encapsulation cases.
-		`if (net ~ dead:beef:7::/64) then { accept; }`,
-		`if (net ~ dead:beef:8::/64) then { reject; } # BGP export is disabled.`,
-		`if (net ~ dead:beef:9::/64) then { accept; }`,
-		`if (net ~ dead:beef:10::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:7::/64) then { accept; }`,
+		`  if (net ~ dead:beef:8::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:9::/64) then { accept; }`,
+		`  if (net ~ dead:beef:10::/64) then { reject; } # BGP export is disabled.`,
 	}
 	testExpectedIPPoolStatments(t, poolsTestsV6, expectedStatements, false, 6)
 }
@@ -366,7 +366,7 @@ func testExpectedIPPoolStatments(
 ) {
 	kvps := ippoolTestCasesToKVPairs(t, tcs)
 	for _, filterAction := range []string{"", "accept", "reject"} {
-		expected := filterExpextedStatements(expectedStatements, filterAction)
+		expected := filterExpectedStatements(expectedStatements, filterAction)
 		generated, err := IPPoolsFilterBIRDFunc(kvps, filterAction, forProgrammingKernel, ipVersion)
 		if err != nil {
 			t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
@@ -399,7 +399,7 @@ func ippoolTestCasesToKVPairs(t *testing.T, tcs []ippoolTestCase) memkv.KVPairs 
 	return kvps
 }
 
-func filterExpextedStatements(statements []string, filterAction string) (filtered []string) {
+func filterExpectedStatements(statements []string, filterAction string) (filtered []string) {
 	if len(filterAction) == 0 {
 		return statements
 	}

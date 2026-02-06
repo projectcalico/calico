@@ -411,9 +411,9 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 //   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
 //     first reject disabled ippool, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (to not filter).
-//   - forProgrammingKernel: Whether the generated statemens are intended for programming routes to kernel or exporting to
+//   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
 //     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
-//   - version: the statment ip family.
+//   - version: the statement ip family.
 //
 // As an example, For the following sample IPPool resource:
 //
@@ -524,9 +524,9 @@ func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string)
 		return
 	}
 	if len(extraStatement) != 0 {
-		statement = fmt.Sprintf("if (net ~ %s) then { %s %s; }", cidr, extraStatement, action)
+		statement = fmt.Sprintf("  if (net ~ %s) then { %s %s; }", cidr, extraStatement, action)
 	} else {
-		statement = fmt.Sprintf("if (net ~ %s) then { %s; }", cidr, action)
+		statement = fmt.Sprintf("  if (net ~ %s) then { %s; }", cidr, action)
 	}
 	if len(comment) != 0 {
 		statement = fmt.Sprintf("%s %s", statement, formatComment(comment))
