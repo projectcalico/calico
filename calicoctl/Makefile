@@ -152,7 +152,7 @@ st: bin/calicoctl-linux-$(ARCH) version-helper
 		   -v $(CURDIR):/code \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
-		   sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
+		   sh -c 'pytest $(ST_TO_RUN) -sv --junit-xml="/code/report/pytest.xml" $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 	$(MAKE) stop-kubernetes-master
 

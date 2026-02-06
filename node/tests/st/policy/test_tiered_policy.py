@@ -7,7 +7,7 @@ import logging
 import subprocess
 import time
 import yaml
-from nose_parameterized import parameterized
+from parameterized import parameterized
 from multiprocessing.dummy import Pool
 
 from tests.st.test_base import TestBase, HOST_IPV4
