@@ -6,8 +6,12 @@ LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
-NETPOL_CNP_TAG = main
-NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/heads/$(NETPOL_CNP_TAG)/config/crd/standard
+# For a branch/tag use this format:
+# NETPOL_CNP_REF = refs/heads/main
+# For a commit, just use the commit ID:
+# NETPOL_CNP_REF = <commit ID>
+NETPOL_CNP_REF = 1f80acbe25809162f3f81ffa254eb24318ea387b
+NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/$(NETPOL_CNP_REF)/config/crd/standard
 NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
 
 ###############################################################################
@@ -127,6 +131,7 @@ ut-cover:
 
 WHAT?=.
 GINKGO_FOCUS?=.*
+GINKGO_SKIP?=
 
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
@@ -155,7 +160,7 @@ fv-fast:
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip "$(GINKGO_SKIP)" -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 
 # Create a kind cluster, and deploy some resources required for the libcalico-go tests.
 # TODO: Remove the need for this extra target, these should be created by the tests that need them.

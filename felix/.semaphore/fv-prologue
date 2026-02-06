@@ -39,10 +39,10 @@ elif [[ $FELIX_TEST_GROUP =~ 24.04 ]]; then
   export IMAGE_FAMILY=ubuntu-2404-lts-amd64
   JOB_TAG+="2404"
   TEST_REPORT_NAME+="Ubuntu-24.04/"
-elif [[ $FELIX_TEST_GROUP =~ 25.04 ]]; then
-  export IMAGE_FAMILY=ubuntu-2504-amd64
-  JOB_TAG+="2504"
-  TEST_REPORT_NAME+="Ubuntu-25.04/"
+elif [[ $FELIX_TEST_GROUP =~ 25.10 ]]; then
+  export IMAGE_FAMILY=ubuntu-2510-amd64
+  JOB_TAG+="2510"
+  TEST_REPORT_NAME+="Ubuntu-25.10/"
 else
   echo "Unknown OS version in FELIX_TEST_GROUP: $FELIX_TEST_GROUP"
   exit 1

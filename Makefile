@@ -137,7 +137,7 @@ CHART_DESTINATION ?= ./bin
 
 # Build helm charts.
 chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz \
-			 $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz
+			 $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz \
 			 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
 
 $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
