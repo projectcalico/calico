@@ -183,6 +183,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 	// Use a trie to find overlapping pools more efficiently. We can insert each pool into the trie, and if we find an existing pool that
 	// overlaps with it, we can mark the new pool as disabled.
 	trie := ip.NewCIDRTrie()
+	triev6 := ip.NewCIDRTrie()
 	active := map[string]*v3.IPPool{}
 	overlapping := map[string]*v3.IPPool{}
 	for _, p := range pools {
@@ -212,8 +213,14 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 			continue
 		}
 
+		// Use the appropriate trie based on the IP address family of this pool.
+		t := trie
+		if c.Version() == 6 {
+			t = triev6
+		}
+
 		// Check if this pool is overlapped by any existing active pool in the trie.
-		if trie.Intersects(c) {
+		if t.Intersects(c) {
 			// This pool overlaps with an existing active pool, so we should disable it.
 			logrus.WithField("overlap", pool.Name).Debug("Found overlapping pools")
 			overlapping[pool.Name] = pool
@@ -223,7 +230,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 			// This pool does not overlap with any existing active pools, so we can add it to the active set and insert it into the trie.
 			logrus.WithField("pool", pool.Name).Debug("Found non-overlapping pool, adding to active set")
 			active[pool.Name] = pool
-			trie.Update(c, pool)
+			t.Update(c, pool)
 		}
 	}
 
