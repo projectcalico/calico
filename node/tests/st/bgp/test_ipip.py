@@ -17,7 +17,7 @@ import subprocess
 import logging
 
 from netaddr import IPAddress, IPNetwork
-from nose_parameterized import parameterized
+from parameterized import parameterized
 from time import sleep
 
 from tests.st.test_base import TestBase
