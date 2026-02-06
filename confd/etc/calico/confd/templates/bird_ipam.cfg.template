@@ -19,21 +19,24 @@ function reject_local_routes () {
 }
 
 function reject_disabled_pools() {
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "reject" false 4 }}
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "reject" false "" 4 }}
 {{ $line }}
 {{- end }}
 }
 
 function accept_enabled_pools() {
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "accept" false 4 }}
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "accept" false "" 4 }}
 {{ $line }}
 {{- end }}
 }
 
+{{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}
 function program_pools_to_kernel() {
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "" true 4 }}
+{{- if exists $network_key}}{{$network := getv $network_key}}
+{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "" true $network 4 }}
 {{ $line }}
 {{- end }}
+{{- end}}
 }
 
 function calico_export_to_bgp_peers(bool internal_peer) {

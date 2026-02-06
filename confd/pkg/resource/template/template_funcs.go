@@ -14,6 +14,7 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -413,6 +414,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 //     "accept", "reject", and "" (to not filter).
 //   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
 //     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
+//   - localSubnet: the subnet of local node, which is needed by IPv4 IPIP pool in cross subnet mode.
 //   - version: the statement ip family.
 //
 // As an example, For the following sample IPPool resource:
@@ -439,6 +441,7 @@ func IPPoolsFilterBIRDFunc(
 	pairs memkv.KVPairs,
 	filterAction string,
 	forProgrammingKernel bool,
+	localSubnet string,
 	version int,
 ) ([]string, error) {
 	if version != 4 && version != 6 {
@@ -472,10 +475,10 @@ func IPPoolsFilterBIRDFunc(
 		case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
 			ippool.IPIPMode == encap.Undefined || ippool.VXLANMode == encap.Undefined: // No-encapsulation.
 			// IPIP encapsulation or No-Encap.
-			if forProgrammingKernel && version == 4 {
+			if forProgrammingKernel && version == 4 && len(localSubnet) != 0 {
 				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
 				// our fork of BIRD.
-				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, cidr)
+				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 			}
 			action = "accept"
 		default:
@@ -503,13 +506,14 @@ func IPPoolsFilterBIRDFunc(
 	return lines, nil
 }
 
-func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, cidr string) string {
+func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSubnet string) string {
+	logrus.Infof("pepper %v", localSubnet)
 	switch v3.EncapMode(ipipMode) {
 	case v3.Always:
 		return `krt_tunnel="tunl0";`
 	case v3.CrossSubnet:
 		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
-		return fmt.Sprintf(format, cidr)
+		return fmt.Sprintf(format, localSubnet)
 	case v3.Undefined:
 		// No-encap case.
 		return `krt_tunnel="";`
