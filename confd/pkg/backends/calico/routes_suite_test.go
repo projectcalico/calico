@@ -3,16 +3,16 @@ package calico
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func TestCalico(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/calico_backend_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Calico Backend Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../../report/calico_backend_suite.xml"
+	ginkgo.RunSpecs(t, "Calico Backend Suite", suiteConfig, reporterConfig)
 }

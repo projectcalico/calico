@@ -202,7 +202,7 @@ release-publish-latest: release-prereqs
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo2 -r
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
