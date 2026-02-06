@@ -243,7 +243,7 @@ create-release-branch: release/bin/release
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r release/pkg
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo2 -cover -r hack/release/pkg
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.
