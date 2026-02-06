@@ -26,7 +26,7 @@
 # resource).
 import netaddr
 
-from utils import API_VERSION
+from .utils import API_VERSION
 
 # Large list of CIDRs for testing truncation of certain fields.
 many_nets = []
