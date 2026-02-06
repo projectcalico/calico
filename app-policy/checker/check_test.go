@@ -244,7 +244,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 	Expect(trace[0].Index).To(Equal(-1))
 	Expect(trace[0].Tier).To(Equal("tier1"))
 	Expect(trace[0].Name).To(Equal("policy1"))
-	Expect(trace[0].Namespace).To(Equal("ns1"))
+	Expect(trace[0].Namespace).To(Equal(""))
 
 	// Test with a matching source IP and destination port 80
 	flow2 := &MockFlow{
@@ -261,7 +261,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 	Expect(trace[0].Index).To(Equal(0))
 	Expect(trace[0].Tier).To(Equal("tier1"))
 	Expect(trace[0].Name).To(Equal("policy1"))
-	Expect(trace[0].Namespace).To(Equal("ns1"))
+	Expect(trace[0].Namespace).To(Equal(""))
 
 	// Test with a matching source IP and destination port 443
 	flow3 := &MockFlow{
@@ -278,7 +278,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 	Expect(trace[0].Index).To(Equal(1))
 	Expect(trace[0].Tier).To(Equal("tier1"))
 	Expect(trace[0].Name).To(Equal("policy1"))
-	Expect(trace[0].Namespace).To(Equal("ns1"))
+	Expect(trace[0].Namespace).To(Equal(""))
 }
 
 // actionFromString should parse strings in case-insensitive mode.
@@ -581,7 +581,7 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
-// And endpoint with a Tier should not evaluate profiles; there is a default deny on the tier.
+// An endpoint with a Tier should not evaluate profiles; there is a default deny on the tier.
 func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -596,7 +596,7 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 		},
 		ProfileIds: []string{"profile1"},
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy1"})] = &proto.Policy{
+	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy})] = &proto.Policy{
 		Tier: "tier1",
 		InboundRules: []*proto.Rule{
 			{

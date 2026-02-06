@@ -150,8 +150,12 @@ GINKGO_ARGS?=
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: protobuf
+<<<<<<< copilot/align-environment-variables
 	mkdir -p report
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip="$(GINKGO_SKIP)" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+=======
+	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "cd /go/src/$(PACKAGE_NAME) && go test -v ./..."
+>>>>>>> master
 
 ###############################################################################
 # CI
