@@ -13,7 +13,6 @@ more-itertools==10.8.0
 netaddr==1.3.0
 oauthlib==3.3.1
 #packaging - already provided by Alpine
-parameterized
 pluggy==1.6.0
 pyasn1-modules==0.4.2
 pyasn1==0.6.2

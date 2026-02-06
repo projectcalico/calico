@@ -17,7 +17,7 @@ import random
 import netaddr
 import time
 import yaml
-from parameterized import parameterized
+import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -179,7 +179,7 @@ class MultiHostIpam(TestBase):
                 assert str(ip) not in workload_ips, \
                     "ipam show says IP %s is not assigned when it is!" % ip
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("make_static_workload", [
         (False,),
         (True,),
     ])
