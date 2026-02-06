@@ -436,14 +436,14 @@ class MultiHostMainline(TestBase):
         n2_workloads.append(host2.create_workload("workload_h2n2_1",
                                                   image="workload",
                                                   network=network2))
-        print "*******************"
-        print "Network1 is:\n%s\n%s" % (
+        print("*******************")
+        print("Network1 is:\n%s\n%s" % (
             [x.ip for x in n1_workloads],
-            [x.name for x in n1_workloads])
-        print "Network2 is:\n%s\n%s" % (
+            [x.name for x in n1_workloads]))
+        print("Network2 is:\n%s\n%s" % (
             [x.ip for x in n2_workloads],
-            [x.name for x in n2_workloads])
-        print "*******************"
+            [x.name for x in n2_workloads]))
+        print("*******************")
 
         # Assert that endpoints are in Calico
         assert_number_endpoints(host1, 4)

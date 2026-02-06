@@ -18,7 +18,7 @@ import random
 
 import yaml
 import json
-from nose_parameterized import parameterized
+from parameterized import parameterized
 
 from tests.st.utils.utils import calicoctl, \
     name, wipe_etcd, get_ip, clean_calico_data
