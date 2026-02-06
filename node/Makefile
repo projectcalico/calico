@@ -127,7 +127,7 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
 K8ST_TO_RUN?=tests/
-# Can exclude the slower tests with "-a '!slow'"
+# Can exclude the slower tests with "-m 'not slow'"
 ST_OPTIONS?=
 
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
