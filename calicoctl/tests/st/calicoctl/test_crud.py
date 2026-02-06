@@ -15,7 +15,7 @@ import logging
 import copy
 import os
 
-from nose_parameterized import parameterized
+from parameterized import parameterized
 
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \

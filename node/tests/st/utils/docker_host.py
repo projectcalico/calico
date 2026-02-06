@@ -375,7 +375,7 @@ class DockerHost(object):
         pools_output = self.calicoctl("get ippool -o yaml")
         pools_dict = yaml.safe_load(pools_output)
         for pool in pools_dict['items']:
-            print "Pool is %s" % pool
+            print("Pool is %s" % pool)
             if ':' not in pool['spec']['cidr']:
                 pool['spec']['ipipMode'] = 'Always' if enabled else 'Never'
             if 'creationTimestamp' in pool['metadata']:
