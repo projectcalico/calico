@@ -22,9 +22,8 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
@@ -46,7 +45,7 @@ func init() {
 }
 
 func TestFv(t *testing.T) {
-	RegisterFailHandler(Fail)
+	gomega.RegisterFailHandler(Fail)
 	// OS_RELEASE is set by run-batches. On ubuntu, it looks like 24.04.
 	osRel := os.Getenv("OS_RELEASE")
 	extraSuffix := os.Getenv("EXTRA_REPORT_SUFFIX")
@@ -68,27 +67,28 @@ func TestFv(t *testing.T) {
 	if extraSuffix != "" {
 		descSuffix += " " + extraSuffix
 	}
-	junitReporter := reporters.NewJUnitReporter(fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix))
-	RunSpecsWithDefaultAndCustomReporters(t, "FV: Felix "+descSuffix, []Reporter{junitReporter})
+	suiteConfig, reporterConfig := GinkgoConfiguration()
+	reporterConfig.JUnitReport = fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix)
+	RunSpecs(t, "FV: Felix "+descSuffix, suiteConfig, reporterConfig)
 }
 
 var _ = BeforeEach(func() {
-	_, _ = fmt.Fprintf(realStdout, "\nFV-TEST-START: %s", CurrentGinkgoTestDescription().FullTestText)
+	_, _ = fmt.Fprintf(realStdout, "\nFV-TEST-START: %s", CurrentSpecReport().FullText())
 })
 
 var _ = JustAfterEach(func() {
-	if CurrentGinkgoTestDescription().Failed {
+	if CurrentSpecReport().Failed() {
 		_, _ = fmt.Fprintf(realStdout, "\n")
 	}
 })
 
 var _ = AfterEach(func() {
 	defer connectivity.UnactivatedCheckers.Clear()
-	if CurrentGinkgoTestDescription().Failed {
+	if CurrentSpecReport().Failed() {
 		// If the test has already failed, ignore any connectivity checker leak.
 		return
 	}
-	Expect(connectivity.UnactivatedCheckers.Len()).To(BeZero(),
+	gomega.Expect(connectivity.UnactivatedCheckers.Len()).To(gomega.BeZero(),
 		"Test bug: ConnectivityChecker was created but not activated.")
 })
 
@@ -102,7 +102,7 @@ var _ = BeforeSuite(func() {
 	var err error
 	// Using Prometheus' library because we already import it indirectly.
 	procFS, err = procfs.NewFS("/proc")
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	go func() {
 		for {
 			select {
