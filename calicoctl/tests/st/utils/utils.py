@@ -453,6 +453,7 @@ def log_and_run(command, raise_exception_on_failure=True, stderr=STDOUT):
     try:
         logger.info("%s", command)
         results = check_output(command, shell=True, stderr=stderr).rstrip()
+        results = results.decode()
         log_output(results)
         return results
     except CalledProcessError as e:
