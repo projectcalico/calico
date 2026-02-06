@@ -18,9 +18,9 @@ from time import time
 
 from netaddr import IPAddress
 
-from exceptions import CommandExecError
-from utils import retry_until_success, debug_failures, get_ip
-from utils import ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL
+from tests.st.utils.exceptions import CommandExecError
+from tests.st.utils.utils import retry_until_success, debug_failures, get_ip
+from tests.st.utils.utils import ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL
 
 
 NET_NONE = "none"

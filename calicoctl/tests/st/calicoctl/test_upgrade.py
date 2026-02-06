@@ -16,9 +16,9 @@ import logging
 import os
 import random
 
+import pytest
 import yaml
 import json
-from nose_parameterized import parameterized
 
 from tests.st.utils.utils import calicoctl, \
     name, wipe_etcd, get_ip, clean_calico_data
@@ -34,37 +34,34 @@ logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 tests = [
-    ("bgppeer_long_node_name", False),
-    ("bgppeer_dotted_asn", False),
+    ("bgppeer_long_node_name", False, None),
+    ("bgppeer_dotted_asn", False, None),
     ("hep_bad_label", True, "a qualified name must consist of alphanumeric characters"),
-    ("hep_tame", False),
-    ("hep_mixed_ip", False),
+    ("hep_tame", False, None),
+    ("hep_mixed_ip", False, None),
     ("hep_label_too_long", True, "name part must be no more than 63 characters"),
-    ("hep_long_fields", False),
+    ("hep_long_fields", False, None),
     ("hep_name_too_long", True, "name is too long by 11 bytes"),
-    ("ippool_mixed", False),
-    ("ippool_v4_small", False),
-    ("ippool_v4_large", False),
-    ("node_long_name", False),
-    ("node_tame", False),
-    ("policy_long_name", False),
-    ("policy_big", False),
-    ("policy_tame", False),
-    ("profile_big", False),
-    ("profile_tame", False),
+    ("ippool_mixed", False, None),
+    ("ippool_v4_small", False, None),
+    ("ippool_v4_large", False, None),
+    ("node_long_name", False, None),
+    ("node_tame", False, None),
+    ("policy_long_name", False, None),
+    ("policy_big", False, None),
+    ("policy_tame", False, None),
+    ("profile_big", False, None),
+    ("profile_tame", False, None),
     ("wep_bad_workload_id", True, "field must not begin with a '-'"),
-    ("wep_lots_ips", False),
-    ("wep_similar_name", True,
-     "workload was not added through the Calico CNI plugin and cannot be converted"),
-    ("wep_similar_name_2", False),
-    ("do_not_track", False),
-    ("prednat_policy", False),
-
-    # profile_long_labels Fails validation after conversion, but error is not clear.
-    # TODO: Add some error text once new validator lands and gives this test a sane error message
-    ("profile_long_labels", True),
+    ("wep_lots_ips", False, None),
+    ("wep_similar_name", True, "workload was not added through the Calico CNI plugin and cannot be converted"),
+    ("wep_similar_name_2", False, None),
+    ("do_not_track", False, None),
+    ("prednat_policy", False, None),
+    ("profile_long_labels", True, None),
 ]
 random.shuffle(tests)
+
 
 def _test_converter(testname, fail_expected, error_text=None, format="yaml"):
     """
@@ -105,18 +102,18 @@ def _test_converter(testname, fail_expected, error_text=None, format="yaml"):
     else:
         rc.assert_error(error_text)
 
-@parameterized(tests)
-def test_converter_yaml(testname, fail_expected, error_text=None):
+
+@pytest.mark.parametrize("testname,fail_expected,error_text", tests)
+def test_converter_yaml(testname, fail_expected, error_text):
     """
     Convert a v1 object to v3, then apply the result and read it back.
     """
-    test_converter_yaml.__name__ = "yaml_" +testname
     _test_converter(testname, fail_expected, error_text=error_text, format="yaml")
 
-@parameterized(tests)
-def test_converter_json(testname, fail_expected, error_text=None):
+
+@pytest.mark.parametrize("testname,fail_expected,error_text", tests)
+def test_converter_json(testname, fail_expected, error_text):
     """
     Convert a v1 object to v3, then apply the result and read it back.
     """
-    test_converter_json.__name__ = "json_" + testname
     _test_converter(testname, fail_expected, error_text=error_text, format="json")

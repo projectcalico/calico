@@ -16,7 +16,7 @@ import logging
 import copy
 import os
 
-from nose_parameterized import parameterized
+import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import calicoctl
@@ -90,14 +90,14 @@ class TestCalicoctlConvert(TestBase):
         else:
             rc.assert_error()
 
-    @parameterized.expand(convert_files)
+    @pytest.mark.parametrize("filename,applySuccess", convert_files)
     def test_convert_yaml(self, filename, applySuccess):
         """
         Test convert with yaml output.
         """
         self._test_convert(filename, applySuccess, format="yaml")
 
-    @parameterized.expand(convert_files)
+    @pytest.mark.parametrize("filename,applySuccess", convert_files)
     def test_convert_json(self, filename, applySuccess):
         """
         Test convert with json output.
