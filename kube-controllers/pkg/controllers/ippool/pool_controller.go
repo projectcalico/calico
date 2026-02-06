@@ -28,6 +28,7 @@ import (
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -178,80 +179,36 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 // - When a pool is added / updated, if it overlaps with an existing active pool, we should not enable the new pool.
 // - When a pool is deleted, if it was the only active pool covering its CIDR, we should enable another overlapping pool if there is one.
 func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
-	// Get all of the IP pools, and sort each list of pools so that we have a consistent order when checking for overlaps.
-	// We sort by:
-	// - previous active / disabled decision.
-	// - creation timestamp
-	// - then by name
-	// In order to ensure we always prefer to keep the same pool active when there are overlaps, prioritizing
-	// the oldest pool where possible.
+	// Use a trie to find overlapping pools more efficiently. We can insert each pool into the trie, and if we find an existing pool that
+	// overlaps with it, we can mark the new pool as disabled.
+	trie := ip.NewCIDRTrie()
 	pools := c.poolInformer.GetIndexer().List()
-	slices.SortFunc(pools, func(a, b any) int {
-		poolA := a.(*v3.IPPool)
-		poolB := b.(*v3.IPPool)
+	slices.SortFunc(pools, poolSortFunc)
 
-		// Disabled pools should be sorted after active pools, so that we prefer to keep
-		// existing active pools active when there are overlaps.
-		aDisabled := hasCondition(poolA, v3.IPPoolConditionDisabled)
-		bDisabled := hasCondition(poolB, v3.IPPoolConditionDisabled)
-		if aDisabled && !bDisabled {
-			return 1
-		}
-		if !aDisabled && bDisabled {
-			return -1
-		}
-
-		// If both pools are in the same state (both active or both disabled), sort by creation timestamp,
-		// sorting older pools first.
-		if poolA.CreationTimestamp.Before(&poolB.CreationTimestamp) {
-			return -1
-		}
-		if poolB.CreationTimestamp.Before(&poolA.CreationTimestamp) {
-			return 1
-		}
-
-		// If creation timestamps are equal, sort by name to ensure a deterministic order.
-		return strings.Compare(poolA.Name, poolB.Name)
-	})
-
-	// Go through each pool and find any overlaps.
 	active := map[string]*v3.IPPool{}
 	disabled := map[string]*v3.IPPool{}
-	overlaps := map[string]string{}
 
-	for i, p := range pools {
+	for _, p := range pools {
 		pool := p.(*v3.IPPool)
 
-		logrus.WithFields(logrus.Fields{
-			"pool":         pool.Name,
-			"cidr":         pool.Spec.CIDR,
-			"creationTime": pool.CreationTimestamp.String(),
-			"index":        i,
-		}).Debug("Checking pool for overlaps")
-
-		_, net, err := cnet.ParseCIDR(pool.Spec.CIDR)
+		c, err := ip.CIDRFromString(pool.Spec.CIDR)
 		if err != nil {
 			logrus.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
 			continue
 		}
 
-		for _, activePool := range active {
-			_, activeNet, err := cnet.ParseCIDR(activePool.Spec.CIDR)
-			if err != nil {
-				logrus.WithError(err).WithField("cidr", activePool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
-				continue
-			}
-			if net.IsNetOverlap(activeNet.IPNet) {
-				logrus.WithField("overlap", pool.Name).WithField("active", activePool.Name).Debug("Found overlapping pools")
-				disabled[pool.Name] = pool
-				overlaps[pool.Name] = activePool.Name
-			}
+		// Check if this pool is overlapped by any existing active pool in the trie.
+		if trie.Intersects(c) {
+			// This pool overlaps with an existing active pool, so we should disable it.
+			logrus.WithField("overlap", pool.Name).Debug("Found overlapping pools")
+			disabled[pool.Name] = pool
 		}
 
 		if _, ok := disabled[pool.Name]; !ok {
-			// This pool does not overlap with any existing active pools, so we can add it to the active set.
+			// This pool does not overlap with any existing active pools, so we can add it to the active set and insert it into the trie.
 			logrus.WithField("pool", pool.Name).Debug("Found non-overlapping pool, adding to active set")
 			active[pool.Name] = pool
+			trie.Update(c, pool)
 		}
 	}
 
@@ -259,13 +216,10 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 	for _, pool := range disabled {
 		// Disable any other overlapping pools by setting a condition on them, which will prevent IPAM from allocating from those pools.
 		cond := metav1.Condition{
-			Type:   v3.IPPoolConditionDisabled,
-			Status: metav1.ConditionTrue,
-			Reason: "OverlappingPool",
-			Message: fmt.Sprintf(
-				"CIDR overlaps %s; disabled to prevent IP allocation conflicts.",
-				overlaps[pool.Name],
-			),
+			Type:    v3.IPPoolConditionDisabled,
+			Status:  metav1.ConditionTrue,
+			Reason:  "OverlappingPool",
+			Message: "CIDR overlaps another pool; disabled to prevent IP allocation conflicts.",
 		}
 		if setCondition(pool, cond) {
 			logrus.WithField("otherPool", pool.Name).Info("Disabling IPPool due to overlap")
@@ -290,7 +244,36 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 			}
 		}
 	}
+
 	return nil
+}
+
+func poolSortFunc(a, b any) int {
+	poolA := a.(*v3.IPPool)
+	poolB := b.(*v3.IPPool)
+
+	// Disabled pools should be sorted after active pools, so that we prefer to keep
+	// existing active pools active when there are overlaps.
+	aDisabled := hasCondition(poolA, v3.IPPoolConditionDisabled)
+	bDisabled := hasCondition(poolB, v3.IPPoolConditionDisabled)
+	if aDisabled && !bDisabled {
+		return 1
+	}
+	if !aDisabled && bDisabled {
+		return -1
+	}
+
+	// If both pools are in the same state (both active or both disabled), sort by creation timestamp,
+	// sorting older pools first.
+	if poolA.CreationTimestamp.Before(&poolB.CreationTimestamp) {
+		return -1
+	}
+	if poolB.CreationTimestamp.Before(&poolA.CreationTimestamp) {
+		return 1
+	}
+
+	// If creation timestamps are equal, sort by name to ensure a deterministic order.
+	return strings.Compare(poolA.Name, poolB.Name)
 }
 
 // reconcileFinalizer ensures that a finalizer is added to the pool when it is created, and that when the pool is deleted, all associated
