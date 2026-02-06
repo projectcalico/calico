@@ -220,7 +220,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 		}
 
 		// Check if this pool is overlapped by any existing active pool in the trie.
-		if t.Intersects(c) {
+		if e := t.Get(c); e != nil || t.Intersects(c) || t.Covers(c) {
 			// This pool overlaps with an existing active pool, so we should disable it.
 			logrus.WithField("overlap", pool.Name).Debug("Found overlapping pools")
 			overlapping[pool.Name] = pool

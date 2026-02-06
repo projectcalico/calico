@@ -41,6 +41,11 @@ type IPPoolList struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The pool CIDR"
+// +kubebuilder:printcolumn:name="VXLAN Mode",type=string,JSONPath=".spec.vxlanMode",description="The VXLAN mode for this pool"
+// +kubebuilder:printcolumn:name="IPIP Mode",type=string,JSONPath=".spec.ipipMode",description="The IPIP mode for this pool"
+// +kubebuilder:printcolumn:name="NAT Outgoing",type=boolean,JSONPath=".spec.natOutgoing",description="Whether outgoing NAT is enabled for this pool"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp",description="The age of the pool"
+// +kubebuilder:printcolumn:name="Conditions",type=string,JSONPath=".status.conditions[*].type",description="The conditions of the pool"
 
 type IPPool struct {
 	metav1.TypeMeta   `json:",inline"`
