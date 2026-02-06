@@ -7,7 +7,7 @@ import logging
 import subprocess
 import time
 import yaml
-from nose_parameterized import parameterized
+import pytest
 from multiprocessing.dummy import Pool
 
 from tests.st.test_base import TestBase, HOST_IPV4
@@ -412,7 +412,7 @@ class TieredPolicyWorkloads(TestBase):
                         order=second_pol_order)
         self.assert_no_connectivity(self.n1_workloads)
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("policy,workload_label,no_label_expected_result", [
         ({"apiVersion": "projectcalico.org/v3",
           "kind": "GlobalNetworkPolicy",
           "metadata": {"name": "default.deny-test-true1"},

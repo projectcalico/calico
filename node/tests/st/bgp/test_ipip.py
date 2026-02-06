@@ -17,7 +17,7 @@ import subprocess
 import logging
 
 from netaddr import IPAddress, IPNetwork
-from nose_parameterized import parameterized
+import pytest
 from time import sleep
 
 from tests.st.test_base import TestBase
@@ -39,7 +39,7 @@ class TestIPIP(TestBase):
     def tearDown(self):
         self.remove_tunl_ip()
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("backend", [
         ('bird',),
     ])
     def test_ipip(self, backend):
@@ -190,7 +190,7 @@ class TestIPIP(TestBase):
             self.pool_action(host, "delete", ipv4_pool)
             self.assert_tunl_ip(host, new_ipv4_pool)
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("backend", [
         ('bird',),
     ])
     def test_issue_1584(self, backend):
@@ -459,7 +459,7 @@ class TestIPIP(TestBase):
                           output)
         return int(match.group(1))
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("with_ipip", [
         (False,),
         (True,),
     ])
@@ -493,7 +493,7 @@ class TestIPIP(TestBase):
 
             self._test_gce_int(with_ipip, backend, host1, host2, None)
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("with_ipip", [
         (False,),
         (True,),
     ])
@@ -623,4 +623,3 @@ class TestIPIP(TestBase):
             host1.set_ipip_enabled(with_ipip)
 
 TestIPIP.batchnumber = 4  # Add batch label to these tests for parallel running
-
