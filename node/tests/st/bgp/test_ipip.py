@@ -17,7 +17,6 @@ import subprocess
 import logging
 
 from netaddr import IPAddress, IPNetwork
-from nose_parameterized import parameterized
 from time import sleep
 
 from tests.st.test_base import TestBase
@@ -39,10 +38,12 @@ class TestIPIP(TestBase):
     def tearDown(self):
         self.remove_tunl_ip()
 
-    @parameterized.expand([
-        ('bird',),
-    ])
-    def test_ipip(self, backend):
+    def test_ipip(self):
+        for backend in ['bird']:
+            with self.subTest(backend=backend):
+                self._test_ipip(backend)
+
+    def _test_ipip(self, backend):
         """
         Test IPIP routing with the different IPIP modes.
 
@@ -190,10 +191,12 @@ class TestIPIP(TestBase):
             self.pool_action(host, "delete", ipv4_pool)
             self.assert_tunl_ip(host, new_ipv4_pool)
 
-    @parameterized.expand([
-        ('bird',),
-    ])
-    def test_issue_1584(self, backend):
+    def test_issue_1584(self):
+        for backend in ['bird']:
+            with self.subTest(backend=backend):
+                self._test_issue_1584(backend)
+
+    def _test_issue_1584(self, backend):
         """
         Test cold start of bgp daemon correctly fixes tunl/non-tunl routes.
 
@@ -393,7 +396,7 @@ class TestIPIP(TestBase):
         Remove the host tunl IP address if assigned.
         """
         try:
-            output = subprocess.check_output(["ip", "addr", "show", "tunl0"])
+            output = subprocess.check_output(["ip", "addr", "show", "tunl0"]).decode()
         except subprocess.CalledProcessError:
             return
 
@@ -459,11 +462,12 @@ class TestIPIP(TestBase):
                           output)
         return int(match.group(1))
 
-    @parameterized.expand([
-        (False,),
-        (True,),
-    ])
-    def test_gce(self, with_ipip, backend='bird'):
+    def test_gce(self):
+        for with_ipip in [False, True]:
+            with self.subTest(with_ipip=with_ipip):
+                self._test_gce(with_ipip)
+
+    def _test_gce(self, with_ipip, backend='bird'):
         """Test with and without IP-in-IP routing on simulated GCE instances.
 
         In this test we simulate GCE instance routing, where there is a router
@@ -493,11 +497,12 @@ class TestIPIP(TestBase):
 
             self._test_gce_int(with_ipip, backend, host1, host2, None)
 
-    @parameterized.expand([
-        (False,),
-        (True,),
-    ])
-    def test_gce_rr(self, with_ipip):
+    def test_gce_rr(self):
+        for with_ipip in [False, True]:
+            with self.subTest(with_ipip=with_ipip):
+                self._test_gce_rr(with_ipip)
+
+    def _test_gce_rr(self, with_ipip):
         """As test_gce except with a route reflector instead of mesh config."""
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
@@ -623,4 +628,3 @@ class TestIPIP(TestBase):
             host1.set_ipip_enabled(with_ipip)
 
 TestIPIP.batchnumber = 4  # Add batch label to these tests for parallel running
-

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from nose.plugins.attrib import attr
+import pytest
 from unittest import skip
 
 from tests.st.test_base import TestBase
@@ -125,7 +125,7 @@ class TestRouteReflectorCluster(TestBase):
                                                       workload_host2.ip,
                                                       workload_host3.ip])
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_route_reflector_cluster(self):
         self._test_route_reflector_cluster(backend='bird')
 

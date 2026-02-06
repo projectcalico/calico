@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from nose.plugins.attrib import attr
+import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
@@ -32,7 +32,7 @@ else:
 
 class TestAutodetection(TestBase):
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_autodetection(self):
         """
         Test using different IP autodetection methods.

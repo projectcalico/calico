@@ -42,7 +42,7 @@ class TestNodeStatus(TestBase):
                 host.calicoctl("node status")
             except CommandExecError as e:
                 self.assertEquals(e.returncode, 1)
-                self.assertEquals(e.output,
+                self.assertEquals(e.output.decode(),
                                   "Calico process is not running.\n")
             else:
                 raise AssertionError("'calicoctl node status' did not exit"
