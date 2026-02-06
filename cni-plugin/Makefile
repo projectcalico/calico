@@ -201,6 +201,11 @@ build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 ###############################################################################
 # Unit Tests
 ###############################################################################
+WHAT?=.
+GINKGO_FOCUS?=.*
+GINKGO_SKIP?=
+GINKGO_ARGS?=
+
 fv:
 	@echo "No FV tests for CNI plugin"
 
@@ -227,7 +232,7 @@ ut-datastore:
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
+			ginkgo -cover -r -skipPackage pkg/install,containernetworking-plugins,flannel-cni-plugin -skip="$(GINKGO_SKIP)" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
