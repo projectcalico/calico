@@ -233,3 +233,38 @@ func TestChanUtil_Clear(t *testing.T) {
 		})
 	}
 }
+
+func TestChanUtil_WaitForCloseWithDeadline(t *testing.T) {
+	t.Run("channel closes before deadline", func(t *testing.T) {
+		ch := make(chan string)
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			close(ch)
+		}()
+		err := chanutil.WaitForCloseWithDeadline(context.Background(), ch, 100*time.Millisecond)
+		if err != nil {
+			t.Fatalf("Expected nil error, got '%v'", err)
+		}
+	})
+
+	t.Run("context cancelled before channel closes", func(t *testing.T) {
+		ch := make(chan string)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+		err := chanutil.WaitForCloseWithDeadline(ctx, ch, 100*time.Millisecond)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Expected context canceled error, got '%v'", err)
+		}
+	})
+
+	t.Run("deadline exceeded before channel closes", func(t *testing.T) {
+		ch := make(chan string)
+		err := chanutil.WaitForCloseWithDeadline(context.Background(), ch, 10*time.Millisecond)
+		if !errors.Is(err, chanutil.ErrDeadlineExceeded) {
+			t.Fatalf("Expected deadline exceeded error, got '%v'", err)
+		}
+	})
+}
