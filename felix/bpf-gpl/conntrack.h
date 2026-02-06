@@ -336,7 +336,7 @@ static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct 
 	if (ctx->ipheader_len == 20) {
 		if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
-			ctx->fwd.res = TC_ACT_SHOT;
+			ctx->state->fwd.res = TC_ACT_SHOT;
 			CALI_DEBUG("ICMP v4 reply: too short getting hdr");
 			return false;
 		}
