@@ -103,17 +103,19 @@ def _test_converter(testname, fail_expected, error_text=None, format="yaml"):
         rc.assert_error(error_text)
 
 
-@pytest.mark.parametrize("testname,fail_expected,error_text", tests)
-def test_converter_yaml(testname, fail_expected, error_text):
+def test_converter_yaml(subtests):
     """
     Convert a v1 object to v3, then apply the result and read it back.
     """
-    _test_converter(testname, fail_expected, error_text=error_text, format="yaml")
+    for testname, fail_expected, error_text in tests:
+        with subtests.test(testname=testname, fail_expected=fail_expected, error_text=error_text):
+            _test_converter(testname, fail_expected, error_text=error_text, format="yaml")
 
 
-@pytest.mark.parametrize("testname,fail_expected,error_text", tests)
-def test_converter_json(testname, fail_expected, error_text):
+def test_converter_json(subtests):
     """
     Convert a v1 object to v3, then apply the result and read it back.
     """
-    _test_converter(testname, fail_expected, error_text=error_text, format="json")
+    for testname, fail_expected, error_text in tests:
+        with subtests.test(testname=testname, fail_expected=fail_expected, error_text=error_text):
+            _test_converter(testname, fail_expected, error_text=error_text, format="json")
