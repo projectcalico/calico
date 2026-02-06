@@ -22,7 +22,7 @@ import (
 )
 
 func TestV3(t *testing.T) {
-	gomega.RegisterFailHandler(Fail)
+	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
 	reporterConfig.JUnitReport = "../../../report/v3_api_suite.xml"
 	ginkgo.RunSpecs(t, "v3 API Suite", suiteConfig, reporterConfig)
