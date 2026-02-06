@@ -50,7 +50,16 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	}
 	for _, port := range ports {
 		args := []string{}
-		if !windows.ClusterIsWindows() {
+		env := []v1.EnvVar{}
+
+		if windows.ClusterIsWindows() {
+			env = []v1.EnvVar{
+				{
+					Name:  fmt.Sprintf("SERVE_PORT_%d", port),
+					Value: "foo",
+				},
+			}
+		} else {
 			args = []string{fmt.Sprintf("--port=%d", port)}
 		}
 
@@ -60,6 +69,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 			Image:           image,
 			ImagePullPolicy: v1.PullIfNotPresent,
 			Args:            args,
+			Env:             env,
 			Ports: []v1.ContainerPort{
 				{
 					ContainerPort: int32(port),

@@ -41,6 +41,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("NetworkPolicy"),
 	describe.WithCategory(describe.Policy),
+	describe.WithWindows(),
 	"Calico NetworkPolicy",
 	func() {
 		// Define variables common across all tests.
@@ -81,7 +82,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// This is a baseline test to ensure that the test framework is working as expected.
-		framework.ConformanceIt("should provide a default allow", func() {
+		framework.ConformanceIt("should provide a default allow [RunsOnWindows]", func() {
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
 			checker.Execute()
 		})
