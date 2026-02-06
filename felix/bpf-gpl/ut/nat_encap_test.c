@@ -20,10 +20,6 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 	globals->data = __globals.v4;
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 		.ipheader_len = IP_SIZE,
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
