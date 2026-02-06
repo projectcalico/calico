@@ -408,7 +408,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 
 // This function generates BIRD statements for IPPool resources to be used as BIRD filters based on the following input:
 //   - pairs: IPPool resources packaged into KVPairs.
-//   - targetAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
+//   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
 //     first reject disabled ippool, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (to not filter).
 //   - forProgrammingKernel: Whether the generated statemens are intended for programming routes to kernel or exporting to
@@ -437,7 +437,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 //	if (net ~ 10.10.0.0/16) then { accept; }
 func IPPoolsFilterBIRDFunc(
 	pairs memkv.KVPairs,
-	targetAction string,
+	filterAction string,
 	forProgrammingKernel bool,
 	version int,
 ) ([]string, error) {
@@ -462,30 +462,41 @@ func IPPoolsFilterBIRDFunc(
 			comment = "BGP export is disabled."
 		case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
 			// VXLAN encapsulation is always handled by Felix.
-			action = "reject"
-			comment = "VXLAN routes are handled by Felix."
-		default:
+			if forProgrammingKernel {
+				// Felix always handles programming VXLAN IPPools.
+				action = "reject"
+				comment = "VXLAN routes are handled by Felix."
+			} else {
+				action = "accept"
+			}
+		case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
+			ippool.IPIPMode == encap.Undefined || ippool.VXLANMode == encap.Undefined: // No-encapsulation.
 			// IPIP encapsulation or No-Encap.
 			if forProgrammingKernel && version == 4 {
+				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+				// our fork of BIRD.
 				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, cidr)
 			}
 			action = "accept"
+		default:
+			return nil, fmt.Errorf("invalid %s ippool", kvp.Key)
 		}
 
-		if !forProgrammingKernel && len(targetAction) != 0 && targetAction != action {
+		// Filter statements based on provided filterAction.
+		if len(filterAction) != 0 && filterAction != action {
 			continue
 		}
 		lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment))
 	}
 	if len(lines) == 0 {
 		var line string
-		switch targetAction {
+		switch filterAction {
 		case "accept", "reject":
-			line = formatComment(fmt.Sprintf("No v%d %s filter generated", version, targetAction))
+			line = formatComment(fmt.Sprintf("No v%d %s filter generated", version, filterAction))
 		case "":
 			line = formatComment(fmt.Sprintf("No v%d IPPool configured", version))
 		default:
-			return nil, fmt.Errorf("unknown target action %s", targetAction)
+			return nil, fmt.Errorf("unknown target action %s", filterAction)
 		}
 		lines = append(lines, line)
 	}

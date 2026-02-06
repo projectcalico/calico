@@ -296,35 +296,7 @@ func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV4(t *testing.T) {
 		`if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 		`if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 	}
-
-	kvps := ippoolTestCasesToKVPairs(t, poolsTestsV4)
-	generated, err := IPPoolsFilterBIRDFunc(kvps, "", true, 4)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
-
-	// Generated statemetns for kernel programming should not differ based on different target action.
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "accept", true, 4)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
-
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "reject", true, 4)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
+	testExpectedIPPoolStatments(t, poolsTestsV4, expectedStatements, true, 4)
 }
 
 func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
@@ -343,34 +315,7 @@ func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
 		`if (net ~ dead:beef:9::/64) then { reject; } # VXLAN routes are handled by Felix.`,
 		`if (net ~ dead:beef:10::/64) then { reject; } # VXLAN routes are handled by Felix.`,
 	}
-	kvps := ippoolTestCasesToKVPairs(t, poolsTestsV6)
-	generated, err := IPPoolsFilterBIRDFunc(kvps, "", true, 6)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
-
-	// Generated statemetns for kernel programming should not differ based on different target action.
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "accept", true, 6)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
-
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "reject", true, 6)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
+	testExpectedIPPoolStatments(t, poolsTestsV6, expectedStatements, true, 6)
 }
 
 func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
@@ -384,42 +329,12 @@ func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
 		`if (net ~ 10.14.0.0/16) then { accept; }`,
 		`if (net ~ 10.15.0.0/16) then { reject; } # BGP export is disabled.`,
 		// IPv4 VXLAN Encapsulation cases.
-		`if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if (net ~ 10.16.0.0/16) then { accept; }`,
 		`if (net ~ 10.17.0.0/16) then { reject; } # BGP export is disabled.`,
-		`if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if (net ~ 10.18.0.0/16) then { accept; }`,
 		`if (net ~ 10.19.0.0/16) then { reject; } # BGP export is disabled.`,
 	}
-	kvps := ippoolTestCasesToKVPairs(t, poolsTestsV4)
-	generated, err := IPPoolsFilterBIRDFunc(kvps, "", false, 4)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
-
-	// Check with reject action
-	rejectStatements := filterExpextedStatements(expectedStatements, "reject")
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "reject", false, 4)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, rejectStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, rejectStatements)
-	}
-
-	// Check with reject action
-	acceptStatements := filterExpextedStatements(expectedStatements, "accept")
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "accept", false, 4)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, acceptStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, acceptStatements)
-	}
+	testExpectedIPPoolStatments(t, poolsTestsV4, expectedStatements, false, 4)
 }
 
 func Test_IPPoolsFilterBIRDFunc_BGPPeeringV6(t *testing.T) {
@@ -433,41 +348,32 @@ func Test_IPPoolsFilterBIRDFunc_BGPPeeringV6(t *testing.T) {
 		`if (net ~ dead:beef:5::/64) then { accept; }`,
 		`if (net ~ dead:beef:6::/64) then { reject; } # BGP export is disabled.`,
 		// IPv6 VXLAN Encapsulation cases.
-		`if (net ~ dead:beef:7::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if (net ~ dead:beef:7::/64) then { accept; }`,
 		`if (net ~ dead:beef:8::/64) then { reject; } # BGP export is disabled.`,
-		`if (net ~ dead:beef:9::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`if (net ~ dead:beef:9::/64) then { accept; }`,
 		`if (net ~ dead:beef:10::/64) then { reject; } # BGP export is disabled.`,
 	}
-	kvps := ippoolTestCasesToKVPairs(t, poolsTestsV6)
-	generated, err := IPPoolsFilterBIRDFunc(kvps, "", false, 6)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, expectedStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, expectedStatements)
-	}
+	testExpectedIPPoolStatments(t, poolsTestsV6, expectedStatements, false, 6)
+}
 
-	// Check with reject action
-	rejectStatements := filterExpextedStatements(expectedStatements, "reject")
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "reject", false, 6)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, rejectStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, rejectStatements)
-	}
-
-	// Check with accept action
-	acceptStatements := filterExpextedStatements(expectedStatements, "accept")
-	generated, err = IPPoolsFilterBIRDFunc(kvps, "accept", false, 6)
-	if err != nil {
-		t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-	}
-	if !reflect.DeepEqual(generated, acceptStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			generated, acceptStatements)
+func testExpectedIPPoolStatments(
+	t *testing.T,
+	tcs []ippoolTestCase,
+	expectedStatements []string,
+	forProgrammingKernel bool,
+	ipVersion int,
+) {
+	kvps := ippoolTestCasesToKVPairs(t, tcs)
+	for _, filterAction := range []string{"", "accept", "reject"} {
+		expected := filterExpextedStatements(expectedStatements, filterAction)
+		generated, err := IPPoolsFilterBIRDFunc(kvps, filterAction, forProgrammingKernel, ipVersion)
+		if err != nil {
+			t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
+		}
+		if !reflect.DeepEqual(generated, expected) {
+			t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+				generated, expected)
+		}
 	}
 }
 
@@ -492,9 +398,12 @@ func ippoolTestCasesToKVPairs(t *testing.T, tcs []ippoolTestCase) memkv.KVPairs 
 	return kvps
 }
 
-func filterExpextedStatements(statements []string, targetAction string) (filtered []string) {
+func filterExpextedStatements(statements []string, filterAction string) (filtered []string) {
+	if len(filterAction) == 0 {
+		return statements
+	}
 	for _, s := range statements {
-		if strings.Contains(s, fmt.Sprintf("{ %s; }", targetAction)) {
+		if strings.Contains(s, fmt.Sprintf("%s; }", filterAction)) {
 			filtered = append(filtered, s)
 		}
 	}
