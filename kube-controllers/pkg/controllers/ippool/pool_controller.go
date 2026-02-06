@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 
@@ -223,7 +222,7 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 		}
 		if setCondition(pool, cond) {
 			logrus.WithField("otherPool", pool.Name).Info("Disabling IPPool due to overlap")
-			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, metav1.UpdateOptions{}); err != nil {
 				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
 			}
 		}
@@ -233,7 +232,7 @@ func (c *IPPoolController) reconcilePoolOverlaps(ctx context.Context) error {
 	for _, pool := range active {
 		if removeCondition(pool, v3.IPPoolConditionDisabled) {
 			logrus.WithField("pool", pool.Name).Info("Enabling IPPool")
-			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, v1.UpdateOptions{}); err != nil {
+			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, metav1.UpdateOptions{}); err != nil {
 				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
 			}
 
@@ -293,7 +292,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 			if hasFinalizer(p) {
 				logCtx.Info("IPPool is not active, removing finalizer")
 				p.Finalizers = slices.Delete(p.Finalizers, slices.Index(p.Finalizers, IPPoolFinalizer), slices.Index(p.Finalizers, IPPoolFinalizer)+1)
-				if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
+				if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, metav1.UpdateOptions{}); err != nil {
 					logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
 					return err
 				}
@@ -305,7 +304,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 		if !hasFinalizer(p) {
 			logCtx.Info("Adding finalizer to IPPool")
 			p.SetFinalizers(append(p.Finalizers, IPPoolFinalizer))
-			if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
+			if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, metav1.UpdateOptions{}); err != nil {
 				logCtx.WithError(err).Error("Failed to add finalizer to IPPool")
 				return err
 			}
@@ -338,7 +337,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 
 	logCtx.Info("No IPAM blocks left in pool, removing finalizer")
 	p.Finalizers = slices.Delete(p.Finalizers, slices.Index(p.Finalizers, IPPoolFinalizer), slices.Index(p.Finalizers, IPPoolFinalizer)+1)
-	if _, err := c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
+	if _, err := c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, metav1.UpdateOptions{}); err != nil {
 		logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
 		return err
 	}
