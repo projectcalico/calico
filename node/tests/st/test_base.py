@@ -48,7 +48,7 @@ def calculate_batch(cname, mname):
     combined = cname + "." + mname
     m = hashlib.sha224()
     m.update(combined.encode())
-    batch = ord(m.digest()[0]) % NUM_BATCHES
+    batch = m.digest()[0] % NUM_BATCHES
     print("Assigned %s to batch %s" % (combined, batch))
     return batch
 
