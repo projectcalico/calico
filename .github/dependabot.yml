@@ -5,8 +5,10 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-    allow:
-      - dependency-name: "golang.org/x/*"
+    groups:
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
     labels:
       - "docs-not-required"
       - "release-note-not-required"
