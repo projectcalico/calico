@@ -47,9 +47,9 @@ first_log_time = None
 def calculate_batch(cname, mname):
     combined = cname + "." + mname
     m = hashlib.sha224()
-    m.update(combined)
+    m.update(combined.encode())
     batch = ord(m.digest()[0]) % NUM_BATCHES
-    print "Assigned %s to batch %s" % (combined, batch)
+    print("Assigned %s to batch %s" % (combined, batch))
     return batch
 
 
@@ -64,7 +64,7 @@ class AutoBatcher(type):
     def __init__(cls, name, bases, dct):
         test_methods_with_no_batch = {}
         has_batch = False
-        for k, v in dct.iteritems():
+        for k, v in dct.items():
             if k == "batchnumber":
                 has_batch = True
             elif k.startswith("test_"):
@@ -74,14 +74,13 @@ class AutoBatcher(type):
                     continue
                 test_methods_with_no_batch[k] = v
         if not has_batch:
-            for k, v in test_methods_with_no_batch.iteritems():
+            for k, v in test_methods_with_no_batch.items():
                 v.batchnumber = calculate_batch(name, k)
             dct["batchnumber"] = calculate_batch(name, "__class__")
         super(AutoBatcher, cls).__init__(name, bases, dct)
 
 
-class TestBase(TestCase):
-    __metaclass__ = AutoBatcher
+class TestBase(TestCase, metaclass=AutoBatcher):
 
     """
     Base class for test-wide methods.
@@ -287,7 +286,7 @@ class TestBase(TestCase):
         Compares two things.  Debug logs the differences between them before
         asserting that they are the same.
         """
-        assert cmp(thing1, thing2) == 0, \
+        assert thing1 == thing2, \
             "Items are not the same.  Difference is:\n %s" % \
             pformat(DeepDiff(thing1, thing2), indent=2)
 

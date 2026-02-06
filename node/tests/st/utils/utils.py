@@ -27,7 +27,7 @@ from time import sleep
 import termios
 import yaml
 from netaddr import IPNetwork, IPAddress
-from exceptions import CommandExecError
+from tests.st.utils.exceptions import CommandExecError
 
 LOCAL_IP_ENV = "MY_IP"
 LOCAL_IPv6_ENV = "MY_IPv6"
