@@ -19,7 +19,7 @@ import (
 	"crypto/x509"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -201,7 +201,7 @@ var _ = DescribeTable("CertificateVerifier",
 		err := verifier([][]byte{peerCertBytes}, nil)
 		errChecker(err)
 	},
-	genTestCases()...)
+	genTestCases())
 
 func makePeerCert(cfg *certConfig) []byte {
 	log.WithField("cfg", cfg).Info("Make peer cert")

@@ -15,12 +15,12 @@
 package config
 
 import (
-	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 )
 
-var _ = Describe("Docs metadata", func() {
-	It("should load the metadata", func() {
+var _ = ginkgo.Describe("Docs metadata", func() {
+	ginkgo.It("should load the metadata", func() {
 		params, err := CombinedFieldInfo()
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(params).NotTo(gomega.BeEmpty())
