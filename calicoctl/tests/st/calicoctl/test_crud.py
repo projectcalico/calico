@@ -15,8 +15,6 @@ import logging
 import copy
 import os
 
-from nose_parameterized import parameterized
-
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
     API_VERSION, name, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
@@ -596,37 +594,40 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("get workloadendpoints -o yaml")
         rc.assert_empty_list("WorkloadEndpoint")
 
-    @parameterized.expand([
-        (ippool_name1_rev1_v4,),
-        (ipresv_name1_rev1_v4,),
-        (profile_name1_rev1,),
-        (globalnetworkpolicy_name1_rev1,),
-        (stagedglobalnetworkpolicy_name1_rev1,),
-        (globalnetworkset_name1_rev1,),
-        (globalnetworkset_name1_rev1_large,),
-        (hostendpoint_name1_rev1,),
-        (bgppeer_name1_rev1_v4,),
-        (node_name1_rev1,),
-        (tier_name1_rev1,),
-    ])
-
-    def test_non_namespaced(self, data):
+    def test_non_namespaced(self):
         """
         Test namespace is handled as expected for each non-namespaced resource type.
         """
-        return self._test_non_namespaced(data)
+        for data in [
+                ippool_name1_rev1_v4,
+                ipresv_name1_rev1_v4,
+                profile_name1_rev1,
+                globalnetworkpolicy_name1_rev1,
+                stagedglobalnetworkpolicy_name1_rev1,
+                globalnetworkset_name1_rev1,
+                globalnetworkset_name1_rev1_large,
+                hostendpoint_name1_rev1,
+                bgppeer_name1_rev1_v4,
+                node_name1_rev1,
+                tier_name1_rev1,
+        ]:
+            with self.subTest(data=data):
+                self.setUp()
+                self._test_non_namespaced(data)
 
-    @parameterized.expand([
-        (globalnetworkpolicy_tiered_name2_rev1,),
-        (stagedglobalnetworkpolicy_tiered_name2_rev1,),
-    ])
-    def test_non_namespaced_tiered(self, data):
+    def test_non_namespaced_tiered(self):
         """
         Test namespace is handled as expected for each non-namespaced resource type.
         """
-        self._create_admin_tier()
-        self._test_non_namespaced(data)
-        self._delete_admin_tier()
+        for data in [
+                globalnetworkpolicy_tiered_name2_rev1,
+                stagedglobalnetworkpolicy_tiered_name2_rev1,
+        ]:
+            with self.subTest(data=data):
+                self.setUp()
+                self._create_admin_tier()
+                self._test_non_namespaced(data)
+                self._delete_admin_tier()
 
     def _create_admin_tier(self):
         rc = calicoctl("create", data=tier_name1_rev1)
@@ -695,64 +696,72 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
 
-    @parameterized.expand([
-        (globalnetworkset_name1_rev1_large,),
-        (networkset_name1_rev1_large,),
-    ])
-    def test_nets_truncation(self, data):
+    def test_nets_truncation(self):
         """
         Test that the list of nets is truncated if it's too long.
         """
-        rc = calicoctl("create", data)
-        rc.assert_no_error()
+        for data in [
+                globalnetworkset_name1_rev1_large,
+                networkset_name1_rev1_large,
+        ]:
+            with self.subTest(data=data):
+                self.setUp()
+                rc = calicoctl("create", data)
+                rc.assert_no_error()
 
-        kind = data['kind']
-        if kind == "GlobalNetworkSet":
-            rc = calicoctl("get %s -o wide" % kind)
-        else:
-            rc = calicoctl("get %s -o wide -n %s" % (kind, data['metadata']['namespace']))
+                kind = data['kind']
+                if kind == "GlobalNetworkSet":
+                    rc = calicoctl("get %s -o wide" % kind)
+                else:
+                    rc = calicoctl("get %s -o wide -n %s" % (kind, data['metadata']['namespace']))
 
-        rc.assert_no_error()
-        rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
+                rc.assert_no_error()
+                rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
 
-    @parameterized.expand([
-        (globalnetworkset_name1_rev1,),
-        (networkset_name1_rev1,),
-    ])
-    def test_nets_no_truncation(self, data):
+    def test_nets_no_truncation(self):
         """
         Test that the list of nets is shown in full if not too long.
         """
-        rc = calicoctl("create", data)
-        rc.assert_no_error()
+        for data in [
+                globalnetworkset_name1_rev1,
+                networkset_name1_rev1,
+        ]:
+            with self.subTest(data=data):
+                self.setUp()
+                rc = calicoctl("create", data)
+                rc.assert_no_error()
 
-        rc = calicoctl("get %s -o wide" % data['kind'])
-        rc.assert_no_error()
-        rc.assert_output_contains("10.0.0.1,11.0.0.0/16,feed:beef::1,dead:beef::96")
+                rc = calicoctl("get %s -o wide" % data['kind'])
+                rc.assert_no_error()
+                rc.assert_output_contains("10.0.0.1,11.0.0.0/16,feed:beef::1,dead:beef::96")
 
-    @parameterized.expand([
-        (networkpolicy_name1_rev1,),
-        (stagednetworkpolicy_name1_rev1,),
-        (networkset_name1_rev1,),
-        (workloadendpoint_name1_rev1,),
-    ])
-    def test_namespaced(self, data):
+    def test_namespaced(self):
         """
         Tests namespace is handled as expected for each namespaced resource type.
         """
-        self._test_namespaced(data)
+        for data in [
+                networkpolicy_name1_rev1,
+                stagednetworkpolicy_name1_rev1,
+                networkset_name1_rev1,
+                workloadendpoint_name1_rev1,
+        ]:
+            with self.subTest(data=data):
+                self.setUp()
+                self._test_namespaced(data)
 
-    @parameterized.expand([
-        (networkpolicy_tiered_name2_rev1,),
-        (stagednetworkpolicy_tiered_name2_rev1,),
-    ])
-    def test_namespaced_tiered(self, data):
+    def test_namespaced_tiered(self):
         """
         Tests namespace is handled as expected for each namespaced resource type.
         """
-        self._create_admin_tier()
-        self._test_namespaced(data)
-        self._delete_admin_tier()
+        for data in [
+                networkpolicy_tiered_name2_rev1,
+                stagednetworkpolicy_tiered_name2_rev1,
+        ]:
+            with self.subTest(data=data):
+                self.setUp()
+                self._create_admin_tier()
+                self._test_namespaced(data)
+                self._delete_admin_tier()
 
     def _test_namespaced(self, data):
         # Clone the data so that we can modify the metadata parms.
@@ -867,13 +876,18 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete", data2)
         rc.assert_no_error()
 
-    @parameterized.expand([
-        (globalnetworkpolicy_os_name1_rev1, False),
-        (stagedglobalnetworkpolicy_os_name1_rev1, False),
-        (networkpolicy_os_name1_rev1, True),
-        (stagednetworkpolicy_os_name1_rev1, True),
-    ])
-    def test_os_compat(self, data, is_namespaced):
+    def test_os_compat(self):
+        for data, is_namespaced in [
+                (globalnetworkpolicy_os_name1_rev1, False),
+                (stagedglobalnetworkpolicy_os_name1_rev1, False),
+                (networkpolicy_os_name1_rev1, True),
+                (stagednetworkpolicy_os_name1_rev1, True),
+        ]:
+            with self.subTest(data=data, is_namespaced=is_namespaced):
+                self.setUp()
+                self._test_os_compat(data, is_namespaced)
+
+    def _test_os_compat(self, data, is_namespaced):
         """
         Test policy CRUD commands with calico (open source) style manifests.
         """
@@ -1083,11 +1097,16 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete kubecontrollersconfig %s" % name(rev2))
         rc.assert_no_error()
 
-    @parameterized.expand([
-        ('create', 'replace'),
-        ('apply', 'apply'),
-    ])
-    def test_metadata_unchanged(self, create_cmd, update_cmd):
+    def test_metadata_unchanged(self):
+        for create_cmd, update_cmd in [
+                ('create', 'replace'),
+                ('apply', 'apply'),
+        ]:
+            with self.subTest(create_cmd=create_cmd, update_cmd=update_cmd):
+                self.setUp()
+                self._test_metadata_unchanged(create_cmd, update_cmd)
+
+    def _test_metadata_unchanged(self, create_cmd, update_cmd):
         """
         Test that the metadata fields other than labels and annotations cannot be changed
         in create and update operations by applying a resource twice.
@@ -1304,11 +1323,16 @@ class TestCalicoctlCommands(TestBase):
         # Delete the resources
         rc = calicoctl("delete", data=resources)
 
-    @parameterized.expand([
-        ('replace'),
-        ('apply'),
-    ])
-    def test_disallow_update_old_resource_version(self, update_cmd):
+    def test_disallow_update_old_resource_version(self):
+        for update_cmd in [
+                'replace',
+                'apply',
+        ]:
+            with self.subTest(update_cmd=update_cmd):
+                self.setUp()
+                self.test_disallow_update_old_resource_version(update_cmd)
+
+    def _test_disallow_update_old_resource_version(self, update_cmd):
         """
         Test that we disallow updates on resources with old resource versions.
         """
@@ -1607,7 +1631,7 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_error()
         rc.assert_output_contains("Usage:")
 
-        # Test --namespace argument rejection  
+        # Test --namespace argument rejection
         rc = calicoctl("validate --namespace=test -f /tmp/test.yaml", no_config=True)
         rc.assert_error()
         rc.assert_output_contains("Usage:")
@@ -1659,7 +1683,7 @@ class TestCalicoctlCommands(TestBase):
         valid_ippool = ippool_name1_rev1_v4
         invalid_networkpolicy = {
             'apiVersion': API_VERSION,
-            'kind': 'NetworkPolicy', 
+            'kind': 'NetworkPolicy',
             'metadata': {
                 'name': 'invalid-policy',
                 'namespace': 'test'
@@ -2834,9 +2858,13 @@ class InvalidData(TestBase):
     def setUp(self):
         super(InvalidData, self).setUp()
 
-    @parameterized.expand(testdata)
-    def test_invalid_profiles_rejected(self, name, testdata, error):
+    def test_invalid_profiles_rejected(self):
+        for name, testdata, error in testdata:
+            with self.subTest(name=name, testdata=testdata, error=error):
+                self.setUp()
+                self._test_invalid_profiles_rejected(name, testdata, error)
 
+    def _test_invalid_profiles_rejected(self, name, testdata, error):
         log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
         ctl = calicoctl("create", testdata)
 
@@ -2850,9 +2878,13 @@ class InvalidData(TestBase):
         # Assert that we saw the correct error being reported
         ctl.assert_error(error)
 
-    @parameterized.expand(compound_test_data)
-    def test_invalid_compound_profiles_rejected(self, name, testdata, errors):
+    def test_invalid_compound_profiles_rejected(self):
+        for name, testdata, errors in compound_test_data:
+            with self.subTest(name=name, testdata=testdata, errors=errors):
+                self.setUp()
+                self._test_invalid_compound_profiles_rejected(name, testdata, errors)
 
+    def _test_invalid_compound_profiles_rejected(self, name, testdata, errors):
         log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
         ctl = calicoctl("create", testdata)
 

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from nose.plugins.attrib import attr
+import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -73,7 +73,7 @@ class TestNodePeers(TestBase):
             check_bird_status(host1, [("node specific", host2.ip, "Established")])
             check_bird_status(host2, [("node specific", host1.ip, "Established")])
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_node_peers(self):
         self._test_node_peers(backend='bird')
 
