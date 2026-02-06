@@ -176,6 +176,7 @@ rules:
       - update
       - delete
     resourceNames:
+      - baselineadminnetworkpolicies.policy.networking.k8s.io
       - clusternetworkpolicies.policy.networking.k8s.io
   - apiGroups:
       - ""
@@ -341,7 +342,6 @@ rules:
       - projectcalico.org
     resources:
       - felixconfigurations
-      - ippools
     verbs:
       - create
       - patch
@@ -360,6 +360,7 @@ rules:
       - list
       - watch
   - apiGroups:
+      - crd.projectcalico.org
       - projectcalico.org
     resources:
       - ippools
