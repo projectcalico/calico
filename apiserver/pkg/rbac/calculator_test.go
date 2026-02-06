@@ -17,7 +17,7 @@ package rbac_test
 import (
 	"encoding/json"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
 	rbac_v1 "k8s.io/api/rbac/v1"

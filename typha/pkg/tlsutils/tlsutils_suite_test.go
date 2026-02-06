@@ -17,9 +17,8 @@ package tlsutils_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -29,7 +28,8 @@ func init() {
 }
 
 func TestTLSUtils(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/tls_utils_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "TLS utils Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/tls_utils_suite.xml"
+	ginkgo.RunSpecs(t, "TLS utils Suite", suiteConfig, reporterConfig)
 }

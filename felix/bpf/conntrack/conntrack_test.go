@@ -19,8 +19,7 @@ import (
 	"net"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.org/x/sys/unix"
 
@@ -78,7 +77,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			Expect(deletedEntries).To(ConsistOf(tc.ExpectedDeletions),
 				"Scan() did not delete the expected entries")
 		},
-		entries...,
+		entries,
 	)
 
 	DescribeTable(
@@ -94,7 +93,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 
 			Expect(ctMap.IsEmpty()).To(BeTrue(), "all entries should have been deleted, but map isn't empty")
 		},
-		entries...,
+		entries,
 	)
 })
 
