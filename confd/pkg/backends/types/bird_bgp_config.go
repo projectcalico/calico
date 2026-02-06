@@ -15,19 +15,20 @@ package types
 
 // BirdBGPConfig represents the processed BGP configuration for templates
 type BirdBGPConfig struct {
-	NodeName         string
-	NodeIP           string
-	NodeIPv6         string
-	ASNumber         string
-	RouterID         string
-	Peers            []BirdBGPPeer
-	Filters          map[string]string
-	Communities      []CommunityRule
-	LogLevel         string
-	DebugMode        string // "all", "{ states }", or "" (none)
-	ListenAddress    string
-	ListenPort       string
-	DirectInterfaces string // Complete interface pattern string for protocol direct
+	NodeName             string
+	NodeIP               string
+	NodeIPv6             string
+	ASNumber             string
+	RouterID             string
+	Peers                []BirdBGPPeer
+	Filters              map[string]string
+	Communities          []CommunityRule
+	LogLevel             string
+	DebugMode            string // "all", "{ states }", or "" (none)
+	ListenAddress        string
+	ListenPort           string
+	DirectInterfaces     string // Complete interface pattern string for protocol direct
+	ProgramClusterRoutes bool
 }
 
 // BirdBGPPeer represents a processed BGP peer configuration
