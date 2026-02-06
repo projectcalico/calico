@@ -38,6 +38,7 @@ type IPPoolList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The pool CIDR"
 
@@ -46,6 +47,19 @@ type IPPool struct {
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Spec IPPoolSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
+
+	// +optional
+	Status *IPPoolStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+}
+
+const (
+	// IPPoolDisabled is a condition type that indicates the IP pool has been operationally disabled
+	// by Calico due to an issue with the pool.
+	IPPoolConditionDisabled = "Disabled"
+)
+
+type IPPoolStatus struct {
+	Conditions []metav1.Condition `json:"conditions,omitempty" protobuf:"bytes,1,rep,name=conditions"`
 }
 
 // IPPoolSpec contains the specification for an IPPool resource.
