@@ -143,3 +143,21 @@ func Clear[R any](c <-chan R) {
 		}
 	}
 }
+
+// WaitForCloseWithDeadline waits for the channel to close. It returns an error if the deadline is exceeded or the context
+// is cancelled.
+func WaitForCloseWithDeadline[E any](ctx context.Context, ch <-chan E, duration time.Duration) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case _, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			return nil
+		case <-time.After(duration):
+			return ErrDeadlineExceeded
+		}
+	}
+}
