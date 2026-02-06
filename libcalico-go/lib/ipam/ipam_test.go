@@ -251,7 +251,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 100)
+		})
 
 		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
@@ -268,7 +268,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 100)
+		})
 
 		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
@@ -285,7 +285,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 100)
+		})
 
 		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
@@ -302,7 +302,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 20)
+		})
 
 		Context("with 1000 nodes", func() {
 			BeforeEach(func() {
@@ -373,14 +373,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				b.Time("runtime", func() {
 					allocOneIPPerNode()
 				})
-			}, 1)
+			})
 
 			Measure("time to allocate second IP per node across 1000 nodes", func(b Benchmarker) {
 				allocOneIPPerNode() // Pre-create one IPAM block per node.
 				b.Time("runtime", func() {
 					allocOneIPPerNode()
 				})
-			}, 1)
+			})
 		})
 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
@@ -406,7 +406,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 20)
+		})
 	})
 
 	Describe("ReleaseIPs test", func() {
