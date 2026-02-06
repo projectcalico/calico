@@ -5,7 +5,6 @@ chardet==5.2.0
 configparser
 contextlib2
 deepdiff==8.6.1
-exceptions
 google-auth==2.48.0
 importlib-metadata
 jsonpickle==4.1.1
