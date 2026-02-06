@@ -290,7 +290,7 @@ static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 	struct frags4_fwd_value v = {
 		.sport = ctx->state->sport,
 		.dport = ctx->state->dport,
-		.seen_mark = ctx->fwd.mark,
+		.seen_mark = ctx->state->fwd.mark,
 	};
 
 	cali_v4_frgfwd_update_elem(&k, &v, 0);
