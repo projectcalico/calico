@@ -69,10 +69,10 @@ class Workload(object):
 
         net_options = "--net=none"
 
-        command = "docker run -tid --name %s %s %s %s" % (name,
-                                                          net_options,
-                                                          lbl_args,
-                                                          image)
+        command = "docker run -id --name %s %s %s %s" % (name,
+                                                         net_options,
+                                                         lbl_args,
+                                                         image)
         docker_run_wl = partial(host.execute, command)
         retry_until_success(docker_run_wl)
 
