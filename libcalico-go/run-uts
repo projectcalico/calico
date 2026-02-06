@@ -32,7 +32,7 @@ test ! -z "$go_dirs"
 echo WHAT: $WHAT
 echo SKIP: $SKIP
 ginkgo2 -cover -coverpkg=${go_dirs} -r --skip-package $SKIP $WHAT
-gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
+gocovmerge $(find . -name 'coverprofile.out') > combined.coverprofile
 
 echo
 echo '+==============+'
