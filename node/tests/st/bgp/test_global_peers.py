@@ -13,7 +13,7 @@
 # limitations under the License.
 import re
 
-from nose.plugins.attrib import attr
+import pytest
 from unittest import skip
 
 from tests.st.test_base import TestBase
@@ -73,7 +73,7 @@ class TestGlobalPeers(TestBase):
             check_bird_status(host1, [("global", host2.ip, "Established")])
             check_bird_status(host2, [("global", host1.ip, "Established")])
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_node_peers(self):
         self._test_global_peers(backend='bird')
 

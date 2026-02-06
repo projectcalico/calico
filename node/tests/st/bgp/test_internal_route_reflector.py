@@ -14,7 +14,7 @@
 import logging
 import yaml
 
-from nose.plugins.attrib import attr
+import pytest
 from unittest import skip
 
 from tests.st.test_base import TestBase
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 class TestInternalRouteReflector(TestBase):
 
-    @attr('slow')
+    @pytest.mark.slow
     def _test_internal_route_reflector(self, backend='bird', bgpconfig_as_num=64514, peer_as_num=64514):
         """
         Run a multi-host test using an internal route reflector.
@@ -100,11 +100,11 @@ class TestInternalRouteReflector(TestBase):
                                                       workload_host3.ip],
                                         retries=5)
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_internal_route_reflector(self):
         self._test_internal_route_reflector(backend='bird')
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_internal_route_reflector_default_as(self):
         self._test_internal_route_reflector(backend='bird', bgpconfig_as_num=None, peer_as_num=64512)
 
