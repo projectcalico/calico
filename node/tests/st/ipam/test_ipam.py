@@ -17,7 +17,6 @@ import random
 import netaddr
 import time
 import yaml
-import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -179,11 +178,12 @@ class MultiHostIpam(TestBase):
                 assert str(ip) not in workload_ips, \
                     "ipam show says IP %s is not assigned when it is!" % ip
 
-    @pytest.mark.parametrize("make_static_workload", [
-        (False,),
-        (True,),
-    ])
-    def test_pool_wrap(self, make_static_workload):
+    def test_pool_wrap(self):
+        for make_static_workload in [False, True]:
+            with self.subTest(make_static_workload=make_static_workload):
+                self._test_pool_wrap(make_static_workload)
+
+    def _test_pool_wrap(self, make_static_workload):
         """
         Repeatedly create and delete workloads until the system re-assigns an IP.
         """

@@ -16,7 +16,6 @@ import logging
 
 import netaddr
 import yaml
-import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS, NODE_CONTAINER_NAME
@@ -48,34 +47,44 @@ class TestDefaultPools(TestBase):
     def tearDownClass(cls):
             cls.host.cleanup()
 
-    @pytest.mark.parametrize("success_expected,param,value,exp_num_pools,ipip,nat_outgoing,description", [
-        (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/27", 0, None, True, "Too small"),
-        (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/32", 0, None, True, "Too small, but legal CIDR"),
-        (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/33", 0, None, True, "Impossible CIDR"),
-        (False, "CALICO_IPV4POOL_CIDR", "256.0.0.0/24", 0, None, True, "Invalid IP"),
-        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, None, True, "Typical non-default pool"),
-        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/26", 2, None, True, "Smallest legal pool"),
-        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, None, False, "Smallest legal pool"),
-        (False, "CALICO_IPV6POOL_CIDR", "fd00::/123", 0, None, False, "Too small"),
-        (False, "CALICO_IPV6POOL_CIDR", "fd00::/128", 0, None, False, "Too small, but legal CIDR"),
-        (False, "CALICO_IPV6POOL_CIDR", "fd00::/129", 0, None, False, "Impossible CIDR"),
-        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "CrossSubnet", True,"Typ. non-def pool, IPIP"),
-        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "Always", True,"Typ. non-default pool, IPIP"),
-        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "Never", True, "Typical pool, explicitly no IPIP"),
-        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "Always", False, "IPv6 - IPIP not permitted"),
-        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "CrossSubnet", False, "IPv6 - IPIP not allowed"),
-        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "Never", False, "IPv6, IPIP explicitly off"),
-        (False, "CALICO_IPV6POOL_CIDR", "fd00::/122", 0, "junk", False, "Invalid IPIP value"),
-        (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 0, "reboot", True, "Invalid IPIP value"),
-        (False, "CALICO_IPV4POOL_CIDR", "0.0.0.0/0", 0, None, True, "Invalid, link local address"),
-        (False, "CALICO_IPV6POOL_CIDR", "::/0", 0, None, False, "Invalid, link local address"),
-        (True, "CALICO_IPV6POOL_CIDR", "fd80::0:0/120", 2, None, False, "Valid, but non-canonical form"),
-        (False, "CALICO_IPV6POOL_CIDR", "1.2.3.4/24", 0, None, False, "Wrong type"),
-        (False, "CALICO_IPV4POOL_CIDR", "fd00::/24", 0, None, True, "Wrong type"),
-        (True, "CALICO_IPV6POOL_CIDR", "::0:a:b:c:d:e:0/120", 2, None, False, "Valid, non-canonical form"),
-        (False, "CALICO_IPV4POOL_CIDR", "1.2/16", 0, None, True, "Valid, unusual form"),
-    ])
-    def test_default_pools(self, success_expected, param, value, exp_num_pools, ipip, nat_outgoing, description):
+    def test_default_pools(self):
+        for success_expected, param, value, exp_num_pools, ipip, nat_outgoing, description in [
+                (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/27", 0, None, True, "Too small"),
+                (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/32", 0, None, True, "Too small, but legal CIDR"),
+                (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/33", 0, None, True, "Impossible CIDR"),
+                (False, "CALICO_IPV4POOL_CIDR", "256.0.0.0/24", 0, None, True, "Invalid IP"),
+                (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, None, True, "Typical non-default pool"),
+                (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/26", 2, None, True, "Smallest legal pool"),
+                (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, None, False, "Smallest legal pool"),
+                (False, "CALICO_IPV6POOL_CIDR", "fd00::/123", 0, None, False, "Too small"),
+                (False, "CALICO_IPV6POOL_CIDR", "fd00::/128", 0, None, False, "Too small, but legal CIDR"),
+                (False, "CALICO_IPV6POOL_CIDR", "fd00::/129", 0, None, False, "Impossible CIDR"),
+                (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "CrossSubnet", True,"Typ. non-def pool, IPIP"),
+                (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "Always", True,"Typ. non-default pool, IPIP"),
+                (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "Never", True, "Typical pool, explicitly no IPIP"),
+                (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "Always", False, "IPv6 - IPIP not permitted"),
+                (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "CrossSubnet", False, "IPv6 - IPIP not allowed"),
+                (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "Never", False, "IPv6, IPIP explicitly off"),
+                (False, "CALICO_IPV6POOL_CIDR", "fd00::/122", 0, "junk", False, "Invalid IPIP value"),
+                (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 0, "reboot", True, "Invalid IPIP value"),
+                (False, "CALICO_IPV4POOL_CIDR", "0.0.0.0/0", 0, None, True, "Invalid, link local address"),
+                (False, "CALICO_IPV6POOL_CIDR", "::/0", 0, None, False, "Invalid, link local address"),
+                (True, "CALICO_IPV6POOL_CIDR", "fd80::0:0/120", 2, None, False, "Valid, but non-canonical form"),
+                (False, "CALICO_IPV6POOL_CIDR", "1.2.3.4/24", 0, None, False, "Wrong type"),
+                (False, "CALICO_IPV4POOL_CIDR", "fd00::/24", 0, None, True, "Wrong type"),
+                (True, "CALICO_IPV6POOL_CIDR", "::0:a:b:c:d:e:0/120", 2, None, False, "Valid, non-canonical form"),
+                (False, "CALICO_IPV4POOL_CIDR", "1.2/16", 0, None, True, "Valid, unusual form"),
+        ]:
+            with self.subTest(success_expected=success_expected,
+                              param=param,
+                              value=value,
+                              exp_num_pools=exp_num_pools,
+                              ipip=ipip,
+                              nat_outgoing=nat_outgoing,
+                              description=description):
+                self._test_default_pools(success_expected, param, value, exp_num_pools, ipip, nat_outgoing, description)
+
+    def _test_default_pools(self, success_expected, param, value, exp_num_pools, ipip, nat_outgoing, description):
         """
         Test that the various options for default pools work correctly
         """

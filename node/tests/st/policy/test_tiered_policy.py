@@ -7,7 +7,6 @@ import logging
 import subprocess
 import time
 import yaml
-import pytest
 from multiprocessing.dummy import Pool
 
 from tests.st.test_base import TestBase, HOST_IPV4
@@ -412,475 +411,479 @@ class TieredPolicyWorkloads(TestBase):
                         order=second_pol_order)
         self.assert_no_connectivity(self.n1_workloads)
 
-    @pytest.mark.parametrize("policy,workload_label,no_label_expected_result", [
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true1"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source": {"selector": "test == 'True'"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination": {"selector": "test == 'True'"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "True"},
-         True
-         ),
+    def test_selectors(self):
+        for policy, workload_label, no_label_expected_result in [
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true1"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source": {"selector": "test == 'True'"},
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination": {"selector": "test == 'True'"}},
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "True"},
+                 True
+                 ),
 
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true2"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source": {"selector": "test != 'True'"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination": {"selector": "test != 'True'"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "False"},
-         False
-         ),
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true2"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source": {"selector": "test != 'True'"},
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination": {"selector": "test != 'True'"}},
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "False"},
+                 False
+                 ),
 
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true3"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source": {"selector": "has(test)"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination": {"selector": "has(test)"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "any_old_value"},
-         True
-         ),
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true3"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source": {"selector": "has(test)"},
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination": {"selector": "has(test)"}},
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "any_old_value"},
+                 True
+                 ),
 
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true4"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source": {"selector": "!has(test)"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination": {"selector": "!has(test)"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "no_one_cares"},
-         False
-         ),
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true4"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source": {"selector": "!has(test)"},
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination": {"selector": "!has(test)"}},
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "no_one_cares"},
+                 False
+                 ),
 
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true5"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source": {"selector": "test in {'true', 'false'}"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination": {"selector": "test in {'true', 'false'}"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "true"},
-         True
-         ),
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true5"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source": {"selector": "test in {'true', 'false'}"},
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination": {"selector": "test in {'true', 'false'}"}},
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "true"},
+                 True
+                 ),
 
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true6"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source": {"selector": "test in {'true', 'false'}"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination": {"selector": "test in {'true', 'false'}"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "false"},
-         True
-         ),
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true6"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source": {"selector": "test in {'true', 'false'}"},
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination": {"selector": "test in {'true', 'false'}"}},
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "false"},
+                 True
+                 ),
 
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true7"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source": {"selector": "test not in {'true', 'false'}"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination": {"selector": "test not in {'true', 'false'}"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "neither"},
-         False
-         ),
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true7"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source": {"selector": "test not in {'true', 'false'}"},
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination": {"selector": "test not in {'true', 'false'}"}},
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "neither"},
+                 False
+                 ),
 
-        ([{"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true8a"},
-           "spec":
-               {
-                   "tier": "default",
-                   "selector": "test == 'true'",
-                   "ingress": [
-                       {"action": "Deny"},
-                   ],
-                   "egress": [
-                       {"action": "Deny"},
-                   ]
-               }
-           },
-          {"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true8b"},
-           "spec":
-               {
-                   "tier": "default",
-                   "ingress": [
-                       {"action": "Allow"},
-                   ],
-                   "egress": [
-                       {"action": "Allow"},
-                   ]
-               }
-           }
-          ],
-         {"test": "true"},
-         True
-         ),
+                ([{"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true8a"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "selector": "test == 'true'",
+                       "ingress": [
+                           {"action": "Deny"},
+                       ],
+                       "egress": [
+                           {"action": "Deny"},
+                       ]
+                   }
+                   },
+                  {"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true8b"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "ingress": [
+                           {"action": "Allow"},
+                       ],
+                       "egress": [
+                           {"action": "Allow"},
+                       ]
+                   }
+                   }
+                  ],
+                 {"test": "true"},
+                 True
+                 ),
 
-        ([{"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true9a"},
-           "spec":
-               {
-                   "tier": "default",
-                   "selector": "test != 'true'",
-                   "ingress": [
-                       {"action": "Deny"},
-                   ],
-                   "egress": [
-                       {"action": "Deny"},
-                   ]
-               }
-           },
-          {"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true9b"},
-           "spec":
-               {
-                   "tier": "default",
-                   "ingress": [
-                       {"action": "Allow"},
-                   ],
-                   "egress": [
-                       {"action": "Allow"},
-                   ]
-               }
-           }
-          ],
-         {"test": "true"},
-         False
-         ),
+                ([{"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true9a"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "selector": "test != 'true'",
+                       "ingress": [
+                           {"action": "Deny"},
+                       ],
+                       "egress": [
+                           {"action": "Deny"},
+                       ]
+                   }
+                   },
+                  {"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true9b"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "ingress": [
+                           {"action": "Allow"},
+                       ],
+                       "egress": [
+                           {"action": "Allow"},
+                       ]
+                   }
+                   }
+                  ],
+                 {"test": "true"},
+                 False
+                 ),
 
-        ([{"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true10a"},
-           "spec":
-               {
-                   "tier": "default",
-                   "selector": "has(test)",
-                   "ingress": [
-                       {"action": "Deny"},
-                   ],
-                   "egress": [
-                       {"action": "Deny"},
-                   ]
-               }
-           },
-          {"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true10b"},
-           "spec":
-               {
-                   "tier": "default",
-                   "ingress": [
-                       {"action": "Allow"},
-                   ],
-                   "egress": [
-                       {"action": "Allow"},
-                   ]
-               }
-           }
-          ],
-         {"test": "true"},
-         True
-         ),
+                ([{"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true10a"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "selector": "has(test)",
+                       "ingress": [
+                           {"action": "Deny"},
+                       ],
+                       "egress": [
+                           {"action": "Deny"},
+                       ]
+                   }
+                   },
+                  {"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true10b"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "ingress": [
+                           {"action": "Allow"},
+                       ],
+                       "egress": [
+                           {"action": "Allow"},
+                       ]
+                   }
+                   }
+                  ],
+                 {"test": "true"},
+                 True
+                 ),
 
-        ([{"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true11a"},
-           "spec":
-               {
-                   "tier": "default",
-                   "selector": "!has(test)",
-                   "ingress": [
-                       {"action": "Deny"},
-                   ],
-                   "egress": [
-                       {"action": "Deny"},
-                   ]
-               }
-           },
-          {"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true11b"},
-           "spec":
-               {
-                   "tier": "default",
-                   "ingress": [
-                       {"action": "Allow"},
-                   ],
-                   "egress": [
-                       {"action": "Allow"},
-                   ]
-               }
-           }
-          ],
-         {"test": "true"},
-         False
-         ),
+                ([{"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true11a"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "selector": "!has(test)",
+                       "ingress": [
+                           {"action": "Deny"},
+                       ],
+                       "egress": [
+                           {"action": "Deny"},
+                       ]
+                   }
+                   },
+                  {"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true11b"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "ingress": [
+                           {"action": "Allow"},
+                       ],
+                       "egress": [
+                           {"action": "Allow"},
+                       ]
+                   }
+                   }
+                  ],
+                 {"test": "true"},
+                 False
+                 ),
 
-        ([{"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true12a"},
-           "spec":
-               {
-                   "tier": "default",
-                   "selector": "test in {'true', 'false'}",
-                   "ingress": [
-                       {"action": "Deny"},
-                   ],
-                   "egress": [
-                       {"action": "Deny"},
-                   ]
-               }
-           },
-          {"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true12b"},
-           "spec":
-               {
-                   "tier": "default",
-                   "ingress": [
-                       {"action": "Allow"},
-                   ],
-                   "egress": [
-                       {"action": "Allow"},
-                   ]
-               }
-           }
-          ],
-         {"test": "true"},
-         True
-         ),
+                ([{"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true12a"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "selector": "test in {'true', 'false'}",
+                       "ingress": [
+                           {"action": "Deny"},
+                       ],
+                       "egress": [
+                           {"action": "Deny"},
+                       ]
+                   }
+                   },
+                  {"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true12b"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "ingress": [
+                           {"action": "Allow"},
+                       ],
+                       "egress": [
+                           {"action": "Allow"},
+                       ]
+                   }
+                   }
+                  ],
+                 {"test": "true"},
+                 True
+                 ),
 
-        ([{"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true13a"},
-           "spec":
-               {
-                   "tier": "default",
-                   "selector": "test in {'true', 'false'}",
-                   "ingress": [
-                       {"action": "Deny"},
-                   ],
-                   "egress": [
-                       {"action": "Deny"},
-                   ]
-               }
-           },
-          {"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true13b"},
-           "spec":
-               {
-                   "tier": "default",
-                   "ingress": [
-                       {"action": "Allow"},
-                   ],
-                   "egress": [
-                       {"action": "Allow"},
-                   ]
-               }
-           }
-          ],
-         {"test": "false"},
-         True
-         ),
+                ([{"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true13a"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "selector": "test in {'true', 'false'}",
+                       "ingress": [
+                           {"action": "Deny"},
+                       ],
+                       "egress": [
+                           {"action": "Deny"},
+                       ]
+                   }
+                   },
+                  {"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true13b"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "ingress": [
+                           {"action": "Allow"},
+                       ],
+                       "egress": [
+                           {"action": "Allow"},
+                       ]
+                   }
+                   }
+                  ],
+                 {"test": "false"},
+                 True
+                 ),
 
-        ([{"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true14a"},
-           "spec":
-               {
-                   "tier": "default",
-                   "selector": "test not in {'true', 'false'}",
-                   "ingress": [
-                       {"action": "Deny"},
-                   ],
-                   "egress": [
-                       {"action": "Deny"},
-                   ]
-               }
-           },
-          {"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true14b"},
-           "spec":
-               {
-                   "tier": "default",
-                   "ingress": [
-                       {"action": "Allow"},
-                   ],
-                   "egress": [
-                       {"action": "Allow"},
-                   ]
-               }
-           }
-          ],
-         {"test": "neither"},
-         False
-         ),
+                ([{"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true14a"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "selector": "test not in {'true', 'false'}",
+                       "ingress": [
+                           {"action": "Deny"},
+                       ],
+                       "egress": [
+                           {"action": "Deny"},
+                       ]
+                   }
+                   },
+                  {"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true14b"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "ingress": [
+                           {"action": "Allow"},
+                       ],
+                       "egress": [
+                           {"action": "Allow"},
+                       ]
+                   }
+                   }
+                  ],
+                 {"test": "neither"},
+                 False
+                 ),
 
-        ([{"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true15a"},
-           "spec":
-               {
-                   "tier": "default",
-                   "selector": "has(test) && test in {'true', 'false'} && test == 'true'",
-                   "ingress": [
-                       {"action": "Deny"},
-                   ],
-                   "egress": [
-                       {"action": "Deny"},
-                   ]
-               }
-           },
-          {"apiVersion": "projectcalico.org/v3",
-           "kind": "GlobalNetworkPolicy",
-           "metadata": {"name": "default.deny-test-true15b"},
-           "spec":
-               {
-                   "tier": "default",
-                   "ingress": [
-                       {"action": "Allow"},
-                   ],
-                   "egress": [
-                       {"action": "Allow"},
-                   ]
-               }
-           }
-          ],
-         {"test": "true"},
-         True
-         ),
+                ([{"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true15a"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "selector": "has(test) && test in {'true', 'false'} && test == 'true'",
+                       "ingress": [
+                           {"action": "Deny"},
+                       ],
+                       "egress": [
+                           {"action": "Deny"},
+                       ]
+                   }
+                   },
+                  {"apiVersion": "projectcalico.org/v3",
+                   "kind": "GlobalNetworkPolicy",
+                   "metadata": {"name": "default.deny-test-true15b"},
+                   "spec":
+                   {
+                       "tier": "default",
+                       "ingress": [
+                           {"action": "Allow"},
+                       ],
+                       "egress": [
+                           {"action": "Allow"},
+                       ]
+                   }
+                   }
+                  ],
+                 {"test": "true"},
+                 True
+                 ),
 
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true16"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source":
-                      {"selector": "has(test) && test in {'True', 'False'} && test == 'True'"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination":
-                       {"selector": "has(test) && test in {'True', 'False'} && test == 'True'"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "True"},
-         True
-         ),
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true16"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source":
+                          {"selector": "has(test) && test in {'True', 'False'} && test == 'True'"},
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination":
+                           {"selector": "has(test) && test in {'True', 'False'} && test == 'True'"}},
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "True"},
+                 True
+                 ),
 
-        ({"apiVersion": "projectcalico.org/v3",
-          "kind": "GlobalNetworkPolicy",
-          "metadata": {"name": "default.deny-test-true17"},
-          "spec": {
-              "tier": "default",
-              "ingress": [{
-                  "action": "Deny",
-                  "source":
-                      {"selector":
+                ({"apiVersion": "projectcalico.org/v3",
+                  "kind": "GlobalNetworkPolicy",
+                  "metadata": {"name": "default.deny-test-true17"},
+                  "spec": {
+                      "tier": "default",
+                      "ingress": [{
+                          "action": "Deny",
+                          "source":
+                          {"selector":
                            "has(test) && test not in {'True', 'False'} && test == 'Sausage'"},
-              },
-                  {"action": "Allow"}
-              ],
-              "egress": [
-                  {"action": "Deny",
-                   "destination":
-                       {"selector":
+                      },
+                                  {"action": "Allow"}
+                                  ],
+                      "egress": [
+                          {"action": "Deny",
+                           "destination":
+                           {"selector":
                             "has(test) && test not in {'True', 'False'} && test == 'Sausage'"}},
-                  {"action": "Allow"}
-              ]},
-          },
-         {"test": "Sausage"},
-         True
-         ),
-    ])
-    def test_selectors(self, policy, workload_label, no_label_expected_result):
+                          {"action": "Allow"}
+                      ]},
+                  },
+                 {"test": "Sausage"},
+                 True
+                 ),
+        ]:
+            with self.subTest(policy=policy, workload_label=workload_label, no_label_expected_result=no_label_expected_result):
+                self._test_selectors(policy, workload_label, no_label_expected_result)
+
+    def _test_selectors(self, policy, workload_label, no_label_expected_result):
         """
         Tests selectors in policy.
         :param policy: The policy to apply
