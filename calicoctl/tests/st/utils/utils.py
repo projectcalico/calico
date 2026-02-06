@@ -21,8 +21,6 @@ from datetime import datetime
 from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
 
-import termios
-
 import json
 import logging
 from pprint import pformat
@@ -443,12 +441,6 @@ def get_ip(v6=False):
     return ip
 
 
-# Some of the commands we execute like to mess with the TTY configuration,
-# which can break the output formatting. As a workaround, save off the
-# terminal settings and restore them after each command.
-_term_settings = termios.tcgetattr(sys.stdin.fileno())
-
-
 def log_and_run(command, raise_exception_on_failure=True, stderr=STDOUT):
     def log_output(results):
         if results is None:
@@ -460,14 +452,7 @@ def log_and_run(command, raise_exception_on_failure=True, stderr=STDOUT):
 
     try:
         logger.info("%s", command)
-        try:
-            results = check_output(command, shell=True, stderr=stderr).rstrip()
-        finally:
-            # Restore terminal settings in case the command we ran manipulated
-            # them. Note: under concurrent access, this is still not a perfect
-            # solution since another thread's child process may break the
-            # settings again before we log below.
-            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _term_settings)
+        results = check_output(command, shell=True, stderr=stderr).rstrip()
         log_output(results)
         return results
     except CalledProcessError as e:
