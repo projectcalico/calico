@@ -190,7 +190,7 @@ var _ = Describe("Status", func() {
 					defer datastore.mutex.Unlock()
 					return datastore.workloadsListed
 				}).Should(BeTrue())
-			}, 1)
+			})
 			It("should not coalesce flapping workload EP updates", func() {
 				epUpdates <- &wlEPUpdateUp   // tick #1
 				epUpdates <- &wlEPUpdateUp   // no change, ignored

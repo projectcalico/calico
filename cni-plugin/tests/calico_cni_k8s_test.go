@@ -3267,7 +3267,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	Describe("testConnection tests", func() {
-		It("successfully connects to the datastore", func(done Done) {
+		It("successfully connects to the datastore", func() {
 			netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
@@ -3300,10 +3300,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			_, err = c.CombinedOutput()
 			Expect(err).ToNot(HaveOccurred())
-			close(done)
 		})
 
-		It("reports it cannot connect to the datastore", func(done Done) {
+		It("reports it cannot connect to the datastore", func() {
 			// wrong port(s).
 			netconf := fmt.Sprintf(`
 			{
@@ -3338,7 +3337,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			_, err = c.CombinedOutput()
 			Expect(err).To(HaveOccurred())
-			close(done)
 		})
 	})
 
