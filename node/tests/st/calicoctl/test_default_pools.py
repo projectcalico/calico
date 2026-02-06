@@ -16,7 +16,7 @@ import logging
 
 import netaddr
 import yaml
-from nose_parameterized import parameterized
+from parameterized import parameterized
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS, NODE_CONTAINER_NAME

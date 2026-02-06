@@ -444,8 +444,7 @@ def add_on_failure(fn):
 
 def handle_failure(fn):
     """
-    Decorator for test methods so that, if they fail, they immediately print
-    information about the problem and run any defined on_failure functions.
+    Decorator for test methods so that, if they fail, they immediately print(information about the problem and run any defined on_failure functions.)
     :param fn: The function to decorate.
     :return: The decorated function.
     """

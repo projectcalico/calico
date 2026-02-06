@@ -53,10 +53,10 @@ RUN apk add --no-cache \
     musl-dev \
     netcat-openbsd \
     openssl-dev \
-    py-setuptools \
-    py2-pip \
-    python \
-    python-dev \
+    py3-setuptools \
+    py3-pip \
+    python3 \
+    python3-dev \
     tshark
 
 # Install etcdctl
@@ -64,7 +64,7 @@ RUN curl -sfL https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/e
     tar xz --strip-components 1 -C /usr/local/bin etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl
 
 COPY requirements.txt /requirements.txt
-RUN pip install -r /requirements.txt
+RUN pip3 install -r /requirements.txt
 
 # The container is used by mounting the code-under-test to /code
 WORKDIR /code/
