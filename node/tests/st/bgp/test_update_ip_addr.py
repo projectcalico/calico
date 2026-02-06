@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
-from nose.plugins.attrib import attr
+import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 
 class TestUpdateIPAddress(TestBase):
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_update_ip_address(self):
         """
         Test updating the IP address automatically updates and fixes the

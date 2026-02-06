@@ -275,17 +275,17 @@ class TestDisableBGPExport(TestBase):
             # Verify that pool2 and pool3 are exported and pool1 is not
             output = host1.execute("docker exec calico-node birdcl show route export %s" % nameHost2)
             for pool in [ '192.168.2.0/24', '192.168.3.0/24' ]:
-                self.assertRegexpMatches(output, _get_re_from_pool(pool),
-                                         "pool '%s' should be present in 'birdcl show route export' output" % pool)
+                self.assertRegex(output, _get_re_from_pool(pool),
+                                 "pool '%s' should be present in 'birdcl show route export' output" % pool)
             for pool in [ '192.168.1.0/24' ]:
-                self.assertNotRegexpMatches(output, _get_re_from_pool(pool),
-                                            "pool '%s' should not be present in 'birdcl show route export' output" % pool)
+                self.assertNotRegex(output, _get_re_from_pool(pool),
+                                    "pool '%s' should not be present in 'birdcl show route export' output" % pool)
 
             # Verify that pool1 is filtered from being exported and pool2 and pool3 are not
             output = host1.execute("docker exec calico-node birdcl show route noexport %s" % nameHost2)
             for pool in [ '192.168.1.0/24' ]:
-                self.assertRegexpMatches(output, _get_re_from_pool(pool),
-                                         "pool '%s' should be present in 'birdcl show route noexport' output" % pool)
+                self.assertRegex(output, _get_re_from_pool(pool),
+                                 "pool '%s' should be present in 'birdcl show route noexport' output" % pool)
             for pool in [ '192.168.2.0/24', '192.168.3.0/24' ]:
-                self.assertNotRegexpMatches(output, _get_re_from_pool(pool),
-                                            "pool '%s' should not be present in 'birdcl show route noexport' output" % pool)
+                self.assertNotRegex(output, _get_re_from_pool(pool),
+                                    "pool '%s' should not be present in 'birdcl show route noexport' output" % pool)
