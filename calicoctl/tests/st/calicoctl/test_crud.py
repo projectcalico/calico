@@ -15,7 +15,7 @@ import logging
 import copy
 import os
 
-from parameterized import parameterized
+import pytest
 
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
@@ -596,7 +596,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("get workloadendpoints -o yaml")
         rc.assert_empty_list("WorkloadEndpoint")
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("data", [
         (ippool_name1_rev1_v4,),
         (ipresv_name1_rev1_v4,),
         (profile_name1_rev1,),
@@ -609,14 +609,13 @@ class TestCalicoctlCommands(TestBase):
         (node_name1_rev1,),
         (tier_name1_rev1,),
     ])
-
     def test_non_namespaced(self, data):
         """
         Test namespace is handled as expected for each non-namespaced resource type.
         """
         return self._test_non_namespaced(data)
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("data", [
         (globalnetworkpolicy_tiered_name2_rev1,),
         (stagedglobalnetworkpolicy_tiered_name2_rev1,),
     ])
@@ -695,7 +694,7 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("data", [
         (globalnetworkset_name1_rev1_large,),
         (networkset_name1_rev1_large,),
     ])
@@ -715,7 +714,7 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("data", [
         (globalnetworkset_name1_rev1,),
         (networkset_name1_rev1,),
     ])
@@ -730,7 +729,7 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rc.assert_output_contains("10.0.0.1,11.0.0.0/16,feed:beef::1,dead:beef::96")
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("data", [
         (networkpolicy_name1_rev1,),
         (stagednetworkpolicy_name1_rev1,),
         (networkset_name1_rev1,),
@@ -742,7 +741,7 @@ class TestCalicoctlCommands(TestBase):
         """
         self._test_namespaced(data)
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("data", [
         (networkpolicy_tiered_name2_rev1,),
         (stagednetworkpolicy_tiered_name2_rev1,),
     ])
@@ -1033,7 +1032,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete kubecontrollersconfig %s" % name(rev2))
         rc.assert_no_error()
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("create_cmd,update_cmd", [
         ('create', 'replace'),
         ('apply', 'apply'),
     ])
@@ -1252,7 +1251,7 @@ class TestCalicoctlCommands(TestBase):
         # Delete the resources
         rc = calicoctl("delete", data=resources)
 
-    @parameterized.expand([
+    @pytest.mark.parametrize("update_cmd", [
         ('replace'),
         ('apply'),
     ])
@@ -2777,7 +2776,7 @@ class InvalidData(TestBase):
     def setUp(self):
         super(InvalidData, self).setUp()
 
-    @parameterized.expand(testdata)
+    @pytest.mark.parametrize("name,testdata,error", testdata)
     def test_invalid_profiles_rejected(self, name, testdata, error):
 
         log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
@@ -2793,7 +2792,7 @@ class InvalidData(TestBase):
         # Assert that we saw the correct error being reported
         ctl.assert_error(error)
 
-    @parameterized.expand(compound_test_data)
+    @pytest.mark.parametrize("name,testdata,errors", compound_test_data)
     def test_invalid_compound_profiles_rejected(self, name, testdata, errors):
 
         log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))

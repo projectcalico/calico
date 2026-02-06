@@ -15,8 +15,6 @@ import logging
 import copy
 import os
 
-from parameterized import parameterized
-
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
     API_VERSION, name, namespace, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
