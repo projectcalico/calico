@@ -2,8 +2,11 @@ atomicwrites==1.4.1
 attrs==25.4.0
 cachetools==7.0.0
 chardet==5.2.0
+configparser
+contextlib2
 deepdiff==8.6.1
 google-auth==2.48.0
+importlib-metadata
 jsonpickle==4.1.1
 kubernetes==35.0.0
 more-itertools==10.8.0
@@ -15,6 +18,7 @@ pyasn1-modules==0.4.2
 pyasn1==0.6.2
 #pyparsing - already provided by Alpine
 pytest==9.0.2
+pytest-timeout
 python-dateutil==2.9.0.post0
 PyYAML==6.0.3
 requests-oauthlib==2.0.0

@@ -17,7 +17,7 @@ import random
 import netaddr
 import time
 import yaml
-from nose_parameterized import parameterized
+from parameterized import parameterized
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -166,7 +166,7 @@ class MultiHostIpam(TestBase):
                                             network=self.network)
             workload_ips.append(workload.ip)
 
-        print workload_ips
+        print(workload_ips)
 
         for ip in ipv4_subnet:
             response = self.hosts[0].calicoctl("ipam show --ip=%s" % ip)

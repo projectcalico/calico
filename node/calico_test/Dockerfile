@@ -56,6 +56,7 @@ RUN apk add --no-cache \
     musl-dev \
     netcat-openbsd \
     openssl-dev \
+    py3-setuptools \
     py3-pip \
     python3 \
     python3-dev \

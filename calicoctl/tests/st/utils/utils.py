@@ -97,7 +97,7 @@ class CalicoctlOutput:
         cleaned = clean_calico_data(self.decoded)
 
         print(self.decoded)
-        assert cmp(cleaned, data) == 0, \
+        assert cleaned == data, \
             "Items are not the same.  Difference is:\n %s" % \
             pformat(DeepDiff(cleaned, data), indent=2)
 
@@ -314,7 +314,7 @@ def clean_calico_data(data, extra_keys_to_remove=None):
             if extra_keys is not None:
                 for extra_key in extra_keys:
                     del_keys.append(extra_key)
-            for k, v in elem.iteritems():
+            for k, v in elem.items():
                 clean_elem(v, extra_keys)
                 if v is None or v == {}:
                     del_keys.append(k)
@@ -372,7 +372,7 @@ def decode_json_yaml(value):
 def find_and_format_creation_timestamp(decoded):
     if decoded:
         if 'items' in decoded:
-            for i in xrange(len(decoded['items'])):
+            for i in range(len(decoded['items'])):
                 decoded['items'][i] = format_creation_timestamp(decoded['items'][i])
         else:
             decoded = format_creation_timestamp(decoded)
