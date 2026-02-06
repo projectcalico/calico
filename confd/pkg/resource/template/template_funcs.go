@@ -16,6 +16,8 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 func newFuncMap() map[string]interface{} {
@@ -40,6 +42,7 @@ func newFuncMap() map[string]interface{} {
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
 	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
+	m["ippoolsFilterBIRDFunc"] = IPPoolsFilterBIRDFunc
 	return m
 }
 
@@ -401,6 +404,127 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 		lines = append(lines, line)
 	}
 	return lines, nil
+}
+
+// This function generates BIRD statements for IPPool resources to be used as BIRD filters based on the following input:
+//   - pairs: IPPool resources packaged into KVPairs.
+//   - targetAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
+//     first reject disabled ippool, and then accept the rest at the end after all other filters. Allowed values are
+//     "accept", "reject", and "" (to not filter).
+//   - forProgrammingKernel: Whether the generated statemens are intended for programming routes to kernel or exporting to
+//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
+//   - version: the statment ip family.
+//
+// As an example, For the following sample IPPool resource:
+//
+// apiVersion: projectcalico.org/v3
+// kind: IPPool
+// metadata:
+//
+//	name: my.ippool-1
+//
+// spec:
+//
+//	cidr: 10.1.0.0/16
+//	ipipMode: Always
+//
+// this function generates the following statement for programming routes to kernel:
+//
+//	if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }
+//
+// and the following statement for exporting to BGP peers:
+//
+//	if (net ~ 10.10.0.0/16) then { accept; }
+func IPPoolsFilterBIRDFunc(
+	pairs memkv.KVPairs,
+	targetAction string,
+	forProgrammingKernel bool,
+	version int,
+) ([]string, error) {
+	if version != 4 && version != 6 {
+		return []string{}, fmt.Errorf("version must be either 4 or 6")
+	}
+
+	lines := []string{}
+	for _, kvp := range pairs {
+		var ippool model.IPPool
+		err := json.Unmarshal([]byte(kvp.Value), &ippool)
+		if err != nil {
+			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
+		}
+
+		cidr := ippool.CIDR.String()
+		var action, comment, extraStatement string
+		switch {
+		case ippool.DisableBGPExport && !forProgrammingKernel:
+			// IPPool's BGP export is disabled, and filter is for exporting to other peers.
+			action = "reject"
+			comment = "BGP export is disabled."
+		case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
+			// VXLAN encapsulation is always handled by Felix.
+			action = "reject"
+			comment = "VXLAN routes are handled by Felix."
+		default:
+			// IPIP encapsulation or No-Encap.
+			if forProgrammingKernel && version == 4 {
+				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, cidr)
+			}
+			action = "accept"
+		}
+
+		if !forProgrammingKernel && len(targetAction) != 0 && targetAction != action {
+			continue
+		}
+		lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment))
+	}
+	if len(lines) == 0 {
+		var line string
+		switch targetAction {
+		case "accept", "reject":
+			line = formatComment(fmt.Sprintf("No v%d %s filter generated", version, targetAction))
+		case "":
+			line = formatComment(fmt.Sprintf("No v%d IPPool configured", version))
+		default:
+			return nil, fmt.Errorf("unknown target action %s", targetAction)
+		}
+		lines = append(lines, line)
+	}
+	return lines, nil
+}
+
+func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, cidr string) string {
+	switch v3.EncapMode(ipipMode) {
+	case v3.Always:
+		return `krt_tunnel="tunl0";`
+	case v3.CrossSubnet:
+		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
+		return fmt.Sprintf(format, cidr)
+	case v3.Undefined:
+		// No-encap case.
+		return `krt_tunnel="";`
+	default:
+		return ``
+	}
+}
+
+func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string) (statement string) {
+	// Check mandatory inputs.
+	if len(cidr) == 0 || len(action) == 0 {
+		return
+	}
+	if len(extraStatement) != 0 {
+		statement = fmt.Sprintf("if (net ~ %s) then { %s %s; }", cidr, extraStatement, action)
+	} else {
+		statement = fmt.Sprintf("if (net ~ %s) then { %s; }", cidr, action)
+	}
+	if len(comment) != 0 {
+		statement = fmt.Sprintf("%s %s", statement, formatComment(comment))
+	}
+	return
+}
+
+func formatComment(comment string) string {
+	return fmt.Sprintf("# %s", comment)
 }
 
 // Getenv retrieves the value of the environment variable named by the key.
