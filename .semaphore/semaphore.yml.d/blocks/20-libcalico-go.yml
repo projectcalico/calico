@@ -19,9 +19,9 @@
           - name: STORE_BUILD_CACHE
             value: "true"
 
-      - name: "libcalico-go: FV (projectcalico.org/v3)"
+      - name: "libcalico-go: CI (projectcalico.org/v3)"
         commands:
-          - ../.semaphore/run-and-monitor fv-pcv3.log make fv
+          - ../.semaphore/run-and-monitor make-ci.log make ci
         env_vars:
           - name: STORE_BUILD_CACHE
             value: "true"
