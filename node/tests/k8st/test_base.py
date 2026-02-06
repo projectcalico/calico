@@ -229,33 +229,6 @@ class TestBase(TestCase):
     def get_routes(self):
         return run("docker exec kube-node-extra ip r")
 
-    def update_ds_env(self, ds, ns, env_vars):
-        config.load_kube_config(os.environ.get('KUBECONFIG'))
-        api = client.AppsV1Api(client.ApiClient())
-        node_ds = api.read_namespaced_daemon_set(ds, ns, exact=True, export=False)
-        for container in node_ds.spec.template.spec.containers:
-            if container.name == ds:
-                for k, v in env_vars.items():
-                    logger.info("Set %s=%s", k, v)
-                    env_present = False
-                    for env in container.env:
-                        if env.name == k:
-                            env_present = True
-                    if not env_present:
-                        v1_ev = client.V1EnvVar(name=k, value=v, value_from=None)
-                        container.env.append(v1_ev)
-        api.replace_namespaced_daemon_set(ds, ns, node_ds)
-
-        # Wait until the DaemonSet reports that all nodes have been updated.
-        while True:
-            time.sleep(10)
-            node_ds = api.read_namespaced_daemon_set_status("calico-node", "calico-system")
-            logger.info("%d/%d nodes updated",
-                      node_ds.status.updated_number_scheduled,
-                      node_ds.status.desired_number_scheduled)
-            if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
-                break
-
     def scale_deployment(self, deployment, ns, replicas):
         return kubectl("scale deployment %s -n %s --replicas %s" %
                        (deployment, ns, replicas)).strip()
