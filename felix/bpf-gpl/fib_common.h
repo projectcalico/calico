@@ -46,7 +46,7 @@ static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 			return false;
 		}
 		if (iface_is_workload(val->flags) && !iface_is_ready(val->flags)) {
-			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_FIB;
+			ctx->state->fwd.mark |= CALI_SKB_MARK_SKIP_FIB;
 			CALI_DEBUG("FIB not approved - connection to unready ep %s (ifindex %d) not confirmed.",
 					val->name, ifindex);
 			CALI_DEBUG("FIB not approved - connection to unready ep %s (flags 0x%x) not confirmed.",
