@@ -279,7 +279,7 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdou
         output = log_and_run(full_cmd, stderr=(None if only_stdout else STDOUT))
         return CalicoctlOutput(full_cmd, output)
     except CalledProcessError as e:
-        return CalicoctlOutput(full_cmd, e.output, error=e.returncode)
+        return CalicoctlOutput(full_cmd, e.output.decode(), error=e.returncode)
 
 
 def clean_calico_data(data, extra_keys_to_remove=None):
@@ -598,4 +598,4 @@ def set_cluster_version(calico_version="", kdd=False):
         output = log_and_run(full_cmd, stderr=STDOUT)
         return CalicoctlOutput(full_cmd, output)
     except CalledProcessError as e:
-        return CalicoctlOutput(full_cmd, e.output, error=e.returncode)
+        return CalicoctlOutput(full_cmd, e.output.decode(), error=e.returncode)
