@@ -64,6 +64,7 @@ type ProxyFrontend interface {
 type DPSyncerState struct {
 	SvcMap   k8sp.ServicePortMap
 	EpsMap   k8sp.EndpointsMap
+	Hostname string
 	NodeZone string
 }
 
@@ -287,6 +288,7 @@ func (p *proxy) invokeDPSyncer() error {
 	err := p.dpSyncer.Apply(DPSyncerState{
 		SvcMap:   p.svcMap,
 		EpsMap:   p.epsMap,
+		Hostname: p.hostname,
 		NodeZone: p.nodeZone,
 	})
 	p.syncerLck.Unlock()
@@ -443,12 +445,14 @@ type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
 	UseMaglev() bool
+	TopologyMode() string
 }
 
 type servicePortAnnotations struct {
 	reapTerminatingUDP bool
 	excludeService     bool
 	useMaglev          bool
+	topologyMode       string
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -461,6 +465,10 @@ func (s *servicePortAnnotations) ExcludeService() bool {
 
 func (s *servicePortAnnotations) UseMaglev() bool {
 	return s.useMaglev
+}
+
+func (s *servicePortAnnotations) TopologyMode() string {
+	return s.topologyMode
 }
 
 type servicePort struct {
@@ -486,6 +494,10 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 
 	if a, ok := s.Annotations[ExternalTrafficStrategyAnnotation]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
 		svc.useMaglev = true
+	}
+
+	if v, ok := s.Annotations[v1.AnnotationTopologyMode]; ok {
+		svc.topologyMode = v
 	}
 
 out:
