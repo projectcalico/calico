@@ -216,7 +216,14 @@ skip_redir_ifindex:
 #endif
 
 			rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), fib_flags);
-			state->ct_result.ifindex_fwd = fib_params(ctx)->ifindex;
+			switch (rc) {
+			case 0:
+			case BPF_FIB_LKUP_RET_NO_NEIGH:
+				state->ct_result.ifindex_fwd = fib_params(ctx)->ifindex;
+				break;
+			default:
+				goto try_fib_external;
+			}
 		}
 
 		if (cali_rt_flags_local_workload(dest_rt->flags)) {
