@@ -43,7 +43,7 @@ class TestBGP(TestBase):
             # Set the global-default AS number.
             update_bgp_config(host, asNum=12345)
 
-            self.assertEquals(get_bgp_spec(host)['asNumber'], 12345)
+            self.assertEqual(get_bgp_spec(host)['asNumber'], 12345)
 
             with self.assertRaises(CommandExecError):
                 update_bgp_config(host, asNum=99999999999999999999999)
@@ -52,13 +52,13 @@ class TestBGP(TestBase):
 
             # Check BGP mesh command
             if 'nodeToNodeMeshEnabled' in get_bgp_spec(host):
-                self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
+                self.assertEqual(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
 
             update_bgp_config(host, nodeMesh=False)
-            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], False)
+            self.assertEqual(get_bgp_spec(host)['nodeToNodeMeshEnabled'], False)
 
             update_bgp_config(host, nodeMesh=True)
-            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
+            self.assertEqual(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
 
     @pytest.mark.slow
     def _test_as_num(self, backend='bird'):
