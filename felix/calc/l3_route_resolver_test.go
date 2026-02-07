@@ -154,6 +154,17 @@ var _ = Describe("L3RouteResolver", func() {
 			}
 			Expect(info.AddressesAsCIDRs()).To(Equal([]ip.CIDR{}))
 		})
+		It("should not panic on nil addresses in AddressesAsCIDRs()", func() {
+			// Test for issue #11384: SIGSEGV on null address
+			// When ExternalIP is empty, a nil ip.Addr can end up in the Addresses slice.
+			// The nil check should prevent a panic when AsCIDR() is called.
+			info := l3rrNodeInfo{
+				Addresses: []ip.Addr{nil, ip.FromString("192.168.0.1"), nil},
+			}
+			cidrs := info.AddressesAsCIDRs()
+			Expect(cidrs).To(HaveLen(1))
+			Expect(cidrs[0].String()).To(Equal("192.168.0.1/32"))
+		})
 		It("should consider VXLANV6Addr in Equal() method", func() {
 			info1 := l3rrNodeInfo{
 				VXLANV6Addr: ip.FromString("dead:beef::1"),
