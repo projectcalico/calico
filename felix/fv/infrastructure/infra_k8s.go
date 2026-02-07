@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -209,7 +209,7 @@ func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
 		kds.bpfLog = RunBPFLog(kds, kds.bpfLogByteLimit)
 	}
-	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
+	K8sInfra[index].runningTest = ginkgo.CurrentSpecReport().FullText()
 }
 
 type CleanupProvider interface {
@@ -602,7 +602,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 
 	// We do run the per-test cleanup stack, this tears down the resources that
 	// the test created.
-	if ginkgo.CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentSpecReport().Failed() {
 		// Queue up the diags dump so that the cleanupStack will handle any
 		// panic from it.
 		kds.AddCleanup(kds.DumpErrorData)
