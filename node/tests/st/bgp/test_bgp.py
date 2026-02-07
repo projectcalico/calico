@@ -89,8 +89,8 @@ class TestReadiness(TestBase):
             host1.execute("docker exec -i calico-node sv stop /etc/service/enabled/bird")
 
             # Check that the readiness script is reporting 'not ready'
-            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: bird/confd is not live: service bird is not running.",
-                                host1.execute, "docker exec calico-node /bin/calico-node -bird-live")
+            self.assertRaisesRegex(CalledProcessError, "calico/node is not ready: bird/confd is not live: service bird is not running.",
+                                   host1.execute, "docker exec calico-node /bin/calico-node -bird-live")
 
     def test_liveness_bird_confd_down(self):
         """
@@ -102,8 +102,8 @@ class TestReadiness(TestBase):
             host1.execute("docker exec -i calico-node sv stop /etc/service/enabled/confd")
 
             # Check that the readiness script is reporting 'not ready'
-            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: bird/confd is not live: service confd is not running.",
-                                    host1.execute, "docker exec calico-node /bin/calico-node -bird-live")
+            self.assertRaisesRegex(CalledProcessError, "calico/node is not ready: bird/confd is not live: service confd is not running.",
+                                   host1.execute, "docker exec calico-node /bin/calico-node -bird-live")
 
     def test_liveness_bird6_down(self):
         """
@@ -115,8 +115,8 @@ class TestReadiness(TestBase):
             host1.execute("docker exec -i calico-node sv stop /etc/service/enabled/bird6")
 
             # Check that the readiness script is reporting 'not ready'
-            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: bird6/confd is not live: service bird6 is not running.",
-                                    host1.execute, "docker exec calico-node /bin/calico-node -bird6-live")
+            self.assertRaisesRegex(CalledProcessError, "calico/node is not ready: bird6/confd is not live: service bird6 is not running.",
+                                   host1.execute, "docker exec calico-node /bin/calico-node -bird6-live")
 
     def test_liveness_bird6_confd_down(self):
         """
@@ -128,8 +128,8 @@ class TestReadiness(TestBase):
             host1.execute("docker exec -i calico-node sv stop /etc/service/enabled/confd")
 
             # Check that the readiness script is reporting 'not ready'
-            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: bird/confd is not live: service confd is not running.",
-                                host1.execute, "docker exec calico-node /bin/calico-node -bird-live")
+            self.assertRaisesRegex(CalledProcessError, "calico/node is not ready: bird/confd is not live: service confd is not running.",
+                                   host1.execute, "docker exec calico-node /bin/calico-node -bird-live")
 
     def test_not_ready_with_broken_felix(self):
         """
@@ -141,8 +141,8 @@ class TestReadiness(TestBase):
             host1.start_calico_node(env_options="-e FELIX_HEALTHENABLED=false")
 
             # Run readiness checks against felix
-            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: felix is not ready", host1.execute,
-                               "docker exec calico-node /bin/calico-node -felix-ready")
+            self.assertRaisesRegex(CalledProcessError, "calico/node is not ready: felix is not ready", host1.execute,
+                                   "docker exec calico-node /bin/calico-node -felix-ready")
 
     def test_not_ready_with_no_networking_and_broken_felix(self):
         """
@@ -154,8 +154,8 @@ class TestReadiness(TestBase):
             host1.start_calico_node(env_options="-e FELIX_HEALTHENABLED=false -e CALICO_NETWORKING_BACKEND=none")
 
             # Run readiness checks against felix
-            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: felix is not ready", host1.execute,
-                               "docker exec calico-node /bin/calico-node -felix-ready")
+            self.assertRaisesRegex(CalledProcessError, "calico/node is not ready: felix is not ready", host1.execute,
+                                   "docker exec calico-node /bin/calico-node -felix-ready")
 
     def test_bird_readiness(self):
         """
@@ -189,10 +189,10 @@ class TestReadiness(TestBase):
             host2.execute("docker exec -i calico-node sv kill bird")
 
             # Check that the readiness script is reporting 'not ready'
-            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: BIRD is not ready: BGP not established with",
-                                    host1.execute, "docker exec calico-node /bin/calico-node -bird-ready -felix-ready")
-            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: BIRD is not ready: BGP not established with",
-                                    host1.execute, "docker exec calico-node /bin/calico-node -bird-ready -felix-ready")
+            self.assertRaisesRegex(CalledProcessError, "calico/node is not ready: BIRD is not ready: BGP not established with",
+                                   host1.execute, "docker exec calico-node /bin/calico-node -bird-ready -felix-ready")
+            self.assertRaisesRegex(CalledProcessError, "calico/node is not ready: BIRD is not ready: BGP not established with",
+                                   host1.execute, "docker exec calico-node /bin/calico-node -bird-ready -felix-ready")
 
             # Restore connectivity
             host1.execute("iptables -t raw -D PREROUTING -p tcp -m multiport --dports 179 -j DROP")
