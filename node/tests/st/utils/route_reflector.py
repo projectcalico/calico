@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import os
-from docker_host import DockerHost
+from .docker_host import DockerHost
 
 from netaddr import IPAddress
 
