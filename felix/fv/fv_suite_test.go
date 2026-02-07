@@ -16,15 +16,17 @@ package fv_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"runtime/metrics"
+	"strconv"
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
@@ -46,7 +48,11 @@ func init() {
 }
 
 func TestFv(t *testing.T) {
-	RegisterFailHandler(Fail)
+	gomega.RegisterFailHandler(Fail)
+	err := configureManualSharding()
+	if err != nil {
+		t.Fatalf("Failed to configure manual sharding: %v", err)
+	}
 	// OS_RELEASE is set by run-batches. On ubuntu, it looks like 24.04.
 	osRel := os.Getenv("OS_RELEASE")
 	extraSuffix := os.Getenv("EXTRA_REPORT_SUFFIX")
@@ -68,27 +74,28 @@ func TestFv(t *testing.T) {
 	if extraSuffix != "" {
 		descSuffix += " " + extraSuffix
 	}
-	junitReporter := reporters.NewJUnitReporter(fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix))
-	RunSpecsWithDefaultAndCustomReporters(t, "FV: Felix "+descSuffix, []Reporter{junitReporter})
+	suiteConfig, reporterConfig := GinkgoConfiguration()
+	reporterConfig.JUnitReport = fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix)
+	RunSpecs(t, "FV: Felix "+descSuffix, suiteConfig, reporterConfig)
 }
 
 var _ = BeforeEach(func() {
-	_, _ = fmt.Fprintf(realStdout, "\nFV-TEST-START: %s", CurrentGinkgoTestDescription().FullTestText)
+	_, _ = fmt.Fprintf(realStdout, "\nFV-TEST-START: %s", CurrentSpecReport().FullText())
 })
 
 var _ = JustAfterEach(func() {
-	if CurrentGinkgoTestDescription().Failed {
+	if CurrentSpecReport().Failed() {
 		_, _ = fmt.Fprintf(realStdout, "\n")
 	}
 })
 
 var _ = AfterEach(func() {
 	defer connectivity.UnactivatedCheckers.Clear()
-	if CurrentGinkgoTestDescription().Failed {
+	if CurrentSpecReport().Failed() {
 		// If the test has already failed, ignore any connectivity checker leak.
 		return
 	}
-	Expect(connectivity.UnactivatedCheckers.Len()).To(BeZero(),
+	gomega.Expect(connectivity.UnactivatedCheckers.Len()).To(gomega.BeZero(),
 		"Test bug: ConnectivityChecker was created but not activated.")
 })
 
@@ -102,7 +109,7 @@ var _ = BeforeSuite(func() {
 	var err error
 	// Using Prometheus' library because we already import it indirectly.
 	procFS, err = procfs.NewFS("/proc")
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	go func() {
 		for {
 			select {
@@ -116,6 +123,42 @@ var _ = BeforeSuite(func() {
 		}
 	}()
 })
+
+func configureManualSharding() error {
+	currentBatch, err := strconv.Atoi(os.Getenv("FV_BATCH"))
+	if err != nil {
+		return err
+	}
+	totalBatches, err := strconv.Atoi(os.Getenv("FV_NUM_BATCHES"))
+	if err != nil {
+		return err
+	}
+
+	if totalBatches <= 1 || currentBatch <= 0 {
+		return errors.New("invalid FV_BATCH or FV_NUM_BATCHES environment variable")
+	}
+
+	fmt.Printf("[SHARD-INIT] Manual Sharding Active: Running Batch %d of %d\n", currentBatch, totalBatches)
+
+	BeforeEach(func() {
+		specReport := CurrentSpecReport()
+		hash := hashString(specReport.FullText())
+		assignedBatch := (hash % uint32(totalBatches)) + 1
+		if int(assignedBatch) != currentBatch {
+			Skip(fmt.Sprintf("️[SHARD-SKIP] Test assigned to batch %d (Current: %d)", assignedBatch, currentBatch))
+		} else {
+			fmt.Printf("️[SHARD-RUN] Batch %d executing: %s\n", currentBatch, specReport.LeafNodeText)
+		}
+	})
+
+	return nil
+}
+
+func hashString(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
 
 func logStats() {
 	p := message.NewPrinter(language.English)
