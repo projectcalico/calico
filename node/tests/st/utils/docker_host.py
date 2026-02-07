@@ -600,7 +600,7 @@ class DockerHost(object):
         :return: Return code of execute operation.
         """
         if self.dind:
-            with tempfile.NamedTemporaryFile() as tmp:
+            with tempfile.NamedTemporaryFile(mode='w') as tmp:
                 tmp.write(data)
                 tmp.flush()
                 log_and_run("docker cp %s %s:%s" % (tmp.name, self.name, filename))
