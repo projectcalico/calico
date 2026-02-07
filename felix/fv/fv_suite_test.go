@@ -16,9 +16,12 @@ package fv_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"runtime/metrics"
+	"strconv"
 	"testing"
 	"time"
 
@@ -46,6 +49,10 @@ func init() {
 
 func TestFv(t *testing.T) {
 	gomega.RegisterFailHandler(Fail)
+	err := configureManualSharding()
+	if err != nil {
+		t.Fatalf("Failed to configure manual sharding: %v", err)
+	}
 	// OS_RELEASE is set by run-batches. On ubuntu, it looks like 24.04.
 	osRel := os.Getenv("OS_RELEASE")
 	extraSuffix := os.Getenv("EXTRA_REPORT_SUFFIX")
@@ -116,6 +123,42 @@ var _ = BeforeSuite(func() {
 		}
 	}()
 })
+
+func configureManualSharding() error {
+	currentBatch, err := strconv.Atoi(os.Getenv("FV_BATCH"))
+	if err != nil {
+		return err
+	}
+	totalBatches, err := strconv.Atoi(os.Getenv("FV_NUM_BATCHES"))
+	if err != nil {
+		return err
+	}
+
+	if totalBatches <= 1 || currentBatch <= 0 {
+		return errors.New("invalid FV_BATCH or FV_NUM_BATCHES environment variable")
+	}
+
+	fmt.Printf("[SHARD-INIT] Manual Sharding Active: Running Batch %d of %d\n", currentBatch, totalBatches)
+
+	BeforeEach(func() {
+		specReport := CurrentSpecReport()
+		hash := hashString(specReport.FullText())
+		assignedBatch := (hash % uint32(totalBatches)) + 1
+		if int(assignedBatch) != currentBatch {
+			Skip(fmt.Sprintf("️[SHARD-SKIP] Test assigned to batch %d (Current: %d)", assignedBatch, currentBatch))
+		} else {
+			fmt.Printf("️[SHARD-RUN] Batch %d executing: %s\n", currentBatch, specReport.LeafNodeText)
+		}
+	})
+
+	return nil
+}
+
+func hashString(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
 
 func logStats() {
 	p := message.NewPrinter(language.English)

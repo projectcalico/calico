@@ -23,30 +23,19 @@
 : ${GINKGO_FOCUS:=.*}
 
 mkdir -p cwlogs
-export FV_CWLOGDIR=`pwd`/cwlogs
+export FV_CWLOGDIR=$(pwd)/cwlogs
 export OS_RELEASE=$(lsb_release -rs 2> /dev/null || echo "unknown")
 
 for batch in ${FV_BATCHES_TO_RUN}; do
   (
     echo "Running FV batch ${batch}"
-    # List the tests that will be run.
-    ./fv.test -ginkgo.parallel.node ${batch} \
-      -ginkgo.parallel.total ${FV_NUM_BATCHES} \
-      -ginkgo.seed 1 \
-      -ginkgo.randomize-all \
-      -ginkgo.slow-spec-threshold ${FV_SLOW_SPEC_THRESH} \
-      -ginkgo.focus="${GINKGO_FOCUS}" \
-      ${GINKGO_ARGS} \
-      -ginkgo.v \
-      -ginkgo.no-color \
-      -ginkgo.dry-run 2>&1 | awk -f test-list-filter.awk
-    # Now really run them.
-    ./fv.test -ginkgo.parallel.node ${batch} \
-      -ginkgo.parallel.total ${FV_NUM_BATCHES} \
-      -ginkgo.seed 1 \
-      -ginkgo.randomize-all \
-      -ginkgo.slow-spec-threshold ${FV_SLOW_SPEC_THRESH} \
-      -ginkgo.focus="${GINKGO_FOCUS}" \
+    FV_BATCH=${batch} FV_NUM_BATCHES=${FV_NUM_BATCHES} ./fv.test \
+      --ginkgo.randomize-all \
+      --ginkgo.seed 1 \
+      --ginkgo.silence-skips \
+      --ginkgo.slow-spec-threshold=${FV_SLOW_SPEC_THRESH} \
+      --ginkgo.v \
+      --ginkgo.focus="${GINKGO_FOCUS}" \
       ${GINKGO_ARGS}
     status=$?
     echo "Test batch $batch completed with status $status"
