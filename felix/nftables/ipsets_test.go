@@ -18,8 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/knftables"
 
@@ -249,27 +248,27 @@ var _ = DescribeTable("IPSets programming v4",
 	},
 
 	Entry(
-		ipsets.IPSetTypeHashIP,
+		string(ipsets.IPSetTypeHashIP),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIP}, []string{"10.0.0.1"},
 		[]*knftables.Element{{Set: "cali40test", Key: []string{"10.0.0.1"}}},
 	),
 	Entry(
-		ipsets.IPSetTypeHashNet,
+		string(ipsets.IPSetTypeHashNet),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNet}, []string{"10.0.0.0/24"},
 		[]*knftables.Element{{Set: "cali40test", Key: []string{"10.0.0.0/24"}}},
 	),
 	Entry(
-		ipsets.IPSetTypeHashIPPort,
+		string(ipsets.IPSetTypeHashIPPort),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIPPort}, []string{"1.2.3.4,tcp:81"},
 		[]*knftables.Element{{Set: "cali40test", Key: []string{"1.2.3.4", "tcp", "81"}}},
 	),
 	Entry(
-		ipsets.IPSetTypeHashNetNet,
+		string(ipsets.IPSetTypeHashNetNet),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet}, []string{"10.0.0.0/32,10.0.0.0/32"},
 		[]*knftables.Element{{Set: "cali40test", Key: []string{"10.0.0.0", "10.0.0.0"}}},
 	),
 	Entry(
-		ipsets.IPSetTypeBitmapPort,
+		string(ipsets.IPSetTypeBitmapPort),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeBitmapPort}, []string{"v4,80"},
 		[]*knftables.Element{{Set: "cali40test", Key: []string{"80"}}},
 	),
@@ -303,27 +302,27 @@ var _ = DescribeTable("IPSets programming v6",
 	},
 
 	Entry(
-		ipsets.IPSetTypeHashIP,
+		string(ipsets.IPSetTypeHashIP),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIP}, []string{"2001:db8::1"},
 		[]*knftables.Element{{Set: "cali60test", Key: []string{"2001:db8::1"}}},
 	),
 	Entry(
-		ipsets.IPSetTypeHashNet,
+		string(ipsets.IPSetTypeHashNet),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNet}, []string{"2001:db8::/64"},
 		[]*knftables.Element{{Set: "cali60test", Key: []string{"2001:db8::/64"}}},
 	),
 	Entry(
-		ipsets.IPSetTypeHashIPPort,
+		string(ipsets.IPSetTypeHashIPPort),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIPPort}, []string{"2001:db8::1,tcp:81"},
 		[]*knftables.Element{{Set: "cali60test", Key: []string{"2001:db8::1", "tcp", "81"}}},
 	),
 	Entry(
-		ipsets.IPSetTypeHashNetNet,
+		string(ipsets.IPSetTypeHashNetNet),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet}, []string{"2001:db8::/128,2001:db8::/128"},
 		[]*knftables.Element{{Set: "cali60test", Key: []string{"2001:db8::", "2001:db8::"}}},
 	),
 	Entry(
-		ipsets.IPSetTypeBitmapPort,
+		string(ipsets.IPSetTypeBitmapPort),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeBitmapPort}, []string{"v6,80"},
 		[]*knftables.Element{{Set: "cali60test", Key: []string{"80"}}},
 	),
@@ -336,17 +335,17 @@ var _ = DescribeTable("CanonicalizeMember",
 		Expect(canon.Key()).To(Equal(key))
 	},
 
-	Entry(ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashIP, "192.168.0.1/32", "192.168.0.1", []string{"192.168.0.1"}),
-	Entry(ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashIP, "fe80::1/128", "fe80::1", []string{"fe80::1"}),
-	Entry(ipsets.IPSetTypeHashNet, ipsets.IPSetTypeHashNet, "10.0.0.0/24", "10.0.0.0/24", []string{"10.0.0.0/24"}),
-	Entry(ipsets.IPSetTypeHashNet, ipsets.IPSetTypeHashNet, "2001:db8::/64", "2001:db8::/64", []string{"2001:db8::/64"}),
-	Entry(ipsets.IPSetTypeHashIPPort, ipsets.IPSetTypeHashIPPort, "192.168.0.1,tcp:80", "192.168.0.1,tcp:80", []string{"192.168.0.1", "tcp", "80"}),
-	Entry(ipsets.IPSetTypeHashIPPort, ipsets.IPSetTypeHashIPPort, "fe80::1,udp:53", "fe80::1,udp:53", []string{"fe80::1", "udp", "53"}),
-	Entry(ipsets.IPSetTypeHashNetNet, ipsets.IPSetTypeHashNetNet, "10.0.0.1/32,10.0.0.1/32", "10.0.0.1/32 . 10.0.0.1/32", []string{"10.0.0.1", "10.0.0.1"}),
-	Entry(ipsets.IPSetTypeHashNetNet, ipsets.IPSetTypeHashNetNet, "2001:db8::1/128,2001:db8::1/128", "2001:db8::1/128 . 2001:db8::1/128", []string{"2001:db8::1", "2001:db8::1"}),
-	Entry(ipsets.IPSetTypeBitmapPort, ipsets.IPSetTypeBitmapPort, "v4,80", "80", []string{"80"}),
-	Entry(ipsets.IPSetTypeBitmapPort, ipsets.IPSetTypeBitmapPort, "v6,80", "80", []string{"80"}),
-	Entry(ipsets.IPSetTypeBitmapPort, ipsets.IPSetTypeBitmapPort, "80", "80", []string{"80"}),
+	Entry(string(ipsets.IPSetTypeHashIP), ipsets.IPSetTypeHashIP, "192.168.0.1/32", "192.168.0.1", []string{"192.168.0.1"}),
+	Entry(string(ipsets.IPSetTypeHashIP), ipsets.IPSetTypeHashIP, "fe80::1/128", "fe80::1", []string{"fe80::1"}),
+	Entry(string(ipsets.IPSetTypeHashNet), ipsets.IPSetTypeHashNet, "10.0.0.0/24", "10.0.0.0/24", []string{"10.0.0.0/24"}),
+	Entry(string(ipsets.IPSetTypeHashNet), ipsets.IPSetTypeHashNet, "2001:db8::/64", "2001:db8::/64", []string{"2001:db8::/64"}),
+	Entry(string(ipsets.IPSetTypeHashIPPort), ipsets.IPSetTypeHashIPPort, "192.168.0.1,tcp:80", "192.168.0.1,tcp:80", []string{"192.168.0.1", "tcp", "80"}),
+	Entry(string(ipsets.IPSetTypeHashIPPort), ipsets.IPSetTypeHashIPPort, "fe80::1,udp:53", "fe80::1,udp:53", []string{"fe80::1", "udp", "53"}),
+	Entry(string(ipsets.IPSetTypeHashNetNet), ipsets.IPSetTypeHashNetNet, "10.0.0.1/32,10.0.0.1/32", "10.0.0.1/32 . 10.0.0.1/32", []string{"10.0.0.1", "10.0.0.1"}),
+	Entry(string(ipsets.IPSetTypeHashNetNet), ipsets.IPSetTypeHashNetNet, "2001:db8::1/128,2001:db8::1/128", "2001:db8::1/128 . 2001:db8::1/128", []string{"2001:db8::1", "2001:db8::1"}),
+	Entry(string(ipsets.IPSetTypeBitmapPort), ipsets.IPSetTypeBitmapPort, "v4,80", "80", []string{"80"}),
+	Entry(string(ipsets.IPSetTypeBitmapPort), ipsets.IPSetTypeBitmapPort, "v6,80", "80", []string{"80"}),
+	Entry(string(ipsets.IPSetTypeBitmapPort), ipsets.IPSetTypeBitmapPort, "80", "80", []string{"80"}),
 )
 
 var _ = DescribeTable("NFTablesSet",
@@ -360,27 +359,27 @@ var _ = DescribeTable("NFTablesSet",
 	},
 
 	Entry(
-		ipsets.IPSetTypeHashIP,
+		string(ipsets.IPSetTypeHashIP),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIP},
 		&knftables.Set{Name: "cali40test", Type: "ipv4_addr"},
 	),
 	Entry(
-		ipsets.IPSetTypeHashNet,
+		string(ipsets.IPSetTypeHashNet),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNet},
 		&knftables.Set{Name: "cali40test", Type: "ipv4_addr", Flags: []knftables.SetFlag{knftables.IntervalFlag}},
 	),
 	Entry(
-		ipsets.IPSetTypeHashIPPort,
+		string(ipsets.IPSetTypeHashIPPort),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIPPort},
 		&knftables.Set{Name: "cali40test", Type: "ipv4_addr . inet_proto . inet_service"},
 	),
 	Entry(
-		ipsets.IPSetTypeHashNetNet,
+		string(ipsets.IPSetTypeHashNetNet),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet},
 		&knftables.Set{Name: "cali40test", Type: "ipv4_addr . ipv4_addr"},
 	),
 	Entry(
-		ipsets.IPSetTypeBitmapPort,
+		string(ipsets.IPSetTypeBitmapPort),
 		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeBitmapPort},
 		&knftables.Set{Name: "cali40test", Type: "inet_service"},
 	),
