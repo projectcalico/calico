@@ -370,7 +370,7 @@ func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, presen
 		"present":   present,
 	}).Debug("expectAddrStateCb")
 
-	Eventually(dp.addrC).Should(Receive(&cbIface))
+	EventuallyWithOffset(1, dp.addrC).Should(Receive(&cbIface))
 	log.WithFields(log.Fields{
 		"ifaceName": cbIface.ifaceName,
 		"addrs":     cbIface.addrs,
@@ -519,7 +519,7 @@ var _ = Describe("ifacemonitor", func() {
 	})
 
 	It("should skip netlink address updates for ipvs", func() {
-		var netlinkUpdates = func(iface string) {
+		netlinkUpdates := func(iface string) {
 			// Should not receive any address callbacks.
 			idx := nl.nextIndex
 
@@ -669,6 +669,68 @@ var _ = Describe("ifacemonitor", func() {
 		resyncC <- time.Time{}
 
 		Expect(fatalErrC).ToNot(BeClosed())
+	})
+
+	It("should handle out of order interface delete and add", func() {
+		// This test simulates a race condition on interface deletion/recreation where
+		// the add is processed before the delete.
+
+		// Add a link and an address.
+		idx1 := nl.nextIndex
+		nl.addLink("eth0")
+		resyncC <- time.Time{}
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx1)
+		dp.expectAddrStateCb("eth0", "", true)
+		nl.addAddr("eth0", "10.0.240.10/24")
+		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
+
+		// Set the link up, and expect a link callback.  Addresses are unchanged, so there
+		// is no address callback.
+		nl.changeLinkState("eth0", "up")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp, idx1)
+
+		// Now, we get an out-of-order add for a link with the same name, but a new ifindex.
+		// We don't expect any callbacks yet, because the monitor now sees two interfaces with
+		// the same name and cannot determine which is correct.
+		idx2 := nl.nextIndex
+		nl.addLink("eth0")
+		resyncC <- time.Time{}
+		nl.addAddr("eth0", "10.0.240.11/24")
+		nl.changeLinkState("eth0", "up")
+		dp.expectAddrStateCb("eth0", "10.0.240.11", true)
+
+		// We shouldn't see any change yet - as far as we know, the link is still up but now
+		// is associated with two interface indices. The monitor refrains from making link status
+		// callbacks until it can resolve to a single index.
+		dp.notExpectLinkStateCb()
+
+		// Now send a delete signal for the old ifindex, simulating the "late" receipt of the delete.
+		update := netlink.LinkUpdate{
+			Header: unix.NlMsghdr{
+				Type: syscall.RTM_DELLINK,
+			},
+			Link: &netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name:  "eth0",
+					Index: idx1,
+				},
+			},
+		}
+		nl.linkUpdates <- update
+
+		// We should have correctly spotted that the interface is still present and up, so
+		// no change in link state, but we should now get an address callback for the new address.
+		dp.notExpectLinkStateCb()
+
+		// Trigger a resync.
+		resyncC <- time.Time{}
+
+		// We still shouldn't see any link state change - the interface is still up.
+		dp.notExpectLinkStateCb()
+
+		// Now delete the new interface. This should result in a deletion callback for the new ifindex.
+		nl.delLink("eth0")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx2)
 	})
 
 	It("should handle link flap", func() {
