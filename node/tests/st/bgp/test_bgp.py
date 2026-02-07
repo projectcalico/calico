@@ -86,7 +86,7 @@ class TestReadiness(TestBase):
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1:
             retry_until_success(host1.assert_is_ready, retries=30)
-            host1.execute("docker exec -it calico-node sv stop /etc/service/enabled/bird")
+            host1.execute("docker exec -i calico-node sv stop /etc/service/enabled/bird")
 
             # Check that the readiness script is reporting 'not ready'
             self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: bird/confd is not live: service bird is not running.",
@@ -99,7 +99,7 @@ class TestReadiness(TestBase):
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1:
             retry_until_success(host1.assert_is_ready, retries=30)
-            host1.execute("docker exec -it calico-node sv stop /etc/service/enabled/confd")
+            host1.execute("docker exec -i calico-node sv stop /etc/service/enabled/confd")
 
             # Check that the readiness script is reporting 'not ready'
             self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: bird/confd is not live: service confd is not running.",
@@ -112,7 +112,7 @@ class TestReadiness(TestBase):
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1:
             retry_until_success(host1.assert_is_ready, retries=30)
-            host1.execute("docker exec -it calico-node sv stop /etc/service/enabled/bird6")
+            host1.execute("docker exec -i calico-node sv stop /etc/service/enabled/bird6")
 
             # Check that the readiness script is reporting 'not ready'
             self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: bird6/confd is not live: service bird6 is not running.",
@@ -125,7 +125,7 @@ class TestReadiness(TestBase):
         with DockerHost('host1',
                     additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1:
             retry_until_success(host1.assert_is_ready, retries=30)
-            host1.execute("docker exec -it calico-node sv stop /etc/service/enabled/confd")
+            host1.execute("docker exec -i calico-node sv stop /etc/service/enabled/confd")
 
             # Check that the readiness script is reporting 'not ready'
             self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: bird/confd is not live: service confd is not running.",
@@ -185,8 +185,8 @@ class TestReadiness(TestBase):
             # Block bgp connectivity between hosts
             host1.execute("iptables -t raw -I PREROUTING  -p tcp -m multiport --dport 179 -j DROP")
             host2.execute("iptables -t raw -I PREROUTING -p tcp -m multiport --dport 179 -j DROP")
-            host1.execute("docker exec -it calico-node sv kill bird")
-            host2.execute("docker exec -it calico-node sv kill bird")
+            host1.execute("docker exec -i calico-node sv kill bird")
+            host2.execute("docker exec -i calico-node sv kill bird")
 
             # Check that the readiness script is reporting 'not ready'
             self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: BIRD is not ready: BGP not established with",
@@ -275,17 +275,17 @@ class TestDisableBGPExport(TestBase):
             # Verify that pool2 and pool3 are exported and pool1 is not
             output = host1.execute("docker exec calico-node birdcl show route export %s" % nameHost2)
             for pool in [ '192.168.2.0/24', '192.168.3.0/24' ]:
-                self.assertRegexpMatches(output, _get_re_from_pool(pool),
-                                         "pool '%s' should be present in 'birdcl show route export' output" % pool)
+                self.assertRegex(output, _get_re_from_pool(pool),
+                                 "pool '%s' should be present in 'birdcl show route export' output" % pool)
             for pool in [ '192.168.1.0/24' ]:
-                self.assertNotRegexpMatches(output, _get_re_from_pool(pool),
-                                            "pool '%s' should not be present in 'birdcl show route export' output" % pool)
+                self.assertNotRegex(output, _get_re_from_pool(pool),
+                                    "pool '%s' should not be present in 'birdcl show route export' output" % pool)
 
             # Verify that pool1 is filtered from being exported and pool2 and pool3 are not
             output = host1.execute("docker exec calico-node birdcl show route noexport %s" % nameHost2)
             for pool in [ '192.168.1.0/24' ]:
-                self.assertRegexpMatches(output, _get_re_from_pool(pool),
-                                         "pool '%s' should be present in 'birdcl show route noexport' output" % pool)
+                self.assertRegex(output, _get_re_from_pool(pool),
+                                 "pool '%s' should be present in 'birdcl show route noexport' output" % pool)
             for pool in [ '192.168.2.0/24', '192.168.3.0/24' ]:
-                self.assertNotRegexpMatches(output, _get_re_from_pool(pool),
-                                            "pool '%s' should not be present in 'birdcl show route noexport' output" % pool)
+                self.assertNotRegex(output, _get_re_from_pool(pool),
+                                    "pool '%s' should not be present in 'birdcl show route noexport' output" % pool)
