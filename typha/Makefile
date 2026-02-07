@@ -45,7 +45,7 @@ clean:
 		report/*.xml \
 		release-notes-* \
 		.calico_typha.created-*
-	find . -name "*.coverprofile" -type f -delete
+	find . -name "coverprofile.out" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
@@ -202,7 +202,7 @@ release-publish-latest: release-prereqs
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo2 -r
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
