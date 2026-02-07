@@ -218,7 +218,7 @@ class DockerHost(object):
         whitespace removed.
         """
         if self.dind:
-            option = "-d" if daemon_mode else "-it"
+            option = "-d" if daemon_mode else "-i"
             command = self.escape_shell_single_quotes(command)
             command = "docker exec %s %s sh -c '%s'" % (option, self.name, command)
 
