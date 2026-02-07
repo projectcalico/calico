@@ -197,7 +197,7 @@ e2e-test-clusternetworkpolicy:
 
 ## Run the general e2e tests against a pre-existing kind cluster.
 e2e-run-test:
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test --ginkgo.focus=$(E2E_FOCUS) --ginkgo.skip=$(E2E_SKIP)
 
 ## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
 e2e-run-cnp-test:
