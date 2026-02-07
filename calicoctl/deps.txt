@@ -34,7 +34,7 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 github.com/olekukonko/tablewriter v0.0.5
-github.com/onsi/gomega v1.39.0
+github.com/onsi/gomega v1.39.1
 github.com/pborman/uuid v1.2.1
 github.com/pkg/errors v0.9.1
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
