@@ -19,7 +19,7 @@ import (
 	"errors"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -47,7 +47,7 @@ var _ = Describe("Server", func() {
 			var output chan *proto.ToDataplane
 			syncDone := make(chan bool)
 
-			BeforeEach(func(done Done) {
+			BeforeEach(func() {
 				output = make(chan *proto.ToDataplane)
 				stream = &testSyncStream{output: output}
 				go func() {
@@ -58,10 +58,9 @@ var _ = Describe("Server", func() {
 				jr := j.(policysync.JoinRequest)
 				Expect(jr.EndpointID.WorkloadId).To(Equal(WorkloadID))
 				updates = jr.C
-				close(done)
 			})
 
-			It("should stream messages", func(done Done) {
+			It("should stream messages", func() {
 				msgs := []*proto.ToDataplane{
 					{Payload: &proto.ToDataplane_WorkloadEndpointUpdate{}},
 					{Payload: &proto.ToDataplane_InSync{}},
@@ -71,27 +70,23 @@ var _ = Describe("Server", func() {
 					g := <-output
 					Expect(googleproto.Equal(g, msg)).To(BeTrue())
 				}
-
-				close(done)
 			})
 
 			Context("with unstreamed updates", func() {
-				BeforeEach(func(done Done) {
+				BeforeEach(func() {
 					// Queue up 10 messages. This should not block because the updates channel should be buffered.
 					for i := 0; i < 10; i++ {
 						updates <- &proto.ToDataplane{}
 					}
-					close(done)
 				})
 
 				Context("after error on stream", func() {
-					BeforeEach(func(done Done) {
+					BeforeEach(func() {
 						stream.sendErr = true
 						<-output
-						close(done)
 					})
 
-					It("should drain updates channel, send leave request and end Sync", func(done Done) {
+					It("should drain updates channel, send leave request and end Sync", func() {
 						for i := 0; i < 10; i++ {
 							updates <- &proto.ToDataplane{}
 						}
@@ -100,7 +95,6 @@ var _ = Describe("Server", func() {
 						Expect(lr.EndpointID.WorkloadId).To(Equal(WorkloadID))
 						close(updates)
 						<-syncDone
-						close(done)
 					})
 
 				})
@@ -110,7 +104,7 @@ var _ = Describe("Server", func() {
 						close(updates)
 					})
 
-					It("send pending updates, leave request and end Sync", func(done Done) {
+					It("send pending updates, leave request and end Sync", func() {
 						for i := 0; i < 10; i++ {
 							<-output
 						}
@@ -118,7 +112,6 @@ var _ = Describe("Server", func() {
 						lr := j.(policysync.LeaveRequest)
 						Expect(lr.EndpointID.WorkloadId).To(Equal(WorkloadID))
 						<-syncDone
-						close(done)
 					})
 				})
 			})

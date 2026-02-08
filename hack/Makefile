@@ -19,7 +19,7 @@ APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./l
 .PHONY: clean
 clean:
 	rm -rf $(BINDIR)
-	find . -name '*.coverprofile' -type f -delete
+	find . -name 'coverprofile.out' -type f -delete
 
 ###############################################################################
 # Building the binary
