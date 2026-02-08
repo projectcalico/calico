@@ -16,7 +16,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/mcuadros/go-version"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/vishvananda/netlink"
@@ -379,7 +379,7 @@ var _ = Describe("CalicoCni", func() {
 	})
 
 	Context("With a gRPC dataplane", func() {
-		It("communicates with the dataplane", func(done Done) {
+		It("communicates with the dataplane", func() {
 			var contNs ns.NetNS
 			var grpcBackend *grpc_dataplane.TestServer
 			var exitCode int
@@ -456,8 +456,7 @@ var _ = Describe("CalicoCni", func() {
 			if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 				Expect(err).NotTo(HaveOccurred())
 			}
-			close(done)
-		}, 30.0)
+		})
 	})
 
 	Context("deprecate hostname for nodename", func() {
@@ -874,7 +873,7 @@ var _ = Describe("CalicoCni", func() {
 
 	Describe("testConnection tests", func() {
 
-		It("successfully connects to the datastore", func(done Done) {
+		It("successfully connects to the datastore", func() {
 			netconf := fmt.Sprintf(`
 {
   "cniVersion": "%s",
@@ -901,10 +900,9 @@ var _ = Describe("CalicoCni", func() {
 
 			_, err = c.CombinedOutput()
 			Expect(err).ToNot(HaveOccurred())
-			close(done)
-		}, 10)
+		})
 
-		It("reports it cannot connect to the datastore", func(done Done) {
+		It("reports it cannot connect to the datastore", func() {
 			// wrong port.
 			netconf := fmt.Sprintf(`
 {
@@ -932,8 +930,7 @@ var _ = Describe("CalicoCni", func() {
 
 			_, err = c.CombinedOutput()
 			Expect(err).To(HaveOccurred())
-			close(done)
-		}, 10)
+		})
 
 	})
 
