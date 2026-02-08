@@ -26,6 +26,8 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
+	"github.com/onsi/ginkgo/v2/types"
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/prometheus/procfs"
@@ -38,7 +40,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-var realStdout = os.Stdout
+var (
+	reportPath string
+	realStdout = os.Stdout
+)
 
 func init() {
 	testutils.HookLogrusForGinkgo()
@@ -75,7 +80,8 @@ func TestFv(t *testing.T) {
 		descSuffix += " " + extraSuffix
 	}
 	suiteConfig, reporterConfig := GinkgoConfiguration()
-	reporterConfig.JUnitReport = fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix)
+	reportPath = fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix)
+	reporterConfig.JUnitReport = ""
 	RunSpecs(t, "FV: Felix "+descSuffix, suiteConfig, reporterConfig)
 }
 
@@ -239,4 +245,37 @@ var _ = AfterSuite(func() {
 	}
 	infrastructure.RemoveTLSCredentials()
 	close(stopMonitorC)
+})
+
+var _ = ReportAfterSuite("Clean Report Generator", func(report Report) {
+	cleanSpecs := []SpecReport{}
+	skippedOrPendingCount := 0
+
+	for _, spec := range report.SpecReports {
+		// Filter skipped or pending tests
+		if spec.State == types.SpecStateSkipped || spec.State == types.SpecStatePending {
+			skippedOrPendingCount++
+			continue
+		}
+
+		// Strip logs for passed tests to save space
+		if spec.State == types.SpecStatePassed {
+			spec.CapturedGinkgoWriterOutput = ""
+			spec.CapturedStdOutErr = ""
+		}
+
+		cleanSpecs = append(cleanSpecs, spec)
+	}
+
+	// Update the report object with the filtered list
+	report.SpecReports = cleanSpecs
+	fmt.Printf("\n[REPORT-CLEANER] Removed %d skipped or pending specs. Saving report with %d specs.\n", skippedOrPendingCount, len(cleanSpecs))
+
+	if reportPath != "" {
+		if err := reporters.GenerateJUnitReport(report, reportPath); err != nil {
+			fmt.Printf("[REPORT-CLEANER] Error generating JUnit report: %v\n", err)
+		} else {
+			fmt.Printf("[REPORT-CLEANER] JUnit report saved to: %s\n", reportPath)
+		}
+	}
 })
