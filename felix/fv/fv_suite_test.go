@@ -26,6 +26,8 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
+	"github.com/onsi/ginkgo/v2/types"
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/prometheus/procfs"
@@ -38,7 +40,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-var realStdout = os.Stdout
+var (
+	reportPath string
+	realStdout = os.Stdout
+)
 
 func init() {
 	testutils.HookLogrusForGinkgo()
@@ -75,7 +80,8 @@ func TestFv(t *testing.T) {
 		descSuffix += " " + extraSuffix
 	}
 	suiteConfig, reporterConfig := GinkgoConfiguration()
-	reporterConfig.JUnitReport = fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix)
+	reportPath = fmt.Sprintf("../report/felix_fv_%s.xml", fileSuffix)
+	reporterConfig.JUnitReport = ""
 	RunSpecs(t, "FV: Felix "+descSuffix, suiteConfig, reporterConfig)
 }
 
@@ -239,4 +245,25 @@ var _ = AfterSuite(func() {
 	}
 	infrastructure.RemoveTLSCredentials()
 	close(stopMonitorC)
+})
+
+var _ = ReportAfterSuite("Clean Report Generator", func(report Report) {
+	cleanSpecs := []SpecReport{}
+	skippedCount := 0
+
+	for _, spec := range report.SpecReports {
+		// Keep only specs that are NOT skipped
+		if spec.State != types.SpecStateSkipped {
+			cleanSpecs = append(cleanSpecs, spec)
+		} else {
+			skippedCount++
+		}
+	}
+
+	// Update the report object with the filtered list
+	report.SpecReports = cleanSpecs
+
+	fmt.Printf("\n[REPORT-CLEANER] Removed %d skipped specs. Saving report with %d specs.\n", skippedCount, len(cleanSpecs))
+
+	reporters.GenerateJUnitReport(report, reportPath)
 })
