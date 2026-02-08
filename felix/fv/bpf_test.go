@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -453,7 +453,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		})
 
 		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
+			if CurrentSpecReport().Failed() {
 				var (
 					currBpfsvcs   []nat.MapMem
 					currBpfeps    []nat.BackendMapMem

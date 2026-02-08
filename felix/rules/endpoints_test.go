@@ -19,8 +19,7 @@ import (
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -1125,7 +1124,7 @@ var (
 	cali_po_i = PolicyChainName("cali-po-", &types.PolicyID{Name: "i", Kind: v3.KindGlobalNetworkPolicy}, false)
 )
 
-var _ = table.DescribeTable("PolicyGroup chains",
+var _ = DescribeTable("PolicyGroup chains",
 	func(group PolicyGroup, expectedRules []generictables.Rule) {
 		renderer := NewRenderer(Config{
 			MarkAccept:          0x8,
@@ -1358,8 +1357,8 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 )
 
-func polGroupEntry(group PolicyGroup, rules []generictables.Rule) table.TableEntry {
-	return table.Entry(fmt.Sprintf("%v", group), group, rules)
+func polGroupEntry(group PolicyGroup, rules []generictables.Rule) TableEntry {
+	return Entry(fmt.Sprintf("%v", group), group, rules)
 }
 
 func jumpToPolicyGroup(target string, clearMark uint32) generictables.Rule {

@@ -21,8 +21,7 @@ import (
 	"net"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
@@ -35,8 +34,9 @@ func init() {
 
 func TestCommands(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../../report/autodetection_ipv4_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "IPv4 pool selector Suite", []Reporter{junitReporter})
+	suiteConfig, reporterConfig := GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../../../report/autodetection_ipv4_suite.xml"
+	RunSpecs(t, "IPv4 pool selector Suite", suiteConfig, reporterConfig)
 }
 
 var _ = Describe("IPv4 pool selector tests", func() {

@@ -5,13 +5,13 @@ package resourcemgr_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 )
 
 func TestResourcemgr(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/resourcemgr_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Resourcemgr Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/resourcemgr_suite.xml"
+	ginkgo.RunSpecs(t, "Resourcemgr Suite", suiteConfig, reporterConfig)
 }

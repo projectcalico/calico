@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	log "github.com/sirupsen/logrus"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports

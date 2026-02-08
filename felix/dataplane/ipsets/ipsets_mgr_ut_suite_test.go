@@ -17,9 +17,8 @@ package ipsets
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -29,7 +28,8 @@ func init() {
 }
 
 func TestIPSetMgr(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/felix_dataplane_ipsets_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/dataplane/ipsets", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/felix_dataplane_ipsets_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/dataplane/ipsets", suiteConfig, reporterConfig)
 }

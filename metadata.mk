@@ -6,9 +6,6 @@
 GO_BUILD_VER=1.25.6-llvm18.1.8-k8s1.34.3
 CALICO_BASE_VER=ubi9-1769122535
 
-# Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
-ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
-
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
 K8S_VERSION=v1.34.3
 
