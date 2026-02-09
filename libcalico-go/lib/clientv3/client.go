@@ -209,8 +209,7 @@ func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
 	}
 
 	if pool.Status != nil {
-		// Skip any pools that have been marked as disabled by the IPAM controller, which can happen when an IP pool
-		// fails a validation check.
+		// Skip any pools that have been marked as unavailable for allocations by the IP pool controller in kube-controllers.
 		for _, condition := range pool.Status.Conditions {
 			if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionFalse {
 				log.Debugf("Skipping IP pool (%s) with condition Allocatable=false", pool.Name)
