@@ -413,7 +413,7 @@ func (r *CalicoManager) checkCodeGeneration() error {
 }
 
 func (r *CalicoManager) PreReleaseValidate() error {
-	// Cheeck that we are on a release branch
+	// Check that we are on a release branch
 	if r.validateBranch {
 		branch, err := utils.GitBranch(r.repoRoot)
 		if err != nil {
@@ -554,10 +554,14 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 	if err := os.MkdirAll(tmpChartsDir, utils.DirPerms); err != nil {
 		return fmt.Errorf("create temp dir for building helm index: %w", err)
 	}
-	srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
-	destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion()))
-	if err := utils.CopyFile(srcChart, destChart); err != nil {
-		return fmt.Errorf("copy chart to temp dir for building helm index: %w", err)
+
+	// Copy charts to temp dir.
+	for _, chart := range utils.AllReleaseCharts() {
+		srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
+		destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
+		if err := utils.CopyFile(srcChart, destChart); err != nil {
+			return fmt.Errorf("error copying %s chart to temp dir for building helm index: %w", chart, err)
+		}
 	}
 
 	// Build the new helm index.
@@ -576,6 +580,7 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 		// For hashreleases, copy the helm index to the upload dir.
 		srcIndex := filepath.Join(tmpChartsDir, helmIndexFileName)
 		destIndex := filepath.Join(r.uploadDir(), "charts", helmIndexFileName)
+
 		// Ensure destination directory exists.
 		if err := os.MkdirAll(filepath.Dir(destIndex), utils.DirPerms); err != nil {
 			return fmt.Errorf("create dest dir for helm index: %w", err)
@@ -1175,6 +1180,8 @@ Attached to this release are the following artifacts:
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
 - {helm_chart}: Calico Helm 3 chart (also hosted at oci://quay.io/calico/charts/tigera-operator).
+- {helm_v1_crd_chart}: Calico crd.projectcalico.org/v1 CRD chart.
+- {helm_v3_crd_chart}: Calico projectcalico.org/v3 CRD chart (tech-preview).
 - ocp.tgz: Manifest bundle for OpenShift.
 
 Additional links:
@@ -1193,6 +1200,8 @@ Additional links:
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
 		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.calicoVersion),
+		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV1CRDsChart, r.calicoVersion),
+		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV3CRDsChart, r.calicoVersion),
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -1277,8 +1286,10 @@ func (r *CalicoManager) publishHelmCharts() error {
 		return nil
 	}
 	for _, reg := range r.helmRegistries {
-		if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, r.helmChartVersion())), reg); err != nil {
-			return err
+		for _, chart := range utils.AllReleaseCharts() {
+			if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion())), reg); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -1326,13 +1337,12 @@ func (r *CalicoManager) updateHelmChartIndex() error {
 func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
 	// Validate that the release notes for this version are present,
 	// fail if not.
-
 	releaseNotesPath := filepath.Join(r.repoRoot, "release-notes", fmt.Sprintf("%s-release-notes.md", ver))
 	releaseNotesStat, err := os.Stat(releaseNotesPath)
-	// If we got an error, handle that?
 	if err != nil {
 		return fmt.Errorf("release notes file is invalid: %s", err.Error())
 	}
+
 	if releaseNotesStat.Size() == 0 {
 		return fmt.Errorf("release notes file is invalid: file is 0 bytes")
 	} else if releaseNotesStat.IsDir() {

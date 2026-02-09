@@ -18,29 +18,20 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
 	ClusterInfoResourceName = "ClusterInformations"
-	ClusterInfoCRDName      = "clusterinformations.crd.projectcalico.org"
 )
 
-func NewClusterInfoClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
+func NewClusterInfoClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
 		restClient:      r,
-		name:            ClusterInfoCRDName,
 		resource:        ClusterInfoResourceName,
-		description:     "Calico Cluster Information",
 		k8sResourceType: reflect.TypeOf(apiv3.ClusterInformation{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindClusterInformation,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(apiv3.ClusterInformationList{}),
-		resourceKind: apiv3.KindClusterInformation,
+		k8sListType:     reflect.TypeOf(apiv3.ClusterInformationList{}),
+		kind:            apiv3.KindClusterInformation,
+		apiGroup:        group,
 	}
 }

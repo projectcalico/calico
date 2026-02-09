@@ -403,15 +403,23 @@ func decode(
 //	   }
 //	})
 func (rs *resourceStore) GuaranteedUpdate(
-	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
-	preconditions *storage.Preconditions, userUpdate storage.UpdateFunc, cachedExistingObject runtime.Object,
+	ctx context.Context,
+	key string,
+	out runtime.Object,
+	ignoreNotFound bool,
+	preconditions *storage.Preconditions,
+	userUpdate storage.UpdateFunc,
+	cachedExistingObject runtime.Object,
 ) error {
 	logrus.Tracef("GuaranteedUpdate called with key: %v on resource %v\n", key, rs.resourceName)
+
 	// If a cachedExistingObject was passed, use that as the initial object, otherwise use Get() to retrieve it
 	var initObj runtime.Object
 	if cachedExistingObject != nil {
+		logrus.Debugf("Using cached existing object for key: %v on resource %v\n", key, rs.resourceName)
 		initObj = cachedExistingObject
 	} else {
+		logrus.Debugf("Getting initial object for key: %v on resource %v\n", key, rs.resourceName)
 		initObj = reflect.New(rs.aapiType).Interface().(runtime.Object)
 		opts := storage.GetOptions{IgnoreNotFound: ignoreNotFound}
 		if err := rs.Get(ctx, key, opts, initObj); err != nil {
@@ -419,6 +427,7 @@ func (rs *resourceStore) GuaranteedUpdate(
 			return aapiError(err, key)
 		}
 	}
+
 	// In either case, extract current state from the initial object
 	curState, err := rs.getStateFromObject(initObj)
 	if err != nil {
@@ -441,6 +450,7 @@ func (rs *resourceStore) GuaranteedUpdate(
 			logrus.Errorf("checking preconditions (%s)", err)
 			return err
 		}
+
 		// update the object by applying the userUpdate func & encode it
 		updatedObj, ttl, err := userUpdate(curState.obj, *curState.meta)
 		if err != nil {

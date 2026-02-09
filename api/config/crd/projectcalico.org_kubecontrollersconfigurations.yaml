@@ -1,0 +1,271 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: kubecontrollersconfigurations.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: KubeControllersConfiguration
+    listKind: KubeControllersConfigurationList
+    plural: kubecontrollersconfigurations
+    singular: kubecontrollersconfiguration
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                controllers:
+                  properties:
+                    loadBalancer:
+                      properties:
+                        assignIPs:
+                          default: AllServices
+                          enum:
+                            - AllServices
+                            - RequestedServicesOnly
+                          type: string
+                      type: object
+                    namespace:
+                      properties:
+                        reconcilerPeriod:
+                          type: string
+                      type: object
+                    node:
+                      properties:
+                        hostEndpoint:
+                          properties:
+                            autoCreate:
+                              enum:
+                                - Enabled
+                                - Disabled
+                              type: string
+                            createDefaultHostEndpoint:
+                              type: string
+                            templates:
+                              items:
+                                properties:
+                                  generateName:
+                                    maxLength: 253
+                                    type: string
+                                  interfaceCIDRs:
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: set
+                                  interfacePattern:
+                                    type: string
+                                  labels:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  nodeSelector:
+                                    type: string
+                                type: object
+                              type: array
+                          type: object
+                        leakGracePeriod:
+                          type: string
+                        reconcilerPeriod:
+                          type: string
+                        syncLabels:
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
+                      type: object
+                    policy:
+                      properties:
+                        reconcilerPeriod:
+                          type: string
+                      type: object
+                    policyMigration:
+                      properties:
+                        enabled:
+                          default: Enabled
+                          enum:
+                            - Disabled
+                            - Enabled
+                          type: string
+                      type: object
+                    serviceAccount:
+                      properties:
+                        reconcilerPeriod:
+                          type: string
+                      type: object
+                    workloadEndpoint:
+                      properties:
+                        reconcilerPeriod:
+                          type: string
+                      type: object
+                  type: object
+                debugProfilePort:
+                  format: int32
+                  maximum: 65535
+                  minimum: 0
+                  type: integer
+                etcdV3CompactionPeriod:
+                  type: string
+                healthChecks:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                logSeverityScreen:
+                  enum:
+                    - None
+                    - Debug
+                    - Info
+                    - Warning
+                    - Error
+                    - Fatal
+                    - Panic
+                  type: string
+                prometheusMetricsPort:
+                  maximum: 65535
+                  minimum: 0
+                  type: integer
+              required:
+                - controllers
+              type: object
+            status:
+              properties:
+                environmentVars:
+                  additionalProperties:
+                    type: string
+                  type: object
+                runningConfig:
+                  properties:
+                    controllers:
+                      properties:
+                        loadBalancer:
+                          properties:
+                            assignIPs:
+                              default: AllServices
+                              enum:
+                                - AllServices
+                                - RequestedServicesOnly
+                              type: string
+                          type: object
+                        namespace:
+                          properties:
+                            reconcilerPeriod:
+                              type: string
+                          type: object
+                        node:
+                          properties:
+                            hostEndpoint:
+                              properties:
+                                autoCreate:
+                                  enum:
+                                    - Enabled
+                                    - Disabled
+                                  type: string
+                                createDefaultHostEndpoint:
+                                  type: string
+                                templates:
+                                  items:
+                                    properties:
+                                      generateName:
+                                        maxLength: 253
+                                        type: string
+                                      interfaceCIDRs:
+                                        items:
+                                          type: string
+                                        type: array
+                                        x-kubernetes-list-type: set
+                                      interfacePattern:
+                                        type: string
+                                      labels:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      nodeSelector:
+                                        type: string
+                                    type: object
+                                  type: array
+                              type: object
+                            leakGracePeriod:
+                              type: string
+                            reconcilerPeriod:
+                              type: string
+                            syncLabels:
+                              enum:
+                                - Enabled
+                                - Disabled
+                              type: string
+                          type: object
+                        policy:
+                          properties:
+                            reconcilerPeriod:
+                              type: string
+                          type: object
+                        policyMigration:
+                          properties:
+                            enabled:
+                              default: Enabled
+                              enum:
+                                - Disabled
+                                - Enabled
+                              type: string
+                          type: object
+                        serviceAccount:
+                          properties:
+                            reconcilerPeriod:
+                              type: string
+                          type: object
+                        workloadEndpoint:
+                          properties:
+                            reconcilerPeriod:
+                              type: string
+                          type: object
+                      type: object
+                    debugProfilePort:
+                      format: int32
+                      maximum: 65535
+                      minimum: 0
+                      type: integer
+                    etcdV3CompactionPeriod:
+                      type: string
+                    healthChecks:
+                      default: Enabled
+                      enum:
+                        - Enabled
+                        - Disabled
+                      type: string
+                    logSeverityScreen:
+                      enum:
+                        - None
+                        - Debug
+                        - Info
+                        - Warning
+                        - Error
+                        - Fatal
+                        - Panic
+                      type: string
+                    prometheusMetricsPort:
+                      maximum: 65535
+                      minimum: 0
+                      type: integer
+                  required:
+                    - controllers
+                  type: object
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true

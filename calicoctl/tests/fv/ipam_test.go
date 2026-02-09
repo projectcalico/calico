@@ -71,7 +71,7 @@ func TestIPAM(t *testing.T) {
 
 		// Set Calico version in ClusterInformation
 		out, err := SetCalicoVersion(kdd)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred(), out)
 		Expect(out).To(ContainSubstring("Calico version set to"))
 
 		// ipam show with specific unallocated IP.

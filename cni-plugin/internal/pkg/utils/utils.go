@@ -702,6 +702,11 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 			return nil, err
 		}
 	}
+	if conf.CalicoAPIGroup != "" {
+		if err := os.Setenv("CALICO_API_GROUP", string(conf.CalicoAPIGroup)); err != nil {
+			return nil, err
+		}
+	}
 
 	if conf.QPS != 0 {
 		if err := os.Setenv("K8S_CLIENT_QPS", fmt.Sprintf("%d", conf.QPS)); err != nil {

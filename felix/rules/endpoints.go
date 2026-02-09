@@ -404,7 +404,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 		chainToJumpTo := PolicyChainName(
 			polChainPrefix,
 			pol,
-			r.NFTables,
+			r.nft,
 		)
 		rules = append(rules, generictables.Rule{
 			Match:  match,
@@ -461,7 +461,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			// Add ingress packet rate limit rules if applicable
 			if qosControls.IngressPacketRate != 0 {
 				logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "IngressPacketBurst": qosControls.IngressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
-				if r.NFTables {
+				if r.nft {
 					rules = append(rules,
 						generictables.Rule{
 							Match:   r.NewMatch(),
@@ -499,7 +499,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			// Add egress packet rate limit rules if applicable
 			if qosControls.EgressPacketRate != 0 {
 				logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "EgressPacketBurst": qosControls.EgressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
-				if r.NFTables {
+				if r.nft {
 					rules = append(rules,
 						generictables.Rule{
 							Match:   r.NewMatch(),
@@ -644,7 +644,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
 							policyPrefix,
 							p,
-							r.NFTables,
+							r.nft,
 						))
 					}
 				} else {
@@ -738,7 +738,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType == chainTypeNormal {
 		// Then, jump to each profile in turn.
 		for _, profileID := range profileIds {
-			profChainName := ProfileChainName(profilePrefix, &types.ProfileID{Name: profileID}, r.NFTables)
+			profChainName := ProfileChainName(profilePrefix, &types.ProfileID{Name: profileID}, r.nft)
 			rules = append(rules,
 				generictables.Rule{Match: r.NewMatch(), Action: r.Jump(profChainName)},
 				// If policy marked packet as accepted, it returns, setting the

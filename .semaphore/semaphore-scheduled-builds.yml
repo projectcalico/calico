@@ -906,19 +906,19 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF program-loading check on 25.04 (nftables)"
+  - name: "Felix: BPF program-loading check on 25.10 (nftables)"
     run:
       when: "true"
     dependencies:
       - "Felix: Build"
     task:
       jobs:
-        - name: "Felix: BPF program-loading check on 25.04"
+        - name: "Felix: BPF program-loading check on 25.10"
           execution_time_limit:
             minutes: 30
           env_vars:
             - name: FELIX_TEST_GROUP
-              value: "bpf-25.04-nft-no-fv-with-ut"
+              value: "bpf-25.10-nft-no-fv-with-ut"
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
           commands:
@@ -932,19 +932,19 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2 (nftables)"
+  - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
     run:
       when: "true"
     dependencies:
       - "Felix: Build"
     task:
       jobs:
-        - name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2"
+        - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2"
           execution_time_limit:
             minutes: 60
           env_vars:
             - name: FELIX_TEST_GROUP
-              value: "bpf-25.04-nft-with-ut-jitharden"
+              value: "bpf-25.10-nft-with-ut-jitharden"
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
           commands:
@@ -1070,12 +1070,23 @@ blocks:
         commands:
           - cd libcalico-go
       jobs:
-        - name: "libcalico-go: CI"
+        # Run the tests twice, once for each backing API version.
+        - name: "libcalico-go: CI (crd.projectcalico.org/v1)"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+        - name: "libcalico-go: CI (projectcalico.org/v3)"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
+            - name: CALICO_API_GROUP
+              value: projectcalico.org/v3
+            - name: GINKGO_SKIP
+              value: "etcdv3 backend"
   - name: "Node: Build"
     run:
       when: "true"
@@ -1316,56 +1327,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-  - name: "OpenStack integration (Yoga)"
-    run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"
-    dependencies:
-      - Prerequisites
-    task:
-      agent:
-        machine:
-          type: f1-standard-2
-          os_image: ubuntu2204
-      prologue:
-        commands:
-          - cd networking-calico
-      jobs:
-        - name: "OpenStack: Unit and FV tests (tox) on Yoga"
-          commands:
-            - ../.semaphore/run-and-monitor tox.log make tox-yoga
-        - name: "OpenStack: Mainline ST (DevStack + Tempest) on Yoga"
-          commands:
-            # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
-            # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
-            # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
-            # or replace the existing version.  Happily we do know that, so let's do it upfront here.
-            - sudo apt-get remove -y python3-wrapt || true
-            # Install all the packages that would trigger an initramfs update using a workaround
-            # for limited /boot partition space in the ubuntu2004 image
-            - sudo apt update
-            - sudo rsync -av /boot/ /boot2/
-            - sudo mount --bind /boot2 /boot
-            - sudo apt install -y cryptsetup lsscsi open-iscsi thin-provisioning-tools
-            - sudo umount /boot
-            - sudo rsync -av /boot2/ /boot/ --exclude "*.new" --exclude "*.dpkg-bak" --delete --inplace
-            - sudo rm -rf /boot2/
-            # Set NC_PLUGIN_REPO and NC_PLUGIN_REF so that DevStack will use the networking-calico
-            # code from the current PR or branch.  The following checkout is to make sure of having a
-            # local ref that we can specify.
-            - git checkout -b devstack-test
-            - export NC_PLUGIN_REPO=$(dirname $(pwd))
-            - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
-            - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
-            # The BIRD config in our DevStack setup is thoroughly broken and generates loads of errors
-            # in the log.  But we don't need it for a single node setup anyway, so let's disable it.
-            - export CALICO_BGP_MODE=none
-            - TEMPEST=true OPENSTACK_RELEASE=yoga ./devstack/bootstrap.sh
-      epilogue:
-        on_fail:
-          commands:
-            - mkdir logs
-            - sudo journalctl > logs/journalctl.txt
-            - artifact push job logs
   - name: "OpenStack integration (Caracal)"
     run:
       when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"

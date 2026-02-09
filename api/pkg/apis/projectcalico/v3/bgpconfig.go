@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ const (
 	KindBGPConfigurationList = "BGPConfigurationList"
 )
 
+// +kubebuilder:validation:Enum=None;NodeIP
 type BindMode string
 
 const (
@@ -33,11 +34,12 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName={bgpconfig,bgpconfigs}
 
 // BGPConfigurationList is a list of BGPConfiguration resources.
 type BGPConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []BGPConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -45,12 +47,12 @@ type BGPConfigurationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
+// +kubebuilder:resource:scope=Cluster
 type BGPConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec BGPConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec BGPConfigurationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // ServiceLoadBalancerAggregation defines how LoadBalancer service IPs should be aggregated for BGP advertisement.
@@ -66,25 +68,32 @@ const (
 
 // BGPConfigurationSpec contains the values of the BGP configuration.
 type BGPConfigurationSpec struct {
-	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: INFO]
+	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
+	// +kubebuilder:default=Info
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel" confignamev1:"loglevel"`
 
 	// NodeToNodeMeshEnabled sets whether full node to node BGP mesh is enabled. [Default: true]
+	// +optional
 	NodeToNodeMeshEnabled *bool `json:"nodeToNodeMeshEnabled,omitempty" validate:"omitempty" confignamev1:"node_mesh"`
 
 	// ASNumber is the default AS number used by a node. [Default: 64512]
+	// +optional
 	ASNumber *numorstring.ASNumber `json:"asNumber,omitempty" validate:"omitempty" confignamev1:"as_num"`
 
 	// ServiceLoadBalancerIPs are the CIDR blocks for Kubernetes Service LoadBalancer IPs.
 	// Kubernetes Service status.LoadBalancer.Ingress IPs will only be advertised if they are within one of these blocks.
+	// +listType=set
 	ServiceLoadBalancerIPs []ServiceLoadBalancerIPBlock `json:"serviceLoadBalancerIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_loadbalancer_ips"`
 
 	// ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
 	// Kubernetes Service ExternalIPs will only be advertised if they are within one of these blocks.
+	// +listType=set
 	ServiceExternalIPs []ServiceExternalIPBlock `json:"serviceExternalIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_external_ips"`
 
 	// ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated.
 	// If specified, Calico will advertise these blocks, as well as any cluster IPs within them.
+	// +listType=set
 	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_cluster_ips"`
 
 	// ServiceLoadBalancerAggregation controls how LoadBalancer service IPs are advertised.
@@ -95,9 +104,11 @@ type BGPConfigurationSpec struct {
 	ServiceLoadBalancerAggregation *ServiceLoadBalancerAggregation `json:"serviceLoadBalancerAggregation,omitempty" validate:"omitempty" confignamev1:"svc_loadbalancer_aggregation"`
 
 	// Communities is a list of BGP community values and their arbitrary names for tagging routes.
+	// +listType=set
 	Communities []Community `json:"communities,omitempty" validate:"omitempty,dive" confignamev1:"communities"`
 
 	// PrefixAdvertisements contains per-prefix advertisement configuration.
+	// +listType=set
 	PrefixAdvertisements []PrefixAdvertisement `json:"prefixAdvertisements,omitempty" validate:"omitempty,dive" confignamev1:"prefix_advertisements"`
 
 	// ListenPort is the port where BGP protocol should listen. Defaults to 179
@@ -124,6 +135,7 @@ type BGPConfigurationSpec struct {
 
 	// IgnoredInterfaces indicates the network interfaces that needs to be excluded when reading device routes.
 	// +optional
+	// +listType=set
 	IgnoredInterfaces []string `json:"ignoredInterfaces,omitempty" validate:"omitempty,dive,ignoredInterface"`
 
 	// The virtual IPv4 address of the node with which its local workload is expected to peer.
@@ -138,21 +150,28 @@ type BGPConfigurationSpec struct {
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.
+// +mapType=atomic
 type ServiceLoadBalancerIPBlock struct {
+	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
 // ServiceExternalIPBlock represents a single allowed External IP CIDR block.
+// +mapType=atomic
 type ServiceExternalIPBlock struct {
+	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
 // ServiceClusterIPBlock represents a single allowed ClusterIP CIDR block.
+// +mapType=atomic
 type ServiceClusterIPBlock struct {
+	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
 // Community contains standard or large community value and its name.
+// +mapType=atomic
 type Community struct {
 	// Name given to community value.
 	Name string `json:"name,omitempty" validate:"required,name"`
@@ -165,8 +184,10 @@ type Community struct {
 }
 
 // PrefixAdvertisement configures advertisement properties for the specified CIDR.
+// +mapType=atomic
 type PrefixAdvertisement struct {
 	// CIDR for which properties should be advertised.
+	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"required,net"`
 	// Communities can be list of either community names already defined in `Specs.Communities` or community value of format `aa:nn` or `aa:nn:mm`.
 	// For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.

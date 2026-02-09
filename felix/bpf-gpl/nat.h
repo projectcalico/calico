@@ -174,26 +174,32 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("VXLAN: Invalid VNI");
 		goto fall_through;
 	}
-	if (vxlan_vni(ctx) != CALI_VXLAN_VNI) {
+	if (vxlan_vni(ctx) == OVERLAY_TUNNEL_ID) {
 		if (rt_addr_is_remote_host((ipv46_addr_t *)&ip_hdr(ctx)->saddr)) {
 			/* Not BPF-generated VXLAN packet but it was from a Calico host to this node. */
 			CALI_DEBUG("VXLAN: non-tunnel calico");
 			goto auto_allow;
 		}
-		/* Not our VNI, not from Calico host. Fall through to policy. */
-		CALI_DEBUG("VXLAN: Not our VNI");
+		/* Our VNI, but not from a Calico host. Fall through to policy. */
+		CALI_DEBUG("VXLAN with our VNI (0x%x) from non-calico source.", vxlan_vni(ctx));
+		/* N.B. we defer dropping to policy */
 		goto fall_through;
-	}
-	if (!rt_addr_is_remote_host((ipv46_addr_t *)&ip_hdr(ctx)->saddr)) {
-		CALI_DEBUG("VXLAN with our VNI from unexpected source.");
-		deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
-		goto deny;
-	}
-	if (!vxlan_udp_csum_ok(udp_hdr(ctx))) {
-		/* Our VNI but checksum is incorrect (we always use check=0). */
-		CALI_DEBUG("VXLAN with our VNI but incorrect checksum.");
-		deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
-		goto deny;
+	} else if (vxlan_vni(ctx) == CALI_VXLAN_VNI) {
+		if (!rt_addr_is_remote_host((ipv46_addr_t *)&ip_hdr(ctx)->saddr)) {
+			CALI_DEBUG("VXLAN with our VNI (0x%x) from unexpected source.", vxlan_vni(ctx));
+			deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
+			goto deny;
+		}
+		if (!vxlan_udp_csum_ok(udp_hdr(ctx))) {
+			/* Our VNI but checksum is incorrect (we always use check=0). */
+			CALI_DEBUG("VXLAN with our VNI but incorrect checksum.");
+			deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
+			goto deny;
+		}
+	} else {
+		/* Not our VNI, not from Calico host. Fall through to policy. */
+		CALI_DEBUG("VXLAN: Not our VNI 0x%x", vxlan_vni(ctx));
+		goto fall_through;
 	}
 
 	/* We update the map straight with the packet data, eth header is

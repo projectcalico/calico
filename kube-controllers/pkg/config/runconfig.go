@@ -344,7 +344,10 @@ func getOrCreateSnapshot(ctx context.Context, kcc clientv3.KubeControllersConfig
 // mergeConfig takes the environment variables, and resulting config
 func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControllersConfigurationSpec) (RunConfig, v3.KubeControllersConfigurationStatus) {
 	var rCfg RunConfig
-	status := v3.KubeControllersConfigurationStatus{EnvironmentVars: map[string]string{}}
+	status := v3.KubeControllersConfigurationStatus{
+		RunningConfig:   &v3.KubeControllersConfigurationSpec{},
+		EnvironmentVars: map[string]string{},
+	}
 	rc := &rCfg.Controllers
 
 	mergeLogLevel(envVars, &status, &rCfg, apiCfg)
@@ -411,14 +414,6 @@ func mergeLoadBalancer(status *v3.KubeControllersConfigurationStatus, rCfg *RunC
 		if apiCfg.Controllers.LoadBalancer != nil {
 			rCfg.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
 			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
-		}
-	} else {
-		// We can enable the LoadBalancer controller as it won't be assigning any IPs if IPPool for LoadBalancer is not set
-		rCfg.Controllers.LoadBalancer = &LoadBalancerControllerConfig{
-			AssignIPs: v3.AllServices,
-		}
-		status.RunningConfig.Controllers.LoadBalancer = &v3.LoadBalancerControllerConfig{
-			AssignIPs: v3.AllServices,
 		}
 	}
 }
@@ -669,8 +664,12 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 				rc.ServiceAccount = &GenericControllerConfig{}
 				sc.ServiceAccount = &v3.ServiceAccountControllerConfig{}
 			case "loadbalancer":
-				rc.LoadBalancer = &LoadBalancerControllerConfig{}
-				sc.LoadBalancer = &v3.LoadBalancerControllerConfig{}
+				rc.LoadBalancer = &LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}
+				sc.LoadBalancer = &v3.LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}
 			case "flannelmigration":
 				log.WithField(EnvEnabledControllers, v).Fatal("cannot run flannelmigration with other controllers")
 			default:

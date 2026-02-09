@@ -1,0 +1,26 @@
+From 3cc87eafcb5657bf02bfc9a11573684b5577b30b Mon Sep 17 00:00:00 2001
+From: Casey Davenport <davenport.cas@gmail.com>
+Date: Wed, 4 Feb 2026 14:36:34 -0800
+Subject: [PATCH] Add nullable to IPAM block allocations field
+
+---
+ api/config/crd/projectcalico.org_ipamblocks.yaml | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/api/config/crd/projectcalico.org_ipamblocks.yaml b/api/config/crd/projectcalico.org_ipamblocks.yaml
+index a6159008d1..20beb8de45 100644
+--- a/api/config/crd/projectcalico.org_ipamblocks.yaml
++++ b/api/config/crd/projectcalico.org_ipamblocks.yaml
+@@ -44,6 +44,9 @@ spec:
+                 allocations:
+                   items:
+                     type: integer
++                    # TODO: This nullable is manually added in. We should update controller-gen
++                    # to handle []*int properly itself.
++                    nullable: true
+                   type: array
+                 attributes:
+                   items:
+--
+2.34.1
+

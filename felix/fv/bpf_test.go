@@ -400,6 +400,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFProfiling"] = "Enabled"
+			options.ExtraEnvVars["FELIX_PrometheusMetricsEnabled"] = "true"
+			options.ExtraEnvVars["FELIX_PrometheusMetricsHost"] = "0.0.0.0"
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
@@ -1915,6 +1917,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						familyInt = 6
 					}
 
+					felixWithMaglevBackend := 0
+					initialIngressFelix := 1
+					failoverIngressFelix := 2
+
 					newConntrackKey := func(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, family string) conntrack.KeyInterface {
 						var key conntrack.KeyInterface
 						// cmp := bytes.Compare(srcIP, dstIP)
@@ -1991,6 +1997,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 					}
 
+					probeMaglevConntrackMetric := func(metricName string, felixes ...*infrastructure.Felix) []int {
+						counts := make([]int, 0)
+						for _, f := range felixes {
+							ctCount, err := f.PromMetric(metricName).Int()
+							if err != nil {
+								log.WithError(err).WithField("felix", f.Name).Warn("Error while probing Felix metric. Skipping this felix")
+								continue
+							}
+							counts = append(counts, ctCount)
+						}
+						return counts
+					}
+
 					BeforeEach(func() {
 						switch testOpts.protocol {
 						case "udp":
@@ -2004,11 +2023,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						log.WithFields(log.Fields{"number": proto, "name": testOpts.protocol}).Info("parsed protocol")
 
+						pTCP := numorstring.ProtocolFromString("tcp")
+						promPinhole := api.Rule{
+							Action:   "Allow",
+							Protocol: &pTCP,
+							Destination: api.EntityRule{
+								Ports: []numorstring.Port{
+									{MinPort: 9091, MaxPort: 9091},
+								},
+								Nets: []string{},
+							},
+						}
+
 						// Create policy allowing ingress from external client
 						allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
 						allowIngressFromExtClient.Namespace = "fv"
 						allowIngressFromExtClient.Name = "policy-ext-client"
 						allowIngressFromExtClient.Spec.Ingress = []api.Rule{
+							promPinhole,
 							{
 								Action: "Allow",
 								Source: api.EntityRule{
@@ -2024,11 +2056,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
 
 						// Create service with maglev annotation
-						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0,
+						testSvc = k8sServiceWithExtIP(testSvcName, clusterIP, w[felixWithMaglevBackend][0], 80, tgtPort, 0,
 							testOpts.protocol, []string{externalIP})
 						testSvc.Annotations = map[string]string{
 							"lb.projectcalico.org/external-traffic-strategy": "maglev",
 						}
+
 						testSvcNamespace = testSvc.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
@@ -2080,16 +2113,39 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cmdCleanRt = append(ipRoute, "route", "del", externalIP)
 						_ = externalClient.ExecMayFail(strings.Join(cmdCleanRt, ""))
 
-						cmdCIP := append(ipRoute, "route", "add", clusterIP, "via", felixIP(1))
+						cmdCIP := append(ipRoute, "route", "add", clusterIP, "via", felixIP(initialIngressFelix))
 						externalClient.Exec(cmdCIP...)
-						cmdEIP := append(ipRoute, "route", "add", externalIP, "via", felixIP(1))
+						cmdEIP := append(ipRoute, "route", "add", externalIP, "via", felixIP(initialIngressFelix))
 						externalClient.Exec(cmdEIP...)
 					})
 
 					It("should have connectivity from external client to maglev backend via cluster IP and external IP", func() {
+						probeMaglevLocalConntrackMetricFunc := func(felixes ...*infrastructure.Felix) func() []int {
+							return func() []int {
+								return probeMaglevConntrackMetric(fmt.Sprintf("felix_bpf_conntrack_maglev_entries_total{destination=\"local\",ip_family=\"%d\"}", familyInt), felixes...)
+							}
+						}
+						probeMaglevRemoteConntrackMetricFunc := func(felixes ...*infrastructure.Felix) func() []int {
+							return func() []int {
+								return probeMaglevConntrackMetric(fmt.Sprintf("felix_bpf_conntrack_maglev_entries_total{destination=\"remote\",ip_family=\"%d\"}", familyInt), felixes...)
+							}
+						}
+
+						Eventually(probeMaglevLocalConntrackMetricFunc(tc.Felixes...), "10s", "1s").Should(Equal([]int{0, 0, 0}), "Expected maglev local-conntrack metric to start at 0 for all Felixes")
+						Eventually(probeMaglevRemoteConntrackMetricFunc(tc.Felixes...), "10s", "1s").Should(Equal([]int{0, 0, 0}), "Expected maglev remote-conntrack metric to start at 0 for all Felixes")
+
 						cc.ExpectSome(externalClient, TargetIP(clusterIP), port)
 						cc.ExpectSome(externalClient, TargetIP(externalIP), port)
 						cc.CheckConnectivity()
+
+						// There is a 10-second interval between iterations of Felix's conntrack scanner (where we export the maglev conntrack metrics).
+						// This means we must be very pessimistic about timeouts when searching for the prom values we're after.
+						Eventually(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[initialIngressFelix]), "12s", "1s").Should(Equal([]int{2}), "Expected maglev-ingress felix to increment the remote-conntracks metric")
+						Eventually(probeMaglevLocalConntrackMetricFunc(tc.Felixes[felixWithMaglevBackend]), "12s", "1s").Should(Equal([]int{2}), "Expected felix with maglev backend to increment the local-conntracks metric")
+						Consistently(probeMaglevLocalConntrackMetricFunc(tc.Felixes[initialIngressFelix])).Should(Equal([]int{0}), "Expected ingress-felix to only have remote maglev conntracks, but saw metric for local maglev conntracks go up")
+						Consistently(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[felixWithMaglevBackend])).Should(Equal([]int{0}), "Expected backing felix to only have local maglev conntracks, but saw metric for remote maglev conntracks go up")
+						Consistently(probeMaglevLocalConntrackMetricFunc(tc.Felixes[failoverIngressFelix])).Should(Equal([]int{0}), "No failover occurred, but an unrelated Felix's local maglev prom metrics went up")
+						Consistently(probeMaglevRemoteConntrackMetricFunc(tc.Felixes[failoverIngressFelix])).Should(Equal([]int{0}), "No failover occurred, but an unrelated Felix's remote maglev prom metrics went up")
 					})
 
 					testFailover := func(serviceIP string) {
@@ -4760,7 +4816,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.ExpectNone(externalClient, TargetIP(felixIP(1)), npPort)
 							cc.CheckConnectivity()
 
-							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }, 10*time.Second, 200*time.Millisecond).
 								Should(BeNumerically(">", 0), matcher)
 						})
 					})
@@ -4796,7 +4852,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								cc.ExpectNone(externalClient, TargetIP(felixIP(1)), npPort)
 								cc.CheckConnectivity()
-								Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+								Eventually(func() int { return tcpdump.MatchCount("ICMP") }, 10*time.Second, 200*time.Millisecond).
 									Should(BeNumerically(">", 0), matcher)
 							})
 						}
@@ -4819,7 +4875,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							cc.ExpectNone(w[1][1], TargetIP(tgtWorkload.IP), uint16(tgtPort))
 							cc.CheckConnectivity()
-							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }, 10*time.Second, 200*time.Millisecond).
 								Should(BeNumerically(">", 0), matcher)
 						})
 
@@ -4868,18 +4924,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				hostIP0 := TargetIP(felixIP(0))
 				hostPort := uint16(8080)
+				target := net.JoinHostPort(w[0][0].IP, "8055")
+
 				var (
-					target    string
 					tool      string
 					nftFamily string
 				)
-
 				if testOpts.ipv6 {
-					target = fmt.Sprintf("[%s]:8055", w[0][0].IP)
 					tool = "ip6tables"
 					nftFamily = "ip6"
 				} else {
-					target = fmt.Sprintf("%s:8055", w[0][0].IP)
 					tool = "iptables"
 					nftFamily = "ip"
 				}
@@ -4980,6 +5034,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				pol = createPolicy(pol)
 
 				pc = nil
+				if NFTMode() && testOpts.ipv6 && !testOpts.dsr && testOpts.tunnel == "none" && testOpts.connTimeEnabled {
+					// In NFT mode, we add the kube-proxy tables.
+					tc.Felixes[0].Exec("nft", "add", "table", "ip", "kube-proxy")
+					tc.Felixes[0].Exec("nft", "add", "chain", "ip", "kube-proxy", "KUBE-TEST", "{ type filter hook forward priority 0 ; }")
+					tc.Felixes[0].Exec("nft", "add", "table", "ip6", "kube-proxy")
+					tc.Felixes[0].Exec("nft", "add", "chain", "ip6", "kube-proxy", "KUBE-TEST", "{ type filter hook forward priority 0 ; }")
+				}
 			})
 
 			AfterEach(func() {
@@ -5008,6 +5069,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				// Wait for BPF to be active.
 				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+				if NFTMode() && testOpts.ipv6 && !testOpts.dsr && testOpts.tunnel == "none" && testOpts.connTimeEnabled {
+					Eventually(func() string {
+						out, _ := tc.Felixes[0].ExecOutput("nft", "list", "tables")
+						return out
+					}, "15s", "1s").ShouldNot(ContainSubstring("kube-proxy"))
+				}
 			}
 
 			expectPongs := func() {

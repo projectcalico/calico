@@ -344,6 +344,13 @@ func (c *loadBalancerController) handleIPPoolUpdate(kvp model.KVPair) {
 	}
 
 	pool := kvp.Value.(*api.IPPool)
+
+	if pool.DeletionTimestamp != nil {
+		// Pool is being deleted, remove it from our map.
+		delete(c.ipPools, kvp.Key.String())
+		return
+	}
+
 	if slices.Contains(pool.Spec.AllowedUses, api.IPPoolAllowedUseLoadBalancer) {
 		c.ipPools[kvp.Key.String()] = *pool
 	} else {
@@ -431,7 +438,18 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 			}
 		} else {
 			// We can skip service sync if there are no ippools defined that can be used for Service LoadBalancer
-			log.Warnf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svcKey.namespace, svcKey.name)
+			svc, err := c.serviceLister.Services(svcKey.namespace).Get(svcKey.name)
+			if apierrors.IsNotFound(err) {
+				return
+			}
+			if err != nil {
+				log.WithError(err).Errorf("Error getting service %s/%s", svcKey.namespace, svcKey.name)
+				return
+			}
+			if IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs) {
+				// Only warn the user if the service is managed by Calico and should have IP assigned
+				log.Warnf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svcKey.namespace, svcKey.name)
+			}
 		}
 		return
 	}

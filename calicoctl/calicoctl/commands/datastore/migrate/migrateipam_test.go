@@ -293,7 +293,7 @@ func (c *MockIPAMClient) CalicoNodeStatus() client.CalicoNodeStatusInterface {
 	return nil
 }
 
-func (c *MockIPAMClient) IPAMConfig() client.IPAMConfigInterface {
+func (c *MockIPAMClient) IPAMConfiguration() client.IPAMConfigurationInterface {
 	// DO NOTHING
 	return nil
 }

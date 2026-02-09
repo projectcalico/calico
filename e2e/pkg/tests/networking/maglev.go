@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -540,14 +541,9 @@ func (m *MaglevTests) sendRequestsAndGatherStats(extNode *externalnode.Client, u
 		// Use external node to run rapidclient with netexec endpoint to get hostname
 		// Use configured source port for consistent testing
 		var cmd string
-		if useIPv6 {
-			// For IPv6, we need to wrap the IP in brackets for the URL
-			cmd = fmt.Sprintf("sudo docker run --rm --net=host %s -url http://[%s]:%d/shell?cmd=hostname -port %d",
-				images.RapidClient, clusterIP, m.maglevConfig.ServicePort, m.maglevConfig.SourcePort)
-		} else {
-			cmd = fmt.Sprintf("sudo docker run --rm --net=host %s -url http://%s:%d/shell?cmd=hostname -port %d",
-				images.RapidClient, clusterIP, m.maglevConfig.ServicePort, m.maglevConfig.SourcePort)
-		}
+		ep := net.JoinHostPort(clusterIP, fmt.Sprint(m.maglevConfig.ServicePort))
+		cmd = fmt.Sprintf("sudo docker run --rm --net=host %s -url http://%s/shell?cmd=hostname -port %d",
+			images.RapidClient, ep, m.maglevConfig.SourcePort)
 		output, err := extNode.Exec("sh", "-c", cmd)
 		Expect(err).NotTo(HaveOccurred())
 
