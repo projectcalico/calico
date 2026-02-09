@@ -21,6 +21,9 @@ spec:
         - jsonPath: .spec.tier
           name: Tier
           type: string
+        - jsonPath: .spec.order
+          name: Orders
+          type: string
       name: v3
       schema:
         openAPIV3Schema:

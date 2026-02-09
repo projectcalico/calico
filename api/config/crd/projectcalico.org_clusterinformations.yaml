@@ -17,7 +17,20 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The version of Calico that the cluster is running
+          jsonPath: .spec.calicoVersion
+          name: Version
+          type: string
+        - description: Whether the datastore is ready for use
+          jsonPath: .spec.datastoreReady
+          name: Ready
+          type: boolean
+        - description: The types associated with the cluster
+          jsonPath: .spec.clusterType
+          name: Types
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -46,3 +59,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

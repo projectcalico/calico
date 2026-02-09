@@ -25,7 +25,6 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster,shortName={kcc,kccs}
 
 // KubeControllersConfigurationList contains a list of KubeControllersConfiguration object.
 type KubeControllersConfigurationList struct {
@@ -39,6 +38,8 @@ type KubeControllersConfigurationList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:scope=Cluster,shortName={kcc,kccs}
+// +kubebuilder:printcolumn:name="EnabledControllers",type=string,JSONPath=".status.runningConfig.controllers",description="The controllers that are enabled in the kube-controllers configuration"
 
 type KubeControllersConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
