@@ -114,7 +114,13 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 			break;
 		case BPF_FIB_LKUP_RET_NOT_FWDED:
 			if (ip_link_local(ctx->state->ip_src)) {
-				ret = RPF_RES_STRICT;
+#ifdef IPVER6
+				if (ip_link_local(ctx->state->ip_dst)){
+#else
+				if (ip_equal(ctx->state->ip_dst, HOST_IP)) {
+#endif
+					ret = RPF_RES_STRICT;
+				}
 			}
 			break;
 
