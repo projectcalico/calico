@@ -207,6 +207,17 @@ func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
 		log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
 		return false
 	}
+
+	if pool.Status != nil {
+		// Skip any pools that have been marked as unavailable for allocations by the IP pool controller in kube-controllers.
+		for _, condition := range pool.Status.Conditions {
+			if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionFalse {
+				log.Debugf("Skipping IP pool (%s) with condition Allocatable=false", pool.Name)
+				return false
+			}
+		}
+	}
+
 	if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
 		log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
 		return true
