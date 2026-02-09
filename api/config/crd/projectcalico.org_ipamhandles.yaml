@@ -14,7 +14,12 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The handle ID
+          jsonPath: .spec.handleID
+          name: ID
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -44,3 +49,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

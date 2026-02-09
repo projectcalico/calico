@@ -10,11 +10,24 @@ spec:
     kind: GlobalNetworkPolicy
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
+    shortNames:
+      - gnp
+      - cgnp
     singular: globalnetworkpolicy
   preserveUnknownFields: false
-  scope: Cluster
+  scope: Namespaced
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -422,3 +435,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

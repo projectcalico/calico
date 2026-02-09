@@ -14,7 +14,38 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: Selector for the nodes that should have this peering
+          jsonPath: .spec.nodeSelector
+          name: Node Selector
+          type: string
+        - description:
+            The node name identifying the Calico node instance that is targeted
+            by this peer
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description:
+            The optional Local AS Number to use when peering with this remote
+            peer
+          jsonPath: .spec.localASNumber
+          name: Local ASN
+          type: string
+        - description: Selector for the remote nodes to peer with
+          jsonPath: .spec.peerSelector
+          name: Peer Selector
+          type: string
+        - description:
+            The IP address of the peer followed by an optional port number
+            to peer with
+          jsonPath: .spec.peerIP
+          name: Peer IP
+          type: string
+        - description: The AS Number of the peer
+          jsonPath: .spec.asNumber
+          name: Peer ASN
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -102,3 +133,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

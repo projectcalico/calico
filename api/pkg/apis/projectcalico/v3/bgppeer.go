@@ -39,6 +39,13 @@ type BGPPeerList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:printcolumn:name="Node Selector",type="string",JSONPath=".spec.nodeSelector",description="Selector for the nodes that should have this peering"
+// +kubebuilder:printcolumn:name="Node",type="string",JSONPath=".spec.node",description="The node name identifying the Calico node instance that is targeted by this peer"
+// +kubebuilder:printcolumn:name="Local ASN",type="string",JSONPath=".spec.localASNumber",description="The optional Local AS Number to use when peering with this remote peer"
+// +kubebuilder:printcolumn:name="Peer Selector",type="string",JSONPath=".spec.peerSelector",description="Selector for the remote nodes to peer with"
+// +kubebuilder:printcolumn:name="Peer IP",type="string",JSONPath=".spec.peerIP",description="The IP address of the peer followed by an optional port number to peer with"
+// +kubebuilder:printcolumn:name="Peer ASN",type="string",JSONPath=".spec.asNumber",description="The AS Number of the peer"
+
 type BGPPeer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`

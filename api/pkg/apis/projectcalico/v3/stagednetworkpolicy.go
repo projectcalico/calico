@@ -29,6 +29,7 @@ const (
 // +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:resource:shortName={scnp,snp}
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
+// +kubebuilder:printcolumn:name="Order",type=string,JSONPath=`.spec.order`
 
 // StagedNetworkPolicy is a staged NetworkPolicy.
 // StagedNetworkPolicy is the Namespaced-equivalent of the StagedGlobalNetworkPolicy.
