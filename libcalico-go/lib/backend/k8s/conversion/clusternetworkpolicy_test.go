@@ -479,7 +479,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (1000) is greater than maximum port number (10) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (1000) is greater than maximum port number (10) in port range",
 				},
 				{
 					IngressRule: nil,
@@ -497,7 +497,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (1000) is greater than maximum port number (10) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (1000) is greater than maximum port number (10) in port range",
 				},
 			},
 		}
@@ -1545,7 +1545,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (40) is greater than maximum port number (20) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (40) is greater than maximum port number (20) in port range",
 				},
 				{
 					EgressRule: nil,
@@ -1563,7 +1563,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (40) is greater than maximum port number (20) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (40) is greater than maximum port number (20) in port range",
 				},
 				{
 					IngressRule: nil,
@@ -1581,7 +1581,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (40) is greater than maximum port number (20) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (40) is greater than maximum port number (20) in port range",
 				},
 			},
 		}
