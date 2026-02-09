@@ -30,7 +30,7 @@ sub-image-%:
 # Build webhook image.
 webhook calico/webhook: $(IMAGE_BUILD_MARKER)
 $(IMAGE_BUILD_MARKER): $(BINARIES) bin/LICENSE
-	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t webhook:latest-$(ARCH) -f docker/Dockerfile .
+	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) --build-arg GIT_VERSION=$(GIT_VERSION) -t webhook:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -39,12 +39,6 @@ bin/webhook-$(ARCH): $(shell find . -name '*.go') $(shell find ../apiserver -nam
 
 bin/LICENSE: ../LICENSE.md
 	cp ../LICENSE.md $@
-
-###############################################################################
-# Generate files
-###############################################################################
-GENERATED_FILES=proto/api.pb.go
-gen-files: $(GENERATED_FILES) gen-mocks
 
 ###############################################################################
 # UTs
