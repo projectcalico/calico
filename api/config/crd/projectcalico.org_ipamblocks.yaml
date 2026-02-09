@@ -23,6 +23,10 @@ spec:
           jsonPath: .spec.affinity
           name: Affininty
           type: string
+        - description: The time at which affinity was claimed
+          jsonPath: .spec.affinityClaimTime
+          name: ClaimTime
+          type: date
       name: v3
       schema:
         openAPIV3Schema:
