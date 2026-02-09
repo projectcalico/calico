@@ -332,7 +332,7 @@ func unpackCNPProtocols(cnpProtocols []clusternetpol.ClusterNetworkPolicyProtoco
 	for _, p := range protocols {
 		protocol, calicoPort, err := k8sCNPPortToCalicoFields(&p)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse k8s port: %s", err)
+			return nil, nil, fmt.Errorf("failed to parse k8s protocol: %s", err)
 		}
 
 		if protocol == nil && calicoPort == nil {
