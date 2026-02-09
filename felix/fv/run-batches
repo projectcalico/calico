@@ -21,6 +21,7 @@
 : ${PRIVATE_KEY:=`pwd`/private.key}
 : ${GINKGO_ARGS:=}
 : ${GINKGO_FOCUS:=.*}
+: ${GINKGO_SKIP:=}
 
 mkdir -p cwlogs
 export FV_CWLOGDIR=`pwd`/cwlogs
@@ -36,6 +37,7 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
+               -ginkgo.skip="${GINKGO_SKIP}" \
                -ginkgo.focus="${GINKGO_FOCUS}" \
                ${GINKGO_ARGS} \
                -ginkgo.v \
@@ -48,6 +50,7 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
+               -ginkgo.skip="${GINKGO_SKIP}" \
                -ginkgo.focus="${GINKGO_FOCUS}" \
                ${GINKGO_ARGS}
      status=$?
