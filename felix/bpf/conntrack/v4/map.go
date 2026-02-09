@@ -225,6 +225,7 @@ const (
 	FlagNoRedirPeer uint32 = (1 << 14)
 	FlagSetDSCP     uint32 = (1 << 15)
 	FlagMaglev      uint32 = (1 << 16)
+	FlagSendRST     uint32 = (1 << 17)
 )
 
 func (e Value) ReverseNATKey() KeyInterface {
