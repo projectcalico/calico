@@ -399,6 +399,9 @@ func k8sCNPPortToCalicoFields(cnpProto *clusternetpol.ClusterNetworkPolicyProtoc
 
 func k8sCNPPortToCalico(port *clusternetpol.Port) (*numorstring.Port, error) {
 	// Only one of the Number or Range is set.
+	if port == nil {
+		return nil, nil
+	}
 	if port.Number != 0 {
 		p := numorstring.SinglePort(uint16(port.Number))
 		return &p, nil
