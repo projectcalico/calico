@@ -10,11 +10,19 @@ spec:
     kind: KubeControllersConfiguration
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
+    shortNames:
+      - kcc
+      - kccs
     singular: kubecontrollersconfiguration
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The controllers that are enabled in the kube-controllers configuration
+          jsonPath: .status.runningConfig.controllers
+          name: EnabledControllers
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -269,3 +277,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
