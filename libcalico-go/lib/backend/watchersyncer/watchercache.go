@@ -51,7 +51,9 @@ type watcherCache struct {
 	errorCountAtCurrentRev int
 	resyncBlockedUntil     time.Time
 	lastSuccessfulConnTime time.Time
+	lastEventTime          time.Time
 	watchRetryTimeout      time.Duration
+	reconnectStartTime     time.Time
 
 	// crdInstalled tracks whether or not we've detected that the backing API for this
 	// resource type is installed in the cluster.
@@ -85,16 +87,19 @@ type cacheEntry struct {
 
 // Create a new watcherCache.
 func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- interface{}, watchTimeout time.Duration) *watcherCache {
+	now := time.Now()
 	return &watcherCache{
-		logger:               logrus.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
-		client:               client,
-		resourceType:         resourceType,
-		results:              results,
-		resources:            make(map[string]cacheEntry, 0),
-		currentWatchRevision: "0",
-		resyncBlockedUntil:   time.Now(),
-		watchRetryTimeout:    watchTimeout,
-		crdInstalled:         true, // Assume true until we detect otherwise.
+		logger:                 logrus.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
+		client:                 client,
+		resourceType:           resourceType,
+		results:                results,
+		resources:              make(map[string]cacheEntry, 0),
+		currentWatchRevision:   "0",
+		resyncBlockedUntil:     now,
+		lastSuccessfulConnTime: now,
+		lastEventTime:          now, // Initialize to now to avoid immediate staleness
+		watchRetryTimeout:      watchTimeout,
+		crdInstalled:           true, // Assume true until we detect otherwise.
 	}
 }
 
@@ -154,20 +159,26 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 			case api.WatchAdded, api.WatchModified:
 				kvp := event.New
 				wc.handleWatchListEvent(kvp)
-				wc.lastSuccessfulConnTime = time.Now()
-			case api.WatchDeleted:
-				// Nil out the value to indicate a delete.
-				kvp := event.Old
-				if kvp == nil {
-					// Bug, we're about to panic when we hit the nil pointer, log something useful.
-					eventLogger.Panic("Deletion event without old value")
-				}
-				kvp.Value = nil
-				wc.handleWatchListEvent(kvp)
-				wc.lastSuccessfulConnTime = time.Now()
-			case api.WatchBookmark:
-				wc.handleWatchBookmark(event)
-				wc.lastSuccessfulConnTime = time.Now()
+			now := time.Now()
+			wc.lastSuccessfulConnTime = now
+			wc.lastEventTime = now
+		case api.WatchDeleted:
+			// Nil out the value to indicate a delete.
+			kvp := event.Old
+			if kvp == nil {
+				// Bug, we're about to panic when we hit the nil pointer, log something useful.
+				eventLogger.Panic("Deletion event without old value")
+			}
+			kvp.Value = nil
+			wc.handleWatchListEvent(kvp)
+			now := time.Now()
+			wc.lastSuccessfulConnTime = now
+			wc.lastEventTime = now
+		case api.WatchBookmark:
+			wc.handleWatchBookmark(event)
+			now := time.Now()
+			wc.lastSuccessfulConnTime = now
+			wc.lastEventTime = now // Bookmarks count as events too
 			case api.WatchError:
 				if kerrors.IsResourceExpired(event.Error) {
 					// Our current watch revision is too old.  Even with watch bookmarks, we hit this path after the
@@ -409,6 +420,13 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 func (wc *watcherCache) resetWatchRevisionForFullResync() {
 	wc.currentWatchRevision = "0"
 	wc.errorCountAtCurrentRev = 0
+	
+	// If we've previously synced, notify consumers that we're reconnecting
+	if wc.hasSynced {
+		wc.logger.Info("Connection lost after initial sync, sending ResyncInProgress status")
+		wc.reconnectStartTime = time.Now()
+		wc.results <- api.ResyncInProgress
+	}
 }
 
 var closedTimeC = make(chan time.Time)
@@ -442,12 +460,14 @@ func (wc *watcherCache) cleanExistingWatcher() {
 // We may also need to send deleted messages for old resources that were not validated in the
 // resync (i.e. they must have since been deleted).
 func (wc *watcherCache) finishResync() {
-	// If we haven't already sent an InSync event then send a synced notification.  The watcherSyncer will send a Synced
-	// event when it has received synced events from each cache. Once in-sync the cache remains in-sync.
 	if !wc.hasSynced {
-		wc.logger.Info("Sending synced update")
+		wc.logger.Info("Sending initial synced update")
 		wc.results <- api.InSync
 		wc.hasSynced = true
+	} else {
+		reconnectDuration := time.Since(wc.reconnectStartTime)
+		wc.logger.WithField("reconnectDuration", reconnectDuration).Info("Resync complete, returning to InSync state")
+		wc.results <- api.InSync
 	}
 
 	// If the watcher failed at any time, we end up recreating a watcher and storing off
@@ -469,6 +489,7 @@ func (wc *watcherCache) finishResync() {
 		wc.results <- updates
 	}
 	wc.oldResources = nil
+	wc.reconnectStartTime = time.Time{} // Reset reconnect tracking
 }
 
 // handleWatchListEvent handles a watch event converting it if required and passing to
