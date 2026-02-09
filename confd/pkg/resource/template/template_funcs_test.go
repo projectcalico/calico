@@ -264,23 +264,6 @@ var (
 	}
 )
 
-func Test_IPPoolsFilterBIRDFunc_NoIPPool(t *testing.T) {
-	kvps := ippoolTestCasesToKVPairs(t, nil)
-	for _, ipfamily := range []int{4, 6} {
-		for _, action := range []string{"", "accept", "reject"} {
-			for _, forKernel := range []bool{true, false} {
-				generated, err := IPPoolsFilterBIRDFunc(kvps, action, forKernel, "", ipfamily)
-				if err != nil {
-					t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-				}
-				if len(generated) != 1 || !strings.HasPrefix(generated[0], "# ") {
-					t.Errorf("Expected exactly one comment but received: %s", generated)
-				}
-			}
-		}
-	}
-}
-
 func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV4(t *testing.T) {
 	expectedStatements := []string{
 		// IPv4 IPIP Encapsulation cases.

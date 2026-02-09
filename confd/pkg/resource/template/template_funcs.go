@@ -14,7 +14,6 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -491,23 +490,10 @@ func IPPoolsFilterBIRDFunc(
 		}
 		lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment))
 	}
-	if len(lines) == 0 {
-		var line string
-		switch filterAction {
-		case "accept", "reject":
-			line = formatComment(fmt.Sprintf("No v%d %s filter generated", version, filterAction))
-		case "":
-			line = formatComment(fmt.Sprintf("No v%d IPPool configured", version))
-		default:
-			return nil, fmt.Errorf("unknown target action %s", filterAction)
-		}
-		lines = append(lines, line)
-	}
 	return lines, nil
 }
 
 func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSubnet string) string {
-	logrus.Infof("pepper %v", localSubnet)
 	switch v3.EncapMode(ipipMode) {
 	case v3.Always:
 		return `krt_tunnel="tunl0";`
