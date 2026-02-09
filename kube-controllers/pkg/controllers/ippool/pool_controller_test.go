@@ -146,6 +146,9 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		Expect(err).NotTo(HaveOccurred())
 		expectFinalizerPresent(cli, pool.Name)
 
+		// The pool should be allocatable.
+		expectPoolAllocatable(cli, pool.Name)
+
 		// Assign an IP address from the pool, putting it "in use".
 		_, _, err = ipamcli.AutoAssign(context.Background(), ipam.AutoAssignArgs{
 			Num4:        1,
@@ -164,6 +167,9 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		EventuallyWithOffset(1, func() error {
 			return cli.Get(context.Background(), ctrlclient.ObjectKey{Name: pool.Name}, p)
 		}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should still exist")
+
+		// Expect a status condition indicating the pool is terminating.
+		expectPoolNotAllocatable(cli, pool.Name)
 
 		// Release the assigned IP address.
 		Expect(ipamcli.ReleaseByHandle(context.Background(), "test-handle")).NotTo(HaveOccurred())
