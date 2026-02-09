@@ -132,8 +132,8 @@ var _ = describe.CalicoDescribe(
 				// Add route to external node where packets to service cluster IP go to node 2
 				maglevTests.SetupExternalNodeClientRoutingToSpecificNode(extNode, nodeNames[1]) // node 2 (second node)
 
-				// Test random backend selection without Maglev annotation for both IPv4 and IPv6
-				maglevTests.TestRandomBackendSelection(extNode, isIPv6) // IPv4 test
+				// Test random backend selection without Maglev annotation
+				maglevTests.TestRandomBackendSelection(extNode, isIPv6)
 
 				// Enable Maglev on the same service by adding annotation
 				maglevTests.EnableMaglev()
@@ -141,12 +141,12 @@ var _ = describe.CalicoDescribe(
 				// Set a fixed source port for consistent hashing tests
 				maglevTests.SetSourcePort(12345)
 
-				// Test Maglev consistent hashing with the annotation for both IPv4 and IPv6 using first source port
-				backendViaNode2Port1 := maglevTests.TestMaglevConsistentHashing(extNode, isIPv6) // IPv4 test with port 12345
+				// Test Maglev consistent hashing with the annotation using first source port
+				backendViaNode2Port1 := maglevTests.TestMaglevConsistentHashing(extNode, isIPv6) // test with port 12345
 
 				// Test Maglev consistent hashing with a different source port to verify different flows can hash to different backends
 				maglevTests.SetSourcePort(23456)                                                 // Change source port
-				backendViaNode2Port2 := maglevTests.TestMaglevConsistentHashing(extNode, isIPv6) // IPv4 test with port 23456
+				backendViaNode2Port2 := maglevTests.TestMaglevConsistentHashing(extNode, isIPv6) // test with port 23456
 				framework.Logf("Maglev hashing with different source ports: %s port 12345->%s, port 23456->%s",
 					ipVer, backendViaNode2Port1, backendViaNode2Port2)
 
@@ -159,12 +159,12 @@ var _ = describe.CalicoDescribe(
 				// Add route to external node where packets to service cluster IP go to node 3
 				maglevTests.SetupExternalNodeClientRoutingToSpecificNode(extNode, nodeNames[2]) // node 3 (third node)
 
-				// Test Maglev consistent hashing again for both IPv4 and IPv6 via node 3 with first source port
-				backendViaNode3Port1 := maglevTests.TestMaglevConsistentHashing(extNode, isIPv6) // IPv4 test via node 3 with port 12345
+				// Test Maglev consistent hashing again via node 3 with first source port
+				backendViaNode3Port1 := maglevTests.TestMaglevConsistentHashing(extNode, isIPv6) // test via node 3 with port 12345
 
 				// Test Maglev consistent hashing via node 3 with a different source port
 				maglevTests.SetSourcePort(23456)                                                 // Change source port
-				backendViaNode3Port2 := maglevTests.TestMaglevConsistentHashing(extNode, isIPv6) // IPv4 test via node 3 with port 23456
+				backendViaNode3Port2 := maglevTests.TestMaglevConsistentHashing(extNode, isIPv6) // test via node 3 with port 23456
 				framework.Logf("Maglev hashing via node 3 with different source ports: %s port 12345->%s, port 23456->%s",
 					ipVer, backendViaNode3Port1, backendViaNode3Port2)
 
