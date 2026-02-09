@@ -29,6 +29,8 @@ const (
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:resource:shortName={gnp,cgnp}
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
+// +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // GlobalNetworkPolicyList is a list of Policy objects.
 type GlobalNetworkPolicyList struct {

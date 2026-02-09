@@ -26,6 +26,9 @@ const (
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:printcolumn:name="StrictAffinity",type=boolean,JSONPath=".spec.strictAffinity",description="Whether borrowing IP addresses is allowed"
+// +kubebuilder:printcolumn:name="MaxBlocksPerHost",type=integer,JSONPath=".spec.maxBlocksPerHost",description="The max number of blocks that can be affine to each host"
+// +kubebuilder:printcolumn:name="AutoAllocateBlocks",type=boolean,JSONPath=".spec.autoAllocateBlocks",description="Whether or not to auto allocate blocks to hosts"
 
 // IPAMConfigurationList contains a list of IPAMConfiguration resources.
 type IPAMConfigurationList struct {
