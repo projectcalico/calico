@@ -173,20 +173,12 @@ var _ = describe.CalicoDescribe(
 
 				// Assert that the backend selected via node 3 is the same as that selected via node 2 (for same source port)
 				Expect(backendViaNode3Port1).Should(Equal(backendViaNode2Port1),
-					fmt.Sprintf("Expected IPv4 backend selection to be consistent across nodes: node 2 selected %s, node 3 selected %s",
-						backendViaNode2Port1, backendViaNode3Port1))
-
-				Expect(backendViaNode3Port1).Should(Equal(backendViaNode2Port1),
-					fmt.Sprintf("Expected IPv6 backend selection to be consistent across nodes: node 2 selected %s, node 3 selected %s",
+					fmt.Sprintf("Expected backend selection to be consistent across nodes: node 2 selected %s, node 3 selected %s",
 						backendViaNode2Port1, backendViaNode3Port1))
 
 				// Also verify that the second source port routes to the same backend across nodes
 				Expect(backendViaNode3Port2).Should(Equal(backendViaNode2Port2),
-					fmt.Sprintf("Expected IPv4 backend selection (port 23456) to be consistent across nodes: node 2 selected %s, node 3 selected %s",
-						backendViaNode2Port2, backendViaNode3Port2))
-
-				Expect(backendViaNode3Port2).Should(Equal(backendViaNode2Port2),
-					fmt.Sprintf("Expected IPv6 backend selection (port 23456) to be consistent across nodes: node 2 selected %s, node 3 selected %s",
+					fmt.Sprintf("Expected backend selection (port 23456) to be consistent across nodes: node 2 selected %s, node 3 selected %s",
 						backendViaNode2Port2, backendViaNode3Port2))
 
 				framework.Logf("Maglev cross-node consistency verified for both source ports: %s port 12345->%s, port 23456->%s",
