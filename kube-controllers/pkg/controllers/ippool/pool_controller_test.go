@@ -191,7 +191,7 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect the second pool to have a status condition indicating it overlaps with another pool.
-		expectPoolDisabledCondition(cli, overlappingPool.Name)
+		expectPoolNotAllocatable(cli, overlappingPool.Name)
 
 		// Create a third pool that also overlaps with both the first and second pools.
 		anotherOverlappingPool := &v3.IPPool{
@@ -219,65 +219,45 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect the third pool to also have a status condition indicating it overlaps with another pool.
-		expectPoolDisabledCondition(cli, anotherOverlappingPool.Name)
+		expectPoolNotAllocatable(cli, anotherOverlappingPool.Name)
 
-		// Expect the non-overlapping pool to be active without any disabled condition.
+		// Expect the non-overlapping pool to be allocatable.
 		expectFinalizerPresent(cli, nonOverlappingPool.Name)
-		expectPoolActiveCondition(cli, nonOverlappingPool.Name)
+		expectPoolAllocatable(cli, nonOverlappingPool.Name)
 
 		// Delete the first pool.
 		err = cli.Delete(context.Background(), pool)
 		Expect(err).NotTo(HaveOccurred())
 
 		// The second pool should still be masked by the non-overlapping pool, even though it was created before the non-overlapping pool,
-		// because we prioritize pools that are already active.
-		expectPoolDisabledCondition(cli, overlappingPool.Name)
-		expectPoolDisabledCondition(cli, anotherOverlappingPool.Name)
+		// because we prioritize pools that are already allocatable.
+		expectPoolNotAllocatable(cli, overlappingPool.Name)
+		expectPoolNotAllocatable(cli, anotherOverlappingPool.Name)
 
-		// Delete the non-overlapping pool, which should allow the second pool to become active since it was created before the third pool.
+		// Delete the non-overlapping pool, which should allow the second pool to become allocatable since it was created before the third pool.
 		err = cli.Delete(context.Background(), nonOverlappingPool)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Expect the second pool to have its status updated to remove the disabled condition, but the
+		// Expect the second pool to have its status updated to be enabled, but the
 		// third pool should still be disabled because it overlaps with the second pool.
-		expectPoolActiveCondition(cli, overlappingPool.Name)
-		expectPoolDisabledCondition(cli, anotherOverlappingPool.Name)
+		expectPoolAllocatable(cli, overlappingPool.Name)
+		expectPoolNotAllocatable(cli, anotherOverlappingPool.Name)
 
-		// Expect a finalizer to be added to the second pool to prevent deletion while it's active,
+		// Expect a finalizer to be added to the second pool to prevent deletion while it's allocatable,
 		// but the third pool should not have a finalizer since it's still disabled.
 		expectFinalizerPresent(cli, overlappingPool.Name)
 		expectFinalizerMissing(cli, anotherOverlappingPool.Name)
 
-		// Delete the second pool, which should allow the third pool to become active.
+		// Delete the second pool, which should allow the third pool to become allocatable.
 		err = cli.Delete(context.Background(), overlappingPool)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Expect the third pool to have its status updated to remove the disabled condition.
-		expectPoolActiveCondition(cli, anotherOverlappingPool.Name)
+		// Expect the third pool to have its status updated to be enabled.
+		expectPoolAllocatable(cli, anotherOverlappingPool.Name)
 	})
 })
 
-func expectPoolActiveCondition(cli ctrlclient.Client, poolName string) {
-	pool := &v3.IPPool{}
-	EventuallyWithOffset(1, func() error {
-		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool)
-		if err != nil {
-			return err
-		}
-		if pool.Status == nil {
-			// If status is nil, we consider the pool active since it has no conditions.
-			return nil
-		}
-		for _, condition := range pool.Status.Conditions {
-			if condition.Type == "Disabled" && condition.Status == metav1.ConditionTrue {
-				return fmt.Errorf("pool %s is disabled", poolName)
-			}
-		}
-		return nil
-	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should be active without disabled condition")
-}
-
-func expectPoolDisabledCondition(cli ctrlclient.Client, poolName string) {
+func expectPoolAllocatable(cli ctrlclient.Client, poolName string) {
 	pool := &v3.IPPool{}
 	EventuallyWithOffset(1, func() error {
 		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool)
@@ -288,12 +268,35 @@ func expectPoolDisabledCondition(cli ctrlclient.Client, poolName string) {
 			return fmt.Errorf("%s status is nil", poolName)
 		}
 		for _, condition := range pool.Status.Conditions {
-			if condition.Type == v3.IPPoolConditionDisabled && condition.Status == metav1.ConditionTrue {
+			if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionTrue {
 				return nil
+			} else if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionFalse {
+				return fmt.Errorf("pool %s is not allocatable", poolName)
 			}
 		}
-		return fmt.Errorf("disabled condition not found on pool %s", poolName)
-	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should have disabled condition")
+		return fmt.Errorf("condition not found on pool %s", poolName)
+	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should be allocatable")
+}
+
+func expectPoolNotAllocatable(cli ctrlclient.Client, poolName string) {
+	pool := &v3.IPPool{}
+	EventuallyWithOffset(1, func() error {
+		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool)
+		if err != nil {
+			return err
+		}
+		if pool.Status == nil {
+			return fmt.Errorf("%s status is nil", poolName)
+		}
+		for _, condition := range pool.Status.Conditions {
+			if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionFalse {
+				return nil
+			} else if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionTrue {
+				return fmt.Errorf("pool %s is allocatable", poolName)
+			}
+		}
+		return fmt.Errorf("condition not found on pool %s", poolName)
+	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should be not allocatable")
 }
 
 func expectPoolDeleted(cli ctrlclient.Client, poolName string) {

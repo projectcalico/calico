@@ -193,16 +193,25 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 		// determining overlaps, since an administratively disabled pool should not block other pools from being active.
 		if pool.Spec.Disabled {
 			cond := metav1.Condition{
-				Type:    v3.IPPoolConditionDisabled,
-				Status:  metav1.ConditionTrue,
-				Reason:  "AdminDisabled",
+				Type:    v3.IPPoolConditionAllocatable,
+				Status:  metav1.ConditionFalse,
+				Reason:  v3.IPPoolReasonDisabled,
 				Message: "IPPool.Spec.Disabled is true",
 			}
-			if setCondition(pool, cond) {
-				logrus.WithField("pool", pool.Name).Info("Setting IPPool as disabled due to spec.disabled=true")
-				if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, metav1.UpdateOptions{}); err != nil {
-					logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
-				}
+			if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
+				logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
+			}
+			continue
+		}
+		if pool.DeletionTimestamp != nil {
+			cond := metav1.Condition{
+				Type:    v3.IPPoolConditionAllocatable,
+				Status:  metav1.ConditionFalse,
+				Reason:  v3.IPPoolReasonTerminating,
+				Message: "IPPool is being deleted",
+			}
+			if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
+				logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
 			}
 			continue
 		}
@@ -238,23 +247,24 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 	for _, pool := range overlapping {
 		// Disable any other overlapping pools by setting a condition on them, which will prevent IPAM from allocating from those pools.
 		cond := metav1.Condition{
-			Type:    v3.IPPoolConditionDisabled,
-			Status:  metav1.ConditionTrue,
-			Reason:  "OverlappingPool",
+			Type:    v3.IPPoolConditionAllocatable,
+			Status:  metav1.ConditionFalse,
+			Reason:  v3.IPPoolReasonCIDROverlap,
 			Message: "CIDR overlaps another pool; disabled to prevent IP allocation conflicts.",
 		}
-		if setCondition(pool, cond) {
-			logrus.WithField("otherPool", pool.Name).Info("Disabling IPPool due to overlap")
-			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, metav1.UpdateOptions{}); err != nil {
-				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
-			}
+		if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
+			logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
 		}
 	}
 
 	// Make sure non-overlapping pools are enabled by removing the disabled condition if it exists.
 	for _, pool := range active {
-		if removeCondition(pool, v3.IPPoolConditionDisabled) {
-			logrus.WithField("pool", pool.Name).Info("Enabling IPPool")
+		cond := metav1.Condition{
+			Type:   v3.IPPoolConditionAllocatable,
+			Status: metav1.ConditionTrue,
+		}
+		if setConditionOnPool(pool, cond) {
+			logrus.WithField("pool", pool.Name).Infof("Setting condition %s to %s", cond.Type, cond.Status)
 			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, metav1.UpdateOptions{}); err != nil {
 				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
 			}
@@ -274,10 +284,10 @@ func poolSortFunc(a, b any) int {
 	poolA := a.(*v3.IPPool)
 	poolB := b.(*v3.IPPool)
 
-	// Disabled pools should be sorted after active pools, so that we prefer to keep
+	// Allocatable pools should be sorted first, so that we prefer to keep
 	// existing active pools active when there are overlaps.
-	aDisabled := hasCondition(poolA, v3.IPPoolConditionDisabled)
-	bDisabled := hasCondition(poolB, v3.IPPoolConditionDisabled)
+	aDisabled := hasCondition(poolA, v3.IPPoolConditionAllocatable, metav1.ConditionFalse)
+	bDisabled := hasCondition(poolB, v3.IPPoolConditionAllocatable, metav1.ConditionFalse)
 	if aDisabled && !bDisabled {
 		return 1
 	}
@@ -308,7 +318,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 	}
 
 	if p.DeletionTimestamp == nil {
-		if hasCondition(p, v3.IPPoolConditionDisabled) {
+		if hasCondition(p, v3.IPPoolConditionAllocatable, metav1.ConditionFalse) {
 			// If this pool is disabled due to CIDR overlaps or other validation issues, we should not add a finalizer to it
 			// since any IPAM blocks within this CIDR belong to the active pool and we don't want to interfere with the deletion of this
 			// pool if the user tries to delete it to resolve the overlap.
@@ -389,21 +399,33 @@ func hasFinalizer(p *v3.IPPool) bool {
 	return slices.Contains(p.Finalizers, IPPoolFinalizer)
 }
 
-func hasCondition(p *v3.IPPool, conditionType string) bool {
+func hasCondition(p *v3.IPPool, conditionType string, status metav1.ConditionStatus) bool {
 	if p.Status == nil {
 		return false
 	}
 	for _, c := range p.Status.Conditions {
-		if c.Type == conditionType {
+		if c.Type == conditionType && c.Status == status {
 			return true
 		}
 	}
 	return false
 }
 
-// setCondition sets the given condition on the IP pool, replacing any existing condition of the same type.
-// Returns true if the condition was added or updated, false if no change was made.
-func setCondition(p *v3.IPPool, condition metav1.Condition) bool {
+// updateCondition updates the given condition on the IP pool if it has changed, and updates the status of the pool if needed.
+func updateCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool, condition metav1.Condition) error {
+	if setConditionOnPool(p, condition) {
+		logrus.WithField("pool", p.Name).Infof("Updating condition %s to %s", condition.Type, condition.Status)
+		if _, err := cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, p, metav1.UpdateOptions{}); err != nil {
+			logrus.WithError(err).WithField("pool", p.Name).Error("Failed to update status of IPPool")
+			return err
+		}
+	}
+	return nil
+}
+
+// setConditionOnPool sets the given condition on the IP pool, replacing any existing condition of the same type.
+// Returns true if the condition was changed and needs to be updated in the API, or false if the condition was already in the desired state.
+func setConditionOnPool(p *v3.IPPool, condition metav1.Condition) bool {
 	if p.Status == nil {
 		// If there is no status, we need to create one and add the condition to it.
 		condition.LastTransitionTime = metav1.Now()
@@ -432,18 +454,4 @@ func setCondition(p *v3.IPPool, condition metav1.Condition) bool {
 	condition.LastTransitionTime = metav1.Now()
 	p.Status.Conditions = append(p.Status.Conditions, condition)
 	return true
-}
-
-func removeCondition(p *v3.IPPool, conditionType string) bool {
-	if p.Status == nil {
-		return false
-	}
-	conditions := p.Status.Conditions
-	for i, c := range conditions {
-		if c.Type == conditionType {
-			p.Status.Conditions = slices.Delete(conditions, i, i+1)
-			return true
-		}
-	}
-	return false
 }

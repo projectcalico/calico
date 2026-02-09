@@ -58,9 +58,19 @@ type IPPool struct {
 }
 
 const (
-	// IPPoolDisabled is a condition type that indicates the IP pool has been operationally disabled
-	// by Calico due to an issue with the pool.
-	IPPoolConditionDisabled = "Disabled"
+	// IPPoolConditionReady indicates whether the pool is ready to be used for IP address assignment.
+	IPPoolConditionAllocatable = "Allocatable"
+)
+
+const (
+	// IPPoolReasonCIDRInvalid indicates that the pool CIDR overlaps with another IP pool.
+	IPPoolReasonCIDROverlap = "CIDROverlap"
+
+	// IPPoolReasonTerminating indicates that the pool is terminating and cannot be used for new IP address assignments.
+	IPPoolReasonTerminating = "Terminating"
+
+	// IPPoolReasonDisabled indicates the pool is administratively disabled and cannot be used for new IP address assignments.
+	IPPoolReasonDisabled = "PoolDisabled"
 )
 
 type IPPoolStatus struct {
