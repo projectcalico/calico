@@ -14,7 +14,16 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The name of the node
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The types of information to monitor for this calico/node
+          jsonPath: .spec.classes
+          name: Classes
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -215,3 +224,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

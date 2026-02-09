@@ -26,7 +26,6 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster,shortName={hep,heps}
 
 // HostEndpointList is a list of HostEndpoint objects.
 type HostEndpointList struct {
@@ -40,6 +39,9 @@ type HostEndpointList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:scope=Cluster,shortName={hep,heps}
+// +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".spec.node",description="The node name identifying the Calico node instance that is targeted by this HostEndpoint"
+// +kubebuilder:printcolumn:name="Interface",type=string,JSONPath=".spec.interfaceName",description="The name of the interface that is targeted by this HostEndpoint"
 
 type HostEndpoint struct {
 	metav1.TypeMeta   `json:",inline"`
