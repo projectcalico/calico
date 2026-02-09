@@ -78,7 +78,7 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 			ctx->state->sport = frag_ct_val->sport;
 			ctx->state->dport = frag_ct_val->dport;
 			CALI_DEBUG("IP FRAG: hit ports %d -> %d", ctx->state->sport, ctx->state->dport);
-			ctx->fwd.mark = frag_ct_val->marks;
+			ctx->state->fwd.mark = frag_ct_val->marks;
 			if (ip_is_last_frag(ip_hdr(ctx))) {
 				frags4_remove_ct(ctx);
 			}
