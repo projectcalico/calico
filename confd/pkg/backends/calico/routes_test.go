@@ -50,10 +50,12 @@ func buildSimpleService() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIPs:            []string{"127.0.0.1", "::1"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP1, externalIP2},
+			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 	}
 	ep = &discoveryv1.EndpointSlice{
-		ObjectMeta: meta,
+		AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+		ObjectMeta:  meta,
 	}
 	return
 }
@@ -68,10 +70,12 @@ func buildSimpleService2() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIPs:            []string{"127.0.0.5", "::5"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP1, externalIP2},
+			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 	}
 	ep = &discoveryv1.EndpointSlice{
-		ObjectMeta: meta,
+		AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+		ObjectMeta:  meta,
 	}
 	return
 }
@@ -86,6 +90,7 @@ func buildSimpleService3() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIPs:            []string{"127.0.0.10", "::a"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			LoadBalancerIP:        loadBalancerIP1,
+			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 		Status: v1.ServiceStatus{
 			LoadBalancer: v1.LoadBalancerStatus{
@@ -94,7 +99,8 @@ func buildSimpleService3() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 		},
 	}
 	ep = &discoveryv1.EndpointSlice{
-		ObjectMeta: meta,
+		AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+		ObjectMeta:  meta,
 	}
 	return
 }
@@ -109,10 +115,12 @@ func buildSimpleService4() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIPs:            []string{"127.0.0.11", "::b"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP3},
+			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 	}
 	ep = &discoveryv1.EndpointSlice{
-		ObjectMeta: meta,
+		AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+		ObjectMeta:  meta,
 	}
 	return
 }
@@ -317,6 +325,7 @@ var _ = Describe("RouteGenerator", func() {
 
 			// Add the endpoint back with an IPv6 address.  The service's cluster IPs
 			// should remain non-advertised.
+			ep.AddressType = discoveryv1.AddressType(v1.IPv6Protocol)
 			ep.Endpoints = []discoveryv1.Endpoint{{
 				Addresses: []string{"fd5f:1234::3"},
 				NodeName:  &rg.nodeName,
@@ -336,6 +345,7 @@ var _ = Describe("RouteGenerator", func() {
 
 			// Add the endpoint again with an IPv4 address.  The service's cluster IPs
 			// should now be advertised.
+			ep.AddressType = discoveryv1.AddressType(v1.IPv4Protocol)
 			ep.Endpoints = []discoveryv1.Endpoint{{
 				Addresses: []string{"10.96.0.45"},
 				NodeName:  &rg.nodeName,
@@ -829,10 +839,12 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "10.0.0.1",
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"10.0.0.2"},
@@ -858,10 +870,12 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "10.0.0.1",
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"10.0.0.2"},
@@ -880,11 +894,13 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "10.0.0.1",
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
-					Endpoints:  []discoveryv1.Endpoint{},
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+					Endpoints:   []discoveryv1.Endpoint{},
 				}
 
 				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
@@ -904,10 +920,12 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "10.0.0.1", // IPv4
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					AddressType: discoveryv1.AddressType(v1.IPv6Protocol),
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"2001:db8::1"}, // IPv6
@@ -926,6 +944,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "2001:db8::1", // IPv6
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv6Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
@@ -934,6 +953,65 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Namespace: "default",
 						Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
 					},
+					AddressType: discoveryv1.AddressType(v1.IPv6Protocol),
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses: []string{"2001:db8::2"}, // IPv6
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
+				Expect(result).To(BeTrue())
+			})
+
+			It("should advertise dual-stuck service when get IPv4 endpointSlice", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "2001:db8::1",
+						ClusterIPs:            []string{"2001:db8::1", "1.1.1.1"},
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
+					},
+				}
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-svc",
+						Namespace: "default",
+						Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+					},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses: []string{"10.10.10.10"}, // IPv6
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
+				Expect(result).To(BeTrue())
+			})
+
+			It("should advertise dual-stuck service when get IPv6 endpointSlice", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "2001:db8::1",
+						ClusterIPs:            []string{"2001:db8::1", "1.1.1.1"},
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
+					},
+				}
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-svc",
+						Namespace: "default",
+						Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+					},
+					AddressType: discoveryv1.AddressType(v1.IPv6Protocol),
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"2001:db8::2"}, // IPv6

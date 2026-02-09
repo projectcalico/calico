@@ -500,30 +500,31 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 		return false
 	}
 
-	isIPv6 := func(ip string) bool { return strings.Contains(ip, ":") }
+	// Build a lookup table of IP families supported by the Service.
+	// Example: ["IPv4"], ["IPv6"], or ["IPv4","IPv6"] for dual-stack.
+	svcIPFamilies := make(map[string]struct{})
+	for _, fam := range svc.Spec.IPFamilies {
+		svcIPFamilies[string(fam)] = struct{}{}
+	}
 
-	svcIsIPv6 := isIPv6(svc.Spec.ClusterIP)
-
-	// Endpoint-based advertisement logic for both Cluster and Local services.
-	// For Cluster services: advertise if any endpoints exist (when aggregation is disabled).
-	// For Local services: advertise only if local endpoints exist.
 	for _, ep := range eps {
+		// We only consider EndpointSlices whose addressType matches one of the Service’s families.
+		epFamily := string(ep.AddressType)
+		// Skip EndpointSlices with incompatible address families.
+		if _, ok := svcIPFamilies[epFamily]; !ok {
+			continue
+		}
 		for _, subset := range ep.Endpoints {
 			// not interested in subset.NotReadyAddresses
-			for _, address := range subset.Addresses {
-				if isIPv6(address) != svcIsIPv6 {
-					continue
-				}
-				if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
-					// For Cluster services, advertise if we have any endpoints
-					logc.Debugf("Advertising cluster service")
+			if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
+				// For Cluster services, advertise if we have any endpoints
+				logc.Debugf("Advertising cluster service")
+				return true
+			} else {
+				// For Local services, only advertise if we have local endpoints
+				if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
+					logc.Debugf("Advertising local service")
 					return true
-				} else {
-					// For Local services, only advertise if we have local endpoints
-					if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
-						logc.Debugf("Advertising local service")
-						return true
-					}
 				}
 			}
 		}
