@@ -2967,7 +2967,7 @@ func startBPFDataplaneComponents(
 		config.BPFMapSizeConntrackScaling, maps.CtCleanupMap.(bpfmaps.MapWithExistsCheck),
 		int(ipFamily),
 		bpfCleaner,
-		livenessScanner, bpfconntrack.NewWorkloadRemoveScanner(workloadRemoveChan))
+		livenessScanner, bpfconntrack.NewWorkloadRemoveScannerTCP(workloadRemoveChan))
 
 	// Before we start, scan for all finished / timed out connections to
 	// free up the conntrack table asap as it may take time to sync up the

@@ -67,7 +67,16 @@ func TestTCPResetIPv6(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, ipv6, l4, _, pktBytes, err := testPacketV6(nil, nil, tcpSyn, nil)
+	hop := &layers.IPv6HopByHop{}
+	hop.NextHeader = layers.IPProtocolTCP
+
+	/* from gopacket ip6_test.go */
+	tlv := &layers.IPv6HopByHopOption{}
+	tlv.OptionType = 0x01 //PadN
+	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
+	hop.Options = append(hop.Options, tlv)
+
+	_, ipv6, l4, _, pktBytes, err := testPacketV6(nil, nil, tcpSyn, nil, hop)
 	Expect(err).NotTo(HaveOccurred())
 	tcp, ok := l4.(*layers.TCP)
 	Expect(ok).To(BeTrue())

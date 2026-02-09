@@ -48,6 +48,7 @@ static CALI_BPF_INLINE int tcp_v6_rst(struct cali_tc_ctx *ctx) {
 	ctx->ipheader_len = IP_SIZE;
 
 	struct tcphdr *th = ((void *)ip_hdr(ctx)) + IP_SIZE;
+	__builtin_memset(th, 0, TCP_SIZE);
 	th->source = th_orig.dest;
 	th->dest = th_orig.source;
 	th->rst = 1;

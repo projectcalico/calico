@@ -48,6 +48,7 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	ctx->ipheader_len = 20;
 
 	struct tcphdr *th = ((void *)ip_hdr(ctx)) + IP_SIZE;
+	__builtin_memset(th, 0, sizeof(struct tcphdr));
 	th->source = th_orig.dest;
 	th->dest = th_orig.source;
 	th->rst = 1;
@@ -70,7 +71,6 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 		CALI_DEBUG("TCP reset v4 reply: set ip csum failed");
 		return -1;
 	}
-
 
 	err = bpf_l4_csum_replace(ctx->skb, skb_l4hdr_offset(ctx) +
 			offsetof(struct tcphdr, check), 0, tcp_csum, BPF_F_PSEUDO_HDR);

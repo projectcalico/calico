@@ -481,32 +481,6 @@ func (s *Scanner) get(k KeyInterface) (ValueInterface, error) {
 	return s.valueFromBytes(v), nil
 }
 
-func createNewV4Value(v ValueInterface, flags uint32) ValueInterface {
-	var newVal ValueInterface
-	if v.Type() == TypeNATForward {
-		newVal = v4.NewValueNATForward(time.Duration(v.LastSeen()), flags, (v.ReverseNATKey()).(v4.Key))
-	} else if v.Type() == TypeNATReverse {
-		newVal = v4.NewValueNATReverse(time.Duration(v.LastSeen()), flags,
-			v.Data().A2B, v.Data().B2A, v.Data().TunIP, v.OrigIP(), v.OrigPort())
-	} else {
-		newVal = v4.NewValueNormal(time.Duration(v.LastSeen()), flags, v.Data().A2B, v.Data().B2A)
-	}
-	return newVal
-}
-
-func createNewV6Value(v ValueInterface, flags uint32) ValueInterface {
-	var newVal ValueInterface
-	if v.Type() == TypeNATForward {
-		newVal = v4.NewValueV6NATForward(time.Duration(v.LastSeen()), flags, v.ReverseNATKey().(v4.KeyV6))
-	} else if v.Type() == TypeNATReverse {
-		newVal = v4.NewValueV6NATReverse(time.Duration(v.LastSeen()), flags,
-			v.Data().A2B, v.Data().B2A, v.Data().TunIP, v.OrigIP(), v.OrigPort())
-	} else {
-		newVal = v4.NewValueV6Normal(time.Duration(v.LastSeen()), flags, v.Data().A2B, v.Data().B2A)
-	}
-	return newVal
-}
-
 // Start the periodic scanner
 func (s *Scanner) Start() {
 	s.wg.Add(1)
@@ -598,7 +572,17 @@ func (h ipv4Helper) dummyKey() KeyInterface {
 }
 
 func (h ipv4Helper) setRSTFlagInValue(v ValueInterface) ValueInterface {
-	return createNewV4Value(v, v.Flags()|v4.FlagSendRST)
+	var newVal ValueInterface
+	flags := v.Flags() | v4.FlagSendRST
+	if v.Type() == TypeNATForward {
+		newVal = v4.NewValueNATForward(time.Duration(v.LastSeen()), flags, (v.ReverseNATKey()).(v4.Key))
+	} else if v.Type() == TypeNATReverse {
+		newVal = v4.NewValueNATReverse(time.Duration(v.LastSeen()), flags,
+			v.Data().A2B, v.Data().B2A, v.Data().TunIP, v.OrigIP(), v.OrigPort())
+	} else {
+		newVal = v4.NewValueNormal(time.Duration(v.LastSeen()), flags, v.Data().A2B, v.Data().B2A)
+	}
+	return newVal
 }
 
 type ipv6Helper struct{}
@@ -612,5 +596,15 @@ func (h ipv6Helper) dummyKey() KeyInterface {
 }
 
 func (h ipv6Helper) setRSTFlagInValue(v ValueInterface) ValueInterface {
-	return createNewV6Value(v, v.Flags()|v4.FlagSendRST)
+	var newVal ValueInterface
+	flags := v.Flags() | v4.FlagSendRST
+	if v.Type() == TypeNATForward {
+		newVal = v4.NewValueV6NATForward(time.Duration(v.LastSeen()), flags, v.ReverseNATKey().(v4.KeyV6))
+	} else if v.Type() == TypeNATReverse {
+		newVal = v4.NewValueV6NATReverse(time.Duration(v.LastSeen()), flags,
+			v.Data().A2B, v.Data().B2A, v.Data().TunIP, v.OrigIP(), v.OrigPort())
+	} else {
+		newVal = v4.NewValueV6Normal(time.Duration(v.LastSeen()), flags, v.Data().A2B, v.Data().B2A)
+	}
+	return newVal
 }
