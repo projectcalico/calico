@@ -21,19 +21,19 @@ spec:
           type: string
         - description: The VXLAN mode for this pool
           jsonPath: .spec.vxlanMode
-          name: VXLAN Mode
+          name: VXLAN
           type: string
         - description: The IPIP mode for this pool
           jsonPath: .spec.ipipMode
-          name: IPIP Mode
+          name: IPIP
           type: string
         - description: Whether outgoing NAT is enabled for this pool
           jsonPath: .spec.natOutgoing
-          name: NAT Outgoing
+          name: NAT
           type: boolean
-        - description: The conditions of the pool
-          jsonPath: .status.conditions[*].type
-          name: Conditions
+        - description: Whether or not this pool is available for IP allocations
+          jsonPath: .status.conditions[?(@.type=='Allocatable')].status
+          name: Allocatable
           type: string
         - description: The age of the pool
           jsonPath: .metadata.creationTimestamp

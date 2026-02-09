@@ -189,6 +189,18 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 	for _, p := range pools {
 		pool := p.(*v3.IPPool)
 
+		cidr, err := ip.CIDRFromString(pool.Spec.CIDR)
+		if err != nil {
+			logrus.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
+			continue
+		}
+
+		// Use the appropriate trie based on the IP address family of this pool.
+		t := trie
+		if cidr.Version() == 6 {
+			t = triev6
+		}
+
 		// If the pool is administratively disabled, reflect that in its conditions and skip it for the purposes of
 		// determining overlaps, since an administratively disabled pool should not block other pools from being active.
 		if pool.Spec.Disabled {
@@ -213,23 +225,15 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 			if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
 				logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
 			}
+			// If the pool is being deleted, we still want to consider it for overlaps.
+			// This ensures we don't preemptively enable another pool that might overlap with it until this pool
+			// is fully deleted.
+			t.Update(cidr, pool)
 			continue
-		}
-
-		c, err := ip.CIDRFromString(pool.Spec.CIDR)
-		if err != nil {
-			logrus.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
-			continue
-		}
-
-		// Use the appropriate trie based on the IP address family of this pool.
-		t := trie
-		if c.Version() == 6 {
-			t = triev6
 		}
 
 		// Check if this pool is overlapped by any existing active pool in the trie.
-		if e := t.Get(c); e != nil || t.Intersects(c) || t.Covers(c) {
+		if e := t.Get(cidr); e != nil || t.Intersects(cidr) || t.Covers(cidr) {
 			// This pool overlaps with an existing active pool, so we should disable it.
 			logrus.WithField("overlap", pool.Name).Debug("Found overlapping pools")
 			overlapping[pool.Name] = pool
@@ -239,7 +243,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 			// This pool does not overlap with any existing active pools, so we can add it to the active set and insert it into the trie.
 			logrus.WithField("pool", pool.Name).Debug("Found non-overlapping pool, adding to active set")
 			active[pool.Name] = pool
-			t.Update(c, pool)
+			t.Update(cidr, pool)
 		}
 	}
 
@@ -260,8 +264,10 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 	// Make sure non-overlapping pools are enabled by removing the disabled condition if it exists.
 	for _, pool := range active {
 		cond := metav1.Condition{
-			Type:   v3.IPPoolConditionAllocatable,
-			Status: metav1.ConditionTrue,
+			Type:    v3.IPPoolConditionAllocatable,
+			Status:  metav1.ConditionTrue,
+			Reason:  v3.IPPoolReasonOK,
+			Message: "IPPool is available for IP allocation.",
 		}
 		if setConditionOnPool(pool, cond) {
 			logrus.WithField("pool", pool.Name).Infof("Setting condition %s to %s", cond.Type, cond.Status)

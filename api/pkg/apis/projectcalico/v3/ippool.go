@@ -41,10 +41,10 @@ type IPPoolList struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The pool CIDR"
-// +kubebuilder:printcolumn:name="VXLAN Mode",type=string,JSONPath=".spec.vxlanMode",description="The VXLAN mode for this pool"
-// +kubebuilder:printcolumn:name="IPIP Mode",type=string,JSONPath=".spec.ipipMode",description="The IPIP mode for this pool"
-// +kubebuilder:printcolumn:name="NAT Outgoing",type=boolean,JSONPath=".spec.natOutgoing",description="Whether outgoing NAT is enabled for this pool"
-// +kubebuilder:printcolumn:name="Conditions",type=string,JSONPath=".status.conditions[*].type",description="The conditions of the pool"
+// +kubebuilder:printcolumn:name="VXLAN",type=string,JSONPath=".spec.vxlanMode",description="The VXLAN mode for this pool"
+// +kubebuilder:printcolumn:name="IPIP",type=string,JSONPath=".spec.ipipMode",description="The IPIP mode for this pool"
+// +kubebuilder:printcolumn:name="NAT",type=boolean,JSONPath=".spec.natOutgoing",description="Whether outgoing NAT is enabled for this pool"
+// +kubebuilder:printcolumn:name="Allocatable",type="string",JSONPath=".status.conditions[?(@.type=='Allocatable')].status",description="Whether or not this pool is available for IP allocations"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp",description="The age of the pool"
 
 type IPPool struct {
@@ -71,6 +71,9 @@ const (
 
 	// IPPoolReasonDisabled indicates the pool is administratively disabled and cannot be used for new IP address assignments.
 	IPPoolReasonDisabled = "PoolDisabled"
+
+	// IPPoolReasonOK indicates that the pool is ready to be used for IP address assignment.
+	IPPoolReasonOK = "OK"
 )
 
 type IPPoolStatus struct {
