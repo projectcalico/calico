@@ -1,6 +1,6 @@
 include ../metadata.mk
 
-PACKAGE_NAME = github.com/projectcalico/calico/validatingwebhook
+PACKAGE_NAME = github.com/projectcalico/calico/webhooks
 IMAGE_BUILD_MARKER = webhook_container-$(ARCH).created
 
 # Configure variables used by ci/cd common targets from lib.Makefile.
