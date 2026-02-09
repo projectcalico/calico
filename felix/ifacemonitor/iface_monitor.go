@@ -331,10 +331,17 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 			newState = StateDown
 		}
 	}
-
-	ids := m.ifaceNameToIdx[ifaceName]
+	if oldState != newState {
+		log.WithFields(log.Fields{
+			"ifaceName": ifaceName,
+			"ifIndex":   ifIndex,
+			"oldState":  oldState,
+			"newState":  newState,
+		}).Info("Interface state change detected.")
+	}
 
 	// Store or remove the information.
+	ids := m.ifaceNameToIdx[ifaceName]
 	trackAddrs := !m.isExcludedInterface(ifaceName)
 	if ifaceExists {
 		if m.ifaceIdxToInfo[ifIndex] == nil {
@@ -354,6 +361,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 			delete(m.ifaceNameToIdx, ifaceName)
 		}
 	}
+	m.ifaceNameToIdx[ifaceName] = ids
 
 	// In some cases, we can receive a notification for a new link of the same name before
 	// receiving the deletion notification for the old link.  In that case, we want to avoid
@@ -381,6 +389,18 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		logCxt.Debug("Interface state hasn't changed, nothing to notify.")
 	}
 
+	addrsUpdated := true
+	if newState == StateNotPresent {
+		if oldState != StateNotPresent {
+			// We were tracking addresses for this interface before but now it's gone.  Signal that.
+			log.Debug("Notify link non-existence to address callback consumers")
+			m.AddrCallback(ifaceName, nil)
+		}
+
+		// If the interface is done, we don't have to worry about addresses.
+		addrsUpdated = false
+	}
+
 	// If we sent a notification that the interface is gone, but there is another index associated with
 	// this name, we should notify the state of the newly unmasked interface now.
 	for remainingIdx := range ids.All() {
@@ -404,18 +424,12 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		})
 		logCxt.Debug("Notifying remaining interface with same name after deletion.")
 		m.StateCallback(ifaceName, remainingInfo.State, remainingIdx)
+
+		// If we notified a new interface, we should also notify the addresses for that interface.
+		addrsUpdated = true
 	}
 
-	if !trackAddrs {
-		return
-	}
-
-	if newState == StateNotPresent {
-		if oldState != StateNotPresent {
-			// We were tracking addresses for this interface before but now it's gone.  Signal that.
-			log.Debug("Notify link non-existence to address callback consumers")
-			m.AddrCallback(ifaceName, nil)
-		}
+	if !trackAddrs || !addrsUpdated {
 		return
 	}
 
