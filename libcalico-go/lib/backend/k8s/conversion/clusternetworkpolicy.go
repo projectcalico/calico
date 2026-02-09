@@ -377,18 +377,21 @@ func k8sCNPPortToCalicoFields(cnpProto *clusternetpol.ClusterNetworkPolicyProtoc
 		dstPort, err = k8sCNPPortToCalico(cnpProto.TCP.DestinationPort)
 		p := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
 		protocol = &p
+		return
 	}
 
 	if cnpProto.UDP != nil {
 		dstPort, err = k8sCNPPortToCalico(cnpProto.UDP.DestinationPort)
 		p := numorstring.ProtocolFromString(numorstring.ProtocolUDP)
 		protocol = &p
+		return
 	}
 
 	if cnpProto.SCTP != nil {
 		dstPort, err = k8sCNPPortToCalico(cnpProto.SCTP.DestinationPort)
 		p := numorstring.ProtocolFromString(numorstring.ProtocolSCTP)
 		protocol = &p
+		return
 	}
 
 	return
