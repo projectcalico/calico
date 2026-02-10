@@ -142,7 +142,7 @@ var _ = Describe("BPF workload remove conntrack scanner", func() {
 			k := conntrack.NewKey(6, ipA, 1234, ipB, 80)
 			val, err := ctMap.Get(k.AsBytes())
 			v := conntrack.ValueFromBytes(val)
-			Expect(err).To(HaveOccurred(), "expected entry for workload IP to still exist")
+			Expect(err).NotTo(HaveOccurred(), "expected entry for workload IP to still exist")
 			if i < 12 {
 				// These workload IPs were removed, so the entry should be marked for RST
 				Expect(v.Flags()&v4.FlagSendRST).To(Equal(v4.FlagSendRST), "expected entry for removed workload IP to be marked for RST")

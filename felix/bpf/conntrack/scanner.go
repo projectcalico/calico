@@ -261,6 +261,7 @@ func (s *Scanner) Scan() {
 
 	batchK := make([][]byte, 0, rstBatchSize)
 	batchV := make([][]byte, 0, rstBatchSize)
+	rstCount := 0
 
 	if s.ctCleanupMap != nil {
 		s.ctCleanupMap.Desired().DeleteAll()
@@ -308,16 +309,25 @@ func (s *Scanner) Scan() {
 				updatedVal := s.versionHelper.setRSTFlagInValue(ctVal)
 				batchK = append(batchK, ctKey.AsBytes())
 				batchV = append(batchV, updatedVal.AsBytes())
-				if len(batchK) >= rstBatchSize {
+				rstCount++
+				if rstCount == rstBatchSize {
 					if debug {
 						log.Debugf("Updating RST flag on %d conntrack entries in batch.", len(batchK))
 					}
-					_, err := s.ctMap.BatchUpdate(batchK, batchV, 0)
+					applied, err := s.ctMap.BatchUpdate(batchK, batchV, 0)
 					if err != nil {
-						log.WithError(err).Warn("Failed to batch update conntrack entries to send RST.")
+						applied++
 					}
-					batchK = batchK[:0]
-					batchV = batchV[:0]
+					rstCount = rstBatchSize - applied
+					if rstCount == 0 {
+						batchK = batchK[:0]
+						batchV = batchV[:0]
+					} else {
+						// Some entries in the batch failed to update. Remove the successfully updated entries from the batch and keep the rest for the next iteration.
+						batchK = batchK[applied:]
+						batchV = batchV[applied:]
+					}
+
 				}
 				continue
 			}
@@ -388,11 +398,14 @@ func (s *Scanner) Scan() {
 	// Run the bpf cleaner to process the remaining entries in the cleanup map.
 	cleaned += s.runBPFCleaner()
 
-	if len(batchK) > 0 {
-		_, err := s.ctMap.BatchUpdate(batchK, batchV, 0)
+	for rstCount > 0 {
+		applied, err := s.ctMap.BatchUpdate(batchK, batchV, 0)
 		if err != nil {
-			log.WithError(err).Warn("Failed to batch update conntrack entries to send RST.")
+			applied++
 		}
+		batchK = batchK[applied:]
+		batchV = batchV[applied:]
+		rstCount -= applied
 	}
 
 	batchK = nil
