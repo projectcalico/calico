@@ -151,9 +151,10 @@ func runDiags(logDir string) error {
 	// Add container ipset command only if a runtime is detected
 	ipsetCmd := getIPSetCommand(runtime)
 	if ipsetCmd != "" {
-		cmds = append(cmds[:10], append([]diagCmd{
-			{"Dumping ipsets (container)", ipsetCmd, "ipset_container"},
-		}, cmds[10:]...)...)
+		// Insert after "Dumping ipsets" command
+		cmds = append(cmds, diagCmd{
+			"Dumping ipsets (container)", ipsetCmd, "ipset_container",
+		})
 	}
 
 	// Make sure the command is run with super user privileges
@@ -263,13 +264,6 @@ func getNodeContainerLogs(logDir string, runtime containerRuntime) {
 
 	case runtimeCRIO:
 		// Use crictl to get container list
-		result, err = exec.Command("crictl", "ps", "-a", "--name", "calico", "-o", "json").CombinedOutput()
-		if err != nil {
-			fmt.Printf("Could not run crictl command: %s\n", string(result))
-			return
-		}
-		// Parse the JSON output to get container names and creation times
-		// For simplicity, we'll get the container IDs and names
 		result, err = exec.Command("crictl", "ps", "-a", "--name", "calico").CombinedOutput()
 		if err != nil {
 			fmt.Printf("Could not run crictl command: %s\n", string(result))
@@ -354,9 +348,10 @@ func getContainerLogs(logDir, containers string, runtime containerRuntime) {
 			}
 			containerID := fields[0]
 			name = containerID
-			// Note: ctr doesn't have a direct 'logs' command, logs are typically accessed via task logs
-			// We'll try to read from task logs
-			logCmd = exec.Command("ctr", "-n", "k8s.io", "tasks", "exec", "--exec-id", "log-reader", containerID, "cat", "/dev/stdout")
+			// Note: ctr doesn't have a direct 'logs' command for container logs
+			// Skip log collection for containerd without CRI as logs are not easily accessible
+			log.Debugf("Skipping log collection for container %s: ctr doesn't support direct log retrieval", name)
+			continue
 
 		default:
 			continue
