@@ -31,11 +31,62 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
+// containerRuntime represents a detected container runtime
+type containerRuntime int
+
+const (
+	runtimeUnknown containerRuntime = iota
+	runtimeDocker
+	runtimeContainerd
+	runtimeCRIO
+)
+
 // diagCmd is a struct to hold a command, cmd info and filename to run diagnostic on
 type diagCmd struct {
 	info     string
 	cmd      string
 	filename string
+}
+
+// detectContainerRuntime detects which container runtime is available on the system
+func detectContainerRuntime() containerRuntime {
+	// Check for crictl first (most common for Kubernetes with containerd)
+	if _, err := exec.LookPath("crictl"); err == nil {
+		log.Debug("Detected crictl (containerd/CRI-O)")
+		return runtimeCRIO
+	}
+
+	// Check for ctr (containerd native CLI)
+	if _, err := exec.LookPath("ctr"); err == nil {
+		log.Debug("Detected ctr (containerd)")
+		return runtimeContainerd
+	}
+
+	// Check for docker
+	if _, err := exec.LookPath("docker"); err == nil {
+		log.Debug("Detected docker")
+		return runtimeDocker
+	}
+
+	log.Debug("No container runtime detected")
+	return runtimeUnknown
+}
+
+// getIPSetCommand returns the appropriate command to run ipset in a container based on detected runtime
+func getIPSetCommand(runtime containerRuntime) string {
+	switch runtime {
+	case runtimeDocker:
+		return "docker run --rm --privileged --net=host calico/node ipset list"
+	case runtimeCRIO:
+		// crictl doesn't support running one-off commands, so we try to exec into a running calico-node pod
+		// This command attempts to find and exec into the calico-node container
+		return "crictl exec $(crictl ps --name calico-node -q | head -1) ipset list"
+	case runtimeContainerd:
+		// ctr can exec into running containers in the k8s.io namespace
+		return "ctr -n k8s.io task exec --exec-id diag-ipset $(ctr -n k8s.io c ls -q | grep calico-node | head -1) ipset list"
+	default:
+		return ""
+	}
 }
 
 // Diags function collects diagnostic information and logs
@@ -77,6 +128,9 @@ Description:
 
 // runDiags takes logDir and runs a sequence of commands to collect diagnostics
 func runDiags(logDir string) error {
+	// Detect container runtime early
+	runtime := detectContainerRuntime()
+
 	// Note: in for the cmd field in this struct, it  can't handle args quoted with space in it
 	// For example, you can't add cmd "do this", since after the `strings.Fields` it will become `"do` and `this"`
 	cmds := []diagCmd{
@@ -90,9 +144,17 @@ func runDiags(logDir string) error {
 		{"Dumping iptables (IPv4)", "iptables-save -c", "ipv4_tables"},
 		{"Dumping iptables (IPv6)", "ip6tables-save -c", "ipv6_tables"},
 		{"Dumping ipsets", "ipset list", "ipsets"},
-		{"Dumping ipsets (container)", "docker run --rm --privileged --net=host calico/node ipset list", "ipset_container"},
 		{"Copying journal for calico-node.service", "journalctl -u calico-node.service --no-pager", "journalctl_calico_node"},
 		{"Dumping felix stats", "pkill -SIGUSR1 felix", ""},
+	}
+
+	// Add container ipset command only if a runtime is detected
+	ipsetCmd := getIPSetCommand(runtime)
+	if ipsetCmd != "" {
+		// Insert after "Dumping ipsets" command
+		cmds = append(cmds, diagCmd{
+			"Dumping ipsets (container)", ipsetCmd, "ipset_container",
+		})
 	}
 
 	// Make sure the command is run with super user privileges
@@ -159,7 +221,7 @@ func runDiags(logDir string) error {
 	}
 
 	// Try to copy logs from containers for hosted installs.
-	getNodeContainerLogs(tmpLogDir)
+	getNodeContainerLogs(tmpLogDir, runtime)
 
 	// Get the current time and create a tar.gz file with the timestamp in the name
 	tarFile := fmt.Sprintf("diags-%s.tar.gz", time.Now().Format("20060102_150405"))
@@ -180,42 +242,123 @@ func runDiags(logDir string) error {
 }
 
 // getNodeContainerLogs will attempt to grab logs for any "calico" named containers for hosted installs.
-func getNodeContainerLogs(logDir string) {
+func getNodeContainerLogs(logDir string, runtime containerRuntime) {
 	err := os.MkdirAll(logDir, os.ModeDir)
 	if err != nil {
 		fmt.Printf("Error creating log directory: %v\n", err)
 		return
 	}
 
-	// Get a list of Calico containers running on this Node.
-	result, err := exec.Command("docker", "ps", "-a", "--filter", "name=calico", "--format", "{{.Names}}: {{.CreatedAt}}").CombinedOutput()
-	if err != nil {
-		fmt.Printf("Could not run docker command: %s\n", string(result))
+	var result []byte
+	var containers string
+
+	switch runtime {
+	case runtimeDocker:
+		// Get a list of Calico containers running on this Node.
+		result, err = exec.Command("docker", "ps", "-a", "--filter", "name=calico", "--format", "{{.Names}}: {{.CreatedAt}}").CombinedOutput()
+		if err != nil {
+			fmt.Printf("Could not run docker command: %s\n", string(result))
+			return
+		}
+		containers = string(result)
+
+	case runtimeCRIO:
+		// Use crictl to get container list
+		result, err = exec.Command("crictl", "ps", "-a", "--name", "calico").CombinedOutput()
+		if err != nil {
+			fmt.Printf("Could not run crictl command: %s\n", string(result))
+			return
+		}
+		containers = string(result)
+
+	case runtimeContainerd:
+		// Use ctr to get container list
+		result, err = exec.Command("ctr", "-n", "k8s.io", "containers", "list").CombinedOutput()
+		if err != nil {
+			fmt.Printf("Could not run ctr command: %s\n", string(result))
+			return
+		}
+		// Filter for calico containers
+		lines := strings.Split(string(result), "\n")
+		var calicoContainers []string
+		for _, line := range lines {
+			if strings.Contains(line, "calico") {
+				calicoContainers = append(calicoContainers, line)
+			}
+		}
+		containers = strings.Join(calicoContainers, "\n")
+
+	default:
+		log.Debug("No supported container runtime found for log collection")
 		return
 	}
 
 	// No Calico containers found.
-	if string(result) == "" {
+	if containers == "" {
 		log.Debug("Did not find any Calico containers")
 		return
 	}
 
 	// Remove any containers that have "k8s_POD" in them.
 	re := regexp.MustCompile("(?m)[\r\n]+^.*k8s_POD.*$")
-	containers := re.ReplaceAllString(string(result), "")
+	containers = re.ReplaceAllString(containers, "")
 
 	fmt.Println("Copying logs from Calico containers")
 	err = os.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0o666)
 	if err != nil {
-		fmt.Printf("Could not save output of `docker ps` command to container_creation_time: %s\n", err)
+		fmt.Printf("Could not save output of container list command to container_creation_time: %s\n", err)
 	}
 
-	// Grab the log for each container and write it as <containerName>.log.
+	// Grab the log for each container based on runtime
+	getContainerLogs(logDir, containers, runtime)
+}
+
+// getContainerLogs retrieves logs for each container based on the runtime
+func getContainerLogs(logDir, containers string, runtime containerRuntime) {
 	scanner := bufio.NewScanner(strings.NewReader(containers))
 	for scanner.Scan() {
-		name := strings.Split(scanner.Text(), ":")[0]
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		var name string
+		var logCmd *exec.Cmd
+
+		switch runtime {
+		case runtimeDocker:
+			name = strings.Split(line, ":")[0]
+			logCmd = exec.Command("docker", "logs", name)
+
+		case runtimeCRIO:
+			// crictl output format: CONTAINER ID IMAGE CREATED STATE NAME
+			fields := strings.Fields(line)
+			if len(fields) < 5 {
+				continue
+			}
+			containerID := fields[0]
+			name = fields[4] // Container name is typically the 5th field
+			logCmd = exec.Command("crictl", "logs", containerID)
+
+		case runtimeContainerd:
+			// ctr output format: CONTAINER IMAGE RUNTIME
+			fields := strings.Fields(line)
+			if len(fields) < 1 {
+				continue
+			}
+			containerID := fields[0]
+			name = containerID
+			// Note: ctr doesn't have a direct 'logs' command for container logs
+			// Skip log collection for containerd without CRI as logs are not easily accessible
+			log.Debugf("Skipping log collection for container %s: ctr doesn't support direct log retrieval", name)
+			continue
+
+		default:
+			continue
+		}
+
 		log.Debugf("Getting logs for container %s", name)
-		cLog, err := exec.Command("docker", "logs", name).CombinedOutput()
+		cLog, err := logCmd.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Could not pull log for container %s: %s\n", name, err)
 			continue
@@ -236,7 +379,17 @@ func writeDiags(cmds diagCmd, dir string) error {
 
 	parts := strings.Fields(cmds.cmd)
 
-	content, err := exec.Command(parts[0], parts[1:]...).CombinedOutput()
+	var content []byte
+	var err error
+
+	// Check if command contains shell features like $(...) or |
+	// If so, execute via shell
+	if strings.Contains(cmds.cmd, "$(") || strings.Contains(cmds.cmd, "|") {
+		content, err = exec.Command("sh", "-c", cmds.cmd).CombinedOutput()
+	} else {
+		content, err = exec.Command(parts[0], parts[1:]...).CombinedOutput()
+	}
+
 	if err != nil {
 		fmt.Printf("Failed to run command: %s\nError: %s\n", cmds.cmd, string(content))
 		return err
