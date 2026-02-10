@@ -2985,6 +2985,10 @@ func startBPFDataplaneComponents(
 			log.WithError(err).Panic("Failed to start kube-proxy.")
 		}
 
+		hostMetadataCache := NewHostMetadataCache()
+		hostMetadataCache.SetOnHostUpdateCB(kp.OnHostMetadataV4V6Update)
+		dp.RegisterManager(hostMetadataCache)
+
 		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
 		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))

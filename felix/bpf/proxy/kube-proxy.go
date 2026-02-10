@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // KubeProxy is a wrapper of Proxy that deals with higher level issue like
@@ -33,6 +34,8 @@ import (
 type KubeProxy struct {
 	proxy  ProxyFrontend
 	syncer DPSyncer
+
+	hostMetadataUpdates chan map[string]*proto.HostMetadataV4V6Update
 
 	ipFamily      int
 	hostIPUpdates chan []net.IP
@@ -104,13 +107,14 @@ func (kp *KubeProxy) Stop() {
 		defer kp.lock.Unlock()
 
 		close(kp.exiting)
+		close(kp.hostMetadataUpdates)
 		close(kp.hostIPUpdates)
 		kp.proxy.Stop()
 		kp.wg.Wait()
 	})
 }
 
-func (kp *KubeProxy) run(hostIPs []net.IP) error {
+func (kp *KubeProxy) run(hostIPs []net.IP, hostMetadata map[string]*proto.HostMetadataV4V6Update) error {
 
 	ips := make([]net.IP, 0, len(hostIPs))
 	for _, ip := range hostIPs {
@@ -141,6 +145,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	}
 
 	kp.proxy.SetHostIPs(hostIPs)
+	kp.proxy.SetHostMetadata(hostMetadata)
 	kp.proxy.SetSyncer(syncer)
 
 	log.Infof("kube-proxy v%d node info updated, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)
@@ -173,25 +178,37 @@ func (kp *KubeProxy) start() error {
 	kp.syncer = syncer
 	kp.lock.Unlock()
 
-	// wait for the initial update
+	// Wait for the initial update.
 	hostIPs := <-kp.hostIPUpdates
+	// Could be nil, initially.
+	hostMetadata := kp.checkHostMetadataV4V6Updates()
 
-	err = kp.run(hostIPs)
+	err = kp.run(hostIPs, hostMetadata)
 	if err != nil {
 		return err
 	}
 
 	kp.wg.Go(func() {
 		for {
+			var ok bool
 			select {
-			case hostIPs, ok := <-kp.hostIPUpdates:
+			case hostIPs, ok = <-kp.hostIPUpdates:
 				if !ok {
 					log.Error("kube-proxy: hostIPUpdates closed")
 					return
 				}
-				err = kp.run(hostIPs)
+				err = kp.run(hostIPs, hostMetadata)
 				if err != nil {
 					log.Panic("kube-proxy failed to resync after host IPs update")
+				}
+			case hostMetadata, ok = <-kp.hostMetadataUpdates:
+				if !ok {
+					log.Error("kube-proxy: hostMetadataUpdates closed")
+					return
+				}
+				err = kp.run(hostIPs, hostMetadata)
+				if err != nil {
+					log.Panic("kube-proxy failed to resync after host metadata update")
 				}
 			case <-kp.exiting:
 				log.Info("kube-proxy: exiting")
@@ -219,6 +236,32 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 		kp.hostIPUpdates <- IPs
 	}
 	log.Debugf("kube-proxy OnHostIPsUpdate: %+v", IPs)
+}
+
+// OnHostMetadataV4V6Update is called by host-metadata cache after
+// it goes in-sync (completeDeferredWork called).
+func (kp *KubeProxy) OnHostMetadataV4V6Update(updates map[string]*proto.HostMetadataV4V6Update) {
+	select {
+	case kp.hostMetadataUpdates <- updates:
+	default:
+		select {
+		case <-kp.hostMetadataUpdates:
+		default:
+		}
+		kp.hostMetadataUpdates <- updates
+	}
+	if log.GetLevel() == log.DebugLevel {
+		log.WithField("updates", updates).Debug("kube-proxy HostMetadataV4V6Update cb fired")
+	}
+}
+
+func (kp *KubeProxy) checkHostMetadataV4V6Updates() map[string]*proto.HostMetadataV4V6Update {
+	select {
+	case upd := <-kp.hostMetadataUpdates:
+		return upd
+	default:
+		return nil
+	}
 }
 
 // OnRouteUpdate should be used to update the internal state of routing tables
