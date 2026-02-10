@@ -94,35 +94,10 @@ func newBPFTestEpMgr(
 }
 
 // countSubPrograms counts the number of sub-programs that would be loaded for a given AttachType.
-// This uses the same program name arrays as hook.ProgramsMap.allocateLayout().
+// This uses the GetApplicableSubProgs API from the hook package.
 func countSubPrograms(at hook.AttachType) int {
-	count := 0
-	subProgs := hook.GetSubProgNames(at.Hook)
-
-	for idx, subprog := range subProgs {
-		if subprog == "" {
-			continue
-		}
-
-		// SubProgTCHostCtConflict - skip if not applicable
-		if idx == int(hook.SubProgTCHostCtConflict) && !at.HasHostConflictProg() {
-			continue
-		}
-
-		// SubProgIPFrag - skip if not applicable
-		if idx == int(hook.SubProgIPFrag) && !at.HasIPDefrag() {
-			continue
-		}
-
-		// SubProgMaglev - skip if not applicable
-		if idx == int(hook.SubProgMaglev) && !at.HasMaglev() {
-			continue
-		}
-
-		count++
-	}
-
-	return count
+	applicableProgs := hook.GetApplicableSubProgs(at, false)
+	return len(applicableProgs)
 }
 
 // expectedProgramCount computes the expected total program count for a map of AttachTypes.
