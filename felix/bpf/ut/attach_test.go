@@ -563,7 +563,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(attached).NotTo(HaveKey("workloadep3"))
 
 		// Capture the program count before restart (includes workload3)
-		programsCountBeforeReset := programsIng.Count()
+		programsCountBeforeRestart := programsIng.Count()
 
 		programsIng.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
 		programsEg.ResetForTesting()  // Because we recycle it, restarted Felix would get a fresh copy.
@@ -610,8 +610,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = oldProgs.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
-		// Old programs map should still have the programs from before reset
-		Expect(pm).To(HaveLen(programsCountBeforeReset))
+		// Old programs map should still have the programs from before restart
+		Expect(pm).To(HaveLen(programsCountBeforeRestart))
 
 		oldPoliciesParams := jump.IngressMapParameters
 		oldPoliciesParams.PinDir = tmp
