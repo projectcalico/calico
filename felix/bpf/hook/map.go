@@ -73,6 +73,16 @@ var xdpSubProgNames = []string{
 	"calico_xdp_drop",
 }
 
+// GetSubProgNames returns the sub-program names for the given hook type.
+// This is useful for testing and other scenarios where you need to know
+// which sub-programs are defined for a particular hook.
+func GetSubProgNames(hookType Hook) []string {
+	if hookType == XDP {
+		return xdpSubProgNames
+	}
+	return tcSubProgNames
+}
+
 // Layout maps sub-programs of an object to their location in the ProgramsMap
 type Layout map[SubProg]int
 

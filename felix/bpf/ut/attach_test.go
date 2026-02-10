@@ -94,33 +94,10 @@ func newBPFTestEpMgr(
 }
 
 // countSubPrograms counts the number of sub-programs that would be loaded for a given AttachType.
-// This mirrors the logic in hook.ProgramsMap.allocateLayout().
+// This uses the same program name arrays as hook.ProgramsMap.allocateLayout().
 func countSubPrograms(at hook.AttachType) int {
 	count := 0
-	var subProgs []string
-
-	if at.Hook == hook.XDP {
-		subProgs = []string{
-			"calico_xdp_main",
-			"", // index reserved for policy program
-			"calico_xdp_accepted_entrypoint",
-			"", // reserved / nothing
-			"calico_xdp_drop",
-		}
-	} else {
-		subProgs = []string{
-			"calico_tc_main",
-			"", // index reserved for policy program
-			"calico_tc_skb_accepted_entrypoint",
-			"calico_tc_skb_send_icmp_replies",
-			"calico_tc_skb_drop",
-			"calico_tc_host_ct_conflict",
-			"calico_tc_skb_icmp_inner_nat",
-			"calico_tc_skb_new_flow_entrypoint",
-			"calico_tc_skb_ipv4_frag",
-			"calico_tc_maglev",
-		}
-	}
+	subProgs := hook.GetSubProgNames(at.Hook)
 
 	for idx, subprog := range subProgs {
 		if subprog == "" {
