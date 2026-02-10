@@ -38,11 +38,15 @@ import (
 //
 // Returns:
 //
-//	[]k8sp.Endpoint - Filtered slice of endpoints based on topology-aware routing.
-//	bool            - True if topology-aware routing was applied, false otherwise.
+//	[]k8sp.Endpoint - Endpoints chosen by topology-aware routing, or all endpoints if the logic falls back.
+//	bool            - True if topology-aware routing logic was executed for the service, false if it was not enabled.
 func FilterEpsByTopologyAwareRouting(endpoints []k8sp.Endpoint, topologyMode, nodeZone string) ([]k8sp.Endpoint, bool) {
 	if topologyMode != "Auto" && topologyMode != "auto" {
-		log.Debugf("Skipping topology aware endpoint filtering since Service has unexpected value '%s' for key '%s'\n", topologyMode, v1.AnnotationTopologyMode)
+		log.Debugf(
+			"Skipping topology aware endpoint filtering. Feature is enabled only when '%s' is set to 'Auto'; current value: '%s'",
+			v1.AnnotationTopologyMode,
+			topologyMode,
+		)
 		return endpoints, false
 	}
 
@@ -50,7 +54,7 @@ func FilterEpsByTopologyAwareRouting(endpoints []k8sp.Endpoint, topologyMode, no
 	for _, ep := range endpoints {
 		zoneHints := ep.ZoneHints()
 		if !ep.IsReady() && !ep.IsTerminating() {
-			log.Debugf("Topology Aware Routing: ignoring Endpoint '%s' since its status is not Ready or Terminating'\n", ep.IP())
+			log.Debugf("Topology Aware Routing: ignoring Endpoint '%s' since its status is not Ready or Terminating\n", ep.IP())
 			continue
 		}
 
@@ -88,7 +92,7 @@ func filterEndpointsByHints(endpoints []k8sp.Endpoint, targetHint string, getHin
 	for _, ep := range endpoints {
 		epHints := getHints(ep)
 		if !ep.IsReady() && !ep.IsTerminating() {
-			log.Debugf("Traffic Distribution: ignoring Endpoint '%s' since its status is not Ready or Terminating'\n", ep.IP())
+			log.Debugf("Traffic Distribution: ignoring Endpoint '%s' since its status is not Ready or Terminating\n", ep.IP())
 			continue
 		}
 
