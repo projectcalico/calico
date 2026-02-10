@@ -1623,3 +1623,9 @@ func K8sSvcWithReapTerminatingUDP() K8sServicePortOption {
 		s.(*servicePort).reapTerminatingUDP = true
 	}
 }
+
+func K8sSvcWithTopologyMode(value string) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*servicePort).topologyMode = value
+	}
+}

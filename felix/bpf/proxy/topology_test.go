@@ -183,6 +183,16 @@ func TestFilterEpsByTrafficDistribution(t *testing.T) {
 			wantIPs: []string{"10.0.0.1"},
 		},
 		{
+			name:     "one endpoint with zone hint, one with none, only zone-hinted returned",
+			nodeName: "node-x",
+			nodeZone: "zone-a",
+			endpoints: []testEndpoint{
+				{fakeEndpoint{"10.0.0.1", true, false, sets.New[string]("zone-a"), sets.New[string]()}},
+				{fakeEndpoint{"10.0.0.2", true, false, sets.New[string](), sets.New[string]()}},
+			},
+			wantIPs: []string{"10.0.0.1"},
+		},
+		{
 			name:     "prefer endpoints with zone hint if node hint missing",
 			nodeName: "node-1",
 			nodeZone: "zone-a",
@@ -199,6 +209,26 @@ func TestFilterEpsByTrafficDistribution(t *testing.T) {
 			endpoints: []testEndpoint{
 				{fakeEndpoint{"10.0.0.1", true, false, sets.New[string]("zone-a"), sets.New[string]("node-1")}},
 				{fakeEndpoint{"10.0.0.2", true, false, sets.New[string]("zone-b"), sets.New[string]("node-2")}},
+			},
+			wantIPs: []string{"10.0.0.1", "10.0.0.2"},
+		},
+		{
+			name:     "one endpoint with node hint, one with none, only node-hinted returned",
+			nodeName: "node-1",
+			nodeZone: "zone-a",
+			endpoints: []testEndpoint{
+				{fakeEndpoint{"10.0.0.1", true, false, sets.New[string]("zone-a"), sets.New[string]("node-1")}},
+				{fakeEndpoint{"10.0.0.2", true, false, sets.New[string]("zone-a"), sets.New[string]()}},
+			},
+			wantIPs: []string{"10.0.0.1"},
+		},
+		{
+			name:     "endpoint with no node or zone hints is ignored for node/zone, fallback to all",
+			nodeName: "node-x",
+			nodeZone: "zone-x",
+			endpoints: []testEndpoint{
+				{fakeEndpoint{"10.0.0.1", true, false, sets.New[string](), sets.New[string]()}},
+				{fakeEndpoint{"10.0.0.2", true, false, sets.New[string](), sets.New[string]()}},
 			},
 			wantIPs: []string{"10.0.0.1", "10.0.0.2"},
 		},
@@ -221,6 +251,26 @@ func TestFilterEpsByTrafficDistribution(t *testing.T) {
 				{fakeEndpoint{"10.0.0.2", true, false, sets.New[string]("zone-a"), sets.New[string]("node-1")}},
 			},
 			wantIPs: []string{"10.0.0.1", "10.0.0.2"},
+		},
+		{
+			name:     "all endpoints not ready or terminating, fallback to all endpoints",
+			nodeName: "node-1",
+			nodeZone: "zone-a",
+			endpoints: []testEndpoint{
+				{fakeEndpoint{"10.0.0.1", false, false, sets.New[string]("zone-a"), sets.New[string]("node-1")}},
+				{fakeEndpoint{"10.0.0.2", false, false, sets.New[string]("zone-a"), sets.New[string]("node-1")}},
+			},
+			wantIPs: []string{"10.0.0.1", "10.0.0.2"},
+		},
+		{
+			name:     "one endpoint with node hint but not ready, one with zone hint and ready",
+			nodeName: "node-1",
+			nodeZone: "zone-a",
+			endpoints: []testEndpoint{
+				{fakeEndpoint{"10.0.0.1", false, false, sets.New[string]("zone-a"), sets.New[string]("node-1")}}, // not ready
+				{fakeEndpoint{"10.0.0.2", true, false, sets.New[string]("zone-a"), sets.New[string]()}},          // ready, zone hint
+			},
+			wantIPs: []string{"10.0.0.2"},
 		},
 	}
 
