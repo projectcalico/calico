@@ -362,6 +362,7 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefr
 	l := make(Layout)
 
 	offset := 0
+	// Debug programs for TC hooks use a different offset
 	if at.Hook != XDP && at.LogLevel == "debug" {
 		offset = int(SubProgTCMainDebug)
 	}
