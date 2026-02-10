@@ -128,17 +128,17 @@ func countSubPrograms(at hook.AttachType) int {
 		}
 
 		// SubProgTCHostCtConflict - skip if not applicable
-		if idx == int(hook.SubProgTCHostCtConflict) && !hasHostConflictProg(at) {
+		if idx == int(hook.SubProgTCHostCtConflict) && !at.HasHostConflictProg() {
 			continue
 		}
 
 		// SubProgIPFrag - skip if not applicable
-		if idx == int(hook.SubProgIPFrag) && !hasIPDefrag(at) {
+		if idx == int(hook.SubProgIPFrag) && !at.HasIPDefrag() {
 			continue
 		}
 
 		// SubProgMaglev - skip if not applicable
-		if idx == int(hook.SubProgMaglev) && !hasMaglev(at) {
+		if idx == int(hook.SubProgMaglev) && !at.HasMaglev() {
 			continue
 		}
 
@@ -146,32 +146,6 @@ func countSubPrograms(at hook.AttachType) int {
 	}
 
 	return count
-}
-
-// hasHostConflictProg returns true if the attach type should have a host conflict program.
-func hasHostConflictProg(at hook.AttachType) bool {
-	switch at.Type {
-	case tcdefs.EpTypeWorkload:
-		return false
-	}
-	return at.Hook == hook.Egress
-}
-
-// hasIPDefrag returns true if the attach type should have an IP defragmentation program.
-func hasIPDefrag(at hook.AttachType) bool {
-	if at.Family != 4 {
-		return false
-	}
-	switch at.Type {
-	case tcdefs.EpTypeLO, tcdefs.EpTypeNAT:
-		return false
-	}
-	return at.Hook == hook.Ingress
-}
-
-// hasMaglev returns true if the attach type should have a Maglev program.
-func hasMaglev(at hook.AttachType) bool {
-	return at.Type == tcdefs.EpTypeHost && at.Hook == hook.Ingress
 }
 
 // expectedProgramCount computes the expected total program count for a map of AttachTypes.
