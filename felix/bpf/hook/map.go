@@ -76,11 +76,12 @@ var xdpSubProgNames = []string{
 // GetSubProgNames returns the sub-program names for the given hook type.
 // This is useful for testing and other scenarios where you need to know
 // which sub-programs are defined for a particular hook.
+// Returns a copy of the internal array to prevent modifications.
 func GetSubProgNames(hookType Hook) []string {
 	if hookType == XDP {
-		return xdpSubProgNames
+		return append([]string{}, xdpSubProgNames...)
 	}
-	return tcSubProgNames
+	return append([]string{}, tcSubProgNames...)
 }
 
 // Layout maps sub-programs of an object to their location in the ProgramsMap
