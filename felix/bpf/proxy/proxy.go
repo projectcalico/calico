@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/projectcalico/calico/felix/proto"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -58,6 +59,7 @@ type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
 	SetHostIPs([]net.IP)
+	SetHostMetadata(map[string]*proto.HostMetadataV4V6Update)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -93,6 +95,8 @@ type proxy struct {
 
 	svcMap k8sp.ServicePortMap
 	epsMap k8sp.EndpointsMap
+
+	hostMetadataByHostname map[string]*proto.HostMetadataV4V6Update
 
 	dpSyncer  DPSyncer
 	syncerLck sync.Mutex
@@ -145,6 +149,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		ipFamily: 4,
 		svcMap:   make(k8sp.ServicePortMap),
 		epsMap:   make(k8sp.EndpointsMap),
+
+		hostMetadataByHostname: make(map[string]*proto.HostMetadataV4V6Update),
 
 		recorder: new(loggerRecorder),
 
@@ -389,6 +395,13 @@ func (p *proxy) SetHostIPs(hostIPs []net.IP) {
 	log.Infof("NodePortAddresses V%d for health checks: %s", p.ipFamily, npa.String())
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder,
 		npa, p.healthzServer)
+}
+
+func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update) {
+	p.runnerLck.Lock()
+	defer p.runnerLck.Unlock()
+
+	p.hostMetadataByHostname = updates
 }
 
 func (p *proxy) IPFamily() discovery.AddressType {
