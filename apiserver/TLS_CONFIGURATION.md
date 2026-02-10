@@ -1,236 +1,159 @@
 # TLS Configuration Guide
 
-## Overview
+## Quick Reference
 
-The Calico API server supports comprehensive TLS configuration through environment variables, allowing fine-grained control over security settings for production environments.
+Configure TLS security via environment variables:
 
-## Environment Variables
+| Variable | Values | Default | Purpose |
+|----------|--------|---------|---------|
+| `TLS_MIN_VERSION` | `1.2`, `1.3` | `1.2` | Minimum TLS protocol version |
+| `TLS_CIPHER_SUITES` | Cipher list (comma-separated) | Strong defaults | Allowed cipher suites |
 
-### TLS_MIN_VERSION
+## Configuration Architecture
 
-Controls the minimum TLS protocol version accepted by the API server.
-
-**Supported Values:**
-- `""` (empty string) or `"1.2"` - TLS 1.2 minimum (default)
-- `"1.3"` - TLS 1.3 minimum
-
-**Default:** TLS 1.2
-
-**Example:**
-```bash
-export TLS_MIN_VERSION=1.3
+```
+┌─────────────────────────────────────────────────────────┐
+│                    TLS Configuration                     │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  TLS_MIN_VERSION ─────┐                                 │
+│                       ├──► Validation ──► API Server    │
+│  TLS_CIPHER_SUITES ───┘                                 │
+│                                                          │
+│  ┌──────────────┐      ┌──────────────┐                │
+│  │  TLS 1.2     │◄─────┤  TLS 1.2     │                │
+│  │  Ciphers     │      │  Ciphers OK  │                │
+│  └──────────────┘      └──────────────┘                │
+│                                                          │
+│  ┌──────────────┐      ┌──────────────┐                │
+│  │  TLS 1.3     │  ✗───┤  TLS 1.2     │ ← FAILS        │
+│  │  Ciphers     │      │  Min Version │                │
+│  └──────────────┘      └──────────────┘                │
+│                                                          │
+│  ┌──────────────┐      ┌──────────────┐                │
+│  │  TLS 1.3     │◄─────┤  TLS 1.3     │                │
+│  │  Ciphers     │      │  Min Version │                │
+│  └──────────────┘      └──────────────┘                │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### TLS_CIPHER_SUITES
+## Valid Configuration Matrix
 
-Specifies a comma-separated list of cipher suites to be used. If not set, a default set of strong ciphers is used.
-
-**Example:**
-```bash
-export TLS_CIPHER_SUITES="TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384"
-```
+| TLS_MIN_VERSION | TLS 1.2 Ciphers | TLS 1.3 Ciphers | Mixed | Result |
+|-----------------|-----------------|-----------------|-------|--------|
+| `1.2` (default) | ✅ | ✅ | ✅ | **Works** - Negotiates best available |
+| `1.3` | ❌ | ✅ | ❌ | **Works** - TLS 1.3 only |
+| `1.2` | ✅ | ❌ | ❌ | **Works** - TLS 1.2 compatible |
+| `1.2` | ❌ | ✅ (only) | ❌ | **FAILS** - No TLS 1.2 ciphers |
 
 ## Configuration Examples
 
-### Example 1: TLS 1.3 Only with TLS 1.3 Ciphers
-
-For maximum security, restrict to TLS 1.3 with strong ciphers:
-
+### 🔒 Maximum Security (TLS 1.3 Only)
 ```bash
 export TLS_MIN_VERSION=1.3
-export TLS_CIPHER_SUITES="TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
+export TLS_CIPHER_SUITES="TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
 ```
+**Result:** Only TLS 1.3 clients can connect with specified ciphers
 
-**Use Case:** High-security environments where all clients support TLS 1.3
-
-### Example 2: TLS 1.2 with Strong Ciphers (Default)
-
-Maintain backward compatibility while using strong ciphers:
-
+### 🔓 Backward Compatible (Default)
 ```bash
-export TLS_MIN_VERSION=1.2
-export TLS_CIPHER_SUITES="TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
-```
-
-**Use Case:** Environments with mixed client versions
-
-### Example 3: Default Configuration
-
-For most deployments, the defaults provide a good security/compatibility balance:
-
-```bash
-# No configuration needed - uses sensible defaults
-# Defaults to TLS 1.2 minimum with a curated set of strong ciphers
-```
-
-## Compatibility Matrix
-
-### TLS 1.2 Ciphers
-
-| Cipher Suite | Min TLS Version | Security Level |
-|-------------|-----------------|----------------|
-| TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 | 1.2 | High |
-| TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 | 1.2 | High |
-| TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 | 1.2 | High |
-| TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 | 1.2 | High |
-| TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 | 1.2 | High |
-| TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 | 1.2 | High |
-
-### TLS 1.3 Ciphers
-
-| Cipher Suite | Min TLS Version | Security Level |
-|-------------|-----------------|----------------|
-| TLS_AES_256_GCM_SHA384 | 1.3 | High |
-| TLS_CHACHA20_POLY1305_SHA256 | 1.3 | High |
-| TLS_AES_128_GCM_SHA256 | 1.3 | High |
-
-## Important Configuration Rules
-
-### Rule 1: Match TLS Version with Cipher Suites
-
-When using TLS 1.3-only ciphers, you **must** set `TLS_MIN_VERSION=1.3`:
-
-```bash
-# ✅ CORRECT
-export TLS_MIN_VERSION=1.3
-export TLS_CIPHER_SUITES="TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384"
-
-# ❌ INCORRECT - Will cause startup failure
-export TLS_MIN_VERSION=1.2
-export TLS_CIPHER_SUITES="TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384"
-```
-
-**Why?** Go's HTTP/2 server validates that at least one cipher is compatible with the minimum TLS version. TLS 1.3 ciphers are not valid for TLS 1.2.
-
-### Rule 2: Mixing TLS 1.2 and 1.3 Ciphers
-
-You can mix ciphers from both versions when using `TLS_MIN_VERSION=1.2`:
-
-```bash
-# ✅ CORRECT - Will negotiate TLS 1.3 with supporting clients
 export TLS_MIN_VERSION=1.2
 export TLS_CIPHER_SUITES="TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_AES_128_GCM_SHA256"
 ```
+**Result:** TLS 1.2+ clients supported, TLS 1.3 preferred when available
 
-## Troubleshooting
-
-### Error: "API server fails to start"
-
-**Symptom:** API server exits immediately after startup with HTTP/2 cipher validation error.
-
-**Cause:** Mismatch between `TLS_MIN_VERSION` and configured cipher suites.
-
-**Solution:**
-1. Check your `TLS_CIPHER_SUITES` configuration
-2. If using only TLS 1.3 ciphers, set `TLS_MIN_VERSION=1.3`
-3. If using TLS 1.2 ciphers, ensure `TLS_MIN_VERSION=1.2` or leave unset
-
-### Error: "Unsupported TLS version"
-
-**Symptom:** Error message indicating invalid TLS_MIN_VERSION value.
-
-**Cause:** Invalid value for `TLS_MIN_VERSION` environment variable.
-
-**Solution:** Use only supported values: `1.2` or `1.3`
-
-### Error: "Unsupported cipher"
-
-**Symptom:** API server fails to start with error about unsupported cipher suite.
-
-**Cause:** Invalid or unsupported cipher name in `TLS_CIPHER_SUITES`.
-
-**Solution:** Verify cipher names against the compatibility matrix above. Use exact names as shown in Go's crypto/tls package.
-
-## Security Best Practices
-
-### 1. Use TLS 1.3 When Possible
-
-TLS 1.3 provides improved security and performance:
-- Faster handshakes
-- Forward secrecy by default
-- Removal of legacy cryptographic algorithms
-
-### 2. Regularly Update Cipher Configurations
-
-Stay current with security advisories and disable weak ciphers:
-- Review NIST guidelines periodically
-- Monitor CVE databases for cipher vulnerabilities
-- Update configurations during maintenance windows
-
-### 3. Test Configuration Changes
-
-Before deploying to production:
-1. Test in a staging environment
-2. Verify client compatibility
-3. Monitor connection success rates
-4. Have a rollback plan
-
-### 4. Enable TLS Logging
-
-For debugging TLS issues:
+### ⚙️ Default (No Configuration)
 ```bash
-export GODEBUG=tls13=1  # Enable TLS 1.3 debug logging
+# Use built-in defaults
+```
+**Result:** TLS 1.2+ with curated strong ciphers (both 1.2 and 1.3)
+
+## Cipher Suite Reference
+
+```
+TLS 1.2 Ciphers              TLS 1.3 Ciphers
+─────────────────            ──────────────────
+ECDHE_*_AES_256_GCM    ──┐   TLS_AES_256_GCM
+ECDHE_*_AES_128_GCM    ──┤   TLS_AES_128_GCM
+ECDHE_*_CHACHA20       ──┘   TLS_CHACHA20_POLY1305
+                             
+Min Version: TLS 1.2         Min Version: TLS 1.3
+Compatible: Wide             Compatible: Modern clients
+Security: High               Security: Highest
 ```
 
-### 5. Client Certificate Authentication
+## Common Issue: Startup Failure
 
-For enhanced security, combine TLS configuration with mutual TLS (mTLS):
-- Require client certificates
-- Validate certificate chains
-- Use short-lived certificates
+**Symptom:** API server fails with HTTP/2 cipher validation error
 
-## Verification
+**Cause & Solution:**
 
-### Test TLS Configuration
+| Configuration | Problem | Fix |
+|--------------|---------|-----|
+| TLS 1.3 ciphers + `TLS_MIN_VERSION=1.2` | ❌ Version mismatch | Set `TLS_MIN_VERSION=1.3` |
+| Invalid cipher name | ❌ Unknown cipher | Use exact names from tables |
+| Empty cipher list | ❌ No ciphers | Remove `TLS_CIPHER_SUITES` for defaults |
 
-Use `openssl` to test your TLS configuration:
+**Debug:**
+```bash
+# Check configuration
+echo "Min Version: $TLS_MIN_VERSION"
+echo "Ciphers: $TLS_CIPHER_SUITES"
+
+# Test connection
+openssl s_client -connect api-server:443 -tls1_3
+```
+
+## Supported Ciphers
+
+### TLS 1.2 Ciphers (Compatible)
+```
+TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384  
+TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+```
+
+### TLS 1.3 Ciphers (Modern)
+```
+TLS_AES_256_GCM_SHA384
+TLS_CHACHA20_POLY1305_SHA256
+TLS_AES_128_GCM_SHA256
+```
+
+## Security Recommendations
+
+| Priority | Recommendation | Configuration |
+|----------|---------------|---------------|
+| 🔴 High Security | TLS 1.3 only | `TLS_MIN_VERSION=1.3` with TLS 1.3 ciphers |
+| 🟡 Balanced | Default settings | No configuration needed |
+| 🟢 Compatible | TLS 1.2+ mixed | `TLS_MIN_VERSION=1.2` with both cipher types |
+
+## Testing Your Configuration
 
 ```bash
-# Test TLS 1.3 connection
+# Test TLS 1.3 support
 openssl s_client -connect api-server:443 -tls1_3
 
-# List negotiated cipher
-openssl s_client -connect api-server:443 -showcerts | grep "Cipher"
+# Show negotiated cipher
+openssl s_client -connect api-server:443 -showcerts 2>/dev/null | grep "Cipher"
 
-# Test specific cipher suite
+# Verify specific cipher
 openssl s_client -connect api-server:443 -cipher TLS_AES_128_GCM_SHA256
 ```
 
-### Monitor TLS Metrics
+## Key Takeaway
 
-Monitor these metrics in production:
-- TLS handshake duration
-- TLS version distribution (1.2 vs 1.3)
-- Cipher suite usage
-- TLS error rates
+```
+┌────────────────────────────────────────────────────────┐
+│  Rule: Match cipher suites to minimum TLS version     │
+│                                                        │
+│  TLS 1.3 ciphers → Requires TLS_MIN_VERSION=1.3      │
+│  TLS 1.2 ciphers → Works with any min version         │
+│  Mixed ciphers   → Use TLS_MIN_VERSION=1.2 (default)  │
+└────────────────────────────────────────────────────────┘
+```
 
-## Default Cipher List
-
-When `TLS_CIPHER_SUITES` is not set, the following ciphers are used by default:
-
-**TLS 1.3 Ciphers:**
-- TLS_AES_256_GCM_SHA384
-- TLS_CHACHA20_POLY1305_SHA256
-- TLS_AES_128_GCM_SHA256
-
-**TLS 1.2 Ciphers:**
-- TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
-- TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-- TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
-- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-- TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
-- TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-
-These defaults provide a good balance of security and compatibility.
-
-## Related Documentation
-
-- [Calico Security Documentation](../SECURITY.md)
-- [Kubernetes TLS Best Practices](https://kubernetes.io/docs/tasks/tls/managing-tls-in-a-cluster/)
-- [Mozilla SSL Configuration Generator](https://ssl-config.mozilla.org/)
-
-## References
-
-- [RFC 8446 - TLS 1.3](https://datatracker.ietf.org/doc/html/rfc8446)
-- [RFC 5246 - TLS 1.2](https://datatracker.ietf.org/doc/html/rfc5246)
-- [Go crypto/tls Package](https://pkg.go.dev/crypto/tls)
+**Fixes Issue #11706** - Resolves startup failures when configuring TLS 1.3-only cipher suites.
