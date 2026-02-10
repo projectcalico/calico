@@ -15,11 +15,8 @@
 package server
 
 import (
-	"crypto/tls"
 	"os"
 	"testing"
-
-	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
 func TestCATypeFlagParsing(t *testing.T) {
@@ -57,71 +54,5 @@ func TestCATypeFlagParsing(t *testing.T) {
 				testCase.args,
 			)
 		}
-	}
-}
-
-func TestTLSVersionEnvironmentVariable(t *testing.T) {
-	testCases := []struct {
-		name               string
-		tlsMinVersionEnv   string
-		expectedMinVersion uint16
-		expectError        bool
-	}{
-		{
-			name:               "default TLS 1.2 when not set",
-			tlsMinVersionEnv:   "",
-			expectedMinVersion: tls.VersionTLS12,
-			expectError:        false,
-		},
-		{
-			name:               "TLS 1.3 configured",
-			tlsMinVersionEnv:   "1.3",
-			expectedMinVersion: tls.VersionTLS13,
-			expectError:        false,
-		},
-		{
-			name:               "TLS 1.2 explicitly configured",
-			tlsMinVersionEnv:   "1.2",
-			expectedMinVersion: tls.VersionTLS12,
-			expectError:        false,
-		},
-		{
-			name:               "invalid TLS version",
-			tlsMinVersionEnv:   "1.1",
-			expectedMinVersion: 0,
-			expectError:        true,
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			if testCase.tlsMinVersionEnv != "" {
-				os.Setenv("TLS_MIN_VERSION", testCase.tlsMinVersionEnv)
-				defer os.Unsetenv("TLS_MIN_VERSION")
-			} else {
-				os.Unsetenv("TLS_MIN_VERSION")
-			}
-
-			minVersion, err := calicotls.ParseTLSVersion(os.Getenv("TLS_MIN_VERSION"))
-
-			if testCase.expectError {
-				if err == nil {
-					t.Fatalf("Expected error for TLS_MIN_VERSION=%s, but got none", testCase.tlsMinVersionEnv)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Unexpected error for TLS_MIN_VERSION=%s: %v", testCase.tlsMinVersionEnv, err)
-				}
-
-				if minVersion != testCase.expectedMinVersion {
-					t.Fatalf(
-						"Expected MinTLSVersion to be %v, got %v for TLS_MIN_VERSION=%s",
-						testCase.expectedMinVersion,
-						minVersion,
-						testCase.tlsMinVersionEnv,
-					)
-				}
-			}
-		})
 	}
 }

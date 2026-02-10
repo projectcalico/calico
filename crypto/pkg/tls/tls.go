@@ -72,6 +72,9 @@ func supportedCipherMap() map[string]uint16 {
 	return cipherMap
 }
 
+// ParseTLSCiphers takes a comma-separated string of cipher names and returns a slice of uint16 representing the ciphers.
+// If ciphers is empty, it returns the default ciphers.
+// It returns an error if any of the cipher names are not supported.
 func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	if ciphers == "" {
 		return DefaultCiphers(), nil
@@ -93,22 +96,6 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	return result, nil
 }
 
-func ParseTLSVersion(version string) (uint16, error) {
-	if version == "" {
-		return tls.VersionTLS12, nil
-	}
-
-	version = strings.TrimSpace(version)
-	switch version {
-	case "1.2":
-		return tls.VersionTLS12, nil
-	case "1.3":
-		return tls.VersionTLS13, nil
-	default:
-		return 0, fmt.Errorf("unsupported TLS version: %s", version)
-	}
-}
-
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
 // boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
 func NewTLSConfig() (*tls.Config, error) {
@@ -118,12 +105,8 @@ func NewTLSConfig() (*tls.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
 	}
-	minVersion, err := ParseTLSVersion(os.Getenv("TLS_MIN_VERSION"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
-	}
 	return &tls.Config{
-		MinVersion:   minVersion,
+		MinVersion:   tls.VersionTLS12,
 		MaxVersion:   tls.VersionTLS13,
 		CipherSuites: ciphers,
 	}, nil
