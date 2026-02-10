@@ -159,26 +159,26 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 			case api.WatchAdded, api.WatchModified:
 				kvp := event.New
 				wc.handleWatchListEvent(kvp)
-			now := time.Now()
-			wc.lastSuccessfulConnTime = now
-			wc.lastEventTime = now
-		case api.WatchDeleted:
-			// Nil out the value to indicate a delete.
-			kvp := event.Old
-			if kvp == nil {
-				// Bug, we're about to panic when we hit the nil pointer, log something useful.
-				eventLogger.Panic("Deletion event without old value")
-			}
-			kvp.Value = nil
-			wc.handleWatchListEvent(kvp)
-			now := time.Now()
-			wc.lastSuccessfulConnTime = now
-			wc.lastEventTime = now
-		case api.WatchBookmark:
-			wc.handleWatchBookmark(event)
-			now := time.Now()
-			wc.lastSuccessfulConnTime = now
-			wc.lastEventTime = now // Bookmarks count as events too
+				now := time.Now()
+				wc.lastSuccessfulConnTime = now
+				wc.lastEventTime = now
+			case api.WatchDeleted:
+				// Nil out the value to indicate a delete.
+				kvp := event.Old
+				if kvp == nil {
+					// Bug, we're about to panic when we hit the nil pointer, log something useful.
+					eventLogger.Panic("Deletion event without old value")
+				}
+				kvp.Value = nil
+				wc.handleWatchListEvent(kvp)
+				now := time.Now()
+				wc.lastSuccessfulConnTime = now
+				wc.lastEventTime = now
+			case api.WatchBookmark:
+				wc.handleWatchBookmark(event)
+				now := time.Now()
+				wc.lastSuccessfulConnTime = now
+				wc.lastEventTime = now // Bookmarks count as events too
 			case api.WatchError:
 				if kerrors.IsResourceExpired(event.Error) {
 					// Our current watch revision is too old.  Even with watch bookmarks, we hit this path after the
@@ -420,7 +420,7 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 func (wc *watcherCache) resetWatchRevisionForFullResync() {
 	wc.currentWatchRevision = "0"
 	wc.errorCountAtCurrentRev = 0
-	
+
 	// If we've previously synced, notify consumers that we're reconnecting
 	if wc.hasSynced {
 		wc.logger.Info("Connection lost after initial sync, sending ResyncInProgress status")
