@@ -331,13 +331,18 @@ func getContainerLogs(logDir, containers string, runtime containerRuntime) {
 			logCmd = exec.Command("docker", "logs", name)
 
 		case runtimeCRIO:
-			// crictl output format: CONTAINER ID IMAGE CREATED STATE NAME
+			// crictl output format: CONTAINER ID IMAGE CREATED STATE NAME ATTEMPT POD ID
+			// Example: a1b2c3d4e5f6 calico/node:v3.22.0 10 minutes ago Running calico-node 0 g7h8i9j0k1l2
 			fields := strings.Fields(line)
 			if len(fields) < 5 {
 				continue
 			}
 			containerID := fields[0]
-			name = fields[4] // Container name is typically the 5th field
+			// Container name is the 5th field (index 4) in crictl ps output
+			name = fields[4]
+			if name == "" {
+				name = containerID
+			}
 			logCmd = exec.Command("crictl", "logs", containerID)
 
 		case runtimeContainerd:
@@ -382,9 +387,12 @@ func writeDiags(cmds diagCmd, dir string) error {
 	var content []byte
 	var err error
 
-	// Check if command contains shell features like $(...) or |
-	// If so, execute via shell
-	if strings.Contains(cmds.cmd, "$(") || strings.Contains(cmds.cmd, "|") {
+	// Check if command contains shell features like command substitution ($(...)),
+	// pipes (|), or redirections (>, <, >>). If so, execute via shell.
+	// Note: Commands using && or || should also use shell execution, but currently
+	// no diagnostic commands use these operators.
+	if strings.Contains(cmds.cmd, "$(") || strings.Contains(cmds.cmd, "|") ||
+		strings.Contains(cmds.cmd, ">") || strings.Contains(cmds.cmd, "<") {
 		content, err = exec.Command("sh", "-c", cmds.cmd).CombinedOutput()
 	} else {
 		content, err = exec.Command(parts[0], parts[1:]...).CombinedOutput()
