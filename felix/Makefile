@@ -61,9 +61,9 @@ EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/c
 include ../lib.Makefile
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a cross-compilation run.
+ifeq ($(ARCH),$(filter $(ARCH),arm64 s390x))
+# Required for eBPF support.
+# We need to force target arch build image to be used in a cross-compilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -121,8 +121,8 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
-# Currently CGO can be enabled in ARM64 and AMD64 builds.
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 s390x))
+# Currently CGO can be enabled in AMD64, ARM64 and S390X builds.
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
@@ -152,6 +152,7 @@ clone-libbpf: $(LIBBPF_FILE_CREATED)
 
 $(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
+	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
@@ -167,7 +168,7 @@ bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 s390x))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
