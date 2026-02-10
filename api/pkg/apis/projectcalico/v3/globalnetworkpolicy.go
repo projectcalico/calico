@@ -39,8 +39,7 @@ type GlobalNetworkPolicyList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster
-// +kubebuilder:resource:shortName={gnp,cgnp}
+// +kubebuilder:resource:scope=Cluster,shortName={gnp,cgnp}
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`

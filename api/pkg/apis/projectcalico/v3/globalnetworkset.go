@@ -37,8 +37,7 @@ type GlobalNetworkSetList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster
-// +kubebuilder:resource:scope=Cluster,shortName={gns}
+// +kubebuilder:resource:scope=Cluster,scope=Cluster,shortName={gns}
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 type GlobalNetworkSet struct {

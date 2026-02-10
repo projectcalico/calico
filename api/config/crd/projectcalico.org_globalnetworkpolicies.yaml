@@ -15,7 +15,7 @@ spec:
       - cgnp
     singular: globalnetworkpolicy
   preserveUnknownFields: false
-  scope: Namespaced
+  scope: Cluster
   versions:
     - additionalPrinterColumns:
         - jsonPath: .spec.tier
