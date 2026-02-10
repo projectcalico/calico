@@ -141,11 +141,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Verify programs were loaded for IPv4 host endpoint
-		Expect(programsIng.Count()).To(BeNumerically(">", 0))
-		Expect(programsEg.Count()).To(BeNumerically(">", 0))
+		// Verify programs were loaded - validate against actual Programs map
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
+		Expect(programsIng.Count()).To(Equal(len(atIng)))
+		Expect(programsEg.Count()).To(Equal(len(atEg)))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
@@ -196,11 +196,12 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			// Verify programs were loaded for both IPv4 and IPv6
-			Expect(programsIng.Count()).To(BeNumerically(">", 0))
 
+			// Verify programs were loaded - validate against actual Programs map
 			atIng := programsIng.Programs()
 			atEg := programsEg.Programs()
+			Expect(programsIng.Count()).To(Equal(len(atIng)))
+			Expect(programsEg.Count()).To(Equal(len(atEg)))
 
 			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
@@ -339,9 +340,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Verify programs are still loaded (no new programs needed for second host endpoint)
-		Expect(programsIng.Count()).To(BeNumerically(">", 0))
-		Expect(programsEg.Count()).To(BeNumerically(">", 0))
+		// Verify programs are still loaded - validate against actual Programs map
+		atIng := programsIng.Programs()
+		atEg := programsEg.Programs()
+		Expect(programsIng.Count()).To(Equal(len(atIng)))
+		Expect(programsEg.Count()).To(Equal(len(atEg)))
 
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
@@ -365,11 +368,13 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify new programs were loaded for the workload endpoint
-		Expect(programsIng.Count()).To(BeNumerically(">", programsIngCount))
-		Expect(programsEg.Count()).To(BeNumerically(">", programsEgCount))
-
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
+		Expect(programsIng.Count()).To(Equal(len(atIng)))
+		Expect(programsEg.Count()).To(Equal(len(atEg)))
+		// Verify count increased from before
+		Expect(len(atIng)).To(BeNumerically(">", programsIngCount))
+		Expect(len(atEg)).To(BeNumerically(">", programsEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
@@ -653,8 +658,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(err).NotTo(HaveOccurred())
 
 		// After restart and replaying state, verify programs were reloaded
-		programsCountAfterReplay := programsIng.Count()
-		Expect(programsCountAfterReplay).To(BeNumerically(">", 0))
+		atIng := programsIng.Programs()
+		programsCountAfterReplay := len(atIng)
+		Expect(programsIng.Count()).To(Equal(programsCountAfterReplay))
 		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
 		Expect(pm).To(HaveLen(programsCountAfterReplay))
 
