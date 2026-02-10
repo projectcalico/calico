@@ -82,7 +82,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// This is a baseline test to ensure that the test framework is working as expected.
-		framework.ConformanceIt("should provide a default allow [RunsOnWindows]", func() {
+		framework.ConformanceIt("should provide a default allow", func() {
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
 			checker.Execute()
 		})
@@ -94,7 +94,7 @@ var _ = describe.CalicoDescribe(
 		// - Creating a default-deny policy applied to both namespaces using a GlobalNetworkPolicy.
 		// - Isolating both namespaces with ingress and egress policies
 		// - Asserting only same namespace connectivity exists.
-		framework.ConformanceIt("should correctly isolate namespaces [RunsOnWindows]", func() {
+		framework.ConformanceIt("should correctly isolate namespaces", func() {
 			nsA := f.Namespace
 
 			By("Creating a second namespace B")
