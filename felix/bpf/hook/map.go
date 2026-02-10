@@ -217,14 +217,14 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		return nil, err
 	}
 
-	if !at.hasIPDefrag() {
+	if !at.HasIPDefrag() {
 		// Disable autoload for the IP defrag program
 		obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
 	}
 	skipIPDefrag := false
 	if err := obj.Load(); err != nil {
 		// If load fails and this attach type has IP defrag, try loading without the IP defrag program
-		if at.hasIPDefrag() {
+		if at.HasIPDefrag() {
 			log.WithError(err).Warn("Failed to load object with IP defrag program, retrying without it")
 			// Close the failed object and reopen
 			obj.Close()
@@ -316,15 +316,15 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefr
 			continue
 		}
 
-		if SubProg(idx) == SubProgTCHostCtConflict && !at.hasHostConflictProg() {
+		if SubProg(idx) == SubProgTCHostCtConflict && !at.HasHostConflictProg() {
 			continue
 		}
 
-		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
+		if SubProg(idx) == SubProgIPFrag && (!at.HasIPDefrag() || skipIPDefrag) {
 			continue
 		}
 
-		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
+		if SubProg(idx) == SubProgMaglev && !at.HasMaglev() {
 			continue
 		}
 
