@@ -48,10 +48,10 @@ func TestTLSVersionParsing(t *testing.T) {
 	RegisterTestingT(t)
 
 	tests := []struct {
-		name          string
-		version       string
-		expected      uint16
-		expectError   bool
+		name        string
+		version     string
+		expected    uint16
+		expectError bool
 	}{
 		{
 			name:        "empty string defaults to TLS 1.2",
