@@ -116,7 +116,7 @@ func TestServePrometheusMetricsHTTPS(t *testing.T) {
 			clientAuthType: "InvalidType",
 			caFile:         caFile,
 			clientHasCert:  false,
-			expectedError:  []string{"Failed to convert ClientAuthType invalid client authentication type: InvalidType. Defaulting to RequireAndVerifyClientCert"},
+			expectedError:  []string{"Failed to convert ClientAuthType invalid client authentication type: InvalidType"},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
