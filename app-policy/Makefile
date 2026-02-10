@@ -143,15 +143,15 @@ bin/LICENSE: ../LICENSE.md
 # UTs
 ###############################################################################
 WHAT?=./...
-GINKGO_FOCUS?=.*
-GINKGO_SKIP?=
+FOCUS?=.*
+SKIP?=
 GINKGO_ARGS?=
 
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: protobuf
 	mkdir -p report
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip="$(GINKGO_SKIP)" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 ###############################################################################
 # CI

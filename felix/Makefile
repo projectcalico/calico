@@ -284,8 +284,8 @@ $(FELIX_CONTAINER_CREATED): register \
 
 UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 WHAT?=.
-GINKGO_FOCUS?=.*
-GINKGO_SKIP?=
+FOCUS?=.*
+SKIP?=
 GINKGO_ARGS?=
 
 # The old XDP tests rely on the Apache BPF programs being built.  The UTs that
@@ -294,7 +294,7 @@ GINKGO_ARGS?=
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) -e $(ACK_GINKGO) $(CALICO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) -skip="$(GINKGO_SKIP)" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)
+	$(DOCKER_RUN) -e $(ACK_GINKGO) $(CALICO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)
 
 ###############################################################################
 # FV Tests
@@ -378,8 +378,8 @@ fv-no-prereqs:
 	  CERTS_PATH=$(CERTS_PATH) \
 	  PRIVATE_KEY=`pwd`/private.key \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
-	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
-	  GINKGO_SKIP="$(GINKGO_SKIP)" \
+	  FOCUS="$(FOCUS)" \
+	  SKIP="$(SKIP)" \
 	  ARCH=$(ARCH) \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
@@ -544,12 +544,12 @@ release-build: .release-$(VERSION).created
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) -skip="$(GINKGO_SKIP)" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)
+	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) -skip="$(GINKGO_SKIP)" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)
+	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')

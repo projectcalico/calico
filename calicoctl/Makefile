@@ -103,14 +103,14 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 # to match the original behavior of testing all subdirectories under calicoctl/
 # Users should provide subdirectory names like "commands" not paths like "./commands"
 WHAT?=*
-GINKGO_FOCUS?=.*
-GINKGO_SKIP?=
+FOCUS?=.*
+SKIP?=
 GINKGO_ARGS?=
 
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut: bin/calicoctl-linux-$(ARCH)
-	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r -skip="$(GINKGO_SKIP)" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) calicoctl/$(WHAT)'
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) calicoctl/$(WHAT)'
 
 ###############################################################################
 # FVs

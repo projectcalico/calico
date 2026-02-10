@@ -20,8 +20,8 @@
 : ${FV_BINARY:=bin/calico-felix-amd64}
 : ${PRIVATE_KEY:=`pwd`/private.key}
 : ${GINKGO_ARGS:=}
-: ${GINKGO_FOCUS:=.*}
-: ${GINKGO_SKIP:=}
+: ${FOCUS:=.*}
+: ${SKIP:=}
 
 mkdir -p cwlogs
 export FV_CWLOGDIR=`pwd`/cwlogs
@@ -37,8 +37,8 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
-               -ginkgo.skip="${GINKGO_SKIP}" \
-               -ginkgo.focus="${GINKGO_FOCUS}" \
+               -ginkgo.skip="${SKIP}" \
+               -ginkgo.focus="${FOCUS}" \
                ${GINKGO_ARGS} \
                -ginkgo.v \
                -ginkgo.noColor \
@@ -50,8 +50,8 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
-               -ginkgo.skip="${GINKGO_SKIP}" \
-               -ginkgo.focus="${GINKGO_FOCUS}" \
+               -ginkgo.skip="${SKIP}" \
+               -ginkgo.focus="${FOCUS}" \
                ${GINKGO_ARGS}
      status=$?
      echo "Test batch $batch completed with status $status"
