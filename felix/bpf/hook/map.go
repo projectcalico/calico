@@ -77,10 +77,13 @@ var xdpSubProgNames = []string{
 // This is useful for testing and other scenarios where you need to know
 // which sub-programs are defined for a particular hook.
 // Returns a copy of the internal array to prevent modifications.
+// For XDP hooks, returns XDP program names. For TC hooks (Ingress/Egress),
+// returns TC program names.
 func GetSubProgNames(hookType Hook) []string {
 	if hookType == XDP {
 		return append([]string{}, xdpSubProgNames...)
 	}
+	// Both Ingress and Egress use TC programs
 	return append([]string{}, tcSubProgNames...)
 }
 
