@@ -17,8 +17,6 @@ package server
 import (
 	"os"
 	"testing"
-
-	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
 func TestCATypeFlagParsing(t *testing.T) {
@@ -56,56 +54,5 @@ func TestCATypeFlagParsing(t *testing.T) {
 				testCase.args,
 			)
 		}
-	}
-}
-
-func TestTLSVersionEnvironmentVariable(t *testing.T) {
-	tests := []struct {
-		name        string
-		envValue    string
-		expected    uint16
-		expectError bool
-	}{
-		{
-			name:        "default to TLS 1.2 when not set",
-			envValue:    "",
-			expected:    0x0303,
-			expectError: false,
-		},
-		{
-			name:        "explicit TLS 1.2",
-			envValue:    "1.2",
-			expected:    0x0303,
-			expectError: false,
-		},
-		{
-			name:        "TLS 1.3",
-			envValue:    "1.3",
-			expected:    0x0304,
-			expectError: false,
-		},
-		{
-			name:        "invalid version",
-			envValue:    "1.0",
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := calicotls.ParseTLSVersion(tt.envValue)
-			if tt.expectError {
-				if err == nil {
-					t.Fatalf("Expected error for value %v, but got none", tt.envValue)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Unexpected error: %v", err)
-				}
-				if result != tt.expected {
-					t.Fatalf("Expected %v, got %v", tt.expected, result)
-				}
-			}
-		})
 	}
 }

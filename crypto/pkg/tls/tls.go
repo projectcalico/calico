@@ -118,15 +118,15 @@ func NewTLSConfig() (*tls.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
 	}
+
+	minVersion, err := ParseTLSVersion(os.Getenv("TLS_MIN_VERSION"))
+	if err != nil {
+		log.WithError(err).Warn("Invalid TLS_MIN_VERSION, defaulting to TLS 1.2")
+		minVersion = tls.VersionTLS12
+	}
+
 	return &tls.Config{
-		MinVersion: func() uint16 {
-			version, err := ParseTLSVersion(os.Getenv("TLS_MIN_VERSION"))
-			if err != nil {
-				log.WithError(err).Warn("Invalid TLS_MIN_VERSION, defaulting to TLS 1.2")
-				return tls.VersionTLS12
-			}
-			return version
-		}(),
+		MinVersion:   minVersion,
 		MaxVersion:   tls.VersionTLS13,
 		CipherSuites: ciphers,
 	}, nil
