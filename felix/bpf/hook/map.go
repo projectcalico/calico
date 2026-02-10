@@ -73,6 +73,64 @@ var xdpSubProgNames = []string{
 	"calico_xdp_drop",
 }
 
+// GetSubProgNames returns the sub-program names for the given hook type.
+// This is useful for testing and other scenarios where you need to know
+// which sub-programs are defined for a particular hook.
+// Returns a copy of the internal array to prevent modifications.
+// For XDP hooks, returns XDP program names. For TC hooks (Ingress/Egress),
+// returns TC program names.
+func GetSubProgNames(hookType Hook) []string {
+	if hookType == XDP {
+		return append([]string{}, xdpSubProgNames...)
+	}
+	// Both Ingress and Egress use TC programs
+	return append([]string{}, tcSubProgNames...)
+}
+
+// SubProgInfo holds information about a sub-program that should be loaded.
+type SubProgInfo struct {
+	Index   int     // Index in the sub-program names array
+	Name    string  // Name of the sub-program
+	SubProg SubProg // SubProg identifier
+}
+
+// GetApplicableSubProgs returns the list of sub-programs that should be loaded
+// for the given AttachType. It filters out empty entries and conditionally
+// excludes programs based on the AttachType's characteristics.
+// The skipIPDefrag parameter allows skipping IP defrag even if the AttachType
+// normally supports it (used when loading fails and retrying without IP defrag).
+func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
+	var result []SubProgInfo
+
+	subs := GetSubProgNames(at.Hook)
+
+	for idx, subprog := range subs {
+		if subprog == "" {
+			continue
+		}
+
+		if SubProg(idx) == SubProgTCHostCtConflict && !at.HasHostConflictProg() {
+			continue
+		}
+
+		if SubProg(idx) == SubProgIPFrag && (!at.HasIPDefrag() || skipIPDefrag) {
+			continue
+		}
+
+		if SubProg(idx) == SubProgMaglev && !at.HasMaglev() {
+			continue
+		}
+
+		result = append(result, SubProgInfo{
+			Index:   idx,
+			Name:    subprog,
+			SubProg: SubProg(idx),
+		})
+	}
+
+	return result
+}
+
 // Layout maps sub-programs of an object to their location in the ProgramsMap
 type Layout map[SubProg]int
 
@@ -217,14 +275,14 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		return nil, err
 	}
 
-	if !at.hasIPDefrag() {
+	if !at.HasIPDefrag() {
 		// Disable autoload for the IP defrag program
 		obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
 	}
 	skipIPDefrag := false
 	if err := obj.Load(); err != nil {
 		// If load fails and this attach type has IP defrag, try loading without the IP defrag program
-		if at.hasIPDefrag() {
+		if at.HasIPDefrag() {
 			log.WithError(err).Warn("Failed to load object with IP defrag program, retrying without it")
 			// Close the failed object and reopen
 			obj.Close()
@@ -304,41 +362,24 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefr
 	l := make(Layout)
 
 	offset := 0
-	subs := tcSubProgNames
-	if at.Hook == XDP {
-		subs = xdpSubProgNames
-	} else if at.LogLevel == "debug" {
+	if at.Hook != XDP && at.LogLevel == "debug" {
 		offset = int(SubProgTCMainDebug)
 	}
 
-	for idx, subprog := range subs {
-		if subprog == "" {
-			continue
-		}
+	applicableProgs := GetApplicableSubProgs(at, skipIPDefrag)
 
-		if SubProg(idx) == SubProgTCHostCtConflict && !at.hasHostConflictProg() {
-			continue
-		}
-
-		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
-			continue
-		}
-
-		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
-			continue
-		}
-
+	for _, progInfo := range applicableProgs {
 		pmIdx := pm.allocIdx()
-		err := obj.UpdateJumpMap(mapName, subprog, pmIdx)
+		err := obj.UpdateJumpMap(mapName, progInfo.Name, pmIdx)
 		if err != nil {
 			return nil, fmt.Errorf("error updating programs map with %s/%s at %d: %w",
-				ObjectFile(at), subprog, pmIdx, err)
+				ObjectFile(at), progInfo.Name, pmIdx, err)
 		}
-		log.Debugf("generic file %s prog %s loaded at %d", ObjectFile(at), subprog, pmIdx)
+		log.Debugf("generic file %s prog %s loaded at %d", ObjectFile(at), progInfo.Name, pmIdx)
 
-		i := idx + offset
-		if SubProg(idx) == SubProgTCPolicy {
-			i = idx // Debug programs share the same policy
+		i := progInfo.Index + offset
+		if progInfo.SubProg == SubProgTCPolicy {
+			i = progInfo.Index // Debug programs share the same policy
 		}
 		l[SubProg(i)] = pmIdx
 	}
