@@ -93,6 +93,96 @@ func newBPFTestEpMgr(
 	)
 }
 
+// countSubPrograms counts the number of sub-programs that would be loaded for a given AttachType.
+// This mirrors the logic in hook.ProgramsMap.allocateLayout().
+func countSubPrograms(at hook.AttachType) int {
+	count := 0
+	var subProgs []string
+
+	if at.Hook == hook.XDP {
+		subProgs = []string{
+			"calico_xdp_main",
+			"", // index reserved for policy program
+			"calico_xdp_accepted_entrypoint",
+			"", // reserved / nothing
+			"calico_xdp_drop",
+		}
+	} else {
+		subProgs = []string{
+			"calico_tc_main",
+			"", // index reserved for policy program
+			"calico_tc_skb_accepted_entrypoint",
+			"calico_tc_skb_send_icmp_replies",
+			"calico_tc_skb_drop",
+			"calico_tc_host_ct_conflict",
+			"calico_tc_skb_icmp_inner_nat",
+			"calico_tc_skb_new_flow_entrypoint",
+			"calico_tc_skb_ipv4_frag",
+			"calico_tc_maglev",
+		}
+	}
+
+	for idx, subprog := range subProgs {
+		if subprog == "" {
+			continue
+		}
+
+		// SubProgTCHostCtConflict - skip if not applicable
+		if idx == int(hook.SubProgTCHostCtConflict) && !hasHostConflictProg(at) {
+			continue
+		}
+
+		// SubProgIPFrag - skip if not applicable
+		if idx == int(hook.SubProgIPFrag) && !hasIPDefrag(at) {
+			continue
+		}
+
+		// SubProgMaglev - skip if not applicable
+		if idx == int(hook.SubProgMaglev) && !hasMaglev(at) {
+			continue
+		}
+
+		count++
+	}
+
+	return count
+}
+
+// hasHostConflictProg returns true if the attach type should have a host conflict program.
+func hasHostConflictProg(at hook.AttachType) bool {
+	switch at.Type {
+	case tcdefs.EpTypeWorkload:
+		return false
+	}
+	return at.Hook == hook.Egress
+}
+
+// hasIPDefrag returns true if the attach type should have an IP defragmentation program.
+func hasIPDefrag(at hook.AttachType) bool {
+	if at.Family != 4 {
+		return false
+	}
+	switch at.Type {
+	case tcdefs.EpTypeLO, tcdefs.EpTypeNAT:
+		return false
+	}
+	return at.Hook == hook.Ingress
+}
+
+// hasMaglev returns true if the attach type should have a Maglev program.
+func hasMaglev(at hook.AttachType) bool {
+	return at.Type == tcdefs.EpTypeHost && at.Hook == hook.Ingress
+}
+
+// expectedProgramCount computes the expected total program count for a map of AttachTypes.
+func expectedProgramCount(programs map[hook.AttachType]hook.Layout) int {
+	total := 0
+	for at := range programs {
+		total += countSubPrograms(at)
+	}
+	return total
+}
+
 func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	bpfmaps, err := bpfmap.CreateBPFMaps(ipv6Enabled)
 	Expect(err).NotTo(HaveOccurred())
@@ -141,11 +231,13 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Verify programs were loaded - validate against actual Programs map
+		// Verify expected programs were loaded based on AttachTypes
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
-		Expect(programsIng.Count()).To(Equal(len(atIng)))
-		Expect(programsEg.Count()).To(Equal(len(atEg)))
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
@@ -197,11 +289,13 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify programs were loaded - validate against actual Programs map
+			// Verify expected programs were loaded based on AttachTypes
 			atIng := programsIng.Programs()
 			atEg := programsEg.Programs()
-			Expect(programsIng.Count()).To(Equal(len(atIng)))
-			Expect(programsEg.Count()).To(Equal(len(atEg)))
+			expectedIngCount := expectedProgramCount(atIng)
+			expectedEgCount := expectedProgramCount(atEg)
+			Expect(programsIng.Count()).To(Equal(expectedIngCount))
+			Expect(programsEg.Count()).To(Equal(expectedEgCount))
 
 			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
@@ -340,11 +434,13 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Verify programs are still loaded - validate against actual Programs map
+		// Verify expected programs are loaded based on AttachTypes
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
-		Expect(programsIng.Count()).To(Equal(len(atIng)))
-		Expect(programsEg.Count()).To(Equal(len(atEg)))
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
@@ -367,14 +463,16 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Verify new programs were loaded for the workload endpoint
+		// Verify expected programs were loaded based on AttachTypes
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
-		Expect(programsIng.Count()).To(Equal(len(atIng)))
-		Expect(programsEg.Count()).To(Equal(len(atEg)))
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		// Verify count increased from before
-		Expect(len(atIng)).To(BeNumerically(">", programsIngCount))
-		Expect(len(atEg)).To(BeNumerically(">", programsEgCount))
+		Expect(expectedIngCount).To(BeNumerically(">", programsIngCount))
+		Expect(expectedEgCount).To(BeNumerically(">", programsEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
@@ -657,12 +755,12 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// After restart and replaying state, verify programs were reloaded
+		// After restart and replaying state, verify expected programs were loaded
 		atIng := programsIng.Programs()
-		programsCountAfterReplay := len(atIng)
-		Expect(programsIng.Count()).To(Equal(programsCountAfterReplay))
+		expectedIngCount := expectedProgramCount(atIng)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
 		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
-		Expect(pm).To(HaveLen(programsCountAfterReplay))
+		Expect(pm).To(HaveLen(expectedIngCount))
 
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
