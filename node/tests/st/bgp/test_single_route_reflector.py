@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from nose.plugins.attrib import attr
+import pytest
 from unittest import skip
 
 from tests.st.test_base import TestBase
@@ -23,7 +23,7 @@ from .peer import create_bgp_peer
 
 class TestSingleRouteReflector(TestBase):
 
-    @attr('slow')
+    @pytest.mark.slow
     def _test_single_route_reflector(self, backend='bird', bgpconfig_as_num=64514, peer_as_num=64514):
         """
         Run a multi-host test using a single route reflector and global
@@ -74,11 +74,11 @@ class TestSingleRouteReflector(TestBase):
                                         ip_pass_list=[workload_host1.ip,
                                                       workload_host2.ip])
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_single_route_reflector(self):
         self._test_single_route_reflector(backend='bird')
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_single_route_reflector_default_as(self):
         self._test_single_route_reflector(backend='bird', bgpconfig_as_num=None, peer_as_num=64512)
 
