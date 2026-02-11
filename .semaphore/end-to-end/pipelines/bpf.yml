@@ -125,12 +125,14 @@ blocks:
             - name: KUBE_PROXY_MANAGEMENT
               value: "Enabled"
 
-        - name: AWS, no encap, DSR
+        - name: AWS-Talos, no encap, DSR
           execution_time_limit:
             hours: 7
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: ENABLE_EXTERNAL_NODE
+              value: "false"  # No code for external nodes on Talos yet
             - name: VPC_SUBNETS
               value: '["172.16.101.0/24"]'
             - name: IPAM_TEST_POOL_SUBNET
@@ -138,7 +140,7 @@ blocks:
             - name: ENABLE_BPF_DSR
               value: "true"
             - name: PROVISIONER
-              value: "aws-kubeadm"
+              value: "aws-talos"
             - name: ENCAPSULATION_TYPE
               value: "None"
             - name: BGP_STATUS
