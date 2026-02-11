@@ -80,8 +80,7 @@ func (at AttachType) ObjectFile() string {
 	return ObjectFile(at)
 }
 
-// HasHostConflictProg returns true if the attach type should have a host conflict program.
-func (at AttachType) HasHostConflictProg() bool {
+func (at AttachType) hasHostConflictProg() bool {
 	switch at.Type {
 	case tcdefs.EpTypeWorkload:
 		return false
@@ -90,8 +89,7 @@ func (at AttachType) HasHostConflictProg() bool {
 	return at.Hook == Egress
 }
 
-// HasIPDefrag returns true if the attach type should have an IP defragmentation program.
-func (at AttachType) HasIPDefrag() bool {
+func (at AttachType) hasIPDefrag() bool {
 	if at.Family != 4 {
 		return false
 	}
@@ -104,8 +102,7 @@ func (at AttachType) HasIPDefrag() bool {
 	return at.Hook == Ingress
 }
 
-// HasMaglev returns true if the attach type should have a Maglev program.
-func (at AttachType) HasMaglev() bool {
+func (at AttachType) hasMaglev() bool {
 	return at.Type == tcdefs.EpTypeHost && at.Hook == Ingress
 }
 
