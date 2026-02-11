@@ -147,7 +147,7 @@ var _ = Describe("RouteGenerator", func() {
 		rg = &routeGenerator{
 			nodeName:                   "foobar",
 			svcIndexer:                 cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
-			epIndexer:                  cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
+			epIndexer:                  cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{endpointSliceServiceIndex: endpointSliceServiceIndexFunc}),
 			svcRouteMap:                make(map[string]map[string]bool),
 			routeAdvertisementRefCount: make(map[string]int),
 			client: &client{
