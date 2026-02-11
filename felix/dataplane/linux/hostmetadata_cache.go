@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/calico/felix/proto"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 type HostMetadataCache struct {
@@ -33,9 +34,11 @@ func NewHostMetadataCache() *HostMetadataCache {
 }
 
 func (c *HostMetadataCache) CompleteDeferredWork() error {
+	if !c.inSync {
+		logrus.Debug("Now in sync")
+	}
 	c.inSync = true
-	logrus.Debug("Now in sync")
-	c.requestUpdate()
+	c.requestFlush()
 	return nil
 }
 
@@ -44,6 +47,7 @@ func (c *HostMetadataCache) OnUpdate(u any) {
 	case *proto.HostMetadataV4V6Update:
 		logrus.WithField("update", upd).Debug("Received HostMetadataV4V6Update message")
 		c.onHostMetadataV4V6Update(upd)
+
 	case *proto.HostMetadataV4V6Remove:
 		logrus.WithField("update", upd).Debug("Received HostMetadataV4V6Remove message")
 		c.onHostMetadataV4V6Remove(upd)
@@ -52,7 +56,7 @@ func (c *HostMetadataCache) OnUpdate(u any) {
 	}
 
 	if c.inSync {
-		c.requestUpdate()
+		c.requestFlush()
 	}
 }
 
@@ -64,7 +68,7 @@ func (c *HostMetadataCache) onHostMetadataV4V6Remove(u *proto.HostMetadataV4V6Re
 	delete(c.updates, u.Hostname)
 }
 
-func (c *HostMetadataCache) requestUpdate() {
+func (c *HostMetadataCache) requestFlush() {
 	select {
 	case c.queue <- signal{}:
 	default:
@@ -75,6 +79,7 @@ func (c *HostMetadataCache) loopFlushingUpdates() {
 	var timer *time.Timer
 	for {
 		<-c.queue
+		logrus.Debug("Flushing throttled updates")
 		c.sendAllUpdates()
 
 		if timer == nil {
