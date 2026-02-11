@@ -1354,13 +1354,17 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 
 		// Need to check programmed CIDRs against expected to see if any need deleting.
 		logCtx.Debug("Check programmed CIDRs for required deletions")
-		expectedAllowedCidrs := node.allowedCidrsForWireguard()
+		expectedAllowedCidrs := node.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion)
 		configuredCidrsAsSet := set.New[ip.CIDR]()
 		var allowedCidrsForUpdateMsg []net.IPNet
 		for _, netCidr := range configuredCidrs {
 			cidr := ip.CIDRFromIPNet(&netCidr)
 			configuredCidrsAsSet.Add(cidr)
-			if !node.cidrs.Contains(cidr) {
+			expectedCidrsAsSet := set.New[ip.CIDR]()
+			for _, expected := range expectedAllowedCidrs {
+				expectedCidrsAsSet.Add(ip.CIDRFromIPNet(&expected))
+			}
+			if !expectedCidrsAsSet.Contains(cidr) {
 				// Need to delete an entry, so just replace.
 				logCtx.WithField("cidr", cidr).Info("Unexpected CIDR configured - replace full set of CIDRs")
 				replaceCidrs = true

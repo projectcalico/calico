@@ -270,7 +270,7 @@ Node A (10.142.53.31)                    Node B (10.142.53.32)
 | `REMOTE_TUNNEL` | ✅ Yes | ✅ Yes |
 | `LOCAL_TUNNEL` | ✅ Yes | ✅ Yes |
 | `REMOTE_HOST` | ⚠️ Only with EncryptHostTraffic | ✅ Always |
-| `LOCAL_HOST` | ⚠️ Only with EncryptHostTraffic | ✅ Always |
+| `LOCAL_HOST` | ⚠️ Only with EncryptHostTraffic | ⚠️ Only with EncryptHostTraffic (unchanged) |
 
 ---
 
