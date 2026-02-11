@@ -89,11 +89,16 @@ func (n *nodeData) allowedCidrsForWireguard() []net.IPNet {
 	return cidrs
 }
 
-func (n *nodeData) allowedCidrsForWireguardWithExtra(extraIPs []string, ipVersion uint8) []net.IPNet {
+func (n *nodeData) allowedCidrsForWireguardWithExtra(extraIPs []string, ipVersion uint8, logCtx *log.Entry) []net.IPNet {
 	cidrs := n.allowedCidrsForWireguard()
 	for _, ipStr := range extraIPs {
 		cidr, err := ip.ParseCIDROrIP(ipStr)
-		if err != nil || cidr == nil {
+		if err != nil {
+			logCtx.WithFields(log.Fields{"ip": ipStr, "error": err}).Warn("Invalid IP/CIDR in wireguardExtraAllowedIPs, skipping")
+			continue
+		}
+		if cidr == nil {
+			logCtx.WithField("ip", ipStr).Warn("Failed to parse IP/CIDR in wireguardExtraAllowedIPs, skipping")
 			continue
 		}
 		if cidr.Version() == ipVersion {
@@ -1206,7 +1211,7 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 				if !peer.programmedInWireguard || update.cidrsDeleted.Len() > 0 {
 					logCtx.Debug("Peer not programmed or CIDRs were deleted - need to replace full set of CIDRs")
 					wgpeer.ReplaceAllowedIPs = true
-					wgpeer.AllowedIPs = peer.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion)
+					wgpeer.AllowedIPs = peer.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion, w.logCtx)
 					updatePeer = true
 				} else if update.cidrsAdded.Len() > 0 {
 					logCtx.Debug("Peer programmed, no CIDRs deleted and CIDRs added")
@@ -1266,7 +1271,7 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 					wireguardUpdate.Peers = append(wireguardUpdate.Peers, wgtypes.PeerConfig{
 						PublicKey:                   peer.publicKey,
 						Endpoint:                    w.endpointUDPAddr(peer.endpointAddr.AsNetIP()),
-						AllowedIPs:                  peer.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion),
+						AllowedIPs:                  peer.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion, w.logCtx),
 						PersistentKeepaliveInterval: &w.config.PersistentKeepAlive,
 					})
 				}
@@ -1354,7 +1359,7 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 
 		// Need to check programmed CIDRs against expected to see if any need deleting.
 		logCtx.Debug("Check programmed CIDRs for required deletions")
-		expectedAllowedCidrs := node.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion)
+		expectedAllowedCidrs := node.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion, w.logCtx)
 		configuredCidrsAsSet := set.New[ip.CIDR]()
 		var allowedCidrsForUpdateMsg []net.IPNet
 		for _, netCidr := range configuredCidrs {
@@ -1423,7 +1428,7 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 		wireguardUpdate.Peers = append(wireguardUpdate.Peers, wgtypes.PeerConfig{
 			PublicKey:                   node.publicKey,
 			Endpoint:                    w.endpointUDPAddr(node.endpointAddr.AsNetIP()),
-			AllowedIPs:                  node.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion),
+			AllowedIPs:                  node.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion, w.logCtx),
 			PersistentKeepaliveInterval: &w.config.PersistentKeepAlive,
 		})
 		wireguardUpdateRequired = true
