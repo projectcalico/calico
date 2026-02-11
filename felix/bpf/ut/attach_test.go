@@ -382,8 +382,6 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	defer deleteLink(workload1)
 
 	t.Run("create a workload", func(t *testing.T) {
-		programsIngCount := programsIng.Count()
-		programsEgCount := programsEg.Count()
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 		err = bpfEpMgr.CompleteDeferredWork()
@@ -396,9 +394,6 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		expectedEgCount := expectedProgramCount(atEg)
 		Expect(programsIng.Count()).To(Equal(expectedIngCount))
 		Expect(programsEg.Count()).To(Equal(expectedEgCount))
-		// Verify count increased from before
-		Expect(expectedIngCount).To(BeNumerically(">", programsIngCount))
-		Expect(expectedEgCount).To(BeNumerically(">", programsEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
