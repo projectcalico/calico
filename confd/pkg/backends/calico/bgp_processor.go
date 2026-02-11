@@ -28,8 +28,11 @@ import (
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 )
 
-// NodeName gets the node name from environment
-var NodeName = os.Getenv("NODENAME")
+var (
+	// NodeName gets the node name from environment
+	NodeName                = os.Getenv("NODENAME")
+	CalicoNetworkingBackend = os.Getenv("CALICO_NETWORKING_BACKEND")
+)
 
 // BGP configuration cache
 type bgpConfigCache struct {
@@ -64,10 +67,11 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc.Debug("BGP config cache miss or expired, processing new configuration")
 
 	config := &types.BirdBGPConfig{
-		NodeName:    NodeName,
-		Peers:       make([]types.BirdBGPPeer, 0),
-		Filters:     make(map[string]string),
-		Communities: make([]types.CommunityRule, 0),
+		NodeName:             NodeName,
+		ProgramClusterRoutes: CalicoNetworkingBackend != "felix",
+		Peers:                make([]types.BirdBGPPeer, 0),
+		Filters:              make(map[string]string),
+		Communities:          make([]types.CommunityRule, 0),
 	}
 
 	// Get basic node configuration
