@@ -1266,7 +1266,7 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 					wireguardUpdate.Peers = append(wireguardUpdate.Peers, wgtypes.PeerConfig{
 						PublicKey:                   peer.publicKey,
 						Endpoint:                    w.endpointUDPAddr(peer.endpointAddr.AsNetIP()),
-						AllowedIPs:                  peer.allowedCidrsForWireguard(),
+						AllowedIPs:                  peer.allowedCidrsForWireguardWithExtra(w.config.ExtraAllowedIPs, w.ipVersion),
 						PersistentKeepaliveInterval: &w.config.PersistentKeepAlive,
 					})
 				}
