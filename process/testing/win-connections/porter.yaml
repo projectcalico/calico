@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: porter
+  namespace: demo
+  labels:
+    app: porter
+spec:
+  containers:
+    - name: porter
+      image: quay.io/calico/porter:latest
+      ports:
+        - containerPort: 80
+      env:
+        - name: SERVE_PORT_80
+          value: foobar
+  nodeSelector:
+    kubernetes.io/os: windows
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: porter
+  namespace: demo
+  labels:
+    app: porter
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: porter

@@ -1,22 +1,28 @@
-- name: cni-plugin
+- name: CNI Plugin
   run:
     when: "${CHANGE_IN(cni-plugin)}"
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "cni-plugin"
     prologue:
       commands:
         - cd cni-plugin
     jobs:
-      - name: cni-plugin tests
+      - name: "CNI Plugin: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+      - name: "CNI Plugin: build windows images"
         commands:
           - ../.semaphore/run-and-monitor ci.log make image-windows
-- name: "cni-plugin: Windows"
+- name: "CNI Plugin: Windows"
   run:
-    when: "${CHANGE_IN(cni-plugin)}"
+    when: "false or ${CHANGE_IN(cni-plugin,process/testing/aso,process/testing/winfv-cni-plugin)}"
   dependencies:
     - Prerequisites
   task:
@@ -32,9 +38,7 @@
         - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
         - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-cni-plugin/report
         - export LOGS_DIR=~/fv.log
-        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-        - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}
-        - export SUFFIX=${CLUSTER_NAME}
+        - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
         - cd cni-plugin
         - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
     epilogue:
@@ -42,26 +46,30 @@
         commands:
           - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
           - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
-          - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
+          - cd ~/calico/process/testing/aso && make dist-clean
     env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "cni-plugin"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
       - name: AZURE_LOCATION
         value: eastus2
       - name: KUBE_VERSION
-        value: v1.29.7
+        value: v1.33.7
     jobs:
-      - name: Containerd - Windows FV - overlay
+      - name: "CNI Plugin: Windows Containerd FV - overlay"
         execution_time_limit:
           minutes: 60
         commands:
           - export BACKEND=overlay
-          - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
-          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
-      - name: Containerd - Windows FV - l2bridge
+          - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+          - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
+      - name: "CNI Plugin: Windows Containerd FV - l2bridge"
         execution_time_limit:
           minutes: 60
         commands:
           - export BACKEND=l2bridge
-          - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
-          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+          - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+          - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
