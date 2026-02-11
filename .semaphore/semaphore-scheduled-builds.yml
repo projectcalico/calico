@@ -248,7 +248,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make image-windows
   - name: "CNI Plugin: Windows"
     run:
-      when: "false or true"
+      when: "true or true"
     dependencies:
       - Prerequisites
     task:
@@ -514,7 +514,7 @@ blocks:
             - make bin/calico-felix.exe fv/win-fv.exe
   - name: "Felix: Windows FV"
     run:
-      when: "false or true"
+      when: "true or true"
     dependencies: ["Felix: Build Windows binaries"]
     task:
       secrets:
