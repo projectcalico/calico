@@ -389,16 +389,17 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		logCxt.Debug("Interface state hasn't changed, nothing to notify.")
 	}
 
-	addrsUpdated := true
+	notifyAddrs := true
 	if newState == StateNotPresent {
 		if oldState != StateNotPresent {
 			// We were tracking addresses for this interface before but now it's gone.  Signal that.
-			log.Debug("Notify link non-existence to address callback consumers")
+			logCxt.Debug("Notify link non-existence to address callback consumers")
 			m.AddrCallback(ifaceName, nil)
 		}
 
-		// If the interface is done, we don't have to worry about addresses.
-		addrsUpdated = false
+		// If the interface does not exist, we don't have to notify addresses.
+		logCxt.Debug("Interface does not exist, can skip address notification.")
+		notifyAddrs = false
 	}
 
 	// If we sent a notification that the interface is gone, but there is another index associated with
@@ -426,10 +427,15 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		m.StateCallback(ifaceName, remainingInfo.State, remainingIdx)
 
 		// If we notified a new interface, we should also notify the addresses for that interface.
-		addrsUpdated = true
+		logCxt.Debug("Notifying addresses for remaining interface with same name after deletion.")
+		notifyAddrs = true
+
+		// Use the remaining index for any address updates, as that's the one that is still present.
+		ifIndex = remainingIdx
 	}
 
-	if !trackAddrs || !addrsUpdated {
+	if !trackAddrs || !notifyAddrs {
+		logCxt.Debug("Not notifying addresses for interface")
 		return
 	}
 
