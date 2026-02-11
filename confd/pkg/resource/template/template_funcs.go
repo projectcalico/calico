@@ -409,7 +409,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 // This function generates BIRD statements for IPPool resources to be used as BIRD filters based on the following input:
 //   - pairs: IPPool resources packaged into KVPairs.
 //   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
-//     first reject disabled ippool, and then accept the rest at the end after all other filters. Allowed values are
+//     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (to not filter).
 //   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
 //     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
