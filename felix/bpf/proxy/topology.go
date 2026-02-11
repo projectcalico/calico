@@ -15,6 +15,8 @@
 package proxy
 
 import (
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -41,7 +43,7 @@ import (
 //	[]k8sp.Endpoint - Endpoints chosen by topology-aware routing, or all endpoints if the logic falls back.
 //	bool            - True if topology-aware routing logic was executed for the service, false if it was not enabled.
 func FilterEpsByTopologyAwareRouting(endpoints []k8sp.Endpoint, topologyMode, nodeZone string) ([]k8sp.Endpoint, bool) {
-	if topologyMode != "Auto" && topologyMode != "auto" {
+	if strings.ToLower(topologyMode) != "auto" {
 		log.Debugf(
 			"Skipping topology aware endpoint filtering. Feature is enabled only when '%s' is set to 'Auto'; current value: '%s'",
 			v1.AnnotationTopologyMode,
@@ -122,7 +124,7 @@ func filterEndpointsByHints(endpoints []k8sp.Endpoint, targetHint string, getHin
 //
 // Returns:
 //
-//	A slice of endpoints prioritized by node and zone hints.
+//	A slice of endpoints selected based on the best match with traffic distribution preference.
 func FilterEpsByTrafficDistribution(endpoints []k8sp.Endpoint, nodeName, nodeZone string) []k8sp.Endpoint {
 	// Try to prioritizes sending traffic to endpoints on the same node as the client.
 	eps := filterEndpointsByHints(endpoints, nodeName, func(ep k8sp.Endpoint) sets.Set[string] {
