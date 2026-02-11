@@ -989,6 +989,11 @@ type FelixConfigurationSpec struct {
 	// WireguardHostEncryptionEnabled controls whether Wireguard host-to-host encryption is enabled. [Default: false]
 	WireguardHostEncryptionEnabled *bool `json:"wireguardHostEncryptionEnabled,omitempty"`
 
+	// WireguardExtraAllowedIPs specifies additional CIDRs to be added to each peer's allowed-IPs list.
+	// This can be used to allow traffic from host-networked pods or other edge cases.
+	// Format: comma-separated list of CIDRs (e.g., "10.0.0.1/32,10.0.0.2/32"). [Default: empty]
+	WireguardExtraAllowedIPs string `json:"wireguardExtraAllowedIPs,omitempty"`
+
 	// WireguardPersistentKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
