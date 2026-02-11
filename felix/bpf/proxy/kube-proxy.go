@@ -76,6 +76,8 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 		opts:        opts,
 		rt:          NewRTCache(),
 
+		hostMetadataUpdates: make(chan map[string]*proto.HostMetadataV4V6Update, 1),
+
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
 	}
