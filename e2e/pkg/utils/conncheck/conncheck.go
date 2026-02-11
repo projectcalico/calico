@@ -494,9 +494,7 @@ func (c *connectionTester) command(t Target) string {
 		// Windows.
 		switch t.GetProtocol() {
 		case TCP:
-			cmd = fmt.Sprintf("$sb={Invoke-WebRequest %s -UseBasicParsing -TimeoutSec 3 -DisableKeepAlive}; "+
-				"For ($i=0; $i -lt 5; $i++) { sleep 5; "+
-				"try {& $sb} catch { echo failed loop $i ; continue }; exit 0 ; }; exit 1", t.Destination())
+			cmd = fmt.Sprintf("Invoke-WebRequest %s -UseBasicParsing -TimeoutSec 5 -DisableKeepAlive", t.Destination())
 		case ICMP:
 			cmd = fmt.Sprintf("Test-Connection -Count 5 -ComputerName %s", t.Destination())
 		default:
