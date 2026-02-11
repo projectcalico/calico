@@ -1096,7 +1096,7 @@ blocks:
               value: "true"
             - name: CALICO_API_GROUP
               value: projectcalico.org/v3
-            - name: GINKGO_SKIP
+            - name: SKIP
               value: "etcdv3 backend"
   - name: "Node: Build"
     run:
