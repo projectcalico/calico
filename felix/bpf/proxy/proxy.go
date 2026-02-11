@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/projectcalico/calico/felix/proto"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -44,6 +43,8 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"k8s.io/kubernetes/pkg/proxy/runner"
 	"k8s.io/kubernetes/pkg/proxy/util"
+
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // Proxy watches for updates of Services and Endpoints, maintains their mapping
