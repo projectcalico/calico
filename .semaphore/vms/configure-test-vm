@@ -79,8 +79,8 @@ set +x
 echo "$DOCKERHUB_PASSWORD" | ssh "ubuntu@${vm_ip}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 scp -r -C "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets"
 set -x
-"${ssh_cmd[@]}" "gcloud auth activate-service-account --key-file=/home/ubuntu/secrets/secret.google-service-account-key.json && \
-  gcloud config set project unique-caldron-775 && \
+
+"${ssh_cmd[@]}" "gcloud config set project unique-caldron-775 && \
   gcloud storage cp '${GCS_WORKFLOW_DIR}/${COMPONENT}/fv-artifacts/*' /tmp && \
   tar -xzf /tmp/working-copy.tgz && \
   ${CALICO_DIR_NAME}/${COMPONENT}/.semaphore/load-test-artifacts"
@@ -89,3 +89,6 @@ if [ "$ENABLE_JIT_HARDENING" = "true" ]; then
   echo "Enabling BPF JIT hardening on test VM"
   "${ssh_cmd[@]}" sudo sysctl -w net.core.bpf_jit_harden=2
 fi
+
+# Login using the VM's service account.
+"${ssh_cmd[@]}" 'gcloud auth configure-docker gcr.io --quiet'

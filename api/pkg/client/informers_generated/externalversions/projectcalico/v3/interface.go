@@ -30,8 +30,12 @@ type Interface interface {
 	GlobalNetworkSets() GlobalNetworkSetInformer
 	// HostEndpoints returns a HostEndpointInformer.
 	HostEndpoints() HostEndpointInformer
+	// IPAMBlocks returns a IPAMBlockInformer.
+	IPAMBlocks() IPAMBlockInformer
 	// IPAMConfigurations returns a IPAMConfigurationInformer.
 	IPAMConfigurations() IPAMConfigurationInformer
+	// IPAMHandles returns a IPAMHandleInformer.
+	IPAMHandles() IPAMHandleInformer
 	// IPPools returns a IPPoolInformer.
 	IPPools() IPPoolInformer
 	// IPReservations returns a IPReservationInformer.
@@ -115,9 +119,19 @@ func (v *version) HostEndpoints() HostEndpointInformer {
 	return &hostEndpointInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// IPAMBlocks returns a IPAMBlockInformer.
+func (v *version) IPAMBlocks() IPAMBlockInformer {
+	return &iPAMBlockInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // IPAMConfigurations returns a IPAMConfigurationInformer.
 func (v *version) IPAMConfigurations() IPAMConfigurationInformer {
 	return &iPAMConfigurationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IPAMHandles returns a IPAMHandleInformer.
+func (v *version) IPAMHandles() IPAMHandleInformer {
+	return &iPAMHandleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // IPPools returns a IPPoolInformer.

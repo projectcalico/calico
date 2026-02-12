@@ -3,14 +3,14 @@
 #################################################################################################
 
 # The version of calico/go-build and calico/base to use.
-GO_BUILD_VER=1.25.5-llvm18.1.8-k8s1.34.2
-CALICO_BASE_VER=ubi9-1764706938
+GO_BUILD_VER=1.25.7-llvm18.1.8-k8s1.34.3
+CALICO_BASE_VER=ubi9-1770247388
 
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
-K8S_VERSION=v1.34.2
+K8S_VERSION=v1.34.3
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -20,7 +20,7 @@ GHR_VERSION=v0.17.0
 GITHUB_CLI_VERSION=2.76.2
 GOTESTSUM_VERSION=v1.12.3
 HELM_VERSION=v3.11.3
-KINDEST_NODE_VERSION=v1.34.2
+KINDEST_NODE_VERSION=v1.34.3
 KIND_VERSION=v0.29.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
@@ -61,7 +61,7 @@ CNI_VERSION=master
 FLANNEL_VERSION=main
 
 # The libbpf version to use
-LIBBPF_VERSION=v1.4.6
+LIBBPF_VERSION=v1.6.2
 
 # The bpftool image to use; this is the output of the https://github.com/projectcalico/bpftool repo.
 BPFTOOL_IMAGE=calico/bpftool:v7.5.0

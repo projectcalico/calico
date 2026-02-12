@@ -2,7 +2,7 @@
 This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
-go 1.25.5
+go 1.25.7
 github.com/beorn7/perks v1.0.1
 github.com/cespare/xxhash/v2 v2.3.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
@@ -32,20 +32,21 @@ github.com/stretchr/testify v1.11.1
 github.com/x448/float16 v0.8.4
 go.yaml.in/yaml/v2 v2.4.3
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/net v0.47.0
-golang.org/x/oauth2 v0.32.0
-golang.org/x/sys v0.38.0
-golang.org/x/text v0.31.0
+golang.org/x/net v0.48.0
+golang.org/x/oauth2 v0.34.0
+golang.org/x/sys v0.39.0
+golang.org/x/text v0.32.0
 golang.org/x/time v0.14.0
 google.golang.org/protobuf v1.36.10
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.34.2
-k8s.io/apimachinery v0.34.2
-k8s.io/client-go v0.34.2
+k8s.io/api v0.34.3
+k8s.io/apimachinery v0.34.3
+k8s.io/client-go v0.34.3
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
 k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
+sigs.k8s.io/yaml v1.6.0

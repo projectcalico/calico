@@ -18,29 +18,20 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
 	BGPConfigResourceName = "BGPConfigurations"
-	BGPConfigCRDName      = "bgpconfigurations.crd.projectcalico.org"
 )
 
-func NewBGPConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
+func NewBGPConfigClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
 		restClient:      r,
-		name:            BGPConfigCRDName,
 		resource:        BGPConfigResourceName,
-		description:     "Calico BGP Configuration",
 		k8sResourceType: reflect.TypeOf(apiv3.BGPConfiguration{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindBGPConfiguration,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(apiv3.BGPConfigurationList{}),
-		resourceKind: apiv3.KindBGPConfiguration,
+		k8sListType:     reflect.TypeOf(apiv3.BGPConfigurationList{}),
+		kind:            apiv3.KindBGPConfiguration,
+		apiGroup:        group,
 	}
 }

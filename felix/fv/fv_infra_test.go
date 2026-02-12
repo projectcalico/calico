@@ -110,12 +110,12 @@ func describeConnCheckTests(protocol string) bool {
 						tcpdF := tc.Felixes[0].AttachTCPDump("eth0")
 						tcpdF.SetLogEnabled(true)
 						tcpdF.AddMatcher("UDP", regexp.MustCompile(`.*UDP.*`))
-						tcpdF.Start()
+						tcpdF.Start(infra)
 
 						tcpdW := hostW[1].AttachTCPDump()
 						tcpdW.SetLogEnabled(true)
 						tcpdW.AddMatcher("UDP", regexp.MustCompile(`.*UDP.*`))
-						tcpdW.Start()
+						tcpdW.Start(infra)
 
 						cc.ExpectLoss(tc.Felixes[0], hostW[1], 2*time.Second, 20, -1)
 						cc.CheckConnectivityPacketLoss()

@@ -21,10 +21,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -37,18 +37,18 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 	ctx := context.Background()
 	name1 := "affinity-1"
 	name2 := "affinity-2"
-	spec1 := libapiv3.BlockAffinitySpec{
+	spec1 := v3.BlockAffinitySpec{
 		State:   "confirmed",
 		Node:    "node-1",
 		CIDR:    "10.0.0.0/24",
-		Deleted: "false",
+		Deleted: false,
 		Type:    "host",
 	}
-	spec2 := libapiv3.BlockAffinitySpec{
+	spec2 := v3.BlockAffinitySpec{
 		State:   "confirmed",
 		Node:    "node-2",
 		CIDR:    "10.1.0.0/24",
-		Deleted: "false",
+		Deleted: false,
 		Type:    "host",
 	}
 
@@ -67,9 +67,9 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 	})
 
 	DescribeTable("Block affinity e2e CRUD tests",
-		func(name1, name2 string, spec1, spec2 libapiv3.BlockAffinitySpec) {
+		func(name1, name2 string, spec1, spec2 v3.BlockAffinitySpec) {
 			By("Updating the block affinity before it is created")
-			_, outError := c.BlockAffinities().Update(ctx, &libapiv3.BlockAffinity{
+			_, outError := c.BlockAffinities().Update(ctx, &v3.BlockAffinity{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -77,7 +77,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BlockAffinity(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new block affinity with name1/spec1 and a non-empty ResourceVersion")
-			_, outError = c.BlockAffinities().Create(ctx, &libapiv3.BlockAffinity{
+			_, outError = c.BlockAffinities().Create(ctx, &v3.BlockAffinity{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "12345"},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -90,18 +90,18 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BlockAffinity(" + name1 + ") with error:"))
 
 			By("Creating a new BlockAffinity with name1/spec1")
-			res1, outError := c.BlockAffinities().Create(ctx, &libapiv3.BlockAffinity{
+			res1, outError := c.BlockAffinities().Create(ctx, &v3.BlockAffinity{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res1).To(MatchResource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same BlockAffinity with name1 but with spec2")
-			_, outError = c.BlockAffinities().Create(ctx, &libapiv3.BlockAffinity{
+			_, outError = c.BlockAffinities().Create(ctx, &v3.BlockAffinity{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec2,
 			}, options.SetOptions{})
@@ -111,7 +111,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			By("Getting BlockAffinity (name1) and comparing the output against spec1")
 			res, outError := c.BlockAffinities().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res).To(MatchResource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 			fmt.Printf("Getting res %v", res)
 
@@ -124,39 +124,39 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			outList, outError := c.BlockAffinities().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1),
+				testutils.Resource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1),
 			))
 
 			By("Creating a new BlockAffinity with name2/spec2")
-			res2, outError := c.BlockAffinities().Create(ctx, &libapiv3.BlockAffinity{
+			res2, outError := c.BlockAffinities().Create(ctx, &v3.BlockAffinity{
 				ObjectMeta: metav1.ObjectMeta{Name: name2},
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2).To(MatchResource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2))
 
 			By("Getting BlockAffinity (name2) and comparing the output against spec2")
 			res, outError = c.BlockAffinities().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2).To(MatchResource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the BlockAffinities, expecting two results with name1/spec1 and name2/spec2")
 			outList, outError = c.BlockAffinities().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1),
-				testutils.Resource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2),
+				testutils.Resource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1),
+				testutils.Resource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2),
 			))
 
 			By("Updating BlockAffinity name1 with spec2")
 			res1.Spec = spec2
 			res1, outError = c.BlockAffinities().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec2))
+			Expect(res1).To(MatchResource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec2))
 
 			By("Attempting to update the BlockAffinity without a Creation Timestamp")
-			res, outError = c.BlockAffinities().Update(ctx, &libapiv3.BlockAffinity{
+			res, outError = c.BlockAffinities().Update(ctx, &v3.BlockAffinity{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -165,7 +165,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			Expect(outError.Error()).To(Equal("error with field Metadata.CreationTimestamp = '0001-01-01 00:00:00 +0000 UTC' (field must be set for an Update request)"))
 
 			By("Attempting to update the BlockAffinity without a UID")
-			res, outError = c.BlockAffinities().Update(ctx, &libapiv3.BlockAffinity{
+			res, outError = c.BlockAffinities().Update(ctx, &v3.BlockAffinity{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now()},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -194,14 +194,14 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 				By("Getting BlockAffinity (name1) with the original resource version and comparing the output against spec1")
 				res, outError = c.BlockAffinities().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
-				Expect(res).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1))
+				Expect(res).To(MatchResource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1))
 				Expect(res.ResourceVersion).To(Equal(rv1_1))
 			}
 
 			By("Getting BlockAffinity (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.BlockAffinities().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec2))
+			Expect(res).To(MatchResource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec2))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
@@ -209,7 +209,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 				outList, outError = c.BlockAffinities().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
 				Expect(outList.Items).To(ConsistOf(
-					testutils.Resource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1),
+					testutils.Resource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1),
 				))
 			}
 
@@ -217,21 +217,21 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			outList, outError = c.BlockAffinities().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec2),
-				testutils.Resource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2),
+				testutils.Resource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec2),
+				testutils.Resource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2),
 			))
 
-			By("Attempt to update BlockAffinity (name1) to have the Deleted flag set to \"true\"")
+			By("Attempt to update BlockAffinity (name1) to have the Deleted flag set to true")
 			res1.ResourceVersion = rv1_2
 			res1.ObjectMeta.ResourceVersion = rv1_2
-			spec2.Deleted = "true"
+			spec2.Deleted = true
 			res1.Spec = spec2
 			_, outError = c.BlockAffinities().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Spec.Deleted = '{confirmed node-2 host 10.1.0.0/24 true}' (spec.Deleted cannot be set to \"true\")"))
 
 			By("Deleting BlockAffinity (name1)")
-			spec2.Deleted = "false"
+			spec2.Deleted = false
 			_, outError = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: res1.ResourceVersion})
 			Expect(outError).NotTo(HaveOccurred())
 
@@ -239,7 +239,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			outList, outError = c.BlockAffinities().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2),
+				testutils.Resource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2),
 			))
 
 			By("Deleting BlockAffinity (name2)")
@@ -283,7 +283,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			By("Configuring a BlockAffinity name1/spec1 and storing the response")
 			outRes1, err := c.BlockAffinities().Create(
 				ctx,
-				&libapiv3.BlockAffinity{
+				&v3.BlockAffinity{
 					ObjectMeta: metav1.ObjectMeta{Name: name1},
 					Spec:       spec1,
 				},
@@ -291,19 +291,19 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			)
 			rev1 := outRes1.ResourceVersion
 			modifiedOutRes1 := outRes1.DeepCopy()
-			modifiedOutRes1.Spec.Deleted = fmt.Sprintf("%t", true)
+			modifiedOutRes1.Spec.Deleted = true
 
 			By("Configuring a BlockAffinity name2/spec2 and storing the response")
 			outRes2, err := c.BlockAffinities().Create(
 				ctx,
-				&libapiv3.BlockAffinity{
+				&v3.BlockAffinity{
 					ObjectMeta: metav1.ObjectMeta{Name: name2},
 					Spec:       spec2,
 				},
 				options.SetOptions{},
 			)
 			modifiedOutRes2 := outRes2.DeepCopy()
-			modifiedOutRes2.Spec.Deleted = fmt.Sprintf("%t", true)
+			modifiedOutRes2.Spec.Deleted = true
 
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.BlockAffinities().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
@@ -318,7 +318,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			// Kubernetes does not have version control on delete so need an extra update is called per delete.
 			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
 				By("Checking for two events, create res2 and delete res1")
-				testWatcher1.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher1.ExpectEvents(v3.KindBlockAffinity, []watch.Event{
 					{
 						Type:   watch.Added,
 						Object: outRes2,
@@ -331,7 +331,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 				testWatcher1.Stop()
 			} else {
 				By("Checking for three events, create res2 and delete re1")
-				testWatcher1.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher1.ExpectEvents(v3.KindBlockAffinity, []watch.Event{
 					{
 						Type:   watch.Added,
 						Object: outRes2,
@@ -358,7 +358,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			By("Modifying res2")
 			outRes3, err := c.BlockAffinities().Update(
 				ctx,
-				&libapiv3.BlockAffinity{
+				&v3.BlockAffinity{
 					ObjectMeta: outRes2.ObjectMeta,
 					Spec:       spec1,
 				},
@@ -366,10 +366,10 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			)
 			Expect(err).NotTo(HaveOccurred())
 			modifiedOutRes3 := outRes3.DeepCopy()
-			modifiedOutRes3.Spec.Deleted = fmt.Sprintf("%t", true)
+			modifiedOutRes3.Spec.Deleted = true
 			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
 				// Etcd has version control so it does not update the block affinity before deletion.
-				testWatcher2.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher2.ExpectEvents(v3.KindBlockAffinity, []watch.Event{
 					{
 						Type:   watch.Added,
 						Object: outRes1,
@@ -389,7 +389,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 					},
 				})
 			} else {
-				testWatcher2.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher2.ExpectEvents(v3.KindBlockAffinity, []watch.Event{
 					{
 						Type:   watch.Added,
 						Object: outRes1,
@@ -423,7 +423,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 				Expect(err).NotTo(HaveOccurred())
 				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 				defer testWatcher2_1.Stop()
-				testWatcher2_1.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher2_1.ExpectEvents(v3.KindBlockAffinity, []watch.Event{
 					{
 						Type:   watch.Added,
 						Object: outRes1,
@@ -441,7 +441,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher3.Stop()
-			testWatcher3.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+			testWatcher3.ExpectEvents(v3.KindBlockAffinity, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes3,
@@ -452,7 +452,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			By("Configuring BlockAffinity name1/spec1 again and storing the response")
 			outRes1, err = c.BlockAffinities().Create(
 				ctx,
-				&libapiv3.BlockAffinity{
+				&v3.BlockAffinity{
 					ObjectMeta: metav1.ObjectMeta{Name: name1},
 					Spec:       spec1,
 				},
@@ -464,7 +464,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher4.Stop()
-			testWatcher4.ExpectEventsAnyOrder(libapiv3.KindBlockAffinity, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(v3.KindBlockAffinity, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,
@@ -480,7 +480,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 				// Clean() does deletions in parallel so we cannot predict the order of events.
 				_, err = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: outRes1.ResourceVersion})
 				Expect(err).NotTo(HaveOccurred())
-				testWatcher4.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher4.ExpectEvents(v3.KindBlockAffinity, []watch.Event{
 					{
 						Type:     watch.Modified,
 						Previous: outRes1,
@@ -493,7 +493,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 				})
 				_, err = c.BlockAffinities().Delete(ctx, name2, options.DeleteOptions{ResourceVersion: outRes3.ResourceVersion})
 				Expect(err).NotTo(HaveOccurred())
-				testWatcher4.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher4.ExpectEvents(v3.KindBlockAffinity, []watch.Event{
 					{
 						Type:     watch.Modified,
 						Previous: outRes3,
@@ -509,7 +509,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			Expect(be.Clean()).To(Succeed())
 			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
 				// Etcd has version control so it does not modify the block affinity before deletion.
-				testWatcher4.ExpectEventsAnyOrder(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher4.ExpectEventsAnyOrder(v3.KindBlockAffinity, []watch.Event{
 					{
 						Type:     watch.Deleted,
 						Previous: outRes1,

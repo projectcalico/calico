@@ -1,0 +1,53 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: ipamconfigurations.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: IPAMConfiguration
+    listKind: IPAMConfigurationList
+    plural: ipamconfigurations
+    shortNames:
+      - ipamconfig
+      - ipamconfigs
+    singular: ipamconfiguration
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                autoAllocateBlocks:
+                  default: true
+                  type: boolean
+                maxBlocksPerHost:
+                  default: 0
+                  format: int32
+                  maximum: 1000000
+                  minimum: 0
+                  type: integer
+                strictAffinity:
+                  default: false
+                  type: boolean
+              required:
+                - autoAllocateBlocks
+                - strictAffinity
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true

@@ -15,6 +15,7 @@ package ipam
 
 import (
 	"context"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -37,6 +38,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		bc        bapi.Client
 		ic        Interface
 		crdClient crclient.Client
+		useV3     = os.Getenv("CALICO_API_GROUP") == "projectcalico.org"
 	)
 
 	BeforeEach(func() {
@@ -50,7 +52,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		// Build a raw CRD REST client using the same kubeconfig as the backend client.
 		cfg, _, err := k8s.CreateKubernetesClientset(&config.Spec)
 		Expect(err).NotTo(HaveOccurred())
-		crdClient, err = rawcrdclient.New(cfg)
+		crdClient, err = rawcrdclient.New(cfg, useV3)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -60,6 +62,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 	})
 
 	It("should add labels to this host's block affinities only", func() {
+		if !useV3 {
+			Skip("Block affinity upgrade not needed for v1 API group")
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 

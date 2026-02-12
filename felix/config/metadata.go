@@ -217,6 +217,11 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 			// String schema tends to have the ranges, which are missing from the YAML.
 			pm.YAMLSchema = pm.StringSchema
 		}
+		if pm.GoType == "*numorstring.Port" {
+			// The Port type has its own string encoding.
+			pm.YAMLSchema = "Port range: either an integer in [0,65535] or a string, representing a range, in format `n:m`"
+		}
+
 		pm.StringSchemaHTML = convertSchemaToHTML(pm.StringSchema)
 		pm.YAMLSchemaHTML = convertSchemaToHTML(pm.YAMLSchema)
 		pm.DescriptionHTML = convertDescriptionToHTML(pm.Description)

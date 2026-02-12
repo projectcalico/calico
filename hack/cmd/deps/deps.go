@@ -132,6 +132,14 @@ var nonGoDeps = map[string][]string{
 		// BPF programs.
 		"/felix/bpf-apache",
 		"/felix/bpf-gpl",
+		// Root-level Makefile is used to build operator and other images,
+		// used by the STs.
+		"/Makefile",
+	},
+
+	"e2e": {
+		// Root-level Makefile is used to build the operator and other images.
+		"/Makefile",
 	},
 
 	// Whisker is not a go project so we list the whole thing.

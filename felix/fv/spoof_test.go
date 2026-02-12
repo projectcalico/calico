@@ -91,8 +91,7 @@ var _ = infrastructure.DatastoreDescribe("Spoof tests", []apiconfig.DatastoreTyp
 				tcpdump.SetLogEnabled(true)
 				pattern := fmt.Sprintf(`IP %s\.1234 > %s\.3434: Flags \[R\], seq 123`, tc.Felixes[0].IP, externalClient.IP)
 				tcpdump.AddMatcher("RST", regexp.MustCompile(pattern))
-				tcpdump.Start("tcp", "port", "1234")
-				defer tcpdump.Stop()
+				tcpdump.Start(infra, "tcp", "port", "1234")
 
 				err := externalClient.ExecMayFail("pktgen", externalClient.IP, tc.Felixes[0].IP, "tcp",
 					"--port-src", "3434", "--port-dst", "1234", "--tcp-ack", "--tcp-ack-no=123", "--tcp-seq-no=111")

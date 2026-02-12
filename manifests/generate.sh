@@ -75,15 +75,15 @@ for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
-	        --set node.registry=$REGISTRY \
-	        --set calicoctl.registry=$REGISTRY \
-	        --set typha.registry=$REGISTRY \
-	        --set cni.registry=$REGISTRY \
-	        --set kubeControllers.registry=$REGISTRY \
-	        --set flannelMigration.registry=$REGISTRY \
-	        --set dikastes.registry=$REGISTRY \
-	        --set csi-driver.registry=$REGISTRY \
+		--set version=$CALICO_VERSION \
+		--set node.registry=$REGISTRY \
+		--set calicoctl.registry=$REGISTRY \
+		--set typha.registry=$REGISTRY \
+		--set cni.registry=$REGISTRY \
+		--set kubeControllers.registry=$REGISTRY \
+		--set flannelMigration.registry=$REGISTRY \
+		--set dikastes.registry=$REGISTRY \
+		--set csi-driver.registry=$REGISTRY \
 		-f ../charts/values/calico.yaml >> crds.yaml
 done
 
@@ -91,21 +91,18 @@ done
 # Build manifest which includes both Calico and Operator CRDs.
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico and Tigera operator" > operator-crds.yaml
-for FILE in $(ls ../charts/tigera-operator/crds/*.yaml | xargs -n1 basename); do
-	${HELM} -n tigera-operator template \
-		--include-crds \
-		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
-	       ../charts/tigera-operator >> operator-crds.yaml
+for FILE in $(ls ../charts/crd.projectcalico.org.v1/templates/*.yaml | xargs -n1 basename); do
+	${HELM} template \
+		--show-only templates/$FILE \
+		--set version=$CALICO_VERSION \
+		../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
 done
-for FILE in $(ls ../charts/calico/crds); do
-	${HELM} template ../charts/calico \
-		--include-crds \
-		--show-only $FILE \
-	        --set version=$CALICO_VERSION \
-		-f ../charts/values/calico.yaml >> operator-crds.yaml
+for FILE in $(ls ../charts/crd.projectcalico.org.v1/templates/calico/*.yaml | xargs -n1 basename); do
+	${HELM} template \
+		--show-only templates/calico/$FILE \
+		--set version=$CALICO_VERSION \
+		../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
 done
-
 
 ##########################################################################
 # Build Calico manifests.
@@ -119,7 +116,7 @@ for FILE in $VALUES_FILES; do
 	echo "Generating manifest from charts/values/$FILE"
 	${HELM} -n kube-system template \
 		../charts/calico \
-	        --set version=$CALICO_VERSION \
+		--set version=$CALICO_VERSION \
 		-f ../charts/values/$FILE > $FILE
 done
 

@@ -26,7 +26,6 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
@@ -62,8 +61,8 @@ func NewBlockAffinityStorage(opts Options) (registry.DryRunnableStorage, factory
 		versioner:         APIObjectVersioner{},
 		aapiType:          reflect.TypeOf(api.BlockAffinity{}),
 		aapiListType:      reflect.TypeOf(api.BlockAffinityList{}),
-		libCalicoType:     reflect.TypeOf(libapi.BlockAffinity{}),
-		libCalicoListType: reflect.TypeOf(libapi.BlockAffinityList{}),
+		libCalicoType:     reflect.TypeOf(api.BlockAffinity{}),
+		libCalicoListType: reflect.TypeOf(api.BlockAffinityList{}),
 		isNamespaced:      false,
 		create:            createFn,
 		update:            updateFn,
@@ -77,25 +76,22 @@ func NewBlockAffinityStorage(opts Options) (registry.DryRunnableStorage, factory
 	return dryRunnableStorage, func() {}
 }
 
-type BlockAffinityConverter struct {
-}
+type BlockAffinityConverter struct{}
 
 func (gc BlockAffinityConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	var lcgBlockAffinity *libapi.BlockAffinity
+	var lcgBlockAffinity *api.BlockAffinity
 	// This is should not be called since block affinities are read-only through the AAPI.
 	log.Error("Block affinity API is read-only. Should not attempt to create/update block affinities through the API.")
 	return lcgBlockAffinity
 }
 
 func (gc BlockAffinityConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
-	lcgBlockAffinity := libcalicoObject.(*libapi.BlockAffinity)
+	lcgBlockAffinity := libcalicoObject.(*api.BlockAffinity)
 	aapiBlockAffinity := aapiObj.(*api.BlockAffinity)
 	aapiBlockAffinity.Spec.State = api.BlockAffinityState(lcgBlockAffinity.Spec.State)
 	aapiBlockAffinity.Spec.Node = lcgBlockAffinity.Spec.Node
 	aapiBlockAffinity.Spec.CIDR = lcgBlockAffinity.Spec.CIDR
-	if lcgBlockAffinity.Spec.Deleted == fmt.Sprintf("%t", true) {
-		aapiBlockAffinity.Spec.Deleted = true
-	}
+	aapiBlockAffinity.Spec.Deleted = lcgBlockAffinity.Spec.Deleted
 	aapiBlockAffinity.TypeMeta = lcgBlockAffinity.TypeMeta
 	aapiBlockAffinity.ObjectMeta = lcgBlockAffinity.ObjectMeta
 
@@ -104,7 +100,7 @@ func (gc BlockAffinityConverter) convertToAAPI(libcalicoObject resourceObject, a
 }
 
 func (gc BlockAffinityConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
-	lcgBlockAffinityList := libcalicoListObject.(*libapi.BlockAffinityList)
+	lcgBlockAffinityList := libcalicoListObject.(*api.BlockAffinityList)
 	aapiBlockAffinityList := aapiListObj.(*api.BlockAffinityList)
 	if libcalicoListObject == nil {
 		aapiBlockAffinityList.Items = []api.BlockAffinity{}

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"runtime"
 	"slices"
@@ -62,6 +63,8 @@ type config struct {
 	ShouldSleep bool `envconfig:"SLEEP" default:"true"`
 
 	ServiceAccountToken []byte
+
+	CalicoAPIGroup string `envconfig:"CALICO_API_GROUP" default:"crd.projectcalico.org/v1"`
 }
 
 func getEnv(env, def string) string {
@@ -347,6 +350,8 @@ func writeCNIConfig(c config) {
 
 	netconf = strings.ReplaceAll(netconf, "__SERVICEACCOUNT_TOKEN__", string(c.ServiceAccountToken))
 
+	netconf = strings.ReplaceAll(netconf, "__CALICO_API_GROUP__", string(c.CalicoAPIGroup))
+
 	// Replace etcd datastore variables.
 	hostSecretsDir := c.CNINetDir + "/calico-tls"
 	if fileExists(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-cert")) {
@@ -464,25 +469,6 @@ func copyFileAndPermissions(src, dst string) (err error) {
 }
 
 func writeKubeconfig(kubecfg *rest.Config) {
-	data := `# Kubeconfig file for Calico CNI plugin.
-apiVersion: v1
-kind: Config
-clusters:
-- name: local
-  cluster:
-    server: __KUBERNETES_SERVICE_PROTOCOL__://[__KUBERNETES_SERVICE_HOST__]:__KUBERNETES_SERVICE_PORT__
-    __TLS_CFG__
-users:
-- name: calico
-  user:
-    token: TOKEN
-contexts:
-- name: calico-context
-  context:
-    cluster: local
-    user: calico
-current-context: calico-context`
-
 	clientset, err := cni.BuildClientSet()
 	if err != nil {
 		logrus.WithError(err).Fatal("Unable to create client for generating CNI token")
@@ -492,10 +478,44 @@ current-context: calico-context`
 	if err != nil {
 		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
 	}
-	data = strings.Replace(data, "TOKEN", tu.Token, 1)
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"))
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""))
-	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""))
+
+	data := calculateKubeconfig(kubecfg, tu.Token)
+
+	if err := os.WriteFile(winutils.GetHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0o600); err != nil {
+		logrus.Fatal(err)
+	}
+}
+
+func calculateKubeconfig(kubecfg *rest.Config, token string) string {
+	data := `# Kubeconfig file for Calico CNI plugin.
+apiVersion: v1
+kind: Config
+clusters:
+- name: local
+  cluster:
+    server: __KUBERNETES_SERVICE_PROTOCOL__://__KUBERNETES_SERVICE_ENDPOINT__
+    __TLS_CFG__
+users:
+- name: calico
+  user:
+    token: __TOKEN__
+contexts:
+- name: calico-context
+  context:
+    cluster: local
+    user: calico
+current-context: calico-context
+`
+	data = strings.ReplaceAll(data, "__TOKEN__", token)
+	k8sProto := getEnv("KUBERNETES_SERVICE_PROTOCOL", "https")
+	if k8sProto == "" {
+		k8sProto = "https"
+	}
+	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PROTOCOL__", k8sProto)
+	k8sHost := getEnv("KUBERNETES_SERVICE_HOST", "")
+	k8sPort := getEnv("KUBERNETES_SERVICE_PORT", "")
+	k8sEndpoint := net.JoinHostPort(k8sHost, k8sPort)
+	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_ENDPOINT__", k8sEndpoint)
 
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 	if skipTLSVerify == "true" {
@@ -504,10 +524,7 @@ current-context: calico-context`
 		ca := "certificate-authority-data: " + base64.StdEncoding.EncodeToString(kubecfg.CAData)
 		data = strings.ReplaceAll(data, "__TLS_CFG__", ca)
 	}
-
-	if err := os.WriteFile(winutils.GetHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0o600); err != nil {
-		logrus.Fatal(err)
-	}
+	return data
 }
 
 // destinationUptoDate compares the given files and returns

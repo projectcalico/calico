@@ -339,11 +339,8 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		}
 		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
 		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
-	} else if rts&proto.RouteType_LOCAL_WORKLOAD == proto.RouteType_LOCAL_WORKLOAD && !cgRoute.Borrowed /* not ours */ {
-		if !cgRoute.LocalWorkload {
-			// Just the local IPAM block, not an actual workload.
-			return nil
-		}
+	} else if cgRoute.GetLocalWorkload() {
+		// Explicitly a local WorkloadEndpoint /32.
 		if wepIDs, ok := m.cidrToWEPIDs[cidr]; ok {
 			bestWepScore := -1
 			var bestWepID *proto.WorkloadEndpointID
@@ -392,6 +389,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		// hostname.
 		flags |= routes.FlagsLocalHost
 	} else if rts&proto.RouteType_REMOTE_WORKLOAD == proto.RouteType_REMOTE_WORKLOAD {
+		// Either a remote IPAM block or a remote workload with a borrowed IP.
 		flags |= routes.FlagsRemoteWorkload
 		if m.wgEnabled {
 			flags |= routes.FlagTunneled
@@ -409,6 +407,10 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		}
 		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
 		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
+	} else if rts&proto.RouteType_LOCAL_WORKLOAD == proto.RouteType_LOCAL_WORKLOAD {
+		// Local IPAM block. We don't need to have a map entry for that right
+		// now.
+		return nil
 	}
 
 	if route == nil && flags != 0 {

@@ -42,7 +42,7 @@ var _ = Describe("ipamBlockClient tests with fake REST client", func() {
 			},
 			VersionedAPIPath: "/apis",
 		}
-		client = NewIPAMBlockClient(nil, fakeREST)
+		client = NewIPAMBlockClient(fakeREST, BackingAPIGroupV1)
 	})
 
 	It("should list all (v3)", func() {

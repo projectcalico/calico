@@ -1,0 +1,18 @@
+# This MutatingAdmissionPolicyBinding binds the network policy mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-networkpolicy-types-binding
+spec:
+  policyName: policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies

@@ -14,10 +14,13 @@
 package calico
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2213,4 +2216,105 @@ func TestTruncateBGPFilterName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// =============================================================================
+// Race Condition Tests
+// =============================================================================
+
+// TestConfigCache_ConcurrentReadWrite tests the race condition in the global
+// configCache map when multiple goroutines call GetBirdBGPConfig concurrently.
+//
+// This test simulates the real-world scenario where bird.cfg.template (IPv4)
+// and bird6.cfg.template (IPv6) are rendered simultaneously by different
+// goroutines in processor.go's monitorPrefix function. Each template calls
+// GetBirdBGPConfig with its respective IP version.
+//
+// We now run confd UT with -race, so this test will fail if the configCache map
+// is accessed without proper synchronization.
+func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	// Clear the global configCache to start fresh
+	configCacheMutex.Lock()
+	configCache = make(map[int]*bgpConfigCache)
+	configCacheMutex.Unlock()
+
+	// Enable mesh for more realistic scenario
+	meshConfig := map[string]interface{}{
+		"enabled": true,
+	}
+	meshConfigJSON, err := json.Marshal(meshConfig)
+	require.NoError(t, err)
+
+	// Set up cache with basic configuration needed for GetBirdBGPConfig
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4":   "10.0.0.1",
+		"/calico/bgp/v1/host/test-node/ip_addr_v6":   "fd00::1",
+		"/calico/bgp/v1/global/as_num":               "64512",
+		"/calico/bgp/v1/global/loglevel":             "info",
+		"/calico/bgp/v1/global/node_mesh":            string(meshConfigJSON),
+		"/calico/bgp/v1/host/peer-node-1/ip_addr_v4": "10.0.0.2",
+		"/calico/bgp/v1/host/peer-node-2/ip_addr_v6": "fd00::2",
+	}
+
+	c := newTestClient(cache, nil)
+
+	const numGoroutines = 10
+	const testDuration = 10 * time.Second
+
+	// Create a context with 30-second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), testDuration)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	// Simulate concurrent template rendering - this mimics what happens
+	// in processor.go when monitorPrefix spawns goroutines for each template
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			// Alternate between IPv4 and IPv6 to simulate bird.cfg.template
+			// and bird6.cfg.template rendering concurrently
+			ipVersion := 4
+			if id%2 == 0 {
+				ipVersion = 6
+			}
+
+			iterationCount := 0
+			for {
+				select {
+				case <-ctx.Done():
+					// Context timeout reached, exit goroutine
+					t.Logf("Goroutine %d (IPv%d) completed %d iterations", id, ipVersion, iterationCount)
+					return
+				default:
+					// This is what the template actually calls via getBGPConfig template function
+					_, err := c.GetBirdBGPConfig(ipVersion)
+					if err != nil {
+						// Some errors are expected if cache is cleared
+						continue
+					}
+
+					// Periodically clear the cache to force re-computation and increase
+					// the likelihood of hitting the race condition
+					if iterationCount%5 == 0 {
+						configCacheMutex.Lock()
+						delete(configCache, ipVersion)
+						configCacheMutex.Unlock()
+					}
+
+					iterationCount++
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }

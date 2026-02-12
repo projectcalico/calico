@@ -114,8 +114,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		// unused) service IP.
 		tcpdumpF := tc.Felixes[0].AttachTCPDump("eth0")
 		tcpdumpF.AddMatcher("serviceIPPackets", regexp.MustCompile(`10\.96\.0\.19`))
-		tcpdumpF.Start()
-		defer tcpdumpF.Stop()
+		tcpdumpF.Start(infra)
 
 		// Send a single ping from the external client to the unused service IP.
 		err := externalClient.ExecMayFail("ping", "-c", "1", "-W", "1", "10.96.0.19")

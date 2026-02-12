@@ -28,7 +28,7 @@ spec:
   serviceAccountName: calicoctl
   containers:
     - name: calicoctl
-      image: quay.io/calico/ctl:master
+      image: calico/ctl:test-build
       command:
         - calicoctl
       args:
@@ -69,7 +69,9 @@ rules:
       - pods/status
     verbs:
       - update
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups:
+      - "crd.projectcalico.org"
+      - "projectcalico.org"
     resources:
       - bgppeers
       - bgpfilters

@@ -13,8 +13,9 @@
 # limitations under the License.
 
 ARG CALICO_BASE
+ARG UBI_IMAGE
 
-FROM alpine:3 AS builder
+FROM ${UBI_IMAGE} AS builder
 
 # Make sure the status file is owned by our user.
 RUN mkdir /status
