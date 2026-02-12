@@ -129,17 +129,17 @@ var _ = Describe("EncapsulationCalculator", func() {
 				true, false, false),
 			Entry("Model pool with no encap",
 				nil, nil,
-				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Undefined, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Never, encap.Never)},
 				nil, nil,
 				false, false, false),
 			Entry("Model pool with IPIP 'Always'",
 				nil, nil,
-				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Always, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Always, encap.Never)},
 				nil, nil,
 				true, false, false),
 			Entry("Model pool with VXLAN 'Always'",
 				nil, nil,
-				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Undefined, encap.Always)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Never, encap.Always)},
 				nil, nil,
 				false, true, false),
 			Entry("Model pool with IPIP 'CrossSubnet' and VXLAN 'CrossSubnet'",
@@ -149,18 +149,18 @@ var _ = Describe("EncapsulationCalculator", func() {
 				true, true, false),
 			Entry("2 Model pools with mixed encaps",
 				nil, nil,
-				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Undefined, encap.Always), *getModelPool("192.168.2.0/24", encap.CrossSubnet, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Never, encap.Always), *getModelPool("192.168.2.0/24", encap.CrossSubnet, encap.Never)},
 				nil, nil,
 				true, true, false),
 			Entry("2 Model pools with mixed encaps, then remove one pool",
 				nil, nil,
-				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Undefined, encap.Always), *getModelPool("192.168.2.0/24", encap.CrossSubnet, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Never, encap.Always), *getModelPool("192.168.2.0/24", encap.CrossSubnet, encap.Never)},
 				[]string{"192.168.2.0/24"},
 				nil,
 				false, true, false),
 			Entry("Initialize with initPools, update one Model pool and remove another",
 				nil, nil,
-				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Always, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Always, encap.Never)},
 				[]string{"192.168.2.0/24"},
 				&model.KVPairList{
 					KVPairs: []*model.KVPair{
@@ -214,7 +214,7 @@ var _ = Describe("EncapsulationCalculator", func() {
 			Entry("Both IPIP and VXLAN false in FelixConfig with mixed pools",
 				&f, &f,
 				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), *getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever)},
-				[]model.KVPair{*getModelPool("192.168.3.0/24", encap.Undefined, encap.Always), *getModelPool("192.168.4.0/24", encap.CrossSubnet, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.3.0/24", encap.Never, encap.Always), *getModelPool("192.168.4.0/24", encap.CrossSubnet, encap.Never)},
 				false, false, false),
 			Entry("Mixed VXLAN (ipv4 enabled, ipv6 disabled)",
 				&f, &t,
@@ -278,14 +278,14 @@ var _ = Describe("EncapsulationResolver", func() {
 		It("should not send encapUpdates when adding pools with IPIP encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Never))
 			Expect(callbacks.encapUpdates).To(BeNil())
 		})
 
 		It("should not send encapUpdates when adding pools with VXLAN encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Never, encap.CrossSubnet))
 			Expect(callbacks.encapUpdates).To(BeNil())
 		})
 		It("should not send encapUpdates when adding and removing pools", func() {
@@ -310,7 +310,7 @@ var _ = Describe("EncapsulationResolver", func() {
 		It("should send encapUpdates when adding pools with IPIP encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Never))
 			Expect(callbacks.encapUpdates).To(Equal(
 				[]*proto.Encapsulation{
 					{IpipEnabled: false, VxlanEnabled: false},
@@ -320,7 +320,7 @@ var _ = Describe("EncapsulationResolver", func() {
 		It("should send encapUpdates when adding pools with VXLAN encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Never, encap.CrossSubnet))
 			Expect(callbacks.encapUpdates).To(Equal(
 				[]*proto.Encapsulation{
 					{IpipEnabled: false, VxlanEnabled: false},
@@ -338,7 +338,7 @@ var _ = Describe("EncapsulationResolver", func() {
 
 			_, cidr2, err := net.ParseCIDR("192.168.2.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr2, encap.Undefined, encap.Always))
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr2, encap.Never, encap.Always))
 			Expect(callbacks.encapUpdates).To(Equal(
 				[]*proto.Encapsulation{
 					{IpipEnabled: false, VxlanEnabled: false},
@@ -372,7 +372,7 @@ var _ = Describe("EncapsulationResolver", func() {
 		It("should not send encapUpdates when adding pools before inSync, but should right after", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Never))
 			Expect(callbacks.encapUpdates).To(BeNil())
 
 			encapsulationResolver.OnStatusUpdate(api.InSync)

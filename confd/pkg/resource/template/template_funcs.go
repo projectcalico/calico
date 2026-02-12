@@ -472,7 +472,7 @@ func IPPoolsFilterBIRDFunc(
 				action = "accept"
 			}
 		case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
-			ippool.IPIPMode == encap.Undefined || ippool.VXLANMode == encap.Undefined: // No-encapsulation.
+			ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
 			// IPIP encapsulation or No-Encap.
 			if forProgrammingKernel && version == 4 && len(localSubnet) != 0 {
 				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
@@ -500,7 +500,7 @@ func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSub
 	case v3.CrossSubnet:
 		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
 		return fmt.Sprintf(format, localSubnet)
-	case v3.Undefined:
+	case v3.Never:
 		// No-encap case.
 		return `krt_tunnel="";`
 	default:
