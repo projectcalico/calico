@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
@@ -96,6 +97,61 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		},
 		entries...,
 	)
+})
+
+var _ = Describe("BPF workload remove conntrack scanner", func() {
+	var wrs *conntrack.WorkloadRemoveScannerTCP
+	var scanner *conntrack.Scanner
+	var ctMap, ctCleanupMap *mock.Map
+	var ipCh chan string
+	BeforeEach(func() {
+		ctMap = mock.NewMockMap(conntrack.MapParams)
+		ctCleanupMap = mock.NewMockMap(conntrack.MapParamsCleanup)
+		ipCh = make(chan string, 10)
+		wrs = conntrack.NewWorkloadRemoveScannerTCP(ipCh)
+		scanner = conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes, nil, "Disabled",
+			ctCleanupMap, 4, mock.NewMockBPFCleaner(ctMap, ctCleanupMap), wrs)
+	})
+	It("should mark conntrack entries for removed workloads", func() {
+		// Insert an entry for a workload IP.
+		for i := 0; i < 15; i++ {
+			octetA := byte(1 + (i * 2))
+			octetB := byte(2 + (i * 2))
+			ipA := net.IPv4(10, 0, 0, octetA)
+			ipB := net.IPv4(10, 0, 0, octetB)
+			k := conntrack.NewKey(6, ipA, 1234, ipB, 80)
+			v := conntrack.NewValueNormal(mocktime.StartKTime, 0, conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+			err := ctMap.Update(k.AsBytes(), v.AsBytes())
+			Expect(err).NotTo(HaveOccurred())
+		}
+		for i := 0; i < 6; i++ {
+			octetA := byte(1 + (i * 2))
+			octetB := byte(14 + (i * 2))
+			ipA := net.IPv4(10, 0, 0, octetA)
+			ipB := net.IPv4(10, 0, 0, octetB)
+			ipCh <- ipA.String()
+			ipCh <- ipB.String()
+		}
+		Eventually(func() int { return wrs.NumIPsPending() }, "2s", "50ms").Should(Equal(12))
+		scanner.Scan() // No IPs removed yet, so no deletions.
+		for i := 0; i < 15; i++ {
+			octetA := byte(1 + (i * 2))
+			octetB := byte(2 + (i * 2))
+			ipA := net.IPv4(10, 0, 0, octetA)
+			ipB := net.IPv4(10, 0, 0, octetB)
+			k := conntrack.NewKey(6, ipA, 1234, ipB, 80)
+			val, err := ctMap.Get(k.AsBytes())
+			v := conntrack.ValueFromBytes(val)
+			Expect(err).NotTo(HaveOccurred(), "expected entry for workload IP to still exist")
+			if i < 12 {
+				// These workload IPs were removed, so the entry should be marked for RST
+				Expect(v.Flags()&v4.FlagSendRST).To(Equal(v4.FlagSendRST), "expected entry for removed workload IP to be marked for RST")
+			} else {
+				// These workload IPs were not removed, so the entry should be unmodified.
+				Expect(v.Flags()&v4.FlagSendRST).To(Equal(uint32(0)), "expected entry for existing workload IP to be unmodified")
+			}
+		}
+	})
 })
 
 type dummyNATChecker struct {

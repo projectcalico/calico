@@ -139,6 +139,19 @@ func (m *Map) UpdateWithFlags(k, v []byte, flags int) error {
 	return m.updateUnlocked(k, v)
 }
 
+func (m *Map) BatchUpdate(k, v [][]byte, flags uint64) (int, error) {
+	m.Lock()
+	defer m.Unlock()
+	count := 0
+	for i := range k {
+		if err := m.updateUnlocked(k[i], v[i]); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
+}
+
 func (m *Map) Get(k []byte) ([]byte, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -260,6 +273,10 @@ func (*DummyMap) Iter(_ maps.IterCallback) error {
 
 func (*DummyMap) Update(k, v []byte) error {
 	return nil
+}
+
+func (*DummyMap) BatchUpdate(k, v [][]byte, flags uint64) (int, error) {
+	return 0, nil
 }
 
 func (*DummyMap) Get(k []byte) ([]byte, error) {
