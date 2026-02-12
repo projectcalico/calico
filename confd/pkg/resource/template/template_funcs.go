@@ -14,6 +14,7 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -455,6 +456,8 @@ func IPPoolsFilterBIRDFunc(
 			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
 		}
 
+		logrus.Infof("pepper %#v", ippool)
+
 		cidr := ippool.CIDR.String()
 		var action, comment, extraStatement string
 		switch {
@@ -472,7 +475,7 @@ func IPPoolsFilterBIRDFunc(
 				action = "accept"
 			}
 		case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
-			ippool.IPIPMode == encap.Undefined || ippool.VXLANMode == encap.Undefined: // No-encapsulation.
+			ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
 			// IPIP encapsulation or No-Encap.
 			if forProgrammingKernel && version == 4 && len(localSubnet) != 0 {
 				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
@@ -500,7 +503,7 @@ func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSub
 	case v3.CrossSubnet:
 		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
 		return fmt.Sprintf(format, localSubnet)
-	case v3.Undefined:
+	case v3.Never:
 		// No-encap case.
 		return `krt_tunnel="";`
 	default:
