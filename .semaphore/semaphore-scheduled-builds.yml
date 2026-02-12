@@ -197,27 +197,33 @@ blocks:
       - name: calicoctl tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-- name: cni-plugin
+- name: CNI Plugin
   run:
     when: "true or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "cni-plugin"
     prologue:
       commands:
         - cd cni-plugin
     jobs:
-      - name: cni-plugin tests
+      - name: "CNI Plugin: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+      - name: "CNI Plugin: build windows images"
         commands:
           - ../.semaphore/run-and-monitor ci.log make image-windows
-- name: "cni-plugin: Windows"
+- name: "CNI Plugin: Windows"
   run:
-    when: "true or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "true or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/', '/process/testing/aso/', '/process/testing/utils/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
-    - cni-plugin
+    - Prerequisites
   task:
     secrets:
       - name: banzai-secrets
@@ -229,33 +235,43 @@ blocks:
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
         - export AZURE_CLIENT_ID=$AZ_SP_ID
         - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
-        - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
         - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-cni-plugin/report
         - export LOGS_DIR=~/fv.log
-        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-        - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}
-        - export SUFFIX=${CLUSTER_NAME}
+        - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
         - cd cni-plugin
         - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
     epilogue:
       always:
         commands:
-          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-          - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-          - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+          - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
+          - cd ~/calico/process/testing/aso && make dist-clean
     env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "cni-plugin"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
       - name: AZURE_LOCATION
         value: eastus2
       - name: KUBE_VERSION
-        value: v1.29.7
+        value: v1.33.7
     jobs:
-      - name: Containerd - Windows FV
+      - name: "CNI Plugin: Windows Containerd FV - overlay"
         execution_time_limit:
           minutes: 60
         commands:
-          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+          - export BACKEND=overlay
+          - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+          - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
+      - name: "CNI Plugin: Windows Containerd FV - l2bridge"
+        execution_time_limit:
+          minutes: 60
+        commands:
+          - export BACKEND=l2bridge
+          - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
+          - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
 - name: confd
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/confd/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -385,14 +401,17 @@ blocks:
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "felix"
     jobs:
-      - name: Build Windows binaries
+      - name: "Felix: Build Windows binaries"
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
-- name: "Felix: Windows FV capz"
+- name: "Felix: Windows FV"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/', '/process/testing/aso/', '/process/testing/utils/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -406,18 +425,19 @@ blocks:
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
         - export AZURE_CLIENT_ID=$AZ_SP_ID
         - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
-        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
-        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
-        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
-        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
+        - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-felix/report
+        - export LOGS_DIR=~/fv.log
+        - export RG_PREFIX=${USER}-win-felix-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
         - cd felix
     epilogue:
       always:
         commands:
-          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+          - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
+          - cd ~/calico/process/testing/aso && make dist-clean
     env_vars:
-      - name: FV_PROVISIONER
-        value: "capz"
+      - name: BUILD_CACHE_GROUP
+        value: "felix"
       - name: FV_TYPE
         value: "calico-felix"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
@@ -425,9 +445,11 @@ blocks:
       - name: CONTAINERD_VERSION
         value: 1.7.28
     jobs:
-      - name: CAPZ - Windows FV
+      - name: "Felix: Windows FV"
         commands:
-          - ./.semaphore/run-win-fv
+          - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-rg
+          - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
+          - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh
 - name: "Felix: FV Tests"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
