@@ -62,15 +62,6 @@ func init() {
 }
 
 func main() {
-	// Set up logging.
-	l, err := logrus.ParseLevel(logLevel)
-	if err != nil {
-		logrus.WithError(err).Fatalf("Invalid log level: %s", logLevel)
-	}
-	logrus.SetLevel(l)
-	logutils.ConfigureFormatter("webhook")
-	logrus.SetOutput(os.Stdout)
-
 	// Create the root command and add the webhook command to it.
 	rootCmd := &cobra.Command{Use: "webhook"}
 	rootCmd.AddCommand(WebhookCommand)
@@ -84,7 +75,22 @@ func registerHooks(cs kubernetes.Interface) {
 	http.HandleFunc("/readyz", readyFn())
 }
 
+func configureLogging() {
+	// Set up logging.
+	l, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Invalid log level: %s", logLevel)
+	}
+	logrus.SetLevel(l)
+	logutils.ConfigureFormatter("webhook")
+	logrus.SetOutput(os.Stdout)
+	logrus.Infof("Log level set to %s", logLevel)
+}
+
 func serveWebhookTLS(cmd *cobra.Command, args []string) {
+	configureLogging()
+	logrus.Info("Starting Calico admission webhook server")
+
 	// Create a clientset to interact with the Kubernetes API.
 	rc, err := rest.InClusterConfig()
 	if err != nil {
@@ -107,6 +113,8 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 		Addr:      fmt.Sprintf(":%d", port),
 		TLSConfig: cfg,
 	}
+
+	logrus.Infof("Listening on port %d", port)
 	err = server.ListenAndServeTLS(certFile, keyFile)
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to start webhook server on port %d", port)

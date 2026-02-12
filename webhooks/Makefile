@@ -4,7 +4,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/webhooks
 IMAGE_BUILD_MARKER = webhook_container-$(ARCH).created
 
 # Configure variables used by ci/cd common targets from lib.Makefile.
-BUILD_IMAGES=webhook
+BUILD_IMAGES=webhooks
 
 ###############################################################################
 # include ../lib.Makefile
@@ -28,9 +28,9 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 # Build webhook image.
-webhook calico/webhook: $(IMAGE_BUILD_MARKER)
+webhooks calico/webhooks: $(IMAGE_BUILD_MARKER)
 $(IMAGE_BUILD_MARKER): $(BINARIES) bin/LICENSE
-	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) --build-arg GIT_VERSION=$(GIT_VERSION) -t webhook:latest-$(ARCH) -f docker/Dockerfile .
+	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) --build-arg GIT_VERSION=$(GIT_VERSION) -t webhooks:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
