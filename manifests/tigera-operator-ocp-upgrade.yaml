@@ -140,7 +140,7 @@ rules:
       - globalnetworksets.projectcalico.org
       - hostendpoints.projectcalico.org
       - ipamblocks.projectcalico.org
-      - ipamconfigs.projectcalico.org
+      - ipamconfigurations.projectcalico.org
       - ipamhandles.projectcalico.org
       - ippools.projectcalico.org
       - ipreservations.projectcalico.org
