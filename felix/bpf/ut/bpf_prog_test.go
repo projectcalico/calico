@@ -651,7 +651,7 @@ func initMapsOnce() {
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
 			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6,
-			allowSourcesMap, allowSourcesMapV6 }
+			allowSourcesMap, allowSourcesMapV6}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {

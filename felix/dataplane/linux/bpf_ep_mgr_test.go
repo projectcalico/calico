@@ -3036,8 +3036,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 	})
 
-    Describe("allowed source prefixes map (dual-stack)", func() {
-        var (
+	Describe("allowed source prefixes map (dual-stack)", func() {
+		var (
 			ifaceName  string
 			cidr       ip.CIDR
 			cidrString string
@@ -3056,7 +3056,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-        It("should contain allowed source prefixes from annotation", func() {
+		It("should contain allowed source prefixes from annotation", func() {
 			// initial genWLUpdate should add the prefix to the map
 
 			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
@@ -3080,12 +3080,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bookkeepingSet, exists = bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
 			Expect(exists).To(BeTrue())
 			Expect(bookkeepingSet.Len()).To(Equal(1))
-            Expect(bookkeepingSet.Contains("2001:db8::1/128")).To(BeTrue())
+			Expect(bookkeepingSet.Contains("2001:db8::1/128")).To(BeTrue())
 
-            bookkeepingSetV4, exists := bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
-            Expect(exists).To(BeTrue())
-            Expect(bookkeepingSetV4.Len()).To(Equal(1))
-            Expect(bookkeepingSetV4.Contains("192.168.1.10/24")).To(BeTrue())
+			bookkeepingSetV4, exists := bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSetV4.Len()).To(Equal(1))
+			Expect(bookkeepingSetV4.Contains("192.168.1.10/24")).To(BeTrue())
 
 			// test the case where one of the annotations are removed via genWLUpdate
 			updatedSpoofedSources = []string{"192.168.1.10/24"}
@@ -3095,12 +3095,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(bookkeepingSet.Len()).To(Equal(1))
 			Expect(bookkeepingSet.Contains("192.168.1.10/24")).To(BeTrue())
 
-            bookkeepingSetV6, exists := bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
-            Expect(exists).To(BeTrue())
-            Expect(bookkeepingSetV6.Len()).To(Equal(0))
+			bookkeepingSetV6, exists := bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSetV6.Len()).To(Equal(0))
 		})
 
-    })
+	})
 })
 
 var _ = Describe("jumpMapAlloc tests", func() {

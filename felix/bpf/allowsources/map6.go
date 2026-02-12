@@ -8,7 +8,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-
 const AllowSourcesEntryV6Size = 24
 
 type AllowSourcesEntryV6 [AllowSourcesEntryV6Size]byte
@@ -23,32 +22,32 @@ var MapV6Parameters = maps.MapParameters{
 }
 
 func MapV6() maps.Map {
-    return maps.NewPinnedMap(MapV6Parameters)
+	return maps.NewPinnedMap(MapV6Parameters)
 }
 
 func (e AllowSourcesEntryV6) Addr() ip.Addr {
-    var addr ip.V6Addr
-    copy(addr[:], e[8:24])
-    return addr
+	var addr ip.V6Addr
+	copy(addr[:], e[8:24])
+	return addr
 }
 
 func (e AllowSourcesEntryV6) PrefixLen() int {
-    return int(binary.LittleEndian.Uint32(e[:4]))
+	return int(binary.LittleEndian.Uint32(e[:4]))
 }
 
 func (e AllowSourcesEntryV6) IfIndex() int {
-    return int(binary.LittleEndian.Uint32(e[4:8]))
+	return int(binary.LittleEndian.Uint32(e[4:8]))
 }
 
 func (e AllowSourcesEntryV6) AsBytes() []byte {
-    return e[:]
+	return e[:]
 }
 
 func NewKeyV6(cidr ip.CIDR, ifindex int) AllowSourcesEntryV6 {
-    var entry AllowSourcesEntryV6
-    ipv6 := cidr.Addr().(ip.V6Addr)
-    binary.LittleEndian.PutUint32(entry[:4], uint32(cidr.Prefix()))
-    binary.LittleEndian.PutUint32(entry[4:8], uint32(ifindex))
-    copy(entry[8:24], ipv6[:])
-    return entry
+	var entry AllowSourcesEntryV6
+	ipv6 := cidr.Addr().(ip.V6Addr)
+	binary.LittleEndian.PutUint32(entry[:4], uint32(cidr.Prefix()))
+	binary.LittleEndian.PutUint32(entry[4:8], uint32(ifindex))
+	copy(entry[8:24], ipv6[:])
+	return entry
 }
