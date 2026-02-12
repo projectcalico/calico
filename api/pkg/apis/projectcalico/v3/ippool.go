@@ -179,7 +179,7 @@ const (
 type EncapMode string
 
 const (
-	Never       EncapMode = "never"
+	Never       EncapMode = ""
 	Always      EncapMode = "always"
 	CrossSubnet EncapMode = "cross-subnet"
 )

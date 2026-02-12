@@ -14,7 +14,6 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -455,8 +454,6 @@ func IPPoolsFilterBIRDFunc(
 		if err != nil {
 			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
 		}
-
-		logrus.Infof("pepper %#v", ippool)
 
 		cidr := ippool.CIDR.String()
 		var action, comment, extraStatement string

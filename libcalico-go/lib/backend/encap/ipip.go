@@ -17,7 +17,7 @@ package encap
 type Mode string
 
 const (
-	Never       Mode = "never"
+	Never       Mode = ""
 	Always           = "always"
 	CrossSubnet      = "cross-subnet"
 )
