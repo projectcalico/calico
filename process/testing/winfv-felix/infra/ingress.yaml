@@ -8,13 +8,12 @@ spec:
     matchLabels:
       app: porter
   policyTypes:
-  - Ingress
+    - Ingress
   ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: client
-    ports:
-    - protocol: TCP
-      port: 80
-
+    - from:
+        - podSelector:
+            matchLabels:
+              app: client
+      ports:
+        - protocol: TCP
+          port: 80
