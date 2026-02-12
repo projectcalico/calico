@@ -116,6 +116,13 @@ func (kp *KubeProxy) Stop() {
 	})
 }
 
+func (kp *KubeProxy) setProxyHostMetadata(hostMetadata map[string]*proto.HostMetadataV4V6Update) {
+	kp.lock.Lock()
+	defer kp.lock.Unlock()
+
+	kp.proxy.SetHostMetadata(hostMetadata, true)
+}
+
 func (kp *KubeProxy) run(hostIPs []net.IP, hostMetadata map[string]*proto.HostMetadataV4V6Update) error {
 
 	ips := make([]net.IP, 0, len(hostIPs))
@@ -147,7 +154,8 @@ func (kp *KubeProxy) run(hostIPs []net.IP, hostMetadata map[string]*proto.HostMe
 	}
 
 	kp.proxy.SetHostIPs(hostIPs)
-	kp.proxy.SetHostMetadata(hostMetadata)
+	// Don't bother invoking a resync within SetHostMetadata; we will be syncing a fresh syncer right after.
+	kp.proxy.SetHostMetadata(hostMetadata, false)
 	kp.proxy.SetSyncer(syncer)
 
 	log.Infof("kube-proxy v%d node info updated, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)
@@ -210,10 +218,8 @@ func (kp *KubeProxy) start() error {
 					log.Error("kube-proxy: hostMetadataUpdates closed")
 					return
 				}
-				err = kp.run(hostIPs, hostMetadata)
-				if err != nil {
-					log.Panic("kube-proxy failed to resync after host metadata update")
-				}
+				kp.setProxyHostMetadata(hostMetadata)
+
 			case <-kp.exiting:
 				log.Info("kube-proxy: exiting")
 				return
