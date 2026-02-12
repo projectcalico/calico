@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aso
+
+---
+apiVersion: resources.azure.com/v1api20200601
+kind: ResourceGroup
+metadata:
+  name: {{.Env.AZURE_RESOURCE_GROUP}}
+  namespace: aso
+  annotations:
+    serviceoperator.azure.com/credential-from: aso-credential
+spec:
+  location: {{.Env.AZURE_LOCATION}}
