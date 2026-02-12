@@ -127,6 +127,8 @@ func main() {
 		}
 	}
 
+	fmt.Println("TODO: TRIGGERING TESTS")
+
 	// Check for liveness / readiness flags. Will only run checks specified by flags.
 	if *felixLive || *birdReady || *bird6Ready || *felixReady || *birdLive || *bird6Live {
 		health.Run(*birdReady, *bird6Ready, *felixReady, *felixLive, *birdLive, *bird6Live, *thresholdTime)
