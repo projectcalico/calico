@@ -91,7 +91,7 @@ func (c *HostMetadataCache) loopFlushingUpdates() {
 	}
 }
 
-func (c *HostMetadataCache) sendAllUpdates() error {
+func (c *HostMetadataCache) sendAllUpdates() {
 	c.cbLock.Lock()
 	defer c.cbLock.Unlock()
 	c.updatesLock.Lock()
@@ -102,8 +102,6 @@ func (c *HostMetadataCache) sendAllUpdates() error {
 		maps.Copy(upds, c.updates)
 		c.onHostUpdateCB(upds)
 	}
-
-	return nil
 }
 
 func (c *HostMetadataCache) SetOnHostUpdateCB(cb func(map[string]*proto.HostMetadataV4V6Update)) {
