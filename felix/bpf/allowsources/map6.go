@@ -3,9 +3,10 @@ package allowsources
 import (
 	"encoding/binary"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
-	"golang.org/x/sys/unix"
 )
 
 const AllowSourcesEntryV6Size = 24

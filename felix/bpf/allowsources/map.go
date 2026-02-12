@@ -4,9 +4,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
-	"golang.org/x/sys/unix"
 )
 
 const (

@@ -703,12 +703,12 @@ func newBPFEndpointManagerDataplane(
 	epMgr *bpfEndpointManager,
 ) *bpfEndpointManagerDataplane {
 	return &bpfEndpointManagerDataplane{
-		ipFamily:            ipFamily,
-		ifaceToIpMap:        map[string]net.IP{},
-		mgr:                 epMgr,
-		IPMaps:              ipMaps,
-		iptablesFilterTable: iptablesFilterTable,
-		ipSetIDAlloc:        ipSetIDAlloc,
+		ipFamily:                  ipFamily,
+		ifaceToIpMap:              map[string]net.IP{},
+		mgr:                       epMgr,
+		IPMaps:                    ipMaps,
+		iptablesFilterTable:       iptablesFilterTable,
+		ipSetIDAlloc:              ipSetIDAlloc,
 		allowedSourcesPerWorkload: map[types.WorkloadEndpointID]set.Set[string]{},
 	}
 }
