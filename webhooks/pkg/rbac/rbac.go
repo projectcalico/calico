@@ -19,6 +19,7 @@ package rbac
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 	"time"
@@ -28,13 +29,34 @@ import (
 	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
+	kauth "k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/authorization/cel"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/plugin/pkg/authorizer/webhook"
+	"k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
+
+// RegisterHook creates a new teired RBAC admission webhook authorizer and registers the necessary HTTP handler.
+func RegisterHook(cs kubernetes.Interface, handleFn utils.HandleFn) {
+	// Create a new Kubernetes authorizer.
+	bo := webhook.DefaultRetryBackoff()
+	m := &metrics.NoopAuthorizerMetrics{}
+	compl := cel.NewDefaultCompiler()
+
+	authz, err := webhook.NewFromInterface(cs.AuthorizationV1(), 5*time.Second, 5*time.Second, *bo, kauth.DecisionDeny, m, compl)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
+	}
+	handler := NewTieredRBACHook(authorizer.NewTierAuthorizer(authz)).Handler()
+
+	// Register the webhook handlers and a readiness endpoint.
+	http.HandleFunc("/rbac", handleFn(handler))
+}
 
 // NewTieredRBACHook returns a new instance of the tiered RBAC admission webhook backend, which uses
 // the provided TierAuthorizer to perform authorization checks.
@@ -44,7 +66,6 @@ func NewTieredRBACHook(authz authorizer.TierAuthorizer) utils.HandlerProvider {
 
 // tieredRBACHook is an admission webhook that uses RBAC to authorize requests based on tier.
 type tieredRBACHook struct {
-	calc  rbac.Calculator
 	authz authorizer.TierAuthorizer
 }
 
