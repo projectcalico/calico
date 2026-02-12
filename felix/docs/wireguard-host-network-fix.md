@@ -193,11 +193,16 @@ Wireguard: wireguard.Config{
 **File:** `felix/wireguard/wireguard.go`
 
 ```go
-func (n *nodeData) allowedCidrsForWireguardWithExtra(extraIPs []string, ipVersion uint8) []net.IPNet {
+func (n *nodeData) allowedCidrsForWireguardWithExtra(extraIPs []string, ipVersion uint8, logCtx *log.Entry) []net.IPNet {
     cidrs := n.allowedCidrsForWireguard()
     for _, ipStr := range extraIPs {
         cidr, err := ip.ParseCIDROrIP(ipStr)
-        if err != nil || cidr == nil {
+        if err != nil {
+            logCtx.WithFields(log.Fields{"ip": ipStr, "error": err}).Warn("Invalid IP/CIDR in wireguardExtraAllowedIPs, skipping")
+            continue
+        }
+        if cidr == nil {
+            logCtx.WithField("ip", ipStr).Warn("Failed to parse IP/CIDR in wireguardExtraAllowedIPs, skipping")
             continue
         }
         if cidr.Version() == ipVersion {
@@ -208,9 +213,18 @@ func (n *nodeData) allowedCidrsForWireguardWithExtra(extraIPs []string, ipVersio
 }
 ```
 
-Applied in two locations:
+**Key features:**
+- **Validation**: Invalid CIDRs are logged with warnings, helping users identify misconfigurations
+- **Safe failure**: Invalid entries are skipped rather than breaking the cluster
+- **IP version filtering**: Only includes CIDRs matching the interface's IP version (v4/v6)
+
+**Applied consistently across all peer configuration paths:**
 1. Delta updates with CIDR replacements
-2. Full peer resyncs
+2. Delta updates for new peer creation
+3. Resync expected CIDR calculations
+4. Full peer resyncs for unconfigured nodes
+
+This ensures uniform behavior regardless of how a peer is added or updated, preventing inconsistencies during edge cases like conflicting public keys or configuration resyncs.
 
 ---
 
@@ -322,9 +336,10 @@ spec:
 | `felix/config/config_params.go` | +1 | Add config parameter |
 | `felix/wireguard/config.go` | +1 | Add to internal config struct |
 | `felix/dataplane/driver.go` | +16 | Parse extra IPs and pass to config |
-| `felix/wireguard/wireguard.go` | +26 | Apply extra IPs to peers |
+| `felix/wireguard/wireguard.go` | +40 | Apply extra IPs with validation |
+| `manifests/operator-crds.yaml` | Generated | CRD definitions with new field |
 
-**Total:** ~50 lines of code added/modified
+**Total:** ~65 lines of code added/modified
 
 ### Key Functions Modified
 
@@ -336,15 +351,25 @@ spec:
 **Change:** Removed conditional check for `EncryptHostTraffic` when handling `REMOTE_HOST` routes
 
 #### 2. `allowedCidrsForWireguardWithExtra()`
-**Location:** `felix/wireguard/wireguard.go:92-103`
+**Location:** `felix/wireguard/wireguard.go:92-108`
 
-**Purpose:** Generates allowed-IPs list with extra CIDRs
+**Purpose:** Generates allowed-IPs list with extra CIDRs and validation
 
 **Logic:**
 1. Start with base allowed CIDRs from node data
 2. Parse and validate extra IPs from configuration
-3. Filter by IP version (IPv4/IPv6)
-4. Append to allowed-IPs list
+3. Log warnings for invalid entries (helps troubleshooting)
+4. Filter by IP version (IPv4/IPv6)
+5. Append validated extra CIDRs to allowed-IPs list
+
+**Called from all peer configuration paths:**
+- Delta updates (CIDR replacement)
+- Delta updates (new peer creation)  
+- Resync expected CIDR calculations
+- Full peer additions
+
+**Resync behavior:**
+The resync logic compares expected vs configured CIDRs to detect and correct drift. Extra allowed-IPs are included in the expected set, preventing them from being flagged as "unexpected" and removed during resyncs. This ensures configuration stability and prevents thrashing.
 
 #### 3. `parseExtraAllowedIPs()`
 **Location:** `felix/dataplane/driver.go:486-498`
@@ -441,6 +466,30 @@ spec:
 - Node IPs visible in `wg show` allowed-ips
 - kube-apiserver accessible from pods
 - Services backed by host-networked pods work
+
+### Troubleshooting Extra Allowed-IPs
+
+If you configure `wireguardExtraAllowedIPs`, check Felix logs for validation warnings:
+
+```bash
+# Check for invalid IP/CIDR entries
+kubectl logs -n kube-system <felix-pod> | grep "wireguardExtraAllowedIPs"
+```
+
+**Common validation messages:**
+- `Invalid IP/CIDR in wireguardExtraAllowedIPs, skipping` - Parse error (check CIDR format)
+- `Failed to parse IP/CIDR in wireguardExtraAllowedIPs, skipping` - Nil result (malformed input)
+
+**Example log output:**
+```
+WARN Invalid IP/CIDR in wireguardExtraAllowedIPs, skipping ip="10.0.0.256/32" error="invalid IP address"
+```
+
+**Resolution:**
+1. Verify CIDR format: `10.0.0.1/32` (IP with netmask)
+2. Check for typos in the configuration
+3. Ensure IPs match the WireGuard interface IP version (IPv4 vs IPv6)
+4. Invalid entries are safely skipped - fix and reload configuration
 
 ---
 
