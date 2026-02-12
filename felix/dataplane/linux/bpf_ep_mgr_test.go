@@ -35,6 +35,7 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -412,9 +413,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 		v4Maps.IpsetsMap = bpfipsets.Map()
 		v4Maps.CtMap = conntrack.Map()
+		v4Maps.AllowSourcesMap = mock.NewMockMap(allowsources.MapParameters)
 
 		v6Maps.IpsetsMap = bpfipsets.MapV6()
 		v6Maps.CtMap = conntrack.MapV6()
+		v6Maps.AllowSourcesMap = mock.NewMockMap(allowsources.MapV6Parameters)
 
 		commonMaps.StateMap = state.Map()
 		ifStateMap = mock.NewMockMap(ifstate.MapParams)
@@ -589,7 +592,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					WorkloadId:     name,
 					EndpointId:     name,
 				},
-				Endpoint: &proto.WorkloadEndpoint{Name: name},
+				Endpoint: &proto.WorkloadEndpoint{
+					Name: name,
+				},
 			}
 			if len(policies) > 0 {
 				update.Endpoint.Tiers = []*proto.TierInfo{{
@@ -611,6 +616,25 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					OrchestratorId: "k8s",
 					WorkloadId:     name,
 					EndpointId:     name,
+				},
+			}
+			bpfEpMgr.OnUpdate(update)
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
+	genWLUpdateWithSpoofedSource := func(name string, spoofedSources []string) func() {
+		return func() {
+			update := &proto.WorkloadEndpointUpdate{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     name,
+					EndpointId:     name,
+				},
+				Endpoint: &proto.WorkloadEndpoint{
+					Name:                       name,
+					AllowSpoofedSourcePrefixes: spoofedSources,
 				},
 			}
 			bpfEpMgr.OnUpdate(update)
@@ -2868,6 +2892,214 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			// changed.
 			Expect(changes).To(Equal(4))
 		})
+	})
+
+	Describe("allowed source prefixes map (IPv4)", func() {
+		var (
+			ifaceName  string
+			cidr       ip.CIDR
+			cidrString string
+		)
+
+		JustBeforeEach(func() {
+			ifaceName = "cali12345"
+			cidrString = "192.192.192.192/32"
+
+			newBpfEpMgr(false)
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdateWithSpoofedSource("cali12345", []string{cidrString})()
+
+			var err error
+			cidr, err = ip.CIDRFromString(cidrString)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should contain allowed source prefixes from annotation", func() {
+			// initial genWLUpdate should add the prefix to the map
+
+			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
+			expectedEbpfEntry := allowsources.NewKey(cidr, ifindex)
+			_, err := bpfEpMgr.v4.AllowSourcesMap.Get(expectedEbpfEntry.AsBytes())
+			Expect(err).NotTo(HaveOccurred())
+
+			workloadEndpointID := types.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			}
+			bookkeepingSet, exists := bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains(cidrString)).To(BeTrue())
+
+			// test multiple IPs in the annotation
+			updatedSpoofedSources := []string{"192.192.192.192/32", "0.0.0.0/32"}
+			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
+			bookkeepingSet, exists = bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(2))
+
+			for _, cidr := range updatedSpoofedSources {
+				Expect(bookkeepingSet.Contains(cidr)).To(BeTrue())
+			}
+
+			// test the case where one of the annotations are removed via genWLUpdate
+			updatedSpoofedSources = []string{"0.0.0.0/32"}
+			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
+			bookkeepingSet, exists = bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains("0.0.0.0/32")).To(BeTrue())
+		})
+
+		It("should remove prefix from the map upon removal", func() {
+			// the following prefix should be removed from the map once WLUpdateEpRemove runs
+			genWLUpdateEpRemove("cali12345")()
+
+			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
+
+			expectedEntry := allowsources.NewKey(cidr, ifindex)
+			value, err := bpfEpMgr.v4.AllowSourcesMap.Get(expectedEntry.AsBytes())
+			Expect(err).To(HaveOccurred())
+			Expect(value).To(BeNil())
+		})
+	})
+
+	Describe("allowed source prefixes map (IPv6)", func() {
+		var (
+			ifaceName  string
+			cidr       ip.CIDR
+			cidrString string
+		)
+
+		JustBeforeEach(func() {
+			ifaceName = "cali12345"
+			cidrString = "2001:db8::1/128"
+
+			newBpfEpMgr(true) // Enable IPv6
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdateWithSpoofedSource("cali12345", []string{cidrString})()
+
+			var err error
+			cidr, err = ip.CIDRFromString(cidrString)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should contain allowed source prefixes from annotation", func() {
+			// initial genWLUpdate should add the prefix to the map
+
+			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
+			expectedEbpfEntry := allowsources.NewKeyV6(cidr, ifindex)
+			_, err := bpfEpMgr.v6.AllowSourcesMap.Get(expectedEbpfEntry.AsBytes())
+			Expect(err).NotTo(HaveOccurred())
+
+			workloadEndpointID := types.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			}
+			bookkeepingSet, exists := bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains(cidrString)).To(BeTrue())
+
+			// test multiple IPv6 addresses in the annotation
+			updatedSpoofedSources := []string{"2001:db8::1/128", "::1/128"}
+			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
+			bookkeepingSet, exists = bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(2))
+
+			for _, cidr := range updatedSpoofedSources {
+				Expect(bookkeepingSet.Contains(cidr)).To(BeTrue())
+			}
+
+			// test the case where one of the annotations are removed via genWLUpdate
+			updatedSpoofedSources = []string{"::1/128"}
+			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
+			bookkeepingSet, exists = bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains("::1/128")).To(BeTrue())
+		})
+
+		It("should remove prefix from the map upon removal", func() {
+			// the following prefix should be removed from the map once WLUpdateEpRemove runs
+			genWLUpdateEpRemove("cali12345")()
+
+			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
+
+			expectedEntry := allowsources.NewKeyV6(cidr, ifindex)
+			value, err := bpfEpMgr.v6.AllowSourcesMap.Get(expectedEntry.AsBytes())
+			Expect(err).To(HaveOccurred())
+			Expect(value).To(BeNil())
+		})
+	})
+
+	Describe("allowed source prefixes map (dual-stack)", func() {
+		var (
+			ifaceName  string
+			cidr       ip.CIDR
+			cidrString string
+		)
+
+		JustBeforeEach(func() {
+			ifaceName = "cali12345"
+			cidrString = "2001:db8::1/128"
+
+			newBpfEpMgr(true) // Enable IPv6
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdateWithSpoofedSource("cali12345", []string{cidrString})()
+
+			var err error
+			cidr, err = ip.CIDRFromString(cidrString)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should contain allowed source prefixes from annotation", func() {
+			// initial genWLUpdate should add the prefix to the map
+
+			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
+			expectedEbpfEntry := allowsources.NewKeyV6(cidr, ifindex)
+			_, err := bpfEpMgr.v6.AllowSourcesMap.Get(expectedEbpfEntry.AsBytes())
+			Expect(err).NotTo(HaveOccurred())
+
+			workloadEndpointID := types.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			}
+			bookkeepingSet, exists := bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains(cidrString)).To(BeTrue())
+
+			// test a combination of IPv4 and IPv6 addresses in the annotation
+			updatedSpoofedSources := []string{"2001:db8::1/128", "192.168.1.10/24"}
+			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
+			bookkeepingSet, exists = bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains("2001:db8::1/128")).To(BeTrue())
+
+			bookkeepingSetV4, exists := bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSetV4.Len()).To(Equal(1))
+			Expect(bookkeepingSetV4.Contains("192.168.1.10/24")).To(BeTrue())
+
+			// test the case where one of the annotations are removed via genWLUpdate
+			updatedSpoofedSources = []string{"192.168.1.10/24"}
+			genWLUpdateWithSpoofedSource("cali12345", updatedSpoofedSources)()
+			bookkeepingSet, exists = bpfEpMgr.v4.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSet.Len()).To(Equal(1))
+			Expect(bookkeepingSet.Contains("192.168.1.10/24")).To(BeTrue())
+
+			bookkeepingSetV6, exists := bpfEpMgr.v6.allowedSourcesPerWorkload[workloadEndpointID]
+			Expect(exists).To(BeTrue())
+			Expect(bookkeepingSetV6.Len()).To(Equal(0))
+		})
+
 	})
 })
 
