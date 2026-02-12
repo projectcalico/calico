@@ -60,7 +60,7 @@ type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
 	SetHostIPs([]net.IP)
-	SetHostMetadata(map[string]*proto.HostMetadataV4V6Update)
+	SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -398,11 +398,15 @@ func (p *proxy) SetHostIPs(hostIPs []net.IP) {
 		npa, p.healthzServer)
 }
 
-func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update) {
+func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool) {
 	p.runnerLck.Lock()
 	defer p.runnerLck.Unlock()
 
 	p.hostMetadataByHostname = updates
+	if requestResync {
+		// Invoke a sync via the runner, so that we can release any locks in this goroutine.
+		p.syncDP()
+	}
 }
 
 func (p *proxy) IPFamily() discovery.AddressType {
