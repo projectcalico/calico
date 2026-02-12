@@ -129,7 +129,7 @@ EOF
             birdPeer = "Global_" if globalPeer else "Node_"
             birdPeer += peerIP.replace(".", "_").replace(":","_")
             routes = kubectl("exec -n calico-system %s -- %s show route protocol %s" % (calicoPod, birdCmd, birdPeer))
-            result = re.search("%s *via %s on .* \[%s" % (re.escape(route), re.escape(peerIP), birdPeer), routes)
+            result = re.search(r"%s *via %s on .* \[%s" % (re.escape(route), re.escape(peerIP), birdPeer), routes)
             if result is None and present:
                 raise Exception('route not present when it should be')
             if result is not None and not present:
@@ -149,7 +149,7 @@ EOF
         def fn():
             birdCmd = "birdcl6" if ipv6 else "birdcl"
             routes = run("docker exec %s %s show route protocol %s" % (birdContainer, birdCmd, birdPeer))
-            result = re.search("%s *via %s on .* \[%s" % (routeRegex, peerIPRegex, birdPeer), routes)
+            result = re.search(r"%s *via %s on .* \[%s" % (routeRegex, peerIPRegex, birdPeer), routes)
             if result is None and present:
                 raise Exception('route not present when it should be')
             if result is not None and not present:
@@ -181,11 +181,11 @@ EOF
         """
         with DiagsCollector():
             external_route_v4 = "10.111.111.0/24"
-            cluster_route_regex_v4 = "192\.168\.\d+\.\d+/\d+"
+            cluster_route_regex_v4 = r"192\.168\.\d+\.\d+/\d+"
             export_filter_cidr_v4 = "192.168.0.0/16"
 
             external_route_v6 = "fd00:1111:1111:1111::/64"
-            cluster_route_regex_v6 = "fd00:10:244:.*/\d+"
+            cluster_route_regex_v6 = r"fd00:10:244:.*/\d+"
             export_filter_cidr_v6 = "fd00:10:244::/64"
 
             # Add static route bird config to external node
@@ -306,11 +306,9 @@ EOF
         exhaust matchOperators and actions"""
         with DiagsCollector():
             external_route_v4 = "10.111.111.0/24"
-            cluster_route_regex_v4 = "192\.168\.\d+\.\d+/\d+"
             export_filter_cidr_v4 = "192.168.0.0/16"
 
             external_route_v6 = "fd00:1111:1111:1111::/64"
-            cluster_route_regex_v6 = "fd00:10:244:.*/\d+"
             export_filter_cidr_v6 = "fd00:10:244::/64"
 
             # Add static route bird config
@@ -485,11 +483,9 @@ EOF
         """Test BGP import filters with global BGP peers"""
         with DiagsCollector():
             external_route_v4 = "10.111.111.0/24"
-            cluster_route_regex_v4 = "192\.168\.\d+\.\d+/\d+"
             export_filter_cidr_v4 = "192.168.0.0/16"
 
             external_route_v6 = "fd00:1111:1111:1111::/64"
-            cluster_route_regex_v6 = "fd00:10:244:.*/\d+"
             export_filter_cidr_v6 = "fd00:10:244::/64"
 
             # Add static route bird config

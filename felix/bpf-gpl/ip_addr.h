@@ -111,6 +111,7 @@ typedef ipv6_addr_t ipv46_addr_t;
 #define NP_SPECIAL_IP	0xffffffff
 #define ip_equal(a, b)	((a) == (b))
 #define ip_lt(a, b)	(*(a) < *(b))
+#define ip_link_local(ip) (((ip) & bpf_htonl(0xffff0000)) == bpf_htonl(0xa9fe0000))
 
 typedef ipv4_addr_t ipv46_addr_t;
 

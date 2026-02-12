@@ -19,7 +19,7 @@ rules:
       - list
       - watch
       - create
-  # We only allow update access to our own CRDs.
+  # Allow updating the crd.projectcalico.org CRDs.
   - apiGroups:
       - apiextensions.k8s.io
     resources:
@@ -27,11 +27,6 @@ rules:
     verbs:
       - update
     resourceNames:
-      - apiservers.operator.tigera.io
-      - gatewayapis.operator.tigera.io
-      - imagesets.operator.tigera.io
-      - installations.operator.tigera.io
-      - tigerastatuses.operator.tigera.io
       - bgpconfigurations.crd.projectcalico.org
       - bgpfilters.crd.projectcalico.org
       - bgppeers.crd.projectcalico.org
@@ -54,10 +49,54 @@ rules:
       - stagedkubernetesnetworkpolicies.crd.projectcalico.org
       - networksets.crd.projectcalico.org
       - tiers.crd.projectcalico.org
+  # Allow updating the projectcalico.org/v3 CRDs.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - update
+    resourceNames:
+      - bgpconfigurations.projectcalico.org
+      - bgpfilters.projectcalico.org
+      - bgppeers.projectcalico.org
+      - blockaffinities.projectcalico.org
+      - caliconodestatuses.projectcalico.org
+      - clusterinformations.projectcalico.org
+      - felixconfigurations.projectcalico.org
+      - globalnetworkpolicies.projectcalico.org
+      - stagedglobalnetworkpolicies.projectcalico.org
+      - globalnetworksets.projectcalico.org
+      - hostendpoints.projectcalico.org
+      - ipamblocks.projectcalico.org
+      - ipamconfigs.projectcalico.org
+      - ipamhandles.projectcalico.org
+      - ippools.projectcalico.org
+      - ipreservations.projectcalico.org
+      - kubecontrollersconfigurations.projectcalico.org
+      - networkpolicies.projectcalico.org
+      - stagednetworkpolicies.projectcalico.org
+      - stagedkubernetesnetworkpolicies.projectcalico.org
+      - networksets.projectcalico.org
+      - tiers.projectcalico.org
+  # Allow updating the operator.tigera.io CRDs.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - update
+    resourceNames:
+      - apiservers.operator.tigera.io
+      - gatewayapis.operator.tigera.io
+      - imagesets.operator.tigera.io
+      - installations.operator.tigera.io
+      - tigerastatuses.operator.tigera.io
       - whiskers.operator.tigera.io
       - goldmanes.operator.tigera.io
       - managementclusterconnections.operator.tigera.io
-  # We need update and delete access for ANP/BANP CRDs to set owner refs when assuming control of pre-existing CRDs, for example on OCP.
+  # We need update and delete access for the ClusterNetworkPolicy CRD to set owner references
+  # when assuming control of pre-existing CRDs, for example on OCP.
   - apiGroups:
       - apiextensions.k8s.io
     resources:

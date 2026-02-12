@@ -22,7 +22,7 @@ set -e
 : "${KUBECTL:=./bin/kubectl}"
 : "${GOMPLATE:=./bin/gomplate}"
 
-: "${KUBE_PROXY_MODE:="iptables"}"
+: "${ASO_KUBE_PROXY_MODE:="iptables"}"
 
 # Reconstruct arrays from exported string variables
 # Bash arrays cannot be exported across shells, so we export them as space-separated strings
@@ -143,7 +143,7 @@ networking:
 ---
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
 kind: KubeProxyConfiguration
-mode: "${KUBE_PROXY_MODE}"
+mode: "${ASO_KUBE_PROXY_MODE}"
 EOF
 
   echo "Copying kubeadm config yaml to Linux node 0 (${LINUX_EIPS[0]})..."

@@ -344,6 +344,13 @@ func (c *loadBalancerController) handleIPPoolUpdate(kvp model.KVPair) {
 	}
 
 	pool := kvp.Value.(*api.IPPool)
+
+	if pool.DeletionTimestamp != nil {
+		// Pool is being deleted, remove it from our map.
+		delete(c.ipPools, kvp.Key.String())
+		return
+	}
+
 	if slices.Contains(pool.Spec.AllowedUses, api.IPPoolAllowedUseLoadBalancer) {
 		c.ipPools[kvp.Key.String()] = *pool
 	} else {

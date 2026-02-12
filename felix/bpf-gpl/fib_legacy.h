@@ -9,8 +9,8 @@
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
-	int rc = ctx->fwd.res;
-	enum calico_reason reason = ctx->fwd.reason;
+	int rc = ctx->state->fwd.res;
+	enum calico_reason reason = ctx->state->fwd.reason;
 	struct cali_tc_state *state = ctx->state;
 
 	if (rc == TC_ACT_SHOT) {
@@ -94,7 +94,7 @@ skip_redir_ifindex:
 	}
 
 	// Try a short-circuit FIB lookup.
-	if (fwd_fib(&ctx->fwd)) {
+	if (fwd_fib(&ctx->state->fwd)) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
@@ -152,7 +152,7 @@ skip_redir_ifindex:
 #endif
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");
-		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), ctx->fwd.fib_flags);
+		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), ctx->state->fwd.fib_flags);
 		switch (rc) {
 		case 0:
 			CALI_DEBUG("FIB lookup succeeded - with neigh");
@@ -212,7 +212,7 @@ cancel_fib:
 
 			struct arp_value *arpv = cali_arp_lookup_elem(&arpk);
 			if (!arpv) {
-				ctx->fwd.reason = CALI_REASON_NATIFACE;
+				ctx->state->fwd.reason = CALI_REASON_NATIFACE;
 				CALI_DEBUG("ARP lookup failed for " IP_FMT " dev %d",
 						debug_ip(state->ip_dst), iface);
 				goto deny;
@@ -221,7 +221,7 @@ cancel_fib:
 			/* Revalidate the access to the packet */
 			skb_refresh_start_end(ctx);
 			if (ctx->data_start + sizeof(struct ethhdr) > ctx->data_end) {
-				ctx->fwd.reason = CALI_REASON_SHORT;
+				ctx->state->fwd.reason = CALI_REASON_SHORT;
 				CALI_DEBUG("Too short");
 				goto deny;
 			}
@@ -233,7 +233,7 @@ cancel_fib:
 
 			rc = bpf_redirect(iface, 0);
 			if (rc != TC_ACT_REDIRECT) {
-				ctx->fwd.reason = CALI_REASON_NATIFACE;
+				ctx->state->fwd.reason = CALI_REASON_NATIFACE;
 				CALI_DEBUG("Redirect directly to bpfnatin failed.");
 				goto deny;
 			}
@@ -257,10 +257,10 @@ skip_fib:
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
 		 */
-		ctx->fwd.mark |=  CALI_SKB_MARK_SEEN;
+		ctx->state->fwd.mark |=  CALI_SKB_MARK_SEEN;
 		if (ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL");
-			ctx->fwd.mark |= EXT_TO_SVC_MARK;
+			ctx->state->fwd.mark |= EXT_TO_SVC_MARK;
 			if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK) {
 				/* needs to go via normal routing unless we have access
 				 * to BPF_FIB_LOOKUP_MARK in kernel 6.10+
@@ -274,23 +274,23 @@ skip_fib:
 			 * bpfnatout - if it gets (S)NATed, a new connection is created
 			 * and we know that returning packets must go via bpfnatout again.
 			 */
-			ctx->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
+			ctx->state->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
 			CALI_DEBUG("marking CALI_SKB_MARK_FROM_NAT_IFACE_OUT");
 		}
 
 		if (ct_result_is_related(state->ct_result.rc)) {
 			CALI_DEBUG("Related traffic, marking with CALI_SKB_MARK_RELATED_RESOLVED");
-			ctx->fwd.mark |= CALI_SKB_MARK_RELATED_RESOLVED;
+			ctx->state->fwd.mark |= CALI_SKB_MARK_RELATED_RESOLVED;
 		}
 
-		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.", ctx->fwd.mark);
+		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.", ctx->state->fwd.mark);
 
 		/* FIXME: this ignores the mask that we should be using.
 		 * However, if we mask off the bits, then clang spots that it
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,
 		 * which trips up the validator.
 		 */
-		skb_set_mark(ctx->skb, ctx->fwd.mark); /* make sure that each pkt has SEEN mark */
+		skb_set_mark(ctx->skb, ctx->state->fwd.mark); /* make sure that each pkt has SEEN mark */
 	}
 
 	goto allow;
