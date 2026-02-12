@@ -20,31 +20,22 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
 	KubeControllersConfigResourceName = "KubeControllersConfigurations"
-	KubeControllersConfigCRDName      = "kubecontrollersconfigurations.crd.projectcalico.org"
 )
 
-func NewKubeControllersConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
+func NewKubeControllersConfigClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
 		restClient:      r,
-		name:            KubeControllersConfigCRDName,
 		resource:        KubeControllersConfigResourceName,
-		description:     "Calico Kubernetes Controllers Configuration",
 		k8sResourceType: reflect.TypeOf(apiv3.KubeControllersConfiguration{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindKubeControllersConfiguration,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
-		resourceKind: apiv3.KindKubeControllersConfiguration,
-		validator:    kubeControllersConfigValidator{},
+		k8sListType:     reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
+		kind:            apiv3.KindKubeControllersConfiguration,
+		validator:       kubeControllersConfigValidator{},
+		apiGroup:        group,
 	}
 }
 

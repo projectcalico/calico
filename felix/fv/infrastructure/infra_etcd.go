@@ -130,6 +130,10 @@ func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
 	return eds.client
 }
 
+func (eds *EtcdDatastoreInfra) UseProjectCalicoV3API() bool {
+	return false
+}
+
 func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
 	ci, err := eds.GetCalicoClient().ClusterInformation().Get(
 		context.Background(),

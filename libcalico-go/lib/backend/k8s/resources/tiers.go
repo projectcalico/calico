@@ -19,8 +19,6 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
@@ -28,32 +26,25 @@ import (
 
 const (
 	TierResourceName = "Tiers"
-	TierCRDName      = "tiers.crd.projectcalico.org"
 )
 
-func NewTierClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
-		restClient:      r,
-		name:            TierCRDName,
-		resource:        TierResourceName,
-		description:     "Calico Tiers",
-		k8sResourceType: reflect.TypeOf(apiv3.Tier{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindTier,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
+func NewTierClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
+		restClient:       r,
+		resource:         TierResourceName,
+		k8sResourceType:  reflect.TypeOf(apiv3.Tier{}),
 		k8sListType:      reflect.TypeOf(apiv3.TierList{}),
-		resourceKind:     apiv3.KindTier,
-		versionconverter: tierv1v3Converter{},
+		kind:             apiv3.KindTier,
+		versionconverter: tierDefaulter{},
+		apiGroup:         group,
 	}
 }
 
-// tierv1v3Converter implements VersionConverter interface.
-type tierv1v3Converter struct{}
+// tierDefaulter implements VersionConverter interface.
+type tierDefaulter struct{}
 
-// ConvertFromK8s converts v1 Tier Resource to v3 Tier resource
-func (c tierv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
+// ConvertFromK8s sets defaults on the Tier when reading it from the Kubernetes API.
+func (c tierDefaulter) ConvertFromK8s(inRes Resource) (Resource, error) {
 	tier, ok := inRes.(*apiv3.Tier)
 	if !ok {
 		return nil, fmt.Errorf("invalid type conversion")

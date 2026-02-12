@@ -18,29 +18,20 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
 	IPReservationResourceName = "IPReservations"
-	IPReservationCRDName      = "ipreservations.crd.projectcalico.org"
 )
 
-func NewIPReservationClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
+func NewIPReservationClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
 		restClient:      r,
-		name:            IPReservationCRDName,
 		resource:        IPReservationResourceName,
-		description:     "Calico IP Reservations",
 		k8sResourceType: reflect.TypeOf(apiv3.IPReservation{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindIPReservation,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(apiv3.IPReservationList{}),
-		resourceKind: apiv3.KindIPReservation,
+		k8sListType:     reflect.TypeOf(apiv3.IPReservationList{}),
+		kind:            apiv3.KindIPReservation,
+		apiGroup:        group,
 	}
 }

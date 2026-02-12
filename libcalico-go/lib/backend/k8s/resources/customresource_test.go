@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest/fake"
 
-	calischeme "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
+	calischeme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -40,7 +40,7 @@ func init() {
 
 var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", func() {
 	// Create an empty client since we are only testing conversion functions.
-	client := NewBGPPeerClient(nil, nil).(*customK8sResourceClient)
+	client := NewBGPPeerClient(nil, BackingAPIGroupV1).(*customResourceClient)
 
 	// Define some useful test data.
 	listIncomplete := model.ResourceListOptions{}
@@ -240,7 +240,7 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 })
 
 var _ = Describe("Custom resource conversion methods (tested using namespaced NetworkSet)", func() {
-	var client *customK8sResourceClient
+	var client *customResourceClient
 	var fakeREST *fake.RESTClient
 
 	BeforeEach(func() {
@@ -252,7 +252,7 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 			},
 			VersionedAPIPath: "/apis",
 		}
-		client = NewNetworkSetClient(nil, fakeREST).(*customK8sResourceClient)
+		client = NewNetworkSetClient(fakeREST, BackingAPIGroupV1).(*customResourceClient)
 	})
 
 	It("should get by name", func() {

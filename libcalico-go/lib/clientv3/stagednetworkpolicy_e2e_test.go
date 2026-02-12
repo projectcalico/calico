@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -76,6 +77,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 	var be bapi.Client
 
 	BeforeEach(func() {
+		v3CRD = k8s.UsingV3CRDs(&config.Spec)
+
 		var err error
 		c, err = clientv3.New(config)
 		Expect(err).NotTo(HaveOccurred())

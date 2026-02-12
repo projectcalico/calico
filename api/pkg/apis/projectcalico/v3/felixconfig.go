@@ -21,11 +21,13 @@ import (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:shortName={felixconfig,felixconfigs}
 
 // FelixConfigurationList contains a list of FelixConfiguration object.
 type FelixConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []FelixConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -33,12 +35,13 @@ type FelixConfigurationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type FelixConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec FelixConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec FelixConfigurationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 const (
@@ -46,6 +49,7 @@ const (
 	KindFelixConfigurationList = "FelixConfigurationList"
 )
 
+// +kubebuilder:validation:Enum=Legacy;NFT;Auto
 type IptablesBackend string
 
 const (
@@ -55,6 +59,7 @@ const (
 )
 
 // NFTablesMode is the enum used to enable/disable nftables mode.
+// +enum
 // +kubebuilder:validation:Enum=Disabled;Enabled;Auto
 type NFTablesMode string
 

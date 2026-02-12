@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -165,7 +165,7 @@ func k8sClusterNetPolIngressRuleToCalico(rule clusternetpol.ClusterNetworkPolicy
 	if err != nil {
 		return nil, err
 	}
-	return combinePortsWithCNPIngressPeers(rule.Ports, rule.From, rule.Name, action)
+	return combinePortsWithCNPIngressPeers(rule.Protocols, rule.From, rule.Name, action)
 }
 
 func k8sClusterNetPolEgressRuleToCalico(rule clusternetpol.ClusterNetworkPolicyEgressRule) ([]apiv3.Rule, error) {
@@ -173,7 +173,7 @@ func k8sClusterNetPolEgressRuleToCalico(rule clusternetpol.ClusterNetworkPolicyE
 	if err != nil {
 		return nil, err
 	}
-	return combinePortsWithCNPEgressPeers(rule.Ports, rule.To, rule.Name, action)
+	return combinePortsWithCNPEgressPeers(rule.Protocols, rule.To, rule.Name, action)
 }
 
 func K8sClusterNetworkPolicyActionToCalico(action clusternetpol.ClusterNetworkPolicyRuleAction) (apiv3.Action, error) {
@@ -189,12 +189,12 @@ func K8sClusterNetworkPolicyActionToCalico(action clusternetpol.ClusterNetworkPo
 }
 
 func combinePortsWithCNPIngressPeers(
-	cnpPorts *[]clusternetpol.ClusterNetworkPolicyPort,
+	cnpProtocols []clusternetpol.ClusterNetworkPolicyProtocol,
 	cnpPeers []clusternetpol.ClusterNetworkPolicyIngressPeer,
 	ruleName string,
 	action apiv3.Action,
 ) (rules []apiv3.Rule, err error) {
-	protocolPorts, sortedProtocols, err := unpackCNPPorts(cnpPorts)
+	protocolPorts, sortedProtocols, err := unpackCNPProtocols(cnpProtocols)
 	if err != nil {
 		return nil, err
 	}
@@ -248,12 +248,12 @@ func combinePortsWithCNPIngressPeers(
 }
 
 func combinePortsWithCNPEgressPeers(
-	cnpPorts *[]clusternetpol.ClusterNetworkPolicyPort,
+	cnpProtocols []clusternetpol.ClusterNetworkPolicyProtocol,
 	cnpPeers []clusternetpol.ClusterNetworkPolicyEgressPeer,
 	ruleName string,
 	action apiv3.Action,
 ) (rules []apiv3.Rule, err error) {
-	protocolPorts, sortedProtocols, err := unpackCNPPorts(cnpPorts)
+	protocolPorts, sortedProtocols, err := unpackCNPProtocols(cnpProtocols)
 	if err != nil {
 		return nil, err
 	}
@@ -317,22 +317,22 @@ func combinePortsWithCNPEgressPeers(
 	return rules, nil
 }
 
-func unpackCNPPorts(k8sPorts *[]clusternetpol.ClusterNetworkPolicyPort) (
+func unpackCNPProtocols(cnpProtocols []clusternetpol.ClusterNetworkPolicyProtocol) (
 	map[string][]numorstring.Port,
 	[]string, error,
 ) {
 	// If there are no ports, represent that as zero struct.
-	ports := []clusternetpol.ClusterNetworkPolicyPort{{}}
-	if k8sPorts != nil && len(*k8sPorts) != 0 {
-		ports = *k8sPorts
+	protocols := []clusternetpol.ClusterNetworkPolicyProtocol{{}}
+	if cnpProtocols != nil && len(cnpProtocols) != 0 {
+		protocols = cnpProtocols
 	}
 
 	protocolPorts := map[string][]numorstring.Port{}
 
-	for _, port := range ports {
-		protocol, calicoPort, err := k8sCNPPortToCalicoFields(&port)
+	for _, p := range protocols {
+		protocol, calicoPort, err := k8sCNPPortToCalicoFields(&p)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse k8s port: %s", err)
+			return nil, nil, fmt.Errorf("failed to parse k8s protocol: %s", err)
 		}
 
 		if protocol == nil && calicoPort == nil {
@@ -354,61 +354,72 @@ func unpackCNPPorts(k8sPorts *[]clusternetpol.ClusterNetworkPolicyPort) (
 		}
 	}
 
-	protocols := make([]string, 0, len(protocolPorts))
-	for k := range protocolPorts {
-		protocols = append(protocols, k)
+	protos := make([]string, 0, len(protocolPorts))
+	for p := range protocolPorts {
+		protos = append(protos, p)
 	}
 	// Ensure deterministic output
-	sort.Strings(protocols)
-	return protocolPorts, protocols, nil
+	sort.Strings(protos)
+	return protocolPorts, protos, nil
 }
 
-func k8sCNPPortToCalicoFields(port *clusternetpol.ClusterNetworkPolicyPort) (
+func k8sCNPPortToCalicoFields(cnpProto *clusternetpol.ClusterNetworkPolicyProtocol) (
 	protocol *numorstring.Protocol,
 	dstPort *numorstring.Port,
 	err error,
 ) {
 	// If no port info, return zero values for all fields (protocol, dstPorts).
-	if port == nil {
+	if cnpProto == nil {
 		return
 	}
-	// Only one of the PortNumber or PortRange is set.
-	if port.PortNumber != nil {
-		dstPort = k8sCNPPortToCalico(port.PortNumber)
-		proto := ensureProtocol(port.PortNumber.Protocol)
-		protocol = k8sProtocolToCalico(&proto)
+
+	if cnpProto.TCP != nil {
+		dstPort, err = k8sCNPPortToCalico(cnpProto.TCP.DestinationPort)
+		p := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
+		protocol = &p
 		return
 	}
-	if port.PortRange != nil {
-		dstPort, err = k8sCNPPortRangeToCalico(port.PortRange)
-		if err != nil {
-			return
-		}
-		proto := ensureProtocol(port.PortRange.Protocol)
-		protocol = k8sProtocolToCalico(&proto)
+
+	if cnpProto.UDP != nil {
+		dstPort, err = k8sCNPPortToCalico(cnpProto.UDP.DestinationPort)
+		p := numorstring.ProtocolFromString(numorstring.ProtocolUDP)
+		protocol = &p
 		return
 	}
+
+	if cnpProto.SCTP != nil {
+		dstPort, err = k8sCNPPortToCalico(cnpProto.SCTP.DestinationPort)
+		p := numorstring.ProtocolFromString(numorstring.ProtocolSCTP)
+		protocol = &p
+		return
+	}
+
 	// TODO: Add support for NamedPorts
+	if len(cnpProto.DestinationNamedPort) != 0 {
+		err = fmt.Errorf("named ports are not supported yet.")
+		return
+	}
+
 	return
 }
 
-func k8sCNPPortToCalico(port *clusternetpol.Port) *numorstring.Port {
-	if port == nil {
-		return nil
-	}
-	p := numorstring.SinglePort(uint16(port.Port))
-	return &p
-}
-
-func k8sCNPPortRangeToCalico(port *clusternetpol.PortRange) (*numorstring.Port, error) {
+func k8sCNPPortToCalico(port *clusternetpol.Port) (*numorstring.Port, error) {
+	// Only one of the Number or Range is set.
 	if port == nil {
 		return nil, nil
 	}
-	p, err := numorstring.PortFromRange(uint16(port.Start), uint16(port.End))
-	if err != nil {
-		return nil, err
+	if port.Number != 0 {
+		p := numorstring.SinglePort(uint16(port.Number))
+		return &p, nil
 	}
-	return &p, nil
+	if port.Range != nil {
+		p, err := numorstring.PortFromRange(uint16(port.Range.Start), uint16(port.Range.End))
+		if err != nil {
+			return nil, err
+		}
+		return &p, nil
+	}
+	return nil, nil
 }
 
 func k8sClusterNetworkPolicyToCalicoMetadata(ruleName string) *apiv3.RuleMetadata {

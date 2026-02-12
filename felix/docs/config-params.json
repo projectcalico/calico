@@ -2343,14 +2343,14 @@
           "ParsedDefaultJSON": "\"auto\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `Auto`, `Legacy`, `NFT`.",
+          "YAMLSchema": "One of: `\"Auto\"`, `\"Legacy\"`, `\"NFT\"`.",
           "YAMLEnumValues": [
-            "Auto",
-            "Legacy",
-            "NFT"
+            "`\"Auto\"`",
+            "`\"Legacy\"`",
+            "`\"NFT\"`"
           ],
-          "YAMLSchemaHTML": "One of: <code>Auto</code>, <code>Legacy</code>, <code>NFT</code>.",
-          "YAMLDefault": "Auto",
+          "YAMLSchemaHTML": "One of: <code>\"Auto\"</code>, <code>\"Legacy\"</code>, <code>\"NFT\"</code>.",
+          "YAMLDefault": "auto",
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",

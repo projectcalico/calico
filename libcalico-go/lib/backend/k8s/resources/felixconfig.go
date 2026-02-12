@@ -18,29 +18,20 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
 	FelixConfigResourceName = "FelixConfigurations"
-	FelixConfigCRDName      = "felixconfigurations.crd.projectcalico.org"
 )
 
-func NewFelixConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
+func NewFelixConfigClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
+	return &customResourceClient{
 		restClient:      r,
-		name:            FelixConfigCRDName,
 		resource:        FelixConfigResourceName,
-		description:     "Calico Felix Configuration",
 		k8sResourceType: reflect.TypeOf(apiv3.FelixConfiguration{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindFelixConfiguration,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(apiv3.FelixConfigurationList{}),
-		resourceKind: apiv3.KindFelixConfiguration,
+		k8sListType:     reflect.TypeOf(apiv3.FelixConfigurationList{}),
+		kind:            apiv3.KindFelixConfiguration,
+		apiGroup:        group,
 	}
 }
