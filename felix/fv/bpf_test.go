@@ -3512,7 +3512,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							tcpd.AddMatcher("tcp-rst",
 								regexp.MustCompile(fmt.Sprintf(`%s %s\.\d+ > %s\.\d+: Flags \[[^\]]*R[^\]]*\]`, ipRegex, srcIP, w[1][1].IP)))
 							tcpd.Start(infra)
-							defer tcpd.Stop()
 						}
 
 						By("Stopping the original backend to make sure it is not reachable")

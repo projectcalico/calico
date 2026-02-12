@@ -306,7 +306,7 @@ func (s *Scanner) Scan() {
 					// RST already set, no need to update.
 					continue
 				}
-				updatedVal := s.versionHelper.setRSTFlagInValue(ctVal)
+				updatedVal := ctVal.SetFlags(ctFlags | v4.FlagSendRST)
 				batchK = append(batchK, ctKey.AsBytes())
 				batchV = append(batchV, updatedVal.AsBytes())
 				rstCount++
@@ -571,7 +571,6 @@ type Cleaner interface {
 type ipVersionHelper interface {
 	newCleanupValue(revKeyBytes []byte, ts, rev_ts uint64) cleanupv1.ValueInterface
 	dummyKey() KeyInterface
-	setRSTFlagInValue(v ValueInterface) ValueInterface
 }
 
 type ipv4Helper struct{}
@@ -584,20 +583,6 @@ func (h ipv4Helper) dummyKey() KeyInterface {
 	return dummyKey
 }
 
-func (h ipv4Helper) setRSTFlagInValue(v ValueInterface) ValueInterface {
-	var newVal ValueInterface
-	flags := v.Flags() | v4.FlagSendRST
-	if v.Type() == TypeNATForward {
-		newVal = v4.NewValueNATForward(time.Duration(v.LastSeen()), flags, (v.ReverseNATKey()).(v4.Key))
-	} else if v.Type() == TypeNATReverse {
-		newVal = v4.NewValueNATReverse(time.Duration(v.LastSeen()), flags,
-			v.Data().A2B, v.Data().B2A, v.Data().TunIP, v.OrigIP(), v.OrigPort())
-	} else {
-		newVal = v4.NewValueNormal(time.Duration(v.LastSeen()), flags, v.Data().A2B, v.Data().B2A)
-	}
-	return newVal
-}
-
 type ipv6Helper struct{}
 
 func (h ipv6Helper) newCleanupValue(revKeyBytes []byte, ts, rev_ts uint64) cleanupv1.ValueInterface {
@@ -606,18 +591,4 @@ func (h ipv6Helper) newCleanupValue(revKeyBytes []byte, ts, rev_ts uint64) clean
 
 func (h ipv6Helper) dummyKey() KeyInterface {
 	return dummyKeyV6
-}
-
-func (h ipv6Helper) setRSTFlagInValue(v ValueInterface) ValueInterface {
-	var newVal ValueInterface
-	flags := v.Flags() | v4.FlagSendRST
-	if v.Type() == TypeNATForward {
-		newVal = v4.NewValueV6NATForward(time.Duration(v.LastSeen()), flags, v.ReverseNATKey().(v4.KeyV6))
-	} else if v.Type() == TypeNATReverse {
-		newVal = v4.NewValueV6NATReverse(time.Duration(v.LastSeen()), flags,
-			v.Data().A2B, v.Data().B2A, v.Data().TunIP, v.OrigIP(), v.OrigPort())
-	} else {
-		newVal = v4.NewValueV6Normal(time.Duration(v.LastSeen()), flags, v.Data().A2B, v.Data().B2A)
-	}
-	return newVal
 }

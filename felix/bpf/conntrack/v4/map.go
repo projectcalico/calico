@@ -159,6 +159,7 @@ type ValueInterface interface {
 	Data() EntryData
 	IsForwardDSR() bool
 	String() string
+	SetFlags(flags uint32) ValueInterface
 }
 
 func (e Value) RSTSeen() int64 {
@@ -201,6 +202,15 @@ func (e Value) NATSPort() uint16 {
 // OrigSrcIP returns the original source IP.
 func (e Value) OrigSrcIP() net.IP {
 	return e[VoOrigSIP : VoOrigSIP+4]
+}
+
+// SetFlags sets the flags in the value, replacing any existing flags
+func (e Value) SetFlags(flags uint32) ValueInterface {
+	e[VoFlags] = byte(flags & 0xff)
+	e[VoFlags2] = byte((flags >> 8) & 0xff)
+	e[VoFlags3] = byte((flags >> 16) & 0xff)
+	e[VoFlags4] = byte((flags >> 24) & 0xff)
+	return e
 }
 
 const (
