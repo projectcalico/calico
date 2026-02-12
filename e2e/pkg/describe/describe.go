@@ -97,7 +97,7 @@ func WithAzure() any {
 	return framework.WithLabel("RunsOnAzure")
 }
 
-// WithAzure marks tests that must run on AWS.
+// WithAWS marks tests that must run on AWS.
 func WithAWS() any {
 	return framework.WithLabel("RunsOnAWS")
 }
