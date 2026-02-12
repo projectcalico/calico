@@ -186,7 +186,7 @@ K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
-	#$(MAKE) e2e-run-test
+	$(MAKE) e2e-run-test
 	$(MAKE) e2e-run-cnp-test
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
