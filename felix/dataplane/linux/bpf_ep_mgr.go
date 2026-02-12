@@ -416,6 +416,7 @@ type bpfEndpointManagerDataplane struct {
 	tunnelIP            net.IP
 	iptablesFilterTable Table
 	ipSetIDAlloc        *idalloc.IDAllocator
+	workloadRemoveChan  chan string
 }
 
 type serviceKey struct {
@@ -450,6 +451,7 @@ func NewBPFEndpointManager(
 	healthAggregator *health.HealthAggregator,
 	dataplanefeatures *environment.Features,
 	bpfIfaceMTU int,
+	workloadRemoveChanV4, workloadRemoveChanV6 chan string,
 ) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -600,10 +602,10 @@ func NewBPFEndpointManager(
 			m.bpfAttachType = apiv3.BPFAttachOptionTC
 		}
 	}
-	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, ipSetIDAllocV4, m)
+	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, ipSetIDAllocV4, workloadRemoveChanV4, m)
 
 	if m.ipv6Enabled {
-		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, bpfmaps.V6, iptablesFilterTableV6, ipSetIDAllocV6, m)
+		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, bpfmaps.V6, iptablesFilterTableV6, ipSetIDAllocV6, workloadRemoveChanV6, m)
 	}
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
@@ -696,6 +698,7 @@ func newBPFEndpointManagerDataplane(
 	ipMaps *bpfmap.IPMaps,
 	iptablesFilterTable Table,
 	ipSetIDAlloc *idalloc.IDAllocator,
+	workloadRemoveChan chan string,
 	epMgr *bpfEndpointManager,
 ) *bpfEndpointManagerDataplane {
 	return &bpfEndpointManagerDataplane{
@@ -705,6 +708,7 @@ func newBPFEndpointManagerDataplane(
 		IPMaps:              ipMaps,
 		iptablesFilterTable: iptablesFilterTable,
 		ipSetIDAlloc:        ipSetIDAlloc,
+		workloadRemoveChan:  workloadRemoveChan,
 	}
 }
 
@@ -1300,6 +1304,18 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 	})
 	// Remove policy debug info if any
 	m.removeIfaceAllPolicyDebugInfo(oldWEP.Name)
+	if m.v4 != nil && m.v4.workloadRemoveChan != nil {
+		for _, addr := range oldWEP.GetIpv4Nets() {
+			addr = strings.SplitN(addr, "/", 2)[0]
+			m.v4.workloadRemoveChan <- addr
+		}
+	}
+	if m.v6 != nil && m.v6.workloadRemoveChan != nil {
+		for _, addr := range oldWEP.GetIpv6Nets() {
+			addr = strings.SplitN(addr, "/", 2)[0]
+			m.v6.workloadRemoveChan <- addr
+		}
+	}
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
