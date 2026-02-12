@@ -23,22 +23,16 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	kauth "k8s.io/apiserver/pkg/authorization/authorizer"
-	"k8s.io/apiserver/pkg/authorization/cel"
-	"k8s.io/apiserver/plugin/pkg/authorizer/webhook"
-	"k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/cli"
 
-	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
@@ -83,39 +77,32 @@ func main() {
 	os.Exit(cli.Run(rootCmd))
 }
 
-func serveWebhookTLS(cmd *cobra.Command, args []string) {
-	cfg, err := tls.NewTLSConfig()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create TLS config")
-	}
+func registerHooks(cs kubernetes.Interface) {
+	rbac.RegisterHook(cs, utils.HandleFn(handleFn))
 
-	// Create a new rbacHook.
+	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
+	http.HandleFunc("/readyz", readyFn())
+}
+
+func serveWebhookTLS(cmd *cobra.Command, args []string) {
+	// Create a clientset to interact with the Kubernetes API.
 	rc, err := rest.InClusterConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create in-cluster config")
 	}
-
-	// Create a clientset for the Kubernetes API.
 	cs, err := kubernetes.NewForConfig(rc)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create clientset")
 	}
 
-	// Create a new Kubernetes authorizer.
-	bo := webhook.DefaultRetryBackoff()
-	m := &metrics.NoopAuthorizerMetrics{}
-	compl := cel.NewDefaultCompiler()
+	// Register webhook handlers.
+	registerHooks(cs)
 
-	a, err := webhook.NewFromInterface(cs.AuthorizationV1(), 5*time.Second, 5*time.Second, *bo, kauth.DecisionDeny, m, compl)
+	// Create and run the server.
+	cfg, err := tls.NewTLSConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
+		logrus.WithError(err).Fatal("Failed to create TLS config")
 	}
-	hook := rbac.NewTieredRBACHook(authorizer.NewTierAuthorizer(a))
-
-	// Register the webhook handler and a readiness endpoint.
-	http.HandleFunc("/", handleFn(hook.Handler()))
-	http.HandleFunc("/readyz", readyFn())
-
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", port),
 		TLSConfig: cfg,
@@ -132,6 +119,7 @@ func readyFn() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+// handleFn implements utils.HandleFn to allow registration of webhooks.
 func handleFn(handler utils.AdmissionReviewHandler) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		handleRequest(w, r, handler)

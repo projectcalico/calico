@@ -16,7 +16,11 @@
 
 package utils
 
-import v1 "k8s.io/api/admission/v1"
+import (
+	"net/http"
+
+	v1 "k8s.io/api/admission/v1"
+)
 
 type HandlerProvider interface {
 	Handler() AdmissionReviewHandler
@@ -32,3 +36,7 @@ type AdmissionReviewHandler struct {
 func NewDelegateToV1AdmitHandler(f V1AdmissionFunc) AdmissionReviewHandler {
 	return AdmissionReviewHandler{ProcessV1Review: f}
 }
+
+// HandleFn is a function type that takes an AdmissionReviewHandler and returns an http.HandlerFunc to help with
+// webhook registration.
+type HandleFn func(handler AdmissionReviewHandler) func(http.ResponseWriter, *http.Request)
