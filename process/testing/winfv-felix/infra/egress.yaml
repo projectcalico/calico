@@ -8,15 +8,14 @@ spec:
     matchLabels:
       app: porter
   policyTypes:
-  - Egress
+    - Egress
   egress:
-  - to:
-    ports:
-    - protocol: UDP
-      port: 53
+    - to:
+      ports:
+        - protocol: UDP
+          port: 53
 
 ---
-
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -27,15 +26,14 @@ spec:
     matchLabels:
       app: porter
   policyTypes:
-  - Egress
+    - Egress
   egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: nginx
-    ports:
-    - protocol: TCP
-      port: 80
+    - to:
+        - podSelector:
+            matchLabels:
+              app: nginx
+      ports:
+        - protocol: TCP
+          port: 80
 
 ---
-
