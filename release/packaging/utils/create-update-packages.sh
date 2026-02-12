@@ -198,7 +198,7 @@ function do_net_cal {
     pushd "${rootdir}/networking-calico"
     PKG_NAME=networking-calico \
             NAME=networking-calico \
-            DEB_EPOCH=2: \
+            DEB_EPOCH=3: \
             "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' "$outputDir" \;
@@ -229,11 +229,11 @@ function do_felix {
     # TODO: move the `patchelf` command that the debian packages require into the debian
     # packaging scripts instead, so that they're not affecting things outside of themselves.
     PKG_NAME=felix \
-        NAME=Felix \
-        RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
-        DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
-        DEB_EPOCH=2: \
-        "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
+            NAME=Felix \
+            RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
+            DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
+            DEB_EPOCH=3: \
+            "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
 
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'felix_*-*' -exec mv '{}' "$outputDir" \;
