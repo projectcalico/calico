@@ -120,7 +120,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.22.3
 	sigs.k8s.io/kind v0.30.0
 	sigs.k8s.io/knftables v0.0.19
-	sigs.k8s.io/network-policy-api v0.1.8-0.20260205105847-196cf8e0d449
+	sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
 	sigs.k8s.io/yaml v1.6.0
 )
 
