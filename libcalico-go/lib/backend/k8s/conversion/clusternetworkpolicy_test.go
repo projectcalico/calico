@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
@@ -29,9 +28,11 @@ import (
 
 var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 	It("should parse a basic k8s ClusterNetworkPolicy to a GlobalNetworkPolicy", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{{
-			PortNumber: &clusternetpol.Port{
-				Port: 80,
+		protocols := []clusternetpol.ClusterNetworkPolicyProtocol{{
+			TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+				DestinationPort: &clusternetpol.Port{
+					Number: 80,
+				},
 			},
 		}}
 		cnp := clusternetpol.ClusterNetworkPolicy{
@@ -52,9 +53,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Name:   "The first ingress rule",
-						Action: "Accept",
-						Ports:  &ports,
+						Name:      "The first ingress rule",
+						Action:    "Accept",
+						Protocols: protocols,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -95,12 +96,20 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 	})
 
 	It("should drop rules with invalid action in a k8s ClusterNetworkPolicy", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{
+		protocols := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 			{
-				PortRange: &clusternetpol.PortRange{Start: 2000, End: 3000},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Range: &clusternetpol.PortRange{Start: 2000, End: 3000},
+					},
+				},
 			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
@@ -135,9 +144,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 						},
 					},
 					{
-						Name:   "A random ingress rule 2",
-						Action: "Accept",
-						Ports:  &ports,
+						Name:      "A random ingress rule 2",
+						Action:    "Accept",
+						Protocols: protocols,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -152,9 +161,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &ports,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: protocols,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -335,20 +344,36 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 	})
 
 	It("should drop rules with invalid ports in a k8s ClusterNetworkPolicy", func() {
-		goodPorts := []clusternetpol.ClusterNetworkPolicyPort{
+		goodProtos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 			{
-				PortRange: &clusternetpol.PortRange{Start: 2000, End: 3000},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Range: &clusternetpol.PortRange{Start: 2000, End: 3000},
+					},
+				},
 			},
 		}
-		badPorts := []clusternetpol.ClusterNetworkPolicyPort{
+		badProtos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 			{
-				PortRange: &clusternetpol.PortRange{Start: 1000, End: 10},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Range: &clusternetpol.PortRange{Start: 1000, End: 10},
+					},
+				},
 			},
 		}
 
@@ -370,9 +395,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Name:   "A random ingress rule",
-						Action: "Accept",
-						Ports:  &badPorts,
+						Name:      "A random ingress rule",
+						Action:    "Accept",
+						Protocols: badProtos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -385,9 +410,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 						},
 					},
 					{
-						Name:   "A random ingress rule 2",
-						Action: "Pass",
-						Ports:  &goodPorts,
+						Name:      "A random ingress rule 2",
+						Action:    "Pass",
+						Protocols: goodProtos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -402,9 +427,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &goodPorts,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: goodProtos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -417,9 +442,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 						},
 					},
 					{
-						Name:   "A random egress rule 2",
-						Action: "Accept",
-						Ports:  &badPorts,
+						Name:      "A random egress rule 2",
+						Action:    "Accept",
+						Protocols: badProtos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -441,9 +466,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				{
 					EgressRule: nil,
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
-						Name:   "A random ingress rule",
-						Action: "Accept",
-						Ports:  &badPorts,
+						Name:      "A random ingress rule",
+						Action:    "Accept",
+						Protocols: badProtos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -454,14 +479,14 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (1000) is greater than maximum port number (10) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (1000) is greater than maximum port number (10) in port range",
 				},
 				{
 					IngressRule: nil,
 					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
-						Name:   "A random egress rule 2",
-						Action: "Accept",
-						Ports:  &badPorts,
+						Name:      "A random egress rule 2",
+						Action:    "Accept",
+						Protocols: badProtos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -472,7 +497,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (1000) is greater than maximum port number (10) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (1000) is greater than maximum port number (10) in port range",
 				},
 			},
 		}
@@ -739,9 +764,13 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 	})
 
 	It("should parse a k8s ClusterNetworkPolicy with a DoesNotExist expression ", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{
+		protos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
@@ -764,9 +793,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Name:   "A random ingress rule",
-						Action: "Accept",
-						Ports:  &ports,
+						Name:      "A random ingress rule",
+						Action:    "Accept",
+						Protocols: protos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Pods: &clusternetpol.NamespacedPod{
@@ -813,12 +842,20 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 	})
 
 	It("should parse an ClusterNetworkPolicy with multiple peers and ports", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{
+		protos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 			{
-				PortRange: &clusternetpol.PortRange{Start: 20, End: 30, Protocol: kapiv1.ProtocolUDP},
+				UDP: &clusternetpol.ClusterNetworkPolicyProtocolUDP{
+					DestinationPort: &clusternetpol.Port{
+						Range: &clusternetpol.PortRange{Start: 20, End: 30},
+					},
+				},
 			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
@@ -839,9 +876,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Name:   "A random ingress rule",
-						Action: "Pass",
-						Ports:  &ports,
+						Name:      "A random ingress rule",
+						Action:    "Pass",
+						Protocols: protos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -864,9 +901,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &ports,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: protos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1392,14 +1429,22 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 	})
 
 	It("should replace an unsupported ClusterNetworkPolicy rule with Deny action with a deny-all one", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{
+		goodProtos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 		}
-		badPorts := []clusternetpol.ClusterNetworkPolicyPort{
+		badProtos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortRange: &clusternetpol.PortRange{Start: 40, End: 20, Protocol: kapiv1.ProtocolUDP},
+				UDP: &clusternetpol.ClusterNetworkPolicyProtocolUDP{
+					DestinationPort: &clusternetpol.Port{
+						Range: &clusternetpol.PortRange{Start: 40, End: 20},
+					},
+				},
 			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
@@ -1420,9 +1465,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Name:   "A random ingress rule",
-						Action: "Pass",
-						Ports:  &badPorts,
+						Name:      "A random ingress rule",
+						Action:    "Pass",
+						Protocols: badProtos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1434,9 +1479,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 						},
 					},
 					{
-						Name:   "A random ingress rule 2",
-						Action: "Accept",
-						Ports:  &badPorts,
+						Name:      "A random ingress rule 2",
+						Action:    "Accept",
+						Protocols: badProtos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1450,9 +1495,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &badPorts,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: badProtos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1464,9 +1509,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 						},
 					},
 					{
-						Name:   "A random egress rule 2",
-						Action: "Deny",
-						Ports:  &ports,
+						Name:      "A random egress rule 2",
+						Action:    "Deny",
+						Protocols: goodProtos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1487,9 +1532,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				{
 					EgressRule: nil,
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
-						Name:   "A random ingress rule",
-						Action: "Pass",
-						Ports:  &badPorts,
+						Name:      "A random ingress rule",
+						Action:    "Pass",
+						Protocols: badProtos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1500,14 +1545,14 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (40) is greater than maximum port number (20) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (40) is greater than maximum port number (20) in port range",
 				},
 				{
 					EgressRule: nil,
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
-						Name:   "A random ingress rule 2",
-						Action: "Accept",
-						Ports:  &badPorts,
+						Name:      "A random ingress rule 2",
+						Action:    "Accept",
+						Protocols: badProtos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1518,14 +1563,14 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (40) is greater than maximum port number (20) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (40) is greater than maximum port number (20) in port range",
 				},
 				{
 					IngressRule: nil,
 					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &badPorts,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: badProtos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1536,7 +1581,7 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (40) is greater than maximum port number (20) in port range",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s protocol: minimum port number (40) is greater than maximum port number (20) in port range",
 				},
 			},
 		}
@@ -1730,9 +1775,13 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 	})
 
 	It("should parse a k8s ClusterNetworkPolicy with a Networks peer and ports", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{
+		protos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
@@ -1753,9 +1802,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Name:   "A random ingress rule",
-						Action: "Pass",
-						Ports:  &ports,
+						Name:      "A random ingress rule",
+						Action:    "Pass",
+						Protocols: protos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1769,9 +1818,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &ports,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: protos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1835,9 +1884,13 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 	})
 
 	It("should parse a k8s ClusterNetworkPolicy with an invalid networks peer", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{
+		protos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
@@ -1858,9 +1911,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Name:   "A random ingress rule",
-						Action: "Pass",
-						Ports:  &ports,
+						Name:      "A random ingress rule",
+						Action:    "Pass",
+						Protocols: protos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1874,9 +1927,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				},
 				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &ports,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: protos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1900,9 +1953,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 				{
 					IngressRule: nil,
 					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &ports,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: protos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1949,11 +2002,15 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 // cases for BANP.
 var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() {
 	It("should parse a basic k8s ClusterNetworkPolicy to a GlobalNetworkPolicy", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{{
-			PortNumber: &clusternetpol.Port{
-				Port: 80,
+		protos := []clusternetpol.ClusterNetworkPolicyProtocol{
+			{
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
-		}}
+		}
 		bcnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
@@ -1978,9 +2035,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Name:   "The first ingress rule",
-						Action: "Accept",
-						Ports:  &ports,
+						Name:      "The first ingress rule",
+						Action:    "Accept",
+						Protocols: protos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -2055,9 +2112,13 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 	})
 
 	It("should parse a k8s ClusterNetworkPolicy with an invalid networks peer", func() {
-		ports := []clusternetpol.ClusterNetworkPolicyPort{
+		protos := []clusternetpol.ClusterNetworkPolicyProtocol{
 			{
-				PortNumber: &clusternetpol.Port{Port: 80},
+				TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &clusternetpol.Port{
+						Number: 80,
+					},
+				},
 			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
@@ -2077,8 +2138,8 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 				},
 				Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{
 					{
-						Action: "Deny",
-						Ports:  &ports,
+						Action:    "Deny",
+						Protocols: protos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{},
 						},
@@ -2086,9 +2147,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 				},
 				Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{
 					{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &ports,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: protos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -2111,8 +2172,8 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 			Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{
 				{
 					IngressRule: &clusternetpol.ClusterNetworkPolicyIngressRule{
-						Action: "Deny",
-						Ports:  &ports,
+						Action:    "Deny",
+						Protocols: protos,
 						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{
 							{},
 						},
@@ -2121,9 +2182,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 				},
 				{
 					EgressRule: &clusternetpol.ClusterNetworkPolicyEgressRule{
-						Name:   "A random egress rule",
-						Action: "Deny",
-						Ports:  &ports,
+						Name:      "A random egress rule",
+						Action:    "Deny",
+						Protocols: protos,
 						To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{

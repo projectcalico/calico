@@ -10,7 +10,7 @@ KIND_CONFIG = $(KIND_DIR)/kind-single.config
 # NETPOL_CNP_REF = refs/heads/main
 # For a commit, just use the commit ID:
 # NETPOL_CNP_REF = <commit ID>
-NETPOL_CNP_REF = 1f80acbe25809162f3f81ffa254eb24318ea387b
+NETPOL_CNP_REF = 196cf8e0d449e108f4bb36cb97e127a37d24e428
 NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/$(NETPOL_CNP_REF)/config/crd/standard
 NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
 

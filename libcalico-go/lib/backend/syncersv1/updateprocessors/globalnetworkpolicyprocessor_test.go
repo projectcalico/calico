@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -308,15 +308,19 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 // Define ClusterNetworkPolicies and the corresponding expected v1 KVPairs.
 //
-// kcnp1 is a k8s ClusterNetworkPolicy with a single Egress rule, which contains ports only,
+// kcnp1 is a k8s ClusterNetworkPolicy with a single Egress rule, which contains protocols only,
 // and no selectors.
 var (
 	kcnpOrder = float64(1000.0)
-	ports     = []clusternetpol.ClusterNetworkPolicyPort{{
-		PortNumber: &clusternetpol.Port{
-			Port: 80,
+	protos    = []clusternetpol.ClusterNetworkPolicyProtocol{
+		{
+			TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+				DestinationPort: &clusternetpol.Port{
+					Number: 80,
+				},
+			},
 		},
-	}}
+	}
 	kcnp1 = clusternetpol.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test.policy",
@@ -336,7 +340,7 @@ var (
 							Namespaces: &metav1.LabelSelector{},
 						},
 					},
-					Ports: &ports,
+					Protocols: protos,
 				},
 			},
 		},
