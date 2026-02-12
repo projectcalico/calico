@@ -18,7 +18,7 @@ type HostMetadataCache struct {
 	onHostUpdateCB func(map[string]*proto.HostMetadataV4V6Update)
 	cbLock         sync.Mutex
 
-	queue            chan signal
+	updateRequest    chan signal
 	throttleInterval time.Duration
 }
 
@@ -29,7 +29,7 @@ type HostMetadataCacheOption func(*HostMetadataCache)
 func NewHostMetadataCache(opts ...HostMetadataCacheOption) *HostMetadataCache {
 	c := &HostMetadataCache{
 		updates:          make(map[string]*proto.HostMetadataV4V6Update),
-		queue:            make(chan signal, 1),
+		updateRequest:    make(chan signal, 1),
 		throttleInterval: time.Second,
 	}
 
@@ -78,7 +78,7 @@ func (c *HostMetadataCache) onHostMetadataV4V6Remove(u *proto.HostMetadataV4V6Re
 
 func (c *HostMetadataCache) requestFlush() {
 	select {
-	case c.queue <- signal{}:
+	case c.updateRequest <- signal{}:
 	default:
 	}
 }
@@ -86,7 +86,7 @@ func (c *HostMetadataCache) requestFlush() {
 func (c *HostMetadataCache) loopFlushingUpdates() {
 	var timer *time.Timer
 	for {
-		<-c.queue
+		<-c.updateRequest
 		logrus.Debug("Flushing throttled updates")
 		c.sendAllUpdates()
 
