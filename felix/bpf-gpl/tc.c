@@ -72,22 +72,32 @@
 static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool decap)
 {
 #ifndef IPVER6
-	if ((CALI_F_TO_HOST || CALI_F_FROM_HEP) && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
-		struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
-		if (frag_ct_val) {
-			ctx->state->sport = frag_ct_val->sport;
-			ctx->state->dport = frag_ct_val->dport;
-			CALI_DEBUG("IP FRAG: hit ports %d -> %d", ctx->state->sport, ctx->state->dport);
-			ctx->state->fwd.mark = frag_ct_val->marks;
-			if (ip_is_last_frag(ip_hdr(ctx))) {
-				frags4_remove_ct(ctx);
+	if ((CALI_F_TO_HOST || CALI_F_FROM_HEP) && ip_is_frag(ip_hdr(ctx))) {
+		/* For fragments, we need to skip the FIB lookup as we may not be able to
+		 * forward because of smaller MTU on the next hop. We need to ensure that
+		 * all or none of the gragments fo through Linux stack for correct
+		 * reassembly since that is mandated by conntrack.
+		 */
+		if (CALI_F_FROM_HEP) {
+			fwd_fib_set(&ctx->state->fwd, false);
+		}
+		if (!ip_is_first_frag(ip_hdr(ctx))) {
+			struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
+			if (frag_ct_val) {
+				ctx->state->sport = frag_ct_val->sport;
+				ctx->state->dport = frag_ct_val->dport;
+				CALI_DEBUG("IP FRAG: hit ports %d -> %d", ctx->state->sport, ctx->state->dport);
+				ctx->state->fwd.mark = frag_ct_val->marks;
+				if (ip_is_last_frag(ip_hdr(ctx))) {
+					frags4_remove_ct(ctx);
+				}
+				ctx->state->flags |= CALI_ST_NO_L4_NAT;
+				return PARSING_OK;
+			} else {
+				CALI_DEBUG("IP FRAG: no first fragment");
+				deny_reason(ctx, CALI_REASON_FRAG_REORDER);
+				return PARSING_ERROR;
 			}
-			ctx->state->flags |= CALI_ST_NO_L4_NAT;
-			return PARSING_OK;
-		} else {
-			CALI_DEBUG("IP FRAG: no first fragment");
-			deny_reason(ctx, CALI_REASON_FRAG_REORDER);
-			return PARSING_ERROR;
 		}
 	}
 #endif
@@ -1274,7 +1284,6 @@ nat_encap:
 
 static CALI_BPF_INLINE void post_nat(struct cali_tc_ctx *ctx,
 				     enum do_nat_res nat_res,
-				     bool fib,
 				     __u32 seen_mark,
 				     bool is_dnat)
 {
@@ -1299,7 +1308,8 @@ allow:
 		CALI_DEBUG("Loopback SNAT");
 		seen_mark |=  CALI_SKB_MARK_MASQ;
 		CALI_DEBUG("marking CALI_SKB_MARK_MASQ");
-		fib = false; /* Disable FIB because we want to drop to iptables */
+		/* Disable FIB because we want to drop to iptables */
+		fwd_fib_set(&ctx->state->fwd, false);
 	}
 
 	if (CALI_F_TO_HEP && !skb_seen(ctx->skb) && is_dnat) {
@@ -1310,7 +1320,8 @@ allow:
 			CALI_DEBUG("NP local WL " IP_FMT ":%d on HEP",
 					debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
 			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
-			fib = true; /* Enforce FIB since we want to redirect */
+			/* Enforce FIB since we want to redirect */
+			fwd_fib_set(&ctx->state->fwd, false);
 		} else if (!r || cali_rt_flags_remote_workload(r->flags)) {
 			/* If there is no route, treat it as a remote NP BE */
 			if (CALI_F_LO || CALI_F_MAIN) {
@@ -1320,14 +1331,14 @@ allow:
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 			}
 			ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
-			fib = true; /* Enforce FIB since we want to redirect */
+			/* Enforce FIB since we want to redirect */
+			fwd_fib_set(&ctx->state->fwd, false);
 		}
 	}
 
 encap_allow:
 	ctx->state->fwd.res = rc;
 	ctx->state->fwd.mark = seen_mark;
-	fwd_fib_set(&ctx->state->fwd, fib);
 	return;
 
 deny:
@@ -1346,7 +1357,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	struct cali_tc_ctx *ctx = &_ctx;
 	bool policy_skipped = ctx->state->flags & CALI_ST_SKIP_POLICY;
 
-	CALI_DEBUG("Entering calico_tc_skb_accepted_entrypoint");
+	CALI_DEBUG("Entering calico_tc_skb_accepted_entrypoint fib %d", fwd_fib(&ctx->state->fwd));
 
 	if (!policy_skipped) {
 		counter_inc(ctx, CALI_REASON_ACCEPTED_BY_POLICY);
@@ -1390,17 +1401,19 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE void update_fib_mark(struct cali_tc_state *state, bool* fib, __u32 *seen_mark)
+static CALI_BPF_INLINE void update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen_mark)
 {
-	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
+	if (CALI_F_FROM_WEP && (ctx->state->flags & CALI_ST_NAT_OUTGOING)) {
 		// We are going to SNAT this traffic, using iptables SNAT so set the mark
 		// to trigger that and leave the fib lookup disabled.
-		*fib = false;
+		fwd_fib_set(&ctx->state->fwd, false);
 		*seen_mark = CALI_SKB_MARK_NAT_OUT;
+		CALI_DEBUG("Disabling FIB lookup due to outgoing SNAT");
 	} else {
-		if (state->flags & CALI_ST_SKIP_FIB) {
-			*fib = false;
+		if (ctx->state->flags & CALI_ST_SKIP_FIB) {
+			fwd_fib_set(&ctx->state->fwd, false);
 			*seen_mark = CALI_SKB_MARK_SKIP_FIB;
+			CALI_DEBUG("Disabling FIB lookup due to SKIP_FIB flag");
 		}
 	}
 }
@@ -1416,7 +1429,6 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	enum do_nat_res nat_res = NAT_ALLOW;
 	bool is_dnat = false;
 	__u32 seen_mark = ctx->state->fwd.mark;
-	bool fib = true;
 
 	CALI_DEBUG("Entering calico_tc_skb_new_flow");
 
@@ -1440,7 +1452,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	update_fib_mark(state, &fib, &seen_mark);
+	update_fib_mark(ctx, &seen_mark);
 
 	struct ct_create_ctx *ct_ctx_nat = &ctx->scratch->ct_ctx_nat;
 	__builtin_memset(ct_ctx_nat, 0, sizeof(*ct_ctx_nat));
@@ -1595,7 +1607,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 
 allow:
 do_post_nat:
-	post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
+	post_nat(ctx, nat_res, seen_mark, is_dnat);
 	return forward_or_drop(ctx);
 
 icmp_send_reply:
@@ -1611,7 +1623,6 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 {
 	CALI_DEBUG("Entering calico_tc_skb_accepted");
 	struct cali_tc_state *state = ctx->state;
-	bool fib = true;
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
 	__u32 seen_mark = ctx->state->fwd.mark;
@@ -1642,7 +1653,7 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 		state->post_nat_dport = 0;
 	}
 
-	update_fib_mark(state, &fib, &seen_mark);
+	update_fib_mark(ctx, &seen_mark);
 
 	/* We check the ttl here to avoid needing complicated handling of
 	 * related traffic back from the host if we let the host to handle it.
@@ -1792,7 +1803,7 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 			 */
 			CALI_DEBUG("Traffic is towards host namespace but not conntracked, "
 				"falling through to iptables");
-			fib = false;
+			fwd_fib_set(&ctx->state->fwd, false);
 			goto allow;
 		}
 		goto deny;
@@ -1821,7 +1832,7 @@ icmp_send_reply:
 
 allow:
 do_post_nat:
-	post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
+	post_nat(ctx, nat_res, seen_mark, is_dnat);
 	return;
 
 deny:
@@ -1932,10 +1943,9 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 	bool is_dnat = false;
 	enum do_nat_res nat_res = NAT_ALLOW;
 	__u32 seen_mark = ctx->state->fwd.mark;
-	bool fib = true;
 
 	nat_res = do_nat(ctx, inner_ip_offset, icmp_csum_off, false, ct_rc, NULL, &is_dnat, &seen_mark, true);
-	post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
+	post_nat(ctx, nat_res, seen_mark, is_dnat);
 
 allow:
 	/* We are going to forward the packet now. But all the state is about
@@ -2191,7 +2201,9 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 		ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
 		break;
 	case FRAGS4_HANDLE_FIRST_IN_ORDER:
-		/* Carry on as normal packet */
+		/* Carry on as normal packet, do not redirect, it may get
+		 * fragmented again. */
+		// fwd_fib_set(&ctx->fwd, false);
 		break;
 	}
 

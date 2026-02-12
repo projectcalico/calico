@@ -1675,7 +1675,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 
 				if !testOpts.ipv6 && !testOpts.dsr && testOpts.protocol == "udp" && testOpts.udpUnConnected && !testOpts.connTimeEnabled {
-					It("should handle fragmented UDPi from a pod", func() {
+					It("should handle fragmented UDP from a pod", func() {
 						if testOpts.tunnel == "vxlan" && !utils.UbuntuReleaseGreater("22.04") {
 							Skip("Ubuntu too old to handle frag on vxlan dev properly")
 						}
@@ -4593,6 +4593,35 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.ExpectSome(externalClient, TargetIP(felixIP(0)), npPort)
 								cc.CheckConnectivity()
 							})
+							if !testOpts.ipv6 && !testOpts.dsr &&
+								testOpts.protocol == "udp" && testOpts.udpUnConnected {
+								It("should have connectivity from external to w[0] via node0 with fragments", func() {
+									log.WithFields(log.Fields{
+										"externalClientIP": containerIP(externalClient),
+										"nodePortIP":       felixIP(1),
+									}).Infof("external->nodeport connection")
+
+									cc.Expect(Some, externalClient, TargetIP(felixIP(0)),
+										ExpectWithPorts(npPort),
+										ExpectWithSendLen(4000))
+									cc.CheckConnectivity()
+
+									tcpdumpHost := tc.Felixes[0].AttachTCPDump("eth0")
+									tcpdumpHost.SetLogEnabled(true)
+									tcpdumpHost.AddMatcher("host-frags", regexp.MustCompile("proto UDP"))
+									tcpdumpHost.Start(infra, "-vvv", "src", containerIP(externalClient),
+										"and", "dst", string(TargetIP(felixIP(0))), "and", "ip[6:2]", "&", "0x3fff", "!=", "0") // match UDP fragments
+
+									tcpdumpWL := w[0][0].AttachTCPDump()
+									tcpdumpWL.SetLogEnabled(true)
+									tcpdumpWL.AddMatcher("wl-frags", regexp.MustCompile("proto UDP"))
+									tcpdumpWL.Start(infra, "-vvv", "src", containerIP(externalClient),
+										"and", "dst", w[0][0].IP, "and", "ip[6:2]", "&", "0x3fff", "!=", "0") // match UDP fragments
+									cc.CheckConnectivity()
+									Eventually(tcpdumpWL.MatchCountFn("wl-frags"), "5s", "330ms").
+										Should(BeNumerically("==", 3), "Expected to see 3 fragments on the wl but didn't")
+								})
+							}
 						}
 					})
 				}
