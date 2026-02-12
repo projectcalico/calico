@@ -31,6 +31,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,6 +50,7 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -416,6 +418,8 @@ type bpfEndpointManagerDataplane struct {
 	tunnelIP            net.IP
 	iptablesFilterTable Table
 	ipSetIDAlloc        *idalloc.IDAllocator
+
+    allowedSourcesPerWorkload map[types.WorkloadEndpointID]set.Set[string]
 }
 
 type serviceKey struct {
@@ -705,6 +709,7 @@ func newBPFEndpointManagerDataplane(
 		IPMaps:              ipMaps,
 		iptablesFilterTable: iptablesFilterTable,
 		ipSetIDAlloc:        ipSetIDAlloc,
+        allowedSourcesPerWorkload: map[types.WorkloadEndpointID]set.Set[string]{},
 	}
 }
 
@@ -1279,6 +1284,8 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 		iface.info.endpointID = &wlID
 		return true // Force interface to be marked dirty in case policies changed.
 	})
+
+    m.updateAllowSourceSets(wlID, wl)
 }
 
 // onWorkloadEndpointRemove removes the workload from the cache and the index, which maps from policy to workload.
@@ -1300,6 +1307,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 	})
 	// Remove policy debug info if any
 	m.removeIfaceAllPolicyDebugInfo(oldWEP.Name)
+    m.cleanAllowSourceSetPerWorkload(wlID, oldWEP)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -4604,6 +4612,202 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		}
 	}
 	return IfaceTypeData
+}
+
+
+func (m *bpfEndpointManager) updateAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
+    var oldPrefixes set.Set[string]
+    oldPrefixes, exists := m.getAllowedSourcesPerWorkload(wlID)
+    if !exists {
+        logrus.WithField("wep", wl).Debug("no existing annotations found for this workload")
+        oldPrefixes = set.New[string]()
+    }
+
+    for _, newPrefix := range wl.AllowSpoofedSourcePrefixes {
+        if !oldPrefixes.Contains(newPrefix) {
+            // add new annotation to bookkeeping map AND eBPF map
+            m.addAllowSourcePrefix(wlID, wl, newPrefix)
+        }
+    }
+
+    for existingPrefix := range oldPrefixes.All() {
+        if !slices.Contains(wl.AllowSpoofedSourcePrefixes, existingPrefix) {
+            // remove stale annotations from bookkeeping map AND eBPF map
+            m.removeAllowSourceSets(wlID, wl, existingPrefix)
+        }
+    }
+
+}
+
+func (m *bpfEndpointManager) addAllowSourcePrefix(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint, prefix string) {
+    bpfInterface, exists := m.nameToIface[wl.Name]
+    if !exists {
+        logrus.WithField("iface", wl.Name).Warn("Interface for workload endpoint not found, cannot add allowed source CIDRs")
+        return
+    }
+
+    ifindex := bpfInterface.info.ifIndex
+    if ifindex <= 0 {
+        return // if not an actual interface, don't add it to the map
+    }
+
+    mapAddError := m.changeAllowedSource(prefix, ifindex, true)
+    if mapAddError != nil {
+        logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapAddError).Warn("Failed to add allowed source CIDR")
+        return
+    }
+    m.setAllowedSourcesPerWorkload(wlID, prefix)
+
+    logrus.WithField("wep", wlID).WithField("cidr", prefix).Debug("Successfully added allowed source CIDR")
+}
+
+func (m *bpfEndpointManager) cleanAllowSourceSetPerWorkload(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
+    wlPrefixes, exists := m.getAllowedSourcesPerWorkload(wlID)
+    if !exists {
+        return
+    }
+
+    for wlPrefix := range wlPrefixes.All() {
+        m.removeAllowSourceSets(wlID, wl, wlPrefix)
+    }
+}
+
+func (m *bpfEndpointManager) removeAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint, prefix string) {
+    bpfInterface, exists := m.nameToIface[wl.Name]
+    if !exists {
+        logrus.WithField("wep", wlID).WithField("iface", wl.Name).Warn("Interface for workload endpoint not found, cannot remove allowed source CIDRs")
+        return
+    }
+
+    ifindex := bpfInterface.info.ifIndex
+    if ifindex <= 0 {
+        return // if not an actual interface, don't add it to the map
+    }
+
+    mapDelError := m.changeAllowedSource(prefix, ifindex, false)
+    if mapDelError != nil {
+        logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapDelError).Warn("Failed to remove allowed source CIDR")
+        return
+    }
+
+    m.discardFromAllowedSourcesPerWorkload(wlID, prefix)
+
+    logrus.WithField("wep", wlID).WithField("cidr", prefix).Debug("Successfully removed allowed source CIDR")
+}
+
+func (m *bpfEndpointManager) changeAllowedSource(prefix string, ifindex int, isAdd bool) error {
+    var managerDataplane *bpfEndpointManagerDataplane
+    var entry allowsources.AllowSourcesEntryInterface
+    var err error
+
+    cidr, err := ip.CIDRFromString(prefix)
+    if err != nil {
+        return err
+    }
+
+    if cidr.Version() == 4 {
+        entry = allowsources.NewKey(cidr, ifindex)
+        managerDataplane = m.v4
+    } else if cidr.Version() == 6 {
+        entry = allowsources.NewKeyV6(cidr, ifindex)
+        managerDataplane = m.v6
+    }
+
+    if isAdd {
+        err = managerDataplane.AllowSourcesMap.Update(entry.AsBytes(), allowsources.DummyValue)
+    } else {
+        err = managerDataplane.AllowSourcesMap.Delete(entry.AsBytes())
+    }
+
+    return err
+}
+
+func (m *bpfEndpointManager) getAllowedSourcesPerWorkload(wlID types.WorkloadEndpointID) (set.Set[string], bool) {
+    if m.ipv6Enabled && m.v4 != nil {
+        // dual-stack
+        allAllowedSources := set.New[string]()
+        v4Sources, v4Exists := m.v4.allowedSourcesPerWorkload[wlID]
+        v6Sources, v6Exists := m.v6.allowedSourcesPerWorkload[wlID]
+
+        if v4Exists {
+            allAllowedSources.AddSet(v4Sources)
+        }
+
+        if v6Exists {
+            allAllowedSources.AddSet(v6Sources)
+        }
+        return allAllowedSources, (v4Exists || v6Exists)
+    } else if m.ipv6Enabled {
+        // only ipv6
+        v6Sources, exists := m.v6.allowedSourcesPerWorkload[wlID]
+        return v6Sources, exists
+    } else {
+        // only ipv4
+        v4Sources, exists := m.v4.allowedSourcesPerWorkload[wlID]
+        return v4Sources, exists
+    }
+}
+
+func (m *bpfEndpointManager) setAllowedSourcesPerWorkload(wlID types.WorkloadEndpointID, prefix string) {
+    cidr, err := ip.CIDRFromString(prefix)
+    if err != nil {
+        logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(err).Warn("Failed to parse CIDR")
+        return
+    }
+
+    if m.ipv6Enabled && m.v4 != nil {
+        // dual-stack
+        if cidr.Version() == 4 {
+            _, exists := m.v4.allowedSourcesPerWorkload[wlID]
+            if !exists {
+                m.v4.allowedSourcesPerWorkload[wlID] = set.New[string]()
+            }
+            m.v4.allowedSourcesPerWorkload[wlID].Add(prefix)
+        } else if cidr.Version() == 6 {
+            _, exists := m.v6.allowedSourcesPerWorkload[wlID]
+            if !exists {
+                m.v6.allowedSourcesPerWorkload[wlID] = set.New[string]()
+            }
+            m.v6.allowedSourcesPerWorkload[wlID].Add(prefix)
+        }
+    } else if m.ipv6Enabled {
+        // only ipv6
+        _, exists := m.v6.allowedSourcesPerWorkload[wlID]
+        if !exists {
+            m.v6.allowedSourcesPerWorkload[wlID] = set.New[string]()
+        }
+        m.v6.allowedSourcesPerWorkload[wlID].Add(prefix)
+    } else {
+        // only ipv4
+        _, exists := m.v4.allowedSourcesPerWorkload[wlID]
+        if !exists {
+            m.v4.allowedSourcesPerWorkload[wlID] = set.New[string]()
+        }
+        m.v4.allowedSourcesPerWorkload[wlID].Add(prefix)
+    }
+}
+
+func (m *bpfEndpointManager) discardFromAllowedSourcesPerWorkload(wlID types.WorkloadEndpointID, prefix string) {
+    cidr, err := ip.CIDRFromString(prefix)
+    if err != nil {
+        logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(err).Warn("Failed to parse CIDR")
+        return
+    }
+
+    if m.ipv6Enabled && m.v4 != nil {
+        // dual-stack
+        if cidr.Version() == 4 {
+            m.v4.allowedSourcesPerWorkload[wlID].Discard(prefix)
+        } else if cidr.Version() == 6 {
+            m.v6.allowedSourcesPerWorkload[wlID].Discard(prefix)
+        }
+    } else if m.ipv6Enabled {
+        // only ipv6
+        m.v6.allowedSourcesPerWorkload[wlID].Discard(prefix)
+    } else {
+        // only ipv4
+        m.v4.allowedSourcesPerWorkload[wlID].Discard(prefix)
+    }
 }
 
 func (trees bpfIfaceTrees) getPhyDevices(masterIfName string) []string {
