@@ -1191,6 +1191,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					ensureBPFProgramsAttached(tc.Felixes[0], "bpfout.cali")
 
+					Eventually(func() int {
+						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
+						return strings.Count(out, "cali_tc_preamble")
+					}, "15s", "1s").Should(Equal(10), "Expected 8 BPF programs to be attached")
+
 					By("Changing env and restarting felix")
 
 					tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFENABLED": "false"})
