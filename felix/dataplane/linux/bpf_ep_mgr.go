@@ -4614,7 +4614,6 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	return IfaceTypeData
 }
 
-
 func (m *bpfEndpointManager) updateAllowSourceSets(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
 	var oldPrefixes set.Set[string]
 	oldPrefixes, exists := m.getAllowedSourcesPerWorkload(wlID)
