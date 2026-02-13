@@ -1201,7 +1201,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 						err = json.Unmarshal([]byte(out), &bpfnet)
 						Expect(err).NotTo(HaveOccurred())
-						fmt.Printf("bpftool output: %v\n", bpfnet)
 						var preambleIDs []int
 						for _, entry := range bpfnet {
 							for _, prog := range entry.TC {
@@ -1216,6 +1215,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						return len(getPreambleProgramIDs())
 					}, "15s", "1s").Should(Equal(10)) // 10 = 2 (ingress+egress) * 5 interfaces (bpfout, lo, eth0, caliXXX x2)
 
+					// check for bpf maps
+					out, err := tc.Felixes[0].ExecOutput("ls", "/sys/fs/bpf/tc/globals/")
+					Expect(err).NotTo(HaveOccurred())
+
+					// check for cgroups
+					out, err = tc.Felixes[0].ExecOutput("bpftool", "cgroup", "show", "/run/calico/cgroup")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(out).To(ContainSubstring("calico_connect"))
+
 					By("Changing env and restarting felix")
 
 					tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFENABLED": "false"})
@@ -1227,15 +1235,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						return len(getPreambleProgramIDs())
 					}, "15s", "1s").Should(Equal(0))
 
-					// N.B. calico_failsafe map is created in iptables mode by
-					// bpf.NewFailsafeMap() It has calico_ prefix. All other bpf
-					// maps have only cali_ prefix.
-					Eventually(func() string {
-						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "map", "show")
-						return out
-					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
+					out, err = tc.Felixes[0].ExecOutput("ls", "/sys/fs/bpf/tc/globals/")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(out).To(Equal(""))
 
-					out, _ := tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
+					out, err = tc.Felixes[0].ExecOutput("bpftool", "cgroup", "show", "/run/calico/cgroup")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(out).To(Equal(""))
+
+					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
 					Expect(out).To(Equal("Device \"bpfin.cali\" does not exist.\n"))
 					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfout.cali")
 					Expect(out).To(Equal("Device \"bpfout.cali\" does not exist.\n"))
