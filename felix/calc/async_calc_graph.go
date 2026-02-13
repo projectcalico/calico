@@ -31,12 +31,33 @@ import (
 const (
 	tickInterval    = 10 * time.Millisecond
 	leakyBucketSize = 10
+
+	eventAgeThreshold       = 60 * time.Second
+	perResourceAgeThreshold = 120 * time.Second
+)
+
+
+type DataFreshnessState int
+
+const (
+	DataFresh        DataFreshnessState = 0
+	DataReconnecting DataFreshnessState = 1
+	DataStale        DataFreshnessState = 2
+	DataUnknown      DataFreshnessState = 3
 )
 
 var (
 	dataplaneStatusGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "felix_resync_state",
 		Help: "Current datastore state.",
+	})
+	dataFreshnessGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_datastore_freshness_state",
+		Help: "Freshness of datastore view: 0=Fresh, 1=Reconnecting, 2=Stale, 3=Unknown",
+	})
+	watchLastEventAge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_watch_last_event_age_seconds",
+		Help: "Seconds since last watch event received from datastore",
 	})
 	resyncsStarted = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "felix_resyncs_started",
@@ -63,6 +84,8 @@ var (
 
 func init() {
 	prometheus.MustRegister(dataplaneStatusGauge)
+	prometheus.MustRegister(dataFreshnessGauge)
+	prometheus.MustRegister(watchLastEventAge)
 	prometheus.MustRegister(resyncsStarted)
 	prometheus.MustRegister(countUpdatesProcessed)
 	prometheus.MustRegister(countOutputEvents)
@@ -77,6 +100,11 @@ type AsyncCalcGraph struct {
 	beenInSync       bool
 	needToSendInSync bool
 	syncStatusNow    api.SyncStatus
+
+	dataFreshnessState DataFreshnessState
+	lastEventTime      time.Time
+	lastFreshnessCheck time.Time
+
 	healthAggregator *health.HealthAggregator
 
 	flushTicks       <-chan time.Time
@@ -101,10 +129,12 @@ func NewAsyncCalcGraph(
 ) *AsyncCalcGraph {
 	eventSequencer := NewEventSequencer(conf)
 	g := &AsyncCalcGraph{
-		inputEvents:      make(chan interface{}, 10),
-		outputChannels:   outputChannels,
-		eventSequencer:   eventSequencer,
-		healthAggregator: healthAggregator,
+		inputEvents:        make(chan interface{}, 10),
+		outputChannels:     outputChannels,
+		eventSequencer:     eventSequencer,
+		healthAggregator:   healthAggregator,
+		dataFreshnessState: DataUnknown,
+		lastEventTime:      time.Now(),
 	}
 	g.CalcGraph = NewCalculationGraph(eventSequencer, lookupCache, conf, g.reportHealth)
 	if conf.DebugSimulateCalcGraphHangAfter != 0 {
@@ -116,6 +146,8 @@ func NewAsyncCalcGraph(
 	if healthAggregator != nil {
 		healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, healthTimeout)
 	}
+
+	dataFreshnessGauge.Set(float64(DataUnknown))
 	return g
 }
 
@@ -141,8 +173,10 @@ func (acg *AsyncCalcGraph) loop() {
 		case update := <-acg.inputEvents:
 			switch update := update.(type) {
 			case []api.Update:
-				// Update; send it to the dispatcher.
 				log.Debug("Pulled []KVPair off channel")
+				acg.lastEventTime = time.Now()
+				acg.updateFreshnessState(DataFresh)
+
 				for i, upd := range update {
 					// Send the updates individually so that we can report live in between
 					// each update.  (The dispatcher sends individual updates anyway so this makes
@@ -162,16 +196,30 @@ func (acg *AsyncCalcGraph) loop() {
 					"Pulled status update off channel")
 				acg.syncStatusNow = update
 				acg.CalcGraph.OnStatusUpdated(update)
-				if update == api.InSync && !acg.beenInSync {
-					log.Info("First time we've been in sync")
-					acg.beenInSync = true
+
+				if update == api.InSync {
+					if !acg.beenInSync {
+						log.Info("First time we've been in sync")
+						acg.beenInSync = true
+					} else {
+						log.Info("Returned to InSync state after reconnection")
+					}
 					acg.needToSendInSync = true
 					acg.dirty = true
 					if acg.flushLeakyBucket == 0 {
 						// Force a flush.
 						acg.flushLeakyBucket++
 					}
+					acg.updateFreshnessState(DataFresh)
+				} else if update == api.ResyncInProgress {
+					// Explicitly track reconnection state
+					log.Info("Datastore resync in progress")
+					acg.updateFreshnessState(DataReconnecting)
+				} else if update == api.WaitForDatastore {
+					log.Info("Waiting for datastore connection")
+					acg.updateFreshnessState(DataUnknown)
 				}
+				
 				acg.reportHealth()
 			default:
 				log.Panicf("Unexpected update: %#v", update)
@@ -194,11 +242,58 @@ func (acg *AsyncCalcGraph) loop() {
 }
 
 func (acg *AsyncCalcGraph) reportHealth() {
+	acg.checkDataFreshness()
+
+	eventAge := time.Since(acg.lastEventTime).Seconds()
+	watchLastEventAge.Set(eventAge)
+	dataFreshnessGauge.Set(float64(acg.dataFreshnessState))
+
 	if acg.healthAggregator != nil {
+		isReady := acg.syncStatusNow == api.InSync && acg.dataFreshnessState == DataFresh
 		acg.healthAggregator.Report(healthName, &health.HealthReport{
 			Live:  true,
-			Ready: acg.syncStatusNow == api.InSync,
+			Ready: isReady,
 		})
+	}
+}
+
+func (acg *AsyncCalcGraph) updateFreshnessState(newState DataFreshnessState) {
+	if acg.dataFreshnessState != newState {
+		log.WithFields(log.Fields{
+			"oldState": acg.dataFreshnessState,
+			"newState": newState,
+		}).Info("Datastore freshness state changed")
+		acg.dataFreshnessState = newState
+		dataFreshnessGauge.Set(float64(newState))
+	}
+}
+
+func (acg *AsyncCalcGraph) checkDataFreshness() {
+	now := time.Now()
+
+	if now.Sub(acg.lastFreshnessCheck) < 10*time.Second {
+		return
+	}
+	acg.lastFreshnessCheck = now
+
+	if acg.syncStatusNow == api.InSync && acg.dataFreshnessState == DataFresh {
+		eventAge := now.Sub(acg.lastEventTime)
+		if eventAge > eventAgeThreshold {
+			log.WithFields(log.Fields{
+				"eventAge": eventAge,
+				"threshold": eventAgeThreshold,
+			}).Warn("No watch events received recently, data may be stale")
+			acg.updateFreshnessState(DataStale)
+		}
+	}
+}
+
+func (acg *AsyncCalcGraph) SyncFailed(err error) {
+	log.WithError(err).Warn("Datastore sync failure reported")
+	acg.updateFreshnessState(DataReconnecting)
+
+	if acg.beenInSync {
+		log.Info("Previously in sync, will resync when connection restored")
 	}
 }
 
