@@ -15,7 +15,7 @@
 package model_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v4 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	k8slabels "k8s.io/apimachinery/pkg/labels"

@@ -17,16 +17,16 @@ package nodestatussyncer_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func TestClient(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../../report/nodestatussyncer_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Node status syncer test suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../../../report/nodestatussyncer_suite.xml"
+	ginkgo.RunSpecs(t, "Node status syncer test suite", suiteConfig, reporterConfig)
 }

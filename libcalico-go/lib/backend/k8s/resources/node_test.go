@@ -17,7 +17,7 @@ package resources
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	k8sapi "k8s.io/api/core/v1"
