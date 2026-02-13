@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -552,5 +553,29 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(outRules[0].DstSelector).To(Equal("(pcns.namespace == \"red\") && (has(label1))"))
 		Expect(outRules[1].DstSelector).To(Equal("(has(projectcalico.org/namespace)) && (has(label2))"))
 		Expect(outRules[2].DstSelector).To(Equal("(!has(projectcalico.org/namespace)) && (has(label3))"))
+	})
+})
+
+var _ = Describe("Test NormalizeIPNets", func() {
+	nets := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/16",
+		"192.168.0.0./24",
+	}
+
+	mustCIDR := func(s string) *net.IPNet {
+		_, ipnet, err := net.ParseCIDR(s)
+		Expect(err).NotTo(HaveOccurred(), "bad CIDR in test: %s", s)
+		return ipnet
+	}
+
+	It("Should return only valid CIDRs", func() {
+		expectedOutput := []*net.IPNet{
+			mustCIDR("10.0.0.0/8"),
+			mustCIDR("172.16.0.0/16"),
+			nil,
+		}
+		out := updateprocessors.NormalizeIPNets(nets)
+		Expect(out).To(Equal(expectedOutput))
 	})
 })
