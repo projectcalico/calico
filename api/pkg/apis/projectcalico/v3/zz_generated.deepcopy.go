@@ -191,11 +191,6 @@ func (in *BGPConfigurationSpec) DeepCopyInto(out *BGPConfigurationSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.BGPWithinCluster != nil {
-		in, out := &in.BGPWithinCluster, &out.BGPWithinCluster
-		*out = new(BGPWithinCluster)
-		**out = **in
-	}
 	return
 }
 
