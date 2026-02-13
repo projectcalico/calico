@@ -1838,7 +1838,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
