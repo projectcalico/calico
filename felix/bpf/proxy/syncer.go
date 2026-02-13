@@ -622,6 +622,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	s.newSvcMap = make(map[svcKey]svcInfo, len(state.SvcMap))
 	s.newEpsMap = make(k8sp.EndpointsMap, len(state.EpsMap))
 	nodeZone := state.NodeZone
+	nodeName := state.Hostname
 
 	var expNPMisses []*expandMiss
 
@@ -636,20 +637,16 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		svc := sinfo.(Service)
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
+		topologyMode := svc.TopologyMode()
 
-		eps := make([]k8sp.Endpoint, 0, len(state.EpsMap[sname]))
-		for _, ep := range state.EpsMap[sname] {
-			zoneHints := ep.ZoneHints()
-			if ep.IsReady() || ep.IsTerminating() {
-				if ShouldAppendTopologyAwareEndpoint(nodeZone, "", zoneHints) {
-					eps = append(eps, ep)
-				} else {
-					log.Debugf("Topology Aware Hints: for Endpoint: '%s' however Zone: '%s' does not match Zone Hints: '%v'\n",
-						ep.IP(),
-						nodeZone,
-						zoneHints)
-				}
-			}
+		// Topology Aware Routing has precedence over Traffic Distribution.
+		eps, topologyAwareApplied := FilterEpsByTopologyAwareRouting(state.EpsMap[sname], topologyMode, nodeZone)
+		if !topologyAwareApplied {
+			log.Debugf("Topology Aware Routing not applied for service %s, mode %s. Trying Traffic Distribution...", sname, topologyMode)
+			// If Traffic Distribution can't be applied, it will return the original endpoints (cluster-wide).
+			eps = FilterEpsByTrafficDistribution(state.EpsMap[sname], nodeName, nodeZone)
+		} else {
+			log.Debugf("Topology Aware Routing applied for service %s, mode %s.", sname, topologyMode)
 		}
 
 		var maglevEPs []k8sp.Endpoint
@@ -1624,5 +1621,11 @@ func K8sSvcWithStickyClientIP(seconds int) K8sServicePortOption {
 func K8sSvcWithReapTerminatingUDP() K8sServicePortOption {
 	return func(s interface{}) {
 		s.(*servicePort).reapTerminatingUDP = true
+	}
+}
+
+func K8sSvcWithTopologyMode(value string) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*servicePort).topologyMode = value
 	}
 }
