@@ -123,7 +123,9 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 
 func readyFn() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			logrus.WithError(err).Error("Failed to write readiness response")
+		}
 	}
 }
 
@@ -187,7 +189,7 @@ func decodeAdmissionReview(r *http.Request) (runtime.Object, *schema.GroupVersio
 	deserializer := utils.Codecs.UniversalDeserializer()
 	obj, gvk, err := deserializer.Decode(body, nil, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Request could not be decoded: %v", err)
+		return nil, nil, fmt.Errorf("request could not be decoded: %v", err)
 	}
 	return obj, gvk, nil
 }
@@ -197,7 +199,7 @@ func processAdmissionReview(obj runtime.Object, gvk *schema.GroupVersionKind, ha
 	case v1.SchemeGroupVersion.WithKind("AdmissionReview"):
 		requestedAdmissionReview, ok := obj.(*v1.AdmissionReview)
 		if !ok {
-			return nil, fmt.Errorf("Expected v1.AdmissionReview but got: %T", obj)
+			return nil, fmt.Errorf("expected v1.AdmissionReview but got: %T", obj)
 		}
 		responseAdmissionReview := &v1.AdmissionReview{}
 		responseAdmissionReview.SetGroupVersionKind(*gvk)
@@ -205,6 +207,6 @@ func processAdmissionReview(obj runtime.Object, gvk *schema.GroupVersionKind, ha
 		responseAdmissionReview.Response.UID = requestedAdmissionReview.Request.UID
 		return responseAdmissionReview, nil
 	default:
-		return nil, fmt.Errorf("Unsupported group version kind: %v", gvk)
+		return nil, fmt.Errorf("unsupported group version kind: %v", gvk)
 	}
 }

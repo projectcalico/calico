@@ -27,6 +27,7 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
@@ -44,7 +45,7 @@ func (m *MockTierAuthorizer) AuthorizeTierOperation(ctx context.Context, policyN
 
 func init() {
 	// Add Calico v3 types to the scheme for parsePolicy to work.
-	v3.AddToScheme(utils.Scheme)
+	utilruntime.Must(v3.AddToScheme(utils.Scheme))
 }
 
 func TestGetTier(t *testing.T) {
