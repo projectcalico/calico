@@ -27,8 +27,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
@@ -1348,9 +1347,16 @@ const (
 	serverURISAN = "spiffe://k8s.example.com/typha-server"
 )
 
-var _ = Describe("with server requiring TLS", func() {
-	var certDir string
+var certDir string
 
+var _ = AfterSuite(func() {
+	// Remove TLS keys and certificates.
+	if certDir != "" {
+		_ = os.RemoveAll(certDir)
+	}
+})
+
+var _ = Describe("with server requiring TLS", func() {
 	BeforeEach(func() {
 		// Generating certs is expensive, so we defer it until this BeforeEach and then reuse the certs for all the
 		// tests.
@@ -1405,13 +1411,6 @@ var _ = Describe("with server requiring TLS", func() {
 		clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
 		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client-untrusted.key"))
 		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
-	})
-
-	_ = AfterSuite(func() {
-		// Remove TLS keys and certificates.
-		if certDir != "" {
-			_ = os.RemoveAll(certDir)
-		}
 	})
 
 	// We'll create this pipeline for updates to flow through:
