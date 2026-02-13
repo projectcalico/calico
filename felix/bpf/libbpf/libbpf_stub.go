@@ -205,6 +205,7 @@ const (
 	GlobalsEgressPacketRateConfigured  uint32 = 12345
 	AttachTypeTcxIngress               uint32 = 12345
 	AttachTypeTcxEgress                uint32 = 12345
+	AttachTypeXDP                      uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {
