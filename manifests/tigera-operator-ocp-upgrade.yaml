@@ -468,6 +468,18 @@ rules:
     verbs:
       - list
       - watch
+  # The operator needs permissions to create and update validating webhook configuration.
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
       - config.openshift.io
