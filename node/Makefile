@@ -431,8 +431,8 @@ goldmane.tar: ../go.mod $(shell find ../goldmane -name '*.go')
 
 webhook.tar: ../go.mod $(shell find ../webhooks -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../webhooks image
-	docker tag calico/webhook:latest-$(ARCH) calico/webhook:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/webhook:$(TEST_BUILD_TAG)
+	docker tag calico/webhooks:latest-$(ARCH) calico/webhooks:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/webhooks:$(TEST_BUILD_TAG)
 
 whisker.tar: ../go.mod $(shell find ../whisker)
 	make -C ../whisker image
