@@ -586,6 +586,9 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 	switch msg.CompressionAlgorithm {
 	case syncproto.CompressionSnappy:
 		logCxt.Info("Server selected snappy compression.")
+		// Snappy's reader is synchronous (no background goroutine or
+		// read-ahead buffering), so it's safe to create a new reader on
+		// each decoder restart without losing data from the connection.
 		r := snappy.NewReader(s.connR)
 		s.decoder = gob.NewDecoder(r)
 	case syncproto.CompressionZstd:
@@ -607,6 +610,9 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 	case "":
 		logCxt.Info("Server selected no compression.")
 		s.decoder = gob.NewDecoder(s.connR)
+	default:
+		logCxt.WithField("algorithm", msg.CompressionAlgorithm).Error("Server selected unknown compression algorithm")
+		return fmt.Errorf("unknown compression algorithm: %q", msg.CompressionAlgorithm)
 	}
 	// Server requires an ack of the MsgDecoderRestart before it can send data in the new format.
 	err := s.sendMessageToServer(cxt, logCxt, "send ACK to server",
