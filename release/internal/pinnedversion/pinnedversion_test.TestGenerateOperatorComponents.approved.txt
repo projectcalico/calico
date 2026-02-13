@@ -53,6 +53,8 @@ components:
     version: v3.31.0
   typha:
     version: v3.31.0
+  webhooks:
+    version: v3.31.0
   whisker:
     version: v3.31.0
   whisker-backend:
