@@ -18,6 +18,7 @@ import (
 	_ "crypto/sha256" // register hash func
 	"fmt"
 	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -116,10 +117,9 @@ func (v PrefixVisitor) Visit(n interface{}) {
 }
 
 type Selector struct {
-	root              Node
-	stringRep         string
-	hash              string
-	labelRestrictions LabelRestrictions
+	root      Node
+	stringRep string
+	hash      string
 }
 
 // Evaluate the selector against the given labels map.
@@ -145,8 +145,24 @@ func (sel *Selector) UniqueID() string {
 	return sel.hash
 }
 
+var (
+	lastRestrictionMutex    sync.Mutex
+	lastRestrictionSelector *Selector
+	lastLabelRestrictions   LabelRestrictions
+)
+
 func (sel *Selector) LabelRestrictions() LabelRestrictions {
-	return sel.labelRestrictions
+	// We used to store the label restrictions in a field, but, if there are many selectors active
+	// the maps really add up.  Calculate them on demand, but cache the most recently calculated
+	// one because the LabelRestrictions are used multiple times when adding a particular selector
+	// to the named port index. (Since that is single threaded, caching exactly 1 gives a big win.)
+	lastRestrictionMutex.Lock()
+	defer lastRestrictionMutex.Unlock()
+	if lastRestrictionSelector != sel {
+		lastRestrictionSelector = sel
+		lastLabelRestrictions = sel.root.LabelRestrictions()
+	}
+	return lastLabelRestrictions
 }
 
 func (sel *Selector) Equal(other *Selector) bool {
@@ -165,7 +181,6 @@ func (sel *Selector) updateFields() {
 	str := strings.Join(fragments, "")
 	sel.stringRep = str
 	sel.hash = hash.MakeUniqueID("s", str)
-	sel.labelRestrictions = sel.root.LabelRestrictions()
 }
 
 type Node interface {
