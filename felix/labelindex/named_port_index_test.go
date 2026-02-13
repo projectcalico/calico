@@ -921,7 +921,7 @@ func TestNamedPortIndex(t *testing.T) {
 		// First run each base test as-is: just apply its inputs and
 		// check that we get the right output.
 		t.Run("Base "+state.Name, func(t *testing.T) {
-			idx := NewSelectorAndNamedPortIndex(false)
+			idx := NewSelectorAndNamedPortIndex()
 			RegisterTestingT(t)
 			rec := newRecorder()
 			idx.OnMemberAdded = rec.OnMemberAdded
@@ -952,7 +952,7 @@ func TestNamedPortIndex(t *testing.T) {
 					func(t *testing.T) {
 						logutils.ConfigureLoggingForTestingT(t)
 						RegisterTestingT(t)
-						idx := NewSelectorAndNamedPortIndex(false)
+						idx := NewSelectorAndNamedPortIndex()
 						rec := newRecorder()
 						idx.OnMemberAdded = rec.OnMemberAdded
 						idx.OnMemberRemoved = rec.OnMemberRemoved
@@ -1308,7 +1308,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 	var recorder *testRecorder
 
 	BeforeEach(func() {
-		uut = NewSelectorAndNamedPortIndex(false)
+		uut = NewSelectorAndNamedPortIndex()
 		recorder = newRecorder()
 		uut.OnMemberAdded = recorder.OnMemberAdded
 		uut.OnMemberRemoved = recorder.OnMemberRemoved

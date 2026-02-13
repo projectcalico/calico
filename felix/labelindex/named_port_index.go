@@ -260,10 +260,26 @@ type SelectorAndNamedPortIndex struct {
 
 	OnAlive        func()
 	lastLiveReport time.Time
+
+	makeUniqueLabels func(labels map[string]string) uniquelabels.Map
 }
 
-func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortIndex {
-	inheritIdx := SelectorAndNamedPortIndex{
+type SelectorAndNamedPortIndexOption func(index *SelectorAndNamedPortIndex)
+
+func WithUniqueLabelMaker(uniqueLabels func(labels map[string]string) uniquelabels.Map) SelectorAndNamedPortIndexOption {
+	return func(index *SelectorAndNamedPortIndex) {
+		index.makeUniqueLabels = uniqueLabels
+	}
+}
+
+func WithOverlapSuppressor() SelectorAndNamedPortIndexOption {
+	return func(index *SelectorAndNamedPortIndex) {
+		index.suppressor = NewMemberOverlapSuppressor()
+	}
+}
+
+func NewSelectorAndNamedPortIndex(opts ...SelectorAndNamedPortIndexOption) *SelectorAndNamedPortIndex {
+	inheritIdx := &SelectorAndNamedPortIndex{
 		endpointKVIdx: labelnamevalueindex.New[any, *endpointData]("endpoints"),
 		parentKVIdx:   labelnamevalueindex.New[string, *npParentData]("parents"),
 		ipSetDataByID: map[string]*ipSetData{},
@@ -274,16 +290,16 @@ func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortInd
 			)),
 
 		// Callback functions
-		OnMemberAdded:   func(ipSetID string, member ipsetmember.IPSetMember) {},
-		OnMemberRemoved: func(ipSetID string, member ipsetmember.IPSetMember) {},
-		OnAlive:         func() {},
+		OnMemberAdded:    func(ipSetID string, member ipsetmember.IPSetMember) {},
+		OnMemberRemoved:  func(ipSetID string, member ipsetmember.IPSetMember) {},
+		OnAlive:          func() {},
+		suppressor:       NewNoopMemberOverlapSuppressor(),
+		makeUniqueLabels: uniquelabels.Make,
 	}
-	if supressOverlaps {
-		inheritIdx.suppressor = NewMemberOverlapSuppressor()
-	} else {
-		inheritIdx.suppressor = NewNoopMemberOverlapSuppressor()
+	for _, opt := range opts {
+		opt(inheritIdx)
 	}
-	return &inheritIdx
+	return inheritIdx
 }
 
 func (idx *SelectorAndNamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
@@ -760,7 +776,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 
 func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, rawLabels map[string]string) {
 	parentData := idx.getOrCreateParent(parentID)
-	labels := uniquelabels.Make(rawLabels) // FIXME Should we move this upstream?
+	labels := idx.makeUniqueLabels(rawLabels)
 	if parentData.labels.Equals(labels) {
 		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
 		return

@@ -113,7 +113,7 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		// Cache of profile IDs by local endpoint.
 		endpointKeyToProfileIDs: NewEndpointKeyToProfileIDMap(),
 	}
-	arc.labelIndex = labelindex.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped)
+	arc.labelIndex = labelindex.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped, labelindex.WithInheritIndexUniqueLabelMaker(makeUniqueLabelCached))
 	return arc
 }
 
