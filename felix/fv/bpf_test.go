@@ -1218,6 +1218,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					// check for bpf maps
 					out, err := tc.Felixes[0].ExecOutput("ls", "/sys/fs/bpf/tc/globals/")
 					Expect(err).NotTo(HaveOccurred())
+					Expect(out).To(Not(Equal("")))
 
 					// check for cgroups
 					out, err = tc.Felixes[0].ExecOutput("bpftool", "cgroup", "show", "/run/calico/cgroup")
