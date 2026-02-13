@@ -819,6 +819,13 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							Format:      "",
 						},
 					},
+					"bgpWithinCluster": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BGPWithinCluster enables or disables BGP within the cluster. [Default: Enabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
