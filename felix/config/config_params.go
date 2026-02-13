@@ -178,6 +178,7 @@ type Config struct {
 	WireguardMTU                   int           `config:"int;0"`
 	WireguardMTUV6                 int           `config:"int;0"`
 	WireguardHostEncryptionEnabled bool          `config:"bool;false"`
+	WireguardExtraAllowedIPs       string        `config:"string;"`
 	WireguardPersistentKeepAlive   time.Duration `config:"seconds;0"`
 	WireguardThreadingEnabled      bool          `config:"bool;false"`
 

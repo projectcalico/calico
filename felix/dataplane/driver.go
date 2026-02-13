@@ -317,6 +317,7 @@ func StartDataplaneDriver(
 				MTUV6:               configParams.WireguardMTUV6,
 				RouteSource:         configParams.RouteSource,
 				EncryptHostTraffic:  configParams.WireguardHostEncryptionEnabled,
+				ExtraAllowedIPs:     parseExtraAllowedIPs(configParams.WireguardExtraAllowedIPs),
 				PersistentKeepAlive: configParams.WireguardPersistentKeepAlive,
 				ThreadedNAPI:        configParams.WireguardThreadingEnabled,
 				RouteSyncDisabled:   configParams.RouteSyncDisabled,
@@ -479,6 +480,21 @@ func ConfigurePrometheusMetrics(configParams *config.Config) {
 		log.Info("Discarding WireGuard metrics")
 		prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 	}
+}
+
+func parseExtraAllowedIPs(extraIPs string) []string {
+	if extraIPs == "" {
+		return nil
+	}
+	ips := strings.Split(extraIPs, ",")
+	var result []string
+	for _, ip := range ips {
+		trimmed := strings.TrimSpace(ip)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 func replaceWildcards(nftEnabled bool, s []string) []string {

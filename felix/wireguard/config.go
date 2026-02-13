@@ -31,6 +31,7 @@ type Config struct {
 	MTUV6               int
 	RouteSource         string
 	EncryptHostTraffic  bool
+	ExtraAllowedIPs     []string
 	PersistentKeepAlive time.Duration
 	RouteSyncDisabled   bool
 	ThreadedNAPI        bool

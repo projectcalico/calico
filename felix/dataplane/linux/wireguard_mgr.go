@@ -104,11 +104,7 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 		}
 		if msg.Types&proto.RouteType_REMOTE_HOST != 0 {
 			logCtx.Debug("RouteUpdate is a remote host update")
-			// This can only be done in WorkloadIPs mode, because this breaks networking during upgrade in CalicoIPAM
-			// mode.
-			if m.dpConfig.Wireguard.EncryptHostTraffic {
-				m.wireguardRouteTable.RouteUpdate(msg.DstNodeName, cidr)
-			}
+			m.wireguardRouteTable.RouteUpdate(msg.DstNodeName, cidr)
 		} else if msg.Types&proto.RouteType_LOCAL_WORKLOAD != 0 || msg.Types&proto.RouteType_REMOTE_WORKLOAD != 0 {
 			// CIDR is for a workload.
 			logCtx.Debug("RouteUpdate is a workload update")
