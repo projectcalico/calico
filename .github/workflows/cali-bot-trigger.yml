@@ -6,14 +6,22 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: read
+  issues: read
+
 jobs:
   trigger-cali-bot:
     runs-on: ubuntu-latest
 
-    # Ignore PR comments (we only want issues)
+    # Ignore PR comments and bot comments
     if: >
       (github.event_name == 'issues') ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request == null)
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request == null &&
+        github.event.comment.user.type != 'Bot'
+      )
 
     steps:
       - name: Print debug info
@@ -24,7 +32,16 @@ jobs:
           echo "Author:       ${{ github.event.comment.user.login }}"
 
       - name: Trigger Cali Bot
+        env:
+          CALI_BOT_PAT: ${{ secrets.CALI_BOT_PAT }}
         run: |
+          set -euo pipefail
+
+          if [ -z "$CALI_BOT_PAT" ]; then
+            echo "CALI_BOT_PAT is not set"
+            exit 1
+          fi
+
           EVENT_TYPE=""
           COMMENT_ID=""
           COMMENT_AUTHOR=""
@@ -37,9 +54,11 @@ jobs:
             COMMENT_AUTHOR="${{ github.event.comment.user.login }}"
           fi
 
-          curl -X POST \
+          echo "Dispatching Cali Bot with event: $EVENT_TYPE"
+
+          curl --fail --show-error --silent -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.CALI_BOT_PAT }}" \
+            -H "Authorization: Bearer $CALI_BOT_PAT" \
             https://api.github.com/repos/tigera/cali-bot/actions/workflows/process-issue.yml/dispatches \
             -d @- <<EOF
           {
@@ -53,3 +72,5 @@ jobs:
             }
           }
           EOF
+
+          echo "Cali Bot dispatch successful"
