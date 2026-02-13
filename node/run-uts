@@ -26,7 +26,7 @@ for PKG in "$@"; do
 	HAS_TESTS=$(find ${PKG} -name "*_test.go")
 	if [ ! -z "${HAS_TESTS}" ]; then 
 		echo "Running tests for package: ${PKG}";
-		ginkgo2 -r -skip-package=${SKIP} ${GINKGO_ARGS} ${PKG} || {
+		ginkgo -r -skip-package=${SKIP} ${GINKGO_ARGS} ${PKG} || {
 			failed_packages+="${PKG} ";
 			((RC++))
 		}
