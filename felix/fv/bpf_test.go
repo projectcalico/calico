@@ -1201,10 +1201,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 						err = json.Unmarshal([]byte(out), &bpfnet)
 						Expect(err).NotTo(HaveOccurred())
+						fmt.Printf("bpftool output: %v\n", bpfnet)
 						var preambleIDs []int
-						for _, prog := range bpfnet[0].TC {
-							if prog.Name == "cali_tc_preamble" {
-								preambleIDs = append(preambleIDs, prog.ID)
+						for _, entry := range bpfnet {
+							for _, prog := range entry.TC {
+								if prog.Name == "cali_tc_preamble" {
+									preambleIDs = append(preambleIDs, prog.ID)
+								}
 							}
 						}
 						return preambleIDs
