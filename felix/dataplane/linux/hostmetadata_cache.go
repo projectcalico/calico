@@ -20,24 +20,35 @@ type HostMetadataCache struct {
 
 	updateRequest    chan signal
 	throttleInterval time.Duration
+	newTimerFn       NewResettableTimerFunc
 }
 
 type signal struct{}
 
 type HostMetadataCacheOption func(*HostMetadataCache)
 
+// OptWithThrottleInterval sets the throttling interval for update flushes.
+func OptWithThrottleInterval(d time.Duration) func(t *HostMetadataCache) {
+	return func(t *HostMetadataCache) { t.throttleInterval = d }
+}
+
+// OptWithNewTimerFn sets the ResettableTimer in the HostMetadataCache.
+func OptWithNewTimerFn(f NewResettableTimerFunc) func(t *HostMetadataCache) {
+	return func(t *HostMetadataCache) { t.newTimerFn = f }
+}
+
 func NewHostMetadataCache(opts ...HostMetadataCacheOption) *HostMetadataCache {
 	c := &HostMetadataCache{
 		updates:          make(map[string]*proto.HostMetadataV4V6Update),
 		updateRequest:    make(chan signal, 1),
 		throttleInterval: time.Second,
+		newTimerFn:       NewRealTimer,
 	}
 
 	for _, o := range opts {
 		o(c)
 	}
 
-	go c.loopFlushingUpdates()
 	return c
 }
 
@@ -69,10 +80,14 @@ func (c *HostMetadataCache) OnUpdate(u any) {
 }
 
 func (c *HostMetadataCache) onHostMetadataV4V6Update(u *proto.HostMetadataV4V6Update) {
+	c.updatesLock.Lock()
+	defer c.updatesLock.Unlock()
 	c.updates[u.Hostname] = u
 }
 
 func (c *HostMetadataCache) onHostMetadataV4V6Remove(u *proto.HostMetadataV4V6Remove) {
+	c.updatesLock.Lock()
+	defer c.updatesLock.Unlock()
 	delete(c.updates, u.Hostname)
 }
 
@@ -83,19 +98,22 @@ func (c *HostMetadataCache) requestFlush() {
 	}
 }
 
-func (c *HostMetadataCache) loopFlushingUpdates() {
-	var timer *time.Timer
-	for {
-		<-c.updateRequest
-		logrus.Debug("Flushing throttled updates")
-		c.sendAllUpdates()
+// Start spawns a new goroutine for the cache to flush updates.
+func (c *HostMetadataCache) Start() {
+	go c.loopFlushingUpdates()
+}
 
-		if timer == nil {
-			timer = time.NewTimer(c.throttleInterval)
-		} else {
-			_ = timer.Reset(c.throttleInterval)
-		}
-		<-timer.C
+// loopFlushingUpdates flushes updates indefinitely at most once every c.throttleInterval.
+// Intended to be run on its own goroutine.
+func (c *HostMetadataCache) loopFlushingUpdates() {
+	timer := c.newTimerFn(c.throttleInterval)
+	for {
+		// One update should get through immediately before timers can delay things.
+		<-c.updateRequest
+		logrus.Debug("Flushing host metadata cached updates")
+		c.sendAllUpdates()
+		_ = timer.Reset(c.throttleInterval)
+		<-timer.Chan()
 	}
 }
 
@@ -119,19 +137,25 @@ func (c *HostMetadataCache) SetOnHostUpdateCB(cb func(map[string]*proto.HostMeta
 	c.onHostUpdateCB = cb
 }
 
-// SetThrottle implements the Throttled interface.
-func (c *HostMetadataCache) SetThrottle(d time.Duration) {
-	c.throttleInterval = d
+// wrappedRealTimer implements the ResettableTimer interface.
+// time.Timer requires a method Chan to return timer.C when wrapped in an interface.
+type wrappedRealTimer struct {
+	*time.Timer
 }
 
-// Throttled allows any module to use the 'with throttle interval' option.
-// This felt prudent since dataplane manager options share scope with the whole dataplane pkg.
-type Throttled interface {
-	SetThrottle(time.Duration)
+// Chan implements the ResettableTimer interface.
+func (t wrappedRealTimer) Chan() <-chan time.Time {
+	return t.C
 }
 
-// OptWithThrottleInterval sets the throttling interval for any module
-// that must regulate the period of an operation.
-func OptWithThrottleInterval(d time.Duration) func(t Throttled) {
-	return func(t Throttled) { t.SetThrottle(d) }
+// NewRealTimer returns a time.Timer, wrapped to implement the ResettableTimer interface.
+func NewRealTimer(d time.Duration) ResettableTimer {
+	return wrappedRealTimer{time.NewTimer(d)}
 }
+
+type ResettableTimer interface {
+	Reset(time.Duration) bool
+	Chan() <-chan time.Time
+}
+
+type NewResettableTimerFunc func(time.Duration) ResettableTimer
