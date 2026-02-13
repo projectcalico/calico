@@ -56,7 +56,7 @@ func benchmarkWorkloadUpdates(b *testing.B, numSels int) {
 	logrus.SetLevel(logrus.InfoLevel)
 	defer logrus.SetLevel(logLevel)
 
-	idx := NewSelectorAndNamedPortIndex(false)
+	idx := NewSelectorAndNamedPortIndex()
 	idx.OnMemberAdded = func(ipSetID string, member IPSetMember) {
 		lastID = ipSetID
 		lastMember = member
@@ -140,7 +140,7 @@ func benchmarkParentUpdates(b *testing.B, numSels, numEndpoints int) {
 	logrus.SetLevel(logrus.InfoLevel)
 	defer logrus.SetLevel(logLevel)
 
-	idx := NewSelectorAndNamedPortIndex(false)
+	idx := NewSelectorAndNamedPortIndex()
 	idx.OnMemberAdded = func(ipSetID string, member IPSetMember) {
 		lastID = ipSetID
 		lastMember = member
@@ -217,7 +217,7 @@ func benchmarkSelectorUpdates(b *testing.B, numEndpoints int) {
 	logrus.SetLevel(logrus.InfoLevel)
 	defer logrus.SetLevel(logLevel)
 
-	idx := NewSelectorAndNamedPortIndex(false)
+	idx := NewSelectorAndNamedPortIndex()
 	idx.OnMemberAdded = func(ipSetID string, member IPSetMember) {
 		lastID = ipSetID
 		lastMember = member

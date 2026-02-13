@@ -15,6 +15,9 @@
 package calc
 
 import (
+	"maps"
+	"sync"
+
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -26,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/serviceindex"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -302,7 +306,13 @@ func NewCalculationGraph(
 	//                   |
 	//               <dataplane>
 	//
-	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(conf.NFTablesMode == "Enabled")
+	ipSetMemberIndexOpts := []labelindex.SelectorAndNamedPortIndexOption{
+		labelindex.WithUniqueLabelMaker(makeUniqueLabelCached),
+	}
+	if conf.NFTablesMode == "Enabled" {
+		ipSetMemberIndexOpts = append(ipSetMemberIndexOpts, labelindex.WithOverlapSuppressor())
+	}
+	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(ipSetMemberIndexOpts...)
 	ipsetMemberIndex.OnAlive = liveCallback
 	// Wire up the inputs to the IP set member index.
 	ipsetMemberIndex.RegisterWith(allUpdDispatcher)
@@ -607,4 +617,22 @@ func (f *remoteEndpointFilter) OnUpdate(update api.Update) (filterOut bool) {
 	// Do not log for remote endpoints, since there can be many and logging each
 	// will impact performance.
 	return
+}
+
+var (
+	mapConvertMutex    sync.Mutex
+	lastConvertedMap   map[string]string
+	lastUniqueLabelMap uniquelabels.Map
+)
+
+func makeUniqueLabelCached(labels map[string]string) uniquelabels.Map {
+	mapConvertMutex.Lock()
+	defer mapConvertMutex.Unlock()
+	if maps.Equal(lastConvertedMap, labels) {
+		return lastUniqueLabelMap
+	}
+	unique := uniquelabels.Make(labels)
+	lastConvertedMap = labels
+	lastUniqueLabelMap = unique
+	return unique
 }

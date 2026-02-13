@@ -71,7 +71,7 @@ func NewActiveBGPPeerCalculator(hostname string) *ActiveBGPPeerCalculator {
 		allBGPPeersByName: map[string]*v3.BGPPeer{},
 		peersByWorkloadID: map[model.WorkloadEndpointKey][]string{},
 	}
-	abp.labelIndex = labelindex.NewInheritIndex(abp.onPeerEndpointMatchStarted, abp.onPeerEndpointMatchStopped)
+	abp.labelIndex = labelindex.NewInheritIndex(abp.onPeerEndpointMatchStarted, abp.onPeerEndpointMatchStopped, labelindex.WithInheritIndexUniqueLabelMaker(makeUniqueLabelCached))
 	return abp
 }
 

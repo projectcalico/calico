@@ -107,9 +107,19 @@ type InheritIndex struct {
 	OnMatchStopped MatchCallback
 
 	dirtyItemIDs set.Typed[any]
+
+	makeUniqueLabels func(labels map[string]string) uniquelabels.Map
 }
 
-func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex {
+type InheritIndexOption func(*InheritIndex)
+
+func WithInheritIndexUniqueLabelMaker(uniqueLabels func(labels map[string]string) uniquelabels.Map) InheritIndexOption {
+	return func(index *InheritIndex) {
+		index.makeUniqueLabels = uniqueLabels
+	}
+}
+
+func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback, opts ...InheritIndexOption) *InheritIndex {
 	itemData := map[interface{}]*itemData{}
 	inheritIDx := InheritIndex{
 		itemDataByID:         itemData,
@@ -124,6 +134,8 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		OnMatchStopped: onMatchStopped,
 
 		dirtyItemIDs: set.New[any](),
+
+		makeUniqueLabels: uniquelabels.Make,
 	}
 	return &inheritIDx
 }
@@ -306,7 +318,7 @@ func (idx *InheritIndex) onItemParentsUpdate(id interface{}, oldParents, newPare
 
 func (idx *InheritIndex) UpdateParentLabels(parentID string, labels map[string]string) {
 	parent := idx.getOrCreateParent(parentID)
-	parent.labels = uniquelabels.Make(labels) // FIXME intern further upstream?
+	parent.labels = idx.makeUniqueLabels(labels)
 	idx.flushChildren(parentID)
 }
 
