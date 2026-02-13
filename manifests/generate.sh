@@ -90,18 +90,35 @@ done
 ##########################################################################
 # Build manifest which includes both Calico and Operator CRDs.
 ##########################################################################
-echo "# CustomResourceDefinitions for Calico and Tigera operator" > operator-crds.yaml
+echo "# crd.projectcalico.org/v1 and operator.tigera.io/v1 APIs" > v1_crd_projectcalico_org.yaml
 for FILE in $(ls ../charts/crd.projectcalico.org.v1/templates/*.yaml | xargs -n1 basename); do
 	${HELM} template \
 		--show-only templates/$FILE \
 		--set version=$CALICO_VERSION \
-		../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
+		../charts/crd.projectcalico.org.v1 >> v1_crd_projectcalico_org.yaml
 done
 for FILE in $(ls ../charts/crd.projectcalico.org.v1/templates/calico/*.yaml | xargs -n1 basename); do
 	${HELM} template \
 		--show-only templates/calico/$FILE \
 		--set version=$CALICO_VERSION \
-		../charts/crd.projectcalico.org.v1 >> operator-crds.yaml
+		../charts/crd.projectcalico.org.v1 >> v1_crd_projectcalico_org.yaml
+done
+
+# Maintain legacy operator-crds.yaml for a while.
+cp v1_crd_projectcalico_org.yaml operator-crds.yaml
+
+echo "# projectcalico.org/v3 and operator.tigera.io/v1 APIs" > v3_projectcalico_org.yaml
+for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename); do
+	${HELM} template \
+		--show-only templates/$FILE \
+		--set version=$CALICO_VERSION \
+		../charts/projectcalico.org.v3 >> v3_projectcalico_org.yaml
+done
+for FILE in $(ls ../charts/projectcalico.org.v3/templates/calico/*.yaml | xargs -n1 basename); do
+	${HELM} template \
+		--show-only templates/calico/$FILE \
+		--set version=$CALICO_VERSION \
+		../charts/projectcalico.org.v3 >> v3_projectcalico_org.yaml
 done
 
 ##########################################################################
