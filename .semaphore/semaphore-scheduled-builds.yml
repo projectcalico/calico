@@ -266,6 +266,7 @@ blocks:
             - name: STORE_BUILD_CACHE
               value: "true"
           commands:
+            - make check-ginkgo-v2
             - make check-go-mod
             - make verify-go-mods
             - make gen-deps-files
