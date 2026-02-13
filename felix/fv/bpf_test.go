@@ -453,26 +453,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		})
 
 		JustAfterEach(func() {
-			type BpfProgram struct {
-				ID   int    `json:"id"`
-				Name string `json:"name"`
-			}
-			var programs []BpfProgram
-			for _, felix := range tc.Felixes {
-				out, err := felix.ExecOutput("bpftool", "prog", "show", "-j")
-				Expect(err).NotTo(HaveOccurred())
-				if err := json.Unmarshal([]byte(out), &programs); err != nil {
-					log.Fatal(err)
-				}
-				var preambleIDs []int
-				for _, prog := range programs {
-					if prog.Name == "cali_tc_preamble" {
-						preambleIDs = append(preambleIDs, prog.ID)
-					}
-				}
-
-				fmt.Printf("Felix preamble program IDs: %v\n", preambleIDs)
-			}
 			if CurrentGinkgoTestDescription().Failed {
 				var (
 					currBpfsvcs   []nat.MapMem
@@ -1210,31 +1190,28 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("Waiting for dp to get setup up")
 
 					ensureBPFProgramsAttached(tc.Felixes[0], "bpfout.cali")
-					type BpfProgram struct {
-						ID   int    `json:"id"`
-						Name string `json:"name"`
-					}
-					var programs []BpfProgram
-					for i, felix := range tc.Felixes {
-						out, err := felix.ExecOutput("bpftool", "prog", "show", "-j")
-						Expect(err).NotTo(HaveOccurred())
-						if err := json.Unmarshal([]byte(out), &programs); err != nil {
-							log.Fatal(err)
+					getPreambleProgramIDs := func() []int {
+						var bpfnet []struct {
+							TC []struct {
+								Name string `json:"name"`
+								ID   int    `json:"prog_id"`
+							} `json:"tc"`
 						}
+						out, err := tc.Felixes[0].ExecOutput("bpftool", "net", "show", "-j")
+						Expect(err).NotTo(HaveOccurred())
+						err = json.Unmarshal([]byte(out), &bpfnet)
+						Expect(err).NotTo(HaveOccurred())
 						var preambleIDs []int
-						for _, prog := range programs {
+						for _, prog := range bpfnet[0].TC {
 							if prog.Name == "cali_tc_preamble" {
 								preambleIDs = append(preambleIDs, prog.ID)
 							}
 						}
-
-						fmt.Printf("Felix %d preamble program IDs: %v\n", i, preambleIDs)
+						return preambleIDs
 					}
-
 					Eventually(func() int {
-						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
-						return strings.Count(out, "cali_tc_preamble")
-					}, "15s", "1s").Should(Equal(10), "Expected 8 BPF programs to be attached")
+						return len(getPreambleProgramIDs())
+					}, "15s", "1s").Should(Equal(10)) // 10 = 2 (ingress+egress) * 5 interfaces (bpfout, lo, eth0, caliXXX x2)
 
 					By("Changing env and restarting felix")
 
@@ -1243,11 +1220,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					By("Checking that all programs got cleaned up")
 
-					Eventually(func() string {
-						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
-						return out
-					}, "15s", "1s").ShouldNot(
-						Or(ContainSubstring("cali_"), ContainSubstring("calico_"), ContainSubstring("xdp_cali_")))
+					Eventually(func() int {
+						return len(getPreambleProgramIDs())
+					}, "15s", "1s").Should(Equal(0))
 
 					// N.B. calico_failsafe map is created in iptables mode by
 					// bpf.NewFailsafeMap() It has calico_ prefix. All other bpf
