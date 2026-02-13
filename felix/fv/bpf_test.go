@@ -1190,6 +1190,28 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("Waiting for dp to get setup up")
 
 					ensureBPFProgramsAttached(tc.Felixes[0], "bpfout.cali")
+					getPreambleProgramIDs := func() []int {
+						var bpfnet []struct {
+							TC []struct {
+								Name string `json:"name"`
+								ID   int    `json:"prog_id"`
+							} `json:"tc"`
+						}
+						out, err := tc.Felixes[0].ExecOutput("bpftool", "net", "show", "-j")
+						Expect(err).NotTo(HaveOccurred())
+						err = json.Unmarshal([]byte(out), &bpfnet)
+						Expect(err).NotTo(HaveOccurred())
+						var preambleIDs []int
+						for _, prog := range bpfnet[0].TC {
+							if prog.Name == "cali_tc_preamble" {
+								preambleIDs = append(preambleIDs, prog.ID)
+							}
+						}
+						return preambleIDs
+					}
+					Eventually(func() int {
+						return len(getPreambleProgramIDs())
+					}, "15s", "1s").Should(Equal(10)) // 10 = 2 (ingress+egress) * 5 interfaces (bpfout, lo, eth0, caliXXX x2)
 
 					By("Changing env and restarting felix")
 
@@ -1198,11 +1220,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					By("Checking that all programs got cleaned up")
 
-					Eventually(func() string {
-						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
-						return out
-					}, "15s", "1s").ShouldNot(
-						Or(ContainSubstring("cali_"), ContainSubstring("calico_"), ContainSubstring("xdp_cali_")))
+					Eventually(func() int {
+						return len(getPreambleProgramIDs())
+					}, "15s", "1s").Should(Equal(0))
 
 					// N.B. calico_failsafe map is created in iptables mode by
 					// bpf.NewFailsafeMap() It has calico_ prefix. All other bpf
