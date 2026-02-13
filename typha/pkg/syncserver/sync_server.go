@@ -320,12 +320,22 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
 	}
 
-	s.binSnapCaches[syncproto.CompressionSnappy] = map[syncproto.SyncerType]snapshotCache{}
-	s.binSnapCaches[syncproto.CompressionZstd] = map[syncproto.SyncerType]snapshotCache{}
+	// Only create snapshot caches for algorithms that are in the server's
+	// preferred compression order, avoiding unnecessary allocations and
+	// Prometheus metric registrations for unused algorithms.
+	for _, alg := range config.PreferredCompressionAlgorithmOrder {
+		s.binSnapCaches[alg] = map[syncproto.SyncerType]snapshotCache{}
+	}
 	for st, cache := range caches {
 		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
-		s.binSnapCaches[syncproto.CompressionSnappy][st] = NewSnappySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
-		s.binSnapCaches[syncproto.CompressionZstd][st] = NewZstdSnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
+		for _, alg := range config.PreferredCompressionAlgorithmOrder {
+			switch alg {
+			case syncproto.CompressionSnappy:
+				s.binSnapCaches[alg][st] = NewSnappySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
+			case syncproto.CompressionZstd:
+				s.binSnapCaches[alg][st] = NewZstdSnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
+			}
+		}
 	}
 
 	// Register that we will report liveness.
