@@ -42,10 +42,6 @@ int calico_xdp_main(struct xdp_md *xdp)
 		.counters = counters_get(xdp->ingress_ifindex),
 		.xdp_globals = state_get_globals_xdp(),
 		.xdp = xdp,
-		.fwd = {
-			.res = XDP_PASS, // TODO: Adjust based on the design
-			.reason = CALI_REASON_UNKNOWN,
-		},
 		.ipheader_len = IP_SIZE,
 	};
 	struct cali_tc_ctx *ctx = &_ctx;
@@ -64,6 +60,8 @@ int calico_xdp_main(struct xdp_md *xdp)
 		return XDP_DROP;
 	}
 	__builtin_memset(ctx->state, 0, sizeof(*ctx->state));
+	_ctx.state->fwd.res = TC_ACT_UNSPEC;
+	_ctx.state->fwd.reason = CALI_REASON_UNKNOWN;
 	ctx->scratch = (void *)(ctx->xdp_globals + 1); /* needs to be set to something, not used, there is space */
 	ctx->nh = &ctx->scratch->l4;
 
@@ -143,10 +141,6 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 		.xdp = xdp,
 		.xdp_globals = state_get_globals_xdp(),
 		.counters = counters_get(xdp->ingress_ifindex),
-		.fwd = {
-			.res = XDP_PASS,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 		.ipheader_len = IP_SIZE,
 	};
 	struct cali_tc_ctx *ctx = &_ctx;

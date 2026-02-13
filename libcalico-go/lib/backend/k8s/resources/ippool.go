@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ func IPPoolV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 		ipipMode = encap.CrossSubnet
 	default:
 		ipipInterface = ""
-		ipipMode = encap.Undefined
+		ipipMode = encap.Never
 	}
 
 	var vxlanMode encap.Mode
@@ -84,7 +84,7 @@ func IPPoolV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	case apiv3.VXLANModeCrossSubnet:
 		vxlanMode = encap.CrossSubnet
 	default:
-		vxlanMode = encap.Undefined
+		vxlanMode = encap.Never
 	}
 
 	if v3res.Spec.AssignmentMode == nil {

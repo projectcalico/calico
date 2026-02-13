@@ -84,12 +84,10 @@ int calico_tc_main(struct __sk_buff *skb)
 			/* This generates a bit more richer output for logging */
 			DECLARE_TC_CTX(_ctx,
 				.skb = skb,
-				.fwd = {
-					.res = TC_ACT_UNSPEC,
-					.reason = CALI_REASON_UNKNOWN,
-				},
 				.ipheader_len = IP_SIZE,
 			);
+			_ctx.state->fwd.res = TC_ACT_UNSPEC;
+			_ctx.state->fwd.reason = CALI_REASON_UNKNOWN;
 			struct cali_tc_ctx *ctx = &_ctx;
 
 			CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
@@ -139,16 +137,14 @@ int calico_tc_main(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 		.ipheader_len = IP_SIZE,
 	);
 
 	struct cali_tc_ctx *ctx = &_ctx;
 
 	__builtin_memset(ctx->state, 0, sizeof(*ctx->state));
+	_ctx.state->fwd.res = TC_ACT_UNSPEC;
+	_ctx.state->fwd.reason = CALI_REASON_UNKNOWN;
 
 	CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
 
@@ -157,7 +153,7 @@ int calico_tc_main(struct __sk_buff *skb)
 	if (CALI_F_WEP && qos_enforce_packet_rate(ctx) == TC_ACT_SHOT) {
 		CALI_DEBUG("Drop packet due to QoS packet rate limit.");
 		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
-		ctx->fwd.res = TC_ACT_SHOT;
+		ctx->state->fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
 
@@ -167,7 +163,7 @@ int calico_tc_main(struct __sk_buff *skb)
 
 	/* We only try a FIB lookup and redirect for packets that are towards the host.
 	 * For packets that are leaving the host namespace, routing has already been done. */
-	fwd_fib_set(&ctx->fwd, CALI_F_TO_HOST);
+	fwd_fib_set(&ctx->state->fwd, CALI_F_TO_HOST);
 
 	if (CALI_F_TO_HEP || CALI_F_TO_WEP) {
 		/* We're leaving the host namespace, check for other bypass mark bits.
@@ -195,14 +191,14 @@ int calico_tc_main(struct __sk_buff *skb)
 #endif
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		// A packet that we automatically let through
-		fwd_fib_set(&ctx->fwd, false);
-		ctx->fwd.res = TC_ACT_UNSPEC;
+		fwd_fib_set(&ctx->state->fwd, false);
+		ctx->state->fwd.res = TC_ACT_UNSPEC;
 		goto finalize;
 	case PARSING_ERROR:
 	default:
 		// A malformed packet or a packet we don't support
 		CALI_DEBUG("Drop malformed or unsupported packet");
-		ctx->fwd.res = TC_ACT_SHOT;
+		ctx->state->fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
 
@@ -235,7 +231,7 @@ finalize:
 
 #ifndef IPVER6
 deny:
-	ctx->fwd.res = TC_ACT_SHOT;
+	ctx->state->fwd.res = TC_ACT_SHOT;
 	goto finalize;
 #endif
 }
@@ -257,7 +253,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		if (CALI_F_FROM_HEP && (ctx->state->ip_proto == IPPROTO_IPIP ||
 					ctx->state->dport == WG_PORT)) {
-			fwd_fib_set(&(ctx->fwd), false);
+			fwd_fib_set(&(ctx->state->fwd), false);
 		}
 		goto allow;
 	}
@@ -274,7 +270,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 		case -2:
 			/* Non-BPF VXLAN packet from another Calico node. */
 			CALI_DEBUG("VXLAN packet from known Calico host, allow.");
-			fwd_fib_set(&(ctx->fwd), false);
+			fwd_fib_set(&(ctx->state->fwd), false);
 			goto allow;
 		}
 
@@ -297,7 +293,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 		if (frag_ct_val) {
 			ctx->state->sport = frag_ct_val->sport;
 			ctx->state->dport = frag_ct_val->dport;
-			ctx->fwd.mark = frag_ct_val->seen_mark;
+			ctx->state->fwd.mark = frag_ct_val->seen_mark;
 			if (ip_is_last_frag(ip_hdr(ctx))) {
 				frags4_remove_ct(ctx);
 			}
@@ -320,7 +316,7 @@ allow:
 finalize:
 	return forward_or_drop(ctx);
 deny:
-	ctx->fwd.res = TC_ACT_SHOT;
+	ctx->state->fwd.res = TC_ACT_SHOT;
 	goto finalize;
 }
 
@@ -400,8 +396,8 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 				* known.
 				*/
 				CALI_DEBUG("CT mid-flow miss; fall through to iptables");
-				ctx->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
-				fwd_fib_set(&ctx->fwd, false);
+				ctx->state->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
+				fwd_fib_set(&ctx->state->fwd, false);
 				goto finalize;
 			}
 		} else {
@@ -493,8 +489,8 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		 * known.
 		 */
 		CALI_DEBUG("CT mid-flow miss and not a Maglev failover. Fall through to iptables");
-		ctx->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
-		fwd_fib_set(&ctx->fwd, false);
+		ctx->state->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
+		fwd_fib_set(&ctx->state->fwd, false);
 		goto finalize;
 	}
 
@@ -807,7 +803,7 @@ finalize:
 	return;
 
 deny:
-	ctx->fwd.res = TC_ACT_SHOT;
+	ctx->state->fwd.res = TC_ACT_SHOT;
 }
 
 enum do_nat_res {
@@ -1250,11 +1246,11 @@ nat_encap:
 	return NAT_ENCAP_ALLOW;
 }
 
-static CALI_BPF_INLINE struct fwd post_nat(struct cali_tc_ctx *ctx,
-					   enum do_nat_res nat_res,
-					   bool fib,
-					   __u32 seen_mark,
-					   bool is_dnat)
+static CALI_BPF_INLINE void post_nat(struct cali_tc_ctx *ctx,
+				     enum do_nat_res nat_res,
+				     bool fib,
+				     __u32 seen_mark,
+				     bool is_dnat)
 {
 	struct cali_tc_state *state = ctx->state;
 	int rc = TC_ACT_UNSPEC;
@@ -1303,23 +1299,14 @@ allow:
 	}
 
 encap_allow:
-	{
-		struct fwd fwd = {
-			.res = rc,
-			.mark = seen_mark,
-		};
-		fwd_fib_set(&fwd, fib);
-		return fwd;
-	}
+	ctx->state->fwd.res = rc;
+	ctx->state->fwd.mark = seen_mark;
+	fwd_fib_set(&ctx->state->fwd, fib);
+	return;
 
 deny:
-	{
-		struct fwd fwd = {
-			.res = TC_ACT_SHOT,
-			.reason = ctx->fwd.reason,
-		};
-		return fwd;
-	}
+	ctx->state->fwd.res = TC_ACT_SHOT;
+	return;
 }
 
 SEC("tc")
@@ -1329,11 +1316,6 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-			.mark = CALI_SKB_MARK_SEEN,
-		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 	bool policy_skipped = ctx->state->flags & CALI_ST_SKIP_POLICY;
@@ -1375,7 +1357,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && qos_dscp_needs_update(ctx) && !qos_dscp_set(ctx)) {
 		goto deny;
 	}
-	ctx->fwd = calico_tc_skb_accepted(ctx);
+	calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 
 deny:
@@ -1402,17 +1384,12 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 {
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-			.mark = CALI_SKB_MARK_SEEN,
-		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 	struct cali_tc_state *state = ctx->state;
 	enum do_nat_res nat_res = NAT_ALLOW;
 	bool is_dnat = false;
-	__u32 seen_mark = ctx->fwd.mark;
+	__u32 seen_mark = ctx->state->fwd.mark;
 	bool fib = true;
 
 	CALI_DEBUG("Entering calico_tc_skb_new_flow");
@@ -1592,7 +1569,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 
 allow:
 do_post_nat:
-	ctx->fwd = post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
+	post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
 	return forward_or_drop(ctx);
 
 icmp_send_reply:
@@ -1604,14 +1581,14 @@ deny:
 	goto do_post_nat;
 }
 
-static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 {
 	CALI_DEBUG("Entering calico_tc_skb_accepted");
 	struct cali_tc_state *state = ctx->state;
 	bool fib = true;
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
-	__u32 seen_mark = ctx->fwd.mark;
+	__u32 seen_mark = ctx->state->fwd.mark;
 	size_t l4_csum_off = 0;
 #ifndef IPVER6
 	size_t l3_csum_off = 0;
@@ -1630,7 +1607,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	CALI_DEBUG("ct_related=%d", ct_related);
 	CALI_DEBUG("mark=0x%x", seen_mark);
 
-	ctx->fwd.reason = CALI_REASON_UNKNOWN;
+	ctx->state->fwd.reason = CALI_REASON_UNKNOWN;
 
 	// Set the dport to 0, to make sure conntrack entries for icmp is proper as we use
 	// dport to hold icmp type and code
@@ -1818,7 +1795,8 @@ icmp_send_reply:
 
 allow:
 do_post_nat:
-	return post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
+	post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
+	return;
 
 deny:
 	nat_res = NAT_DENY;
@@ -1832,10 +1810,6 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 
@@ -1865,7 +1839,7 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 	default:
 		// A malformed packet or a packet we don't support
 		CALI_DEBUG("ICMP: Drop malformed or unsupported packet");
-		ctx->fwd.res = TC_ACT_SHOT;
+		ctx->state->fwd.res = TC_ACT_SHOT;
 		goto deny;
 	}
 
@@ -1921,7 +1895,7 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 		case CALI_CT_ESTABLISHED_DNAT:
 			if (CALI_F_FROM_HEP && !ip_void(state->tun_ip) && ct_result_np_node(state->ct_result)) {
 				/* Packet is returning from a NAT tunnel, just forward it. */
-				ctx->fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
+				ctx->state->fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
 				CALI_DEBUG("ICMP related returned from NAT tunnel");
 				goto allow;
 			}
@@ -1931,11 +1905,11 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 
 	bool is_dnat = false;
 	enum do_nat_res nat_res = NAT_ALLOW;
-	__u32 seen_mark = ctx->fwd.mark;
+	__u32 seen_mark = ctx->state->fwd.mark;
 	bool fib = true;
 
 	nat_res = do_nat(ctx, inner_ip_offset, icmp_csum_off, false, ct_rc, NULL, &is_dnat, &seen_mark, true);
-	ctx->fwd = post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
+	post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
 
 allow:
 	/* We are going to forward the packet now. But all the state is about
@@ -1955,7 +1929,7 @@ allow:
 		goto deny;
 	}
 	tc_state_fill_from_iphdr(ctx);
-	fwd_fib_set(&ctx->fwd, true);
+	fwd_fib_set(&ctx->state->fwd, true);
 
 	return forward_or_drop(ctx);
 
@@ -1973,10 +1947,6 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 
@@ -1991,17 +1961,17 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 		if (CALI_F_FROM_WEP) {
 			/* we know it came from workload, just send it back the same way */
-			ctx->fwd.res = CALI_RES_REDIR_BACK;
+			ctx->state->fwd.res = CALI_RES_REDIR_BACK;
 		}
 	}
 
 	if (icmp_reply(ctx, ctx->state->icmp_type, ctx->state->icmp_code, ctx->state->icmp_un)) {
-		ctx->fwd.res = TC_ACT_SHOT;
+		ctx->state->fwd.res = TC_ACT_SHOT;
 	} else {
-		ctx->fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
+		ctx->state->fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
 
-		fwd_fib_set(&ctx->fwd, false);
-		fwd_fib_set_flags(&ctx->fwd, fib_flags);
+		fwd_fib_set(&ctx->state->fwd, false);
+		fwd_fib_set_flags(&ctx->state->fwd, fib_flags);
 	}
 
 	if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE)) {
@@ -2026,10 +1996,6 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 	);
 
 	struct cali_tc_ctx *ctx = &_ctx;
@@ -2168,10 +2134,6 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 
@@ -2209,7 +2171,7 @@ finalize:
 	return forward_or_drop(ctx);
 
 deny:
-	ctx->fwd.res = TC_ACT_SHOT;
+	ctx->state->fwd.res = TC_ACT_SHOT;
 	goto finalize;
 }
 #endif /* !IPVER6 */
@@ -2220,10 +2182,6 @@ int calico_tc_maglev(struct __sk_buff *skb)
 {
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 
