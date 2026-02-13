@@ -105,7 +105,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		struct calico_ct_value *ct_value = cali_ct_lookup_elem(k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!");
-			return 0;
+			if (cali_allowsource_lookup(&ctx->state->ip_src, ctx->skb->ifindex)) {
+				return 0;
+			}
+			goto create;
 		}
 		if (srcLTDest) {
 			CALI_DEBUG("CT-ALL update src_to_dst A->B");
@@ -134,6 +137,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		return 0;
 	}
 
+create:
 	now = bpf_ktime_get_ns();
 	CALI_DEBUG("CT-ALL Creating tracking entry type %d at %llu.", ct_ctx->type, now);
 
