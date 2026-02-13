@@ -453,6 +453,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		})
 
 		JustAfterEach(func() {
+			type BpfProgram struct {
+				ID   int    `json:"id"`
+				Name string `json:"name"`
+			}
+			var programs []BpfProgram
+			for _, felix := range tc.Felixes {
+				out, err := felix.ExecOutput("bpftool", "prog", "show", "-j")
+				Expect(err).NotTo(HaveOccurred())
+				if err := json.Unmarshal([]byte(out), &programs); err != nil {
+					log.Fatal(err)
+				}
+				var preambleIDs []int
+				for _, prog := range programs {
+					if prog.Name == "cali_tc_preamble" {
+						preambleIDs = append(preambleIDs, prog.ID)
+					}
+				}
+
+				fmt.Printf("Felix preamble program IDs: %v\n", preambleIDs)
+			}
 			if CurrentGinkgoTestDescription().Failed {
 				var (
 					currBpfsvcs   []nat.MapMem
@@ -1190,6 +1210,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("Waiting for dp to get setup up")
 
 					ensureBPFProgramsAttached(tc.Felixes[0], "bpfout.cali")
+					type BpfProgram struct {
+						ID   int    `json:"id"`
+						Name string `json:"name"`
+					}
+					var programs []BpfProgram
+					for i, felix := range tc.Felixes {
+						out, err := felix.ExecOutput("bpftool", "prog", "show", "-j")
+						Expect(err).NotTo(HaveOccurred())
+						if err := json.Unmarshal([]byte(out), &programs); err != nil {
+							log.Fatal(err)
+						}
+						var preambleIDs []int
+						for _, prog := range programs {
+							if prog.Name == "cali_tc_preamble" {
+								preambleIDs = append(preambleIDs, prog.ID)
+							}
+						}
+
+						fmt.Printf("Felix %d preamble program IDs: %v\n", i, preambleIDs)
+					}
 
 					Eventually(func() int {
 						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
