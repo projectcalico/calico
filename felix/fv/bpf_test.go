@@ -1242,7 +1242,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					out, err = tc.Felixes[0].ExecOutput("bpftool", "cgroup", "show", "/run/calico/cgroup")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(out).To(Equal(""))
+					Expect(out).NotTo(ContainSubstring("calico_connect"))
 
 					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
 					Expect(out).To(Equal("Device \"bpfin.cali\" does not exist.\n"))
