@@ -1205,7 +1205,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						var preambleIDs []int
 						for _, entry := range bpfnet {
 							for _, prog := range entry.TC {
-								if prog.Name == "cali_tc_preamble" {
+								if strings.Contains(prog.Name, "cali_tc_pream") {
 									preambleIDs = append(preambleIDs, prog.ID)
 								}
 							}
