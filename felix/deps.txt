@@ -63,6 +63,7 @@ github.com/josharian/native v1.1.0
 github.com/json-iterator/go v1.1.12
 github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 github.com/kelseyhightower/envconfig v1.4.0
+github.com/klauspost/compress v1.18.4
 github.com/leodido/go-urn v1.4.0
 github.com/libp2p/go-reuseport v0.4.0
 github.com/lithammer/dedent v1.1.0
