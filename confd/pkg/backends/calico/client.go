@@ -184,6 +184,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 
 	if runtime.GOOS == "windows" {
 		log.WithField("os", runtime.GOOS).Info("Local workload BGP peer is currently unsupported on Windows. Ignoring LocalBGPPeerWatcher...")
+		c.OnSyncChange(SourceLocalBGPPeerWatcher, true)
 	} else {
 		// Get endpoint status path prefix, if specified.
 		epstatusPathPrefix := endpointStatusPathPrefix
