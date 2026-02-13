@@ -1265,7 +1265,7 @@ blocks:
         always:
           commands:
             - 'test-results publish --ignore-missing ./report/*.xml ../felix/report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Typha" || true'
-  - name: libcalico-go
+  - name: webhooks
     run:
       when: "true"
     dependencies:

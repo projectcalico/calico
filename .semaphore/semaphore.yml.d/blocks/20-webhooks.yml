@@ -1,4 +1,4 @@
-- name: libcalico-go
+- name: webhooks
   run:
     when: "${CHANGE_IN(webhooks,api,apiserver)}"
   dependencies:
