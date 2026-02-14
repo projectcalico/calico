@@ -168,6 +168,19 @@ the other TLS parameters must also be specified.
 | Default value (above encoding) | none |
 | Notes | Config file / env var only. | 
 
+### `TyphaCompressionAlgorithmOrder` (config file / env var only)
+
+Comma-separated list of compression algorithms the client advertises to Typha,
+in preference order. The server picks from this list based on its own preference. Valid values: "snappy",
+"zstd". Example: "zstd,snappy" to prefer zstd. Leave empty to use the default (all supported algorithms).
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_TyphaCompressionAlgorithmOrder` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| Notes | Config file / env var only. | 
+
 ### `TyphaK8sNamespace` (config file / env var only)
 
 Namespace to look in when looking for Typha's service (see TyphaK8sServiceName).
