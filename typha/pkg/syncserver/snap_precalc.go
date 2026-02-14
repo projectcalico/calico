@@ -28,38 +28,46 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/multireadbuf"
-	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
 
 var (
+	snapshotMetricLabels = []string{"syncer", "compression"}
+
 	counterVecSnapshotsGenerated = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_snapshots_generated",
 		Help: "Number of binary snapshots generated.",
-	}, []string{"syncer"})
+	}, snapshotMetricLabels)
 	counterVecSnapshotsReused = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_snapshots_reused",
 		Help: "Number of binary snapshots that were cached and reused.",
-	}, []string{"syncer"})
+	}, snapshotMetricLabels)
 	gaugeVecSnapRawBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "typha_snapshot_raw_bytes",
 		Help: "Size of the most recently generated binary snapshot (before compression).",
-	}, []string{"syncer"})
+	}, snapshotMetricLabels)
 	gaugeVecSnapCompressedBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "typha_snapshot_compressed_bytes",
 		Help: "Size of the most recently generated binary snapshot (after compression).",
-	}, []string{"syncer"})
+	}, snapshotMetricLabels)
 )
 
 func init() {
-	promutils.PreCreateCounterPerSyncer(counterVecSnapshotsGenerated)
+	// Pre-create all syncer × compression label combinations so that the
+	// metrics exist (with value 0) at startup rather than only appearing
+	// when the first snapshot is generated.
+	for _, st := range syncproto.AllSyncerTypes {
+		for _, alg := range syncproto.AllCompressionAlgorithms {
+			counterVecSnapshotsGenerated.WithLabelValues(string(st), string(alg))
+			counterVecSnapshotsReused.WithLabelValues(string(st), string(alg))
+			gaugeVecSnapRawBytes.WithLabelValues(string(st), string(alg))
+			gaugeVecSnapCompressedBytes.WithLabelValues(string(st), string(alg))
+		}
+	}
 	prometheus.MustRegister(counterVecSnapshotsGenerated)
-	promutils.PreCreateCounterPerSyncer(counterVecSnapshotsReused)
 	prometheus.MustRegister(counterVecSnapshotsReused)
-	promutils.PreCreateGaugePerSyncer(gaugeVecSnapRawBytes)
 	prometheus.MustRegister(gaugeVecSnapRawBytes)
-	promutils.PreCreateGaugePerSyncer(gaugeVecSnapCompressedBytes)
 	prometheus.MustRegister(gaugeVecSnapCompressedBytes)
 }
 
@@ -129,10 +137,10 @@ func newSnapCache(
 			"thread": "snapshotter",
 			"syncer": syncerName,
 		}),
-		counterBinSnapsGenerated: counterVecSnapshotsGenerated.WithLabelValues(syncerName),
-		counterBinSnapsReused:    counterVecSnapshotsReused.WithLabelValues(syncerName),
-		gaugeSnapBytesRaw:        gaugeVecSnapRawBytes.WithLabelValues(syncerName),
-		gaugeSnapBytesComp:       gaugeVecSnapCompressedBytes.WithLabelValues(syncerName),
+		counterBinSnapsGenerated: counterVecSnapshotsGenerated.WithLabelValues(syncerName, string(compressionAlgorithm)),
+		counterBinSnapsReused:    counterVecSnapshotsReused.WithLabelValues(syncerName, string(compressionAlgorithm)),
+		gaugeSnapBytesRaw:        gaugeVecSnapRawBytes.WithLabelValues(syncerName, string(compressionAlgorithm)),
+		gaugeSnapBytesComp:       gaugeVecSnapCompressedBytes.WithLabelValues(syncerName, string(compressionAlgorithm)),
 	}
 	s.cond.L = &s.lock
 	return s
