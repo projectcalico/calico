@@ -272,7 +272,7 @@ func (c *Config) ApplyDefaults() {
 			"value":   c.PreferredCompressionAlgorithmOrder,
 			"default": defaultCompressionAlgorithmOrder,
 		}).Info("Defaulting PreferredCompressionAlgorithmOrder.")
-		c.PreferredCompressionAlgorithmOrder = c.parseCompressionOrder(defaultCompressionAlgorithmOrder)
+		c.PreferredCompressionAlgorithmOrder = syncproto.ParseCompressionAlgorithms(defaultCompressionAlgorithmOrder)
 	}
 }
 
@@ -286,23 +286,6 @@ func (c *Config) ListenPort() int {
 func (c *Config) requiringTLS() bool {
 	// True if any of the TLS parameters are set.  This must match config.Config.requiringTLS().
 	return c.KeyFile+c.CertFile+c.CAFile+c.ClientCN+c.ClientURISAN != ""
-}
-
-func (c *Config) parseCompressionOrder(s string) []syncproto.CompressionAlgorithm {
-	var order []syncproto.CompressionAlgorithm
-	parts := strings.SplitSeq(s, ",")
-	for part := range parts {
-		alg := strings.ToLower(strings.TrimSpace(part))
-		switch alg {
-		case "snappy":
-			order = append(order, syncproto.CompressionSnappy)
-		case "zstd":
-			order = append(order, syncproto.CompressionZstd)
-		default:
-			log.WithField("algorithm", alg).Warn("ignoring unknown compression algorithm")
-		}
-	}
-	return order
 }
 
 func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
