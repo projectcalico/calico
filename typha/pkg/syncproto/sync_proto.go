@@ -348,6 +348,26 @@ func init() {
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
 }
 
+// ParseCompressionAlgorithms parses a comma-separated string of compression
+// algorithm names (e.g. "zstd,snappy") into a slice of CompressionAlgorithm.
+// Unknown algorithm names are silently skipped.  Returns nil if the input
+// is empty or contains no valid algorithms.
+func ParseCompressionAlgorithms(s string) []CompressionAlgorithm {
+	if s == "" {
+		return nil
+	}
+	var result []CompressionAlgorithm
+	for part := range strings.SplitSeq(s, ",") {
+		switch strings.TrimSpace(strings.ToLower(part)) {
+		case "snappy":
+			result = append(result, CompressionSnappy)
+		case "zstd":
+			result = append(result, CompressionZstd)
+		}
+	}
+	return result
+}
+
 func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
 	su.Key, err = model.KeyToDefaultPath(u.Key)
 	if err != nil {
