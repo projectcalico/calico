@@ -80,6 +80,13 @@ type Options struct {
 	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
 	// Useful for load testing Typha without having to run a "full" client.
 	DebugDiscardKVUpdates bool
+
+	// PreferredCompressionAlgorithmOrder overrides the default list of compression
+	// algorithms advertised to the server.  The server picks from this list
+	// based on its own preference order.  To force a specific algorithm, set
+	// this to a single-element slice (e.g. []syncproto.CompressionAlgorithm{syncproto.CompressionZstd}).
+	// Nil means use the default (all supported algorithms).
+	PreferredCompressionAlgorithmOrder []syncproto.CompressionAlgorithm
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -460,7 +467,11 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	if ourSyncerType == "" {
 		ourSyncerType = syncproto.SyncerTypeFelix
 	}
-	compAlgs := []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy, syncproto.CompressionZstd}
+	compAlgs := s.options.PreferredCompressionAlgorithmOrder
+	if compAlgs == nil {
+		// Set the default compression algorithm order to snappy, then zstd.
+		compAlgs = []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy, syncproto.CompressionZstd}
+	}
 	if s.options.DisableDecoderRestart {
 		// Compression requires decoder restart.
 		compAlgs = nil
