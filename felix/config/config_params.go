@@ -294,6 +294,11 @@ type Config struct {
 	// TyphaCN and TyphaURISAN must be set.
 	TyphaURISAN string `config:"string;;local"`
 
+	// TyphaCompressionAlgorithmOrder comma-separated list of compression algorithms the client advertises to Typha,
+	// in preference order.  The server picks from this list based on its own preference.  Valid values: "snappy",
+	// "zstd".  Example: "zstd,snappy" to prefer zstd.  Leave empty to use the default (all supported algorithms).
+	TyphaCompressionAlgorithmOrder string `config:"string;;local"`
+
 	Ipv6Support bool `config:"bool;true"`
 
 	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);auto"`
