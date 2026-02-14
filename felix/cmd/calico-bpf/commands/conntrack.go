@@ -164,7 +164,7 @@ func protoStr(proto uint8) string {
 		return "ICMP6"
 	}
 
-	return "UNKNOWN"
+	return fmt.Sprintf("Proto-%d", proto)
 }
 
 func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.ValueInterface) {
