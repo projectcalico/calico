@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/klauspost/compress/zstd"
 	log "github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
@@ -171,6 +172,7 @@ type SyncerClient struct {
 	connR      io.Reader
 	encoder    *gob.Encoder
 	decoder    *gob.Decoder
+	zstdReader *zstd.Decoder
 
 	callbacks CallbacksWithKeysKnown
 	Finished  sync.WaitGroup
@@ -440,6 +442,12 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	defer connFinished.Done()
 	defer cancelFn()
 
+	// Clean up any zstd reader from a previous connection.
+	if s.zstdReader != nil {
+		s.zstdReader.Close()
+		s.zstdReader = nil
+	}
+
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
 	logCxt.Info("Started Typha client main loop")
 	s.callbacks.OnStatusUpdated(api.ResyncInProgress)
@@ -452,7 +460,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	if ourSyncerType == "" {
 		ourSyncerType = syncproto.SyncerTypeFelix
 	}
-	compAlgs := []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy}
+	compAlgs := []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy, syncproto.CompressionZstd}
 	if s.options.DisableDecoderRestart {
 		// Compression requires decoder restart.
 		compAlgs = nil
@@ -578,11 +586,33 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 	switch msg.CompressionAlgorithm {
 	case syncproto.CompressionSnappy:
 		logCxt.Info("Server selected snappy compression.")
+		// Snappy's reader is synchronous (no background goroutine or
+		// read-ahead buffering), so it's safe to create a new reader on
+		// each decoder restart without losing data from the connection.
 		r := snappy.NewReader(s.connR)
 		s.decoder = gob.NewDecoder(r)
+	case syncproto.CompressionZstd:
+		logCxt.Info("Server selected zstd compression.")
+		if s.zstdReader == nil {
+			r, err := zstd.NewReader(s.connR)
+			if err != nil {
+				logCxt.WithError(err).Error("Failed to create zstd reader")
+				return err
+			}
+			s.zstdReader = r
+		}
+		// Reuse the existing zstd reader across decoder restarts. The
+		// reader's internal goroutine reads frames in a loop, so it
+		// seamlessly transitions from one zstd frame to the next without
+		// losing bytes it has buffered from the connection. We only need
+		// a new gob decoder since the server restarted its gob encoder.
+		s.decoder = gob.NewDecoder(s.zstdReader)
 	case "":
 		logCxt.Info("Server selected no compression.")
 		s.decoder = gob.NewDecoder(s.connR)
+	default:
+		logCxt.WithField("algorithm", msg.CompressionAlgorithm).Error("Server selected unknown compression algorithm")
+		return fmt.Errorf("unknown compression algorithm: %q", msg.CompressionAlgorithm)
 	}
 	// Server requires an ack of the MsgDecoderRestart before it can send data in the new format.
 	err := s.sendMessageToServer(cxt, logCxt, "send ACK to server",
