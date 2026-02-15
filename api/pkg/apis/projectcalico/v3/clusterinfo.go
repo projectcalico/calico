@@ -36,6 +36,9 @@ type ClusterInformationList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster,path=clusterinformations,shortName={clusterinfo,clusterinfos}
+// +kubebuilder:printcolumn:name="Version",type=string,JSONPath=".spec.calicoVersion",description="The version of Calico that the cluster is running"
+// +kubebuilder:printcolumn:name="Ready",type=boolean,JSONPath=".spec.datastoreReady",description="Whether the datastore is ready for use"
+// +kubebuilder:printcolumn:name="Types",type=string,JSONPath=".spec.clusterType",description="The types associated with the cluster"
 
 type ClusterInformation struct {
 	metav1.TypeMeta   `json:",inline"`

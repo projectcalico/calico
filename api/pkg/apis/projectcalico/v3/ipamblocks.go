@@ -23,7 +23,8 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The block CIDR"
-// +kubebuilder:printcolumn:name="Affininty",type=string,JSONPath=".spec.affinity",description="The block affinity"
+// +kubebuilder:printcolumn:name="Affinity",type=string,JSONPath=".spec.affinity",description="The block affinity"
+// +kubebuilder:printcolumn:name="ClaimTime",type=date,JSONPath=".spec.affinityClaimTime",description="The time at which affinity was claimed"
 
 // +k8s:openapi-gen=true
 type IPAMBlock struct {

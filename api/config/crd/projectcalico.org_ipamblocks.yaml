@@ -21,8 +21,12 @@ spec:
           type: string
         - description: The block affinity
           jsonPath: .spec.affinity
-          name: Affininty
+          name: Affinity
           type: string
+        - description: The time at which affinity was claimed
+          jsonPath: .spec.affinityClaimTime
+          name: ClaimTime
+          type: date
       name: v3
       schema:
         openAPIV3Schema:
