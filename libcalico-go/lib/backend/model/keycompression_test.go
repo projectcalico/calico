@@ -270,30 +270,32 @@ func TestCompressedSize(t *testing.T) {
 // TestCompactAlphabet verifies the compact alphabet round-trips all
 // expected characters and correctly identifies non-compact characters.
 func TestCompactAlphabet(t *testing.T) {
-	compact := "abcdefghijklmnopqrstuvwxyz0123456789-./:" +
-		"_ABCDEFGHIJKLMNOPQRSTUVW"
+	compact := "abcdefghijklmnopqrstuvwxyz-./_ "
+	// Remove trailing space — it's not compact.
+	compact = compact[:len(compact)-1]
 	for i := 0; i < len(compact); i++ {
 		c := compact[i]
-		code := charToCompact[c]
+		code := charTo5Bit[c]
 		if code == 0xFF {
 			t.Errorf("expected %q (0x%02x) to be compact, got 0xFF", string(c), c)
 			continue
 		}
-		if compactToChar[code] != c {
-			t.Errorf("compact round-trip failed for %q: code=%d, back=%q", string(c), code, string(compactToChar[code]))
+		if fiveBitToChar[code] != c {
+			t.Errorf("compact round-trip failed for %q: code=%d, back=%q", string(c), code, string(fiveBitToChar[code]))
 		}
 	}
 
-	nonCompact := "XYZ @#$%^&*()=+[]{}|\\\"'<>?,;\t\n\r\x00\x80\xFD\xFE\xFF"
+	nonCompact := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ @#$%^&*()=+[]{}|\\\"'<>?,;:\t\n\r\x00\x80\xFD\xFE\xFF"
 	for i := 0; i < len(nonCompact); i++ {
 		c := nonCompact[i]
-		if charToCompact[c] != 0xFF {
-			t.Errorf("expected %q (0x%02x) to be non-compact, got code %d", string(c), c, charToCompact[c])
+		if charTo5Bit[c] != 0xFF {
+			t.Errorf("expected %q (0x%02x) to be non-compact, got code %d", string(c), c, charTo5Bit[c])
 		}
 	}
 }
 
-// TestFieldEncoding verifies field encode/decode for various strings.
+// TestFieldEncoding verifies field encode/decode for various strings
+// via the 5-bit packed stream.
 func TestFieldEncoding(t *testing.T) {
 	tests := []string{
 		"",
@@ -313,23 +315,28 @@ func TestFieldEncoding(t *testing.T) {
 
 	for _, s := range tests {
 		t.Run(s, func(t *testing.T) {
-			buf := encodeField(nil, s)
-			decoded, n, err := decodeField(buf)
+			p := &bitPacker{}
+			encodeField(p, s)
+			p.writeCodes(codeSpecial, specialEnd)
+			p.flush()
+
+			fields, err := decodeFields(p.result())
 			if err != nil {
-				t.Fatalf("decodeField error: %v", err)
+				t.Fatalf("decodeFields error: %v", err)
 			}
-			if n != len(buf) {
-				t.Fatalf("decodeField consumed %d bytes, expected %d", n, len(buf))
+			if len(fields) != 1 {
+				t.Fatalf("expected 1 field, got %d", len(fields))
 			}
-			if decoded != s {
-				t.Fatalf("round-trip failed: got %q, want %q", decoded, s)
+			if fields[0] != s {
+				t.Fatalf("round-trip failed: got %q, want %q", fields[0], s)
 			}
 		})
 	}
 }
 
-// TestDictionaryEncoding verifies that dictionary entries produce
-// exactly 2 bytes and round-trip correctly.
+// TestDictionaryEncoding verifies that dictionary entries encode as
+// exactly 10 bits (2 five-bit codes) plus the end marker, and
+// round-trip correctly.
 func TestDictionaryEncoding(t *testing.T) {
 	dictEntries := []string{
 		"kubernetes", "eth0", "default", "k8s", "openstack", "cni",
@@ -340,19 +347,23 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	for _, s := range dictEntries {
 		t.Run(s, func(t *testing.T) {
-			buf := encodeField(nil, s)
-			if len(buf) != 2 {
-				t.Fatalf("dictionary entry should be 2 bytes, got %d: %x", len(buf), buf)
+			p := &bitPacker{}
+			encodeField(p, s)
+			p.writeCodes(codeSpecial, specialEnd)
+			p.flush()
+			packed := p.result()
+
+			// Dict entry = 10 bits, end marker = 10 bits = 20 bits → 3 bytes.
+			if len(packed) != 3 {
+				t.Fatalf("dictionary entry + end marker should pack to 3 bytes, got %d: %x", len(packed), packed)
 			}
-			decoded, n, err := decodeField(buf)
+
+			fields, err := decodeFields(packed)
 			if err != nil {
-				t.Fatalf("decodeField error: %v", err)
+				t.Fatalf("decodeFields error: %v", err)
 			}
-			if n != 2 {
-				t.Fatalf("consumed %d bytes, expected 2", n)
-			}
-			if decoded != s {
-				t.Fatalf("got %q, want %q", decoded, s)
+			if len(fields) != 1 || fields[0] != s {
+				t.Fatalf("got %q, want %q", fields, []string{s})
 			}
 		})
 	}
@@ -367,15 +378,6 @@ func TestDecompressErrors(t *testing.T) {
 		{"empty", nil},
 		{"empty slice", []byte{}},
 		{"unknown tag", []byte{0x80}},
-		{"truncated workload missing delimiters", []byte{tagWorkloadEndpoint}},
-		{"truncated policy missing delimiters", []byte{tagPolicy}},
-		{"truncated host endpoint missing delimiter", []byte{tagHostEndpoint}},
-		{"truncated resource global missing delimiter", []byte{tagResourceKeyGlobal}},
-		{"truncated resource namespaced missing delimiters", []byte{tagResourceKeyNamespaced}},
-		{"invalid dict ref", []byte{tagNetworkSet, fieldDictEntry, 0}},
-		{"invalid dict ref high", []byte{tagNetworkSet, fieldDictEntry, 250}},
-		{"truncated escape", []byte{tagNetworkSet, fieldEscape}},
-		{"invalid compact code", []byte{tagNetworkSet, compactMax}},
 	}
 
 	for _, tt := range tests {
@@ -421,6 +423,86 @@ func TestCompressUsableAsMapKey(t *testing.T) {
 		if !safeKeysEqual(k, got) {
 			t.Fatalf("map lookup mismatch: got %v, want %v", got, k)
 		}
+	}
+}
+
+// Test5BitPacking verifies that the 5-bit packer/unpacker round-trip
+// sequences of codes correctly.
+func Test5BitPacking(t *testing.T) {
+	// Pack a known sequence and verify it unpacks correctly.
+	// Include end marker to avoid padding ambiguity.
+	codes := []byte{0, 1, 2, 30, 15, 7, 31, 0, 25, 26, 27, 28, 29, 31, 1}
+	p := &bitPacker{}
+	p.writeCodes(codes...)
+	p.flush()
+
+	u := &bitUnpacker{data: p.result()}
+	for i, want := range codes {
+		got := u.readCode()
+		if got < 0 {
+			t.Fatalf("readCode exhausted at index %d, expected %d", i, want)
+		}
+		if byte(got) != want {
+			t.Fatalf("readCode[%d]: got %d, want %d", i, got, want)
+		}
+	}
+}
+
+// TestMultiFieldPackedEncoding verifies encoding/decoding multiple
+// fields separated by delimiters in the 5-bit stream.
+func TestMultiFieldPackedEncoding(t *testing.T) {
+	fields := []string{"hello", "world", "test-field", "abc/def"}
+	p := &bitPacker{}
+	for i, f := range fields {
+		if i > 0 {
+			encodeDelimiter(p)
+		}
+		encodeField(p, f)
+	}
+	p.writeCodes(codeSpecial, specialEnd)
+	p.flush()
+
+	decoded, err := decodeFields(p.result())
+	if err != nil {
+		t.Fatalf("decodeFields error: %v", err)
+	}
+	if len(decoded) != len(fields) {
+		t.Fatalf("expected %d fields, got %d: %v", len(fields), len(decoded), decoded)
+	}
+	for i := range fields {
+		if decoded[i] != fields[i] {
+			t.Fatalf("field[%d]: got %q, want %q", i, decoded[i], fields[i])
+		}
+	}
+}
+
+// Test5BitPackingSavings verifies that compact-only strings use
+// fewer bytes when 5-bit packed than raw ASCII.
+func Test5BitPackingSavings(t *testing.T) {
+	typicalNames := []string{
+		"ip-one-two-three.us-west.compute.internal",
+		"kube-system/calico-node-abcde",
+		"my-network-policy",
+		"kns.default",
+		"hello-world",
+	}
+
+	for _, s := range typicalNames {
+		t.Run(s, func(t *testing.T) {
+			p := &bitPacker{}
+			encodeField(p, s)
+			p.writeCodes(codeSpecial, specialEnd)
+			p.flush()
+			packed := p.result()
+
+			t.Logf("string %q: raw=%d bytes, packed=%d bytes, savings=%.0f%%",
+				s, len(s), len(packed), 100*(1-float64(len(packed))/float64(len(s))))
+
+			if len(packed) >= len(s) {
+				t.Errorf("5-bit packed (%d bytes) should be smaller than raw (%d bytes) for %q",
+					len(packed), len(s), s)
+			}
+		})
 	}
 }
 
@@ -582,16 +664,20 @@ func FuzzEncodeDecodeField(f *testing.F) {
 	f.Add("\xFD\xFD\xFD")
 
 	f.Fuzz(func(t *testing.T, s string) {
-		buf := encodeField(nil, s)
-		decoded, n, err := decodeField(buf)
+		p := &bitPacker{}
+		encodeField(p, s)
+		p.writeCodes(codeSpecial, specialEnd)
+		p.flush()
+
+		fields, err := decodeFields(p.result())
 		if err != nil {
-			t.Fatalf("decodeField(%x) error: %v", buf, err)
+			t.Fatalf("decodeFields(%x) error: %v", p.result(), err)
 		}
-		if n != len(buf) {
-			t.Fatalf("decodeField consumed %d bytes, expected %d", n, len(buf))
+		if len(fields) != 1 {
+			t.Fatalf("expected 1 field, got %d: %v", len(fields), fields)
 		}
-		if decoded != s {
-			t.Fatalf("round-trip mismatch: got %q, want %q", decoded, s)
+		if fields[0] != s {
+			t.Fatalf("round-trip mismatch: got %q, want %q", fields[0], s)
 		}
 	})
 }

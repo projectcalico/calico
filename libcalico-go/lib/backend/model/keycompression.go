@@ -22,34 +22,38 @@ import (
 // =====================
 //
 // Compressed keys are designed to be used directly as Go map[string]…
-// keys in deduplicating buffers. The overall length is carried by the
-// Go string header, so the encoding stores no explicit length fields.
+// keys in deduplicating buffers.  The overall length is carried by
+// the Go string header, so the encoding needs no explicit length
+// fields.
 //
 // Layout:
 //
-//   [type_tag: 1 byte] [field0] [0xFE field1] [0xFE field2] …
+//	[type_tag: 1 byte] [5-bit packed stream]
 //
-// The type tag identifies the key type; fields are separated by the
-// delimiter byte 0xFE.
+// The type tag identifies the key type.  The remaining bytes are a
+// bit-packed stream of 5-bit codes.
 //
-// Each field is encoded character-by-character:
+// The 5-bit code space (0–31) is assigned as follows:
 //
-//   • Characters in the compact alphabet (a-z, 0-9, -, ., /, :, _,
-//     A-W) are mapped to single bytes in the range 0x00-0x28 (0-40).
-//     These dominate Kubernetes names and are stored in 1 byte each.
+//	0-25:  a-z   (lowercase letters — the dominant character class)
+//	26:    '-'   (ubiquitous in Kubernetes names)
+//	27:    '.'   (hostnames, profile names like kns.default)
+//	28:    '/'   (workload IDs like namespace/pod)
+//	29:    '_'   (occasional in identifiers)
+//	30:    ESCAPE — the following two 5-bit codes encode a raw byte:
+//	       raw_byte = (hi << 3) | lo, where hi is 0-31 and lo is 0-7.
+//	31:    SPECIAL PREFIX — the next 5-bit code selects:
+//	         0:    field delimiter (separates fields in a multi-field key)
+//	         1-N:  dictionary entry (whole-field substitution, e.g.
+//	               1=kubernetes, 2=eth0, …).  Dictionary indices
+//	               beyond 31 use two 5-bit codes: (idx/31, idx%31+1)
+//	               but in practice all current entries fit in one code.
 //
-//   • Characters outside the compact alphabet are escaped:
-//     [0xFD] [raw_byte]. This costs 2 bytes per rare character.
-//
-//   • Whole-field dictionary matches (e.g. "kubernetes", "eth0",
-//     "default") are encoded as [0xFF] [dict_index] — 2 bytes total
-//     regardless of the original string length.
-//
-// Reserved byte values within a field:
-//
-//   0xFD  escape prefix (next byte is a literal)
-//   0xFE  field delimiter (never appears inside a field)
-//   0xFF  dictionary prefix (next byte is a dictionary index)
+// Everything is 5-bit codes packed into bytes.  The final byte is
+// zero-padded on the right.  Compact characters cost 5 bits each
+// (37.5% smaller than raw ASCII); escaped characters cost 15 bits
+// (escape + hi + lo); dictionary entries cost 10 bits; and field
+// delimiters cost 10 bits.
 
 // Key type tags — first byte of compressed keys.
 const (
@@ -64,29 +68,39 @@ const (
 	tagNetworkSet
 )
 
-// Special bytes used within field encodings.
+// 5-bit code assignments.
 const (
-	fieldEscape    byte = 0xFD
-	fieldDelimiter byte = 0xFE
-	fieldDictEntry byte = 0xFF
+	codeEscape  byte = 30
+	codeSpecial byte = 31
+)
+
+// Sub-codes for the SPECIAL prefix (code 31).
+const (
+	specialDelimiter byte = 0 // field delimiter
+	specialEnd       byte = 1 // end of stream
+	// Dictionary indices start at 2.
+	specialDictBase byte = 2
 )
 
 // Dictionary indices for common whole-field values.
+// These are the sub-code values that follow codeSpecial.
+// They start at specialDictBase (2) to leave room for
+// specialDelimiter (0) and specialEnd (1).
 const (
-	dictKubernetes byte = iota + 1
-	dictEth0
-	dictDefault
-	dictK8s
-	dictOpenstack
-	dictCNI
-	dictNetworkPolicy
-	dictGlobalNetworkPolicy
-	dictStagedNetworkPolicy
-	dictStagedGlobalNetworkPolicy
-	dictStagedKubernetesNetworkPolicy
-	dictFelixConfiguration
+	dictKubernetes                    = specialDictBase + iota // 2
+	dictEth0                                                  // 3
+	dictDefault                                               // 4
+	dictK8s                                                   // 5
+	dictOpenstack                                             // 6
+	dictCNI                                                   // 7
+	dictNetworkPolicy                                         // 8
+	dictGlobalNetworkPolicy                                   // 9
+	dictStagedNetworkPolicy                                   // 10
+	dictStagedGlobalNetworkPolicy                             // 11
+	dictStagedKubernetesNetworkPolicy                         // 12
+	dictFelixConfiguration                                    // 13
 	// dictEnd is a sentinel; all valid indices are < dictEnd.
-	dictEnd
+	dictEnd // 14
 )
 
 // dictStrings maps dictionary indices to their string values.
@@ -110,137 +124,207 @@ func init() {
 	dictStrings[dictFelixConfiguration] = "FelixConfiguration"
 
 	dictLookup = make(map[string]byte, len(dictStrings))
-	for i := byte(1); i < dictEnd; i++ {
-		dictLookup[dictStrings[i]] = i
+	for i := byte(specialDictBase); i < dictEnd; i++ {
+		if dictStrings[i] != "" {
+			dictLookup[dictStrings[i]] = i
+		}
 	}
 }
 
-// --- Compact alphabet ---
+// --- Compact alphabet (5-bit) ---
 //
-// Maps the characters most common in Kubernetes resource names to
-// single bytes in the range 0x00-0x28 (41 values). The remaining
-// byte values up to 0xFC are unused, and 0xFD-0xFF are reserved.
+// Maps the 30 most common characters in Kubernetes resource names
+// to 5-bit codes 0-29.  Codes 30 and 31 are reserved for escape
+// and special prefix respectively.
 //
-//   0-25:  a-z
-//   26-35: 0-9
-//   36:    '-'
-//   37:    '.'
-//   38:    '/'
-//   39:    ':'
-//   40:    '_'
-//   41-63: A-W  (23 uppercase letters; X/Y/Z are rare and escaped)
+//	 0-25: a-z
+//	   26: '-'
+//	   27: '.'
+//	   28: '/'
+//	   29: '_'
+const compactMax5 = 30 // codes 0-29 are compact characters
 
-const compactMax = 64 // codes 0-63 are compact
+// charTo5Bit maps byte values to 5-bit codes.
+// 0xFF means the character requires the escape mechanism.
+var charTo5Bit [256]byte
 
-// charToCompact maps ASCII byte values to compact codes.
-// 0xFF means the character is not in the compact alphabet.
-var charToCompact [256]byte
-
-// compactToChar maps compact codes back to ASCII byte values.
-var compactToChar [compactMax]byte
+// fiveBitToChar maps 5-bit codes 0-29 back to byte values.
+var fiveBitToChar [compactMax5]byte
 
 func init() {
-	for i := range charToCompact {
-		charToCompact[i] = 0xFF
+	for i := range charTo5Bit {
+		charTo5Bit[i] = 0xFF
 	}
 	code := byte(0)
 	for c := byte('a'); c <= 'z'; c++ {
-		charToCompact[c] = code
-		compactToChar[code] = c
+		charTo5Bit[c] = code
+		fiveBitToChar[code] = c
 		code++
 	}
-	for c := byte('0'); c <= '9'; c++ {
-		charToCompact[c] = code
-		compactToChar[code] = c
+	for _, c := range []byte{'-', '.', '/', '_'} {
+		charTo5Bit[c] = code
+		fiveBitToChar[code] = c
 		code++
 	}
-	for _, c := range []byte{'-', '.', '/', ':', '_'} {
-		charToCompact[c] = code
-		compactToChar[code] = c
-		code++
+}
+
+// --- 5-bit stream packer/unpacker ---
+
+// bitPacker accumulates 5-bit codes and packs them into bytes.
+type bitPacker struct {
+	buf  []byte
+	acc  uint32 // accumulator for bits not yet flushed
+	bits uint   // number of valid bits in acc (0-7 between flushes)
+}
+
+// writeCodes appends one or more 5-bit codes to the stream.
+func (p *bitPacker) writeCodes(codes ...byte) {
+	for _, c := range codes {
+		p.acc = (p.acc << 5) | uint32(c&0x1F)
+		p.bits += 5
+		for p.bits >= 8 {
+			p.bits -= 8
+			p.buf = append(p.buf, byte(p.acc>>p.bits))
+		}
 	}
-	for c := byte('A'); c <= 'W'; c++ {
-		charToCompact[c] = code
-		compactToChar[code] = c
-		code++
+}
+
+// flush pads the remaining bits (if any) with zeros and appends
+// the final byte.
+func (p *bitPacker) flush() {
+	if p.bits > 0 {
+		p.buf = append(p.buf, byte(p.acc<<(8-p.bits)))
 	}
+}
+
+// result returns the packed byte slice.
+func (p *bitPacker) result() []byte { return p.buf }
+
+// bitUnpacker reads 5-bit codes from a packed byte stream.
+type bitUnpacker struct {
+	data []byte
+	pos  int    // byte position in data
+	acc  uint32 // bit accumulator
+	bits uint   // number of valid bits in acc
+}
+
+// readCode returns the next 5-bit code, or -1 if exhausted.
+func (u *bitUnpacker) readCode() int {
+	for u.bits < 5 {
+		if u.pos >= len(u.data) {
+			if u.bits == 0 {
+				return -1
+			}
+			// Remaining bits are zero-padding from flush;
+			// treat as exhausted.
+			return -1
+		}
+		u.acc = (u.acc << 8) | uint32(u.data[u.pos])
+		u.pos++
+		u.bits += 8
+	}
+	u.bits -= 5
+	return int((u.acc >> u.bits) & 0x1F)
 }
 
 // --- Field encoding/decoding ---
 
-// encodeField appends the encoded form of s to buf.
-// If s matches a dictionary entry, the 2-byte dictionary form is used.
-// Otherwise each character is encoded individually: compact chars as
-// a single byte, others as [0xFD][raw_byte].
-func encodeField(buf []byte, s string) []byte {
+// encodeField appends the 5-bit-encoded form of the string s to the
+// bitPacker p.  If s matches a dictionary entry, it emits
+// [codeSpecial, dictIndex] (10 bits).  Otherwise each character is
+// encoded as its 5-bit compact code, or as the escape sequence
+// [codeEscape, hi, lo] (15 bits) for non-compact characters.
+func encodeField(p *bitPacker, s string) {
 	if idx, ok := dictLookup[s]; ok {
-		return append(buf, fieldDictEntry, idx)
+		p.writeCodes(codeSpecial, idx)
+		return
 	}
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if code := charToCompact[c]; code != 0xFF {
-			buf = append(buf, code)
+		if code := charTo5Bit[c]; code != 0xFF {
+			p.writeCodes(code)
 		} else {
-			buf = append(buf, fieldEscape, c)
+			// Escape: code 30, then the raw byte split into
+			// high 5 bits and low 3 bits (two 5-bit codes).
+			p.writeCodes(codeEscape, c>>3, c&0x07)
 		}
 	}
-	return buf
 }
 
-// decodeField reads a single field from data, stopping at a
-// fieldDelimiter or end-of-data. Returns the decoded string and the
-// number of bytes consumed (excluding any trailing delimiter).
-func decodeField(data []byte) (string, int, error) {
-	if len(data) == 0 {
-		return "", 0, nil
-	}
-	// Dictionary entry.
-	if data[0] == fieldDictEntry {
-		if len(data) < 2 {
-			return "", 0, fmt.Errorf("truncated dictionary reference")
-		}
-		idx := data[1]
-		if idx == 0 || idx >= dictEnd {
-			return "", 0, fmt.Errorf("invalid dictionary index: %d", idx)
-		}
-		return dictStrings[idx], 2, nil
-	}
+// encodeDelimiter writes the field-delimiter code pair into the
+// 5-bit stream: [codeSpecial, specialDelimiter].
+func encodeDelimiter(p *bitPacker) {
+	p.writeCodes(codeSpecial, specialDelimiter)
+}
 
-	// Character-by-character decoding.
-	var out []byte
-	i := 0
-	for i < len(data) {
-		b := data[i]
-		if b == fieldDelimiter {
+// decodeFields reads the 5-bit packed byte stream in data, splitting
+// on delimiter codes, and returns each field as a string.
+func decodeFields(data []byte) ([]string, error) {
+	var fields []string
+	var cur []byte
+
+	u := &bitUnpacker{data: data}
+
+	for {
+		code := u.readCode()
+		if code < 0 {
+			// End of stream (exhausted bits) — emit the
+			// final field.  This path is taken for streams
+			// that consist of only compact characters with
+			// no trailing special-end marker (shouldn't
+			// happen in practice but is safe).
+			fields = append(fields, string(cur))
 			break
 		}
-		if b == fieldEscape {
-			if i+1 >= len(data) {
-				return "", 0, fmt.Errorf("truncated escape sequence")
+
+		switch {
+		case code < int(compactMax5):
+			cur = append(cur, fiveBitToChar[code])
+
+		case byte(code) == codeEscape:
+			hi := u.readCode()
+			lo := u.readCode()
+			if hi < 0 || lo < 0 {
+				return nil, fmt.Errorf("truncated escape sequence")
 			}
-			out = append(out, data[i+1])
-			i += 2
-			continue
+			cur = append(cur, byte(hi<<3)|byte(lo))
+
+		case byte(code) == codeSpecial:
+			sub := u.readCode()
+			if sub < 0 {
+				return nil, fmt.Errorf("truncated special code")
+			}
+			switch {
+			case byte(sub) == specialDelimiter:
+				// Field delimiter.
+				fields = append(fields, string(cur))
+				cur = nil
+			case byte(sub) == specialEnd:
+				// End of stream — emit the final field and stop.
+				fields = append(fields, string(cur))
+				return fields, nil
+			case byte(sub) >= specialDictBase && byte(sub) < dictEnd:
+				// Dictionary entry.
+				cur = append(cur, dictStrings[byte(sub)]...)
+			default:
+				return nil, fmt.Errorf("invalid special sub-code: %d", sub)
+			}
+
+		default:
+			return nil, fmt.Errorf("invalid 5-bit code: %d", code)
 		}
-		if b == fieldDictEntry {
-			return "", 0, fmt.Errorf("unexpected dictionary marker mid-field")
-		}
-		if b >= compactMax {
-			return "", 0, fmt.Errorf("invalid compact code: 0x%02x", b)
-		}
-		out = append(out, compactToChar[b])
-		i++
 	}
-	return string(out), i, nil
+
+	return fields, nil
 }
 
 // --- Public API ---
 
 // CompressKey compresses a Key into a compact byte slice suitable for
-// use as a Go map key (via string(result)). The encoding eliminates
-// redundant path prefixes and uses single-byte codes for common
-// characters, producing significantly shorter representations than
-// the default path strings.
+// use as a Go map key (via string(result)).  The encoding eliminates
+// redundant path prefixes and bit-packs common characters at 5 bits
+// each, producing significantly shorter representations than the
+// default path strings.
 func CompressKey(key Key) ([]byte, error) {
 	switch k := key.(type) {
 	case WorkloadEndpointKey:
@@ -292,211 +376,166 @@ func DecompressKey(data []byte) (Key, error) {
 	}
 }
 
-// --- Field splitting helper ---
+// --- Helper: compress N fields ---
 
-// nextField decodes the next field from data. If expectDelimiter is
-// true, data must start with fieldDelimiter which is consumed.
-// Returns the decoded string and remaining unconsumed data.
-func nextField(data []byte, expectDelimiter bool) (string, []byte, error) {
-	if expectDelimiter {
-		if len(data) == 0 || data[0] != fieldDelimiter {
-			return "", nil, fmt.Errorf("expected field delimiter")
+// compressFields packs multiple fields into a single byte slice
+// with the given type tag.  An end-of-stream marker is written
+// after the last field so the decoder can distinguish padding
+// zeros from real code-0 characters.
+func compressFields(tag byte, fields ...string) []byte {
+	// Estimate: tag + ~5/8 bytes per char + some overhead.
+	totalChars := 0
+	for _, f := range fields {
+		totalChars += len(f)
+	}
+	p := &bitPacker{buf: make([]byte, 0, 1+totalChars*5/8+len(fields)+4)}
+	p.buf = append(p.buf, tag)
+	for i, f := range fields {
+		if i > 0 {
+			encodeDelimiter(p)
 		}
-		data = data[1:]
+		encodeField(p, f)
 	}
-	s, n, err := decodeField(data)
-	if err != nil {
-		return "", nil, err
-	}
-	return s, data[n:], nil
+	// Write end-of-stream marker so the decoder knows where
+	// meaningful codes stop and padding begins.
+	p.writeCodes(codeSpecial, specialEnd)
+	p.flush()
+	return p.result()
 }
 
 // --- Per-type compress/decompress ---
 
-// WorkloadEndpointKey: [tag] [hostname] 0xFE [orchestratorID] 0xFE [workloadID] 0xFE [endpointID]
+// WorkloadEndpointKey: [tag] [hostname] D [orchestratorID] D [workloadID] D [endpointID]
 func compressWorkloadEndpoint(k WorkloadEndpointKey) []byte {
-	buf := make([]byte, 0, 1+len(k.Hostname)+len(k.OrchestratorID)+len(k.WorkloadID)+len(k.EndpointID)+3)
-	buf = append(buf, tagWorkloadEndpoint)
-	buf = encodeField(buf, k.Hostname)
-	buf = append(buf, fieldDelimiter)
-	buf = encodeField(buf, k.OrchestratorID)
-	buf = append(buf, fieldDelimiter)
-	buf = encodeField(buf, k.WorkloadID)
-	buf = append(buf, fieldDelimiter)
-	buf = encodeField(buf, k.EndpointID)
-	return buf
+	return compressFields(tagWorkloadEndpoint,
+		k.Hostname, k.OrchestratorID, k.WorkloadID, k.EndpointID)
 }
 
 func decompressWorkloadEndpoint(data []byte) (Key, error) {
-	hostname, data, err := nextField(data, false)
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("WorkloadEndpointKey.Hostname: %w", err)
+		return nil, fmt.Errorf("WorkloadEndpointKey: %w", err)
 	}
-	orch, data, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("WorkloadEndpointKey.OrchestratorID: %w", err)
-	}
-	workload, data, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("WorkloadEndpointKey.WorkloadID: %w", err)
-	}
-	endpoint, _, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("WorkloadEndpointKey.EndpointID: %w", err)
+	if len(fields) < 4 {
+		return nil, fmt.Errorf("WorkloadEndpointKey: expected 4 fields, got %d", len(fields))
 	}
 	return WorkloadEndpointKey{
-		Hostname:       hostname,
-		OrchestratorID: orch,
-		WorkloadID:     workload,
-		EndpointID:     endpoint,
+		Hostname:       fields[0],
+		OrchestratorID: fields[1],
+		WorkloadID:     fields[2],
+		EndpointID:     fields[3],
 	}, nil
 }
 
-// PolicyKey: [tag] [kind] 0xFE [namespace] 0xFE [name]
+// PolicyKey: [tag] [kind] D [namespace] D [name]
 func compressPolicy(k PolicyKey) []byte {
-	buf := make([]byte, 0, 1+len(k.Kind)+len(k.Namespace)+len(k.Name)+2)
-	buf = append(buf, tagPolicy)
-	buf = encodeField(buf, k.Kind)
-	buf = append(buf, fieldDelimiter)
-	buf = encodeField(buf, k.Namespace)
-	buf = append(buf, fieldDelimiter)
-	buf = encodeField(buf, k.Name)
-	return buf
+	return compressFields(tagPolicy, k.Kind, k.Namespace, k.Name)
 }
 
 func decompressPolicy(data []byte) (Key, error) {
-	kind, data, err := nextField(data, false)
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("PolicyKey.Kind: %w", err)
+		return nil, fmt.Errorf("PolicyKey: %w", err)
 	}
-	ns, data, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("PolicyKey.Namespace: %w", err)
+	if len(fields) < 3 {
+		return nil, fmt.Errorf("PolicyKey: expected 3 fields, got %d", len(fields))
 	}
-	name, _, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("PolicyKey.Name: %w", err)
-	}
-	return PolicyKey{Kind: kind, Namespace: ns, Name: name}, nil
+	return PolicyKey{Kind: fields[0], Namespace: fields[1], Name: fields[2]}, nil
 }
 
 // ProfileRulesKey: [tag] [name]
 func compressProfileRules(k ProfileRulesKey) []byte {
-	buf := make([]byte, 0, 1+len(k.Name))
-	buf = append(buf, tagProfileRules)
-	buf = encodeField(buf, k.Name)
-	return buf
+	return compressFields(tagProfileRules, k.Name)
 }
 
 func decompressProfileRules(data []byte) (Key, error) {
-	name, _, err := nextField(data, false)
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("ProfileRulesKey.Name: %w", err)
+		return nil, fmt.Errorf("ProfileRulesKey: %w", err)
 	}
-	return ProfileRulesKey{ProfileKey: ProfileKey{Name: name}}, nil
+	if len(fields) < 1 {
+		return nil, fmt.Errorf("ProfileRulesKey: expected 1 field, got %d", len(fields))
+	}
+	return ProfileRulesKey{ProfileKey: ProfileKey{Name: fields[0]}}, nil
 }
 
 // ProfileLabelsKey: [tag] [name]
 func compressProfileLabels(k ProfileLabelsKey) []byte {
-	buf := make([]byte, 0, 1+len(k.Name))
-	buf = append(buf, tagProfileLabels)
-	buf = encodeField(buf, k.Name)
-	return buf
+	return compressFields(tagProfileLabels, k.Name)
 }
 
 func decompressProfileLabels(data []byte) (Key, error) {
-	name, _, err := nextField(data, false)
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("ProfileLabelsKey.Name: %w", err)
+		return nil, fmt.Errorf("ProfileLabelsKey: %w", err)
 	}
-	return ProfileLabelsKey{ProfileKey: ProfileKey{Name: name}}, nil
+	if len(fields) < 1 {
+		return nil, fmt.Errorf("ProfileLabelsKey: expected 1 field, got %d", len(fields))
+	}
+	return ProfileLabelsKey{ProfileKey: ProfileKey{Name: fields[0]}}, nil
 }
 
-// HostEndpointKey: [tag] [hostname] 0xFE [endpointID]
+// HostEndpointKey: [tag] [hostname] D [endpointID]
 func compressHostEndpoint(k HostEndpointKey) []byte {
-	buf := make([]byte, 0, 1+len(k.Hostname)+len(k.EndpointID)+1)
-	buf = append(buf, tagHostEndpoint)
-	buf = encodeField(buf, k.Hostname)
-	buf = append(buf, fieldDelimiter)
-	buf = encodeField(buf, k.EndpointID)
-	return buf
+	return compressFields(tagHostEndpoint, k.Hostname, k.EndpointID)
 }
 
 func decompressHostEndpoint(data []byte) (Key, error) {
-	hostname, data, err := nextField(data, false)
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("HostEndpointKey.Hostname: %w", err)
+		return nil, fmt.Errorf("HostEndpointKey: %w", err)
 	}
-	endpoint, _, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("HostEndpointKey.EndpointID: %w", err)
+	if len(fields) < 2 {
+		return nil, fmt.Errorf("HostEndpointKey: expected 2 fields, got %d", len(fields))
 	}
-	return HostEndpointKey{Hostname: hostname, EndpointID: endpoint}, nil
+	return HostEndpointKey{Hostname: fields[0], EndpointID: fields[1]}, nil
 }
 
-// ResourceKey global: [tag] [kind] 0xFE [name]
+// ResourceKey global: [tag] [kind] D [name]
+// ResourceKey namespaced: [tag] [kind] D [namespace] D [name]
 func compressResource(k ResourceKey) []byte {
 	if k.Namespace == "" {
-		buf := make([]byte, 0, 1+len(k.Kind)+len(k.Name)+1)
-		buf = append(buf, tagResourceKeyGlobal)
-		buf = encodeField(buf, k.Kind)
-		buf = append(buf, fieldDelimiter)
-		buf = encodeField(buf, k.Name)
-		return buf
+		return compressFields(tagResourceKeyGlobal, k.Kind, k.Name)
 	}
-	// ResourceKey namespaced: [tag] [kind] 0xFE [namespace] 0xFE [name]
-	buf := make([]byte, 0, 1+len(k.Kind)+len(k.Namespace)+len(k.Name)+2)
-	buf = append(buf, tagResourceKeyNamespaced)
-	buf = encodeField(buf, k.Kind)
-	buf = append(buf, fieldDelimiter)
-	buf = encodeField(buf, k.Namespace)
-	buf = append(buf, fieldDelimiter)
-	buf = encodeField(buf, k.Name)
-	return buf
+	return compressFields(tagResourceKeyNamespaced, k.Kind, k.Namespace, k.Name)
 }
 
 func decompressResourceGlobal(data []byte) (Key, error) {
-	kind, data, err := nextField(data, false)
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("ResourceKey.Kind: %w", err)
+		return nil, fmt.Errorf("ResourceKey: %w", err)
 	}
-	name, _, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("ResourceKey.Name: %w", err)
+	if len(fields) < 2 {
+		return nil, fmt.Errorf("ResourceKey: expected 2 fields, got %d", len(fields))
 	}
-	return ResourceKey{Kind: kind, Name: name}, nil
+	return ResourceKey{Kind: fields[0], Name: fields[1]}, nil
 }
 
 func decompressResourceNamespaced(data []byte) (Key, error) {
-	kind, data, err := nextField(data, false)
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("ResourceKey.Kind: %w", err)
+		return nil, fmt.Errorf("ResourceKey: %w", err)
 	}
-	ns, data, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("ResourceKey.Namespace: %w", err)
+	if len(fields) < 3 {
+		return nil, fmt.Errorf("ResourceKey: expected 3 fields, got %d", len(fields))
 	}
-	name, _, err := nextField(data, true)
-	if err != nil {
-		return nil, fmt.Errorf("ResourceKey.Name: %w", err)
-	}
-	return ResourceKey{Kind: kind, Namespace: ns, Name: name}, nil
+	return ResourceKey{Kind: fields[0], Namespace: fields[1], Name: fields[2]}, nil
 }
 
 // NetworkSetKey: [tag] [name]
 func compressNetworkSet(k NetworkSetKey) []byte {
-	buf := make([]byte, 0, 1+len(k.Name))
-	buf = append(buf, tagNetworkSet)
-	buf = encodeField(buf, k.Name)
-	return buf
+	return compressFields(tagNetworkSet, k.Name)
 }
 
 func decompressNetworkSet(data []byte) (Key, error) {
-	name, _, err := nextField(data, false)
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("NetworkSetKey.Name: %w", err)
+		return nil, fmt.Errorf("NetworkSetKey: %w", err)
 	}
-	return NetworkSetKey{Name: name}, nil
+	if len(fields) < 1 {
+		return nil, fmt.Errorf("NetworkSetKey: expected 1 field, got %d", len(fields))
+	}
+	return NetworkSetKey{Name: fields[0]}, nil
 }
 
 // Fallback: [tag] [raw default path bytes]
