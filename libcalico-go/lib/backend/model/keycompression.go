@@ -336,6 +336,13 @@ func decodeFields(data []byte) ([]string, error) {
 // It is suitable for direct use as a Go map key.
 type CompressedKey string
 
+// Expand decompresses the CompressedKey back into its original
+// default-path string.  It is a convenience wrapper around
+// DecompressKeyPath.
+func (k CompressedKey) Expand() (string, error) {
+	return DecompressKeyPath(k)
+}
+
 // CompressKeyPath compresses a default-path string into a compact
 // CompressedKey suitable for direct use as a Go map[CompressedKey]…
 // key.  The path is pattern-matched to select the best per-type

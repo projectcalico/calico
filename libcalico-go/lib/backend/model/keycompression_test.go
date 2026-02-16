@@ -15,6 +15,8 @@
 package model
 
 import (
+	"fmt"
+	"runtime"
 	"testing"
 )
 
@@ -486,6 +488,149 @@ func FuzzCompressDecompressRoundTrip(f *testing.F) {
 
 		if decompressed != path {
 			t.Fatalf("round-trip mismatch:\n  original:     %q\n  decompressed: %q", path, decompressed)
+		}
+	})
+}
+
+// TestExpand verifies the CompressedKey.Expand convenience method.
+func TestExpand(t *testing.T) {
+	paths := []string{
+		"/calico/v1/host/node-1/workload/kubernetes/default%2fnginx/endpoint/eth0",
+		"/calico/v1/policy/NetworkPolicy/default/allow-dns",
+		"/calico/v1/policy/profile/kns.default/rules",
+		"/calico/v1/config/LogSeverityScreen",
+	}
+	for _, path := range paths {
+		ck := CompressKeyPath(path)
+		got, err := ck.Expand()
+		if err != nil {
+			t.Fatalf("Expand error for %q: %v", path, err)
+		}
+		if got != path {
+			t.Fatalf("Expand mismatch: got %q, want %q", got, path)
+		}
+	}
+}
+
+// benchmarkPaths is a representative mix of key paths for benchmarks.
+var benchmarkPaths = []string{
+	// Workload endpoint (k8s+eth0, the dominant case)
+	"/calico/v1/host/ip-172-31-22-123.us-west-2.compute.internal/workload/kubernetes/kube-system%2fcalico-node-abcde/endpoint/eth0",
+	// Workload endpoint (general)
+	"/calico/v1/host/compute-01/workload/openstack/instance-12345/endpoint/tap1234",
+	// Policy
+	"/calico/v1/policy/NetworkPolicy/default/allow-dns",
+	// Profile rules
+	"/calico/v1/policy/profile/kns.default/rules",
+	// Resource key (namespaced)
+	"/calico/resources/v3/projectcalico.org/networkpolicies/default/my-policy",
+	// Fallback
+	"/calico/v1/config/LogSeverityScreen",
+}
+
+func BenchmarkCompressKeyPath(b *testing.B) {
+	for _, path := range benchmarkPaths {
+		b.Run(path, func(b *testing.B) {
+			for b.Loop() {
+				_ = CompressKeyPath(path)
+			}
+		})
+	}
+}
+
+func BenchmarkDecompressKeyPath(b *testing.B) {
+	compressed := make([]CompressedKey, len(benchmarkPaths))
+	for i, p := range benchmarkPaths {
+		compressed[i] = CompressKeyPath(p)
+	}
+	b.ResetTimer()
+	for i, ck := range compressed {
+		b.Run(benchmarkPaths[i], func(b *testing.B) {
+			for b.Loop() {
+				_, _ = DecompressKeyPath(ck)
+			}
+		})
+	}
+}
+
+// BenchmarkMapInsertRawString measures the cost of inserting raw
+// default-path strings into a map, simulating the old dedupe buffer.
+func BenchmarkMapInsertRawString(b *testing.B) {
+	// Generate N distinct keys with realistic patterns.
+	const N = 10000
+	keys := make([]string, N)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("/calico/v1/host/node-%d/workload/kubernetes/ns%d%%2fpod-%d/endpoint/eth0", i%100, i%20, i)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		m := make(map[string]int, N)
+		for i, k := range keys {
+			m[k] = i
+		}
+	}
+}
+
+// BenchmarkMapInsertCompressedKey measures the cost of compressing
+// default-path strings and inserting the CompressedKey into a map,
+// simulating the new dedupe buffer.
+func BenchmarkMapInsertCompressedKey(b *testing.B) {
+	const N = 10000
+	keys := make([]string, N)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("/calico/v1/host/node-%d/workload/kubernetes/ns%d%%2fpod-%d/endpoint/eth0", i%100, i%20, i)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		m := make(map[CompressedKey]int, N)
+		for i, k := range keys {
+			m[CompressKeyPath(k)] = i
+		}
+	}
+}
+
+// BenchmarkMapMemory reports the approximate memory overhead of storing
+// N keys in maps using raw strings vs CompressedKeys.
+func BenchmarkMapMemory(b *testing.B) {
+	const N = 10000
+	rawKeys := make([]string, N)
+	compKeys := make([]CompressedKey, N)
+	for i := range rawKeys {
+		rawKeys[i] = fmt.Sprintf("/calico/v1/host/node-%d/workload/kubernetes/ns%d%%2fpod-%d/endpoint/eth0", i%100, i%20, i)
+		compKeys[i] = CompressKeyPath(rawKeys[i])
+	}
+
+	// Report the average key size.
+	totalRaw, totalComp := 0, 0
+	for i := range rawKeys {
+		totalRaw += len(rawKeys[i])
+		totalComp += len(compKeys[i])
+	}
+	b.Logf("Average raw key: %d bytes, compressed: %d bytes, savings: %.0f%%",
+		totalRaw/N, totalComp/N, 100*(1-float64(totalComp)/float64(totalRaw)))
+
+	b.Run("RawStringMap", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			m := make(map[string]int, N)
+			for i, k := range rawKeys {
+				m[k] = i
+			}
+			runtime.KeepAlive(m)
+		}
+	})
+	b.Run("CompressedKeyMap", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			m := make(map[CompressedKey]int, N)
+			for i, k := range compKeys {
+				m[k] = i
+			}
+			runtime.KeepAlive(m)
 		}
 	})
 }
