@@ -35,7 +35,10 @@ type KubeProxy struct {
 	proxy  ProxyFrontend
 	syncer DPSyncer
 
-	hostMetadataUpdates chan map[string]*proto.HostMetadataV4V6Update
+	// Map is hostname to an update/remove msg.
+	// The size-1 channel allows events to enter the main loop,
+	// and allows repeated updates to be merged.
+	hostMetadataUpdates chan map[string]any
 
 	ipFamily      int
 	hostIPUpdates chan []net.IP
@@ -76,7 +79,7 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 		opts:        opts,
 		rt:          NewRTCache(),
 
-		hostMetadataUpdates: make(chan map[string]*proto.HostMetadataV4V6Update, 1),
+		hostMetadataUpdates: make(chan map[string]any, 1),
 
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
@@ -190,8 +193,11 @@ func (kp *KubeProxy) start() error {
 
 	// Wait for the initial update.
 	hostIPs := <-kp.hostIPUpdates
+
 	// Could be nil, initially.
-	hostMetadata := kp.checkHostMetadataV4V6Updates()
+	hostMetadataUpdates := kp.recvHostMetadataV4V6Updates()
+	var hostMetadata map[string]*proto.HostMetadataV4V6Update
+	mergeHostMetadataV4V6Updates(hostMetadata, hostMetadataUpdates)
 
 	err = kp.run(hostIPs, hostMetadata)
 	if err != nil {
@@ -211,11 +217,12 @@ func (kp *KubeProxy) start() error {
 				if err != nil {
 					log.Panic("kube-proxy failed to resync after host IPs update")
 				}
-			case hostMetadata, ok = <-kp.hostMetadataUpdates:
+			case hostMetadataUpdates, ok = <-kp.hostMetadataUpdates:
 				if !ok {
 					log.Error("kube-proxy: hostMetadataUpdates closed")
 					return
 				}
+				mergeHostMetadataV4V6Updates(hostMetadata, hostMetadataUpdates)
 				kp.setProxyHostMetadata(hostMetadata)
 
 			case <-kp.exiting:
@@ -246,29 +253,60 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 	log.Debugf("kube-proxy OnHostIPsUpdate: %+v", IPs)
 }
 
-// OnHostMetadataV4V6Update is called by host-metadata cache after
-// it goes in-sync (completeDeferredWork called).
-func (kp *KubeProxy) OnHostMetadataV4V6Update(updates map[string]*proto.HostMetadataV4V6Update) {
-	select {
-	case kp.hostMetadataUpdates <- updates:
-	default:
-		select {
-		case <-kp.hostMetadataUpdates:
-		default:
+// OnUpdate implements the manager interface.
+func (kp *KubeProxy) OnUpdate(msg any) {
+	// Drain any pre-existing msg first and merge.
+	updates := kp.recvHostMetadataV4V6Updates()
+	if updates == nil {
+		updates = make(map[string]any)
+	}
+
+	switch update := msg.(type) {
+	case *proto.HostMetadataV4V6Update:
+		updates[update.Hostname] = update
+		log.Debugf("kube-proxy OnUpdate: host metadata update for %q: %+v", update.Hostname, update)
+	case *proto.HostMetadataV4V6Remove:
+		if u, ok := updates[update.Hostname]; ok {
+			delete(updates, update.Hostname)
+			log.Debugf("kube-proxy OnUpdate: coalesce host metadata deletion for queued update (deleted update) %q: %+v", update.Hostname, u)
+		} else {
+			log.WithField("remove", update).Debug("No existing update in queue, sending remove event")
+			updates[update.Hostname] = msg
 		}
-		kp.hostMetadataUpdates <- updates
 	}
-	if log.GetLevel() == log.DebugLevel {
-		log.WithField("updates", updates).Debug("kube-proxy HostMetadataV4V6Update cb fired")
-	}
+
+	// Send the now-merged updates back down the channel.
+	log.Debug("Queueing new hostmetadata for main loop")
+	kp.hostMetadataUpdates <- updates
+	log.Debug("Successfully queued new hostmetadata")
 }
 
-func (kp *KubeProxy) checkHostMetadataV4V6Updates() map[string]*proto.HostMetadataV4V6Update {
+// CompleteDeferredWork implements the manager interface.
+func (kp *KubeProxy) CompleteDeferredWork() error {
+	return nil
+}
+
+// recvHostMetadataV4V6Updates tries to read a pending host metadata update on the update channel.
+func (kp *KubeProxy) recvHostMetadataV4V6Updates() map[string]any {
 	select {
 	case upd := <-kp.hostMetadataUpdates:
 		return upd
 	default:
 		return nil
+	}
+}
+
+// mergeHostMetadataV4V6Updates merges the existing host metadata updates with the latest updates:
+// - A 'remove' in latest delete the corresponding key in 'existing'.
+// - An 'update' in latest overrides the corresponding key in 'existing'.
+func mergeHostMetadataV4V6Updates(existing map[string]*proto.HostMetadataV4V6Update, latest map[string]any) {
+	for k, v := range latest {
+		switch update := v.(type) {
+		case *proto.HostMetadataV4V6Update:
+			existing[k] = update
+		case *proto.HostMetadataV4V6Remove:
+			delete(existing, k)
+		}
 	}
 }
 
