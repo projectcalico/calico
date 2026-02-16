@@ -105,12 +105,12 @@ const (
 	dictK8s                                                   // 5
 	dictOpenstack                                             // 6
 	dictCNI                                                   // 7
-	dictNetworkPolicy                                         // 8
-	dictGlobalNetworkPolicy                                   // 9
-	dictStagedNetworkPolicy                                   // 10
-	dictStagedGlobalNetworkPolicy                             // 11
-	dictStagedKubernetesNetworkPolicy                         // 12
-	dictFelixConfiguration                                    // 13
+	dictNetworkPolicies                                       // 8
+	dictGlobalNetworkPolicies                                 // 9
+	dictStagedNetworkPolicies                                 // 10
+	dictStagedGlobalNetworkPolicies                           // 11
+	dictStagedKubernetesNetworkPolicies                       // 12
+	dictFelixConfigurations                                   // 13
 	// dictEnd is a sentinel; all valid indices are < dictEnd.
 	dictEnd // 14
 )
@@ -128,12 +128,12 @@ func init() {
 	dictStrings[dictK8s] = "k8s"
 	dictStrings[dictOpenstack] = "openstack"
 	dictStrings[dictCNI] = "cni"
-	dictStrings[dictNetworkPolicy] = "NetworkPolicy"
-	dictStrings[dictGlobalNetworkPolicy] = "GlobalNetworkPolicy"
-	dictStrings[dictStagedNetworkPolicy] = "StagedNetworkPolicy"
-	dictStrings[dictStagedGlobalNetworkPolicy] = "StagedGlobalNetworkPolicy"
-	dictStrings[dictStagedKubernetesNetworkPolicy] = "StagedKubernetesNetworkPolicy"
-	dictStrings[dictFelixConfiguration] = "FelixConfiguration"
+	dictStrings[dictNetworkPolicies] = "networkpolicies"
+	dictStrings[dictGlobalNetworkPolicies] = "globalnetworkpolicies"
+	dictStrings[dictStagedNetworkPolicies] = "stagednetworkpolicies"
+	dictStrings[dictStagedGlobalNetworkPolicies] = "stagedglobalnetworkpolicies"
+	dictStrings[dictStagedKubernetesNetworkPolicies] = "stagedkubernetesnetworkpolicies"
+	dictStrings[dictFelixConfigurations] = "felixconfigurations"
 
 	dictLookup = make(map[string]byte, len(dictStrings))
 	for i := byte(specialDictBase); i < dictEnd; i++ {

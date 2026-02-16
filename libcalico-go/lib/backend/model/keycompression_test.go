@@ -267,7 +267,7 @@ func TestFieldEncoding(t *testing.T) {
 		"ip-172-31-22-123.us-west-2.compute.internal",
 		"kns.default",
 		"kube-system/calico-node-abcde",
-		"NetworkPolicy",
+		"networkpolicies",
 		"kubernetes",
 		"eth0",
 		"default",
@@ -303,9 +303,9 @@ func TestFieldEncoding(t *testing.T) {
 func TestDictionaryEncoding(t *testing.T) {
 	dictEntries := []string{
 		"kubernetes", "eth0", "default", "k8s", "openstack", "cni",
-		"NetworkPolicy", "GlobalNetworkPolicy", "StagedNetworkPolicy",
-		"StagedGlobalNetworkPolicy", "StagedKubernetesNetworkPolicy",
-		"FelixConfiguration",
+		"networkpolicies", "globalnetworkpolicies", "stagednetworkpolicies",
+		"stagedglobalnetworkpolicies", "stagedkubernetesnetworkpolicies",
+		"felixconfigurations",
 	}
 
 	for _, s := range dictEntries {
