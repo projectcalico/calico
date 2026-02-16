@@ -23,19 +23,19 @@ import (
 // It is common for Make to be called in quick succession with the same input
 // from different call sites. Since the keys and values are interned, the
 // handleMap is the main allocation that can be avoided by caching.
-var recentCache = makeCache{
+var recentCache = recentMapCache{
 	seed: maphash.MakeSeed(),
 }
 
-const makeCacheSize = 128 // Must be a power of two.
+const recentMapCacheSize = 128 // Must be a power of two.
 
-type makeCache struct {
+type recentMapCache struct {
 	mu      sync.Mutex
 	seed    maphash.Seed
-	entries [makeCacheSize]makeCacheEntry
+	entries [recentMapCacheSize]recentMapCacheEntry
 }
 
-type makeCacheEntry struct {
+type recentMapCacheEntry struct {
 	hash uint64
 	m    Map
 }
@@ -43,9 +43,9 @@ type makeCacheEntry struct {
 // Lookup checks the cache for a Map matching the given map[string]string.
 // Returns the cached Map and true on hit, or the zero Map and false on miss.
 // The returned hash should be passed to Store on miss.
-func (c *makeCache) Lookup(m map[string]string) (Map, uint64, bool) {
+func (c *recentMapCache) Lookup(m map[string]string) (Map, uint64, bool) {
 	hash := c.hashMapStringString(m)
-	idx := hash & (makeCacheSize - 1)
+	idx := hash & (recentMapCacheSize - 1)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -57,17 +57,17 @@ func (c *makeCache) Lookup(m map[string]string) (Map, uint64, bool) {
 }
 
 // Store stores a Map in the cache at the slot determined by hash.
-func (c *makeCache) Store(hash uint64, result Map) {
-	idx := hash & (makeCacheSize - 1)
+func (c *recentMapCache) Store(hash uint64, result Map) {
+	idx := hash & (recentMapCacheSize - 1)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries[idx] = makeCacheEntry{hash: hash, m: result}
+	c.entries[idx] = recentMapCacheEntry{hash: hash, m: result}
 }
 
 // hashMapStringString computes an order-independent hash of a
 // map[string]string. Each key/value pair is hashed independently and XORed
 // together so that iteration order does not matter.
-func (c *makeCache) hashMapStringString(m map[string]string) uint64 {
+func (c *recentMapCache) hashMapStringString(m map[string]string) uint64 {
 	var combined uint64
 	var h maphash.Hash
 	h.SetSeed(c.seed)
