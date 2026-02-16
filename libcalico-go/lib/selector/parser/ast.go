@@ -17,6 +17,8 @@ package parser
 import (
 	_ "crypto/sha256" // register hash func
 	"fmt"
+	"iter"
+	"maps"
 	"strings"
 	"sync"
 
@@ -40,11 +42,34 @@ func (l MapAsLabels) GetHandle(labelName uniquestr.Handle) (handle uniquestr.Han
 	return uniquestr.Make(value), present
 }
 
-type LabelRestrictions map[uniquestr.Handle]LabelRestriction
+// LabelRestrictions wraps the label restriction map, preventing callers from
+// modifying the underlying map (which may be cached).
+type LabelRestrictions struct {
+	m map[uniquestr.Handle]LabelRestriction
+}
+
+// MakeLabelRestrictions creates a LabelRestrictions wrapper around the given map.
+// The caller should not modify the map after passing it to this function.
+func MakeLabelRestrictions(m map[uniquestr.Handle]LabelRestriction) LabelRestrictions {
+	return LabelRestrictions{m: m}
+}
+
+func (lr LabelRestrictions) All() iter.Seq2[uniquestr.Handle, LabelRestriction] {
+	return maps.All(lr.m)
+}
+
+func (lr LabelRestrictions) Get(key uniquestr.Handle) (LabelRestriction, bool) {
+	v, ok := lr.m[key]
+	return v, ok
+}
+
+func (lr LabelRestrictions) Len() int {
+	return len(lr.m)
+}
 
 func (lr LabelRestrictions) String() string {
 	m := map[string]LabelRestriction{}
-	for k, v := range lr {
+	for k, v := range lr.m {
 		m[k.Value()] = v
 	}
 	return fmt.Sprint(m)
@@ -148,21 +173,33 @@ func (sel *Selector) UniqueID() string {
 var (
 	lastRestrictionMutex    sync.Mutex
 	lastRestrictionSelector *Selector
-	lastLabelRestrictions   LabelRestrictions
+	lastLabelRestrictions   map[uniquestr.Handle]LabelRestriction
 )
 
+// LabelRestrictions returns a set of lower bound restrictions on the labels
+// that would match this selector.  For example, for "a == 'b' && has(c)", the
+// label restrictions would be "a must be present and have value 'b', c must be
+// present".
+//
+// Since it's common to call LabelRestrictions multiple times for the same
+// selector in quick succession, we cache the most recently calculated value
+// at package level.  The cache is thread safe and deals with the calculation
+// graph's common usage pattern.
 func (sel *Selector) LabelRestrictions() LabelRestrictions {
 	// We used to store the label restrictions in a field, but, if there are many selectors active
 	// the maps really add up.  Calculate them on demand, but cache the most recently calculated
 	// one because the LabelRestrictions are used multiple times when adding a particular selector
 	// to the named port index. (Since that is single threaded, caching exactly 1 gives a big win.)
+	//
+	// The LabelRestrictions struct wraps the map to prevent callers from accidentally modifying
+	// the cached map.
 	lastRestrictionMutex.Lock()
 	defer lastRestrictionMutex.Unlock()
 	if lastRestrictionSelector != sel {
 		lastRestrictionSelector = sel
 		lastLabelRestrictions = sel.root.LabelRestrictions()
 	}
-	return lastLabelRestrictions
+	return MakeLabelRestrictions(lastLabelRestrictions)
 }
 
 func (sel *Selector) Equal(other *Selector) bool {
