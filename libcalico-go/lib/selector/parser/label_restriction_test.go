@@ -123,10 +123,11 @@ func TestLabelRestrictions(t *testing.T) {
 			lrs := sel.LabelRestrictions()
 			var res LabelRestrictions
 			if test.Res != nil {
-				res = LabelRestrictions{}
+				m := map[uniquestr.Handle]LabelRestriction{}
 				for k, v := range test.Res {
-					res[uniquestr.Make(k)] = v
+					m[uniquestr.Make(k)] = v
 				}
+				res = MakeLabelRestrictions(m)
 			}
 			Expect(lrs).To(Equal(res), fmt.Sprintf("Selector %s should produce restrictions: %v", test.Sel, test.Res))
 			lrs = sel.LabelRestrictions()
@@ -147,6 +148,42 @@ func TestLabelRestrictions(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestLabelRestrictionsCache(t *testing.T) {
+	RegisterTestingT(t)
+
+	selA, err := Parse("has(a)")
+	Expect(err).NotTo(HaveOccurred())
+	selB, err := Parse("has(b)")
+	Expect(err).NotTo(HaveOccurred())
+
+	// Clear cache.
+	lastRestrictionSelector = nil
+	lastLabelRestrictions = nil
+
+	// First call should populate the cache.
+	lrsA1 := selA.LabelRestrictions()
+	Expect(lastRestrictionSelector).To(BeIdenticalTo(selA))
+
+	// Second call to the same selector should be a cache hit;
+	// the cached selector pointer should not change.
+	lrsA2 := selA.LabelRestrictions()
+	Expect(lastRestrictionSelector).To(BeIdenticalTo(selA),
+		"cache hit should not change the cached selector")
+	Expect(lrsA2).To(Equal(lrsA1))
+
+	// Calling on a different selector should update the cache.
+	lrsB := selB.LabelRestrictions()
+	Expect(lastRestrictionSelector).To(BeIdenticalTo(selB),
+		"cache miss should update the cached selector")
+	Expect(lrsB).NotTo(Equal(lrsA1))
+
+	// Going back to selA should update the cache again.
+	lrsA3 := selA.LabelRestrictions()
+	Expect(lastRestrictionSelector).To(BeIdenticalTo(selA),
+		"cache should update when switching back to first selector")
+	Expect(lrsA3).To(Equal(lrsA1))
 }
 
 func handleSlice(ss ...string) []uniquestr.Handle {
