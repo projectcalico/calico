@@ -22,16 +22,16 @@ import (
 // Compressed key format
 // =====================
 //
-// Compressed keys are designed to be used directly as Go map[string]…
-// keys in deduplicating buffers.  The overall length is carried by
-// the Go string header, so the encoding needs no explicit length
-// fields.
+// Compressed keys are designed to be used directly as Go
+// map[CompressedKey]… keys in deduplicating buffers.  The overall
+// length is carried by the Go string header, so the encoding needs
+// no explicit length fields.
 //
 // The public API operates on default-path strings (the same strings
-// used as etcd/KDD keys) and returns compact strings:
+// used as etcd/KDD keys) and returns CompressedKey values:
 //
-//   CompressKeyPath(path string) string
-//   DecompressKeyPath(compressed string) (string, error)
+//   CompressKeyPath(path string) CompressedKey
+//   DecompressKeyPath(compressed CompressedKey) (string, error)
 //
 // The path is pattern-matched to select the best per-type
 // compression; unrecognised paths are stored with a fallback tag.
@@ -332,12 +332,16 @@ func decodeFields(data []byte) ([]string, error) {
 
 // --- Public API ---
 
+// CompressedKey is a compact representation of a default-path string.
+// It is suitable for direct use as a Go map key.
+type CompressedKey string
+
 // CompressKeyPath compresses a default-path string into a compact
-// string suitable for direct use as a Go map[string] key.  The path
-// is pattern-matched to select the best per-type compression;
-// unrecognised paths are stored with a fallback tag.
-func CompressKeyPath(path string) string {
-	return string(compressKeyPathToBytes(path))
+// CompressedKey suitable for direct use as a Go map[CompressedKey]…
+// key.  The path is pattern-matched to select the best per-type
+// compression; unrecognised paths are stored with a fallback tag.
+func CompressKeyPath(path string) CompressedKey {
+	return CompressedKey(compressKeyPathToBytes(path))
 }
 
 func compressKeyPathToBytes(path string) []byte {
@@ -430,9 +434,9 @@ func compressKeyPathToBytes(path string) []byte {
 	return buf
 }
 
-// DecompressKeyPath decompresses a string produced by CompressKeyPath
-// back into the original default-path string.
-func DecompressKeyPath(compressed string) (string, error) {
+// DecompressKeyPath decompresses a CompressedKey produced by
+// CompressKeyPath back into the original default-path string.
+func DecompressKeyPath(compressed CompressedKey) (string, error) {
 	data := []byte(compressed)
 	if len(data) == 0 {
 		return "", fmt.Errorf("empty compressed key")

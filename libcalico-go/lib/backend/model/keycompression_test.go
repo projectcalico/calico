@@ -211,7 +211,7 @@ func TestCompressUsableAsMapKey(t *testing.T) {
 		"/calico/v1/policy/NetworkPolicy/default/p2",
 	}
 
-	m := make(map[string]string)
+	m := make(map[CompressedKey]string)
 	for _, p := range paths {
 		m[CompressKeyPath(p)] = p
 	}
@@ -344,7 +344,7 @@ func TestDecompressErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := DecompressKeyPath(tt.data)
+			_, err := DecompressKeyPath(CompressedKey(tt.data))
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
