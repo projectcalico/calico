@@ -53,6 +53,9 @@ type Map struct {
 // strings via pointer dereference rather than iterating the input map (which
 // would require uniquestr.Make per key lookup).
 func (i Map) EquivalentTo(m map[string]string) bool {
+	if i.IsNil() != (m == nil) {
+		return false
+	}
 	if len(m) != i.Len() {
 		return false
 	}
