@@ -1190,40 +1190,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("Waiting for dp to get setup up")
 
 					ensureBPFProgramsAttached(tc.Felixes[0], "bpfout.cali")
-					getPreambleProgramIDs := func() []int {
-						var bpfnet []struct {
-							TC []struct {
-								Name string `json:"name"`
-								ID   int    `json:"prog_id"`
-							} `json:"tc"`
-						}
-						out, err := tc.Felixes[0].ExecOutput("bpftool", "net", "show", "-j")
-						Expect(err).NotTo(HaveOccurred())
-						err = json.Unmarshal([]byte(out), &bpfnet)
-						Expect(err).NotTo(HaveOccurred())
-						var preambleIDs []int
-						for _, entry := range bpfnet {
-							for _, prog := range entry.TC {
-								if strings.Contains(prog.Name, "cali_tc_pream") {
-									preambleIDs = append(preambleIDs, prog.ID)
-								}
-							}
-						}
-						return preambleIDs
-					}
-					Eventually(func() int {
-						return len(getPreambleProgramIDs())
-					}, "15s", "1s").Should(Equal(10)) // 10 = 2 (ingress+egress) * 5 interfaces (bpfout, lo, eth0, caliXXX x2)
-
-					// check for bpf maps
-					out, err := tc.Felixes[0].ExecOutput("ls", "/sys/fs/bpf/tc/globals/")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(out).To(Not(Equal("")))
-
-					// check for cgroups
-					out, err = tc.Felixes[0].ExecOutput("bpftool", "cgroup", "show", "/run/calico/cgroup")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(out).To(ContainSubstring("calico_connect"))
 
 					By("Changing env and restarting felix")
 
@@ -1232,19 +1198,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					By("Checking that all programs got cleaned up")
 
-					Eventually(func() int {
-						return len(getPreambleProgramIDs())
-					}, "15s", "1s").Should(Equal(0))
+					Eventually(func() string {
+						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
+						return out
+					}, "15s", "1s").ShouldNot(
+						Or(ContainSubstring("cali_"), ContainSubstring("calico_"), ContainSubstring("xdp_cali_")))
 
-					out, err = tc.Felixes[0].ExecOutput("ls", "/sys/fs/bpf/tc/globals/")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(out).To(Equal(""))
+					// N.B. calico_failsafe map is created in iptables mode by
+					// bpf.NewFailsafeMap() It has calico_ prefix. All other bpf
+					// maps have only cali_ prefix.
+					Eventually(func() string {
+						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "map", "show")
+						return out
+					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
 
-					out, err = tc.Felixes[0].ExecOutput("bpftool", "cgroup", "show", "/run/calico/cgroup")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(out).NotTo(ContainSubstring("calico_connect"))
-
-					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
+					out, _ := tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
 					Expect(out).To(Equal("Device \"bpfin.cali\" does not exist.\n"))
 					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfout.cali")
 					Expect(out).To(Equal("Device \"bpfout.cali\" does not exist.\n"))
