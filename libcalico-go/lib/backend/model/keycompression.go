@@ -55,8 +55,10 @@ import (
 //	31:    SPECIAL PREFIX — the next 5-bit code selects:
 //	         0:    field delimiter (separates fields in a multi-field key)
 //	         1:    end-of-stream marker
-//	         2-N:  dictionary entry (whole-field substitution, e.g.
-//	               2=kubernetes, 3=eth0, …).
+//	         2-13: dictionary entry (whole-field substitution, e.g.
+//	               2=kubernetes, 3=eth0, …); dictEnd (14) is the
+//	               current upper bound, leaving room for growth
+//	               within one 5-bit sub-code (max 31).
 //
 // Everything is 5-bit codes packed into bytes.  The final byte is
 // zero-padded on the right.  Compact characters cost 5 bits each
