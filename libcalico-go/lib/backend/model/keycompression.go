@@ -16,6 +16,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Compressed key format
@@ -25,6 +26,15 @@ import (
 // keys in deduplicating buffers.  The overall length is carried by
 // the Go string header, so the encoding needs no explicit length
 // fields.
+//
+// The public API operates on default-path strings (the same strings
+// used as etcd/KDD keys) and returns compact strings:
+//
+//   CompressKeyPath(path string) string
+//   DecompressKeyPath(compressed string) (string, error)
+//
+// The path is pattern-matched to select the best per-type
+// compression; unrecognised paths are stored with a fallback tag.
 //
 // Layout:
 //
@@ -44,10 +54,9 @@ import (
 //	       raw_byte = (hi << 3) | lo, where hi is 0-31 and lo is 0-7.
 //	31:    SPECIAL PREFIX — the next 5-bit code selects:
 //	         0:    field delimiter (separates fields in a multi-field key)
-//	         1-N:  dictionary entry (whole-field substitution, e.g.
-//	               1=kubernetes, 2=eth0, …).  Dictionary indices
-//	               beyond 31 use two 5-bit codes: (idx/31, idx%31+1)
-//	               but in practice all current entries fit in one code.
+//	         1:    end-of-stream marker
+//	         2-N:  dictionary entry (whole-field substitution, e.g.
+//	               2=kubernetes, 3=eth0, …).
 //
 // Everything is 5-bit codes packed into bytes.  The final byte is
 // zero-padded on the right.  Compact characters cost 5 bits each
@@ -59,6 +68,7 @@ import (
 const (
 	tagUnknown byte = iota
 	tagWorkloadEndpoint
+	tagWorkloadEndpointK8s // k8s orchestrator + eth0 endpoint; stores only [hostname] D [workloadID]
 	tagPolicy
 	tagProfileRules
 	tagProfileLabels
@@ -320,59 +330,134 @@ func decodeFields(data []byte) ([]string, error) {
 
 // --- Public API ---
 
-// CompressKey compresses a Key into a compact byte slice suitable for
-// use as a Go map key (via string(result)).  The encoding eliminates
-// redundant path prefixes and bit-packs common characters at 5 bits
-// each, producing significantly shorter representations than the
-// default path strings.
-func CompressKey(key Key) ([]byte, error) {
-	switch k := key.(type) {
-	case WorkloadEndpointKey:
-		return compressWorkloadEndpoint(k), nil
-	case PolicyKey:
-		return compressPolicy(k), nil
-	case ProfileRulesKey:
-		return compressProfileRules(k), nil
-	case ProfileLabelsKey:
-		return compressProfileLabels(k), nil
-	case HostEndpointKey:
-		return compressHostEndpoint(k), nil
-	case ResourceKey:
-		return compressResource(k), nil
-	case NetworkSetKey:
-		return compressNetworkSet(k), nil
-	default:
-		return compressFallback(key)
-	}
+// CompressKeyPath compresses a default-path string into a compact
+// string suitable for direct use as a Go map[string] key.  The path
+// is pattern-matched to select the best per-type compression;
+// unrecognised paths are stored with a fallback tag.
+func CompressKeyPath(path string) string {
+	return string(compressKeyPathToBytes(path))
 }
 
-// DecompressKey decompresses a byte slice produced by CompressKey back
-// into a Key.
-func DecompressKey(data []byte) (Key, error) {
+func compressKeyPathToBytes(path string) []byte {
+	// Only match known patterns for canonical paths starting with "/".
+	if len(path) == 0 || path[0] != '/' {
+		// Fallback: store the raw path.
+		buf := make([]byte, 0, 1+len(path))
+		buf = append(buf, tagUnknown)
+		buf = append(buf, path...)
+		return buf
+	}
+
+	// Strip leading "/" for splitting.
+	parts := strings.Split(path[1:], "/")
+
+	if len(parts) >= 3 && parts[0] == "calico" {
+		switch parts[1] {
+		case "v1":
+			switch parts[2] {
+			case "host":
+				if len(parts) >= 5 {
+					switch parts[4] {
+					case "workload":
+						// /calico/v1/host/<hostname>/workload/<orch>/<workload>/endpoint/<ep>
+						if len(parts) == 9 && parts[7] == "endpoint" {
+							if parts[5] == "kubernetes" && parts[8] == "eth0" {
+								// Optimised: k8s+eth0 stores only hostname and workloadID.
+								return compressFields(tagWorkloadEndpointK8s,
+									parts[3], parts[6])
+							}
+							return compressFields(tagWorkloadEndpoint,
+								parts[3], parts[5], parts[6], parts[8])
+						}
+					case "endpoint":
+						// /calico/v1/host/<hostname>/endpoint/<endpointID>
+						if len(parts) == 6 {
+							return compressFields(tagHostEndpoint,
+								parts[3], parts[5])
+						}
+					}
+				}
+			case "netset":
+				// /calico/v1/netset/<name>
+				if len(parts) == 4 {
+					return compressFields(tagNetworkSet, parts[3])
+				}
+			case "policy":
+				if len(parts) >= 6 {
+					switch parts[3] {
+					case "profile":
+						// /calico/v1/policy/profile/<name>/rules
+						// /calico/v1/policy/profile/<name>/labels
+						if len(parts) == 6 {
+							switch parts[5] {
+							case "rules":
+								return compressFields(tagProfileRules, parts[4])
+							case "labels":
+								return compressFields(tagProfileLabels, parts[4])
+							}
+						}
+					default:
+						// /calico/v1/policy/<kind>/<namespace>/<name>
+						if len(parts) == 6 {
+							return compressFields(tagPolicy,
+								parts[3], parts[4], parts[5])
+						}
+					}
+				}
+			}
+		case "resources":
+			// /calico/resources/v3/projectcalico.org/<plural>/<name>           (global)
+			// /calico/resources/v3/projectcalico.org/<plural>/<namespace>/<name> (namespaced)
+			if len(parts) >= 6 && parts[2] == "v3" && parts[3] == "projectcalico.org" {
+				switch len(parts) {
+				case 6:
+					return compressFields(tagResourceKeyGlobal,
+						parts[4], parts[5])
+				case 7:
+					return compressFields(tagResourceKeyNamespaced,
+						parts[4], parts[5], parts[6])
+				}
+			}
+		}
+	}
+
+	// Fallback: store the raw path.
+	buf := make([]byte, 0, 1+len(path))
+	buf = append(buf, tagUnknown)
+	buf = append(buf, path...)
+	return buf
+}
+
+// DecompressKeyPath decompresses a string produced by CompressKeyPath
+// back into the original default-path string.
+func DecompressKeyPath(compressed string) (string, error) {
+	data := []byte(compressed)
 	if len(data) == 0 {
-		return nil, fmt.Errorf("empty compressed key")
+		return "", fmt.Errorf("empty compressed key")
 	}
 	switch data[0] {
 	case tagWorkloadEndpoint:
-		return decompressWorkloadEndpoint(data[1:])
+		return decompressWorkloadEndpointPath(data[1:])
+	case tagWorkloadEndpointK8s:
+		return decompressWorkloadEndpointK8sPath(data[1:])
 	case tagPolicy:
-		return decompressPolicy(data[1:])
+		return decompressPolicyPath(data[1:])
 	case tagProfileRules:
-		return decompressProfileRules(data[1:])
+		return decompressProfilePath(data[1:], "rules")
 	case tagProfileLabels:
-		return decompressProfileLabels(data[1:])
+		return decompressProfilePath(data[1:], "labels")
 	case tagHostEndpoint:
-		return decompressHostEndpoint(data[1:])
+		return decompressHostEndpointPath(data[1:])
 	case tagResourceKeyGlobal:
-		return decompressResourceGlobal(data[1:])
+		return decompressResourcePath(data[1:], false)
 	case tagResourceKeyNamespaced:
-		return decompressResourceNamespaced(data[1:])
+		return decompressResourcePath(data[1:], true)
 	case tagNetworkSet:
-		return decompressNetworkSet(data[1:])
+		return decompressNetworkSetPath(data[1:])
 	case tagUnknown:
-		return decompressFallback(data[1:])
+		return string(data[1:]), nil
 	default:
-		return nil, fmt.Errorf("unknown key type tag: 0x%02x", data[0])
+		return "", fmt.Errorf("unknown key type tag: 0x%02x", data[0])
 	}
 }
 
@@ -403,160 +488,109 @@ func compressFields(tag byte, fields ...string) []byte {
 	return p.result()
 }
 
-// --- Per-type compress/decompress ---
+// --- Per-type path decompression ---
 
-// WorkloadEndpointKey: [tag] [hostname] D [orchestratorID] D [workloadID] D [endpointID]
-func compressWorkloadEndpoint(k WorkloadEndpointKey) []byte {
-	return compressFields(tagWorkloadEndpoint,
-		k.Hostname, k.OrchestratorID, k.WorkloadID, k.EndpointID)
-}
-
-func decompressWorkloadEndpoint(data []byte) (Key, error) {
+// decompressWorkloadEndpointPath: fields = [hostname, orch, workload, endpoint]
+// → /calico/v1/host/<hostname>/workload/<orch>/<workload>/endpoint/<ep>
+func decompressWorkloadEndpointPath(data []byte) (string, error) {
 	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("WorkloadEndpointKey: %w", err)
+		return "", fmt.Errorf("WorkloadEndpointPath: %w", err)
 	}
 	if len(fields) < 4 {
-		return nil, fmt.Errorf("WorkloadEndpointKey: expected 4 fields, got %d", len(fields))
+		return "", fmt.Errorf("WorkloadEndpointPath: expected 4 fields, got %d", len(fields))
 	}
-	return WorkloadEndpointKey{
-		Hostname:       fields[0],
-		OrchestratorID: fields[1],
-		WorkloadID:     fields[2],
-		EndpointID:     fields[3],
-	}, nil
+	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
+		fields[0], fields[1], fields[2], fields[3]), nil
 }
 
-// PolicyKey: [tag] [kind] D [namespace] D [name]
-func compressPolicy(k PolicyKey) []byte {
-	return compressFields(tagPolicy, k.Kind, k.Namespace, k.Name)
-}
-
-func decompressPolicy(data []byte) (Key, error) {
+// decompressWorkloadEndpointK8sPath: fields = [hostname, workload]
+// → /calico/v1/host/<hostname>/workload/kubernetes/<workload>/endpoint/eth0
+func decompressWorkloadEndpointK8sPath(data []byte) (string, error) {
 	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("PolicyKey: %w", err)
-	}
-	if len(fields) < 3 {
-		return nil, fmt.Errorf("PolicyKey: expected 3 fields, got %d", len(fields))
-	}
-	return PolicyKey{Kind: fields[0], Namespace: fields[1], Name: fields[2]}, nil
-}
-
-// ProfileRulesKey: [tag] [name]
-func compressProfileRules(k ProfileRulesKey) []byte {
-	return compressFields(tagProfileRules, k.Name)
-}
-
-func decompressProfileRules(data []byte) (Key, error) {
-	fields, err := decodeFields(data)
-	if err != nil {
-		return nil, fmt.Errorf("ProfileRulesKey: %w", err)
-	}
-	if len(fields) < 1 {
-		return nil, fmt.Errorf("ProfileRulesKey: expected 1 field, got %d", len(fields))
-	}
-	return ProfileRulesKey{ProfileKey: ProfileKey{Name: fields[0]}}, nil
-}
-
-// ProfileLabelsKey: [tag] [name]
-func compressProfileLabels(k ProfileLabelsKey) []byte {
-	return compressFields(tagProfileLabels, k.Name)
-}
-
-func decompressProfileLabels(data []byte) (Key, error) {
-	fields, err := decodeFields(data)
-	if err != nil {
-		return nil, fmt.Errorf("ProfileLabelsKey: %w", err)
-	}
-	if len(fields) < 1 {
-		return nil, fmt.Errorf("ProfileLabelsKey: expected 1 field, got %d", len(fields))
-	}
-	return ProfileLabelsKey{ProfileKey: ProfileKey{Name: fields[0]}}, nil
-}
-
-// HostEndpointKey: [tag] [hostname] D [endpointID]
-func compressHostEndpoint(k HostEndpointKey) []byte {
-	return compressFields(tagHostEndpoint, k.Hostname, k.EndpointID)
-}
-
-func decompressHostEndpoint(data []byte) (Key, error) {
-	fields, err := decodeFields(data)
-	if err != nil {
-		return nil, fmt.Errorf("HostEndpointKey: %w", err)
+		return "", fmt.Errorf("WorkloadEndpointK8sPath: %w", err)
 	}
 	if len(fields) < 2 {
-		return nil, fmt.Errorf("HostEndpointKey: expected 2 fields, got %d", len(fields))
+		return "", fmt.Errorf("WorkloadEndpointK8sPath: expected 2 fields, got %d", len(fields))
 	}
-	return HostEndpointKey{Hostname: fields[0], EndpointID: fields[1]}, nil
+	return fmt.Sprintf("/calico/v1/host/%s/workload/kubernetes/%s/endpoint/eth0",
+		fields[0], fields[1]), nil
 }
 
-// ResourceKey global: [tag] [kind] D [name]
-// ResourceKey namespaced: [tag] [kind] D [namespace] D [name]
-func compressResource(k ResourceKey) []byte {
-	if k.Namespace == "" {
-		return compressFields(tagResourceKeyGlobal, k.Kind, k.Name)
-	}
-	return compressFields(tagResourceKeyNamespaced, k.Kind, k.Namespace, k.Name)
-}
-
-func decompressResourceGlobal(data []byte) (Key, error) {
+// decompressPolicyPath: fields = [kind, namespace, name]
+// → /calico/v1/policy/<kind>/<namespace>/<name>
+func decompressPolicyPath(data []byte) (string, error) {
 	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("ResourceKey: %w", err)
-	}
-	if len(fields) < 2 {
-		return nil, fmt.Errorf("ResourceKey: expected 2 fields, got %d", len(fields))
-	}
-	return ResourceKey{Kind: fields[0], Name: fields[1]}, nil
-}
-
-func decompressResourceNamespaced(data []byte) (Key, error) {
-	fields, err := decodeFields(data)
-	if err != nil {
-		return nil, fmt.Errorf("ResourceKey: %w", err)
+		return "", fmt.Errorf("PolicyPath: %w", err)
 	}
 	if len(fields) < 3 {
-		return nil, fmt.Errorf("ResourceKey: expected 3 fields, got %d", len(fields))
+		return "", fmt.Errorf("PolicyPath: expected 3 fields, got %d", len(fields))
 	}
-	return ResourceKey{Kind: fields[0], Namespace: fields[1], Name: fields[2]}, nil
+	return fmt.Sprintf("/calico/v1/policy/%s/%s/%s",
+		fields[0], fields[1], fields[2]), nil
 }
 
-// NetworkSetKey: [tag] [name]
-func compressNetworkSet(k NetworkSetKey) []byte {
-	return compressFields(tagNetworkSet, k.Name)
-}
-
-func decompressNetworkSet(data []byte) (Key, error) {
+// decompressProfilePath: fields = [name]
+// → /calico/v1/policy/profile/<name>/<suffix>
+func decompressProfilePath(data []byte, suffix string) (string, error) {
 	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("NetworkSetKey: %w", err)
+		return "", fmt.Errorf("ProfilePath: %w", err)
 	}
 	if len(fields) < 1 {
-		return nil, fmt.Errorf("NetworkSetKey: expected 1 field, got %d", len(fields))
+		return "", fmt.Errorf("ProfilePath: expected 1 field, got %d", len(fields))
 	}
-	return NetworkSetKey{Name: fields[0]}, nil
+	return fmt.Sprintf("/calico/v1/policy/profile/%s/%s",
+		fields[0], suffix), nil
 }
 
-// Fallback: [tag] [raw default path bytes]
-// The raw path is stored directly — no per-character encoding — since
-// it is only used for uncommon key types.
-func compressFallback(key Key) ([]byte, error) {
-	path, err := key.defaultPath()
+// decompressHostEndpointPath: fields = [hostname, endpointID]
+// → /calico/v1/host/<hostname>/endpoint/<endpointID>
+func decompressHostEndpointPath(data []byte) (string, error) {
+	fields, err := decodeFields(data)
 	if err != nil {
-		return nil, fmt.Errorf("compressing unknown key type: %w", err)
+		return "", fmt.Errorf("HostEndpointPath: %w", err)
 	}
-	buf := make([]byte, 0, 1+len(path))
-	buf = append(buf, tagUnknown)
-	buf = append(buf, path...)
-	return buf, nil
+	if len(fields) < 2 {
+		return "", fmt.Errorf("HostEndpointPath: expected 2 fields, got %d", len(fields))
+	}
+	return fmt.Sprintf("/calico/v1/host/%s/endpoint/%s",
+		fields[0], fields[1]), nil
 }
 
-func decompressFallback(data []byte) (Key, error) {
-	path := string(data)
-	key := KeyFromDefaultPath(path)
-	if key == nil {
-		return nil, fmt.Errorf("failed to parse fallback key path: %q", path)
+// decompressResourcePath: fields = [plural, name] or [plural, namespace, name]
+// → /calico/resources/v3/projectcalico.org/<plural>/<name>
+// → /calico/resources/v3/projectcalico.org/<plural>/<namespace>/<name>
+func decompressResourcePath(data []byte, namespaced bool) (string, error) {
+	fields, err := decodeFields(data)
+	if err != nil {
+		return "", fmt.Errorf("ResourcePath: %w", err)
 	}
-	return key, nil
+	if namespaced {
+		if len(fields) < 3 {
+			return "", fmt.Errorf("ResourcePath: expected 3 fields, got %d", len(fields))
+		}
+		return fmt.Sprintf("/calico/resources/v3/projectcalico.org/%s/%s/%s",
+			fields[0], fields[1], fields[2]), nil
+	}
+	if len(fields) < 2 {
+		return "", fmt.Errorf("ResourcePath: expected 2 fields, got %d", len(fields))
+	}
+	return fmt.Sprintf("/calico/resources/v3/projectcalico.org/%s/%s",
+		fields[0], fields[1]), nil
+}
+
+// decompressNetworkSetPath: fields = [name]
+// → /calico/v1/netset/<name>
+func decompressNetworkSetPath(data []byte) (string, error) {
+	fields, err := decodeFields(data)
+	if err != nil {
+		return "", fmt.Errorf("NetworkSetPath: %w", err)
+	}
+	if len(fields) < 1 {
+		return "", fmt.Errorf("NetworkSetPath: expected 1 field, got %d", len(fields))
+	}
+	return fmt.Sprintf("/calico/v1/netset/%s", fields[0]), nil
 }

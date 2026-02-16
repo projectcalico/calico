@@ -16,201 +16,152 @@ package model
 
 import (
 	"testing"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
-// TestCompressDecompressRoundTrip verifies that known key types round-trip
-// through CompressKey/DecompressKey without data loss.
+// TestCompressDecompressRoundTrip verifies that known key paths round-trip
+// through CompressKeyPath/DecompressKeyPath without data loss.
 func TestCompressDecompressRoundTrip(t *testing.T) {
 	tests := []struct {
 		name string
-		key  Key
+		path string
 	}{
+		// WorkloadEndpoint — k8s+eth0 (optimised tag)
 		{
-			name: "WorkloadEndpoint/kubernetes/eth0",
-			key: WorkloadEndpointKey{
-				Hostname:       "node-1.example.com",
-				OrchestratorID: "kubernetes",
-				WorkloadID:     "default/nginx-abc123",
-				EndpointID:     "eth0",
-			},
+			name: "WorkloadEndpoint/k8s/eth0",
+			path: "/calico/v1/host/node-1.example.com/workload/kubernetes/default%2fnginx-abc123/endpoint/eth0",
 		},
 		{
+			name: "WorkloadEndpoint/k8s/eth0/long-hostname",
+			path: "/calico/v1/host/ip-172-31-22-123.us-west-2.compute.internal/workload/kubernetes/kube-system%2fcalico-node-abcde/endpoint/eth0",
+		},
+		// WorkloadEndpoint — general (non-k8s or non-eth0)
+		{
 			name: "WorkloadEndpoint/openstack",
-			key: WorkloadEndpointKey{
-				Hostname:       "compute-01",
-				OrchestratorID: "openstack",
-				WorkloadID:     "instance-12345",
-				EndpointID:     "tap1234",
-			},
+			path: "/calico/v1/host/compute-01/workload/openstack/instance-12345/endpoint/tap1234",
 		},
 		{
 			name: "WorkloadEndpoint/cni",
-			key: WorkloadEndpointKey{
-				Hostname:       "host-a",
-				OrchestratorID: "cni",
-				WorkloadID:     "container-xyz",
-				EndpointID:     "eth0",
-			},
+			path: "/calico/v1/host/host-a/workload/cni/container-xyz/endpoint/eth0",
 		},
 		{
-			name: "WorkloadEndpoint/empty-looking-fields",
-			key: WorkloadEndpointKey{
-				Hostname:       "h",
-				OrchestratorID: "o",
-				WorkloadID:     "w",
-				EndpointID:     "e",
-			},
+			name: "WorkloadEndpoint/k8s/non-eth0",
+			path: "/calico/v1/host/node-1/workload/kubernetes/ns%2fpod/endpoint/net1",
 		},
 		{
-			name: "WorkloadEndpoint/long-hostname",
-			key: WorkloadEndpointKey{
-				Hostname:       "ip-172-31-22-123.us-west-2.compute.internal",
-				OrchestratorID: "kubernetes",
-				WorkloadID:     "kube-system/calico-node-abcde",
-				EndpointID:     "eth0",
-			},
+			name: "WorkloadEndpoint/escaped-fields",
+			path: "/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
 		},
-		{
-			name: "WorkloadEndpoint/non-compact-chars",
-			key: WorkloadEndpointKey{
-				Hostname:       "node-1",
-				OrchestratorID: "orch\x80id",
-				WorkloadID:     "work\xffload",
-				EndpointID:     "ep",
-			},
-		},
-		{
-			name: "WorkloadEndpoint/all-special-bytes",
-			key: WorkloadEndpointKey{
-				Hostname:       "\xFD\xFE\xFF",
-				OrchestratorID: "\x00",
-				WorkloadID:     "\xFD\xFD",
-				EndpointID:     "\xFE",
-			},
-		},
+		// PolicyKey
 		{
 			name: "PolicyKey/NetworkPolicy",
-			key: PolicyKey{
-				Kind:      apiv3.KindNetworkPolicy,
-				Namespace: "default",
-				Name:      "allow-dns",
-			},
+			path: "/calico/v1/policy/NetworkPolicy/default/allow-dns",
 		},
 		{
 			name: "PolicyKey/GlobalNetworkPolicy",
-			key: PolicyKey{
-				Kind: apiv3.KindGlobalNetworkPolicy,
-				Name: "deny-all",
-			},
+			path: "/calico/v1/policy/GlobalNetworkPolicy//deny-all",
 		},
 		{
 			name: "PolicyKey/StagedNetworkPolicy",
-			key: PolicyKey{
-				Kind:      apiv3.KindStagedNetworkPolicy,
-				Namespace: "production",
-				Name:      "my-staged-policy",
-			},
+			path: "/calico/v1/policy/StagedNetworkPolicy/production/my-staged-policy",
 		},
-		{
-			name: "PolicyKey/empty-namespace",
-			key: PolicyKey{
-				Kind: "SomeKind",
-				Name: "some-name",
-			},
-		},
+		// ProfileRulesKey
 		{
 			name: "ProfileRulesKey",
-			key:  ProfileRulesKey{ProfileKey: ProfileKey{Name: "kns.default"}},
+			path: "/calico/v1/policy/profile/kns.default/rules",
 		},
+		// ProfileLabelsKey
 		{
 			name: "ProfileLabelsKey",
-			key:  ProfileLabelsKey{ProfileKey: ProfileKey{Name: "kns.kube-system"}},
+			path: "/calico/v1/policy/profile/kns.kube-system/labels",
 		},
+		// HostEndpointKey
 		{
 			name: "HostEndpointKey",
-			key: HostEndpointKey{
-				Hostname:   "node-1.example.com",
-				EndpointID: "eth0",
-			},
+			path: "/calico/v1/host/node-1.example.com/endpoint/eth0",
 		},
+		{
+			name: "HostEndpointKey/escaped",
+			path: "/calico/v1/host/foobar/endpoint/end%2fpoint",
+		},
+		// ResourceKey — global
 		{
 			name: "ResourceKey/global",
-			key: ResourceKey{
-				Kind: apiv3.KindFelixConfiguration,
-				Name: "default",
-			},
+			path: "/calico/resources/v3/projectcalico.org/felixconfigurations/default",
 		},
+		// ResourceKey — namespaced
 		{
 			name: "ResourceKey/namespaced",
-			key: ResourceKey{
-				Kind:      apiv3.KindNetworkPolicy,
-				Namespace: "default",
-				Name:      "my-policy",
-			},
+			path: "/calico/resources/v3/projectcalico.org/networkpolicies/default/my-policy",
 		},
+		// NetworkSetKey
 		{
 			name: "NetworkSetKey",
-			key:  NetworkSetKey{Name: "my-network-set"},
+			path: "/calico/v1/netset/my-network-set",
+		},
+		// Fallback paths (unrecognised)
+		{
+			name: "Fallback/config",
+			path: "/calico/v1/config/LogSeverityScreen",
 		},
 		{
-			name: "NetworkSetKey/namespaced",
-			key:  NetworkSetKey{Name: "production/allowed-ips"},
+			name: "Fallback/ready",
+			path: "/calico/v1/Ready",
+		},
+		{
+			name: "Fallback/host-config",
+			path: "/calico/v1/host/node-1/config/LogSeverityScreen",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			compressed, err := CompressKey(tt.key)
+			compressed := CompressKeyPath(tt.path)
+
+			decompressed, err := DecompressKeyPath(compressed)
 			if err != nil {
-				t.Fatalf("CompressKey(%v) error: %v", tt.key, err)
+				t.Fatalf("DecompressKeyPath error: %v (compressed: %x)", err, []byte(compressed))
 			}
 
-			decompressed, err := DecompressKey(compressed)
-			if err != nil {
-				t.Fatalf("DecompressKey error: %v (compressed: %x)", err, compressed)
-			}
-
-			if !safeKeysEqual(tt.key, decompressed) {
-				t.Fatalf("round-trip mismatch:\n  original:     %v\n  decompressed: %v", tt.key, decompressed)
+			if decompressed != tt.path {
+				t.Fatalf("round-trip mismatch:\n  original:     %q\n  decompressed: %q", tt.path, decompressed)
 			}
 		})
 	}
 }
 
-// TestCompressFallback verifies that unknown key types fall back to encoding
-// the default path and can round-trip correctly.
-func TestCompressFallback(t *testing.T) {
-	fallbackKeys := []Key{
-		GlobalConfigKey{Name: "LogSeverityScreen"},
-		HostConfigKey{Hostname: "node-1", Name: "LogSeverityScreen"},
-		ReadyFlagKey{},
-		WireguardKey{NodeName: "node-1"},
-		HostIPKey{Hostname: "node-1"},
-		HostMetadataKey{Hostname: "node-1"},
+// TestK8sOptimisation verifies that the k8s+eth0 optimised tag is used
+// for kubernetes/eth0 workload endpoints, saving space over the
+// general workload endpoint tag.
+func TestK8sOptimisation(t *testing.T) {
+	k8sPath := "/calico/v1/host/node-1.example.com/workload/kubernetes/default%2fnginx/endpoint/eth0"
+	genPath := "/calico/v1/host/node-1.example.com/workload/openstack/default%2fnginx/endpoint/eth0"
+
+	k8sCompressed := CompressKeyPath(k8sPath)
+	genCompressed := CompressKeyPath(genPath)
+
+	// k8s+eth0 should use tagWorkloadEndpointK8s.
+	if k8sCompressed[0] != tagWorkloadEndpointK8s {
+		t.Fatalf("expected tag %d for k8s+eth0, got %d", tagWorkloadEndpointK8s, k8sCompressed[0])
+	}
+	// General should use tagWorkloadEndpoint.
+	if genCompressed[0] != tagWorkloadEndpoint {
+		t.Fatalf("expected tag %d for general, got %d", tagWorkloadEndpoint, genCompressed[0])
+	}
+	// k8s+eth0 should be shorter (2 fields vs 4).
+	if len(k8sCompressed) >= len(genCompressed) {
+		t.Errorf("k8s+eth0 (%d bytes) should be shorter than general (%d bytes)",
+			len(k8sCompressed), len(genCompressed))
 	}
 
-	for _, key := range fallbackKeys {
-		t.Run(key.String(), func(t *testing.T) {
-			compressed, err := CompressKey(key)
-			if err != nil {
-				t.Fatalf("CompressKey(%v) error: %v", key, err)
-			}
-
-			if compressed[0] != tagUnknown {
-				t.Fatalf("expected fallback tag 0x00, got 0x%02x", compressed[0])
-			}
-
-			decompressed, err := DecompressKey(compressed)
-			if err != nil {
-				t.Fatalf("DecompressKey error: %v", err)
-			}
-
-			if !safeKeysEqual(key, decompressed) {
-				t.Fatalf("round-trip mismatch:\n  original:     %v\n  decompressed: %v", key, decompressed)
-			}
-		})
+	// Both should round-trip.
+	for _, path := range []string{k8sPath, genPath} {
+		got, err := DecompressKeyPath(CompressKeyPath(path))
+		if err != nil {
+			t.Fatalf("DecompressKeyPath error: %v", err)
+		}
+		if got != path {
+			t.Fatalf("round-trip failed: got %q, want %q", got, path)
+		}
 	}
 }
 
@@ -219,60 +170,72 @@ func TestCompressFallback(t *testing.T) {
 func TestCompressedSize(t *testing.T) {
 	tests := []struct {
 		name string
-		key  Key
+		path string
 	}{
 		{
-			name: "WorkloadEndpoint/kubernetes/eth0",
-			key: WorkloadEndpointKey{
-				Hostname:       "ip-172-31-22-123.us-west-2.compute.internal",
-				OrchestratorID: "kubernetes",
-				WorkloadID:     "kube-system/calico-node-abcde",
-				EndpointID:     "eth0",
-			},
+			name: "WorkloadEndpoint/k8s/eth0",
+			path: "/calico/v1/host/ip-172-31-22-123.us-west-2.compute.internal/workload/kubernetes/kube-system%2fcalico-node-abcde/endpoint/eth0",
 		},
 		{
 			name: "PolicyKey/NetworkPolicy",
-			key: PolicyKey{
-				Kind:      apiv3.KindNetworkPolicy,
-				Namespace: "default",
-				Name:      "allow-dns",
-			},
+			path: "/calico/v1/policy/NetworkPolicy/default/allow-dns",
 		},
 		{
 			name: "ProfileRulesKey",
-			key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "kns.default"}},
+			path: "/calico/v1/policy/profile/kns.default/rules",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path, err := KeyToDefaultPath(tt.key)
-			if err != nil {
-				t.Fatalf("KeyToDefaultPath error: %v", err)
-			}
-
-			compressed, err := CompressKey(tt.key)
-			if err != nil {
-				t.Fatalf("CompressKey error: %v", err)
-			}
+			compressed := CompressKeyPath(tt.path)
 
 			t.Logf("path len=%d, compressed len=%d, savings=%.0f%%",
-				len(path), len(compressed), 100*(1-float64(len(compressed))/float64(len(path))))
+				len(tt.path), len(compressed), 100*(1-float64(len(compressed))/float64(len(tt.path))))
 
-			if len(compressed) >= len(path) {
+			if len(compressed) >= len(tt.path) {
 				t.Errorf("compressed key (%d bytes) should be smaller than path (%d bytes)",
-					len(compressed), len(path))
+					len(compressed), len(tt.path))
 			}
 		})
+	}
+}
+
+// TestCompressUsableAsMapKey verifies that compressed keys can be used
+// as Go map keys via string conversion.
+func TestCompressUsableAsMapKey(t *testing.T) {
+	paths := []string{
+		"/calico/v1/host/h1/workload/kubernetes/w1/endpoint/eth0",
+		"/calico/v1/host/h2/workload/kubernetes/w1/endpoint/eth0",
+		"/calico/v1/policy/NetworkPolicy/default/p1",
+		"/calico/v1/policy/NetworkPolicy/default/p2",
+	}
+
+	m := make(map[string]string)
+	for _, p := range paths {
+		m[CompressKeyPath(p)] = p
+	}
+
+	if len(m) != len(paths) {
+		t.Fatalf("expected %d unique map entries, got %d", len(paths), len(m))
+	}
+
+	// Verify lookup works.
+	for _, p := range paths {
+		got, ok := m[CompressKeyPath(p)]
+		if !ok {
+			t.Fatalf("compressed key not found in map for %q", p)
+		}
+		if got != p {
+			t.Fatalf("map lookup mismatch: got %q, want %q", got, p)
+		}
 	}
 }
 
 // TestCompactAlphabet verifies the compact alphabet round-trips all
 // expected characters and correctly identifies non-compact characters.
 func TestCompactAlphabet(t *testing.T) {
-	compact := "abcdefghijklmnopqrstuvwxyz-./_ "
-	// Remove trailing space — it's not compact.
-	compact = compact[:len(compact)-1]
+	compact := "abcdefghijklmnopqrstuvwxyz-./_"
 	for i := 0; i < len(compact); i++ {
 		c := compact[i]
 		code := charTo5Bit[c]
@@ -373,56 +336,19 @@ func TestDictionaryEncoding(t *testing.T) {
 func TestDecompressErrors(t *testing.T) {
 	tests := []struct {
 		name string
-		data []byte
+		data string
 	}{
-		{"empty", nil},
-		{"empty slice", []byte{}},
-		{"unknown tag", []byte{0x80}},
+		{"empty", ""},
+		{"unknown tag", "\x80"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := DecompressKey(tt.data)
+			_, err := DecompressKeyPath(tt.data)
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
 		})
-	}
-}
-
-// TestCompressUsableAsMapKey verifies that compressed keys can be used
-// as Go map keys via string conversion.
-func TestCompressUsableAsMapKey(t *testing.T) {
-	keys := []Key{
-		WorkloadEndpointKey{Hostname: "h1", OrchestratorID: "kubernetes", WorkloadID: "w1", EndpointID: "eth0"},
-		WorkloadEndpointKey{Hostname: "h2", OrchestratorID: "kubernetes", WorkloadID: "w1", EndpointID: "eth0"},
-		PolicyKey{Kind: "NetworkPolicy", Namespace: "default", Name: "p1"},
-		PolicyKey{Kind: "NetworkPolicy", Namespace: "default", Name: "p2"},
-	}
-
-	m := make(map[string]Key)
-	for _, k := range keys {
-		compressed, err := CompressKey(k)
-		if err != nil {
-			t.Fatalf("CompressKey error: %v", err)
-		}
-		m[string(compressed)] = k
-	}
-
-	if len(m) != len(keys) {
-		t.Fatalf("expected %d unique map entries, got %d", len(keys), len(m))
-	}
-
-	// Verify lookup works.
-	for _, k := range keys {
-		compressed, _ := CompressKey(k)
-		got, ok := m[string(compressed)]
-		if !ok {
-			t.Fatalf("compressed key not found in map for %v", k)
-		}
-		if !safeKeysEqual(k, got) {
-			t.Fatalf("map lookup mismatch: got %v, want %v", got, k)
-		}
 	}
 }
 
@@ -506,178 +432,60 @@ func Test5BitPackingSavings(t *testing.T) {
 	}
 }
 
-// FuzzCompressDecompressRoundTrip fuzzes the compression/decompression
-// round-trip for WorkloadEndpointKey, the most common key type.
+// FuzzCompressDecompressRoundTrip is a single fuzz test with an input
+// corpus containing examples of all the different key path types.
+// It verifies that any path round-trips correctly.
 func FuzzCompressDecompressRoundTrip(f *testing.F) {
-	f.Add("node-1", "kubernetes", "default/nginx", "eth0")
-	f.Add("ip-10-0-1-5.ec2.internal", "k8s", "kube-system/coredns-abc", "eth0")
-	f.Add("compute-01", "openstack", "instance-123", "tap5678")
-	f.Add("host", "cni", "container", "veth1234")
-	f.Add("h", "o", "w", "e")
-	f.Add("", "", "", "")
-	f.Add("node/with/slashes", "orch/id", "work/load", "end/point")
-	f.Add("node\x80", "\xff", "work\x00load", "ep")
-	f.Add("\xFD\xFE\xFF", "\xFD", "\xFE", "\xFF")
-
-	f.Fuzz(func(t *testing.T, hostname, orch, workload, endpoint string) {
-		key := WorkloadEndpointKey{
-			Hostname:       hostname,
-			OrchestratorID: orch,
-			WorkloadID:     workload,
-			EndpointID:     endpoint,
-		}
-
-		compressed, err := CompressKey(key)
-		if err != nil {
-			t.Fatalf("CompressKey error: %v", err)
-		}
-
-		decompressed, err := DecompressKey(compressed)
-		if err != nil {
-			t.Fatalf("DecompressKey error: %v (compressed: %x)", err, compressed)
-		}
-
-		got, ok := decompressed.(WorkloadEndpointKey)
-		if !ok {
-			t.Fatalf("expected WorkloadEndpointKey, got %T", decompressed)
-		}
-
-		if got.Hostname != hostname || got.OrchestratorID != orch ||
-			got.WorkloadID != workload || got.EndpointID != endpoint {
-			t.Fatalf("round-trip mismatch:\n  original:     %v\n  decompressed: %v", key, got)
-		}
-	})
-}
-
-// FuzzCompressDecompressPolicyRoundTrip fuzzes the compression/decompression
-// for PolicyKey.
-func FuzzCompressDecompressPolicyRoundTrip(f *testing.F) {
-	f.Add("NetworkPolicy", "default", "allow-dns")
-	f.Add("GlobalNetworkPolicy", "", "deny-all")
-	f.Add("StagedNetworkPolicy", "production", "my-staged")
-	f.Add("Kind", "ns", "name")
-	f.Add("", "", "")
-	f.Add("\xff\xfe\x00", "ns\x80", "n\xffame")
-	f.Add("\xFD\xFD\xFD", "\xFE", "\xFF")
-
-	f.Fuzz(func(t *testing.T, kind, ns, name string) {
-		key := PolicyKey{Kind: kind, Namespace: ns, Name: name}
-
-		compressed, err := CompressKey(key)
-		if err != nil {
-			t.Fatalf("CompressKey error: %v", err)
-		}
-
-		decompressed, err := DecompressKey(compressed)
-		if err != nil {
-			t.Fatalf("DecompressKey error: %v", err)
-		}
-
-		got, ok := decompressed.(PolicyKey)
-		if !ok {
-			t.Fatalf("expected PolicyKey, got %T", decompressed)
-		}
-
-		if got.Kind != kind || got.Namespace != ns || got.Name != name {
-			t.Fatalf("round-trip mismatch:\n  original:     %v\n  decompressed: %v", key, got)
-		}
-	})
-}
-
-// FuzzCompressDecompressProfileRoundTrip fuzzes compression/decompression for
-// ProfileRulesKey and ProfileLabelsKey.
-func FuzzCompressDecompressProfileRoundTrip(f *testing.F) {
-	f.Add("kns.default", true)
-	f.Add("kns.kube-system", false)
-	f.Add("ksa.default.my-sa", true)
-	f.Add("", false)
-	f.Add("profile-with-special/chars", true)
-	f.Add("profile\xff\x00\xFD\xFEname", false)
-
-	f.Fuzz(func(t *testing.T, name string, isRules bool) {
-		var key Key
-		if isRules {
-			key = ProfileRulesKey{ProfileKey: ProfileKey{Name: name}}
-		} else {
-			key = ProfileLabelsKey{ProfileKey: ProfileKey{Name: name}}
-		}
-
-		compressed, err := CompressKey(key)
-		if err != nil {
-			t.Fatalf("CompressKey error: %v", err)
-		}
-
-		decompressed, err := DecompressKey(compressed)
-		if err != nil {
-			t.Fatalf("DecompressKey error: %v", err)
-		}
-
-		if !safeKeysEqual(key, decompressed) {
-			t.Fatalf("round-trip mismatch:\n  original:     %v\n  decompressed: %v", key, decompressed)
-		}
-	})
-}
-
-// FuzzDecompressKey ensures DecompressKey does not panic on arbitrary input.
-func FuzzDecompressKey(f *testing.F) {
-	validKeys := []Key{
-		WorkloadEndpointKey{Hostname: "h", OrchestratorID: "kubernetes", WorkloadID: "w", EndpointID: "eth0"},
-		PolicyKey{Kind: "NetworkPolicy", Namespace: "default", Name: "p"},
-		ProfileRulesKey{ProfileKey: ProfileKey{Name: "kns.default"}},
-		ProfileLabelsKey{ProfileKey: ProfileKey{Name: "kns.default"}},
-		HostEndpointKey{Hostname: "h", EndpointID: "eth0"},
-		ResourceKey{Kind: apiv3.KindFelixConfiguration, Name: "default"},
-		ResourceKey{Kind: apiv3.KindNetworkPolicy, Namespace: "default", Name: "p"},
-		NetworkSetKey{Name: "ns"},
-		ReadyFlagKey{},
-	}
-	for _, k := range validKeys {
-		compressed, err := CompressKey(k)
-		if err != nil {
-			continue
-		}
-		f.Add(compressed)
-	}
-	f.Add([]byte{0})
-	f.Add([]byte{255})
-	f.Add([]byte{1, 2, 3})
-	f.Add([]byte{0xFE})
-	f.Add([]byte{0xFF})
-	f.Add([]byte{0xFD})
-
-	f.Fuzz(func(t *testing.T, data []byte) {
-		// Should never panic.
-		_, _ = DecompressKey(data)
-	})
-}
-
-// FuzzEncodeDecodeField fuzzes the field encoding/decoding directly.
-func FuzzEncodeDecodeField(f *testing.F) {
-	f.Add("hello")
+	// Workload endpoints — k8s+eth0 (optimised tag)
+	f.Add("/calico/v1/host/node-1.example.com/workload/kubernetes/default%2fnginx-abc123/endpoint/eth0")
+	f.Add("/calico/v1/host/ip-172-31-22-123.us-west-2.compute.internal/workload/kubernetes/kube-system%2fcalico-node-abcde/endpoint/eth0")
+	// Workload endpoints — general
+	f.Add("/calico/v1/host/compute-01/workload/openstack/instance-12345/endpoint/tap1234")
+	f.Add("/calico/v1/host/host-a/workload/cni/container-xyz/endpoint/eth0")
+	f.Add("/calico/v1/host/node-1/workload/kubernetes/ns%2fpod/endpoint/net1")
+	f.Add("/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint")
+	f.Add("/calico/v1/host/h/workload/o/w/endpoint/e")
+	// Policy keys
+	f.Add("/calico/v1/policy/NetworkPolicy/default/allow-dns")
+	f.Add("/calico/v1/policy/GlobalNetworkPolicy//deny-all")
+	f.Add("/calico/v1/policy/StagedNetworkPolicy/production/my-staged-policy")
+	f.Add("/calico/v1/policy/StagedGlobalNetworkPolicy//staged-deny")
+	f.Add("/calico/v1/policy/StagedKubernetesNetworkPolicy/kube-system/staged-k8s")
+	// Profile keys
+	f.Add("/calico/v1/policy/profile/kns.default/rules")
+	f.Add("/calico/v1/policy/profile/kns.kube-system/labels")
+	f.Add("/calico/v1/policy/profile/ksa.default.my-sa/rules")
+	// Host endpoint keys
+	f.Add("/calico/v1/host/node-1.example.com/endpoint/eth0")
+	f.Add("/calico/v1/host/foobar/endpoint/end%2fpoint")
+	// Resource keys
+	f.Add("/calico/resources/v3/projectcalico.org/felixconfigurations/default")
+	f.Add("/calico/resources/v3/projectcalico.org/networkpolicies/default/my-policy")
+	// Network set keys
+	f.Add("/calico/v1/netset/my-network-set")
+	// Fallback paths
+	f.Add("/calico/v1/config/LogSeverityScreen")
+	f.Add("/calico/v1/Ready")
+	f.Add("/calico/v1/host/node-1/config/LogSeverityScreen")
+	f.Add("/calico/v1/host/node-1/metadata")
+	f.Add("/calico/v1/host/node-1/bird_ip")
+	// Pathological inputs
 	f.Add("")
-	f.Add("kubernetes")
-	f.Add("eth0")
-	f.Add("default")
-	f.Add("ip-172-31-22-123.us-west-2.compute.internal")
-	f.Add("NetworkPolicy")
-	f.Add("\x00\x01\xFD\xFE\xFF")
-	f.Add("\xFD\xFD\xFD")
+	f.Add("/")
+	f.Add("not-a-calico-path")
+	f.Add("/calico/v1/host")
+	f.Add("/calico/v1/host/a/workload/b/c/endpoint")
 
-	f.Fuzz(func(t *testing.T, s string) {
-		p := &bitPacker{}
-		encodeField(p, s)
-		p.writeCodes(codeSpecial, specialEnd)
-		p.flush()
+	f.Fuzz(func(t *testing.T, path string) {
+		compressed := CompressKeyPath(path)
 
-		fields, err := decodeFields(p.result())
+		decompressed, err := DecompressKeyPath(compressed)
 		if err != nil {
-			t.Fatalf("decodeFields(%x) error: %v", p.result(), err)
+			t.Fatalf("DecompressKeyPath error: %v (compressed: %x)", err, []byte(compressed))
 		}
-		if len(fields) != 1 {
-			t.Fatalf("expected 1 field, got %d: %v", len(fields), fields)
-		}
-		if fields[0] != s {
-			t.Fatalf("round-trip mismatch: got %q, want %q", fields[0], s)
+
+		if decompressed != path {
+			t.Fatalf("round-trip mismatch:\n  original:     %q\n  decompressed: %q", path, decompressed)
 		}
 	})
 }
