@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // KubeProxy is a wrapper of Proxy that deals with higher level issue like
@@ -33,6 +34,11 @@ import (
 type KubeProxy struct {
 	proxy  ProxyFrontend
 	syncer DPSyncer
+
+	// Map is hostname to an update/remove msg.
+	// The size-1 channel allows events to enter the main loop,
+	// and allows repeated updates to be merged.
+	hostMetadataUpdates chan map[string]any
 
 	ipFamily      int
 	hostIPUpdates chan []net.IP
@@ -73,6 +79,8 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 		opts:        opts,
 		rt:          NewRTCache(),
 
+		hostMetadataUpdates: make(chan map[string]any, 1),
+
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
 	}
@@ -104,13 +112,21 @@ func (kp *KubeProxy) Stop() {
 		defer kp.lock.Unlock()
 
 		close(kp.exiting)
+		close(kp.hostMetadataUpdates)
 		close(kp.hostIPUpdates)
 		kp.proxy.Stop()
 		kp.wg.Wait()
 	})
 }
 
-func (kp *KubeProxy) run(hostIPs []net.IP) error {
+func (kp *KubeProxy) setProxyHostMetadata(hostMetadata map[string]*proto.HostMetadataV4V6Update) {
+	kp.lock.Lock()
+	defer kp.lock.Unlock()
+
+	kp.proxy.SetHostMetadata(hostMetadata, true)
+}
+
+func (kp *KubeProxy) run(hostIPs []net.IP, hostMetadata map[string]*proto.HostMetadataV4V6Update) error {
 
 	ips := make([]net.IP, 0, len(hostIPs))
 	for _, ip := range hostIPs {
@@ -141,6 +157,8 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	}
 
 	kp.proxy.SetHostIPs(hostIPs)
+	// Don't bother invoking a resync within SetHostMetadata; we will be syncing a fresh syncer right after.
+	kp.proxy.SetHostMetadata(hostMetadata, false)
 	kp.proxy.SetSyncer(syncer)
 
 	log.Infof("kube-proxy v%d node info updated, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)
@@ -173,10 +191,15 @@ func (kp *KubeProxy) start() error {
 	kp.syncer = syncer
 	kp.lock.Unlock()
 
-	// wait for the initial update
+	// Wait for the initial update.
 	hostIPs := <-kp.hostIPUpdates
 
-	err = kp.run(hostIPs)
+	// Could be nil, initially.
+	hostMetadataUpdates := kp.recvHostMetadataV4V6Updates()
+	var hostMetadata map[string]*proto.HostMetadataV4V6Update
+	mergeHostMetadataV4V6Updates(hostMetadata, hostMetadataUpdates)
+
+	err = kp.run(hostIPs, hostMetadata)
 	if err != nil {
 		return err
 	}
@@ -185,16 +208,25 @@ func (kp *KubeProxy) start() error {
 	go func() {
 		defer kp.wg.Done()
 		for {
+			var ok bool
 			select {
-			case hostIPs, ok := <-kp.hostIPUpdates:
+			case hostIPs, ok = <-kp.hostIPUpdates:
 				if !ok {
 					log.Error("kube-proxy: hostIPUpdates closed")
 					return
 				}
-				err = kp.run(hostIPs)
+				err = kp.run(hostIPs, hostMetadata)
 				if err != nil {
 					log.Panic("kube-proxy failed to resync after host IPs update")
 				}
+			case hostMetadataUpdates, ok = <-kp.hostMetadataUpdates:
+				if !ok {
+					log.Error("kube-proxy: hostMetadataUpdates closed")
+					return
+				}
+				mergeHostMetadataV4V6Updates(hostMetadata, hostMetadataUpdates)
+				kp.setProxyHostMetadata(hostMetadata)
+
 			case <-kp.exiting:
 				log.Info("kube-proxy: exiting")
 				return
@@ -221,6 +253,63 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 		kp.hostIPUpdates <- IPs
 	}
 	log.Debugf("kube-proxy OnHostIPsUpdate: %+v", IPs)
+}
+
+// OnUpdate implements the manager interface.
+func (kp *KubeProxy) OnUpdate(msg any) {
+	// Drain any pre-existing msg first and merge.
+	updates := kp.recvHostMetadataV4V6Updates()
+	if updates == nil {
+		updates = make(map[string]any)
+	}
+
+	switch update := msg.(type) {
+	case *proto.HostMetadataV4V6Update:
+		updates[update.Hostname] = update
+		log.Debugf("kube-proxy OnUpdate: host metadata update for %q: %+v", update.Hostname, update)
+	case *proto.HostMetadataV4V6Remove:
+		if u, ok := updates[update.Hostname]; ok {
+			delete(updates, update.Hostname)
+			log.Debugf("kube-proxy OnUpdate: coalesce host metadata deletion for queued update (deleted update) %q: %+v", update.Hostname, u)
+		} else {
+			log.WithField("remove", update).Debug("No existing update in queue, sending remove event")
+			updates[update.Hostname] = msg
+		}
+	}
+
+	// Send the now-merged updates back down the channel.
+	log.Debug("Queueing new hostmetadata for main loop")
+	kp.hostMetadataUpdates <- updates
+	log.Debug("Successfully queued new hostmetadata")
+}
+
+// CompleteDeferredWork implements the manager interface.
+func (kp *KubeProxy) CompleteDeferredWork() error {
+	return nil
+}
+
+// recvHostMetadataV4V6Updates tries to read a pending host metadata update on the update channel.
+func (kp *KubeProxy) recvHostMetadataV4V6Updates() map[string]any {
+	select {
+	case upd := <-kp.hostMetadataUpdates:
+		return upd
+	default:
+		return nil
+	}
+}
+
+// mergeHostMetadataV4V6Updates merges the existing host metadata updates with the latest updates:
+// - A 'remove' in latest delete the corresponding key in 'existing'.
+// - An 'update' in latest overrides the corresponding key in 'existing'.
+func mergeHostMetadataV4V6Updates(existing map[string]*proto.HostMetadataV4V6Update, latest map[string]any) {
+	for k, v := range latest {
+		switch update := v.(type) {
+		case *proto.HostMetadataV4V6Update:
+			existing[k] = update
+		case *proto.HostMetadataV4V6Remove:
+			delete(existing, k)
+		}
+	}
 }
 
 // OnRouteUpdate should be used to update the internal state of routing tables
