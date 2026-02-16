@@ -123,6 +123,20 @@ func TestAllHandles(t *testing.T) {
 	}
 }
 
+func TestMakeCacheReturnsSameMap(t *testing.T) {
+	input := map[string]string{"a": "b", "c": "d"}
+
+	m1 := Make(input)
+	m2 := Make(input)
+
+	// Both calls should return the same underlying handleMap from the cache.
+	// Maps can only be compared to nil with ==, so use reflect to compare
+	// the underlying map pointers.
+	if reflect.ValueOf(m1.m).UnsafePointer() != reflect.ValueOf(m2.m).UnsafePointer() {
+		t.Errorf("expected Make to return cached handleMap on repeat call")
+	}
+}
+
 func TestIntersectAndFilter(t *testing.T) {
 	for _, tc := range []struct {
 		description      string
