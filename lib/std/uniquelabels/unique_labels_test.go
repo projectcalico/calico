@@ -151,7 +151,7 @@ func TestMakeCacheMiss(t *testing.T) {
 
 func TestMakeCacheEviction(t *testing.T) {
 	// Use a private cache so we don't interfere with other tests.
-	c := makeCache{seed: recentCache.seed}
+	c := recentMapCache{seed: recentCache.seed}
 
 	input1 := map[string]string{"a": "b"}
 	input2 := map[string]string{"x": "y"}
@@ -192,7 +192,7 @@ func TestMakeCacheHashCollision(t *testing.T) {
 	// should still return correct (different) results from Make.
 	// We can't easily force a natural collision, but we can verify
 	// that Make returns correct values regardless of cache state.
-	inputs := make([]map[string]string, makeCacheSize+1)
+	inputs := make([]map[string]string, recentMapCacheSize+1)
 	for i := range inputs {
 		inputs[i] = map[string]string{"key": fmt.Sprintf("value-%d", i)}
 	}
