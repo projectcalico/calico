@@ -282,7 +282,7 @@ func TestFieldEncoding(t *testing.T) {
 		t.Run(s, func(t *testing.T) {
 			p := &bitPacker{}
 			encodeField(p, s)
-			p.writeCodes(codeSpecial, specialEnd)
+			p.writeCodes(codeEnd)
 			p.flush()
 
 			fields, err := decodeFields(p.result())
@@ -300,8 +300,7 @@ func TestFieldEncoding(t *testing.T) {
 }
 
 // TestDictionaryEncoding verifies that dictionary entries encode as
-// exactly 10 bits (2 five-bit codes) plus the end marker, and
-// round-trip correctly.
+// a single 6-bit code plus the end marker, and round-trip correctly.
 func TestDictionaryEncoding(t *testing.T) {
 	dictEntries := []string{
 		"kubernetes", "eth0", "default", "k8s", "openstack", "cni",
@@ -314,13 +313,13 @@ func TestDictionaryEncoding(t *testing.T) {
 		t.Run(s, func(t *testing.T) {
 			p := &bitPacker{}
 			encodeField(p, s)
-			p.writeCodes(codeSpecial, specialEnd)
+			p.writeCodes(codeEnd)
 			p.flush()
 			packed := p.result()
 
-			// Dict entry = 12 bits, end marker = 12 bits = 24 bits → 3 bytes.
-			if len(packed) != 3 {
-				t.Fatalf("dictionary entry + end marker should pack to 3 bytes, got %d: %x", len(packed), packed)
+			// Dict entry = 6 bits, end marker = 6 bits = 12 bits → 2 bytes.
+			if len(packed) != 2 {
+				t.Fatalf("dictionary entry + end marker should pack to 2 bytes, got %d: %x", len(packed), packed)
 			}
 
 			fields, err := decodeFields(packed)
@@ -359,7 +358,7 @@ func TestDecompressErrors(t *testing.T) {
 func Test6BitPacking(t *testing.T) {
 	// Pack a known sequence and verify it unpacks correctly.
 	// Include end marker to avoid padding ambiguity.
-	codes := []byte{0, 1, 2, 62, 15, 7, 63, 0, 25, 36, 37, 38, 39, 40, 63, 1}
+	codes := []byte{0, 1, 2, 62, 15, 7, 41, 42, 25, 36, 37, 38, 39, 40, 43, 44}
 	p := &bitPacker{}
 	p.writeCodes(codes...)
 	p.flush()
@@ -387,7 +386,7 @@ func TestMultiFieldPackedEncoding(t *testing.T) {
 		}
 		encodeField(p, f)
 	}
-	p.writeCodes(codeSpecial, specialEnd)
+	p.writeCodes(codeEnd)
 	p.flush()
 
 	decoded, err := decodeFields(p.result())
@@ -422,7 +421,7 @@ func Test6BitPackingSavings(t *testing.T) {
 		t.Run(s, func(t *testing.T) {
 			p := &bitPacker{}
 			encodeField(p, s)
-			p.writeCodes(codeSpecial, specialEnd)
+			p.writeCodes(codeEnd)
 			p.flush()
 			packed := p.result()
 

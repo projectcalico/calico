@@ -52,21 +52,20 @@ import (
 //	   38: '/'   (workload IDs like namespace/pod)
 //	   39: '_'   (occasional in identifiers)
 //	   40: '%'   (URL-encoded chars in workload IDs, e.g. %2f)
-//	41-61: (unused — reserved for future compact characters)
+//	   41: field delimiter (separates fields in a multi-field key)
+//	   42: end-of-stream marker
+//	43-54: dictionary entries (whole-field substitution, e.g.
+//	       43=kubernetes, 44=eth0, …); allocated at init time.
+//	55-61: (reserved for future dictionary entries)
 //	   62: ESCAPE — the following two 6-bit codes encode a raw byte:
 //	       raw_byte = (hi << 4) | lo, where hi is 0-15 and lo is 0-15.
-//	   63: SPECIAL PREFIX — the next 6-bit code selects:
-//	         0:    field delimiter (separates fields in a multi-field key)
-//	         1:    end-of-stream marker
-//	         2+:   dictionary entry (whole-field substitution, e.g.
-//	               2=kubernetes, 3=eth0, …); the number of dictionary
-//	               entries is determined at init time.
+//	   63: (reserved)
 //
 // Everything is 6-bit codes packed into bytes.  The final byte is
 // zero-padded on the right.  Compact characters cost 6 bits each
 // (25% smaller than raw ASCII); escaped characters cost 18 bits
-// (escape + hi + lo); dictionary entries cost 12 bits; and field
-// delimiters cost 12 bits.
+// (escape + hi + lo); dictionary entries, field delimiters, and
+// end-of-stream markers each cost just 6 bits.
 
 // Key type tags — first byte of compressed keys.
 const (
@@ -84,43 +83,41 @@ const (
 
 // 6-bit code assignments.
 const (
-	codeEscape  byte = 62
-	codeSpecial byte = 63
+	codeDelimiter byte = 41 // field delimiter
+	codeEnd       byte = 42 // end of stream
+	codeDictBase  byte = 43 // first dictionary entry code
+	codeDictMax   byte = 55 // exclusive upper bound (codes 43-54 = 12 entries)
+	codeEscape    byte = 62 // next two codes encode a raw byte
 )
 
-// Sub-codes for the SPECIAL prefix (code 63).
-const (
-	specialDelimiter byte = 0 // field delimiter
-	specialEnd       byte = 1 // end of stream
-	// Dictionary indices start at 2.
-	specialDictBase byte = 2
-)
-
-// dictStrings maps dictionary sub-codes to their string values.
-// Populated by registerDictEntry during init.
+// dictStrings maps dictionary codes (offset from codeDictBase) to
+// their string values.  Populated by registerDictEntry during init.
 var dictStrings []string
 
-// dictLookup maps string values to their dictionary sub-codes.
+// dictLookup maps string values to their 6-bit dictionary codes.
 var dictLookup map[string]byte
 
-// dictEnd is the next available dictionary sub-code.  All valid
-// dictionary indices satisfy specialDictBase <= idx < dictEnd.
-var dictEnd byte
+// nextDictCode is the next available dictionary code.  All valid
+// dictionary codes satisfy codeDictBase <= code < nextDictCode.
+var nextDictCode byte
 
-// registerDictEntry adds a word to the dictionary and returns the
-// sub-code assigned to it.  Must only be called during init().
+// registerDictEntry adds a word to the dictionary, assigning it the
+// next available 6-bit code.  Must only be called during init().
 func registerDictEntry(word string) byte {
-	idx := dictEnd
-	dictEnd++
+	if nextDictCode >= codeDictMax {
+		panic("dictionary full: no more 6-bit codes available")
+	}
+	code := nextDictCode
+	nextDictCode++
 	dictStrings = append(dictStrings, word)
-	dictLookup[word] = idx
-	return idx
+	dictLookup[word] = code
+	return code
 }
 
 func init() {
-	dictEnd = specialDictBase
-	dictStrings = make([]string, specialDictBase, 16)
-	dictLookup = make(map[string]byte, 16)
+	nextDictCode = codeDictBase
+	dictStrings = make([]string, 0, int(codeDictMax-codeDictBase))
+	dictLookup = make(map[string]byte, int(codeDictMax-codeDictBase))
 
 	registerDictEntry("kubernetes")
 	registerDictEntry("eth0")
@@ -242,13 +239,13 @@ func (u *bitUnpacker) readCode() int {
 // --- Field encoding/decoding ---
 
 // encodeField appends the 6-bit-encoded form of the string s to the
-// bitPacker p.  If s matches a dictionary entry, it emits
-// [codeSpecial, dictIndex] (12 bits).  Otherwise each character is
-// encoded as its 6-bit compact code, or as the escape sequence
+// bitPacker p.  If s matches a dictionary entry, it emits a single
+// dictionary code (6 bits).  Otherwise each character is encoded as
+// its 6-bit compact code, or as the escape sequence
 // [codeEscape, hi, lo] (18 bits) for non-compact characters.
 func encodeField(p *bitPacker, s string) {
-	if idx, ok := dictLookup[s]; ok {
-		p.writeCodes(codeSpecial, idx)
+	if code, ok := dictLookup[s]; ok {
+		p.writeCodes(code)
 		return
 	}
 	for i := 0; i < len(s); i++ {
@@ -263,10 +260,10 @@ func encodeField(p *bitPacker, s string) {
 	}
 }
 
-// encodeDelimiter writes the field-delimiter code pair into the
-// 6-bit stream: [codeSpecial, specialDelimiter].
+// encodeDelimiter writes the field-delimiter code into the 6-bit
+// stream: a single codeDelimiter (6 bits).
 func encodeDelimiter(p *bitPacker) {
-	p.writeCodes(codeSpecial, specialDelimiter)
+	p.writeCodes(codeDelimiter)
 }
 
 // decodeFields reads the 6-bit packed byte stream in data, splitting
@@ -283,44 +280,38 @@ func decodeFields(data []byte) ([]string, error) {
 			// End of stream (exhausted bits) — emit the
 			// final field.  This path is taken for streams
 			// that consist of only compact characters with
-			// no trailing special-end marker (shouldn't
-			// happen in practice but is safe).
+			// no trailing end marker (shouldn't happen in
+			// practice but is safe).
 			fields = append(fields, string(cur))
 			break
 		}
 
+		bc := byte(code)
 		switch {
-		case code < int(compactMax6):
-			cur = append(cur, sixBitToChar[code])
+		case bc < compactMax6:
+			cur = append(cur, sixBitToChar[bc])
 
-		case byte(code) == codeEscape:
+		case bc == codeDelimiter:
+			// Field delimiter.
+			fields = append(fields, string(cur))
+			cur = nil
+
+		case bc == codeEnd:
+			// End of stream — emit the final field and stop.
+			fields = append(fields, string(cur))
+			return fields, nil
+
+		case bc >= codeDictBase && bc < nextDictCode:
+			// Dictionary entry.
+			cur = append(cur, dictStrings[bc-codeDictBase]...)
+
+		case bc == codeEscape:
 			hi := u.readCode()
 			lo := u.readCode()
 			if hi < 0 || lo < 0 {
 				return nil, fmt.Errorf("truncated escape sequence")
 			}
 			cur = append(cur, byte(hi<<4)|byte(lo))
-
-		case byte(code) == codeSpecial:
-			sub := u.readCode()
-			if sub < 0 {
-				return nil, fmt.Errorf("truncated special code")
-			}
-			switch {
-			case byte(sub) == specialDelimiter:
-				// Field delimiter.
-				fields = append(fields, string(cur))
-				cur = nil
-			case byte(sub) == specialEnd:
-				// End of stream — emit the final field and stop.
-				fields = append(fields, string(cur))
-				return fields, nil
-			case byte(sub) >= specialDictBase && byte(sub) < dictEnd:
-				// Dictionary entry.
-				cur = append(cur, dictStrings[byte(sub)]...)
-			default:
-				return nil, fmt.Errorf("invalid special sub-code: %d", sub)
-			}
 
 		default:
 			return nil, fmt.Errorf("invalid 6-bit code: %d", code)
@@ -496,7 +487,7 @@ func compressFields(tag byte, fields ...string) []byte {
 	}
 	// Write end-of-stream marker so the decoder knows where
 	// meaningful codes stop and padding begins.
-	p.writeCodes(codeSpecial, specialEnd)
+	p.writeCodes(codeEnd)
 	p.flush()
 	return p.result()
 }
