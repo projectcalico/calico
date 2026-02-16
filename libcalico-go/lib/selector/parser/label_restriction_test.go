@@ -123,10 +123,11 @@ func TestLabelRestrictions(t *testing.T) {
 			lrs := sel.LabelRestrictions()
 			var res LabelRestrictions
 			if test.Res != nil {
-				res = LabelRestrictions{}
+				m := map[uniquestr.Handle]LabelRestriction{}
 				for k, v := range test.Res {
-					res[uniquestr.Make(k)] = v
+					m[uniquestr.Make(k)] = v
 				}
+				res = MakeLabelRestrictions(m)
 			}
 			Expect(lrs).To(Equal(res), fmt.Sprintf("Selector %s should produce restrictions: %v", test.Sel, test.Res))
 			lrs = sel.LabelRestrictions()
