@@ -38,33 +38,35 @@ import (
 //
 // Layout:
 //
-//	[type_tag: 1 byte] [5-bit packed stream]
+//	[type_tag: 1 byte] [6-bit packed stream]
 //
 // The type tag identifies the key type.  The remaining bytes are a
-// bit-packed stream of 5-bit codes.
+// bit-packed stream of 6-bit codes.
 //
-// The 5-bit code space (0–31) is assigned as follows:
+// The 6-bit code space (0–63) is assigned as follows:
 //
-//	0-25:  a-z   (lowercase letters — the dominant character class)
-//	26:    '-'   (ubiquitous in Kubernetes names)
-//	27:    '.'   (hostnames, profile names like kns.default)
-//	28:    '/'   (workload IDs like namespace/pod)
-//	29:    '_'   (occasional in identifiers)
-//	30:    ESCAPE — the following two 5-bit codes encode a raw byte:
-//	       raw_byte = (hi << 3) | lo, where hi is 0-31 and lo is 0-7.
-//	31:    SPECIAL PREFIX — the next 5-bit code selects:
+//	 0-25: a-z   (lowercase letters — the dominant character class)
+//	26-35: 0-9   (digits — very common in k8s names, IPs, pod hashes)
+//	   36: '-'   (ubiquitous in Kubernetes names)
+//	   37: '.'   (hostnames, profile names like kns.default)
+//	   38: '/'   (workload IDs like namespace/pod)
+//	   39: '_'   (occasional in identifiers)
+//	   40: '%'   (URL-encoded chars in workload IDs, e.g. %2f)
+//	41-61: (unused — reserved for future compact characters)
+//	   62: ESCAPE — the following two 6-bit codes encode a raw byte:
+//	       raw_byte = (hi << 4) | lo, where hi is 0-15 and lo is 0-15.
+//	   63: SPECIAL PREFIX — the next 6-bit code selects:
 //	         0:    field delimiter (separates fields in a multi-field key)
 //	         1:    end-of-stream marker
-//	         2-13: dictionary entry (whole-field substitution, e.g.
-//	               2=kubernetes, 3=eth0, …); dictEnd (14) is the
-//	               current upper bound, leaving room for growth
-//	               within one 5-bit sub-code (max 31).
+//	         2+:   dictionary entry (whole-field substitution, e.g.
+//	               2=kubernetes, 3=eth0, …); the number of dictionary
+//	               entries is determined at init time.
 //
-// Everything is 5-bit codes packed into bytes.  The final byte is
-// zero-padded on the right.  Compact characters cost 5 bits each
-// (37.5% smaller than raw ASCII); escaped characters cost 15 bits
-// (escape + hi + lo); dictionary entries cost 10 bits; and field
-// delimiters cost 10 bits.
+// Everything is 6-bit codes packed into bytes.  The final byte is
+// zero-padded on the right.  Compact characters cost 6 bits each
+// (25% smaller than raw ASCII); escaped characters cost 18 bits
+// (escape + hi + lo); dictionary entries cost 12 bits; and field
+// delimiters cost 12 bits.
 
 // Key type tags — first byte of compressed keys.
 const (
@@ -80,13 +82,13 @@ const (
 	tagNetworkSet
 )
 
-// 5-bit code assignments.
+// 6-bit code assignments.
 const (
-	codeEscape  byte = 30
-	codeSpecial byte = 31
+	codeEscape  byte = 62
+	codeSpecial byte = 63
 )
 
-// Sub-codes for the SPECIAL prefix (code 31).
+// Sub-codes for the SPECIAL prefix (code 63).
 const (
 	specialDelimiter byte = 0 // field delimiter
 	specialEnd       byte = 1 // end of stream
@@ -94,106 +96,104 @@ const (
 	specialDictBase byte = 2
 )
 
-// Dictionary indices for common whole-field values.
-// These are the sub-code values that follow codeSpecial.
-// They start at specialDictBase (2) to leave room for
-// specialDelimiter (0) and specialEnd (1).
-const (
-	dictKubernetes                      = specialDictBase + iota // 2
-	dictEth0                                                     // 3
-	dictDefault                                                  // 4
-	dictK8s                                                      // 5
-	dictOpenstack                                                // 6
-	dictCNI                                                      // 7
-	dictNetworkPolicies                                          // 8
-	dictGlobalNetworkPolicies                                    // 9
-	dictStagedNetworkPolicies                                    // 10
-	dictStagedGlobalNetworkPolicies                              // 11
-	dictStagedKubernetesNetworkPolicies                          // 12
-	dictFelixConfigurations                                      // 13
-	// dictEnd is a sentinel; all valid indices are < dictEnd.
-	dictEnd // 14
-)
+// dictStrings maps dictionary sub-codes to their string values.
+// Populated by registerDictEntry during init.
+var dictStrings []string
 
-// dictStrings maps dictionary indices to their string values.
-var dictStrings [dictEnd]string
-
-// dictLookup maps string values to their dictionary indices.
+// dictLookup maps string values to their dictionary sub-codes.
 var dictLookup map[string]byte
 
-func init() {
-	dictStrings[dictKubernetes] = "kubernetes"
-	dictStrings[dictEth0] = "eth0"
-	dictStrings[dictDefault] = "default"
-	dictStrings[dictK8s] = "k8s"
-	dictStrings[dictOpenstack] = "openstack"
-	dictStrings[dictCNI] = "cni"
-	dictStrings[dictNetworkPolicies] = "networkpolicies"
-	dictStrings[dictGlobalNetworkPolicies] = "globalnetworkpolicies"
-	dictStrings[dictStagedNetworkPolicies] = "stagednetworkpolicies"
-	dictStrings[dictStagedGlobalNetworkPolicies] = "stagedglobalnetworkpolicies"
-	dictStrings[dictStagedKubernetesNetworkPolicies] = "stagedkubernetesnetworkpolicies"
-	dictStrings[dictFelixConfigurations] = "felixconfigurations"
+// dictEnd is the next available dictionary sub-code.  All valid
+// dictionary indices satisfy specialDictBase <= idx < dictEnd.
+var dictEnd byte
 
-	dictLookup = make(map[string]byte, len(dictStrings))
-	for i := byte(specialDictBase); i < dictEnd; i++ {
-		if dictStrings[i] != "" {
-			dictLookup[dictStrings[i]] = i
-		}
-	}
+// registerDictEntry adds a word to the dictionary and returns the
+// sub-code assigned to it.  Must only be called during init().
+func registerDictEntry(word string) byte {
+	idx := dictEnd
+	dictEnd++
+	dictStrings = append(dictStrings, word)
+	dictLookup[word] = idx
+	return idx
 }
 
-// --- Compact alphabet (5-bit) ---
+func init() {
+	dictEnd = specialDictBase
+	dictStrings = make([]string, specialDictBase, 16)
+	dictLookup = make(map[string]byte, 16)
+
+	registerDictEntry("kubernetes")
+	registerDictEntry("eth0")
+	registerDictEntry("default")
+	registerDictEntry("k8s")
+	registerDictEntry("openstack")
+	registerDictEntry("cni")
+	registerDictEntry("networkpolicies")
+	registerDictEntry("globalnetworkpolicies")
+	registerDictEntry("stagednetworkpolicies")
+	registerDictEntry("stagedglobalnetworkpolicies")
+	registerDictEntry("stagedkubernetesnetworkpolicies")
+	registerDictEntry("felixconfigurations")
+}
+
+// --- Compact alphabet (6-bit) ---
 //
-// Maps the 30 most common characters in Kubernetes resource names
-// to 5-bit codes 0-29.  Codes 30 and 31 are reserved for escape
+// Maps the most common characters in Kubernetes resource names
+// to 6-bit codes 0-61.  Codes 62 and 63 are reserved for escape
 // and special prefix respectively.
 //
-//	0-25: a-z
-//	  26: '-'
-//	  27: '.'
-//	  28: '/'
-//	  29: '_'
-const compactMax5 = 30 // codes 0-29 are compact characters
+//	 0-25: a-z
+//	26-35: 0-9
+//	   36: '-'
+//	   37: '.'
+//	   38: '/'
+//	   39: '_'
+//	   40: '%'
+const compactMax6 = 41 // codes 0-40 are compact characters
 
-// charTo5Bit maps byte values to 5-bit codes.
+// charTo6Bit maps byte values to 6-bit codes.
 // 0xFF means the character requires the escape mechanism.
-var charTo5Bit [256]byte
+var charTo6Bit [256]byte
 
-// fiveBitToChar maps 5-bit codes 0-29 back to byte values.
-var fiveBitToChar [compactMax5]byte
+// sixBitToChar maps 6-bit codes 0-40 back to byte values.
+var sixBitToChar [compactMax6]byte
 
 func init() {
-	for i := range charTo5Bit {
-		charTo5Bit[i] = 0xFF
+	for i := range charTo6Bit {
+		charTo6Bit[i] = 0xFF
 	}
 	code := byte(0)
 	for c := byte('a'); c <= 'z'; c++ {
-		charTo5Bit[c] = code
-		fiveBitToChar[code] = c
+		charTo6Bit[c] = code
+		sixBitToChar[code] = c
 		code++
 	}
-	for _, c := range []byte{'-', '.', '/', '_'} {
-		charTo5Bit[c] = code
-		fiveBitToChar[code] = c
+	for c := byte('0'); c <= '9'; c++ {
+		charTo6Bit[c] = code
+		sixBitToChar[code] = c
+		code++
+	}
+	for _, c := range []byte{'-', '.', '/', '_', '%'} {
+		charTo6Bit[c] = code
+		sixBitToChar[code] = c
 		code++
 	}
 }
 
-// --- 5-bit stream packer/unpacker ---
+// --- 6-bit stream packer/unpacker ---
 
-// bitPacker accumulates 5-bit codes and packs them into bytes.
+// bitPacker accumulates 6-bit codes and packs them into bytes.
 type bitPacker struct {
 	buf  []byte
 	acc  uint32 // accumulator for bits not yet flushed
 	bits uint   // number of valid bits in acc (0-7 between flushes)
 }
 
-// writeCodes appends one or more 5-bit codes to the stream.
+// writeCodes appends one or more 6-bit codes to the stream.
 func (p *bitPacker) writeCodes(codes ...byte) {
 	for _, c := range codes {
-		p.acc = (p.acc << 5) | uint32(c&0x1F)
-		p.bits += 5
+		p.acc = (p.acc << 6) | uint32(c&0x3F)
+		p.bits += 6
 		for p.bits >= 8 {
 			p.bits -= 8
 			p.buf = append(p.buf, byte(p.acc>>p.bits))
@@ -212,7 +212,7 @@ func (p *bitPacker) flush() {
 // result returns the packed byte slice.
 func (p *bitPacker) result() []byte { return p.buf }
 
-// bitUnpacker reads 5-bit codes from a packed byte stream.
+// bitUnpacker reads 6-bit codes from a packed byte stream.
 type bitUnpacker struct {
 	data []byte
 	pos  int    // byte position in data
@@ -220,9 +220,9 @@ type bitUnpacker struct {
 	bits uint   // number of valid bits in acc
 }
 
-// readCode returns the next 5-bit code, or -1 if exhausted.
+// readCode returns the next 6-bit code, or -1 if exhausted.
 func (u *bitUnpacker) readCode() int {
-	for u.bits < 5 {
+	for u.bits < 6 {
 		if u.pos >= len(u.data) {
 			if u.bits == 0 {
 				return -1
@@ -235,17 +235,17 @@ func (u *bitUnpacker) readCode() int {
 		u.pos++
 		u.bits += 8
 	}
-	u.bits -= 5
-	return int((u.acc >> u.bits) & 0x1F)
+	u.bits -= 6
+	return int((u.acc >> u.bits) & 0x3F)
 }
 
 // --- Field encoding/decoding ---
 
-// encodeField appends the 5-bit-encoded form of the string s to the
+// encodeField appends the 6-bit-encoded form of the string s to the
 // bitPacker p.  If s matches a dictionary entry, it emits
-// [codeSpecial, dictIndex] (10 bits).  Otherwise each character is
-// encoded as its 5-bit compact code, or as the escape sequence
-// [codeEscape, hi, lo] (15 bits) for non-compact characters.
+// [codeSpecial, dictIndex] (12 bits).  Otherwise each character is
+// encoded as its 6-bit compact code, or as the escape sequence
+// [codeEscape, hi, lo] (18 bits) for non-compact characters.
 func encodeField(p *bitPacker, s string) {
 	if idx, ok := dictLookup[s]; ok {
 		p.writeCodes(codeSpecial, idx)
@@ -253,23 +253,23 @@ func encodeField(p *bitPacker, s string) {
 	}
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if code := charTo5Bit[c]; code != 0xFF {
+		if code := charTo6Bit[c]; code != 0xFF {
 			p.writeCodes(code)
 		} else {
-			// Escape: code 30, then the raw byte split into
-			// high 5 bits and low 3 bits (two 5-bit codes).
-			p.writeCodes(codeEscape, c>>3, c&0x07)
+			// Escape: code 62, then the raw byte split into
+			// high 4 bits and low 4 bits (two 6-bit codes).
+			p.writeCodes(codeEscape, c>>4, c&0x0F)
 		}
 	}
 }
 
 // encodeDelimiter writes the field-delimiter code pair into the
-// 5-bit stream: [codeSpecial, specialDelimiter].
+// 6-bit stream: [codeSpecial, specialDelimiter].
 func encodeDelimiter(p *bitPacker) {
 	p.writeCodes(codeSpecial, specialDelimiter)
 }
 
-// decodeFields reads the 5-bit packed byte stream in data, splitting
+// decodeFields reads the 6-bit packed byte stream in data, splitting
 // on delimiter codes, and returns each field as a string.
 func decodeFields(data []byte) ([]string, error) {
 	var fields []string
@@ -290,8 +290,8 @@ func decodeFields(data []byte) ([]string, error) {
 		}
 
 		switch {
-		case code < int(compactMax5):
-			cur = append(cur, fiveBitToChar[code])
+		case code < int(compactMax6):
+			cur = append(cur, sixBitToChar[code])
 
 		case byte(code) == codeEscape:
 			hi := u.readCode()
@@ -299,7 +299,7 @@ func decodeFields(data []byte) ([]string, error) {
 			if hi < 0 || lo < 0 {
 				return nil, fmt.Errorf("truncated escape sequence")
 			}
-			cur = append(cur, byte(hi<<3)|byte(lo))
+			cur = append(cur, byte(hi<<4)|byte(lo))
 
 		case byte(code) == codeSpecial:
 			sub := u.readCode()
@@ -323,7 +323,7 @@ func decodeFields(data []byte) ([]string, error) {
 			}
 
 		default:
-			return nil, fmt.Errorf("invalid 5-bit code: %d", code)
+			return nil, fmt.Errorf("invalid 6-bit code: %d", code)
 		}
 	}
 
@@ -481,12 +481,12 @@ func DecompressKeyPath(compressed CompressedKey) (string, error) {
 // after the last field so the decoder can distinguish padding
 // zeros from real code-0 characters.
 func compressFields(tag byte, fields ...string) []byte {
-	// Estimate: tag + ~5/8 bytes per char + some overhead.
+	// Estimate: tag + ~6/8 bytes per char + some overhead.
 	totalChars := 0
 	for _, f := range fields {
 		totalChars += len(f)
 	}
-	p := &bitPacker{buf: make([]byte, 0, 1+totalChars*5/8+len(fields)+4)}
+	p := &bitPacker{buf: make([]byte, 0, 1+totalChars*6/8+len(fields)+4)}
 	p.buf = append(p.buf, tag)
 	for i, f := range fields {
 		if i > 0 {

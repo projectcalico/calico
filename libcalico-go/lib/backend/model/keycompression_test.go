@@ -237,24 +237,24 @@ func TestCompressUsableAsMapKey(t *testing.T) {
 // TestCompactAlphabet verifies the compact alphabet round-trips all
 // expected characters and correctly identifies non-compact characters.
 func TestCompactAlphabet(t *testing.T) {
-	compact := "abcdefghijklmnopqrstuvwxyz-./_"
+	compact := "abcdefghijklmnopqrstuvwxyz0123456789-./_%"
 	for i := 0; i < len(compact); i++ {
 		c := compact[i]
-		code := charTo5Bit[c]
+		code := charTo6Bit[c]
 		if code == 0xFF {
 			t.Errorf("expected %q (0x%02x) to be compact, got 0xFF", string(c), c)
 			continue
 		}
-		if fiveBitToChar[code] != c {
-			t.Errorf("compact round-trip failed for %q: code=%d, back=%q", string(c), code, string(fiveBitToChar[code]))
+		if sixBitToChar[code] != c {
+			t.Errorf("compact round-trip failed for %q: code=%d, back=%q", string(c), code, string(sixBitToChar[code]))
 		}
 	}
 
-	nonCompact := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ @#$%^&*()=+[]{}|\\\"'<>?,;:\t\n\r\x00\x80\xFD\xFE\xFF"
+	nonCompact := "ABCDEFGHIJKLMNOPQRSTUVWXYZ @#$^&*()=+[]{}|\\\"'<>?,;:\t\n\r\x00\x80\xFD\xFE\xFF"
 	for i := 0; i < len(nonCompact); i++ {
 		c := nonCompact[i]
-		if charTo5Bit[c] != 0xFF {
-			t.Errorf("expected %q (0x%02x) to be non-compact, got code %d", string(c), c, charTo5Bit[c])
+		if charTo6Bit[c] != 0xFF {
+			t.Errorf("expected %q (0x%02x) to be non-compact, got code %d", string(c), c, charTo6Bit[c])
 		}
 	}
 }
@@ -318,7 +318,7 @@ func TestDictionaryEncoding(t *testing.T) {
 			p.flush()
 			packed := p.result()
 
-			// Dict entry = 10 bits, end marker = 10 bits = 20 bits → 3 bytes.
+			// Dict entry = 12 bits, end marker = 12 bits = 24 bits → 3 bytes.
 			if len(packed) != 3 {
 				t.Fatalf("dictionary entry + end marker should pack to 3 bytes, got %d: %x", len(packed), packed)
 			}
@@ -354,12 +354,12 @@ func TestDecompressErrors(t *testing.T) {
 	}
 }
 
-// Test5BitPacking verifies that the 5-bit packer/unpacker round-trip
+// Test6BitPacking verifies that the 6-bit packer/unpacker round-trip
 // sequences of codes correctly.
-func Test5BitPacking(t *testing.T) {
+func Test6BitPacking(t *testing.T) {
 	// Pack a known sequence and verify it unpacks correctly.
 	// Include end marker to avoid padding ambiguity.
-	codes := []byte{0, 1, 2, 30, 15, 7, 31, 0, 25, 26, 27, 28, 29, 31, 1}
+	codes := []byte{0, 1, 2, 62, 15, 7, 63, 0, 25, 36, 37, 38, 39, 40, 63, 1}
 	p := &bitPacker{}
 	p.writeCodes(codes...)
 	p.flush()
@@ -404,15 +404,18 @@ func TestMultiFieldPackedEncoding(t *testing.T) {
 	}
 }
 
-// Test5BitPackingSavings verifies that compact-only strings use
-// fewer bytes when 5-bit packed than raw ASCII.
-func Test5BitPackingSavings(t *testing.T) {
+// Test6BitPackingSavings verifies that compact-only strings use
+// fewer bytes when 6-bit packed than raw ASCII.
+func Test6BitPackingSavings(t *testing.T) {
 	typicalNames := []string{
 		"ip-one-two-three.us-west.compute.internal",
 		"kube-system/calico-node-abcde",
 		"my-network-policy",
 		"kns.default",
 		"hello-world",
+		"ip-172-31-22-123.us-west-2.compute.internal",
+		"nginx-deployment-7fb96c846b-4x2jq",
+		"node-1.example.com",
 	}
 
 	for _, s := range typicalNames {
@@ -427,7 +430,7 @@ func Test5BitPackingSavings(t *testing.T) {
 				s, len(s), len(packed), 100*(1-float64(len(packed))/float64(len(s))))
 
 			if len(packed) >= len(s) {
-				t.Errorf("5-bit packed (%d bytes) should be smaller than raw (%d bytes) for %q",
+				t.Errorf("6-bit packed (%d bytes) should be smaller than raw (%d bytes) for %q",
 					len(packed), len(s), s)
 			}
 		})
