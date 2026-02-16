@@ -99,18 +99,18 @@ const (
 // They start at specialDictBase (2) to leave room for
 // specialDelimiter (0) and specialEnd (1).
 const (
-	dictKubernetes                    = specialDictBase + iota // 2
-	dictEth0                                                  // 3
-	dictDefault                                               // 4
-	dictK8s                                                   // 5
-	dictOpenstack                                             // 6
-	dictCNI                                                   // 7
-	dictNetworkPolicies                                       // 8
-	dictGlobalNetworkPolicies                                 // 9
-	dictStagedNetworkPolicies                                 // 10
-	dictStagedGlobalNetworkPolicies                           // 11
-	dictStagedKubernetesNetworkPolicies                       // 12
-	dictFelixConfigurations                                   // 13
+	dictKubernetes                      = specialDictBase + iota // 2
+	dictEth0                                                     // 3
+	dictDefault                                                  // 4
+	dictK8s                                                      // 5
+	dictOpenstack                                                // 6
+	dictCNI                                                      // 7
+	dictNetworkPolicies                                          // 8
+	dictGlobalNetworkPolicies                                    // 9
+	dictStagedNetworkPolicies                                    // 10
+	dictStagedGlobalNetworkPolicies                              // 11
+	dictStagedKubernetesNetworkPolicies                          // 12
+	dictFelixConfigurations                                      // 13
 	// dictEnd is a sentinel; all valid indices are < dictEnd.
 	dictEnd // 14
 )
@@ -149,11 +149,11 @@ func init() {
 // to 5-bit codes 0-29.  Codes 30 and 31 are reserved for escape
 // and special prefix respectively.
 //
-//	 0-25: a-z
-//	   26: '-'
-//	   27: '.'
-//	   28: '/'
-//	   29: '_'
+//	0-25: a-z
+//	  26: '-'
+//	  27: '.'
+//	  28: '/'
+//	  29: '_'
 const compactMax5 = 30 // codes 0-29 are compact characters
 
 // charTo5Bit maps byte values to 5-bit codes.
