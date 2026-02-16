@@ -2981,10 +2981,7 @@ func startBPFDataplaneComponents(
 			log.WithError(err).Panic("Failed to start kube-proxy.")
 		}
 
-		hostMetadataCache := NewHostMetadataCache()
-		hostMetadataCache.SetOnHostUpdateCB(kp.OnHostMetadataV4V6Update)
-		dp.RegisterManager(hostMetadataCache)
-		hostMetadataCache.Start()
+		dp.RegisterManager(kp)
 
 		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
