@@ -92,7 +92,7 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector *selector.
 	optimized := false
 	debug := logrus.IsLevelEnabled(logrus.DebugLevel)
 	if found {
-		res := lrs[labelName]
+		res, _ := lrs.Get(labelName)
 		if !res.PossibleToSatisfy() {
 			// Selector is impossible to satisfy, we don't even need to
 			// add it to the index(!)
@@ -158,7 +158,7 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	labelName, found := findMostRestrictedLabel(lrs)
 	optimized := false
 	if found {
-		res := lrs[labelName]
+		res, _ := lrs.Get(labelName)
 		if !res.PossibleToSatisfy() {
 			optimized = true
 		} else if res.MustHaveOneOfValues != nil {
@@ -187,11 +187,11 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	delete(s.selectorsByID, id)
 }
 
-func findMostRestrictedLabel(lrs map[uniquestr.Handle]parser.LabelRestriction) (uniquestr.Handle, bool) {
+func findMostRestrictedLabel(lrs parser.LabelRestrictions) (uniquestr.Handle, bool) {
 	var zeroHandle uniquestr.Handle
 	var bestLabel uniquestr.Handle
 	var bestScore = -1
-	for label, res := range lrs {
+	for label, res := range lrs.All() {
 		score := scoreLabelRestriction(res)
 		if bestLabel == zeroHandle ||
 			score > bestScore ||
