@@ -46,14 +46,15 @@ type DedupeBuffer struct {
 	cond *sync.Cond
 
 	// keyToPendingUpdate holds an entry for each updateWithStringKey in the
-	// pendingUpdates queue
-	keyToPendingUpdate    map[string]*list.Element
+	// pendingUpdates queue.  Keys are compressed to save RAM when the
+	// queue is large.
+	keyToPendingUpdate    map[model.CompressedKey]*list.Element
 	peakPendingUpdatesLen int
 
 	// liveResourceKeys Contains an entry for every key that we have sent to
 	// the consumer and that we have not subsequently sent a deletion for.
-	liveResourceKeys              set.Set[string]
-	liveKeysNotSeenSinceReconnect set.Set[string]
+	liveResourceKeys              set.Set[model.CompressedKey]
+	liveKeysNotSeenSinceReconnect set.Set[model.CompressedKey]
 	resyncStart                   time.Time
 	// pendingUpdates is the queue of updates that we want to send to the
 	// consumer.  We use a linked list so that we can remove items from
@@ -66,8 +67,8 @@ type DedupeBuffer struct {
 
 func New() *DedupeBuffer {
 	d := &DedupeBuffer{
-		keyToPendingUpdate: map[string]*list.Element{},
-		liveResourceKeys:   set.New[string](),
+		keyToPendingUpdate: map[model.CompressedKey]*list.Element{},
+		liveResourceKeys:   set.New[model.CompressedKey](),
 	}
 	d.cond = sync.NewCond(&d.lock)
 	return d
@@ -177,11 +178,12 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 				continue
 			}
 		}
+		compressedKey := model.CompressKeyPath(key)
 		if d.liveKeysNotSeenSinceReconnect != nil {
-			d.liveKeysNotSeenSinceReconnect.Discard(key)
+			d.liveKeysNotSeenSinceReconnect.Discard(compressedKey)
 		}
 
-		d.queueUpdate(key, u)
+		d.queueUpdate(compressedKey, u)
 	}
 	queueNowEmpty := d.pendingUpdates.Len() == 0
 	if queueWasEmpty && !queueNowEmpty {
@@ -193,7 +195,7 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 	}
 }
 
-func (d *DedupeBuffer) queueUpdate(key string, u api.Update) {
+func (d *DedupeBuffer) queueUpdate(key model.CompressedKey, u api.Update) {
 	debug := log.IsLevelEnabled(log.DebugLevel)
 
 	if u.Value != nil {
@@ -260,7 +262,7 @@ func (d *DedupeBuffer) Stop() {
 }
 
 type updateWithStringKey struct {
-	key    string
+	key    model.CompressedKey
 	update api.Update
 }
 
@@ -313,7 +315,7 @@ func (d *DedupeBuffer) pullNextBatch(buf []any, batchSize int) []any {
 				// https://github.com/golang/go/issues/20135
 				// Opportunistically free the map when it's empty. This can
 				// free a good amount of RAM after loading a large snapshot.
-				d.keyToPendingUpdate = map[string]*list.Element{}
+				d.keyToPendingUpdate = map[model.CompressedKey]*list.Element{}
 				d.peakPendingUpdatesLen = 0
 			}
 			// Update liveResourceKeys now, before we drop the lock.  Once we drop
@@ -382,11 +384,15 @@ func (d *DedupeBuffer) onInSyncAfterReconnection() {
 		"resources not seen during the resync.",
 		d.liveKeysNotSeenSinceReconnect.Len())
 	for key := range d.liveKeysNotSeenSinceReconnect.All() {
-		parsedKey := model.KeyFromDefaultPath(key)
+		defaultPath, err := key.Expand()
+		if err != nil {
+			log.WithError(err).WithField("key", key).Panic("Failed to decompress key during reconnection to Typha.")
+		}
+		parsedKey := model.KeyFromDefaultPath(defaultPath)
 		if parsedKey == nil {
 			// Not clear how this could happen since these keys came from the
 			// set that we'd already parsed and passed downstream!
-			log.WithField("key", key).Panic("Failed to parse key during reconnection to Typha.")
+			log.WithField("key", defaultPath).Panic("Failed to parse key during reconnection to Typha.")
 		}
 		d.queueUpdate(key, api.Update{
 			KVPair: model.KVPair{
