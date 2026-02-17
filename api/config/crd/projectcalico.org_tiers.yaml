@@ -45,6 +45,7 @@ spec:
                     - enum:
                         - Pass
                         - Deny
+                  default: Deny
                   type: string
                 order:
                   type: number

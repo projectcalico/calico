@@ -40,6 +40,7 @@ type StagedGlobalNetworkPolicy struct {
 
 type StagedGlobalNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
+	// +kubebuilder:default=Set
 	StagedAction StagedAction `json:"stagedAction,omitempty" validate:"omitempty,stagedAction"`
 
 	// The name of the tier that this policy belongs to.  If this is omitted, the default

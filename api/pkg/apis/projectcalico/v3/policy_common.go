@@ -80,6 +80,7 @@ type Rule struct {
 // HTTPPath specifies an HTTP path to match. It may be either of the form:
 // exact: <path>: which matches the path exactly or
 // prefix: <path-prefix>: which matches the path prefix
+// +kubebuilder:validation:XValidation:rule="(self.exact == ” && self.prefix != ”) || (self.exact != ” && self.prefix == ”)",message="exactly one of 'exact' or 'prefix' must be set"
 type HTTPPath struct {
 	Exact  string `json:"exact,omitempty" validate:"omitempty"`
 	Prefix string `json:"prefix,omitempty" validate:"omitempty"`
@@ -103,11 +104,12 @@ type HTTPMatch struct {
 }
 
 // ICMPFields defines structure for ICMP and NotICMP sub-struct for ICMP code and type
+// +kubebuilder:validation:XValidation:rule="!has(self.code) || has(self.type)",message="ICMP code specified without an ICMP type"
 type ICMPFields struct {
 	// Match on a specific ICMP type.  For example a value of 8 refers to ICMP Echo Request
 	// (i.e. pings).
 	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=255
+	// +kubebuilder:validation:Maximum=254
 	// +optional
 	Type *int `json:"type,omitempty" validate:"omitempty,gte=0,lte=254"`
 

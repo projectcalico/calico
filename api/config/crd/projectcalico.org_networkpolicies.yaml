@@ -108,6 +108,13 @@ spec:
                                 prefix:
                                   type: string
                               type: object
+                              x-kubernetes-validations:
+                                - message:
+                                    exactly one of 'exact' or 'prefix' must be
+                                    set
+                                  rule:
+                                    (self.exact == '' && self.prefix != '') || (self.exact
+                                    != '' && self.prefix == '')
                             type: array
                         type: object
                       icmp:
@@ -117,10 +124,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -140,10 +150,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -286,6 +299,13 @@ spec:
                                 prefix:
                                   type: string
                               type: object
+                              x-kubernetes-validations:
+                                - message:
+                                    exactly one of 'exact' or 'prefix' must be
+                                    set
+                                  rule:
+                                    (self.exact == '' && self.prefix != '') || (self.exact
+                                    != '' && self.prefix == '')
                             type: array
                         type: object
                       icmp:
@@ -295,10 +315,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -318,10 +341,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
