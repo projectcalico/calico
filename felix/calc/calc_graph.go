@@ -554,11 +554,11 @@ func (f *endpointHostnameFilter) RegisterWith(localEndpointDisp *dispatcher.Disp
 func (f *endpointHostnameFilter) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
-		if key.Hostname != f.hostname {
+		if key.Host() != f.hostname {
 			filterOut = true
 		}
 	case model.HostEndpointKey:
-		if key.Hostname != f.hostname {
+		if key.Host() != f.hostname {
 			filterOut = true
 		}
 	}
@@ -596,11 +596,11 @@ func (f *remoteEndpointFilter) RegisterWith(remoteEndpointDisp *dispatcher.Dispa
 func (f *remoteEndpointFilter) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
-		if key.Hostname == f.hostname {
+		if key.Host() == f.hostname {
 			filterOut = true
 		}
 	case model.HostEndpointKey:
-		if key.Hostname == f.hostname {
+		if key.Host() == f.hostname {
 			filterOut = true
 		}
 	}

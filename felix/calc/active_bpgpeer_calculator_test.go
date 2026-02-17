@@ -36,9 +36,9 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 	onEndpointBGPPeerDataUpdate := func(id model.WorkloadEndpointKey, peerData *EndpointBGPPeer) {
 		// Result maps workload name to bgp peer name.
 		if peerData != nil {
-			result[id.WorkloadID] = peerData.v3PeerName
+			result[id.WorkloadID()] = peerData.v3PeerName
 		} else {
-			delete(result, id.WorkloadID)
+			delete(result, id.WorkloadID())
 		}
 	}
 
@@ -52,10 +52,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 		// Add two endpoints with color=red, one with color=blue and one with color=yellow.
 		abp.OnUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.WorkloadEndpointKey{
-					Hostname:   hostname,
-					WorkloadID: "w-red",
-				},
+				Key: model.MakeWorkloadEndpointKey(hostname, "", "w-red", ""),
 				Value: &model.WorkloadEndpoint{
 					Name:   "w-red",
 					Labels: uniquelabels.Make(map[string]string{"color": "red"}),
@@ -65,10 +62,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 
 		abp.OnUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.WorkloadEndpointKey{
-					Hostname:   hostname,
-					WorkloadID: "w-blue",
-				},
+				Key: model.MakeWorkloadEndpointKey(hostname, "", "w-blue", ""),
 				Value: &model.WorkloadEndpoint{
 					Name:   "w-blue",
 					Labels: uniquelabels.Make(map[string]string{"color": "blue"}),
@@ -78,10 +72,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 
 		abp.OnUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.WorkloadEndpointKey{
-					Hostname:   hostname,
-					WorkloadID: "w-yellow",
-				},
+				Key: model.MakeWorkloadEndpointKey(hostname, "", "w-yellow", ""),
 				Value: &model.WorkloadEndpoint{
 					Name:   "w-yellow",
 					Labels: uniquelabels.Make(map[string]string{"color": "yellow"}),
@@ -91,10 +82,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 
 		abp.OnUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.WorkloadEndpointKey{
-					Hostname:   hostname,
-					WorkloadID: "w-red-2",
-				},
+				Key: model.MakeWorkloadEndpointKey(hostname, "", "w-red-2", ""),
 				Value: &model.WorkloadEndpoint{
 					Name:   "w-red-2",
 					Labels: uniquelabels.Make(map[string]string{"color": "red"}),
@@ -217,10 +205,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 			// Turn w-red-2 to blue.
 			abp.OnUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.WorkloadEndpointKey{
-						Hostname:   hostname,
-						WorkloadID: "w-red-2",
-					},
+					Key: model.MakeWorkloadEndpointKey(hostname, "", "w-red-2", ""),
 					Value: &model.WorkloadEndpoint{
 						Name:   "w-red-2",
 						Labels: uniquelabels.Make(map[string]string{"color": "blue"}),
@@ -238,10 +223,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 			// Turn w-red-2 to blue.
 			abp.OnUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.WorkloadEndpointKey{
-						Hostname:   hostname,
-						WorkloadID: "w-red-2",
-					},
+					Key:   model.MakeWorkloadEndpointKey(hostname, "", "w-red-2", ""),
 					Value: nil,
 				},
 			})

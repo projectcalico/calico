@@ -32,25 +32,35 @@ var (
 )
 
 type HostEndpointKey struct {
-	Hostname   string `json:"-" validate:"required,hostname"`
-	EndpointID string `json:"-" validate:"required,namespacedName"`
+	hostname   string
+	endpointID string
+}
+
+// MakeHostEndpointKey creates a new HostEndpointKey with the given fields.
+func MakeHostEndpointKey(hostname, endpointID string) HostEndpointKey {
+	return HostEndpointKey{
+		hostname:   hostname,
+		endpointID: endpointID,
+	}
 }
 
 func (key HostEndpointKey) WorkloadOrHostEndpointKey() {}
 
 func (key HostEndpointKey) Host() string {
-	return key.Hostname
+	return key.hostname
 }
 
+func (key HostEndpointKey) EndpointID() string { return key.endpointID }
+
 func (key HostEndpointKey) defaultPath() (string, error) {
-	if key.Hostname == "" {
+	if key.hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
-	if key.EndpointID == "" {
+	if key.endpointID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/host/%s/endpoint/%s",
-		key.Hostname, escapeName(key.EndpointID))
+		key.hostname, escapeName(key.endpointID))
 	return e, nil
 }
 
@@ -71,7 +81,7 @@ func (key HostEndpointKey) parseValue(rawData []byte) (any, error) {
 }
 
 func (key HostEndpointKey) String() string {
-	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Hostname, key.EndpointID)
+	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.hostname, key.endpointID)
 }
 
 var _ EndpointKey = HostEndpointKey{}
@@ -111,7 +121,7 @@ func (options HostEndpointListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match endpointID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
-	return HostEndpointKey{Hostname: hostname, EndpointID: endpointID}
+	return MakeHostEndpointKey(hostname, endpointID)
 }
 
 type HostEndpoint struct {
