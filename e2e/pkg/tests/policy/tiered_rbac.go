@@ -49,10 +49,10 @@ const (
 	rbacResourcePrefix = "e2e-tiered-rbac-"
 )
 
-// DESCRIPTION: Verify the tiered RBAC webhook correctly enforces tier-based access control
+// DESCRIPTION: Verify tiered RBAC correctly enforces tier-based access control
 // for policy create, update, and delete operations.
 //
-// The tiered RBAC webhook requires that users have:
+// The tiered RBAC implementation requires that users have:
 //  1. GET access to the tier (resource: "tiers")
 //  2. The required verb on either the specific policy or all policies in the tier
 //     (resource: "tier.networkpolicies" / "tier.globalnetworkpolicies")
@@ -64,7 +64,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithCategory(describe.Policy),
 	describe.WithFeature("Tiered-RBAC"),
 	describe.WithSerial(),
-	"Tiered RBAC webhook",
+	"Tiered RBAC",
 	func() {
 		f := utils.NewDefaultFramework("tiered-rbac")
 
@@ -329,7 +329,6 @@ func buildTieredRBACResources() tieredRBACSetup {
 	}
 
 	// baseRules returns the standard API server RBAC rules that all test users need.
-	// These allow the request to pass the API server's own RBAC check before the webhook runs.
 	baseRules := func() []rbacv1.PolicyRule {
 		return []rbacv1.PolicyRule{
 			{
@@ -357,7 +356,7 @@ func buildTieredRBACResources() tieredRBACSetup {
 	))
 
 	// No tier GET: has tier policy access but lacks the required GET on the tier resource.
-	// The webhook should deny because tier GET is required alongside policy access.
+	// RBAC should deny because tier GET is required alongside policy access.
 	addRoleAndBinding("no-tier-get", rbacNoTierGetUser, append(baseRules(),
 		rbacv1.PolicyRule{
 			APIGroups:     []string{"projectcalico.org"},
@@ -368,7 +367,7 @@ func buildTieredRBACResources() tieredRBACSetup {
 	))
 
 	// No policy access: has tier GET but lacks permission on tier.networkpolicies.
-	// The webhook should deny because policy-level access is required.
+	// RBAC should deny because policy-level access is required.
 	addRoleAndBinding("no-policy", rbacNoPolicyUser, append(baseRules(),
 		rbacv1.PolicyRule{
 			APIGroups:     []string{"projectcalico.org"},
