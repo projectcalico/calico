@@ -283,12 +283,7 @@ func makeTagPolicies(num int) []api.Update {
 func makeEndpointUpdates(num int, host string) []api.Update {
 	updates := make([]api.Update, num)
 	for n := 0; n < num; n++ {
-		key := model.WorkloadEndpointKey{
-			Hostname:       host,
-			OrchestratorID: "k8s",
-			WorkloadID:     fmt.Sprintf("wep-%d", n),
-			EndpointID:     "eth0",
-		}
+		key := model.MakeWorkloadEndpointKey(host, "k8s", fmt.Sprintf("wep-%d", n), "eth0")
 		ipNet := getNextIP()
 		updates[n] = api.Update{
 			KVPair: model.KVPair{
@@ -306,12 +301,7 @@ func makeEndpointUpdates(num int, host string) []api.Update {
 func makeEndpointDeletes(num int, host string) []api.Update {
 	updates := make([]api.Update, num)
 	for n := 0; n < num; n++ {
-		key := model.WorkloadEndpointKey{
-			Hostname:       host,
-			OrchestratorID: "k8s",
-			WorkloadID:     fmt.Sprintf("wep-%d", n),
-			EndpointID:     "eth0",
-		}
+		key := model.MakeWorkloadEndpointKey(host, "k8s", fmt.Sprintf("wep-%d", n), "eth0")
 		updates[n] = api.Update{
 			KVPair: model.KVPair{
 				Key:   key,

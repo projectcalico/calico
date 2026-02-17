@@ -25,6 +25,36 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// Map is the storage interface used by LabelNameValueIndex for its primary
+// item map.  It allows callers to supply a specialised implementation that
+// avoids interface-key boxing overhead.
+type Map[K comparable, V any] interface {
+	Get(K) (V, bool)
+	Set(K, V)
+	Delete(K)
+	Len() int
+	AllKeys() iter.Seq[K]
+}
+
+// PlainMap wraps a plain Go map to satisfy the Map interface.
+type PlainMap[K comparable, V any] struct {
+	M map[K]V
+}
+
+func (m PlainMap[K, V]) Get(k K) (V, bool) { v, ok := m.M[k]; return v, ok }
+func (m PlainMap[K, V]) Set(k K, v V)      { m.M[k] = v }
+func (m PlainMap[K, V]) Delete(k K)        { delete(m.M, k) }
+func (m PlainMap[K, V]) Len() int          { return len(m.M) }
+func (m PlainMap[K, V]) AllKeys() iter.Seq[K] {
+	return func(yield func(K) bool) {
+		for k := range m.M {
+			if !yield(k) {
+				return
+			}
+		}
+	}
+}
+
 // LabelNameValueIndex stores a set of Labeled objects by ID, and it indexes
 // them according to their own (not inherited) labels/label values for
 // efficient scans based on selector LabelRestrictions.  The StrategyFor
@@ -38,7 +68,7 @@ import (
 // handled more efficiently at the layer above.
 type LabelNameValueIndex[ItemID comparable, Item Labeled] struct {
 	nameOfTrackedItems    string
-	allItems              map[ItemID]Item
+	allItems              Map[ItemID, Item]
 	labelNameToValueToIDs map[uniquestr.Handle]values[ItemID]
 }
 
@@ -49,7 +79,17 @@ type Labeled interface {
 func New[ItemID comparable, Item Labeled](nameOfTrackedItems string) *LabelNameValueIndex[ItemID, Item] {
 	return &LabelNameValueIndex[ItemID, Item]{
 		nameOfTrackedItems:    nameOfTrackedItems,
-		allItems:              map[ItemID]Item{},
+		allItems:              PlainMap[ItemID, Item]{M: map[ItemID]Item{}},
+		labelNameToValueToIDs: map[uniquestr.Handle]values[ItemID]{},
+	}
+}
+
+// NewWithStorage creates a LabelNameValueIndex that uses the given Map
+// implementation for primary item storage instead of a plain Go map.
+func NewWithStorage[ItemID comparable, Item Labeled](nameOfTrackedItems string, storage Map[ItemID, Item]) *LabelNameValueIndex[ItemID, Item] {
+	return &LabelNameValueIndex[ItemID, Item]{
+		nameOfTrackedItems:    nameOfTrackedItems,
+		allItems:              storage,
 		labelNameToValueToIDs: map[uniquestr.Handle]values[ItemID]{},
 	}
 }
@@ -65,14 +105,14 @@ type values[ItemID comparable] struct {
 //
 // To avoid the above bug, panics if the same ID is added twice.
 func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
-	if _, ok := idx.allItems[id]; ok {
+	if _, ok := idx.allItems.Get(id); ok {
 		logrus.WithFields(logrus.Fields{
 			"id":    id,
 			"item":  item,
 			"index": idx.nameOfTrackedItems,
 		}).Panic("Add called for ID that is already in the index.")
 	}
-	idx.allItems[id] = item
+	idx.allItems.Set(id, item)
 	for k, v := range item.OwnLabelHandles() {
 		vals, ok := idx.labelNameToValueToIDs[k]
 		if !ok {
@@ -96,7 +136,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
 // Remove an item from the index.  Note that it is important that the labels
 // are not mutated between Add and Remove calls.
 func (idx *LabelNameValueIndex[ItemID, Item]) Remove(id ItemID) {
-	v := idx.allItems[id]
+	v, _ := idx.allItems.Get(id)
 	for k, v := range v.OwnLabelHandles() {
 		vals := idx.labelNameToValueToIDs[k]
 		setOfIDs := vals.m[v]
@@ -111,7 +151,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Remove(id ItemID) {
 		vals.count--
 		idx.labelNameToValueToIDs[k] = vals
 	}
-	delete(idx.allItems, id)
+	idx.allItems.Delete(id)
 }
 
 // StrategyFor returns the best available ScanStrategy for the given
@@ -121,7 +161,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Remove(id ItemID) {
 func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName uniquestr.Handle, r parser.LabelRestriction) ScanStrategy[ItemID] {
 	if !r.MustBePresent {
 		// Not much we can do if the selector doesn't match on this label.
-		return FullScanStrategy[ItemID, Item]{allItems: idx.allItems}
+		return idx.FullScanStrategy()
 	}
 
 	if r.MustHaveOneOfValues == nil {
@@ -175,18 +215,17 @@ func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName uniquestr.Ha
 
 // FullScanStrategy returns a scan strategy that scans all items.
 func (idx *LabelNameValueIndex[ItemID, Item]) FullScanStrategy() ScanStrategy[ItemID] {
-	return FullScanStrategy[ItemID, Item]{allItems: idx.allItems}
+	return fullScanStrategy[ItemID]{allKeys: idx.allItems.AllKeys(), count: idx.allItems.Len()}
 }
 
 // Get looks up an item by its ID.  (Allows this object to be the primary
 // map datastructure for storing the items.)
 func (idx *LabelNameValueIndex[ItemID, Item]) Get(id ItemID) (Item, bool) {
-	v, ok := idx.allItems[id]
-	return v, ok
+	return idx.allItems.Get(id)
 }
 
 func (idx *LabelNameValueIndex[ItemID, Item]) Len() int {
-	return len(idx.allItems)
+	return idx.allItems.Len()
 }
 
 // ScanStrategy abstracts over particular types of scans of the index, allowing
@@ -326,28 +365,29 @@ func (s LabelNameStrategy[ItemID]) Name() string {
 	return "label-name"
 }
 
-// FullScanStrategy is a ScanStrategy that scans all items in a completely
+// fullScanStrategy is a ScanStrategy that scans all items in a completely
 // unoptimized way.  It is returned if the selector cannot be optimized.
-type FullScanStrategy[ItemID comparable, Item Labeled] struct {
-	allItems map[ItemID]Item
+type fullScanStrategy[ItemID comparable] struct {
+	allKeys iter.Seq[ItemID]
+	count   int
 }
 
-func (s FullScanStrategy[ItemID, Item]) String() string {
+func (s fullScanStrategy[ItemID]) String() string {
 	return "full-scan"
 }
 
-func (s FullScanStrategy[ItemID, Item]) EstimatedItemsToScan() int {
-	return len(s.allItems)
+func (s fullScanStrategy[ItemID]) EstimatedItemsToScan() int {
+	return s.count
 }
 
-func (s FullScanStrategy[ItemID, Item]) Scan(f func(id ItemID) bool) {
-	for id := range s.allItems {
+func (s fullScanStrategy[ItemID]) Scan(f func(id ItemID) bool) {
+	for id := range s.allKeys {
 		if !f(id) {
 			return
 		}
 	}
 }
 
-func (s FullScanStrategy[ItemID, Item]) Name() string {
+func (s fullScanStrategy[ItemID]) Name() string {
 	return "full-scan"
 }

@@ -530,9 +530,9 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
-					OrchestratorId: key.OrchestratorID,
-					WorkloadId:     key.WorkloadID,
-					EndpointId:     key.EndpointID,
+					OrchestratorId: key.OrchestratorID(),
+					WorkloadId:     key.WorkloadID(),
+					EndpointId:     key.EndpointID(),
 				},
 				Endpoint: ModelWorkloadEndpointToProto(wlep, endpointUpdate.peerData, tiers),
 			})
@@ -540,7 +540,7 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 			hep := endpoint.(*model.HostEndpoint)
 			buf.Callback(&proto.HostEndpointUpdate{
 				Id: &proto.HostEndpointID{
-					EndpointId: key.EndpointID,
+					EndpointId: key.EndpointID(),
 				},
 				Endpoint: ModelHostEndpointToProto(hep, tiers, untrackedTiers, preDNATTiers, forwardTiers),
 			})
@@ -558,15 +558,15 @@ func (buf *EventSequencer) flushEndpointTierDeletes() {
 		case model.WorkloadEndpointKey:
 			buf.Callback(&proto.WorkloadEndpointRemove{
 				Id: &proto.WorkloadEndpointID{
-					OrchestratorId: key.OrchestratorID,
-					WorkloadId:     key.WorkloadID,
-					EndpointId:     key.EndpointID,
+					OrchestratorId: key.OrchestratorID(),
+					WorkloadId:     key.WorkloadID(),
+					EndpointId:     key.EndpointID(),
 				},
 			})
 		case model.HostEndpointKey:
 			buf.Callback(&proto.HostEndpointRemove{
 				Id: &proto.HostEndpointID{
-					EndpointId: key.EndpointID,
+					EndpointId: key.EndpointID(),
 				},
 			})
 		}
