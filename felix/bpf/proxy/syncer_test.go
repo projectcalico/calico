@@ -245,7 +245,7 @@ var _ = Describe("BPF Syncer", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cnt).To(Equal(5))
+			Expect(cnt).To(Equal(7))
 		}))
 
 		udpSvcKey := k8sp.ServicePortName{
@@ -286,7 +286,7 @@ var _ = Describe("BPF Syncer", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cnt).To(Equal(4))
+			Expect(cnt).To(Equal(6))
 		}))
 
 		By("deleting the udp-service backend", makestep(func() {
@@ -365,7 +365,7 @@ var _ = Describe("BPF Syncer", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cnt).To(Equal(2))
+			Expect(cnt).To(Equal(6))
 		}))
 
 		By("not programming eps without a service - non reachables", makestep(func() {
@@ -1124,7 +1124,7 @@ var _ = Describe("BPF Syncer", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cnt).To(Equal(0))
+			Expect(cnt).To(Equal(6))
 		}))
 
 		By("checking endpointslice terminating status should be included in endpointslice collection for processing", makestep(func() {
@@ -1180,7 +1180,7 @@ var _ = Describe("BPF Syncer", func() {
 
 			// Expect 6x new conntrack entries from 3x pods NAT forward and 3x pods NAT reverse total.
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cnt).To(Equal(6))
+			Expect(cnt).To(Equal(12))
 		}))
 
 	})

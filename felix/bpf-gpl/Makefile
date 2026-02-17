@@ -1,5 +1,5 @@
 # Project Calico BPF dataplane build scripts.
-# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 # Disable implicit rules.
@@ -58,6 +58,7 @@ LD := llc
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 UT_OBJS+=ut/ip_parse_test_v6.o
+UT_OBJS+=ut/tcp_rst_v6.o
 
 XDP_MAP_HEADERS := jump.h
 COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
@@ -219,6 +220,10 @@ ut/%.o: ut/%.ll
 ut/ip_parse_test_v6.ll: ut/ip_parse_test.c
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
 ut/ip_parse_test_v6.o: ut/ip_parse_test_v6.ll
+	$(LINK)
+ut/tcp_rst_v6.ll: ut/tcp_rst.c
+	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
+ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(LINK)
 
 %_v4.ll: %.c %.d calculate-flags
