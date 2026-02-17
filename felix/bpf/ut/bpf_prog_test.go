@@ -478,14 +478,16 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 			}
 			Expect(errs).To(BeEmpty())
 		}()
-		var progType uint32
+		progType := uint32(0)
+		attachType := uint32(0)
 		if topts.xdp {
 			progType = unix.BPF_PROG_TYPE_XDP
+			attachType = libbpf.AttachTypeXDP
 		} else {
 			progType = unix.BPF_PROG_TYPE_SCHED_CLS
 		}
 		for i, p := range insns {
-			polProgFD, err := bpf.LoadBPFProgramFromInsns(p, "calico_policy", "Apache-2.0", progType)
+			polProgFD, err := bpf.LoadBPFProgramFromInsnsWithAttachType(p, "calico_policy", "Apache-2.0", progType, attachType)
 			Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 			Expect(polProgFD).NotTo(BeZero())
 			polProgFDs = append(polProgFDs, polProgFD)

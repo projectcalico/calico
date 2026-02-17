@@ -20,11 +20,12 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -1254,6 +1255,122 @@ var _ = Describe("BPF Syncer", func() {
 		})
 
 	})
+
+	Describe("Topology-aware routing and traffic distribution integration", func() {
+		var (
+			svcKeyTopo = k8sp.ServicePortName{
+				NamespacedName: types.NamespacedName{
+					Namespace: "default",
+					Name:      "topology-service",
+				},
+			}
+			nodeName = "node-a"
+			nodeZone = "zone-1"
+		)
+
+		BeforeEach(func() {
+			// Reset state and maps for each test.
+			svcs = newMockNATMap()
+			eps = newMockNATBackendMap()
+			mgEps = newMockMaglevMap()
+			aff = newMockAffinityMap()
+			rt = proxy.NewRTCache()
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+		})
+
+		type testCase struct {
+			name       string
+			service    k8sp.ServicePortMap
+			endpoints  k8sp.EndpointsMap
+			expectBack []string
+		}
+
+		DescribeTable("endpoint selection behavior",
+			func(tc testCase) {
+				state := proxy.DPSyncerState{
+					SvcMap:   tc.service,
+					EpsMap:   tc.endpoints,
+					Hostname: nodeName,
+					NodeZone: nodeZone,
+				}
+
+				err := s.Apply(state)
+				Expect(err).NotTo(HaveOccurred())
+
+				var backendIPs []string
+				for _, v := range eps.m {
+					backendIPs = append(backendIPs, v.Addr().String())
+				}
+
+				Expect(backendIPs).To(ConsistOf(tc.expectBack))
+			},
+			Entry("topology-aware: prefers routing over traffic distribution hints", testCase{
+				service: k8sp.ServicePortMap{
+					svcKeyTopo: svc("10.0.0.50", 8080).topology("Auto").build(),
+				},
+				endpoints: k8sp.EndpointsMap{
+					svcKeyTopo: []k8sp.Endpoint{
+						ep("10.50.0.1", 8081).zones(nodeZone).build(),
+						ep("10.50.0.2", 8082).zones(nodeZone).nodes("node-b").build(),
+						ep("10.50.0.3", 8083).zones("zone-2").nodes("node-c").build(),
+						ep("10.50.0.4", 8084).zones("zone-2").nodes(nodeName).build(),
+					},
+				},
+				expectBack: []string{"10.50.0.1", "10.50.0.2"},
+			}),
+			Entry("topology-aware:falls back to all endpoints if no hints found", testCase{
+				service: k8sp.ServicePortMap{
+					svcKeyTopo: svc("10.0.0.50", 8080).topology("Auto").build(),
+				},
+				endpoints: k8sp.EndpointsMap{
+					svcKeyTopo: []k8sp.Endpoint{
+						ep("10.52.0.3", 8083).zones(nodeZone).nodes("node-c").build(),
+						ep("10.52.0.4", 8084).build(),
+					},
+				},
+				expectBack: []string{"10.52.0.3", "10.52.0.4"},
+			}),
+			Entry("traffic distribution: uses hints when topologyMode is disabled", testCase{
+				service: k8sp.ServicePortMap{
+					svcKeyTopo: svc("10.0.0.53", 8080).topology("Disabled").build(),
+				},
+				endpoints: k8sp.EndpointsMap{
+					svcKeyTopo: []k8sp.Endpoint{
+						ep("10.53.0.1", 8081).nodes(nodeName).build(),
+						ep("10.53.0.2", 8082).zones(nodeZone).build(),
+						ep("10.53.0.3", 8083).build(),
+					},
+				},
+				expectBack: []string{"10.53.0.1"},
+			}),
+			Entry("traffic distribution: falls back to zone-local endpoints when no node-local endpoints exist", testCase{
+				service: k8sp.ServicePortMap{
+					svcKeyTopo: svc("10.0.0.51", 8080).build(),
+				},
+				endpoints: k8sp.EndpointsMap{
+					svcKeyTopo: []k8sp.Endpoint{
+						ep("10.51.0.2", 8082).zones(nodeZone).nodes("node-b").build(),
+						ep("10.51.0.3", 8083).zones("zone-2").nodes("node-c").build(),
+						ep("10.51.0.4", 8084).build(),
+					},
+				},
+				expectBack: []string{"10.51.0.2"},
+			}),
+			Entry("falls back to all endpoints when no endpoints match locality", testCase{
+				service: k8sp.ServicePortMap{
+					svcKeyTopo: svc("10.0.0.52", 8080).build(),
+				},
+				endpoints: k8sp.EndpointsMap{
+					svcKeyTopo: []k8sp.Endpoint{
+						ep("10.52.0.1", 8081).zones("zone-2").build(),
+						ep("10.52.0.2", 8082).nodes("node-c").build(),
+						ep("10.52.0.3", 8083).build(),
+					},
+				},
+				expectBack: []string{"10.52.0.1", "10.52.0.2", "10.52.0.3"},
+			}),
+		)
+	})
 })
 
 type mockNATMap struct {
@@ -1644,4 +1761,71 @@ func ctEntriesForSvc(ct maps.Map, proto v1.Protocol,
 
 	err = ct.Update(revKey.AsBytes(), val.AsBytes())
 	Expect(err).NotTo(HaveOccurred(), "Test failed to populate ct map with REV")
+}
+
+type svcBuilder struct {
+	ip       net.IP
+	port     int
+	protocol v1.Protocol
+	opts     []proxy.K8sServicePortOption
+}
+
+func svc(ip string, port int) *svcBuilder {
+	return &svcBuilder{
+		ip:       net.ParseIP(ip),
+		port:     port,
+		protocol: v1.ProtocolTCP,
+	}
+}
+
+func (s *svcBuilder) topology(mode string) *svcBuilder {
+	s.opts = append(s.opts, proxy.K8sSvcWithTopologyMode(mode))
+	return s
+}
+
+func (s *svcBuilder) build() k8sp.ServicePort {
+	return proxy.NewK8sServicePort(
+		s.ip,
+		s.port,
+		s.protocol,
+		s.opts...,
+	)
+}
+
+type epBuilder struct {
+	ip   string
+	port int
+	opts []proxy.EndpoiontInfoOpt
+}
+
+func ep(ip string, port int) *epBuilder {
+	return &epBuilder{
+		ip:   ip,
+		port: port,
+		opts: []proxy.EndpoiontInfoOpt{
+			proxy.EndpointInfoOptIsReady(true),
+		},
+	}
+}
+
+func (e *epBuilder) nodes(names ...string) *epBuilder {
+	set := sets.Set[string]{}
+	for _, n := range names {
+		set[n] = struct{}{}
+	}
+	e.opts = append(e.opts, proxy.EndpointInfoOptNodeHints(set))
+	return e
+}
+
+func (e *epBuilder) zones(zones ...string) *epBuilder {
+	set := sets.Set[string]{}
+	for _, n := range zones {
+		set[n] = struct{}{}
+	}
+	e.opts = append(e.opts, proxy.EndpointInfoOptZoneHints(set))
+	return e
+}
+
+func (e *epBuilder) build() k8sp.Endpoint {
+	return proxy.NewEndpointInfo(e.ip, e.port, e.opts...)
 }

@@ -1268,21 +1268,23 @@ func TestAttachTcx(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	loglevel := "off"
-	bpfEpMgr, err := newBPFTestEpMgr(
-		&linux.Config{
-			Hostname:              "uthost",
-			BPFLogLevel:           loglevel,
-			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
-			VXLANMTU:              1000,
-			VXLANPort:             1234,
-			BPFNodePortDSREnabled: false,
-			RulesConfig: rules.Config{
-				EndpointToHostAction: "RETURN",
-			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
-			BPFAttachType:           v3.BPFAttachOptionTCX,
+	bpfConfig := &linux.Config{
+		Hostname:              "uthost",
+		BPFLogLevel:           loglevel,
+		BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+		VXLANMTU:              1000,
+		VXLANPort:             1234,
+		BPFNodePortDSREnabled: false,
+		RulesConfig: rules.Config{
+			EndpointToHostAction: "RETURN",
 		},
+		BPFExtToServiceConnmark: 0,
+		BPFPolicyDebugEnabled:   true,
+		BPFAttachType:           v3.BPFAttachOptionTCX,
+	}
+
+	bpfEpMgr, err := newBPFTestEpMgr(
+		bpfConfig,
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
 	)
@@ -1323,20 +1325,26 @@ func TestAttachTcx(t *testing.T) {
 	tcxProgs, err := tc.ListAttachedTcxPrograms("workloadep0", "ingress")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(tcxProgs)).To(Equal(1))
-	// Now attach Tc program.
-	ap := &tc.AttachPoint{
-		AttachPoint: bpf.AttachPoint{
-			Iface: "workloadep0",
-			Hook:  hook.Ingress,
-		},
-		HostIPv4:   net.IPv4(1, 2, 3, 4),
-		IntfIPv4:   net.IPv4(1, 6, 6, 6),
-		AttachType: v3.BPFAttachOptionTC,
-	}
 
-	_, err = tc.EnsureQdisc("workloadep0")
+	bpfConfig.BPFAttachType = v3.BPFAttachOptionTC
+	bpfEpMgr, err = newBPFTestEpMgr(
+		bpfConfig,
+		bpfmaps,
+		regexp.MustCompile("^workloadep[0123]"),
+	)
 	Expect(err).NotTo(HaveOccurred())
-	err = ap.AttachProgram()
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep0",
+			EndpointId:     "workloadep0",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 	progs, err = tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
@@ -1346,7 +1354,17 @@ func TestAttachTcx(t *testing.T) {
 	tcxProgs, err = tc.ListAttachedTcxPrograms("workloadep0", "ingress")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(tcxProgs)).To(Equal(0))
-	// Now attach TCx again
+
+	bpfConfig.BPFAttachType = v3.BPFAttachOptionTCX
+	bpfEpMgr, err = newBPFTestEpMgr(
+		bpfConfig,
+		bpfmaps,
+		regexp.MustCompile("^workloadep[0123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
