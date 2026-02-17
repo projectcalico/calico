@@ -1259,10 +1259,9 @@ var _ = Describe("BPF Syncer", func() {
 			// Reset state and maps for each test.
 			svcs = newMockNATMap()
 			eps = newMockNATBackendMap()
-			mgEps = newMockMaglevMap()
 			aff = newMockAffinityMap()
 			rt = proxy.NewRTCache()
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
 		})
 
 		type testCase struct {
@@ -1305,7 +1304,7 @@ var _ = Describe("BPF Syncer", func() {
 				},
 				expectBack: []string{"10.50.0.1", "10.50.0.2"},
 			}),
-			Entry("topology-aware:falls back to all endpoints if no hints found", testCase{
+			Entry("topology-aware: falls back to all endpoints if no hints found", testCase{
 				service: k8sp.ServicePortMap{
 					svcKeyTopo: svc("10.0.0.50", 8080).topology("Auto").build(),
 				},
