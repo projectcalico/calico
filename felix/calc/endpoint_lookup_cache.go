@@ -142,8 +142,8 @@ type EndpointLookupsCache struct {
 	localEndpointData map[model.EndpointKey]*LocalEndpointData
 	// remoteEndpointData contains information about remote endpoints only.
 	// We use a separate map for remote endpoints to minimize the size in
-	// memory.
-	remoteEndpointData map[model.EndpointKey]*RemoteEndpointData
+	// memory. Uses EndpointKeyMap to avoid interface-key boxing.
+	remoteEndpointData model.EndpointKeyMap[*RemoteEndpointData]
 
 	ipToEndpoints map[[16]byte][]endpointData
 
@@ -172,8 +172,8 @@ func NewEndpointLookupsCache(opts ...EndpointLookupsCacheOption) *EndpointLookup
 		epMutex:       sync.RWMutex{},
 		ipToEndpoints: map[[16]byte][]endpointData{},
 
-		localEndpointData:  map[model.EndpointKey]*LocalEndpointData{},
-		remoteEndpointData: map[model.EndpointKey]*RemoteEndpointData{},
+		localEndpointData: map[model.EndpointKey]*LocalEndpointData{},
+		// remoteEndpointData zero value is usable.
 
 		endpointDeletionTimers: map[model.Key]*time.Timer{},
 		markedForDeletion:      map[model.EndpointKey]bool{},
@@ -193,7 +193,7 @@ func (ec *EndpointLookupsCache) RegisterWith(
 	allUpdateDisp *dispatcher.Dispatcher,
 	remoteEndpointDispatcher *dispatcher.Dispatcher,
 ) {
-	remoteEndpointDispatcher.Register(model.WorkloadEndpointKey{}, ec.OnUpdate)
+	remoteEndpointDispatcher.RegisterForWorkloadEndpointUpdates(ec.OnUpdate)
 	remoteEndpointDispatcher.Register(model.HostEndpointKey{}, ec.OnUpdate)
 	allUpdateDisp.Register(model.ResourceKey{}, ec.OnResourceUpdate)
 }
@@ -438,9 +438,10 @@ func (ec *EndpointLookupsCache) lookupEndpoint(key model.EndpointKey) (ed endpoi
 	if ok {
 		return
 	}
-	ed, ok = ec.remoteEndpointData[key]
+	var red *RemoteEndpointData
+	red, ok = ec.remoteEndpointData.Get(key)
 	if ok {
-		return
+		return red, true
 	}
 	return nil, false
 }
@@ -450,7 +451,7 @@ func (ec *EndpointLookupsCache) storeEndpoint(key model.EndpointKey, ed endpoint
 	case *LocalEndpointData:
 		ec.localEndpointData[key] = ed
 	case *RemoteEndpointData:
-		ec.remoteEndpointData[key] = ed
+		ec.remoteEndpointData.Set(key, ed)
 	}
 }
 
@@ -461,7 +462,7 @@ func (ec *EndpointLookupsCache) allEndpoints() iter.Seq2[model.EndpointKey, endp
 				return
 			}
 		}
-		for k, v := range ec.remoteEndpointData {
+		for k, v := range ec.remoteEndpointData.All() {
 			if !yield(k, v) {
 				return
 			}
@@ -572,7 +573,7 @@ func (ec *EndpointLookupsCache) removeEndpoint(key model.EndpointKey) {
 	}
 
 	delete(ec.localEndpointData, key)
-	delete(ec.remoteEndpointData, key)
+	ec.remoteEndpointData.Delete(key)
 	delete(ec.endpointDeletionTimers, key)
 	delete(ec.markedForDeletion, key)
 	ec.reportEndpointCacheMetrics()
@@ -625,7 +626,7 @@ func (ec *EndpointLookupsCache) GetEndpointKeys() []model.Key {
 	ec.epMutex.RLock()
 	defer ec.epMutex.RUnlock()
 
-	eps := make([]model.Key, 0, len(ec.localEndpointData)+len(ec.remoteEndpointData))
+	eps := make([]model.Key, 0, len(ec.localEndpointData)+ec.remoteEndpointData.Len())
 	for k := range ec.allEndpoints() {
 		eps = append(eps, k)
 	}
@@ -672,7 +673,7 @@ func (ec *EndpointLookupsCache) MarkEndpointForDeletion(ep EndpointData) {
 
 // reportEndpointCacheMetrics reports endpoint cache performance metrics to prometheus
 func (ec *EndpointLookupsCache) reportEndpointCacheMetrics() {
-	gaugeEndpointCacheLength.Set(float64(len(ec.remoteEndpointData) + len(ec.localEndpointData)))
+	gaugeEndpointCacheLength.Set(float64(ec.remoteEndpointData.Len() + len(ec.localEndpointData)))
 }
 
 func (ec *EndpointLookupsCache) GetNode(ip [16]byte) (string, bool) {
@@ -700,12 +701,12 @@ func endpointName(key model.Key) (name string) {
 
 // workloadEndpointName returns a single string rep of the workload endpoint.
 func workloadEndpointName(wep model.WorkloadEndpointKey) string {
-	return "WEP(" + wep.Hostname + "/" + wep.OrchestratorID + "/" + wep.WorkloadID + "/" + wep.EndpointID + ")"
+	return "WEP(" + wep.Host() + "/" + wep.OrchestratorID() + "/" + wep.WorkloadID() + "/" + wep.EndpointID() + ")"
 }
 
 // hostEndpointName returns a single string rep of the host endpoint.
 func hostEndpointName(hep model.HostEndpointKey) string {
-	return "HEP(" + hep.Hostname + "/" + hep.EndpointID + ")"
+	return "HEP(" + hep.Host() + "/" + hep.EndpointID() + ")"
 }
 
 // extractIPsFromHostEndpoint converts the expected IPs of the host endpoint into [16]byte

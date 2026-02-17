@@ -119,7 +119,7 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 
 func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDispatcher *dispatcher.Dispatcher) {
 	// It needs the filtered endpoints...
-	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, arc.OnUpdate)
+	localEndpointDispatcher.RegisterForWorkloadEndpointUpdates(arc.OnUpdate)
 	localEndpointDispatcher.Register(model.HostEndpointKey{}, arc.OnUpdate)
 	// ...as well as all the policies and profiles.
 	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)

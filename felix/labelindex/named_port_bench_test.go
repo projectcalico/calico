@@ -92,12 +92,7 @@ func sendUpdates(b *testing.B, idx *SelectorAndNamedPortIndex, updates []api.Upd
 func makeEndpointUpdates(num int) []api.Update {
 	updates := make([]api.Update, num)
 	for n := 0; n < num; n++ {
-		key := model.WorkloadEndpointKey{
-			Hostname:       "host",
-			OrchestratorID: "k8s",
-			WorkloadID:     fmt.Sprintf("wep-%d", n),
-			EndpointID:     "eth0",
-		}
+		key := model.MakeWorkloadEndpointKey("host", "k8s", fmt.Sprintf("wep-%d", n), "eth0")
 		ipNet := calinet.IPNet{IPNet: net.IPNet{
 			IP:   net.IPv4(10, 0, byte(n>>8), byte(n&0xff)),
 			Mask: net.CIDRMask(32, 32),

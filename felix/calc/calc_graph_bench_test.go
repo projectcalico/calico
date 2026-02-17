@@ -183,7 +183,7 @@ func makeNetSetAndPolUpdates(num int) []api.Update {
 			},
 		})
 
-		pol := &model.Policy{}
+		pol := &model.Policy{Tier: "default"}
 		pol.Selector = "all()"
 		pol.InboundRules = append(pol.InboundRules, model.Rule{
 			Action:      "Allow",
@@ -259,7 +259,7 @@ func makeTagPolicies(num int) []api.Update {
 	const rulesPerPol = 5
 	updates := make([]api.Update, 0, num)
 	for i := 0; i < num; i++ {
-		pol := &model.Policy{}
+		pol := &model.Policy{Tier: "default"}
 		pol.Selector = fmt.Sprintf("has(%s)", markerLabels[i%len(markerLabels)])
 		for j := 0; j < rulesPerPol; j++ {
 			pol.InboundRules = append(pol.InboundRules, model.Rule{
@@ -283,12 +283,7 @@ func makeTagPolicies(num int) []api.Update {
 func makeEndpointUpdates(num int, host string) []api.Update {
 	updates := make([]api.Update, num)
 	for n := 0; n < num; n++ {
-		key := model.WorkloadEndpointKey{
-			Hostname:       host,
-			OrchestratorID: "k8s",
-			WorkloadID:     fmt.Sprintf("wep-%d", n),
-			EndpointID:     "eth0",
-		}
+		key := model.MakeWorkloadEndpointKey(host, "k8s", fmt.Sprintf("wep-%d", n), "eth0")
 		ipNet := getNextIP()
 		updates[n] = api.Update{
 			KVPair: model.KVPair{
@@ -306,12 +301,7 @@ func makeEndpointUpdates(num int, host string) []api.Update {
 func makeEndpointDeletes(num int, host string) []api.Update {
 	updates := make([]api.Update, num)
 	for n := 0; n < num; n++ {
-		key := model.WorkloadEndpointKey{
-			Hostname:       host,
-			OrchestratorID: "k8s",
-			WorkloadID:     fmt.Sprintf("wep-%d", n),
-			EndpointID:     "eth0",
-		}
+		key := model.MakeWorkloadEndpointKey(host, "k8s", fmt.Sprintf("wep-%d", n), "eth0")
 		updates[n] = api.Update{
 			KVPair: model.KVPair{
 				Key:   key,

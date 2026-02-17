@@ -65,17 +65,17 @@ var (
 // Canned workload endpoints.
 
 var (
-	localWlEpKey1 = model.WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
+	localWlEpKey1 = model.MakeWorkloadEndpointKey(localHostname, "orch", "wl1", "ep1")
 	localWlEp1Id  = "orch/wl1/ep1"
-	localWlEpKey2 = model.WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl2", EndpointID: "ep2"}
+	localWlEpKey2 = model.MakeWorkloadEndpointKey(localHostname, "orch", "wl2", "ep2")
 	localWlEp2Id  = "orch/wl2/ep2"
 )
 
 // A remote workload endpoint
-var remoteWlEpKey1 = model.WorkloadEndpointKey{Hostname: remoteHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
+var remoteWlEpKey1 = model.MakeWorkloadEndpointKey(remoteHostname, "orch", "wl1", "ep1")
 
 // Same as remoteWlEpKey1 but on a different host.
-var remoteWlEpKey2 = model.WorkloadEndpointKey{Hostname: remoteHostname2, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
+var remoteWlEpKey2 = model.MakeWorkloadEndpointKey(remoteHostname2, "orch", "wl1", "ep1")
 
 var localWlEp1 = model.WorkloadEndpoint{
 	State:      "active",
@@ -318,10 +318,7 @@ var hostEpWithNamedPorts = model.HostEndpoint{
 	},
 }
 
-var hostEpWithNameKey = model.HostEndpointKey{
-	Hostname:   localHostname,
-	EndpointID: "named",
-}
+var hostEpWithNameKey = model.MakeHostEndpointKey(localHostname, "named")
 var hostEpWithNameId = "named"
 
 var hostEp2NoName = model.HostEndpoint{
@@ -341,10 +338,7 @@ var hostEp2NoName = model.HostEndpoint{
 	}),
 }
 
-var hostEp2NoNameKey = model.HostEndpointKey{
-	Hostname:   localHostname,
-	EndpointID: "unnamed",
-}
+var hostEp2NoNameKey = model.MakeHostEndpointKey(localHostname, "unnamed")
 var hostEpNoNameId = "unnamed"
 
 // Canned tiers/policies.
