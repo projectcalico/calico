@@ -48,10 +48,7 @@ func convertHostEndpointV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 		return nil, errors.New("Value is not a valid HostEndpoint resource key")
 	}
 
-	v1key := model.HostEndpointKey{
-		Hostname:   v3res.Spec.Node,
-		EndpointID: v3res.GetName(),
-	}
+	v1key := model.MakeHostEndpointKey(v3res.Spec.Node, v3res.GetName())
 
 	var ipv4Addrs []cnet.IP
 	var ipv6Addrs []cnet.IP

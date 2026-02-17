@@ -279,12 +279,7 @@ func ConvertWorkloadEndpointV3KeyToV1Key(v3key model.ResourceKey) (model.Workloa
 	if len(parts) != 4 || v3key.Namespace == "" {
 		return model.WorkloadEndpointKey{}, errors.New("not enough information provided to create v1 Workload Endpoint Key")
 	}
-	return model.WorkloadEndpointKey{
-		Hostname:       parts[0],
-		OrchestratorID: parts[1],
-		WorkloadID:     v3key.Namespace + "/" + parts[2],
-		EndpointID:     parts[3],
-	}, nil
+	return model.MakeWorkloadEndpointKey(parts[0], parts[1], v3key.Namespace+"/"+parts[2], parts[3]), nil
 }
 
 func IdentifiersForV3WorkloadEndpoint(res *v3.WorkloadEndpoint) WorkloadEndpointIdentifiers {

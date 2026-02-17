@@ -54,11 +54,11 @@ func EndpointName(key model.Key) (name string) {
 }
 
 func workloadEndpointName(wep model.WorkloadEndpointKey) string {
-	return "WEP(" + wep.Hostname + "/" + wep.OrchestratorID + "/" + wep.WorkloadID + "/" + wep.EndpointID + ")"
+	return "WEP(" + wep.Host() + "/" + wep.OrchestratorID() + "/" + wep.WorkloadID() + "/" + wep.EndpointID() + ")"
 }
 
 func hostEndpointName(hep model.HostEndpointKey) string {
-	return "HEP(" + hep.Hostname + "/" + hep.EndpointID + ")"
+	return "HEP(" + hep.Host() + "/" + hep.EndpointID() + ")"
 }
 
 func MustParseIP(s string) net2.IP {

@@ -2239,12 +2239,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		expectedKVP := model.KVPair{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "127.0.0.1",
-				OrchestratorID: "k8s",
-				WorkloadID:     fmt.Sprintf("default/%s", pod.ObjectMeta.Name),
-				EndpointID:     "eth0",
-			},
+			Key: model.MakeWorkloadEndpointKey("127.0.0.1", "k8s", fmt.Sprintf("default/%s", pod.ObjectMeta.Name), "eth0"),
 		}
 
 		By("Expecting an update with type 'KVUpdated' on the Syncer API", func() {
@@ -2285,12 +2280,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			var err error
 
 			expectedKVP := model.KVPair{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "127.0.0.1",
-					OrchestratorID: "k8s",
-					WorkloadID:     fmt.Sprintf("default/%s", pod.ObjectMeta.Name),
-					EndpointID:     "eth0",
-				},
+				Key: model.MakeWorkloadEndpointKey("127.0.0.1", "k8s", fmt.Sprintf("default/%s", pod.ObjectMeta.Name), "eth0"),
 			}
 
 			By("Expecting an update with type 'UpdateTypeKVNew' on the Syncer API", func() {
@@ -2408,12 +2398,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		var err error
 
 		expectedKVP := model.KVPair{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "127.0.0.1",
-				OrchestratorID: "k8s",
-				WorkloadID:     fmt.Sprintf("default/%s", pod.ObjectMeta.Name),
-				EndpointID:     "eth0",
-			},
+			Key: model.MakeWorkloadEndpointKey("127.0.0.1", "k8s", fmt.Sprintf("default/%s", pod.ObjectMeta.Name), "eth0"),
 		}
 
 		By("Expecting an update with type 'UpdateTypeKVNew' on the Syncer API", func() {
@@ -2540,12 +2525,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		expectedKVP := model.KVPair{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "127.0.0.1",
-				OrchestratorID: "k8s",
-				WorkloadID:     fmt.Sprintf("default/%s", pod.ObjectMeta.Name),
-				EndpointID:     "eth0",
-			},
+			Key: model.MakeWorkloadEndpointKey("127.0.0.1", "k8s", fmt.Sprintf("default/%s", pod.ObjectMeta.Name), "eth0"),
 		}
 
 		// We only get this update if the Pod passes our check that it has an IP.

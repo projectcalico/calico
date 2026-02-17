@@ -103,9 +103,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 
 	pol := ExtractPolicyMetadata(&model.Policy{Tier: "default"})
 
-	endpointKey := model.WorkloadEndpointKey{
-		Hostname: "test-workload-ep",
-	}
+	endpointKey := model.MakeWorkloadEndpointKey("test-workload-ep", "", "", "")
 	wep := &model.WorkloadEndpoint{
 		Name: "we1",
 	}
@@ -155,7 +153,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 			},
 		}},
 	},
-		cmp.AllowUnexported(PolKV{}),
+		cmp.AllowUnexported(PolKV{}, model.WorkloadEndpointKey{}),
 		cmp.Comparer(func(a, b uniquelabels.Map) bool { return a.Equals(b) }),
 	); d != "" {
 		t.Error("Incorrect update:", d)
@@ -173,9 +171,7 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 
 	pol := policyMetadata{}
 
-	endpointKey := model.WorkloadEndpointKey{
-		Hostname: "test-workload-ep",
-	}
+	endpointKey := model.MakeWorkloadEndpointKey("test-workload-ep", "", "", "")
 
 	pr.policySorter.UpdatePolicy(polKey, &pol)
 
@@ -206,7 +202,9 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 		Key:      endpointKey,
 		Endpoint: nil,
 		Tiers:    []TierInfo{},
-	}); d != "" {
+	},
+		cmp.AllowUnexported(model.WorkloadEndpointKey{}),
+	); d != "" {
 		t.Error("Incorrect update:", d)
 	}
 }

@@ -239,15 +239,15 @@ func (c *L3RouteResolver) OnWorkloadUpdate(update api.Update) (_ bool) {
 	// Incref the new CIDRs.
 	for _, newCIDR := range newCIDRs {
 		cidr := ip.CIDRFromCalicoNet(newCIDR)
-		c.trie.AddRef(cidr, key.Hostname, RefTypeWEP)
-		c.nodeRoutes.Add(nodenameRoute{key.Hostname, cidr})
+		c.trie.AddRef(cidr, key.Host(), RefTypeWEP)
+		c.nodeRoutes.Add(nodenameRoute{key.Host(), cidr})
 	}
 
 	// Decref the old.
 	for _, oldCIDR := range oldCIDRs {
 		cidr := ip.CIDRFromCalicoNet(oldCIDR)
-		c.trie.RemoveRef(cidr, key.Hostname, RefTypeWEP)
-		c.nodeRoutes.Remove(nodenameRoute{key.Hostname, cidr})
+		c.trie.RemoveRef(cidr, key.Host(), RefTypeWEP)
+		c.nodeRoutes.Remove(nodenameRoute{key.Host(), cidr})
 	}
 
 	if len(newCIDRs) > 0 {

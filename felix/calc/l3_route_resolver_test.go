@@ -99,11 +99,7 @@ var _ = Describe("L3RouteResolver", func() {
 
 			l3RR.OnWorkloadUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.WorkloadEndpointKey{
-						Hostname:   "test-hostname",
-						WorkloadID: "w1",
-						EndpointID: "ep1",
-					},
+					Key: model.MakeWorkloadEndpointKey("test-hostname", "", "w1", "ep1"),
 					Value: &model.WorkloadEndpoint{
 						Name:     "w1",
 						IPv6Nets: []net.IPNet{{IPNet: cidr.ToIPNet()}},
@@ -125,11 +121,7 @@ var _ = Describe("L3RouteResolver", func() {
 
 			l3RR.OnWorkloadUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.WorkloadEndpointKey{
-						Hostname:   "nodeName1",
-						WorkloadID: "w2",
-						EndpointID: "ep2",
-					},
+					Key: model.MakeWorkloadEndpointKey("nodeName1", "", "w2", "ep2"),
 					Value: &model.WorkloadEndpoint{
 						Name:     "w2",
 						IPv6Nets: []net.IPNet{{IPNet: cidr.ToIPNet()}},

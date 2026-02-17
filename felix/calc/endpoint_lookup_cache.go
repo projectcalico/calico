@@ -700,12 +700,12 @@ func endpointName(key model.Key) (name string) {
 
 // workloadEndpointName returns a single string rep of the workload endpoint.
 func workloadEndpointName(wep model.WorkloadEndpointKey) string {
-	return "WEP(" + wep.Hostname + "/" + wep.OrchestratorID + "/" + wep.WorkloadID + "/" + wep.EndpointID + ")"
+	return "WEP(" + wep.Host() + "/" + wep.OrchestratorID() + "/" + wep.WorkloadID() + "/" + wep.EndpointID() + ")"
 }
 
 // hostEndpointName returns a single string rep of the host endpoint.
 func hostEndpointName(hep model.HostEndpointKey) string {
-	return "HEP(" + hep.Hostname + "/" + hep.EndpointID + ")"
+	return "HEP(" + hep.Host() + "/" + hep.EndpointID() + ")"
 }
 
 // extractIPsFromHostEndpoint converts the expected IPs of the host endpoint into [16]byte

@@ -30,14 +30,9 @@ func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostn
 		return nil
 	}
 
-	key := &model.WorkloadEndpointKey{
-		Hostname:       hostname,
-		OrchestratorID: id.OrchestratorId,
-		WorkloadID:     id.WorkloadId,
-		EndpointID:     id.EndpointId,
-	}
+	key := model.MakeWorkloadEndpointKey(hostname, id.OrchestratorId, id.WorkloadId, id.EndpointId)
 	logrus.WithField("key", key).Debug("Generating WorkloadEndpointKey from WorkloadEndpointID")
-	return key
+	return &key
 }
 
 // WorkloadEndpointToEndpointStatus constructs WorkloadEndpointStatus data from a proto WorkloadEndpoint struct.
