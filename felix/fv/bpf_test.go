@@ -59,6 +59,7 @@ import (
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // We run with and without connection-time load balancing for a couple of reasons:
@@ -1190,6 +1191,63 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("Waiting for dp to get setup up")
 
 					ensureBPFProgramsAttached(tc.Felixes[0], "bpfout.cali")
+					progIDs := set.New[int]()
+					mapIDs := set.New[int]()
+					// Get the program IDs of the preamble programs that we attach
+					// as part of this test. There can be other preamble programs
+					// from previous tests and we want to ignore those when checking that programs are cleaned up after disabling BPF.
+					getPreambleProgramIDs := func() set.Set[int] {
+						var bpfnet []struct {
+							TC []struct {
+								Name string `json:"name"`
+								ID   int    `json:"prog_id"`
+							} `json:"tc"`
+						}
+						out, err := tc.Felixes[0].ExecOutput("bpftool", "net", "show", "-j")
+						Expect(err).NotTo(HaveOccurred())
+						err = json.Unmarshal([]byte(out), &bpfnet)
+						Expect(err).NotTo(HaveOccurred())
+						preambleIDs := set.New[int]()
+						for _, entry := range bpfnet {
+							for _, prog := range entry.TC {
+								if strings.Contains(prog.Name, "cali_tc_pream") {
+									preambleIDs.Add(prog.ID)
+								}
+							}
+						}
+						return preambleIDs
+					}
+
+					var preambleIDsBefore set.Set[int]
+					Eventually(func() int {
+						preambleIDsBefore = getPreambleProgramIDs()
+						return preambleIDsBefore.Len()
+					}, "15s", "1s").Should(Equal(10)) // 10 = 2 (ingress+egress) * 5 interfaces (bpfout, lo, eth0, caliXXX x2)
+
+					type bpfProgs []struct {
+						ID     int    `json:"id"`
+						Name   string `json:"name"`
+						MapIDs []int  `json:"map_ids"`
+					}
+					programs := bpfProgs{}
+					out, err := tc.Felixes[0].ExecOutput("bpftool", "prog", "show", "-j")
+					Expect(err).NotTo(HaveOccurred())
+					err = json.Unmarshal([]byte(out), &programs)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Get the program and map IDs of all program that are currently attached.
+					for _, prog := range programs {
+						if strings.Contains(prog.Name, "cali_tc_pream") && !preambleIDsBefore.Contains(prog.ID) {
+							continue
+						}
+						progIDs.Add(prog.ID)
+						mapIDs.AddAll(prog.MapIDs)
+					}
+
+					// check for cgroups
+					out, err = tc.Felixes[0].ExecOutput("bpftool", "cgroup", "show", "/run/calico/cgroup")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(out).To(ContainSubstring("calico_connect"))
 
 					By("Changing env and restarting felix")
 
@@ -1198,21 +1256,46 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					By("Checking that all programs got cleaned up")
 
-					Eventually(func() string {
-						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
-						return out
-					}, "15s", "1s").ShouldNot(
-						Or(ContainSubstring("cali_"), ContainSubstring("calico_"), ContainSubstring("xdp_cali_")))
+					// Check that the preamble programs we attached got cleaned up.
+					Eventually(func() int {
+						return getPreambleProgramIDs().Len()
+					}, "15s", "1s").Should(Equal(0))
 
-					// N.B. calico_failsafe map is created in iptables mode by
-					// bpf.NewFailsafeMap() It has calico_ prefix. All other bpf
-					// maps have only cali_ prefix.
-					Eventually(func() string {
-						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "map", "show")
-						return out
-					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
+					programs = bpfProgs{}
+					out, err = tc.Felixes[0].ExecOutput("bpftool", "prog", "show", "-j")
+					Expect(err).NotTo(HaveOccurred())
+					err = json.Unmarshal([]byte(out), &programs)
+					Expect(err).NotTo(HaveOccurred())
+					mapIDsAfter := set.New[int]()
+					progIDsAfter := set.New[int]()
+					for _, prog := range programs {
+						progIDsAfter.Add(prog.ID)
+					}
 
-					out, _ := tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
+					for _, prog := range progIDs.Slice() {
+						Expect(progIDsAfter).NotTo(ContainElement(prog))
+					}
+
+					var bpfMaps []struct {
+						ID int `json:"id"`
+					}
+					out, err = tc.Felixes[0].ExecOutput("bpftool", "map", "show", "-j")
+					Expect(err).NotTo(HaveOccurred())
+					err = json.Unmarshal([]byte(out), &bpfMaps)
+					Expect(err).NotTo(HaveOccurred())
+
+					for _, m := range bpfMaps {
+						mapIDsAfter.Add(m.ID)
+					}
+					for _, id := range mapIDs.Slice() {
+						Expect(mapIDsAfter).NotTo(ContainElement(id))
+					}
+
+					out, err = tc.Felixes[0].ExecOutput("bpftool", "cgroup", "show", "/run/calico/cgroup")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(out).NotTo(ContainSubstring("calico_connect"))
+
+					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
 					Expect(out).To(Equal("Device \"bpfin.cali\" does not exist.\n"))
 					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfout.cali")
 					Expect(out).To(Equal("Device \"bpfout.cali\" does not exist.\n"))
