@@ -45,15 +45,15 @@ var (
 // WorkloadEndpointKeyToStatusFilename accepts a workload endpoint Key
 // and converts it to a filename for use in WEP-policy status syncing
 // between Felix and the CNI.
-// Returns "" if passed a nilptr.
-func WorkloadEndpointKeyToStatusFilename(key *model.WorkloadEndpointKey) string {
+// Returns "" if passed nil.
+func WorkloadEndpointKeyToStatusFilename(key model.WorkloadEndpointKey) string {
 	if key == nil {
 		return ""
 	}
 	parts := make([]string, len(expectedFields))
-	parts[fieldOrchestratorID] = escape(key.OrchestratorID)
-	parts[fieldWorkloadID] = escape(key.WorkloadID)
-	parts[fieldEndpointID] = escape(key.EndpointID)
+	parts[fieldOrchestratorID] = escape(key.OrchestratorID())
+	parts[fieldWorkloadID] = escape(key.WorkloadID())
+	parts[fieldEndpointID] = escape(key.EndpointID())
 
 	logrus.WithFields(logrus.Fields{
 		"parts": parts,
@@ -64,7 +64,7 @@ func WorkloadEndpointKeyToStatusFilename(key *model.WorkloadEndpointKey) string 
 
 // V3WorkloadEndpointToWorkloadEndpointKey generates a WorkloadEndpointKey from the given WorkloadEndpoint.
 // Returns nil if passed endpoint is nil.
-func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) (*model.WorkloadEndpointKey, error) {
+func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) (model.WorkloadEndpointKey, error) {
 	if ep == nil {
 		return nil, nil
 	}
@@ -87,9 +87,5 @@ func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) (*model.Wo
 		Namespace: ep.GetNamespace(),
 	}
 
-	modelKey, err := ConvertWorkloadEndpointV3KeyToV1Key(v3Key)
-	if err != nil {
-		return nil, err
-	}
-	return &modelKey, nil
+	return ConvertWorkloadEndpointV3KeyToV1Key(v3Key)
 }

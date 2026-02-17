@@ -39,14 +39,8 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 		Kind: apiv3.KindHostEndpoint,
 		Name: name2,
 	}
-	v1HostEndpointKey1 := model.HostEndpointKey{
-		Hostname:   hn1,
-		EndpointID: name1,
-	}
-	v1HostEndpointKey2 := model.HostEndpointKey{
-		Hostname:   hn2,
-		EndpointID: name2,
-	}
+	v1HostEndpointKey1 := model.MakeHostEndpointKey(hn1, name1)
+	v1HostEndpointKey2 := model.MakeHostEndpointKey(hn2, name2)
 
 	It("should handle conversion of valid HostEndpoints", func() {
 		up := updateprocessors.NewHostEndpointUpdateProcessor()

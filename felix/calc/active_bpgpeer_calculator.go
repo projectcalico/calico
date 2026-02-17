@@ -77,7 +77,7 @@ func NewActiveBGPPeerCalculator(hostname string) *ActiveBGPPeerCalculator {
 
 func (abp *ActiveBGPPeerCalculator) RegisterWith(localEndpointDispatcher, allUpdDispatcher *dispatcher.Dispatcher) {
 	// It needs local workload endpoints.
-	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, abp.OnUpdate)
+	localEndpointDispatcher.RegisterForWorkloadEndpointUpdates(abp.OnUpdate)
 	// It also needs Nodes and BGPPeers.
 	allUpdDispatcher.Register(model.ResourceKey{}, abp.OnUpdate)
 }

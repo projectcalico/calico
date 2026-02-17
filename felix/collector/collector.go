@@ -1019,7 +1019,7 @@ func equal(a, b []*calc.RuleID) bool {
 func getEndpointIDFromKey(key model.Key) string {
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
-		return k.EndpointID
+		return k.EndpointID()
 	default:
 		return ""
 	}
@@ -1029,7 +1029,7 @@ func getEndpointIDFromKey(key model.Key) string {
 func getOrchestratorIDFromKey(key model.Key) string {
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
-		return k.OrchestratorID
+		return k.OrchestratorID()
 	default:
 		return ""
 	}
@@ -1039,7 +1039,7 @@ func getOrchestratorIDFromKey(key model.Key) string {
 func getWorkloadIDFromKey(key model.Key) string {
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
-		return k.WorkloadID
+		return k.WorkloadID()
 	default:
 		return ""
 	}

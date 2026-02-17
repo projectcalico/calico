@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
@@ -103,9 +104,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 
 	pol := ExtractPolicyMetadata(&model.Policy{Tier: "default"})
 
-	endpointKey := model.WorkloadEndpointKey{
-		Hostname: "test-workload-ep",
-	}
+	endpointKey := model.MakeWorkloadEndpointKey("test-workload-ep", "", "", "")
 	wep := &model.WorkloadEndpoint{
 		Name: "we1",
 	}
@@ -156,6 +155,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		}},
 	},
 		cmp.AllowUnexported(PolKV{}),
+		cmpopts.EquateComparable(model.GenericWEPKey{}, model.K8sWEPKey{}, model.K8sDefaultWEPKey{}),
 		cmp.Comparer(func(a, b uniquelabels.Map) bool { return a.Equals(b) }),
 	); d != "" {
 		t.Error("Incorrect update:", d)
@@ -173,9 +173,7 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 
 	pol := policyMetadata{}
 
-	endpointKey := model.WorkloadEndpointKey{
-		Hostname: "test-workload-ep",
-	}
+	endpointKey := model.MakeWorkloadEndpointKey("test-workload-ep", "", "", "")
 
 	pr.policySorter.UpdatePolicy(polKey, &pol)
 
@@ -206,7 +204,9 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 		Key:      endpointKey,
 		Endpoint: nil,
 		Tiers:    []TierInfo{},
-	}); d != "" {
+	},
+		cmpopts.EquateComparable(model.GenericWEPKey{}, model.K8sWEPKey{}, model.K8sDefaultWEPKey{}),
+	); d != "" {
 		t.Error("Incorrect update:", d)
 	}
 }
