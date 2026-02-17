@@ -49,19 +49,19 @@ func MakeWorkloadEndpointKey(hostname, orchestratorID, workloadID, endpointID st
 		if endpointID == "eth0" {
 			return K8sDefaultWEPKey{
 				hostname:   unique.Make(hostname),
-				workloadID: unique.Make(workloadID),
+				workloadID: workloadID,
 			}
 		}
 		return K8sWEPKey{
 			hostname:   unique.Make(hostname),
-			workloadID: unique.Make(workloadID),
+			workloadID: workloadID,
 			endpointID: unique.Make(endpointID),
 		}
 	}
 	return GenericWEPKey{
 		hostname:       unique.Make(hostname),
 		orchestratorID: unique.Make(orchestratorID),
-		workloadID:     unique.Make(workloadID),
+		workloadID:     workloadID,
 		endpointID:     unique.Make(endpointID),
 	}
 }
@@ -127,14 +127,14 @@ func wepGetNamespace(key WorkloadEndpointKey) string {
 type GenericWEPKey struct {
 	hostname       unique.Handle[string]
 	orchestratorID unique.Handle[string]
-	workloadID     unique.Handle[string]
+	workloadID     string
 	endpointID     unique.Handle[string]
 }
 
 func (key GenericWEPKey) WorkloadOrHostEndpointKey()         {}
 func (key GenericWEPKey) Host() string                       { return key.hostname.Value() }
 func (key GenericWEPKey) OrchestratorID() string             { return key.orchestratorID.Value() }
-func (key GenericWEPKey) WorkloadID() string                 { return key.workloadID.Value() }
+func (key GenericWEPKey) WorkloadID() string                 { return key.workloadID }
 func (key GenericWEPKey) EndpointID() string                 { return key.endpointID.Value() }
 func (key GenericWEPKey) GetNamespace() string               { return wepGetNamespace(key) }
 func (key GenericWEPKey) String() string                     { return wepString(key) }
@@ -152,14 +152,14 @@ func (key GenericWEPKey) parseValue(rawData []byte) (any, error) {
 // OrchestratorID() returns "k8s" without storing it.
 type K8sWEPKey struct {
 	hostname   unique.Handle[string]
-	workloadID unique.Handle[string]
+	workloadID string
 	endpointID unique.Handle[string]
 }
 
 func (key K8sWEPKey) WorkloadOrHostEndpointKey()         {}
 func (key K8sWEPKey) Host() string                       { return key.hostname.Value() }
 func (key K8sWEPKey) OrchestratorID() string             { return "k8s" }
-func (key K8sWEPKey) WorkloadID() string                 { return key.workloadID.Value() }
+func (key K8sWEPKey) WorkloadID() string                 { return key.workloadID }
 func (key K8sWEPKey) EndpointID() string                 { return key.endpointID.Value() }
 func (key K8sWEPKey) GetNamespace() string               { return wepGetNamespace(key) }
 func (key K8sWEPKey) String() string                     { return wepString(key) }
@@ -177,13 +177,13 @@ func (key K8sWEPKey) parseValue(rawData []byte) (any, error) {
 // Both OrchestratorID and EndpointID are implicit, saving storage.
 type K8sDefaultWEPKey struct {
 	hostname   unique.Handle[string]
-	workloadID unique.Handle[string]
+	workloadID string
 }
 
 func (key K8sDefaultWEPKey) WorkloadOrHostEndpointKey()         {}
 func (key K8sDefaultWEPKey) Host() string                       { return key.hostname.Value() }
 func (key K8sDefaultWEPKey) OrchestratorID() string             { return "k8s" }
-func (key K8sDefaultWEPKey) WorkloadID() string                 { return key.workloadID.Value() }
+func (key K8sDefaultWEPKey) WorkloadID() string                 { return key.workloadID }
 func (key K8sDefaultWEPKey) EndpointID() string                 { return "eth0" }
 func (key K8sDefaultWEPKey) GetNamespace() string               { return wepGetNamespace(key) }
 func (key K8sDefaultWEPKey) String() string                     { return wepString(key) }
