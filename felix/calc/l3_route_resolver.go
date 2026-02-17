@@ -64,7 +64,7 @@ type L3RouteResolver struct {
 	blockToRoutes          map[string]set.Set[nodenameRoute]
 	nodeRoutes             nodeRoutes
 	allPools               map[string]l3rrPoolInfo
-	workloadIDToCIDRs      model.WorkloadEndpointKeyMap[[]cnet.IPNet]
+	workloadIDToCIDRs      map[model.WorkloadEndpointKey][]cnet.IPNet
 	useNodeResourceUpdates bool
 	routeSource            string
 
@@ -178,10 +178,10 @@ func NewL3RouteResolver(hostname string, callbacks routeCallbacks, useNodeResour
 
 		trie: NewRouteTrie(),
 
-		nodeNameToNodeInfo: map[string]l3rrNodeInfo{},
-		blockToRoutes:      map[string]set.Set[nodenameRoute]{},
-		allPools:           map[string]l3rrPoolInfo{},
-		// workloadIDToCIDRs zero value is usable.
+		nodeNameToNodeInfo:     map[string]l3rrNodeInfo{},
+		blockToRoutes:          map[string]set.Set[nodenameRoute]{},
+		allPools:               map[string]l3rrPoolInfo{},
+		workloadIDToCIDRs:      map[model.WorkloadEndpointKey][]cnet.IPNet{},
 		useNodeResourceUpdates: useNodeResourceUpdates,
 		routeSource:            routeSource,
 		nodeRoutes:             newNodeRoutes(),
@@ -220,7 +220,7 @@ func (c *L3RouteResolver) OnWorkloadUpdate(update api.Update) (_ bool) {
 	key := update.Key.(model.WorkloadEndpointKey)
 
 	// Look up the (possibly nil) old CIDRs.
-	oldCIDRs, _ := c.workloadIDToCIDRs.Get(key)
+	oldCIDRs := c.workloadIDToCIDRs[key]
 
 	// Get the new CIDRs (again, may be nil if this is a deletion).
 	var newCIDRs []cnet.IPNet
@@ -252,9 +252,9 @@ func (c *L3RouteResolver) OnWorkloadUpdate(update api.Update) (_ bool) {
 
 	if len(newCIDRs) > 0 {
 		// Only store an entry if there are some CIDRs.
-		c.workloadIDToCIDRs.Set(key, newCIDRs)
+		c.workloadIDToCIDRs[key] = newCIDRs
 	} else {
-		c.workloadIDToCIDRs.Delete(key)
+		delete(c.workloadIDToCIDRs, key)
 	}
 
 	return

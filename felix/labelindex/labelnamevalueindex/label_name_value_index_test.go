@@ -82,9 +82,10 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	t.Log("Full-scan strategy...")
 	aHandle := uniquestr.Make("a")
 	strat := idx.StrategyFor(aHandle, parser.LabelRestriction{})
-	Expect(strat.Name()).To(Equal("full-scan"))
+	Expect(strat).To(BeAssignableToTypeOf(FullScanStrategy[string, labels]{}))
 	Expect(scan(strat)).To(ConsistOf("a1", "a2", "a3", "b1", "b2", "b3", "c1", "c2", "c3"))
 	Expect(strat.EstimatedItemsToScan()).To(Equal(9))
+	Expect(strat.Name()).To(Equal("full-scan"))
 
 	t.Log("Label name strategy...")
 	strat = idx.StrategyFor(aHandle, parser.LabelRestriction{MustBePresent: true})

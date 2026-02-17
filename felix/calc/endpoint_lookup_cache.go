@@ -142,8 +142,8 @@ type EndpointLookupsCache struct {
 	localEndpointData map[model.EndpointKey]*LocalEndpointData
 	// remoteEndpointData contains information about remote endpoints only.
 	// We use a separate map for remote endpoints to minimize the size in
-	// memory. Uses EndpointKeyMap to avoid interface-key boxing.
-	remoteEndpointData model.EndpointKeyMap[*RemoteEndpointData]
+	// memory.
+	remoteEndpointData map[model.EndpointKey]*RemoteEndpointData
 
 	ipToEndpoints map[[16]byte][]endpointData
 
@@ -172,8 +172,8 @@ func NewEndpointLookupsCache(opts ...EndpointLookupsCacheOption) *EndpointLookup
 		epMutex:       sync.RWMutex{},
 		ipToEndpoints: map[[16]byte][]endpointData{},
 
-		localEndpointData: map[model.EndpointKey]*LocalEndpointData{},
-		// remoteEndpointData zero value is usable.
+		localEndpointData:  map[model.EndpointKey]*LocalEndpointData{},
+		remoteEndpointData: map[model.EndpointKey]*RemoteEndpointData{},
 
 		endpointDeletionTimers: map[model.Key]*time.Timer{},
 		markedForDeletion:      map[model.EndpointKey]bool{},
@@ -438,10 +438,9 @@ func (ec *EndpointLookupsCache) lookupEndpoint(key model.EndpointKey) (ed endpoi
 	if ok {
 		return
 	}
-	var red *RemoteEndpointData
-	red, ok = ec.remoteEndpointData.Get(key)
+	ed, ok = ec.remoteEndpointData[key]
 	if ok {
-		return red, true
+		return
 	}
 	return nil, false
 }
@@ -451,7 +450,7 @@ func (ec *EndpointLookupsCache) storeEndpoint(key model.EndpointKey, ed endpoint
 	case *LocalEndpointData:
 		ec.localEndpointData[key] = ed
 	case *RemoteEndpointData:
-		ec.remoteEndpointData.Set(key, ed)
+		ec.remoteEndpointData[key] = ed
 	}
 }
 
@@ -462,7 +461,7 @@ func (ec *EndpointLookupsCache) allEndpoints() iter.Seq2[model.EndpointKey, endp
 				return
 			}
 		}
-		for k, v := range ec.remoteEndpointData.All() {
+		for k, v := range ec.remoteEndpointData {
 			if !yield(k, v) {
 				return
 			}
@@ -573,7 +572,7 @@ func (ec *EndpointLookupsCache) removeEndpoint(key model.EndpointKey) {
 	}
 
 	delete(ec.localEndpointData, key)
-	ec.remoteEndpointData.Delete(key)
+	delete(ec.remoteEndpointData, key)
 	delete(ec.endpointDeletionTimers, key)
 	delete(ec.markedForDeletion, key)
 	ec.reportEndpointCacheMetrics()
@@ -626,7 +625,7 @@ func (ec *EndpointLookupsCache) GetEndpointKeys() []model.Key {
 	ec.epMutex.RLock()
 	defer ec.epMutex.RUnlock()
 
-	eps := make([]model.Key, 0, len(ec.localEndpointData)+ec.remoteEndpointData.Len())
+	eps := make([]model.Key, 0, len(ec.localEndpointData)+len(ec.remoteEndpointData))
 	for k := range ec.allEndpoints() {
 		eps = append(eps, k)
 	}
@@ -673,7 +672,7 @@ func (ec *EndpointLookupsCache) MarkEndpointForDeletion(ep EndpointData) {
 
 // reportEndpointCacheMetrics reports endpoint cache performance metrics to prometheus
 func (ec *EndpointLookupsCache) reportEndpointCacheMetrics() {
-	gaugeEndpointCacheLength.Set(float64(ec.remoteEndpointData.Len() + len(ec.localEndpointData)))
+	gaugeEndpointCacheLength.Set(float64(len(ec.remoteEndpointData) + len(ec.localEndpointData)))
 }
 
 func (ec *EndpointLookupsCache) GetNode(ip [16]byte) (string, bool) {
