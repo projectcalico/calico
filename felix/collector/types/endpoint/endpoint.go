@@ -79,7 +79,7 @@ func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
 	key := ed.Key()
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
-		ns, name, err := deconstructNamespaceAndNameFromWepName(k.WorkloadID)
+		ns, name, err := deconstructNamespaceAndNameFromWepName(k.WorkloadID())
 		if err != nil {
 			return Metadata{}, err
 		}
@@ -99,8 +99,8 @@ func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
 	case model.HostEndpointKey:
 		em = Metadata{
 			Type:           Hep,
-			Name:           k.EndpointID,
-			AggregatedName: k.Hostname,
+			Name:           k.EndpointID(),
+			AggregatedName: k.Host(),
 			Namespace:      namespaceGlobal,
 		}
 	case model.NetworkSetKey:

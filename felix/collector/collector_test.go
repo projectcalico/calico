@@ -82,30 +82,12 @@ var (
 )
 
 var (
-	localWlEPKey1 = model.WorkloadEndpointKey{
-		Hostname:       "localhost",
-		OrchestratorID: "orchestrator",
-		WorkloadID:     "localworkloadid1",
-		EndpointID:     "localepid1",
-	}
+	localWlEPKey1 = model.MakeWorkloadEndpointKey("localhost", "orchestrator", "localworkloadid1", "localepid1")
 
-	localWlEPKey2 = model.WorkloadEndpointKey{
-		Hostname:       "localhost",
-		OrchestratorID: "orchestrator",
-		WorkloadID:     "localworkloadid2",
-		EndpointID:     "localepid2",
-	}
+	localWlEPKey2 = model.MakeWorkloadEndpointKey("localhost", "orchestrator", "localworkloadid2", "localepid2")
 
-	remoteWlEpKey1 = model.WorkloadEndpointKey{
-		OrchestratorID: "orchestrator",
-		WorkloadID:     "remoteworkloadid1",
-		EndpointID:     "remoteepid1",
-	}
-	remoteWlEpKey2 = model.WorkloadEndpointKey{
-		OrchestratorID: "orchestrator",
-		WorkloadID:     "remoteworkloadid2",
-		EndpointID:     "remoteepid2",
-	}
+	remoteWlEpKey1 = model.MakeWorkloadEndpointKey("", "orchestrator", "remoteworkloadid1", "remoteepid1")
+	remoteWlEpKey2 = model.MakeWorkloadEndpointKey("", "orchestrator", "remoteworkloadid2", "remoteepid2")
 
 	localWlEp1 = &model.WorkloadEndpoint{
 		State:    "active",
@@ -2002,12 +1984,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 
 		if preferredNamespace != "" {
 			// Create a dummy endpoint in the preferred namespace to simulate the source
-			epKey := model.WorkloadEndpointKey{
-				Hostname:       "test-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "test-workload-src",
-				EndpointID:     "test-endpoint-src",
-			}
+			epKey := model.MakeWorkloadEndpointKey("test-host", "k8s", "test-workload-src", "test-endpoint-src")
 			ep := &model.WorkloadEndpoint{
 				Name:   "test-endpoint-src",
 				Labels: uniquelabels.Make(map[string]string{"env": "test"}),
@@ -2145,12 +2122,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 
 		It("should prioritize endpoints over NetworkSets", func() {
 			// Create test endpoint key and data
-			testEPKey := model.WorkloadEndpointKey{
-				Hostname:       "test-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "test-workload",
-				EndpointID:     "test-endpoint",
-			}
+			testEPKey := model.MakeWorkloadEndpointKey("test-host", "k8s", "test-workload", "test-endpoint")
 
 			testWlEP := &model.WorkloadEndpoint{
 				Labels: uniquelabels.Make(map[string]string{
@@ -2588,18 +2560,8 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			dstIP := ipToBytes("10.1.1.20")
 
 			// Create endpoints for both source and destination
-			srcEPKey := model.WorkloadEndpointKey{
-				Hostname:       "src-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "src-ns/src-workload",
-				EndpointID:     "src-endpoint",
-			}
-			dstEPKey := model.WorkloadEndpointKey{
-				Hostname:       "dst-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "dst-ns/dst-workload",
-				EndpointID:     "dst-endpoint",
-			}
+			srcEPKey := model.MakeWorkloadEndpointKey("src-host", "k8s", "src-ns/src-workload", "src-endpoint")
+			dstEPKey := model.MakeWorkloadEndpointKey("dst-host", "k8s", "dst-ns/dst-workload", "dst-endpoint")
 
 			srcEP := &calc.LocalEndpointData{
 				CommonEndpointData: calc.CalculateCommonEndpointData(srcEPKey, &model.WorkloadEndpoint{}),
@@ -2649,12 +2611,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			dstIP := ipToBytes("10.1.1.20")
 
 			// Create destination endpoint with namespace
-			dstEPKey := model.WorkloadEndpointKey{
-				Hostname:       "dst-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "production/dst-workload", // namespace: production
-				EndpointID:     "dst-endpoint",
-			}
+			dstEPKey := model.MakeWorkloadEndpointKey("dst-host", "k8s", "production/dst-workload", "dst-endpoint")
 			dstEP := &calc.LocalEndpointData{
 				CommonEndpointData: calc.CalculateCommonEndpointData(dstEPKey, &model.WorkloadEndpoint{}),
 			}
@@ -2713,12 +2670,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			dstIP := ipToBytes("10.1.1.20") // No direct endpoint for this
 
 			// Create source endpoint with namespace
-			srcEPKey := model.WorkloadEndpointKey{
-				Hostname:       "src-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "staging/src-workload", // namespace: staging
-				EndpointID:     "src-endpoint",
-			}
+			srcEPKey := model.MakeWorkloadEndpointKey("src-host", "k8s", "staging/src-workload", "src-endpoint")
 			srcEP := &calc.LocalEndpointData{
 				CommonEndpointData: calc.CalculateCommonEndpointData(srcEPKey, &model.WorkloadEndpoint{}),
 			}
@@ -2868,12 +2820,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			dstIP := ipToBytes("10.1.1.20")
 
 			// Source has direct endpoint
-			srcEPKey := model.WorkloadEndpointKey{
-				Hostname:       "src-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "development/src-workload",
-				EndpointID:     "src-endpoint",
-			}
+			srcEPKey := model.MakeWorkloadEndpointKey("src-host", "k8s", "development/src-workload", "src-endpoint")
 			srcEP := &calc.LocalEndpointData{
 				CommonEndpointData: calc.CalculateCommonEndpointData(srcEPKey, &model.WorkloadEndpoint{}),
 			}
@@ -3005,12 +2952,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			dstIP := ipToBytes("10.1.1.20")
 
 			// Create source endpoint with namespace in WorkloadID
-			srcEPKey := model.WorkloadEndpointKey{
-				Hostname:       "src-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "frontend/src-workload", // namespace: frontend
-				EndpointID:     "src-endpoint",
-			}
+			srcEPKey := model.MakeWorkloadEndpointKey("src-host", "k8s", "frontend/src-workload", "src-endpoint")
 			srcEP := &calc.LocalEndpointData{
 				CommonEndpointData: calc.CalculateCommonEndpointData(srcEPKey, &model.WorkloadEndpoint{}),
 			}
@@ -3058,12 +3000,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			dstIP := ipToBytes("10.1.1.20")
 
 			// Create a WorkloadEndpoint that represents a production namespace
-			srcEPKey := model.WorkloadEndpointKey{
-				Hostname:       "src-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "production/src-workload", // namespace: production
-				EndpointID:     "src-endpoint",
-			}
+			srcEPKey := model.MakeWorkloadEndpointKey("src-host", "k8s", "production/src-workload", "src-endpoint")
 			srcEP := &calc.LocalEndpointData{
 				CommonEndpointData: calc.CalculateCommonEndpointData(srcEPKey, &model.WorkloadEndpoint{}),
 			}
@@ -3111,12 +3048,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			dstIP := ipToBytes("10.1.1.20")
 
 			// Create endpoint with WorkloadID that doesn't follow namespace/name pattern
-			srcEPKey := model.WorkloadEndpointKey{
-				Hostname:       "src-host",
-				OrchestratorID: "k8s",
-				WorkloadID:     "invalid-workload-format", // No namespace separator
-				EndpointID:     "src-endpoint",
-			}
+			srcEPKey := model.MakeWorkloadEndpointKey("src-host", "k8s", "invalid-workload-format", "src-endpoint")
 			srcEP := &calc.LocalEndpointData{
 				CommonEndpointData: calc.CalculateCommonEndpointData(srcEPKey, &model.WorkloadEndpoint{}),
 			}
@@ -3410,9 +3342,9 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	// Helper function to convert model workload endpoint key to protobuf endpoint ID
 	convertWorkloadId := func(key model.WorkloadEndpointKey) types.WorkloadEndpointID {
 		return types.WorkloadEndpointID{
-			OrchestratorId: key.OrchestratorID,
-			WorkloadId:     key.WorkloadID,
-			EndpointId:     key.EndpointID,
+			OrchestratorId: key.OrchestratorID(),
+			WorkloadId:     key.WorkloadID(),
+			EndpointId:     key.EndpointID(),
 		}
 	}
 

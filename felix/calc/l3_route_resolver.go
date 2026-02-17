@@ -206,11 +206,15 @@ func (c *L3RouteResolver) RegisterWith(allUpdDispatcher, localDispatcher *dispat
 	logrus.WithField("routeSource", c.routeSource).Info("Registering for L3 route updates")
 	if c.routeSource == "WorkloadIPs" {
 		// Driven off of workload IP addresses. Register for all WEP updates.
-		allUpdDispatcher.Register(model.WorkloadEndpointKey{}, c.OnWorkloadUpdate)
+		for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
+			allUpdDispatcher.Register(wepKeyType, c.OnWorkloadUpdate)
+		}
 	} else {
 		// Driven off of IPAM data. Register for blocks and local WEP updates.
 		allUpdDispatcher.Register(model.BlockKey{}, c.OnBlockUpdate)
-		localDispatcher.Register(model.WorkloadEndpointKey{}, c.OnWorkloadUpdate)
+		for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
+			localDispatcher.Register(wepKeyType, c.OnWorkloadUpdate)
+		}
 	}
 }
 
@@ -239,15 +243,15 @@ func (c *L3RouteResolver) OnWorkloadUpdate(update api.Update) (_ bool) {
 	// Incref the new CIDRs.
 	for _, newCIDR := range newCIDRs {
 		cidr := ip.CIDRFromCalicoNet(newCIDR)
-		c.trie.AddRef(cidr, key.Hostname, RefTypeWEP)
-		c.nodeRoutes.Add(nodenameRoute{key.Hostname, cidr})
+		c.trie.AddRef(cidr, key.Host(), RefTypeWEP)
+		c.nodeRoutes.Add(nodenameRoute{key.Host(), cidr})
 	}
 
 	// Decref the old.
 	for _, oldCIDR := range oldCIDRs {
 		cidr := ip.CIDRFromCalicoNet(oldCIDR)
-		c.trie.RemoveRef(cidr, key.Hostname, RefTypeWEP)
-		c.nodeRoutes.Remove(nodenameRoute{key.Hostname, cidr})
+		c.trie.RemoveRef(cidr, key.Host(), RefTypeWEP)
+		c.nodeRoutes.Remove(nodenameRoute{key.Host(), cidr})
 	}
 
 	if len(newCIDRs) > 0 {

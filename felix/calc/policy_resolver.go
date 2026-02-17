@@ -86,7 +86,9 @@ func NewPolicyResolver() *PolicyResolver {
 func (pr *PolicyResolver) RegisterWith(allUpdDispatcher, localEndpointDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.Register(model.PolicyKey{}, pr.OnUpdate)
 	allUpdDispatcher.Register(model.TierKey{}, pr.OnUpdate)
-	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, pr.OnUpdate)
+	for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
+		localEndpointDispatcher.Register(wepKeyType, pr.OnUpdate)
+	}
 	localEndpointDispatcher.Register(model.HostEndpointKey{}, pr.OnUpdate)
 	localEndpointDispatcher.RegisterStatusHandler(pr.OnDatamodelStatus)
 }
