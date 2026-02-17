@@ -1205,6 +1205,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						out, err := tc.Felixes[0].ExecOutput("bpftool", "net", "show", "-j")
 						Expect(err).NotTo(HaveOccurred())
+						fmt.Printf("bpftool net show output: %s\n", out)
 						err = json.Unmarshal([]byte(out), &bpfnet)
 						Expect(err).NotTo(HaveOccurred())
 						preambleIDs := set.New[int]()
