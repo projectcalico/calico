@@ -35,11 +35,8 @@ var (
 	smoothRtt         = 1
 	minRtt            = 2
 	mss               = 4
-	localHostEpKey1   = model.HostEndpointKey{
-		Hostname:   "localhost",
-		EndpointID: "eth1",
-	}
-	localHostEp1 = &model.HostEndpoint{
+	localHostEpKey1   = model.MakeHostEndpointKey("localhost", "eth1")
+	localHostEp1      = &model.HostEndpoint{
 		Name:              "eth1",
 		ExpectedIPv4Addrs: []net2.IP{utils.MustParseIP("10.0.0.1")},
 		Labels: uniquelabels.Make(map[string]string{
@@ -93,11 +90,8 @@ var (
 		},
 	}
 
-	remoteHostEpKey1 = model.HostEndpointKey{
-		Hostname:   "remotehost",
-		EndpointID: "eth1",
-	}
-	remoteHostEp1 = &model.HostEndpoint{
+	remoteHostEpKey1 = model.MakeHostEndpointKey("remotehost", "eth1")
+	remoteHostEp1    = &model.HostEndpoint{
 		Name:              "eth1",
 		ExpectedIPv4Addrs: []net2.IP{utils.MustParseIP("20.0.0.1")},
 		Labels: uniquelabels.Make(map[string]string{
@@ -452,23 +446,13 @@ var (
 		Tuple:      tuple1,
 		SrcEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-01", "k8s", "kube-system/iperf-4235-5623461", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
@@ -485,23 +469,13 @@ var (
 		Tuple:      tuple1,
 		SrcEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-01", "k8s", "kube-system/iperf-4235-5623461", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
@@ -514,23 +488,13 @@ var (
 		Tuple:      tuple1,
 		SrcEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-01", "k8s", "kube-system/iperf-4235-5623461", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
@@ -557,23 +521,13 @@ var (
 		Tuple:      tuple1,
 		SrcEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-01", "k8s", "kube-system/iperf-4235-5623461", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true", "new-label": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "false"})},
 			),
 		},
@@ -591,12 +545,7 @@ var (
 		SrcEp:      nil,
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
@@ -613,12 +562,7 @@ var (
 		Tuple:      tuple1,
 		SrcEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-01", "k8s", "kube-system/iperf-4235-5623461", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
@@ -637,12 +581,7 @@ var (
 		SrcEp:      nil,
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
@@ -660,12 +599,7 @@ var (
 		SrcEp:      nil,
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
@@ -701,12 +635,7 @@ var (
 		SrcEp:      nil,
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
@@ -723,23 +652,13 @@ var (
 		Tuple:      tuple1,
 		SrcEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-01", "k8s", "kube-system/iperf-4235-5623461", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/manually-created-pod",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/manually-created-pod", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
@@ -758,23 +677,13 @@ var (
 		NatOutgoingPort: 6789,
 		SrcEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-01", "k8s", "kube-system/iperf-4235-5623461", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
 			CommonEndpointData: calc.CalculateCommonEndpointData(
-				model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
+				model.MakeWorkloadEndpointKey("node-02", "k8s", "default/nginx-412354-5123451", "4352"),
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
