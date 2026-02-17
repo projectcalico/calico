@@ -163,6 +163,7 @@ const (
 )
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
+// +kubebuilder:validation:XValidation:rule="!has(self.routeTableRange) || !has(self.routeTableRanges)",message="routeTableRange and routeTableRanges cannot both be set"
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.

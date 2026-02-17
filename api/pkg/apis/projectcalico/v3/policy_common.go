@@ -34,6 +34,9 @@ const (
 // Each positive match criteria has a negated version, prefixed with "Not". All the match
 // criteria within a rule must be satisfied for a packet to match. A single rule can contain
 // the positive and negative version of a match and both must be satisfied for the rule to match.
+// +kubebuilder:validation:XValidation:rule="!has(self.http) || !has(self.protocol) || self.protocol == 'TCP'",message="rules with HTTP match must have protocol TCP or unset"
+// +kubebuilder:validation:XValidation:rule="self.action == 'Allow' || !has(self.http)",message="HTTP match is only valid on Allow rules"
+// +kubebuilder:validation:XValidation:rule="!has(self.destination) || !has(self.destination.services) || (!has(self.destination.ports) || size(self.destination.ports) == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts) == 0)",message="ports and notPorts cannot be specified with services"
 type Rule struct {
 	Action Action `json:"action" validate:"action"`
 
@@ -80,9 +83,10 @@ type Rule struct {
 // HTTPPath specifies an HTTP path to match. It may be either of the form:
 // exact: <path>: which matches the path exactly or
 // prefix: <path-prefix>: which matches the path prefix
-// +kubebuilder:validation:XValidation:rule="(self.exact == ” && self.prefix != ”) || (self.exact != ” && self.prefix == ”)",message="exactly one of 'exact' or 'prefix' must be set"
 type HTTPPath struct {
-	Exact  string `json:"exact,omitempty" validate:"omitempty"`
+	// +kubebuilder:validation:MaxLength=1024
+	Exact string `json:"exact,omitempty" validate:"omitempty"`
+	// +kubebuilder:validation:MaxLength=1024
 	Prefix string `json:"prefix,omitempty" validate:"omitempty"`
 }
 
@@ -92,6 +96,7 @@ type HTTPMatch struct {
 	// Methods is an optional field that restricts the rule to apply only to HTTP requests that use one of the listed
 	// HTTP Methods (e.g. GET, PUT, etc.)
 	// Multiple methods are OR'd together.
+	// +kubebuilder:validation:MaxItems=20
 	Methods []string `json:"methods,omitempty" validate:"omitempty"`
 	// Paths is an optional field that restricts the rule to apply to HTTP requests that use one of the listed
 	// HTTP Paths.
@@ -100,6 +105,7 @@ type HTTPMatch struct {
 	// - exact: /foo
 	// - prefix: /bar
 	// NOTE: Each entry may ONLY specify either a `exact` or a `prefix` match. The validator will check for it.
+	// +kubebuilder:validation:MaxItems=20
 	Paths []HTTPPath `json:"paths,omitempty" validate:"omitempty"`
 }
 
