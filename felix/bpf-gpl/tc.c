@@ -1954,10 +1954,6 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
-		.fwd = {
-			.res = TC_ACT_UNSPEC,
-			.reason = CALI_REASON_UNKNOWN,
-		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 	int ret = 0;
@@ -1969,9 +1965,9 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 
 	CALI_DEBUG("Entering calico_tc_skb_send_tcp_rst");
 	if (ret) {
-		ctx->fwd.res = TC_ACT_SHOT;
+		ctx->state->fwd.res = TC_ACT_SHOT;
 	} else {
-		fwd_fib_set(&ctx->fwd, true);
+		fwd_fib_set(&ctx->state->fwd, true);
 	}
 
 	if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
