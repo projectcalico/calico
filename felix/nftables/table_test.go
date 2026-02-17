@@ -924,22 +924,22 @@ var _ = Describe("Insert early rules", func() {
 })
 
 var _ = Describe("Disabled table cache invalidation", func() {
-	var table *NftablesTable
+	var table *nftables.NftablesTable
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
 
 	BeforeEach(func() {
-		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
 		}
 		featureDetector = environment.NewFeatureDetector(nil)
-		table = NewTable(
+		table = nftables.NewTable(
 			"calico",
 			4,
 			rules.RuleHashPrefix,
 			featureDetector,
-			TableOptions{
+			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
 				OpRecorder:       logutils.NewSummarizer("test loop"),
@@ -1003,22 +1003,22 @@ var _ = Describe("Disabled table cache invalidation", func() {
 })
 
 var _ = Describe("Enabled table cache invalidation", func() {
-	var table *NftablesTable
+	var table *nftables.NftablesTable
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
 
 	BeforeEach(func() {
-		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
 		}
 		featureDetector = environment.NewFeatureDetector(nil)
-		table = NewTable(
+		table = nftables.NewTable(
 			"calico",
 			4,
 			rules.RuleHashPrefix,
 			featureDetector,
-			TableOptions{
+			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
 				OpRecorder:       logutils.NewSummarizer("test loop"),
