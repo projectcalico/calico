@@ -957,6 +957,7 @@ type PersistentConnection struct {
 	Timeout              time.Duration
 	Sleep                time.Duration
 	ProbeLoopFileTimeout time.Duration
+	connectionReset      bool
 
 	loopFile string
 	runCmd   *exec.Cmd
@@ -1044,6 +1045,7 @@ func (pc *PersistentConnection) Start() error {
 			line, err := stdoutReader.ReadString('\n')
 			if err != nil {
 				log.WithError(err).Info("End of permanent connection stdout")
+				pc.connectionReset = true
 				return
 			}
 			line = strings.TrimSpace(string(line))
@@ -1064,6 +1066,7 @@ func (pc *PersistentConnection) Start() error {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
 				log.WithError(err).Info("End of permanent connection stderr")
+				pc.connectionReset = true
 				return
 			}
 			line = strings.TrimSpace(string(line))
@@ -1114,4 +1117,8 @@ func (pc *PersistentConnection) PongCount() int {
 	defer pc.Unlock()
 	log.WithField("name", pc.Name).Infof("pong count %d", pc.pongCount)
 	return pc.pongCount
+}
+
+func (pc *PersistentConnection) IsConnectionReset() bool {
+	return pc.connectionReset
 }
