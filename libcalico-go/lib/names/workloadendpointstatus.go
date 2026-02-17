@@ -51,9 +51,9 @@ func WorkloadEndpointKeyToStatusFilename(key *model.WorkloadEndpointKey) string 
 		return ""
 	}
 	parts := make([]string, len(expectedFields))
-	parts[fieldOrchestratorID] = escape(key.OrchestratorID)
-	parts[fieldWorkloadID] = escape(key.WorkloadID)
-	parts[fieldEndpointID] = escape(key.EndpointID)
+	parts[fieldOrchestratorID] = escape(key.OrchestratorID())
+	parts[fieldWorkloadID] = escape(key.WorkloadID())
+	parts[fieldEndpointID] = escape(key.EndpointID())
 
 	logrus.WithFields(logrus.Fields{
 		"parts": parts,

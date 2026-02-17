@@ -33,33 +33,47 @@ var (
 )
 
 type WorkloadEndpointKey struct {
-	Hostname       string `json:"-"`
-	OrchestratorID string `json:"-"`
-	WorkloadID     string `json:"-"`
-	EndpointID     string `json:"-"`
+	hostname       string
+	orchestratorID string
+	workloadID     string
+	endpointID     string
+}
+
+// MakeWorkloadEndpointKey creates a new WorkloadEndpointKey with the given fields.
+func MakeWorkloadEndpointKey(hostname, orchestratorID, workloadID, endpointID string) WorkloadEndpointKey {
+	return WorkloadEndpointKey{
+		hostname:       hostname,
+		orchestratorID: orchestratorID,
+		workloadID:     workloadID,
+		endpointID:     endpointID,
+	}
 }
 
 func (key WorkloadEndpointKey) WorkloadOrHostEndpointKey() {}
 
 func (key WorkloadEndpointKey) Host() string {
-	return key.Hostname
+	return key.hostname
 }
 
+func (key WorkloadEndpointKey) OrchestratorID() string { return key.orchestratorID }
+func (key WorkloadEndpointKey) WorkloadID() string     { return key.workloadID }
+func (key WorkloadEndpointKey) EndpointID() string     { return key.endpointID }
+
 func (key WorkloadEndpointKey) defaultPath() (string, error) {
-	if key.Hostname == "" {
+	if key.hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
-	if key.OrchestratorID == "" {
+	if key.orchestratorID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
 	}
-	if key.WorkloadID == "" {
+	if key.workloadID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
-	if key.EndpointID == "" {
+	if key.endpointID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
-		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID), escapeName(key.EndpointID)), nil
+		key.hostname, escapeName(key.orchestratorID), escapeName(key.workloadID), escapeName(key.endpointID)), nil
 }
 
 func (key WorkloadEndpointKey) defaultDeletePath() (string, error) {
@@ -67,17 +81,17 @@ func (key WorkloadEndpointKey) defaultDeletePath() (string, error) {
 }
 
 func (key WorkloadEndpointKey) defaultDeleteParentPaths() ([]string, error) {
-	if key.Hostname == "" {
+	if key.hostname == "" {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
-	if key.OrchestratorID == "" {
+	if key.orchestratorID == "" {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
 	}
-	if key.WorkloadID == "" {
+	if key.workloadID == "" {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	workload := fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s",
-		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID))
+		key.hostname, escapeName(key.orchestratorID), escapeName(key.workloadID))
 	endpoints := workload + "/endpoint"
 	return []string{endpoints, workload}, nil
 }
@@ -92,14 +106,14 @@ func (key WorkloadEndpointKey) parseValue(rawData []byte) (any, error) {
 
 func (key WorkloadEndpointKey) String() string {
 	return fmt.Sprintf("WorkloadEndpoint(node=%s, orchestrator=%s, workload=%s, name=%s)",
-		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
+		key.hostname, key.orchestratorID, key.workloadID, key.endpointID)
 }
 
 // GetNamespace extracts and returns the namespace from the WorkloadID.
 // WorkloadID is expected to be in the format "namespace/name".
 // Returns an empty string if the WorkloadID doesn't contain a namespace.
 func (key WorkloadEndpointKey) GetNamespace() string {
-	parts := strings.SplitN(key.WorkloadID, "/", 2)
+	parts := strings.SplitN(key.workloadID, "/", 2)
 	if len(parts) == 2 {
 		return parts[0]
 	}
@@ -163,12 +177,7 @@ func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match endpoint ID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
-	return WorkloadEndpointKey{
-		Hostname:       hostname,
-		OrchestratorID: orch,
-		WorkloadID:     workload,
-		EndpointID:     endpointID,
-	}
+	return MakeWorkloadEndpointKey(hostname, orch, workload, endpointID)
 }
 
 type WorkloadEndpoint struct {

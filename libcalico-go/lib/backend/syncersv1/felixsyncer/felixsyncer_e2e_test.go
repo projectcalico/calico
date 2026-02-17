@@ -588,7 +588,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			expectedCacheSize += 1
 
 			syncTester.ExpectData(model.KVPair{
-				Key: model.HostEndpointKey{Hostname: "127.0.0.1", EndpointID: "hosta.eth0-a"},
+				Key: model.MakeHostEndpointKey("127.0.0.1", "hosta.eth0-a"),
 				Value: &model.HostEndpoint{
 					Name:              "eth0",
 					ExpectedIPv4Addrs: []net.IP{net.MustParseIP("1.2.3.4")},

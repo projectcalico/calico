@@ -121,10 +121,10 @@ func (s *StatsCollector) OnUpdate(update api.Update) (filterOut bool) {
 	case model.HostIPKey:
 		hostname = key.Hostname
 	case model.WorkloadEndpointKey:
-		hostname = key.Hostname
+		hostname = key.Host()
 		counter = &s.numWorkloadEndpoints
 	case model.HostEndpointKey:
-		hostname = key.Hostname
+		hostname = key.Host()
 		counter = &s.numHostEndpoints
 	case model.HostConfigKey:
 		hostname = key.Hostname
