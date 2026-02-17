@@ -535,9 +535,7 @@ type localEndpointDispatcherReg dispatcher.Dispatcher
 
 func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 	led := (*dispatcher.Dispatcher)(l)
-	for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
-		disp.Register(wepKeyType, led.OnUpdate)
-	}
+	disp.RegisterForWorkloadEndpointUpdates(led.OnUpdate)
 	disp.Register(model.HostEndpointKey{}, led.OnUpdate)
 	disp.RegisterStatusHandler(led.OnDatamodelStatus)
 }
@@ -549,9 +547,7 @@ type endpointHostnameFilter struct {
 }
 
 func (f *endpointHostnameFilter) RegisterWith(localEndpointDisp *dispatcher.Dispatcher) {
-	for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
-		localEndpointDisp.Register(wepKeyType, f.OnUpdate)
-	}
+	localEndpointDisp.RegisterForWorkloadEndpointUpdates(f.OnUpdate)
 	localEndpointDisp.Register(model.HostEndpointKey{}, f.OnUpdate)
 }
 
@@ -581,9 +577,7 @@ type remoteEndpointDispatcherReg dispatcher.Dispatcher
 
 func (l *remoteEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 	red := (*dispatcher.Dispatcher)(l)
-	for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
-		disp.Register(wepKeyType, red.OnUpdate)
-	}
+	disp.RegisterForWorkloadEndpointUpdates(red.OnUpdate)
 	disp.Register(model.HostEndpointKey{}, red.OnUpdate)
 	disp.RegisterStatusHandler(red.OnDatamodelStatus)
 }
@@ -595,9 +589,7 @@ type remoteEndpointFilter struct {
 }
 
 func (f *remoteEndpointFilter) RegisterWith(remoteEndpointDisp *dispatcher.Dispatcher) {
-	for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
-		remoteEndpointDisp.Register(wepKeyType, f.OnUpdate)
-	}
+	remoteEndpointDisp.RegisterForWorkloadEndpointUpdates(f.OnUpdate)
 	remoteEndpointDisp.Register(model.HostEndpointKey{}, f.OnUpdate)
 }
 

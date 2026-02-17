@@ -68,8 +68,8 @@ func MakeWorkloadEndpointKey(hostname, orchestratorID, workloadID, endpointID st
 
 // WorkloadEndpointKeyTypes returns an instance of each concrete WEP key variant,
 // for use with dispatcher registration or reflection.
-func WorkloadEndpointKeyTypes() []WorkloadEndpointKey {
-	return []WorkloadEndpointKey{GenericWEPKey{}, K8sWEPKey{}, K8sDefaultWEPKey{}}
+func WorkloadEndpointKeyTypes() []Key {
+	return []Key{GenericWEPKey{}, K8sWEPKey{}, K8sDefaultWEPKey{}}
 }
 
 // Shared helper functions for all WEP key variants.
