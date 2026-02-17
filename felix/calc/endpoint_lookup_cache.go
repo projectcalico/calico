@@ -193,7 +193,9 @@ func (ec *EndpointLookupsCache) RegisterWith(
 	allUpdateDisp *dispatcher.Dispatcher,
 	remoteEndpointDispatcher *dispatcher.Dispatcher,
 ) {
-	remoteEndpointDispatcher.Register(model.WorkloadEndpointKey{}, ec.OnUpdate)
+	for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
+		remoteEndpointDispatcher.Register(wepKeyType, ec.OnUpdate)
+	}
 	remoteEndpointDispatcher.Register(model.HostEndpointKey{}, ec.OnUpdate)
 	allUpdateDisp.Register(model.ResourceKey{}, ec.OnResourceUpdate)
 }

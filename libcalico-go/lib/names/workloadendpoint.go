@@ -277,7 +277,7 @@ func ParseWorkloadEndpointName(wepName string) (WorkloadEndpointIdentifiers, err
 func ConvertWorkloadEndpointV3KeyToV1Key(v3key model.ResourceKey) (model.WorkloadEndpointKey, error) {
 	parts := ExtractDashSeparatedParms(v3key.Name, 4)
 	if len(parts) != 4 || v3key.Namespace == "" {
-		return model.WorkloadEndpointKey{}, errors.New("not enough information provided to create v1 Workload Endpoint Key")
+		return nil, errors.New("not enough information provided to create v1 Workload Endpoint Key")
 	}
 	return model.MakeWorkloadEndpointKey(parts[0], parts[1], v3key.Namespace+"/"+parts[2], parts[3]), nil
 }

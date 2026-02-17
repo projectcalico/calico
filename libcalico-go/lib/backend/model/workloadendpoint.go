@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"unique"
 
 	log "github.com/sirupsen/logrus"
 
@@ -32,95 +33,176 @@ var (
 	matchWorkloadEndpoint = regexp.MustCompile("^/?calico/v1/host/([^/]+)/workload/([^/]+)/([^/]+)/endpoint/([^/]+)$")
 )
 
-type WorkloadEndpointKey struct {
-	hostname       string
-	orchestratorID string
-	workloadID     string
-	endpointID     string
+// WorkloadEndpointKey is the interface for all workload endpoint key variants.
+type WorkloadEndpointKey interface {
+	EndpointKey
+	OrchestratorID() string
+	WorkloadID() string
+	EndpointID() string
+	GetNamespace() string
 }
 
-// MakeWorkloadEndpointKey creates a new WorkloadEndpointKey with the given fields.
+// MakeWorkloadEndpointKey creates a new WorkloadEndpointKey, picking the most
+// compact variant based on the orchestrator and endpoint ID values.
 func MakeWorkloadEndpointKey(hostname, orchestratorID, workloadID, endpointID string) WorkloadEndpointKey {
-	return WorkloadEndpointKey{
-		hostname:       hostname,
-		orchestratorID: orchestratorID,
-		workloadID:     workloadID,
-		endpointID:     endpointID,
+	if orchestratorID == "k8s" {
+		if endpointID == "eth0" {
+			return K8sDefaultWEPKey{
+				hostname:   unique.Make(hostname),
+				workloadID: unique.Make(workloadID),
+			}
+		}
+		return K8sWEPKey{
+			hostname:   unique.Make(hostname),
+			workloadID: unique.Make(workloadID),
+			endpointID: unique.Make(endpointID),
+		}
+	}
+	return GenericWEPKey{
+		hostname:       unique.Make(hostname),
+		orchestratorID: unique.Make(orchestratorID),
+		workloadID:     unique.Make(workloadID),
+		endpointID:     unique.Make(endpointID),
 	}
 }
 
-func (key WorkloadEndpointKey) WorkloadOrHostEndpointKey() {}
-
-func (key WorkloadEndpointKey) Host() string {
-	return key.hostname
+// WorkloadEndpointKeyTypes returns an instance of each concrete WEP key variant,
+// for use with dispatcher registration or reflection.
+func WorkloadEndpointKeyTypes() []WorkloadEndpointKey {
+	return []WorkloadEndpointKey{GenericWEPKey{}, K8sWEPKey{}, K8sDefaultWEPKey{}}
 }
 
-func (key WorkloadEndpointKey) OrchestratorID() string { return key.orchestratorID }
-func (key WorkloadEndpointKey) WorkloadID() string     { return key.workloadID }
-func (key WorkloadEndpointKey) EndpointID() string     { return key.endpointID }
+// Shared helper functions for all WEP key variants.
 
-func (key WorkloadEndpointKey) defaultPath() (string, error) {
-	if key.hostname == "" {
+func wepDefaultPath(key WorkloadEndpointKey) (string, error) {
+	if key.Host() == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
-	if key.orchestratorID == "" {
+	if key.OrchestratorID() == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
 	}
-	if key.workloadID == "" {
+	if key.WorkloadID() == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
-	if key.endpointID == "" {
+	if key.EndpointID() == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
-		key.hostname, escapeName(key.orchestratorID), escapeName(key.workloadID), escapeName(key.endpointID)), nil
+		key.Host(), escapeName(key.OrchestratorID()), escapeName(key.WorkloadID()), escapeName(key.EndpointID())), nil
 }
 
-func (key WorkloadEndpointKey) defaultDeletePath() (string, error) {
-	return key.defaultPath()
-}
-
-func (key WorkloadEndpointKey) defaultDeleteParentPaths() ([]string, error) {
-	if key.hostname == "" {
+func wepDefaultDeleteParentPaths(key WorkloadEndpointKey) ([]string, error) {
+	if key.Host() == "" {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
-	if key.orchestratorID == "" {
+	if key.OrchestratorID() == "" {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
 	}
-	if key.workloadID == "" {
+	if key.WorkloadID() == "" {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	workload := fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s",
-		key.hostname, escapeName(key.orchestratorID), escapeName(key.workloadID))
+		key.Host(), escapeName(key.OrchestratorID()), escapeName(key.WorkloadID()))
 	endpoints := workload + "/endpoint"
 	return []string{endpoints, workload}, nil
 }
 
-func (key WorkloadEndpointKey) valueType() (reflect.Type, error) {
-	return reflect.TypeOf(WorkloadEndpoint{}), nil
-}
+var typeWorkloadEndpoint = reflect.TypeOf(WorkloadEndpoint{})
 
-func (key WorkloadEndpointKey) parseValue(rawData []byte) (any, error) {
-	return parseJSONPointer[WorkloadEndpoint](key, rawData)
-}
-
-func (key WorkloadEndpointKey) String() string {
+func wepString(key WorkloadEndpointKey) string {
 	return fmt.Sprintf("WorkloadEndpoint(node=%s, orchestrator=%s, workload=%s, name=%s)",
-		key.hostname, key.orchestratorID, key.workloadID, key.endpointID)
+		key.Host(), key.OrchestratorID(), key.WorkloadID(), key.EndpointID())
 }
 
-// GetNamespace extracts and returns the namespace from the WorkloadID.
-// WorkloadID is expected to be in the format "namespace/name".
-// Returns an empty string if the WorkloadID doesn't contain a namespace.
-func (key WorkloadEndpointKey) GetNamespace() string {
-	parts := strings.SplitN(key.workloadID, "/", 2)
+func wepGetNamespace(key WorkloadEndpointKey) string {
+	parts := strings.SplitN(key.WorkloadID(), "/", 2)
 	if len(parts) == 2 {
 		return parts[0]
 	}
 	return ""
 }
 
-var _ EndpointKey = WorkloadEndpointKey{}
+// GenericWEPKey is a fully general workload endpoint key with all 4 fields stored.
+// Used for non-k8s orchestrators (rare in production).
+type GenericWEPKey struct {
+	hostname       unique.Handle[string]
+	orchestratorID unique.Handle[string]
+	workloadID     unique.Handle[string]
+	endpointID     unique.Handle[string]
+}
+
+func (key GenericWEPKey) WorkloadOrHostEndpointKey()         {}
+func (key GenericWEPKey) Host() string                       { return key.hostname.Value() }
+func (key GenericWEPKey) OrchestratorID() string             { return key.orchestratorID.Value() }
+func (key GenericWEPKey) WorkloadID() string                 { return key.workloadID.Value() }
+func (key GenericWEPKey) EndpointID() string                 { return key.endpointID.Value() }
+func (key GenericWEPKey) GetNamespace() string               { return wepGetNamespace(key) }
+func (key GenericWEPKey) String() string                     { return wepString(key) }
+func (key GenericWEPKey) defaultPath() (string, error)       { return wepDefaultPath(key) }
+func (key GenericWEPKey) defaultDeletePath() (string, error) { return wepDefaultPath(key) }
+func (key GenericWEPKey) defaultDeleteParentPaths() ([]string, error) {
+	return wepDefaultDeleteParentPaths(key)
+}
+func (key GenericWEPKey) valueType() (reflect.Type, error) { return typeWorkloadEndpoint, nil }
+func (key GenericWEPKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[WorkloadEndpoint](key, rawData)
+}
+
+// K8sWEPKey is a Kubernetes workload endpoint key with a non-default endpoint ID.
+// OrchestratorID() returns "k8s" without storing it.
+type K8sWEPKey struct {
+	hostname   unique.Handle[string]
+	workloadID unique.Handle[string]
+	endpointID unique.Handle[string]
+}
+
+func (key K8sWEPKey) WorkloadOrHostEndpointKey()         {}
+func (key K8sWEPKey) Host() string                       { return key.hostname.Value() }
+func (key K8sWEPKey) OrchestratorID() string             { return "k8s" }
+func (key K8sWEPKey) WorkloadID() string                 { return key.workloadID.Value() }
+func (key K8sWEPKey) EndpointID() string                 { return key.endpointID.Value() }
+func (key K8sWEPKey) GetNamespace() string               { return wepGetNamespace(key) }
+func (key K8sWEPKey) String() string                     { return wepString(key) }
+func (key K8sWEPKey) defaultPath() (string, error)       { return wepDefaultPath(key) }
+func (key K8sWEPKey) defaultDeletePath() (string, error) { return wepDefaultPath(key) }
+func (key K8sWEPKey) defaultDeleteParentPaths() ([]string, error) {
+	return wepDefaultDeleteParentPaths(key)
+}
+func (key K8sWEPKey) valueType() (reflect.Type, error) { return typeWorkloadEndpoint, nil }
+func (key K8sWEPKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[WorkloadEndpoint](key, rawData)
+}
+
+// K8sDefaultWEPKey is a Kubernetes workload endpoint key with the default "eth0" endpoint.
+// Both OrchestratorID and EndpointID are implicit, saving storage.
+type K8sDefaultWEPKey struct {
+	hostname   unique.Handle[string]
+	workloadID unique.Handle[string]
+}
+
+func (key K8sDefaultWEPKey) WorkloadOrHostEndpointKey()         {}
+func (key K8sDefaultWEPKey) Host() string                       { return key.hostname.Value() }
+func (key K8sDefaultWEPKey) OrchestratorID() string             { return "k8s" }
+func (key K8sDefaultWEPKey) WorkloadID() string                 { return key.workloadID.Value() }
+func (key K8sDefaultWEPKey) EndpointID() string                 { return "eth0" }
+func (key K8sDefaultWEPKey) GetNamespace() string               { return wepGetNamespace(key) }
+func (key K8sDefaultWEPKey) String() string                     { return wepString(key) }
+func (key K8sDefaultWEPKey) defaultPath() (string, error)       { return wepDefaultPath(key) }
+func (key K8sDefaultWEPKey) defaultDeletePath() (string, error) { return wepDefaultPath(key) }
+func (key K8sDefaultWEPKey) defaultDeleteParentPaths() ([]string, error) {
+	return wepDefaultDeleteParentPaths(key)
+}
+func (key K8sDefaultWEPKey) valueType() (reflect.Type, error) { return typeWorkloadEndpoint, nil }
+func (key K8sDefaultWEPKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[WorkloadEndpoint](key, rawData)
+}
+
+// Compile-time interface checks.
+var (
+	_ WorkloadEndpointKey = GenericWEPKey{}
+	_ WorkloadEndpointKey = K8sWEPKey{}
+	_ WorkloadEndpointKey = K8sDefaultWEPKey{}
+)
 
 type WorkloadEndpointListOptions struct {
 	Hostname       string

@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
@@ -153,7 +154,8 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 			},
 		}},
 	},
-		cmp.AllowUnexported(PolKV{}, model.WorkloadEndpointKey{}),
+		cmp.AllowUnexported(PolKV{}),
+		cmpopts.EquateComparable(model.GenericWEPKey{}, model.K8sWEPKey{}, model.K8sDefaultWEPKey{}),
 		cmp.Comparer(func(a, b uniquelabels.Map) bool { return a.Equals(b) }),
 	); d != "" {
 		t.Error("Incorrect update:", d)
@@ -203,7 +205,7 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 		Endpoint: nil,
 		Tiers:    []TierInfo{},
 	},
-		cmp.AllowUnexported(model.WorkloadEndpointKey{}),
+		cmpopts.EquateComparable(model.GenericWEPKey{}, model.K8sWEPKey{}, model.K8sDefaultWEPKey{}),
 	); d != "" {
 		t.Error("Incorrect update:", d)
 	}

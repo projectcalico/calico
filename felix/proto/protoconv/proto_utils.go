@@ -25,14 +25,14 @@ import (
 // WorkloadEndpointIDToWorkloadEndpointKey converts the proto representation
 // of an endpoint key back to the canonical model structure.
 // Returns nil if passed a nilptr.
-func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostname string) *model.WorkloadEndpointKey {
+func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostname string) model.WorkloadEndpointKey {
 	if id == nil {
 		return nil
 	}
 
 	key := model.MakeWorkloadEndpointKey(hostname, id.OrchestratorId, id.WorkloadId, id.EndpointId)
 	logrus.WithField("key", key).Debug("Generating WorkloadEndpointKey from WorkloadEndpointID")
-	return &key
+	return key
 }
 
 // WorkloadEndpointToEndpointStatus constructs WorkloadEndpointStatus data from a proto WorkloadEndpoint struct.

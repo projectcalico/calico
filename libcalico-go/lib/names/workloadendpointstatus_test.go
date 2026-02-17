@@ -24,27 +24,27 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
-func ptrWepKey(k model.WorkloadEndpointKey) *model.WorkloadEndpointKey {
-	return &k
-}
-
 var _ = DescribeTable("WorkloadEndpointKey to endpoint-status filename",
-	func(k *model.WorkloadEndpointKey, expectedStr string) {
+	func(k model.WorkloadEndpointKey, expectedStr string) {
 		genStr := names.WorkloadEndpointKeyToStatusFilename(k)
 		Expect(genStr).To(Equal(expectedStr))
 	},
-	Entry("Valid workload endpoint key", ptrWepKey(model.MakeWorkloadEndpointKey("cluster-node-0", "k8s", "default/testpod1", "eth0")), "k8s default%2Ftestpod1 eth0"),
-	Entry("Valid slash-filled key", ptrWepKey(model.MakeWorkloadEndpointKey("cl///uster-node-0", "k8/s", "defaul/t/testp/od1", "eth/0")), "k8%2Fs defaul%2Ft%2Ftestp%2Fod1 eth%2F0"),
-	Entry("Valid space-filled key", ptrWepKey(model.MakeWorkloadEndpointKey("cluster-node-0", "k8s", "default/t est pod1", "eth0")), "k8s default%2Ft%20est%20pod1 eth0"),
+	Entry("Valid workload endpoint key", model.MakeWorkloadEndpointKey("cluster-node-0", "k8s", "default/testpod1", "eth0"), "k8s default%2Ftestpod1 eth0"),
+	Entry("Valid slash-filled key", model.MakeWorkloadEndpointKey("cl///uster-node-0", "k8/s", "defaul/t/testp/od1", "eth/0"), "k8%2Fs defaul%2Ft%2Ftestp%2Fod1 eth%2F0"),
+	Entry("Valid space-filled key", model.MakeWorkloadEndpointKey("cluster-node-0", "k8s", "default/t est pod1", "eth0"), "k8s default%2Ft%20est%20pod1 eth0"),
 
 	Entry("Nil key", nil, ""),
 )
 
 var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
-	func(ep *v3.WorkloadEndpoint, expectedKey *model.WorkloadEndpointKey) {
+	func(ep *v3.WorkloadEndpoint, expectedKey model.WorkloadEndpointKey) {
 		genKey, err := names.V3WorkloadEndpointToWorkloadEndpointKey(ep)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(genKey).To(BeEquivalentTo(expectedKey))
+		if expectedKey == nil {
+			Expect(genKey).To(BeNil())
+		} else {
+			Expect(genKey).To(BeEquivalentTo(expectedKey))
+		}
 	},
 	Entry("Valid, FV endpoint (etcd datastore)",
 		&v3.WorkloadEndpoint{
@@ -89,7 +89,7 @@ var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
 				AllowSpoofedSourcePrefixes: nil,
 			},
 		},
-		ptrWepKey(model.MakeWorkloadEndpointKey("felix-0-821432-15-felixfv", "felixfv", "default/workload-endpoint-status-tests-0-idx7", "workload-endpoint-status-tests-0-idx7")),
+		model.MakeWorkloadEndpointKey("felix-0-821432-15-felixfv", "felixfv", "default/workload-endpoint-status-tests-0-idx7", "workload-endpoint-status-tests-0-idx7"),
 	),
 
 	Entry("Valid, FV endpoint (kubernetes datastore)",
@@ -135,7 +135,7 @@ var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
 				AllowSpoofedSourcePrefixes: nil,
 			},
 		},
-		ptrWepKey(model.MakeWorkloadEndpointKey("felix-0-821432-9-felixfv", "k8s", "default/workload-endpoint-status-tests-0-idx3", "eth0")),
+		model.MakeWorkloadEndpointKey("felix-0-821432-9-felixfv", "k8s", "default/workload-endpoint-status-tests-0-idx3", "eth0"),
 	),
 
 	Entry("Nil endpoint", nil, nil),

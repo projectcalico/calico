@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"unique"
 
 	log "github.com/sirupsen/logrus"
 
@@ -32,35 +33,35 @@ var (
 )
 
 type HostEndpointKey struct {
-	hostname   string
-	endpointID string
+	hostname   unique.Handle[string]
+	endpointID unique.Handle[string]
 }
 
 // MakeHostEndpointKey creates a new HostEndpointKey with the given fields.
 func MakeHostEndpointKey(hostname, endpointID string) HostEndpointKey {
 	return HostEndpointKey{
-		hostname:   hostname,
-		endpointID: endpointID,
+		hostname:   unique.Make(hostname),
+		endpointID: unique.Make(endpointID),
 	}
 }
 
 func (key HostEndpointKey) WorkloadOrHostEndpointKey() {}
 
 func (key HostEndpointKey) Host() string {
-	return key.hostname
+	return key.hostname.Value()
 }
 
-func (key HostEndpointKey) EndpointID() string { return key.endpointID }
+func (key HostEndpointKey) EndpointID() string { return key.endpointID.Value() }
 
 func (key HostEndpointKey) defaultPath() (string, error) {
-	if key.hostname == "" {
+	if key.Host() == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
-	if key.endpointID == "" {
+	if key.EndpointID() == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/host/%s/endpoint/%s",
-		key.hostname, escapeName(key.endpointID))
+		key.Host(), escapeName(key.EndpointID()))
 	return e, nil
 }
 
@@ -81,7 +82,7 @@ func (key HostEndpointKey) parseValue(rawData []byte) (any, error) {
 }
 
 func (key HostEndpointKey) String() string {
-	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.hostname, key.endpointID)
+	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Host(), key.EndpointID())
 }
 
 var _ EndpointKey = HostEndpointKey{}

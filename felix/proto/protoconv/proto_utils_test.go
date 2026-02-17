@@ -14,16 +14,13 @@ func TestWorkloadEndpointIDToWorkloadEndpointKey(t *testing.T) {
 		name     string
 		wepID    *proto.WorkloadEndpointID
 		hostname string
-		expected *model.WorkloadEndpointKey
+		expected model.WorkloadEndpointKey
 	}{
 		{
 			name:     "Valid workload endpoint ID",
 			wepID:    &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "default/testpod1", EndpointId: "eth0"},
 			hostname: "cluster-node-0",
-			expected: func() *model.WorkloadEndpointKey {
-				k := model.MakeWorkloadEndpointKey("cluster-node-0", "k8s", "default/testpod1", "eth0")
-				return &k
-			}(),
+			expected: model.MakeWorkloadEndpointKey("cluster-node-0", "k8s", "default/testpod1", "eth0"),
 		},
 		{
 			name:     "Nil ID",

@@ -99,7 +99,9 @@ func NewStatsCollector(callback func(StatsUpdate) error) *StatsCollector {
 
 func (s *StatsCollector) RegisterWith(calcGraph *CalcGraph) {
 	calcGraph.AllUpdDispatcher.Register(model.HostIPKey{}, s.OnUpdate)
-	calcGraph.AllUpdDispatcher.Register(model.WorkloadEndpointKey{}, s.OnUpdate)
+	for _, wepKeyType := range model.WorkloadEndpointKeyTypes() {
+		calcGraph.AllUpdDispatcher.Register(wepKeyType, s.OnUpdate)
+	}
 	calcGraph.AllUpdDispatcher.Register(model.HostEndpointKey{}, s.OnUpdate)
 	calcGraph.AllUpdDispatcher.Register(model.HostConfigKey{}, s.OnUpdate)
 	calcGraph.AllUpdDispatcher.RegisterStatusHandler(s.OnStatusUpdate)
