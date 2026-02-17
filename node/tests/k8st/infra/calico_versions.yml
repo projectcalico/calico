@@ -40,3 +40,5 @@ components:
     version: test-build
   guardian:
     version: test-build
+  webhooks:
+    version: test-build
