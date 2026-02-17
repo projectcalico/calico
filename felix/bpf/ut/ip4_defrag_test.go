@@ -18,11 +18,11 @@ import (
 	"fmt"
 	"testing"
 
-	mapsbpf "github.com/projectcalico/calico/felix/bpf/maps"
-
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
+
+	mapsbpf "github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func TestIP4Defrag(t *testing.T) {
