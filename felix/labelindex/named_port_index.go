@@ -243,6 +243,84 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 	d.endpointIDs.Iter(f)
 }
 
+// endpointOrSetMap stores endpoint and network set IDs without
+// interface-key boxing.  It implements labelnamevalueindex.Map[any, *endpointData]
+// by dispatching to typed sub-maps via a type switch.  An "other" map
+// catches any remaining key types (used in tests with string IDs).
+type endpointOrSetMap struct {
+	endpoints model.EndpointKeyMap[*endpointData]
+	netSets   map[model.NetworkSetKey]*endpointData
+	other     map[any]*endpointData
+}
+
+func (m *endpointOrSetMap) Get(key any) (*endpointData, bool) {
+	switch key := key.(type) {
+	case model.EndpointKey:
+		return m.endpoints.Get(key)
+	case model.NetworkSetKey:
+		v, ok := m.netSets[key]
+		return v, ok
+	default:
+		v, ok := m.other[key]
+		return v, ok
+	}
+}
+
+func (m *endpointOrSetMap) Set(key any, v *endpointData) {
+	switch key := key.(type) {
+	case model.EndpointKey:
+		m.endpoints.Set(key, v)
+	case model.NetworkSetKey:
+		if m.netSets == nil {
+			m.netSets = make(map[model.NetworkSetKey]*endpointData)
+		}
+		m.netSets[key] = v
+	default:
+		if m.other == nil {
+			m.other = make(map[any]*endpointData)
+		}
+		m.other[key] = v
+	}
+}
+
+func (m *endpointOrSetMap) Delete(key any) {
+	switch key := key.(type) {
+	case model.EndpointKey:
+		m.endpoints.Delete(key)
+	case model.NetworkSetKey:
+		delete(m.netSets, key)
+	default:
+		delete(m.other, key)
+	}
+}
+
+func (m *endpointOrSetMap) Len() int {
+	return m.endpoints.Len() + len(m.netSets) + len(m.other)
+}
+
+func (m *endpointOrSetMap) AllKeys() iter.Seq[any] {
+	return func(yield func(any) bool) {
+		for k := range m.endpoints.All() {
+			if !yield(k) {
+				return
+			}
+		}
+		for k := range m.netSets {
+			if !yield(k) {
+				return
+			}
+		}
+		for k := range m.other {
+			if !yield(k) {
+				return
+			}
+		}
+	}
+}
+
+// Compile-time check.
+var _ labelnamevalueindex.Map[any, *endpointData] = (*endpointOrSetMap)(nil)
+
 type NamedPortMatchCallback func(ipSetID string, member ipsetmember.IPSetMember)
 
 type SelectorAndNamedPortIndex struct {
@@ -264,7 +342,7 @@ type SelectorAndNamedPortIndex struct {
 
 func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
-		endpointKVIdx: labelnamevalueindex.New[any, *endpointData]("endpoints"),
+		endpointKVIdx: labelnamevalueindex.NewWithStorage[any, *endpointData]("endpoints", &endpointOrSetMap{}),
 		parentKVIdx:   labelnamevalueindex.New[string, *npParentData]("parents"),
 		ipSetDataByID: map[string]*ipSetData{},
 		selectorCandidatesIdx: labelrestrictionindex.New(
