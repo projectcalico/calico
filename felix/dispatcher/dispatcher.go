@@ -15,6 +15,7 @@
 package dispatcher
 
 import (
+	"fmt"
 	"reflect"
 
 	log "github.com/sirupsen/logrus"
@@ -65,8 +66,38 @@ func (d *Dispatcher) Register(keyExample model.Key, receiver UpdateHandler) {
 	if keyType.Kind() == reflect.Ptr {
 		panic("Register expects a non-pointer")
 	}
+	for _, variantType := range wepKeyVariantTypes {
+		if keyType == variantType {
+			panic(fmt.Sprintf("Register called with %v; use RegisterForWorkloadEndpointUpdates instead", keyType))
+		}
+	}
+	d.register(keyExample, receiver)
+}
+
+// RegisterForWorkloadEndpointUpdates registers the handler for all WorkloadEndpointKey
+// concrete variant types. Since WorkloadEndpointKey is an interface with multiple
+// implementations, callers must use this method rather than Register to ensure all
+// variants are handled.
+func (d *Dispatcher) RegisterForWorkloadEndpointUpdates(receiver UpdateHandler) {
+	for _, k := range model.WorkloadEndpointKeyTypes() {
+		d.register(k, receiver)
+	}
+}
+
+func (d *Dispatcher) register(keyExample model.Key, receiver UpdateHandler) {
+	keyType := reflect.TypeOf(keyExample)
 	log.Infof("Registering listener for type %v: %#v", keyType, receiver)
 	d.typeToHandler[keyType] = append(d.typeToHandler[keyType], receiver)
+}
+
+// wepKeyVariantTypes are the concrete types behind the WorkloadEndpointKey interface.
+// Register panics if called with one of these directly.
+var wepKeyVariantTypes []reflect.Type
+
+func init() {
+	for _, k := range model.WorkloadEndpointKeyTypes() {
+		wepKeyVariantTypes = append(wepKeyVariantTypes, reflect.TypeOf(k))
+	}
 }
 
 func (d *Dispatcher) RegisterStatusHandler(handler StatusHandler) {
