@@ -204,7 +204,7 @@ lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
 3. Run component-specific tests: `make -C <component> test`
 4. Run validation: `make yaml-lint` (if YAML changed)
 5. If APIs/config/CI changed: `make generate`
-6. Format code: `make fix-changed`
+6. **MANDATORY before committing:** Run `make fix-changed` to fix formatting. CI will reject PRs with formatting errors.
 7. Commit changes (generated files must be included)
 8. Push and create PR
 

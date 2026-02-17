@@ -223,7 +223,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 			// Turn w-red-2 to blue.
 			abp.OnUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.MakeWorkloadEndpointKey(hostname, "", "w-red-2", ""),
+					Key:   model.MakeWorkloadEndpointKey(hostname, "", "w-red-2", ""),
 					Value: nil,
 				},
 			})

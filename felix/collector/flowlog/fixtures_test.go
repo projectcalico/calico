@@ -36,7 +36,7 @@ var (
 	minRtt            = 2
 	mss               = 4
 	localHostEpKey1   = model.MakeHostEndpointKey("localhost", "eth1")
-	localHostEp1 = &model.HostEndpoint{
+	localHostEp1      = &model.HostEndpoint{
 		Name:              "eth1",
 		ExpectedIPv4Addrs: []net2.IP{utils.MustParseIP("10.0.0.1")},
 		Labels: uniquelabels.Make(map[string]string{
@@ -91,7 +91,7 @@ var (
 	}
 
 	remoteHostEpKey1 = model.MakeHostEndpointKey("remotehost", "eth1")
-	remoteHostEp1 = &model.HostEndpoint{
+	remoteHostEp1    = &model.HostEndpoint{
 		Name:              "eth1",
 		ExpectedIPv4Addrs: []net2.IP{utils.MustParseIP("20.0.0.1")},
 		Labels: uniquelabels.Make(map[string]string{
