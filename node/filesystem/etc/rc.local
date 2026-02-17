@@ -59,6 +59,9 @@ case "$CALICO_NETWORKING_BACKEND" in
 	# If running in VXLAN-only mode, we don't need to run BIRD / Confd.
 	echo "CALICO_NETWORKING_BACKEND is vxlan - no need to run a BGP daemon"
 	;;
+	"felix" )
+	# Felix programs all cluster routes, we don't need to run BIRD / Confd.
+	echo "CALICO_NETWORKING_BACKEND is Felix - no need to run a BGP daemon"
 	* )
 
 	# Enable the confd and bird services
