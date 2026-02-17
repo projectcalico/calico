@@ -5,8 +5,8 @@
 
 # Clone the repository if needed.
 set -e
-REPO=${REPO:-tigera/operator}
-BRANCH=${BRANCH:-master}
+REPO=${REPO:-caseydavenport/operator}
+BRANCH=${BRANCH:-casey-tiered-rbac-webhook}
 
 rm -rf operator/
 echo "Cloning https://github.com/${REPO} @ ${BRANCH}"
