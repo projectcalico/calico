@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"unique"
 
 	log "github.com/sirupsen/logrus"
 
@@ -32,25 +33,35 @@ var (
 )
 
 type HostEndpointKey struct {
-	Hostname   string `json:"-" validate:"required,hostname"`
-	EndpointID string `json:"-" validate:"required,namespacedName"`
+	hostname   unique.Handle[string]
+	endpointID unique.Handle[string]
+}
+
+// MakeHostEndpointKey creates a new HostEndpointKey with the given fields.
+func MakeHostEndpointKey(hostname, endpointID string) HostEndpointKey {
+	return HostEndpointKey{
+		hostname:   unique.Make(hostname),
+		endpointID: unique.Make(endpointID),
+	}
 }
 
 func (key HostEndpointKey) WorkloadOrHostEndpointKey() {}
 
 func (key HostEndpointKey) Host() string {
-	return key.Hostname
+	return key.hostname.Value()
 }
 
+func (key HostEndpointKey) EndpointID() string { return key.endpointID.Value() }
+
 func (key HostEndpointKey) defaultPath() (string, error) {
-	if key.Hostname == "" {
+	if key.Host() == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
-	if key.EndpointID == "" {
+	if key.EndpointID() == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/host/%s/endpoint/%s",
-		key.Hostname, escapeName(key.EndpointID))
+		key.Host(), escapeName(key.EndpointID()))
 	return e, nil
 }
 
@@ -71,7 +82,7 @@ func (key HostEndpointKey) parseValue(rawData []byte) (any, error) {
 }
 
 func (key HostEndpointKey) String() string {
-	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Hostname, key.EndpointID)
+	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Host(), key.EndpointID())
 }
 
 var _ EndpointKey = HostEndpointKey{}
@@ -111,7 +122,7 @@ func (options HostEndpointListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match endpointID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
-	return HostEndpointKey{Hostname: hostname, EndpointID: endpointID}
+	return MakeHostEndpointKey(hostname, endpointID)
 }
 
 type HostEndpoint struct {

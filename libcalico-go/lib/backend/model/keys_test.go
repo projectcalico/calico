@@ -264,21 +264,13 @@ var _ = DescribeTable(
 	Entry(
 		"workload with a /",
 		"/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
-		WorkloadEndpointKey{
-			Hostname:       "foobar",
-			OrchestratorID: "open/stack",
-			WorkloadID:     "work/load",
-			EndpointID:     "end/point",
-		},
+		MakeWorkloadEndpointKey("foobar", "open/stack", "work/load", "end/point"),
 		false,
 	),
 	Entry(
 		"host endpoint with a /",
 		"/calico/v1/host/foobar/endpoint/end%2fpoint",
-		HostEndpointKey{
-			Hostname:   "foobar",
-			EndpointID: "end/point",
-		},
+		MakeHostEndpointKey("foobar", "end/point"),
 		false,
 	),
 	Entry(
@@ -656,17 +648,9 @@ var (
 	benchResult any
 	_           = benchResult
 	benchKeys   = []Key{
-		WorkloadEndpointKey{
-			Hostname:       "ip-12-23-24-52.cloud.foo.bar.baz",
-			OrchestratorID: "kubernetes",
-			WorkloadID:     "some-pod-name-12346",
-			EndpointID:     "eth0",
-		},
+		MakeWorkloadEndpointKey("ip-12-23-24-52.cloud.foo.bar.baz", "kubernetes", "some-pod-name-12346", "eth0"),
 		WireguardKey{NodeName: "ip-12-23-24-53.cloud.foo.bar.baz"},
-		HostEndpointKey{
-			Hostname:   "ip-12-23-24-52.cloud.foo.bar.baz",
-			EndpointID: "eth0",
-		},
+		MakeHostEndpointKey("ip-12-23-24-52.cloud.foo.bar.baz", "eth0"),
 		ResourceKey{
 			Name:      "projectcalico-default-allow",
 			Namespace: "default",

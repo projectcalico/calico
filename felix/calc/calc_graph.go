@@ -535,7 +535,7 @@ type localEndpointDispatcherReg dispatcher.Dispatcher
 
 func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 	led := (*dispatcher.Dispatcher)(l)
-	disp.Register(model.WorkloadEndpointKey{}, led.OnUpdate)
+	disp.RegisterForWorkloadEndpointUpdates(led.OnUpdate)
 	disp.Register(model.HostEndpointKey{}, led.OnUpdate)
 	disp.RegisterStatusHandler(led.OnDatamodelStatus)
 }
@@ -547,18 +547,18 @@ type endpointHostnameFilter struct {
 }
 
 func (f *endpointHostnameFilter) RegisterWith(localEndpointDisp *dispatcher.Dispatcher) {
-	localEndpointDisp.Register(model.WorkloadEndpointKey{}, f.OnUpdate)
+	localEndpointDisp.RegisterForWorkloadEndpointUpdates(f.OnUpdate)
 	localEndpointDisp.Register(model.HostEndpointKey{}, f.OnUpdate)
 }
 
 func (f *endpointHostnameFilter) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
-		if key.Hostname != f.hostname {
+		if key.Host() != f.hostname {
 			filterOut = true
 		}
 	case model.HostEndpointKey:
-		if key.Hostname != f.hostname {
+		if key.Host() != f.hostname {
 			filterOut = true
 		}
 	}
@@ -577,7 +577,7 @@ type remoteEndpointDispatcherReg dispatcher.Dispatcher
 
 func (l *remoteEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 	red := (*dispatcher.Dispatcher)(l)
-	disp.Register(model.WorkloadEndpointKey{}, red.OnUpdate)
+	disp.RegisterForWorkloadEndpointUpdates(red.OnUpdate)
 	disp.Register(model.HostEndpointKey{}, red.OnUpdate)
 	disp.RegisterStatusHandler(red.OnDatamodelStatus)
 }
@@ -589,18 +589,18 @@ type remoteEndpointFilter struct {
 }
 
 func (f *remoteEndpointFilter) RegisterWith(remoteEndpointDisp *dispatcher.Dispatcher) {
-	remoteEndpointDisp.Register(model.WorkloadEndpointKey{}, f.OnUpdate)
+	remoteEndpointDisp.RegisterForWorkloadEndpointUpdates(f.OnUpdate)
 	remoteEndpointDisp.Register(model.HostEndpointKey{}, f.OnUpdate)
 }
 
 func (f *remoteEndpointFilter) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
-		if key.Hostname == f.hostname {
+		if key.Host() == f.hostname {
 			filterOut = true
 		}
 	case model.HostEndpointKey:
-		if key.Hostname == f.hostname {
+		if key.Host() == f.hostname {
 			filterOut = true
 		}
 	}

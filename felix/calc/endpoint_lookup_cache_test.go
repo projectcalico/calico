@@ -51,7 +51,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 	DescribeTable(
 		"Check adding/deleting workload endpoint modifies the cache",
 		func(key model.WorkloadEndpointKey, wep *model.WorkloadEndpoint, ipAddr net.IP) {
-			c := "WEP(" + key.Hostname + "/" + key.OrchestratorID + "/" + key.WorkloadID + "/" + key.EndpointID + ")"
+			c := "WEP(" + key.Host() + "/" + key.OrchestratorID() + "/" + key.WorkloadID() + "/" + key.EndpointID() + ")"
 
 			// tests adding an endpoint
 			update := api.Update{
@@ -126,7 +126,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		"should cancel a previous endpoint data mark to be deleted and update the endpoint key with data in the new entry",
 		func(key model.HostEndpointKey, hep *model.HostEndpoint, ipAddr net.IP) {
 			// setup - add entry for key
-			c := "HEP(" + key.Hostname + "/" + key.EndpointID + ")"
+			c := "HEP(" + key.Host() + "/" + key.EndpointID() + ")"
 			update := api.Update{
 				KVPair: model.KVPair{
 					Key:   key,
@@ -624,12 +624,7 @@ func TestIsEndpointDeleted(t *testing.T) {
 	cache := NewEndpointLookupsCache(WithDeletionDelay(50 * time.Millisecond))
 
 	// Create a test endpoint key
-	key := model.WorkloadEndpointKey{
-		Hostname:       "test-node",
-		OrchestratorID: "cni",
-		WorkloadID:     "test-workload",
-		EndpointID:     "eth0",
-	}
+	key := model.MakeWorkloadEndpointKey("test-node", "cni", "test-workload", "eth0")
 
 	// Create endpoint data using the same pattern as existing tests
 	ip := net.ParseIP("10.0.0.1")

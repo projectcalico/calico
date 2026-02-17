@@ -56,18 +56,8 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		Name:      name2,
 		Namespace: ns2,
 	}
-	v1WorkloadEndpointKey1 := model.WorkloadEndpointKey{
-		Hostname:       hn1,
-		OrchestratorID: oid1,
-		WorkloadID:     ns1 + "/" + wid1,
-		EndpointID:     eid1,
-	}
-	v1WorkloadEndpointKey2 := model.WorkloadEndpointKey{
-		Hostname:       hn2,
-		OrchestratorID: oid2,
-		WorkloadID:     ns2 + "/" + wid2,
-		EndpointID:     eid2,
-	}
+	v1WorkloadEndpointKey1 := model.MakeWorkloadEndpointKey(hn1, oid1, ns1+"/"+wid1, eid1)
+	v1WorkloadEndpointKey2 := model.MakeWorkloadEndpointKey(hn2, oid2, ns2+"/"+wid2, eid2)
 
 	It("should handle conversion of valid WorkloadEndpoints", func() {
 		netmac2, err := net.ParseMAC("01:23:45:67:89:ab")

@@ -1400,7 +1400,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 				ProfileIDs: []string{"profile1"},
 			}
 			hepKVP := model.KVPair{
-				Key:   model.HostEndpointKey{Hostname: "127.0.0.1", EndpointID: "hosta.eth0-a"},
+				Key:   model.MakeHostEndpointKey("127.0.0.1", "hosta.eth0-a"),
 				Value: hep,
 			}
 			uut.OnUpdate(api.Update{KVPair: hepKVP})
