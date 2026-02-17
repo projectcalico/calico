@@ -1790,7 +1790,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled && !testOpts.dsr {
-					It("should not be able to spoof TCP", func() {
+					spoofSetup := func() {
 						if testOpts.ipv6 {
 							// XXX the routing needs to be different and may not
 							// apply to ipv6
@@ -1813,10 +1813,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// Check that the route manipulation succeeded.
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
+					}
 
-						// PHASE 1: basic single-shot connectivity checks to check that the test infra
-						// is basically doing what we want.  I.e. if felix and the workload disagree on
-						// interface then new connections get dropped.
+					// Basic single-shot connectivity checks to check that the test infra
+					// is basically doing what we want.  I.e. if felix and the workload disagree on
+					// interface then new connections get dropped.
+					It("should not be able to spoof new TCP connections", func() {
+						spoofSetup()
+						if testOpts.ipv6 {
+							return
+						}
 
 						// Switch routes to use the spoofed interface, should fail.
 						By("Workload using spoof0, felix expecting eth0, should fail")
@@ -1839,9 +1845,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.Expect(Some, w[0][0], w[1][0])
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
+					})
 
-						// PHASE 2: keep a connection up and move it from one interface to the other using the pod's
-						// routes.  To the host this looks like one workload is spoofing the other.
+					// Keep a connection up and move it from one interface to the other using the pod's
+					// routes.  To the host this looks like one workload is spoofing the other.
+					It("should not be able to spoof existing TCP connections", func() {
+						spoofSetup()
+						if testOpts.ipv6 {
+							return
+						}
+
 						By("Starting permanent connection")
 						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
