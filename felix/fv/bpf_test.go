@@ -1790,7 +1790,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled && !testOpts.dsr {
-					It("should not be able to spoof TCP", func() {
+					spoofSetup := func() {
 						if testOpts.ipv6 {
 							// XXX the routing needs to be different and may not
 							// apply to ipv6
@@ -1813,10 +1813,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// Check that the route manipulation succeeded.
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
+					}
 
-						// PHASE 1: basic single-shot connectivity checks to check that the test infra
-						// is basically doing what we want.  I.e. if felix and the workload disagree on
-						// interface then new connections get dropped.
+					// Basic single-shot connectivity checks to check that the test infra
+					// is basically doing what we want.  I.e. if felix and the workload disagree on
+					// interface then new connections get dropped.
+					It("should not be able to spoof new TCP connections", func() {
+						spoofSetup()
+						if testOpts.ipv6 {
+							return
+						}
 
 						// Switch routes to use the spoofed interface, should fail.
 						By("Workload using spoof0, felix expecting eth0, should fail")
@@ -1839,9 +1845,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.Expect(Some, w[0][0], w[1][0])
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
+					})
 
-						// PHASE 2: keep a connection up and move it from one interface to the other using the pod's
-						// routes.  To the host this looks like one workload is spoofing the other.
+					// Keep a connection up and move it from one interface to the other using the pod's
+					// routes.  To the host this looks like one workload is spoofing the other.
+					It("should not be able to spoof existing TCP connections", func() {
+						spoofSetup()
+						if testOpts.ipv6 {
+							return
+						}
+
 						By("Starting permanent connection")
 						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
@@ -3403,14 +3416,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					ifUDPnoCTLB := func(desc string, body func()) {
-						if testOpts.protocol != "udp" || testOpts.connTimeEnabled {
+					It("should have connectivity after a backend is replaced by a new one", func() {
+						if testOpts.protocol == "udp" && testOpts.connTimeEnabled {
 							return
 						}
-						It(desc, body)
-					}
-
-					ifUDPnoCTLB("should have connectivity after a backend is replaced by a new one", func() {
 						var (
 							testSvc          *v1.Service
 							testSvcNamespace string
@@ -3472,7 +3481,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Timeout:             60 * time.Second,
 							},
 						)
-						defer pc.Stop()
+						if testOpts.protocol != "tcp" {
+							defer pc.Stop()
+						}
 
 						By("Testing connectivity")
 						prevCount := pc.PongCount()
@@ -3483,15 +3494,54 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testSvc2 := k8sService(testSvcName, clusterIP, w[1][0], 80, 8055, 0, testOpts.protocol)
 						k8sUpdateService(k8sClient, testSvcNamespace, testSvcName, testSvc, testSvc2)
 
-						By("Stoping the original backend to make sure it is not reachable")
+						var tcpd *tcpdump.TCPDump
+						if testOpts.protocol == "tcp" {
+							iface := w[1][1].InterfaceName
+							srcIP := clusterIP
+							tcpdHost := tc.Felixes[1]
+							if testOpts.connTimeEnabled {
+								iface = "eth0"
+								switch testOpts.tunnel {
+								case "vxlan":
+									iface = "vxlan.calico"
+								case "wireguard":
+									iface = "wireguard.cali"
+									if testOpts.ipv6 {
+										iface = "wireguard.cali-v6"
+									}
+								case "ipip":
+									iface = "tunl0"
+								}
+								srcIP = w[0][0].IP
+								tcpdHost = tc.Felixes[0]
+							}
+							tcpd = tcpdHost.AttachTCPDump(iface)
+							tcpd.SetLogEnabled(true)
+
+							ipRegex := "IP"
+							if testOpts.ipv6 {
+								ipRegex = "IP6"
+							}
+							tcpd.AddMatcher("tcp-rst",
+								regexp.MustCompile(fmt.Sprintf(`%s %s\.\d+ > %s\.\d+: Flags \[[^\]]*R[^\]]*\]`, ipRegex, srcIP, w[1][1].IP)))
+							tcpd.Start(infra)
+						}
+
+						By("Stopping the original backend to make sure it is not reachable")
 						w[0][0].Stop()
 						By("removing the old workload from infra")
 						w[0][0].RemoveFromInfra(infra)
 
 						By("Testing connectivity continues")
-						prevCount = pc.PongCount()
-						Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
-							"Expected to see pong responses on the connection but didn't receive any")
+						if testOpts.protocol == "tcp" {
+							Eventually(func() int { return tcpd.MatchCount("tcp-rst") }, "25s").ShouldNot(BeZero(),
+								"Expected to see TCP RSTs on the connection after backend change")
+							Expect(pc.IsConnectionReset()).To(BeTrue())
+						} else {
+							prevCount = pc.PongCount()
+							Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
+								"Expected to see pong responses on the connection but didn't receive any")
+						}
 					})
 				})
 
