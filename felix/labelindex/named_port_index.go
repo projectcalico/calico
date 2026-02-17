@@ -15,6 +15,7 @@
 package labelindex
 
 import (
+	"fmt"
 	"iter"
 	"math"
 	"strings"
@@ -34,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -243,88 +245,263 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 	d.endpointIDs.Iter(f)
 }
 
-// endpointOrSetMap stores endpoint and network set IDs without
-// interface-key boxing.  It implements labelnamevalueindex.Map[any, *endpointData]
-// by dispatching to typed sub-maps via a type switch.  An "other" map
-// catches any remaining key types (used in tests with string IDs).
-type endpointOrSetMap struct {
-	endpoints model.EndpointKeyMap[*endpointData]
-	netSets   map[model.NetworkSetKey]*endpointData
-	other     map[any]*endpointData
+// endpointAndNetsetLabelIndex stores endpoints and network sets in
+// per-concrete-key-type LabelNameValueIndex instances, eliminating
+// interface boxing in both primary storage and secondary label indexes.
+// Sub-indexes are nil initially and allocated lazily on first Add.
+type endpointAndNetsetLabelIndex struct {
+	k8sDefault *labelnamevalueindex.LabelNameValueIndex[model.K8sDefaultWEPKey, *endpointData]
+	k8s        *labelnamevalueindex.LabelNameValueIndex[model.K8sWEPKey, *endpointData]
+	generic    *labelnamevalueindex.LabelNameValueIndex[model.GenericWEPKey, *endpointData]
+	hep        *labelnamevalueindex.LabelNameValueIndex[model.HostEndpointKey, *endpointData]
+	netSet     *labelnamevalueindex.LabelNameValueIndex[model.NetworkSetKey, *endpointData]
+	other      *labelnamevalueindex.LabelNameValueIndex[any, *endpointData] // test fallback
 }
 
-func (m *endpointOrSetMap) Get(key any) (*endpointData, bool) {
-	switch key := key.(type) {
-	case model.EndpointKey:
-		return m.endpoints.Get(key)
-	case model.NetworkSetKey:
-		v, ok := m.netSets[key]
-		return v, ok
-	default:
-		v, ok := m.other[key]
-		return v, ok
-	}
-}
-
-func (m *endpointOrSetMap) Set(key any, v *endpointData) {
-	switch key := key.(type) {
-	case model.EndpointKey:
-		m.endpoints.Set(key, v)
-	case model.NetworkSetKey:
-		if m.netSets == nil {
-			m.netSets = make(map[model.NetworkSetKey]*endpointData)
+func (m *endpointAndNetsetLabelIndex) Get(id any) (*endpointData, bool) {
+	switch id := id.(type) {
+	case model.K8sDefaultWEPKey:
+		if m.k8sDefault != nil {
+			return m.k8sDefault.Get(id)
 		}
-		m.netSets[key] = v
+	case model.K8sWEPKey:
+		if m.k8s != nil {
+			return m.k8s.Get(id)
+		}
+	case model.GenericWEPKey:
+		if m.generic != nil {
+			return m.generic.Get(id)
+		}
+	case model.HostEndpointKey:
+		if m.hep != nil {
+			return m.hep.Get(id)
+		}
+	case model.NetworkSetKey:
+		if m.netSet != nil {
+			return m.netSet.Get(id)
+		}
+	default:
+		if m.other != nil {
+			return m.other.Get(id)
+		}
+	}
+	return nil, false
+}
+
+func (m *endpointAndNetsetLabelIndex) Add(id any, item *endpointData) {
+	switch id := id.(type) {
+	case model.K8sDefaultWEPKey:
+		if m.k8sDefault == nil {
+			m.k8sDefault = labelnamevalueindex.New[model.K8sDefaultWEPKey, *endpointData]("endpoints-k8s-default")
+		}
+		m.k8sDefault.Add(id, item)
+	case model.K8sWEPKey:
+		if m.k8s == nil {
+			m.k8s = labelnamevalueindex.New[model.K8sWEPKey, *endpointData]("endpoints-k8s")
+		}
+		m.k8s.Add(id, item)
+	case model.GenericWEPKey:
+		if m.generic == nil {
+			m.generic = labelnamevalueindex.New[model.GenericWEPKey, *endpointData]("endpoints-generic")
+		}
+		m.generic.Add(id, item)
+	case model.HostEndpointKey:
+		if m.hep == nil {
+			m.hep = labelnamevalueindex.New[model.HostEndpointKey, *endpointData]("endpoints-hep")
+		}
+		m.hep.Add(id, item)
+	case model.NetworkSetKey:
+		if m.netSet == nil {
+			m.netSet = labelnamevalueindex.New[model.NetworkSetKey, *endpointData]("netsets")
+		}
+		m.netSet.Add(id, item)
 	default:
 		if m.other == nil {
-			m.other = make(map[any]*endpointData)
+			m.other = labelnamevalueindex.New[any, *endpointData]("endpoints-other")
 		}
-		m.other[key] = v
+		m.other.Add(id, item)
 	}
 }
 
-func (m *endpointOrSetMap) Delete(key any) {
-	switch key := key.(type) {
-	case model.EndpointKey:
-		m.endpoints.Delete(key)
+func (m *endpointAndNetsetLabelIndex) Remove(id any) {
+	switch id := id.(type) {
+	case model.K8sDefaultWEPKey:
+		if m.k8sDefault != nil {
+			m.k8sDefault.Remove(id)
+		}
+	case model.K8sWEPKey:
+		if m.k8s != nil {
+			m.k8s.Remove(id)
+		}
+	case model.GenericWEPKey:
+		if m.generic != nil {
+			m.generic.Remove(id)
+		}
+	case model.HostEndpointKey:
+		if m.hep != nil {
+			m.hep.Remove(id)
+		}
 	case model.NetworkSetKey:
-		delete(m.netSets, key)
+		if m.netSet != nil {
+			m.netSet.Remove(id)
+		}
 	default:
-		delete(m.other, key)
-	}
-}
-
-func (m *endpointOrSetMap) Len() int {
-	return m.endpoints.Len() + len(m.netSets) + len(m.other)
-}
-
-func (m *endpointOrSetMap) AllKeys() iter.Seq[any] {
-	return func(yield func(any) bool) {
-		for k := range m.endpoints.All() {
-			if !yield(k) {
-				return
-			}
-		}
-		for k := range m.netSets {
-			if !yield(k) {
-				return
-			}
-		}
-		for k := range m.other {
-			if !yield(k) {
-				return
-			}
+		if m.other != nil {
+			m.other.Remove(id)
 		}
 	}
 }
 
-// Compile-time check.
-var _ labelnamevalueindex.Map[any, *endpointData] = (*endpointOrSetMap)(nil)
+func (m *endpointAndNetsetLabelIndex) Len() int {
+	n := 0
+	if m.k8sDefault != nil {
+		n += m.k8sDefault.Len()
+	}
+	if m.k8s != nil {
+		n += m.k8s.Len()
+	}
+	if m.generic != nil {
+		n += m.generic.Len()
+	}
+	if m.hep != nil {
+		n += m.hep.Len()
+	}
+	if m.netSet != nil {
+		n += m.netSet.Len()
+	}
+	if m.other != nil {
+		n += m.other.Len()
+	}
+	return n
+}
+
+// StrategyFor returns a unionStrategy that combines the strategies from
+// all non-nil sub-indexes for the given label restriction.  If all
+// sub-indexes report NoMatch, returns NoMatchStrategy.
+func (m *endpointAndNetsetLabelIndex) StrategyFor(labelName uniquestr.Handle, r parser.LabelRestriction) labelnamevalueindex.ScanStrategy[any] {
+	return m.collectStrategies(func(idx subIndex) labelnamevalueindex.ScanStrategy[any] {
+		return idx.strategyFor(labelName, r)
+	})
+}
+
+// FullScanStrategy returns a unionStrategy that scans all items across
+// all non-nil sub-indexes.
+func (m *endpointAndNetsetLabelIndex) FullScanStrategy() labelnamevalueindex.ScanStrategy[any] {
+	return m.collectStrategies(func(idx subIndex) labelnamevalueindex.ScanStrategy[any] {
+		return idx.fullScanStrategy()
+	})
+}
+
+func (m *endpointAndNetsetLabelIndex) collectStrategies(getStrategy func(subIndex) labelnamevalueindex.ScanStrategy[any]) labelnamevalueindex.ScanStrategy[any] {
+	var strategies []labelnamevalueindex.ScanStrategy[any]
+	totalEstimate := 0
+	for _, sub := range m.nonNilSubIndexes() {
+		s := getStrategy(sub)
+		est := s.EstimatedItemsToScan()
+		if est == 0 {
+			continue
+		}
+		strategies = append(strategies, s)
+		totalEstimate += est
+	}
+	switch len(strategies) {
+	case 0:
+		return labelnamevalueindex.NoMatchStrategy[any]{}
+	case 1:
+		return strategies[0]
+	default:
+		return unionStrategy{strategies: strategies, count: totalEstimate}
+	}
+}
+
+// subIndex abstracts over the per-key-type LabelNameValueIndex instances.
+type subIndex interface {
+	strategyFor(uniquestr.Handle, parser.LabelRestriction) labelnamevalueindex.ScanStrategy[any]
+	fullScanStrategy() labelnamevalueindex.ScanStrategy[any]
+}
+
+// typedSubIndex adapts a concrete LabelNameValueIndex[T] to the subIndex interface.
+type typedSubIndex[T comparable] struct {
+	idx *labelnamevalueindex.LabelNameValueIndex[T, *endpointData]
+}
+
+func (t typedSubIndex[T]) strategyFor(label uniquestr.Handle, r parser.LabelRestriction) labelnamevalueindex.ScanStrategy[any] {
+	return wrappedStrategy[T]{inner: t.idx.StrategyFor(label, r)}
+}
+
+func (t typedSubIndex[T]) fullScanStrategy() labelnamevalueindex.ScanStrategy[any] {
+	return wrappedStrategy[T]{inner: t.idx.FullScanStrategy()}
+}
+
+func (m *endpointAndNetsetLabelIndex) nonNilSubIndexes() []subIndex {
+	var subs []subIndex
+	if m.k8sDefault != nil {
+		subs = append(subs, typedSubIndex[model.K8sDefaultWEPKey]{m.k8sDefault})
+	}
+	if m.k8s != nil {
+		subs = append(subs, typedSubIndex[model.K8sWEPKey]{m.k8s})
+	}
+	if m.generic != nil {
+		subs = append(subs, typedSubIndex[model.GenericWEPKey]{m.generic})
+	}
+	if m.hep != nil {
+		subs = append(subs, typedSubIndex[model.HostEndpointKey]{m.hep})
+	}
+	if m.netSet != nil {
+		subs = append(subs, typedSubIndex[model.NetworkSetKey]{m.netSet})
+	}
+	if m.other != nil {
+		subs = append(subs, typedSubIndex[any]{m.other})
+	}
+	return subs
+}
+
+// wrappedStrategy wraps a ScanStrategy[T] to present as ScanStrategy[any],
+// converting concrete keys to interface values in the callback.
+type wrappedStrategy[T comparable] struct {
+	inner labelnamevalueindex.ScanStrategy[T]
+}
+
+func (w wrappedStrategy[T]) EstimatedItemsToScan() int { return w.inner.EstimatedItemsToScan() }
+func (w wrappedStrategy[T]) Name() string              { return w.inner.Name() }
+func (w wrappedStrategy[T]) String() string            { return w.inner.String() }
+
+func (w wrappedStrategy[T]) Scan(f func(any) bool) {
+	w.inner.Scan(func(id T) bool { return f(id) })
+}
+
+// unionStrategy chains scans from multiple sub-strategies.
+type unionStrategy struct {
+	strategies []labelnamevalueindex.ScanStrategy[any]
+	count      int
+}
+
+func (u unionStrategy) EstimatedItemsToScan() int { return u.count }
+func (u unionStrategy) Name() string              { return "union" }
+func (u unionStrategy) String() string {
+	return fmt.Sprintf("union(%d strategies, ~%d items)", len(u.strategies), u.count)
+}
+
+func (u unionStrategy) Scan(f func(any) bool) {
+	for _, s := range u.strategies {
+		cont := true
+		s.Scan(func(id any) bool {
+			if !f(id) {
+				cont = false
+				return false
+			}
+			return true
+		})
+		if !cont {
+			return
+		}
+	}
+}
 
 type NamedPortMatchCallback func(ipSetID string, member ipsetmember.IPSetMember)
 
 type SelectorAndNamedPortIndex struct {
-	endpointKVIdx *labelnamevalueindex.LabelNameValueIndex[any /*endpoint IDs*/, *endpointData]
+	endpointKVIdx endpointAndNetsetLabelIndex
 
 	parentKVIdx           *labelnamevalueindex.LabelNameValueIndex[string, *npParentData]
 	ipSetDataByID         map[string]*ipSetData
@@ -342,7 +519,6 @@ type SelectorAndNamedPortIndex struct {
 
 func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
-		endpointKVIdx: labelnamevalueindex.NewWithStorage[any, *endpointData]("endpoints", &endpointOrSetMap{}),
 		parentKVIdx:   labelnamevalueindex.New[string, *npParentData]("parents"),
 		ipSetDataByID: map[string]*ipSetData{},
 		selectorCandidatesIdx: labelrestrictionindex.New(
