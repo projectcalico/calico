@@ -50,10 +50,10 @@ type GlobalNetworkPolicy struct {
 	Spec GlobalNetworkPolicySpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(self.doNotTrack && self.preDNAT)",message="preDNAT and doNotTrack cannot both be true"
-// +kubebuilder:validation:XValidation:rule="!self.preDNAT || !has(self.egress) || size(self.egress) == 0",message="preDNAT policy cannot have any egress rules"
-// +kubebuilder:validation:XValidation:rule="!self.preDNAT || !has(self.types) || !self.types.exists(t, t == 'Egress')",message="preDNAT policy cannot have 'Egress' type"
-// +kubebuilder:validation:XValidation:rule="self.applyOnForward || (!self.doNotTrack && !self.preDNAT)",message="applyOnForward must be true if either preDNAT or doNotTrack is true"
+// +kubebuilder:validation:XValidation:rule="!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT) && self.preDNAT))",message="preDNAT and doNotTrack cannot both be true"
+// +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) || size(self.egress) == 0",message="preDNAT policy cannot have any egress rules"
+// +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t, t == 'Egress')",message="preDNAT policy cannot have 'Egress' type"
+// +kubebuilder:validation:XValidation:rule="(has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack) || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))",message="applyOnForward must be true if either preDNAT or doNotTrack is true"
 type GlobalNetworkPolicySpec struct {
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create

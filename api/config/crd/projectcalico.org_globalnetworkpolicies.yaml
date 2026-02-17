@@ -464,17 +464,23 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: preDNAT and doNotTrack cannot both be true
-                  rule: "!(self.doNotTrack && self.preDNAT)"
+                  rule:
+                    "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
+                    && self.preDNAT))"
                 - message: preDNAT policy cannot have any egress rules
-                  rule: "!self.preDNAT || !has(self.egress) || size(self.egress) == 0"
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
+                    size(self.egress) == 0
                 - message: preDNAT policy cannot have 'Egress' type
                   rule:
-                    "!self.preDNAT || !has(self.types) || !self.types.exists(t, t
-                    == 'Egress')"
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
+                    t == 'Egress')
                 - message:
                     applyOnForward must be true if either preDNAT or doNotTrack
                     is true
-                  rule: self.applyOnForward || (!self.doNotTrack && !self.preDNAT)
+                  rule:
+                    (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
+                    || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
           required:
             - metadata
             - spec
