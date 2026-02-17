@@ -38,6 +38,10 @@ type StagedGlobalNetworkPolicy struct {
 	Spec              StagedGlobalNetworkPolicySpec `json:"spec"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!(self.doNotTrack && self.preDNAT)",message="preDNAT and doNotTrack cannot both be true"
+// +kubebuilder:validation:XValidation:rule="!self.preDNAT || !has(self.egress) || size(self.egress) == 0",message="preDNAT policy cannot have any egress rules"
+// +kubebuilder:validation:XValidation:rule="!self.preDNAT || !has(self.types) || !self.types.exists(t, t == 'Egress')",message="preDNAT policy cannot have 'Egress' type"
+// +kubebuilder:validation:XValidation:rule="self.applyOnForward || (!self.doNotTrack && !self.preDNAT)",message="applyOnForward must be true if either preDNAT or doNotTrack is true"
 type StagedGlobalNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set

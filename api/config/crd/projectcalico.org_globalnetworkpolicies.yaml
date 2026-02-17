@@ -96,22 +96,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
-                              x-kubernetes-validations:
-                                - message:
-                                    exactly one of 'exact' or 'prefix' must be
-                                    set
-                                  rule:
-                                    (self.exact == '' && self.prefix != '') || (self.exact
-                                    != '' && self.prefix == '')
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -220,6 +217,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -287,22 +297,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
-                              x-kubernetes-validations:
-                                - message:
-                                    exactly one of 'exact' or 'prefix' must be
-                                    set
-                                  rule:
-                                    (self.exact == '' && self.prefix != '') || (self.exact
-                                    != '' && self.prefix == '')
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -411,6 +418,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 namespaceSelector:
                   type: string
@@ -442,6 +462,19 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: preDNAT and doNotTrack cannot both be true
+                  rule: "!(self.doNotTrack && self.preDNAT)"
+                - message: preDNAT policy cannot have any egress rules
+                  rule: "!self.preDNAT || !has(self.egress) || size(self.egress) == 0"
+                - message: preDNAT policy cannot have 'Egress' type
+                  rule:
+                    "!self.preDNAT || !has(self.types) || !self.types.exists(t, t
+                    == 'Egress')"
+                - message:
+                    applyOnForward must be true if either preDNAT or doNotTrack
+                    is true
+                  rule: self.applyOnForward || (!self.doNotTrack && !self.preDNAT)
           required:
             - metadata
             - spec
