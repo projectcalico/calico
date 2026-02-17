@@ -32,7 +32,7 @@ const AppHeader: React.FC = () => {
                         </LinkOverlay>
                     </Flex>
 
-                    <CalicoCatIcon fontSize='42px' />
+                    <CalicoCatIcon fontSize='40px' />
                 </Flex>
             </LinkBox>
         </Flex>
