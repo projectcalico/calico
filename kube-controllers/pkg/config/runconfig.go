@@ -646,7 +646,7 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 	v, p := envVars[EnvEnabledControllers]
 	if p {
 		status.EnvironmentVars[EnvEnabledControllers] = v
-		for _, controllerType := range strings.Split(v, ",") {
+		for controllerType := range strings.SplitSeq(v, ",") {
 			switch controllerType {
 			case "workloadendpoint":
 				rc.WorkloadEndpoint = &GenericControllerConfig{}

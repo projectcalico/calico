@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/bits"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -449,7 +450,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 		}
 
 		// Release the block affinity, requiring it to be empty.
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, block, releaseAffinityOpts{
 				RequireEmpty: true,
 			}); err != nil {
@@ -477,11 +478,8 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 func filterPoolsByUse(pools []v3.IPPool, use v3.IPPoolAllowedUse) []v3.IPPool {
 	var filteredPools []v3.IPPool
 	for _, p := range pools {
-		for _, allowed := range p.Spec.AllowedUses {
-			if allowed == use {
-				filteredPools = append(filteredPools, p)
-				break
-			}
+		if slices.Contains(p.Spec.AllowedUses, use) {
+			filteredPools = append(filteredPools, p)
 		}
 	}
 	return filteredPools
@@ -522,7 +520,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 
 		// Checking this block - if we hit a CAS error, we'll try this block again.
 		// For any other error, we'll break out and try the next affine block.
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			// Get the affinity.
 			logCtx.Infof("Trying affinity for %s", cidr)
 			aff, err := s.client.blockReaderWriter.queryAffinity(ctx, s.affinityCfg, cidr, "")
@@ -569,7 +567,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 	}
 	logCtx.Debugf("Allocate new blocks? Config: %+v", config)
 	if config.AutoAllocateBlocks {
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			// First, try to find a usable block. findUsableBlock will usually return a new block, or in rare scenarios an already
 			// allocated affine block. This may happen due to a race condition where another process on the host allocates a new block
 			// after we decide that a new block is required to satisfy this request, but before we actually allocate a new block.
@@ -588,7 +586,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 			logCtx := log.WithFields(log.Fields{string(s.affinityCfg.AffinityType): s.affinityCfg.Host, "subnet": subnet})
 			logCtx.Infof("Found unclaimed block in %v", time.Since(findStart))
 
-			for j := 0; j < datastoreRetries; j++ {
+			for range datastoreRetries {
 				// We found an unclaimed block - claim affinity for it.
 				pa, err := s.client.blockReaderWriter.getPendingAffinity(ctx, s.affinityCfg, *subnet)
 				if err != nil {
@@ -648,11 +646,9 @@ type IPAMAssignments struct {
 }
 
 func (i *IPAMAssignments) AddMsg(msg string) {
-	for _, m := range i.Msgs {
-		if msg == m {
-			// Don't add duplicate msgs
-			return
-		}
+	if slices.Contains(i.Msgs, msg) {
+		// Don't add duplicate msgs
+		return
 	}
 	i.Msgs = append(i.Msgs, msg)
 }
@@ -791,7 +787,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		}
 
 		// We have got a block b.
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			assignStart := time.Now()
 			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, config.StrictAffinity, reservations)
 			if err != nil {
@@ -860,7 +856,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 					continue
 				}
 
-				for i := 0; i < datastoreRetries; i++ {
+				for range datastoreRetries {
 					b, err := c.blockReaderWriter.queryBlock(ctx, *blockCIDR, "")
 					if err != nil {
 						logCtx.WithError(err).Warn("Failed to get non-affine block")
@@ -934,7 +930,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 	blockCIDR := getBlockCIDRForAddress(args.IP, pool)
 	log.Debugf("IP %s is in block '%s'", args.IP.String(), blockCIDR.String())
-	for i := 0; i < datastoreRetries; i++ {
+	for range datastoreRetries {
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -1022,7 +1018,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 // - A list of ReleaseOptions that did not encounter an error (either not allocated, or successfully released).
 // - An error, if one occurred.
 func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]net.IP, []ReleaseOptions, error) {
-	for i := 0; i < len(ips); i++ {
+	for i := range ips {
 		// Validate the input.
 		if ips[i].Address == "" {
 			return nil, nil, fmt.Errorf("No IP address specified in options: %+v", ips[i])
@@ -1159,7 +1155,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 
 func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[string]*model.KVPair, ips []ReleaseOptions, blockCIDR net.IPNet) ([]net.IP, error) {
 	logCtx := log.WithField("cidr", blockCIDR)
-	for i := 0; i < datastoreRetries; i++ {
+	for i := range datastoreRetries {
 		logCtx.Debug("Getting block so we can release IPs")
 
 		// Get allocation block for cidr.
@@ -1342,7 +1338,7 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, affinityC
 	// Claim all blocks within the given cidr.
 	blocks := blockGenerator(pool, cidr)
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			// First, claim a pending affinity.
 			pa, err := c.blockReaderWriter.getPendingAffinity(ctx, affinityCfg, *blockCIDR)
 			if err != nil {
@@ -1414,7 +1410,7 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	blocks := blockGenerator(pool, cidr)
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
 		logCtx := log.WithField("cidr", blockCIDR)
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, releaseAffinityOpts{
 				RequireEmpty: mustBeEmpty,
 			})
@@ -1489,7 +1485,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg Affin
 
 		for _, blockCIDR := range blockCIDRs {
 			logCtx := log.WithField("cidr", blockCIDR)
-			for i := 0; i < datastoreRetries; i++ {
+			for range datastoreRetries {
 				err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, blockCIDR, releaseAffinityOpts{
 					RequireEmpty: mustBeEmpty,
 				})
@@ -1577,7 +1573,7 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, affinityCfg AffinityConf
 	logCtx := log.WithField("host", affinityCfg.Host)
 	logCtx.Debug("Removing IPAM data for host")
 
-	for i := 0; i < datastoreRetries; i++ {
+	for range datastoreRetries {
 		// Release affinities for this host.
 		logCtx.Debug("Releasing IPAM affinities for host")
 		if err := c.ReleaseHostAffinities(ctx, affinityCfg, false); err != nil {
@@ -1700,7 +1696,7 @@ func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error 
 
 func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, opts ReleaseOptions) error {
 	logCtx := log.WithFields(log.Fields{"handle": opts.Handle, "cidr": blockCIDR})
-	for i := 0; i < datastoreRetries; i++ {
+	for i := range datastoreRetries {
 		logCtx.Debug("Querying block so we can release IPs by handle")
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 		if err != nil {
@@ -1771,7 +1767,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 		return nil
 	}
 
-	for i := 0; i < datastoreRetries; i++ {
+	for range datastoreRetries {
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -1805,7 +1801,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int) error {
 	var obj *model.KVPair
 	var err error
-	for i := 0; i < datastoreRetries; i++ {
+	for range datastoreRetries {
 		obj, err = c.blockReaderWriter.queryHandle(ctx, handleID, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -1855,7 +1851,7 @@ func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockC
 }
 
 func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int, obj *model.KVPair) error {
-	for i := 0; i < datastoreRetries; i++ {
+	for i := range datastoreRetries {
 		var err error
 		// Query the handle if either of these conditions is true:
 		// - This is the first iteration, and the caller did not provide the current handle.

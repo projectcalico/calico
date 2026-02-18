@@ -45,7 +45,6 @@ func TestIntersectCIDRs(t *testing.T) {
 			[]string{"10.0.1.1/32", "10.0.2.1/32"},
 		},
 	} {
-		test := test
 		sort.Strings(test.as)
 		sort.Strings(test.bs)
 		sort.Strings(test.exp)

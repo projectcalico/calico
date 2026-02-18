@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	typeIPAMHost = reflect.TypeOf(IPAMHost{})
+	typeIPAMHost = reflect.TypeFor[IPAMHost]()
 )
 
 type IPAMHostKey struct {

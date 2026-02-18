@@ -293,10 +293,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 
 		// If we encountered errors, retry again with a longer timeout.
 		if !s.GetReadiness() {
-			timeout = 2 * timeout
-			if timeout > maxTimeout {
-				timeout = maxTimeout
-			}
+			timeout = min(2*timeout, maxTimeout)
 			log.Infof("Health check is not ready, retrying in 2 seconds with new timeout: %s", timeout)
 			time.Sleep(2 * time.Second)
 			continue

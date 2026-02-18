@@ -165,7 +165,7 @@ func TestJumpBackwardsTooFar(t *testing.T) {
 	// Subtract one because the jump is relative to the instruction
 	// after the jump itself.
 	safeNumInsns := -math.MinInt16 - 1
-	for i := 0; i < safeNumInsns; i++ {
+	for range safeNumInsns {
 		b.NoOp()
 	}
 	b.JumpEq32(R0, R1, "label")
@@ -196,7 +196,7 @@ func TestSingleTrampoline(t *testing.T) {
 	// a trampoline.
 	b.JumpEq64(R1, R2, "longB")
 	b.JumpEq64(R1, R2, "longA")
-	for i := 0; i < TrampolineStrideDefault; i++ {
+	for range TrampolineStrideDefault {
 		b.NoOp()
 	}
 
@@ -259,7 +259,7 @@ func TestTrampolineLoadImm64(t *testing.T) {
 	// a trampoline.
 	b.JumpEq64(R1, R2, "longB")
 	b.JumpEq64(R1, R2, "longA")
-	for i := 0; i < TrampolineStrideDefault-3; i++ {
+	for range TrampolineStrideDefault - 3 {
 		b.NoOp()
 	}
 	b.LoadImm64(R3, 1234)
@@ -319,7 +319,7 @@ func TestShortJumpAndTrampoline(t *testing.T) {
 	b.JumpEq64(R1, R2, "shortA")
 	b.JumpEq64(R1, R2, "longA")
 	b.LabelNextInsn("shortA")
-	for i := 0; i < TrampolineStrideDefault; i++ {
+	for range TrampolineStrideDefault {
 		b.NoOp()
 	}
 
@@ -376,7 +376,7 @@ func TestDoubleTrampoline(t *testing.T) {
 	// a trampoline.
 	b.JumpEq64(R1, R2, "longB")
 	b.JumpEq64(R1, R2, "longA")
-	for i := 0; i < TrampolineStrideDefault; i++ {
+	for range TrampolineStrideDefault {
 		b.NoOp()
 	}
 
@@ -385,7 +385,7 @@ func TestDoubleTrampoline(t *testing.T) {
 	b.JumpEq64(R1, R2, "longA")
 	b.JumpEq64(R1, R3, "longC")
 
-	for i := 0; i < TrampolineStrideDefault; i++ {
+	for range TrampolineStrideDefault {
 		b.NoOp()
 	}
 

@@ -19,6 +19,7 @@ package collector
 import (
 	"fmt"
 	net2 "net"
+	"slices"
 	"testing"
 	"time"
 
@@ -2276,7 +2277,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			// Create multiple NetworkSets for performance testing
 			nsMap := make(map[model.NetworkSetKey]*model.NetworkSet)
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				networkSet := &model.NetworkSet{
 					Nets: []net.IPNet{
 						utils.MustParseNet(fmt.Sprintf("10.%d.0.0/16", i)),
@@ -2299,7 +2300,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 
 			// Performance test: multiple namespace lookups should complete quickly
 			start := time.Now()
-			for i := 0; i < 50; i++ {
+			for i := range 50 {
 				namespace := fmt.Sprintf("namespace-%d", i%5)
 				testIPLoop := ipToBytes(fmt.Sprintf("10.%d.1.1", i%10))
 
@@ -3177,10 +3178,8 @@ func (m *mockEgressDomainCache) GetTopLevelDomainsForIP(clientIP string, ip [16]
 func (m *mockEgressDomainCache) IterWatchedDomainsForIP(clientIP string, ip [16]byte, fn func(domain string) bool) {
 	if clientDomains, ok := m.domains[clientIP]; ok {
 		if domains, ok := clientDomains[ip]; ok {
-			for _, domain := range domains {
-				if fn(domain) {
-					break
-				}
+			if slices.ContainsFunc(domains, fn) {
+
 			}
 		}
 	}
@@ -3254,14 +3253,14 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 	}
 	var rids []*calc.RuleID
 	MaxEntries := 10000
-	for i := 0; i < MaxEntries; i++ {
+	for range MaxEntries {
 		rid := defTierPolicy1AllowIngressRuleID
 		rids = append(rids, rid)
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		for i := 0; i < MaxEntries; i++ {
+		for i := range MaxEntries {
 			data := NewData(tuples[i], localEd1, remoteEd1)
 			c.applyNflogStatUpdate(data, rids[i], 0, 1, 2)
 		}

@@ -17,6 +17,7 @@ package fvtests
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
 	"sync"
 	"time"
@@ -76,9 +77,7 @@ func (r *StateRecorder) KVs() map[string]api.Update {
 	defer r.L.Unlock()
 
 	kvsCpy := map[string]api.Update{}
-	for k, v := range r.kvs {
-		kvsCpy[k] = v
-	}
+	maps.Copy(kvsCpy, r.kvs)
 	return kvsCpy
 }
 

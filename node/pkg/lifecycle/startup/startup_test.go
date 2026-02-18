@@ -1213,7 +1213,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create some Nodes using K8s client, Calico client does not support Node creation for KDD.
-		for i := 0; i < numNodes; i++ {
+		for i := range numNodes {
 			n := &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("racenode%02d", i+1),
@@ -1331,7 +1331,7 @@ var _ = Describe("UT for node name determination", func() {
 var _ = Describe("UT for GenerateIPv6ULAPrefix", func() {
 	It("should generate a different address each time", func() {
 		seen := set.New[string]()
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			newAddr, err := GenerateIPv6ULAPrefix()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(seen.Contains(newAddr)).To(BeFalse())

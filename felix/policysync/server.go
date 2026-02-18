@@ -40,12 +40,12 @@ const OutputQueueLen = 100
 // credentials present in the gRPC request.
 type Server struct {
 	proto.UnimplementedPolicySyncServer
-	JoinUpdates chan<- interface{}
+	JoinUpdates chan<- any
 	stats       chan<- *proto.DataplaneStats
 	nextJoinUID func() uint64
 }
 
-func NewServer(joins chan<- interface{}, collector collector.Collector, allocUID func() uint64) *Server {
+func NewServer(joins chan<- any, collector collector.Collector, allocUID func() uint64) *Server {
 	var stats chan<- *proto.DataplaneStats
 	if collector != nil {
 		stats = collector.ReportingChannel()

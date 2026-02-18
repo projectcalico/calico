@@ -637,7 +637,7 @@ func checkWindowsValidIP(ip net.IP, blockSize uint) bool {
 	var ipBinary uint32
 	ipBinary = 0
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		ipBinary = ipBinary << 8
 
 		ipBinary = ipBinary | uint32(ipv4[i])

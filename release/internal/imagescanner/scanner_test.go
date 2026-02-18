@@ -79,7 +79,7 @@ func TestScannerScan(t *testing.T) {
 
 	t.Run("hashrelease scan", func(t *testing.T) {
 		var capturedToken string
-		var capturedPayload map[string]interface{}
+		var capturedPayload map[string]any
 		var capturedQuery url.Values
 		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			capturedToken = r.Header.Get("Authorization")
@@ -131,7 +131,7 @@ func TestScannerScan(t *testing.T) {
 
 	t.Run("release scan", func(t *testing.T) {
 		var capturedToken string
-		var capturedPayload map[string]interface{}
+		var capturedPayload map[string]any
 		var capturedQuery url.Values
 		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			capturedToken = r.Header.Get("Authorization")

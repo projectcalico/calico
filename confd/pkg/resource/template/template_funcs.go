@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"os"
 	"path"
@@ -20,8 +21,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-func newFuncMap() map[string]interface{} {
-	m := make(map[string]interface{})
+func newFuncMap() map[string]any {
+	m := make(map[string]any)
 	m["base"] = path.Base
 	m["split"] = strings.Split
 	m["json"] = UnmarshalJsonObject
@@ -46,16 +47,14 @@ func newFuncMap() map[string]interface{} {
 	return m
 }
 
-func addFuncs(out, in map[string]interface{}) {
-	for name, fn := range in {
-		out[name] = fn
-	}
+func addFuncs(out, in map[string]any) {
+	maps.Copy(out, in)
 }
 
 // addCalicoFuncs adds Calico-specific template functions
-func addCalicoFuncs(funcMap map[string]interface{}) {
+func addCalicoFuncs(funcMap map[string]any) {
 	// Add getBGPConfig function that takes the ipVersion and client as parameters
-	funcMap["getBGPConfig"] = func(ipVersion int, client interface{}) (interface{}, error) {
+	funcMap["getBGPConfig"] = func(ipVersion int, client any) (any, error) {
 		if storeClient, ok := client.(backends.StoreClient); ok {
 			config, err := storeClient.GetBirdBGPConfig(ipVersion)
 			if err != nil {
@@ -546,11 +545,11 @@ func Getenv(key string, v ...string) string {
 
 // CreateMap creates a key-value map of string -> interface{}
 // The i'th is the key and the i+1 is the value
-func CreateMap(values ...interface{}) (map[string]interface{}, error) {
+func CreateMap(values ...any) (map[string]any, error) {
 	if len(values)%2 != 0 {
 		return nil, errors.New("invalid map call")
 	}
-	dict := make(map[string]interface{}, len(values)/2)
+	dict := make(map[string]any, len(values)/2)
 	for i := 0; i < len(values); i += 2 {
 		key, ok := values[i].(string)
 		if !ok {
@@ -561,14 +560,14 @@ func CreateMap(values ...interface{}) (map[string]interface{}, error) {
 	return dict, nil
 }
 
-func UnmarshalJsonObject(data string) (map[string]interface{}, error) {
-	var ret map[string]interface{}
+func UnmarshalJsonObject(data string) (map[string]any, error) {
+	var ret map[string]any
 	err := json.Unmarshal([]byte(data), &ret)
 	return ret, err
 }
 
-func UnmarshalJsonArray(data string) ([]interface{}, error) {
-	var ret []interface{}
+func UnmarshalJsonArray(data string) ([]any, error) {
+	var ret []any
 	err := json.Unmarshal([]byte(data), &ret)
 	return ret, err
 }

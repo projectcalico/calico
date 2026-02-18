@@ -292,7 +292,7 @@ var _ = Describe("UsageReporter with default URL", func() {
 	})
 	It("should have a random component", func() {
 		firstDelay := u.calculateInitialDelay(1000)
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			if u.calculateInitialDelay(1000) != firstDelay {
 				return // Success
 			}
@@ -302,7 +302,7 @@ var _ = Describe("UsageReporter with default URL", func() {
 	It("should have an average close to expected value", func() {
 		var total time.Duration
 		// Give it a high but bounded number of iterations to converge.
-		for i := int64(0); i < 100000; i++ {
+		for i := range int64(100000) {
 			total += u.calculateInitialDelay(60)
 			if i > 100 {
 				average := time.Duration(int64(total) / (i + 1))

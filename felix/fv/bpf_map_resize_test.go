@@ -280,8 +280,8 @@ func getMapSize(felix *infrastructure.Felix, m maps.Map) (int, error) {
 	return int(output["max_entries"].(float64)), nil
 }
 
-func showBpfMap(felix *infrastructure.Felix, m maps.Map) (map[string]interface{}, error) {
-	var data map[string]interface{}
+func showBpfMap(felix *infrastructure.Felix, m maps.Map) (map[string]any, error) {
+	var data map[string]any
 	cmd, err := maps.ShowMapCmd(m)
 	if err != nil {
 		return nil, err

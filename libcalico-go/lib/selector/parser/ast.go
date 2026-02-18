@@ -82,7 +82,7 @@ func (r LabelRestriction) PossibleToSatisfy() bool {
 }
 
 type Visitor interface {
-	Visit(n interface{})
+	Visit(n any)
 }
 
 // PrefixVisitor implements the Visitor interface to allow prefixing of
@@ -91,7 +91,7 @@ type PrefixVisitor struct {
 	Prefix string
 }
 
-func (v PrefixVisitor) Visit(n interface{}) {
+func (v PrefixVisitor) Visit(n any) {
 	log.Debugf("PrefixVisitor visiting node %#v", n)
 	switch np := n.(type) {
 	case *LabelEqValueNode:

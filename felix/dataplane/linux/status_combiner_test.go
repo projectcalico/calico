@@ -28,7 +28,7 @@ var (
 
 var _ = Describe("StatusCombiner", func() {
 	var (
-		fromDataplane  chan interface{}
+		fromDataplane  chan any
 		statusCombiner *endpointStatusCombiner
 	)
 
@@ -42,7 +42,7 @@ var _ = Describe("StatusCombiner", func() {
 	}
 
 	BeforeEach(func() {
-		fromDataplane = make(chan interface{})
+		fromDataplane = make(chan any)
 	})
 
 	Describe("with IPv6 enabled", func() {

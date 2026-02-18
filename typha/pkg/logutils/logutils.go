@@ -89,10 +89,7 @@ func ConfigureLogging(configParams *config.Config) {
 	logLevelSyslog := logutils.SafeParseLogLevel(configParams.LogSeveritySys)
 
 	// Work out the most verbose level that is being logged.
-	mostVerboseLevel := logLevelScreen
-	if logLevelFile > mostVerboseLevel {
-		mostVerboseLevel = logLevelFile
-	}
+	mostVerboseLevel := max(logLevelFile, logLevelScreen)
 	if logLevelSyslog > mostVerboseLevel {
 		mostVerboseLevel = logLevelScreen
 	}

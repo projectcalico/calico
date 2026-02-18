@@ -27,8 +27,8 @@ import (
 // endpoint.
 type Profile struct {
 	unversioned.TypeMetadata
-	Metadata ProfileMetadata `json:"metadata,omitempty"`
-	Spec     ProfileSpec     `json:"spec,omitempty"`
+	Metadata ProfileMetadata `json:"metadata"`
+	Spec     ProfileSpec     `json:"spec"`
 }
 
 func (t Profile) GetResourceMetadata() unversioned.ResourceMetadata {
@@ -84,7 +84,7 @@ func NewProfile() *Profile {
 // enumerations on the client interface.
 type ProfileList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Metadata unversioned.ListMetadata `json:"metadata"`
 	Items    []Profile                `json:"items" validate:"dive,omitempty"`
 }
 

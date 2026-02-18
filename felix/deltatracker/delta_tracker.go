@@ -16,6 +16,7 @@ package deltatracker
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 
 	"github.com/sirupsen/logrus"
@@ -303,12 +304,8 @@ func (c *DataplaneView[K, V]) ReplaceAllIter(iter func(func(k K, v V)) error) er
 		// state broken because we've removed all the keys that we've seen from oldInDPDesired and
 		// oldInDPNotDesired, and updated c.desiredUpdates to match the new KV's from the iterator.
 		// Fix that up by applying the new keys to the old in-DP maps:
-		for k, v := range newInDPDesired {
-			oldInDPDesired[k] = v
-		}
-		for k, v := range newInDPNotDesired {
-			oldInDPNotDesired[k] = v
-		}
+		maps.Copy(oldInDPDesired, newInDPDesired)
+		maps.Copy(oldInDPNotDesired, newInDPNotDesired)
 		return fmt.Errorf("failed to iterate over dataplane state: %w", err)
 	}
 
