@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // rest implements a RESTStorage for API services against etcd
@@ -117,8 +118,7 @@ func (r *REST) List(ctx context.Context, options *metainternalversion.ListOption
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, val rest.ValidateObjectFunc, createOpt *metav1.CreateOptions) (runtime.Object, error) {
 	policy := obj.(*calico.NetworkPolicy)
-	// Is Tier prepended. If not prepend default?
-	tierName, _ := util.GetTierFromPolicyName(policy.Name)
+	tierName := names.TierOrDefault(policy.Spec.Tier)
 	err := r.authorizer.AuthorizeTierOperation(ctx, policy.Name, tierName)
 	if err != nil {
 		return nil, err
@@ -129,8 +129,12 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, val rest.Validate
 
 func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc,
 	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
-	tierName, _ := util.GetTierFromPolicyName(name)
-	err := r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
+	obj, err := r.Store.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, false, err
+	}
+	tierName := names.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
+	err = r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -140,18 +144,26 @@ func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObje
 
 // Get retrieves the item from storage.
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	tierName, _ := util.GetTierFromPolicyName(name)
-	err := r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
+	obj, err := r.Store.Get(ctx, name, options)
+	if err != nil {
+		return nil, err
+	}
+	tierName := names.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
+	err = r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
 	if err != nil {
 		return nil, err
 	}
 
-	return r.Store.Get(ctx, name, options)
+	return obj, nil
 }
 
 func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
-	tierName, _ := util.GetTierFromPolicyName(name)
-	err := r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
+	obj, err := r.Store.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, false, err
+	}
+	tierName := names.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
+	err = r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
 	if err != nil {
 		return nil, false, err
 	}
