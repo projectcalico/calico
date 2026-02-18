@@ -32,8 +32,8 @@ import (
 const MaxMembersPerMessage = 82200
 
 type Processor struct {
-	Updates            <-chan interface{}
-	JoinUpdates        chan interface{}
+	Updates            <-chan any
+	JoinUpdates        chan any
 	endpointsByID      map[types.WorkloadEndpointID]*EndpointInfo
 	policyByID         map[types.PolicyID]*policyInfo
 	profileByID        map[types.ProfileID]*profileInfo
@@ -73,12 +73,12 @@ type LeaveRequest struct {
 	JoinMetadata
 }
 
-func NewProcessor(updates <-chan interface{}) *Processor {
+func NewProcessor(updates <-chan any) *Processor {
 	return &Processor{
 		// Updates from the calculation graph.
 		Updates: updates,
 		// JoinUpdates from the new servers that have started.
-		JoinUpdates:        make(chan interface{}, 10),
+		JoinUpdates:        make(chan any, 10),
 		endpointsByID:      make(map[types.WorkloadEndpointID]*EndpointInfo),
 		policyByID:         make(map[types.PolicyID]*policyInfo),
 		profileByID:        make(map[types.ProfileID]*profileInfo),
@@ -178,7 +178,7 @@ func (p *Processor) handleLeave(leaveReq LeaveRequest) {
 	ei.currentJoinUID = 0
 }
 
-func (p *Processor) handleDataplane(update interface{}) {
+func (p *Processor) handleDataplane(update any) {
 	log.WithFields(log.Fields{"update": update, "type": reflect.TypeOf(update)}).Debug("Dataplane update")
 	switch update := update.(type) {
 	case *proto.InSync:
@@ -760,10 +760,7 @@ func splitMembers(members []string) [][]string {
 	}
 
 	for remains > 0 {
-		numThis := MaxMembersPerMessage
-		if remains < numThis {
-			numThis = remains
-		}
+		numThis := min(remains, MaxMembersPerMessage)
 		end := first + numThis
 		sliceThis := members[first:end]
 		out = append(out, sliceThis)

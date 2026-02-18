@@ -116,7 +116,7 @@ func TestIPAM(t *testing.T) {
 		var allocatedIP string
 		r, err := regexp.Compile(`(10\.65\.[0-9]+\.)([0-9]+)/26`)
 		Expect(err).NotTo(HaveOccurred())
-		for _, line := range strings.Split(out, "\n") {
+		for line := range strings.SplitSeq(out, "\n") {
 			sm := r.FindStringSubmatch(line)
 			if len(sm) > 0 {
 				ordinalBase, err := strconv.Atoi(sm[2])

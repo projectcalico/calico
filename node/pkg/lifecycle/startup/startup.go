@@ -467,7 +467,7 @@ func MonitorIPAddressSubnets() {
 		if updated {
 			// Apply the updated node resource.
 			// we try updating the resource up to 3 times, in case of transient issues.
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				_, err := CreateOrUpdate(ctx, cli, node)
 				if err == nil {
 					log.Info("Updated node IP addresses")
@@ -1372,7 +1372,7 @@ func extractKubeadmCIDRs(kubeadmConfig *v1.ConfigMap) (string, string, error) {
 
 	if len(line) != 0 {
 		// IPv4 and IPv6 CIDRs will be separated by a comma in a dual stack setup.
-		for _, cidr := range strings.Split(line[1], ",") {
+		for cidr := range strings.SplitSeq(line[1], ",") {
 			addr, _, err := net.ParseCIDR(cidr)
 			if err != nil {
 				break

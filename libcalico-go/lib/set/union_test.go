@@ -36,11 +36,10 @@ func TestIterUnion(t *testing.T) {
 		{{1, 2}, {2}, {1, 2, 3}, {2, 3, 4, 5}, {2, 6}},
 		{{1, 2}, {2}, {1, 2, 3}, {2, 3, 4, 5}, {2, 6}, {2, 3}},
 	} {
-		testSets := testSets
 
 		// First sub-test verifies the actual union is correct.
 		t.Run(fmt.Sprint(testSets), func(t *testing.T) {
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				expected := New[int]()
 				var sets []Set[int]
 				for _, i := range testSets {

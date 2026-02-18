@@ -16,6 +16,7 @@ package updateprocessors_test
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"time"
 
@@ -44,7 +45,7 @@ const (
 )
 
 var (
-	numBaseFelixConfigs = reflect.TypeOf(apiv3.FelixConfigurationSpec{}).NumField()
+	numBaseFelixConfigs = reflect.TypeFor[apiv3.FelixConfigurationSpec]().NumField()
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
@@ -72,7 +73,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 	numFelixConfigs := numBaseFelixConfigs
 	numClusterConfigs := 5
 	numNodeClusterConfigs := 4
-	felixMappedNames := map[string]interface{}{
+	felixMappedNames := map[string]any{
 		"RouteRefreshInterval":               nil,
 		"IptablesRefreshInterval":            nil,
 		"IpsetsRefreshInterval":              nil,
@@ -225,7 +226,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res.Spec.NftablesMangleAllowAction = "Accept"
 		res.Spec.BPFMaglevMaxEndpointsPerService = &intype
 		res.Spec.BPFMaglevMaxServices = &intype
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"RouteRefreshInterval":               "12.345",
 			"IptablesLockProbeIntervalMillis":    "54.321",
 			"EndpointReportingDelaySecs":         "0",
@@ -273,7 +274,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 				Timeout: metav1.Duration{Duration: 25 * time.Second},
 			},
 		}
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"HealthTimeoutOverrides": "Foo=20s,Bar=25s",
 		}
 		kvps, err := cc.Process(&model.KVPair{
@@ -295,7 +296,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res := apiv3.NewClusterInformation()
 		res.Spec.ClusterGUID = "abcedfg"
 		res.Spec.ClusterType = "Mesos,K8s"
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"ClusterGUID": "abcedfg",
 			"ClusterType": "Mesos,K8s",
 		}
@@ -318,7 +319,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res := apiv3.NewClusterInformation()
 		ready := true
 		res.Spec.DatastoreReady = &ready
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"ready-flag": true,
 		}
 		kvps, err := cc.Process(&model.KVPair{
@@ -340,7 +341,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res := apiv3.NewClusterInformation()
 		ready := false
 		res.Spec.DatastoreReady = &ready
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"ready-flag": false,
 		}
 		kvps, err := cc.Process(&model.KVPair{
@@ -397,15 +398,13 @@ var _ = Describe("Test the generic configuration update processor and the concre
 // to be nil in the KVPair.
 // You can use expectedValues to verify certain fields were included in the response even
 // if the values were nil.
-func checkExpectedConfigs(kvps []*model.KVPair, dataType int, expectedNum int, expectedValues map[string]interface{}) {
+func checkExpectedConfigs(kvps []*model.KVPair, dataType int, expectedNum int, expectedValues map[string]any) {
 	// Copy/convert input data.  We keep track of:
 	// - all field names, so that we can check for duplicates
 	// - extra fields that we have not yet seen
 	// - expected field values that we have not yet validated
-	ev := make(map[string]interface{}, len(expectedValues))
-	for k, v := range expectedValues {
-		ev[k] = v
-	}
+	ev := make(map[string]any, len(expectedValues))
+	maps.Copy(ev, expectedValues)
 	allNames := map[string]struct{}{}
 
 	By(" - checking the expected number of results")

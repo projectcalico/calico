@@ -29,8 +29,8 @@ func NewBGPConfigClient(r rest.Interface, group BackingAPIGroup) K8sResourceClie
 	return &customResourceClient{
 		restClient:      r,
 		resource:        BGPConfigResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.BGPConfiguration{}),
-		k8sListType:     reflect.TypeOf(apiv3.BGPConfigurationList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.BGPConfiguration](),
+		k8sListType:     reflect.TypeFor[apiv3.BGPConfigurationList](),
 		kind:            apiv3.KindBGPConfiguration,
 		apiGroup:        group,
 	}

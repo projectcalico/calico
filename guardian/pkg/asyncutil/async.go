@@ -243,9 +243,7 @@ func (executor *commandExecutor[C, R]) execBacklog(shutdownCtx context.Context) 
 }
 
 func (executor *commandExecutor[C, R]) executeCommand(ctx context.Context, req Command[C, R]) {
-	executor.inflightCmds.Add(1)
-	go func() {
-		defer executor.inflightCmds.Done()
+	executor.inflightCmds.Go(func() {
 		result, err := executor.command(ctx, req.Get())
 		if err != nil {
 			logrus.WithError(err).Debug("Error executing command")
@@ -260,7 +258,7 @@ func (executor *commandExecutor[C, R]) executeCommand(ctx context.Context, req C
 		}
 
 		req.Return(result)
-	}()
+	})
 }
 
 func (executor *commandExecutor[C, R]) Send(params C) <-chan Result[R] {

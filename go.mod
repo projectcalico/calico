@@ -89,7 +89,6 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.24
 	go.etcd.io/etcd/client/v3 v3.6.5
 	go.yaml.in/yaml/v3 v3.0.4
-	golang.org/x/crypto v0.47.0
 	golang.org/x/mod v0.32.0
 	golang.org/x/net v0.49.0
 	golang.org/x/oauth2 v0.34.0
@@ -122,6 +121,8 @@ require (
 	sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
 	sigs.k8s.io/yaml v1.6.0
 )
+
+require golang.org/x/crypto v0.47.0 // indirect
 
 require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect

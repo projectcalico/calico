@@ -44,16 +44,16 @@ func NewIPAMBlockClient(r rest.Interface, group BackingAPIGroup) K8sResourceClie
 	rc := customResourceClient{
 		restClient:      r,
 		resource:        IPAMBlockResourceName,
-		k8sResourceType: reflect.TypeOf(libapiv3.IPAMBlock{}),
-		k8sListType:     reflect.TypeOf(libapiv3.IPAMBlockList{}),
+		k8sResourceType: reflect.TypeFor[libapiv3.IPAMBlock](),
+		k8sListType:     reflect.TypeFor[libapiv3.IPAMBlockList](),
 		kind:            libapiv3.KindIPAMBlock,
 		apiGroup:        group,
 	}
 
 	if group == BackingAPIGroupV3 {
 		// If this is a v3 resource, then we need to use the v3 API types, as they differ.
-		rc.k8sResourceType = reflect.TypeOf(v3.IPAMBlock{})
-		rc.k8sListType = reflect.TypeOf(v3.IPAMBlockList{})
+		rc.k8sResourceType = reflect.TypeFor[v3.IPAMBlock]()
+		rc.k8sListType = reflect.TypeFor[v3.IPAMBlockList]()
 	}
 
 	return &ipamBlockClient{

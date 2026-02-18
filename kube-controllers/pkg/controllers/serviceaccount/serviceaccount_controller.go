@@ -55,9 +55,9 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 	// Function returns map of profile_name:object stored by policy controller
 	// in the Calico datastore. Identifies controller written objects by
 	// their naming convention.
-	listFunc := func() (map[string]interface{}, error) {
+	listFunc := func() (map[string]any, error) {
 		log.Debugf("Listing profiles from Calico datastore: to check for ServiceAccount")
-		filteredProfiles := make(map[string]interface{})
+		filteredProfiles := make(map[string]any)
 
 		// Get all profile objects from Calico datastore.
 		profileList, err := c.Profiles().List(ctx, options.ListOptions{})
@@ -83,7 +83,7 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 	// Create a Cache to store Profiles in.
 	cacheArgs := rcache.ResourceCacheArgs{
 		ListFunc:    listFunc,
-		ObjectType:  reflect.TypeOf(api.Profile{}),
+		ObjectType:  reflect.TypeFor[api.Profile](),
 		LogTypeDesc: "ServiceAccount",
 	}
 	ccache := rcache.NewResourceCache(cacheArgs)
@@ -98,7 +98,7 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 		ObjectType:    &v1.ServiceAccount{},
 		ResyncPeriod:  0,
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
+			AddFunc: func(obj any) {
 				log.Debugf("Got ADD event for ServiceAccount: %#v", obj)
 				profile, err := serviceAccountConverter.Convert(obj)
 				if err != nil {
@@ -110,7 +110,7 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 				k := serviceAccountConverter.GetKey(profile)
 				ccache.Set(k, profile)
 			},
-			UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			UpdateFunc: func(oldObj any, newObj any) {
 				log.Debugf("Got UPDATE event for ServiceAccount")
 				log.Debugf("Old object: \n%#v\n", oldObj)
 				log.Debugf("New object: \n%#v\n", newObj)
@@ -126,7 +126,7 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 				k := serviceAccountConverter.GetKey(profile)
 				ccache.Set(k, profile)
 			},
-			DeleteFunc: func(obj interface{}) {
+			DeleteFunc: func(obj any) {
 				// Convert the ServiceAccount into a Profile.
 				log.Debugf("Got DELETE event for ServiceAccount: %#v", obj)
 				profile, err := serviceAccountConverter.Convert(obj)

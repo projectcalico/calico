@@ -556,7 +556,7 @@ var _ = Describe("ifacemonitor", func() {
 		}
 
 		// Repeat for 3 different interfaces (to test regexp of interface excludes)
-		for index := 0; index < 3; index++ {
+		for index := range 3 {
 			interfaceName := fmt.Sprintf("kube-ipvs%d", index)
 			netlinkUpdates(interfaceName)
 		}

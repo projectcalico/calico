@@ -17,6 +17,7 @@ package calc
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"maps"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
@@ -169,9 +170,7 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 	if in.Metadata != nil {
 		if in.Metadata.Annotations != nil {
 			out.Metadata = &proto.RuleMetadata{Annotations: make(map[string]string)}
-			for k, v := range in.Metadata.Annotations {
-				out.Metadata.Annotations[k] = v
-			}
+			maps.Copy(out.Metadata.Annotations, in.Metadata.Annotations)
 		}
 	}
 

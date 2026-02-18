@@ -43,7 +43,7 @@ var flows []*types.Flow
 
 func init() {
 	now := time.Now()
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		randomNumber := rand.IntN(1000)
 		flowStartTime := now.Add(time.Duration(randomNumber) * time.Millisecond)
 		flows = append(flows,

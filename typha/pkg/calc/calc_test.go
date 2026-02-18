@@ -27,7 +27,7 @@ import (
 
 type testSink struct {
 	countUpdates int
-	values       []interface{}
+	values       []any
 }
 
 func (s *testSink) OnStatusUpdated(status api.SyncStatus) {}

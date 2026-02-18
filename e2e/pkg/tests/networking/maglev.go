@@ -562,7 +562,7 @@ func (m *MaglevTests) sendRequestsAndGatherStats(extNode *externalnode.Client, u
 	uniqueBackends := make(map[string]int)
 	totalRequests := m.maglevConfig.NumberOfRequests
 
-	for i := 0; i < totalRequests; i++ {
+	for i := range totalRequests {
 		// Use external node to run rapidclient with netexec endpoint to get hostname
 		// Use configured source port for consistent testing
 		var cmd string

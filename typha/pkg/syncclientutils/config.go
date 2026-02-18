@@ -52,7 +52,7 @@ type TyphaConfig struct {
 // <prefix>TYPHA<fieldname uppercase>,  e.g.  CONFD_TYPHAADDR
 func ReadTyphaConfig(supportedPrefixes []string) TyphaConfig {
 	typhaConfig := &TyphaConfig{}
-	kind := reflect.TypeOf(*typhaConfig)
+	kind := reflect.TypeFor[TyphaConfig]()
 	for ii := 0; ii < kind.NumField(); ii++ {
 		field := kind.Field(ii)
 		nameUpper := strings.ToUpper(field.Name)

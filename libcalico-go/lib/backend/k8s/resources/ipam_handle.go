@@ -41,16 +41,16 @@ func NewIPAMHandleClient(r rest.Interface, group BackingAPIGroup) K8sResourceCli
 	rc := customResourceClient{
 		restClient:      r,
 		resource:        IPAMHandleResourceName,
-		k8sResourceType: reflect.TypeOf(libapiv3.IPAMHandle{}),
-		k8sListType:     reflect.TypeOf(libapiv3.IPAMHandleList{}),
+		k8sResourceType: reflect.TypeFor[libapiv3.IPAMHandle](),
+		k8sListType:     reflect.TypeFor[libapiv3.IPAMHandleList](),
 		kind:            libapiv3.KindIPAMHandle,
 		apiGroup:        group,
 	}
 
 	if group == BackingAPIGroupV3 {
 		// If this is a v3 resource, then we need to use the v3 API types, as they differ.
-		rc.k8sResourceType = reflect.TypeOf(v3.IPAMHandle{})
-		rc.k8sListType = reflect.TypeOf(v3.IPAMHandleList{})
+		rc.k8sResourceType = reflect.TypeFor[v3.IPAMHandle]()
+		rc.k8sListType = reflect.TypeFor[v3.IPAMHandleList]()
 	}
 
 	return &ipamHandleClient{

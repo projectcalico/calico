@@ -34,8 +34,8 @@ func NewIPPoolClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient 
 	return &customResourceClient{
 		restClient:       r,
 		resource:         IPPoolResourceName,
-		k8sResourceType:  reflect.TypeOf(apiv3.IPPool{}),
-		k8sListType:      reflect.TypeOf(apiv3.IPPoolList{}),
+		k8sResourceType:  reflect.TypeFor[apiv3.IPPool](),
+		k8sListType:      reflect.TypeFor[apiv3.IPPoolList](),
 		kind:             apiv3.KindIPPool,
 		versionconverter: IPPoolv1v3Converter{},
 		apiGroup:         group,

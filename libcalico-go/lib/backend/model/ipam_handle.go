@@ -26,7 +26,7 @@ import (
 
 var (
 	matchHandle = regexp.MustCompile("^/?calico/ipam/v2/handle/([^/]+)$")
-	typeHandle  = reflect.TypeOf(IPAMHandle{})
+	typeHandle  = reflect.TypeFor[IPAMHandle]()
 )
 
 type IPAMHandleKey struct {

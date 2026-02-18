@@ -245,7 +245,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		Expect(err).NotTo(HaveOccurred())
 
 		// (s)knp3.1->sknp3.9 egress: (N2-1)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			sknp := api.NewStagedKubernetesNetworkPolicy()
 			sknp.Name = fmt.Sprintf("knp3-%d", i+1)
 			sknp.Namespace = "default"

@@ -19,12 +19,12 @@ package inactive
 type InactiveDataplane struct {
 }
 
-func (i *InactiveDataplane) SendMessage(msg interface{}) error {
+func (i *InactiveDataplane) SendMessage(msg any) error {
 	// Do nothing.
 	return nil
 }
 
-func (i *InactiveDataplane) RecvMessage() (msg interface{}, err error) {
+func (i *InactiveDataplane) RecvMessage() (msg any, err error) {
 	// Since this dataplane does nothing, we have no messages communicate.
 	msgChan := make(chan struct{})
 	return <-msgChan, nil

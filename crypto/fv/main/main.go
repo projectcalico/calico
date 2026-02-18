@@ -28,5 +28,5 @@ func main() {
 type fipsHandler struct{}
 
 func (h fipsHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	w.Write([]byte(fmt.Sprintf("%t", tls.BuiltWithBoringCrypto)))
+	w.Write(fmt.Appendf(nil, "%t", tls.BuiltWithBoringCrypto))
 }

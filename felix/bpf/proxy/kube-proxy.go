@@ -181,9 +181,7 @@ func (kp *KubeProxy) start() error {
 		return err
 	}
 
-	kp.wg.Add(1)
-	go func() {
-		defer kp.wg.Done()
+	kp.wg.Go(func() {
 		for {
 			select {
 			case hostIPs, ok := <-kp.hostIPUpdates:
@@ -200,7 +198,7 @@ func (kp *KubeProxy) start() error {
 				return
 			}
 		}
-	}()
+	})
 
 	return nil
 }

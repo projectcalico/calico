@@ -371,11 +371,12 @@ Description:
 	// unable to find image message.
 	runCmd := exec.Command(cmd[0], cmd[1:]...)
 	if output, err := runCmd.CombinedOutput(); err != nil {
-		errStr := fmt.Sprintf("Error executing command: %v\n", err)
-		for _, line := range strings.Split(string(output), "/n") {
-			errStr += fmt.Sprintf(" | %s/n", line)
+		var errStr strings.Builder
+		errStr.WriteString(fmt.Sprintf("Error executing command: %v\n", err))
+		for line := range strings.SplitSeq(string(output), "/n") {
+			errStr.WriteString(fmt.Sprintf(" | %s/n", line))
 		}
-		return errors.New(errStr)
+		return errors.New(errStr.String())
 	}
 
 	// Create the command to follow the docker logs for the calico/node
@@ -493,10 +494,10 @@ func validateIpAutodetectionMethod(method string, version int) error {
 		// Auto-detection method is "first-found", no additional validation
 		// required.
 		return nil
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
+	} else if after, ok := strings.CutPrefix(method, AUTODETECTION_METHOD_CAN_REACH); ok {
 		// Auto-detection method is "can-reach", validate that the address
 		// resolves to at least one IP address of the required version.
-		addrStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
+		addrStr := after
 		ips, err := gonet.LookupIP(addrStr)
 		if err != nil {
 			return fmt.Errorf("error executing command: cannot resolve address specified for IP autodetection: %s", addrStr)
@@ -509,27 +510,27 @@ func validateIpAutodetectionMethod(method string, version int) error {
 			}
 		}
 		return fmt.Errorf("error executing command: address for IP autodetection does not resolve to an IPv%d address: %s", version, addrStr)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_INTERFACE) {
+	} else if after, ok := strings.CutPrefix(method, AUTODETECTION_METHOD_INTERFACE); ok {
 		// Auto-detection method is "interface", validate that the interface
 		// regex is a valid golang regex.
-		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_INTERFACE)
+		ifStr := after
 
 		// Regexes are provided in a string separated by ","
-		ifRegexes := strings.Split(ifStr, ",")
-		for _, ifRegex := range ifRegexes {
+		ifRegexes := strings.SplitSeq(ifStr, ",")
+		for ifRegex := range ifRegexes {
 			if _, err := regexp.Compile(ifStr); err != nil {
 				return fmt.Errorf("error executing command: invalid interface regex specified for IP autodetection: %s", ifRegex)
 			}
 		}
 		return nil
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE) {
+	} else if after, ok := strings.CutPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE); ok {
 		// Auto-detection method is "skip-interface", validate that the
 		// interface regexes used are valid golang regexes.
-		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE)
+		ifStr := after
 
 		// Regexes are provided in a string separated by ","
-		ifRegexes := strings.Split(ifStr, ",")
-		for _, ifRegex := range ifRegexes {
+		ifRegexes := strings.SplitSeq(ifStr, ",")
+		for ifRegex := range ifRegexes {
 			if _, err := regexp.Compile(ifRegex); err != nil {
 				return fmt.Errorf("error executing command: invalid interface regex specified for IP autodetection: %s", ifRegex)
 			}

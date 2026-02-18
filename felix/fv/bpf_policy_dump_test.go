@@ -51,7 +51,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars["FELIX_BPFPolicyDebugEnabled"] = "true"
 		tc, calicoClient = infrastructure.StartNNodeTopology(1, opts, infra)
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			wIP := fmt.Sprintf("10.65.0.%d", i+2)
 			w[i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", "tcp")
 			w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
@@ -120,7 +120,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		Expect(outStr).To(ContainSubstring("IPSets src_ip_set_ids:"))
 		re := regexp.MustCompile("0x[0-9a-fA-F]+")
 		ipSetFound := false
-		for _, tmp := range strings.Split(outStr, "\n") {
+		for tmp := range strings.SplitSeq(outStr, "\n") {
 			if strings.Contains(tmp, "IPSets src_ip_set_ids:") {
 				log.WithField("line", tmp).Info("Examining line for IPSet ID")
 				ipsetStr := re.FindAllString(tmp, -1)
@@ -164,7 +164,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		outStr = string(out)
 		Expect(outStr).To(ContainSubstring("Start of rule policy-tcp action:\"deny\""))
 		ipSetFound = false
-		for _, tmp := range strings.Split(outStr, "\n") {
+		for tmp := range strings.SplitSeq(outStr, "\n") {
 			if strings.Contains(tmp, "IPSets not_dst_ip_set_ids:") {
 				log.WithField("line", tmp).Info("Examining line for IPSet ID")
 				ipsetStr := re.FindAllString(tmp, -1)

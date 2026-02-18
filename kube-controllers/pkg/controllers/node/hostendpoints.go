@@ -19,6 +19,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"net"
 	"reflect"
 	"regexp"
@@ -114,8 +115,8 @@ func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interfa
 		client:         client,
 		nodeCache:      make(map[string]*libapi.Node),
 		nodeUpdates:    make(chan string, utils.BatchUpdateSize),
-		syncerUpdates:  make(chan interface{}, utils.BatchUpdateSize),
-		syncChan:       make(chan interface{}, 1),
+		syncerUpdates:  make(chan any, utils.BatchUpdateSize),
+		syncChan:       make(chan any, 1),
 		autoHEPTracker: hostEndpointTracker{hostEndpointsByNode: make(map[string]map[string]*api.HostEndpoint)},
 	}
 }
@@ -126,8 +127,8 @@ type autoHostEndpointController struct {
 	syncStatus     bapi.SyncStatus
 	nodeCache      map[string]*libapi.Node
 	nodeUpdates    chan string
-	syncerUpdates  chan interface{}
-	syncChan       chan interface{}
+	syncerUpdates  chan any
+	syncChan       chan any
 	autoHEPTracker hostEndpointTracker
 }
 
@@ -176,7 +177,7 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 	}
 }
 
-func (c *autoHostEndpointController) handleUpdate(update interface{}) {
+func (c *autoHostEndpointController) handleUpdate(update any) {
 	switch update := update.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = update
@@ -570,9 +571,7 @@ func (c *autoHostEndpointController) getExpectedIPs(node *libapi.Node) []string 
 // generateAutoHostEndpoint returns a HostEndpoint created based on the specific parameters
 func (c *autoHostEndpointController) generateAutoHostEndpoint(node *libapi.Node, templateLabels map[string]string, hepName string, expectedIPs []string, interfaceName string) *api.HostEndpoint {
 	hepLabels := make(map[string]string)
-	for k, v := range node.Labels {
-		hepLabels[k] = v
-	}
+	maps.Copy(hepLabels, node.Labels)
 	for k, v := range templateLabels {
 		if _, ok := hepLabels[k]; ok {
 			f := logrus.Fields{"key": k, "nodeVal": hepLabels[k], "userVal": v}
