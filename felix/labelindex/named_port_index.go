@@ -288,7 +288,7 @@ func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortInd
 
 func (idx *SelectorAndNamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.Register(model.ResourceKey{}, idx.OnUpdate)
-	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, idx.OnUpdate)
+	allUpdDispatcher.RegisterForWorkloadEndpointUpdates(idx.OnUpdate)
 	allUpdDispatcher.Register(model.HostEndpointKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.NetworkSetKey{}, idx.OnUpdate)
 }

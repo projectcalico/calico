@@ -276,20 +276,20 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 				if len(parts) != 9 || parts[7] != "endpoint" {
 					return nil
 				}
-				return WorkloadEndpointKey{
-					Hostname:       unescapeName(hostname),
-					OrchestratorID: unescapeName(parts[5]),
-					WorkloadID:     unescapeName(parts[6]),
-					EndpointID:     unescapeName(parts[8]),
-				}
+				return MakeWorkloadEndpointKey(
+					unescapeName(hostname),
+					unescapeName(parts[5]),
+					unescapeName(parts[6]),
+					unescapeName(parts[8]),
+				)
 			case "endpoint":
 				if len(parts) != 6 {
 					return nil
 				}
-				return HostEndpointKey{
-					Hostname:   unescapeName(hostname),
-					EndpointID: unescapeName(parts[5]),
-				}
+				return MakeHostEndpointKey(
+					unescapeName(hostname),
+					unescapeName(parts[5]),
+				)
 			case "config":
 				return HostConfigKey{
 					Hostname: unescapeName(hostname),
@@ -495,18 +495,18 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 func OldKeyFromDefaultPath(path string) Key {
 	if m := matchWorkloadEndpoint.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a workload endpoint: %v", path)
-		return WorkloadEndpointKey{
-			Hostname:       unescapeName(m[1]),
-			OrchestratorID: unescapeName(m[2]),
-			WorkloadID:     unescapeName(m[3]),
-			EndpointID:     unescapeName(m[4]),
-		}
+		return MakeWorkloadEndpointKey(
+			unescapeName(m[1]),
+			unescapeName(m[2]),
+			unescapeName(m[3]),
+			unescapeName(m[4]),
+		)
 	} else if m := matchHostEndpoint.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a host endpoint: %v", path)
-		return HostEndpointKey{
-			Hostname:   unescapeName(m[1]),
-			EndpointID: unescapeName(m[2]),
-		}
+		return MakeHostEndpointKey(
+			unescapeName(m[1]),
+			unescapeName(m[2]),
+		)
 	} else if m := matchNetworkSet.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a network set: %v", path)
 		return NetworkSetKey{

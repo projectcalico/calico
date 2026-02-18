@@ -47,12 +47,7 @@ var _ = Describe("WorkloadEndpoint Source IP Spoofing validation", func() {
 		// immutable test data
 		workloadUpdateWithSpoofRequest = api.Update{
 			KVPair: model.KVPair{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "localhostname",
-					OrchestratorID: "k8s",
-					WorkloadID:     "test-ns/test-pod",
-					EndpointID:     "eth0",
-				},
+				Key: model.MakeWorkloadEndpointKey("localhostname", "k8s", "test-ns/test-pod", "eth0"),
 				Value: &model.WorkloadEndpoint{
 					State:                      "active",
 					Name:                       "cali1234",
