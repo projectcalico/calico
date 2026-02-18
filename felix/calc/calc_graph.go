@@ -57,6 +57,7 @@ type rulesUpdateCallbacks interface {
 type endpointCallbacks interface {
 	OnEndpointTierUpdate(endpointKey model.EndpointKey,
 		endpoint model.Endpoint,
+		computedData []EndpointComputedData,
 		peerData *EndpointBGPPeer,
 		filteredTiers []TierInfo)
 }
@@ -376,6 +377,10 @@ func NewCalculationGraph(
 	// And hook its output to the callbacks.
 	polResolver.RegisterCallback(callbacks)
 	cg.policyResolver = polResolver
+
+	if conf.IsIstioAmbientModeEnabled() {
+		_ = NewIstioCalculator(activeRulesCalc, ruleScanner, callbacks, ipsetMemberIndex, polResolver.OnEndpointComputedDataUpdate)
+	}
 
 	// Create and hook up the active BGP peer calculator.
 	activeBGPPeerCalc := NewActiveBGPPeerCalculator(hostname)

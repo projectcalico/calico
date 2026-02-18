@@ -72,20 +72,22 @@ func createPolicyResolver() (*PolicyResolver, *policyResolverRecorder) {
 }
 
 type policyResolverUpdate struct {
-	Key      model.Key
-	Endpoint any
-	Tiers    []TierInfo
+	Key          model.Key
+	Endpoint     any
+	Tiers        []TierInfo
+	ComputedData []EndpointComputedData
 }
 
 type policyResolverRecorder struct {
 	updates []policyResolverUpdate
 }
 
-func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo) {
+func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, computedData []EndpointComputedData, peerData *EndpointBGPPeer, filteredTiers []TierInfo) {
 	p.updates = append(p.updates, policyResolverUpdate{
-		Key:      endpointKey,
-		Endpoint: endpoint,
-		Tiers:    filteredTiers,
+		Key:          endpointKey,
+		Endpoint:     endpoint,
+		ComputedData: computedData,
+		Tiers:        filteredTiers,
 	})
 }
 
