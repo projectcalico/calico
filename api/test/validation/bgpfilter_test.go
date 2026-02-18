@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,9 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-func int32Ptr(i int32) *int32 { return &i }
 
 func TestBGPFilter_V4_Validation(t *testing.T) {
 	tests := []struct {
@@ -61,7 +60,7 @@ func TestBGPFilter_V4_Validation(t *testing.T) {
 				Spec: v3.BGPFilterSpec{
 					ExportV4: []v3.BGPFilterRuleV4{
 						{
-							PrefixLength: &v3.BGPFilterPrefixLengthV4{Min: int32Ptr(24)},
+							PrefixLength: &v3.BGPFilterPrefixLengthV4{Min: ptr.To[int32](24)},
 							Action:       v3.Accept,
 						},
 					},
@@ -130,7 +129,7 @@ func TestBGPFilter_V6_Validation(t *testing.T) {
 				Spec: v3.BGPFilterSpec{
 					ExportV6: []v3.BGPFilterRuleV6{
 						{
-							PrefixLength: &v3.BGPFilterPrefixLengthV6{Min: int32Ptr(64)},
+							PrefixLength: &v3.BGPFilterPrefixLengthV6{Min: ptr.To[int32](64)},
 							Action:       v3.Accept,
 						},
 					},

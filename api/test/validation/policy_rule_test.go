@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,15 +21,9 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-func intPtr(i int) *int { return &i }
-
-func protocolPtr(s string) *numorstring.Protocol {
-	p := numorstring.ProtocolFromString(s)
-	return &p
-}
 
 func TestRule_Validation(t *testing.T) {
 	tests := []struct {
@@ -45,7 +39,7 @@ func TestRule_Validation(t *testing.T) {
 					Ingress: []v3.Rule{
 						{
 							Action:   v3.Allow,
-							Protocol: protocolPtr("UDP"),
+							Protocol: ptr.To(numorstring.ProtocolFromString("UDP")),
 							HTTP:     &v3.HTTPMatch{Methods: []string{"GET"}},
 						},
 					},
@@ -76,7 +70,7 @@ func TestRule_Validation(t *testing.T) {
 					Ingress: []v3.Rule{
 						{
 							Action:   v3.Allow,
-							Protocol: protocolPtr("TCP"),
+							Protocol: ptr.To(numorstring.ProtocolFromString("TCP")),
 							Destination: v3.EntityRule{
 								Services: &v3.ServiceMatch{Name: "my-svc", Namespace: "default"},
 								Ports:    []numorstring.Port{numorstring.SinglePort(80)},
@@ -95,7 +89,7 @@ func TestRule_Validation(t *testing.T) {
 					Ingress: []v3.Rule{
 						{
 							Action:   v3.Allow,
-							Protocol: protocolPtr("TCP"),
+							Protocol: ptr.To(numorstring.ProtocolFromString("TCP")),
 							HTTP:     &v3.HTTPMatch{Methods: []string{"GET"}},
 						},
 					},
@@ -129,8 +123,8 @@ func TestICMPFields_Validation(t *testing.T) {
 					Ingress: []v3.Rule{
 						{
 							Action:   v3.Allow,
-							Protocol: protocolPtr("ICMP"),
-							ICMP:     &v3.ICMPFields{Code: intPtr(0)},
+							Protocol: ptr.To(numorstring.ProtocolFromString("ICMP")),
+							ICMP:     &v3.ICMPFields{Code: ptr.To(0)},
 						},
 					},
 				},
@@ -145,8 +139,8 @@ func TestICMPFields_Validation(t *testing.T) {
 					Ingress: []v3.Rule{
 						{
 							Action:   v3.Allow,
-							Protocol: protocolPtr("ICMP"),
-							ICMP:     &v3.ICMPFields{Type: intPtr(8), Code: intPtr(0)},
+							Protocol: ptr.To(numorstring.ProtocolFromString("ICMP")),
+							ICMP:     &v3.ICMPFields{Type: ptr.To(8), Code: ptr.To(0)},
 						},
 					},
 				},
