@@ -150,12 +150,15 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 	addrs[i.V6Addr] = struct{}{}
 
 	for _, a := range i.Addresses {
-		addrs[a] = struct{}{}
+		// Skip nil address to prevent panic
+		if a != nil {
+			addrs[a] = struct{}{}
+		}
 	}
 
 	// Clean up empty (uninitialized) addresses
 	for a := range addrs {
-		if a == emptyV4Addr || a == emptyV6Addr {
+		if a == nil || a == emptyV4Addr || a == emptyV6Addr {
 			delete(addrs, a)
 		}
 	}
@@ -163,11 +166,14 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 	cidrs := make([]ip.CIDR, len(addrs))
 	idx := 0
 	for a := range addrs {
-		cidrs[idx] = a.AsCIDR()
-		idx++
+		// Addtional safety check before calling AsCIDR
+		if a != nil {
+			cidrs[idx] = a.AsCIDR()
+			idx++
+		}
 	}
 
-	return cidrs
+	return cidrs[:idx]
 }
 
 func NewL3RouteResolver(hostname string, callbacks routeCallbacks, useNodeResourceUpdates bool, routeSource string) *L3RouteResolver {
@@ -428,7 +434,13 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 			for _, a := range node.Spec.Addresses {
 				parsed, _, err := cnet.ParseCIDROrIP(a.Address)
 				if err == nil && parsed != nil {
-					nodeInfo.Addresses = append(nodeInfo.Addresses, ip.FromCalicoIP(*parsed))
+					addr := ip.FromCalicoIP(*parsed)
+					// Add nil check
+					if addr != nil {
+						nodeInfo.Addresses = append(nodeInfo.Addresses, addr)
+					} else {
+						logrus.WithField("addr", a.Address).Warn("FromCalicoIP parsed address is nil")
+					}
 				} else {
 					logrus.WithError(err).WithField("addr", a.Address).Warn("not an IP")
 				}
