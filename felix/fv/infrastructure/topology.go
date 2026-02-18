@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -463,7 +463,7 @@ func StartNNodeTopology(
 	}
 
 	wg.Wait()
-	if ginkgo.CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentSpecReport().Failed() {
 		// If one of our parallel start-up goroutines fails, it will eventually
 		// fail the test but Ginkgo has no automatic way to abort the main goroutine.
 		ginkgo.Fail("StartNNodeTopology: failure on background goroutine.")
