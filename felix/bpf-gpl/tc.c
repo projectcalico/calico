@@ -88,7 +88,7 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 				ctx->state->dport = frag_ct_val->dport;
 				CALI_DEBUG("IP FRAG: hit ports %d -> %d", ctx->state->sport, ctx->state->dport);
 				ctx->state->fwd.mark = frag_ct_val->marks;
-				if (ip_is_last_frag(ip_hdr(ctx))) {
+				if (!CALI_F_FROM_HEP && ip_is_last_frag(ip_hdr(ctx))) {
 					frags4_remove_ct(ctx);
 				}
 				ctx->state->flags |= CALI_ST_NO_L4_NAT;
@@ -1321,7 +1321,7 @@ allow:
 					debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
 			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 			/* Enforce FIB since we want to redirect */
-			fwd_fib_set(&ctx->state->fwd, false);
+			fwd_fib_set(&ctx->state->fwd, true);
 		} else if (!r || cali_rt_flags_remote_workload(r->flags)) {
 			/* If there is no route, treat it as a remote NP BE */
 			if (CALI_F_LO || CALI_F_MAIN) {
@@ -1332,7 +1332,7 @@ allow:
 			}
 			ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
 			/* Enforce FIB since we want to redirect */
-			fwd_fib_set(&ctx->state->fwd, false);
+			fwd_fib_set(&ctx->state->fwd, true);
 		}
 	}
 
