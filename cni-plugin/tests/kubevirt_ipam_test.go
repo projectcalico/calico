@@ -13,8 +13,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -207,9 +207,9 @@ func getDualStackNetconf(cniVersion string) string {
 }
 
 // updateIPAMKubeVirtIPPersistence updates the KubeVirtVMAddressPersistence setting in IPAMConfig
-func updateIPAMKubeVirtIPPersistence(calicoClient client.Interface, persistence *libapiv3.VMAddressPersistence) {
+func updateIPAMKubeVirtIPPersistence(calicoClient client.Interface, persistence *apiv3.VMAddressPersistence) {
 	ctx := context.Background()
-	ipamConfig, err := calicoClient.IPAMConfig().Get(ctx, "default", options.GetOptions{})
+	ipamConfig, err := calicoClient.IPAMConfiguration().Get(ctx, "default", options.GetOptions{})
 
 	if err != nil {
 		// Check if error is specifically because the resource doesn't exist
@@ -220,25 +220,25 @@ func updateIPAMKubeVirtIPPersistence(calicoClient client.Interface, persistence 
 
 		// IPAMConfig doesn't exist, create it
 		fmt.Printf("[TEST] Creating IPAMConfig with KubeVirtVMAddressPersistence = %v\n", persistence)
-		ipamConfig = &libapiv3.IPAMConfig{
+		newConfig := &apiv3.IPAMConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 			},
-			Spec: libapiv3.IPAMConfigSpec{
+			Spec: apiv3.IPAMConfigurationSpec{
 				StrictAffinity:               false,
 				AutoAllocateBlocks:           true,
 				MaxBlocksPerHost:             0,
 				KubeVirtVMAddressPersistence: persistence,
 			},
 		}
-		_, err = calicoClient.IPAMConfig().Create(ctx, ipamConfig, options.SetOptions{})
+		_, err = calicoClient.IPAMConfiguration().Create(ctx, newConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		fmt.Printf("[TEST] IPAMConfig created successfully\n")
 	} else {
 		// IPAMConfig exists, update it
 		fmt.Printf("[TEST] Updating existing IPAMConfig with KubeVirtVMAddressPersistence = %v\n", persistence)
 		ipamConfig.Spec.KubeVirtVMAddressPersistence = persistence
-		_, err = calicoClient.IPAMConfig().Update(ctx, ipamConfig, options.SetOptions{})
+		_, err = calicoClient.IPAMConfiguration().Update(ctx, ipamConfig, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		fmt.Printf("[TEST] IPAMConfig updated successfully\n")
 	}
@@ -729,7 +729,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 			setupSourceVirtLauncherPod(false)
 
 			// Set IPAMConfig to disable VM address persistence.
-			updateIPAMKubeVirtIPPersistence(calicoClient, vmAddressPersistencePtr(libapiv3.VMAddressPersistenceDisabled))
+			updateIPAMKubeVirtIPPersistence(calicoClient, vmAddressPersistencePtr(apiv3.VMAddressPersistenceDisabled))
 
 			// Set up migration target (VMIM + target pod)
 			setupMigrationTarget()
@@ -748,7 +748,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 			fmt.Println("\n[TEST] ===== Running test: should treat virt-launcher source pod as a normal pod when persistence is disabled =====")
 
 			// Disable persistence BEFORE creating the source pod
-			updateIPAMKubeVirtIPPersistence(calicoClient, vmAddressPersistencePtr(libapiv3.VMAddressPersistenceDisabled))
+			updateIPAMKubeVirtIPPersistence(calicoClient, vmAddressPersistencePtr(apiv3.VMAddressPersistenceDisabled))
 
 			// Create VM and VMI resources
 			virtResourceManager.CreateVM()
@@ -829,7 +829,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 })
 
 // Helper function to create VMAddressPersistence pointer
-func vmAddressPersistencePtr(v libapiv3.VMAddressPersistence) *libapiv3.VMAddressPersistence {
+func vmAddressPersistencePtr(v apiv3.VMAddressPersistence) *apiv3.VMAddressPersistence {
 	return &v
 }
 

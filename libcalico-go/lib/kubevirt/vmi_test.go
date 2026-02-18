@@ -91,8 +91,8 @@ func TestGetPodVMIInfo_VirtLauncherPod(t *testing.T) {
 	if info.GetName() != vmiName {
 		t.Errorf("Expected VMI name %s, got %s", vmiName, info.GetName())
 	}
-	if info.GetUID() != vmiUID {
-		t.Errorf("Expected VMI UID %s, got %s", vmiUID, info.GetUID())
+	if info.GetVMIUID() != vmiUID {
+		t.Errorf("Expected VMI UID %s, got %s", vmiUID, info.GetVMIUID())
 	}
 	if info.VMIResource == nil {
 		t.Error("Expected VMIResource to be non-nil")

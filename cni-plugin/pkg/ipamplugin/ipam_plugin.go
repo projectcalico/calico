@@ -41,7 +41,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -601,7 +601,7 @@ func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ipamConfig, err := calicoClient.IPAMConfig().Get(ctx, "default", options.GetOptions{})
+	ipamConfig, err := calicoClient.IPAMConfiguration().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
 		logrus.WithError(err).Debug("Could not retrieve IPAMConfig, defaulting to VMAddressPersistenceEnabled")
 		return true
@@ -611,7 +611,7 @@ func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
 		return true
 	}
 
-	return *ipamConfig.Spec.KubeVirtVMAddressPersistence != libapiv3.VMAddressPersistenceDisabled
+	return *ipamConfig.Spec.KubeVirtVMAddressPersistence != v3.VMAddressPersistenceDisabled
 }
 
 func cmdDel(args *skel.CmdArgs) error {

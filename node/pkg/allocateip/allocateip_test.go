@@ -379,7 +379,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the IPAM allocation for the original leaked address is gone.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")}, ipam.OwnerAttributeTypeActive)
+		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
 		Expect(err).To(HaveOccurred())
 
 		// Assert that exactly one address exists for the node and that it matches the node.
@@ -426,7 +426,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the IPAM allocation for the original leaked address is gone.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")}, ipam.OwnerAttributeTypeActive)
+		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
 		Expect(err).To(HaveOccurred())
 
 		// Assert that exactly one address exists for the node and that it matches the node.
@@ -569,7 +569,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 
 		// Check old address
 		// Verify 172.16.10.10 has been released.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)}, ipam.OwnerAttributeTypeActive)
+		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)})
 		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 
 		// Check new address has been assigned in pool1.
@@ -610,9 +610,9 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 
 		// Check old address.
 		// Verify 172.16.10.10 has not been touched.
-		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)}, ipam.OwnerAttributeTypeActive)
+		allocAttr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(attr).To(Equal(wepAttr))
+		Expect(allocAttr.ActiveOwnerAttrs).To(Equal(wepAttr))
 
 		// Check new address has been assigned.
 		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr2)
@@ -665,7 +665,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify 172.16.0.1 is not properly assigned to tunnel address.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr2)}, ipam.OwnerAttributeTypeActive)
+		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr2)})
 		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 
 		_, ipnet, _ := net.ParseCIDR(cidr2)
@@ -712,9 +712,9 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr2)
 
 		// Verify 172.16.0.0 has not been released.
-		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)}, ipam.OwnerAttributeTypeActive)
+		allocAttr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(attr).To(Equal(wepAttr))
+		Expect(allocAttr.ActiveOwnerAttrs).To(Equal(wepAttr))
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -846,7 +846,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		err = removeHostTunnelAddr(ctx, c, node, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
 		// Assert that the IPAM allocation is gone.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)}, ipam.OwnerAttributeTypeActive)
+		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
 		Expect(err).To(HaveOccurred())
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
@@ -879,7 +879,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the IPAM allocation is gone.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)}, ipam.OwnerAttributeTypeActive)
+		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
 		Expect(err).To(HaveOccurred())
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
@@ -914,7 +914,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the IPAM allocation is gone.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)}, ipam.OwnerAttributeTypeActive)
+		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
 		Expect(err).NotTo(HaveOccurred())
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
