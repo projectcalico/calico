@@ -22,7 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -53,7 +53,7 @@ type VXLANResolver struct {
 
 	// Store node metadata indexed by node name, and routes by the
 	// block that contributed them. The following comprises the full internal data model.
-	nodeNameToNode              map[string]*apiv3.Node
+	nodeNameToNode              map[string]*internalapi.Node
 	nodeNameToVXLANTunnelAddr   map[string]string
 	nodeNameToIPv4Addr          map[string]string
 	nodeNameToVXLANMac          map[string]string
@@ -69,7 +69,7 @@ func NewVXLANResolver(hostname string, callbacks vxlanCallbacks, useNodeResource
 	return &VXLANResolver{
 		hostname:                    hostname,
 		callbacks:                   callbacks,
-		nodeNameToNode:              map[string]*apiv3.Node{},
+		nodeNameToNode:              map[string]*internalapi.Node{},
 		nodeNameToVXLANTunnelAddr:   map[string]string{},
 		nodeNameToIPv4Addr:          map[string]string{},
 		nodeNameToVXLANMac:          map[string]string{},
@@ -94,15 +94,15 @@ func (c *VXLANResolver) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 
 func (c *VXLANResolver) OnResourceUpdate(update api.Update) (_ bool) {
 	resourceKey := update.Key.(model.ResourceKey)
-	if resourceKey.Kind != apiv3.KindNode {
+	if resourceKey.Kind != internalapi.KindNode {
 		return
 	}
 
 	nodeName := update.Key.(model.ResourceKey).Name
 	logCtx := logrus.WithField("node", nodeName).WithField("update", update)
 	logCtx.Debug("OnResourceUpdate triggered")
-	if update.Value != nil && update.Value.(*apiv3.Node).Spec.BGP != nil {
-		node := update.Value.(*apiv3.Node)
+	if update.Value != nil && update.Value.(*internalapi.Node).Spec.BGP != nil {
+		node := update.Value.(*internalapi.Node)
 		bgp := node.Spec.BGP
 		c.nodeNameToNode[nodeName] = node
 		ipv4, _, err := cnet.ParseCIDROrIP(bgp.IPv4Address)

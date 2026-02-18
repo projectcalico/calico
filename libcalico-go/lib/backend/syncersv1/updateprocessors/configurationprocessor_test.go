@@ -26,7 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -163,7 +163,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		By("Testing incorrect resource type value on Process with add/mod")
 		_, err = cc.Process(&model.KVPair{
 			Key:   globalFelixKey,
-			Value: libapiv3.NewWorkloadEndpoint(),
+			Value: internalapi.NewWorkloadEndpoint(),
 		})
 		Expect(err).To(HaveOccurred())
 

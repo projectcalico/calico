@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
 
 var addToSchemeOnce sync.Once
@@ -73,14 +73,14 @@ func BuilderCRDv1() *runtime.SchemeBuilder {
 				&apiv3.TierList{},
 				&apiv3.HostEndpoint{},
 				&apiv3.HostEndpointList{},
-				&libapiv3.BlockAffinity{},
-				&libapiv3.BlockAffinityList{},
-				&libapiv3.IPAMBlock{},
-				&libapiv3.IPAMBlockList{},
-				&libapiv3.IPAMHandle{},
-				&libapiv3.IPAMHandleList{},
-				&libapiv3.IPAMConfig{},
-				&libapiv3.IPAMConfigList{},
+				&internalapi.BlockAffinity{},
+				&internalapi.BlockAffinityList{},
+				&internalapi.IPAMBlock{},
+				&internalapi.IPAMBlockList{},
+				&internalapi.IPAMHandle{},
+				&internalapi.IPAMHandleList{},
+				&internalapi.IPAMConfig{},
+				&internalapi.IPAMConfigList{},
 				&apiv3.KubeControllersConfiguration{},
 				&apiv3.KubeControllersConfigurationList{},
 				&apiv3.CalicoNodeStatus{},

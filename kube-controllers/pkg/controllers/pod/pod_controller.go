@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -39,7 +39,7 @@ import (
 
 type WorkloadEndpointCache struct {
 	sync.RWMutex
-	m map[string]libapi.WorkloadEndpoint
+	m map[string]internalapi.WorkloadEndpoint
 }
 
 // podController implements the Controller interface for managing Kubernetes pods
@@ -95,7 +95,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 	}
 
 	resourceCache := rcache.NewResourceCache(cacheArgs)
-	workloadEndpointCache := WorkloadEndpointCache{m: make(map[string]libapi.WorkloadEndpoint)}
+	workloadEndpointCache := WorkloadEndpointCache{m: make(map[string]internalapi.WorkloadEndpoint)}
 
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.

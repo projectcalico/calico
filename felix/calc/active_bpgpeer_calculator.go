@@ -24,7 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/labelindex"
-	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	sel "github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -110,13 +110,13 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 				abp.onPeerInactive(id.Name)
 				delete(abp.allBGPPeersByName, id.Name)
 			}
-		case libv3.KindNode:
+		case internalapi.KindNode:
 			nodeName := update.Key.(model.ResourceKey).Name
 			if nodeName != abp.hostname {
 				return
 			}
 			if update.Value != nil {
-				node := update.Value.(*libv3.Node)
+				node := update.Value.(*internalapi.Node)
 				abp.onLocalNodeLabelUpdate(node.Labels)
 			} else {
 				// Our node was deleted.  We must handle this as if the node

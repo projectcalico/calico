@@ -24,7 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -36,7 +36,7 @@ import (
 // consumption by Felix.
 func NewWorkloadEndpointUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	return NewSimpleUpdateProcessor(
-		libapiv3.KindWorkloadEndpoint,
+		internalapi.KindWorkloadEndpoint,
 		convertWorkloadEndpointV3ToV1Key,
 		convertWorkloadEndpointV2ToV1Value,
 	)
@@ -47,7 +47,7 @@ func convertWorkloadEndpointV3ToV1Key(key model.ResourceKey) (model.Key, error) 
 }
 
 func convertWorkloadEndpointV2ToV1Value(val any) (any, error) {
-	v3res, ok := val.(*libapiv3.WorkloadEndpoint)
+	v3res, ok := val.(*internalapi.WorkloadEndpoint)
 	if !ok {
 		return nil, errors.New("Value is not a valid WorkloadEndpoint resource value")
 	}
@@ -190,7 +190,7 @@ func convertWorkloadEndpointV2ToV1Value(val any) (any, error) {
 	return v1value, nil
 }
 
-func ConvertV2ToV1IPNAT(ipnat libapiv3.IPNAT) *model.IPNAT {
+func ConvertV2ToV1IPNAT(ipnat internalapi.IPNAT) *model.IPNAT {
 	internalip := cnet.ParseIP(ipnat.InternalIP)
 	externalip := cnet.ParseIP(ipnat.ExternalIP)
 	if internalip != nil && externalip != nil {

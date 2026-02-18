@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"strings"
 
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
@@ -287,7 +287,7 @@ func ConvertWorkloadEndpointV3KeyToV1Key(v3key model.ResourceKey) (model.Workloa
 	}, nil
 }
 
-func IdentifiersForV3WorkloadEndpoint(res *v3.WorkloadEndpoint) WorkloadEndpointIdentifiers {
+func IdentifiersForV3WorkloadEndpoint(res *internalapi.WorkloadEndpoint) WorkloadEndpointIdentifiers {
 	wepids := WorkloadEndpointIdentifiers{
 		Node:         res.Spec.Node,
 		Orchestrator: res.Spec.Orchestrator,

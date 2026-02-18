@@ -31,7 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -245,17 +245,17 @@ func init() {
 	registerStructValidator(validate, validateProtoPort, api.ProtoPort{})
 	registerStructValidator(validate, validatePort, numorstring.Port{})
 	registerStructValidator(validate, validateEndpointPort, api.EndpointPort{})
-	registerStructValidator(validate, validateWorkloadEndpointPort, libapi.WorkloadEndpointPort{})
-	registerStructValidator(validate, validateIPNAT, libapi.IPNAT{})
+	registerStructValidator(validate, validateWorkloadEndpointPort, internalapi.WorkloadEndpointPort{})
+	registerStructValidator(validate, validateIPNAT, internalapi.IPNAT{})
 	registerStructValidator(validate, validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validate, validateIPPoolSpec, api.IPPoolSpec{})
-	registerStructValidator(validate, validateNodeSpec, libapi.NodeSpec{})
+	registerStructValidator(validate, validateNodeSpec, internalapi.NodeSpec{})
 	registerStructValidator(validate, validateIPAMConfigSpec, api.IPAMConfigurationSpec{})
 	registerStructValidator(validate, validateObjectMeta, metav1.ObjectMeta{})
 	registerStructValidator(validate, validateTier, api.Tier{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
 	registerStructValidator(validate, validateFelixConfigSpec, api.FelixConfigurationSpec{})
-	registerStructValidator(validate, validateWorkloadEndpointSpec, libapi.WorkloadEndpointSpec{})
+	registerStructValidator(validate, validateWorkloadEndpointSpec, internalapi.WorkloadEndpointSpec{})
 	registerStructValidator(validate, validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validate, validateRule, api.Rule{})
 	registerStructValidator(validate, validateEntityRule, api.EntityRule{})
@@ -925,7 +925,7 @@ func validatePort(structLevel validator.StructLevel) {
 }
 
 func validateIPNAT(structLevel validator.StructLevel) {
-	i := structLevel.Current().Interface().(libapi.IPNAT)
+	i := structLevel.Current().Interface().(internalapi.IPNAT)
 	log.Debugf("Internal IP: %s; External IP: %s", i.InternalIP, i.ExternalIP)
 
 	iip, _, err := cnet.ParseCIDROrIP(i.InternalIP)
@@ -1034,7 +1034,7 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 }
 
 func validateWorkloadEndpointSpec(structLevel validator.StructLevel) {
-	w := structLevel.Current().Interface().(libapi.WorkloadEndpointSpec)
+	w := structLevel.Current().Interface().(internalapi.WorkloadEndpointSpec)
 
 	// The configured networks only support /32 (for IPv4) and /128 (for IPv6) at present.
 	for _, netw := range w.IPNetworks {
@@ -1461,10 +1461,10 @@ func validateIPAMConfigSpec(structLevel validator.StructLevel) {
 }
 
 func validateNodeSpec(structLevel validator.StructLevel) {
-	ns := structLevel.Current().Interface().(libapi.NodeSpec)
+	ns := structLevel.Current().Interface().(internalapi.NodeSpec)
 
 	if ns.BGP != nil {
-		if reflect.DeepEqual(*ns.BGP, libapi.NodeBGPSpec{}) {
+		if reflect.DeepEqual(*ns.BGP, internalapi.NodeBGPSpec{}) {
 			structLevel.ReportError(reflect.ValueOf(ns.BGP), "BGP", "",
 				reason("Spec.BGP should not be empty"), "")
 		}
@@ -1599,7 +1599,7 @@ func validateEndpointPort(structLevel validator.StructLevel) {
 }
 
 func validateWorkloadEndpointPort(structLevel validator.StructLevel) {
-	port := structLevel.Current().Interface().(libapi.WorkloadEndpointPort)
+	port := structLevel.Current().Interface().(internalapi.WorkloadEndpointPort)
 
 	if !port.Protocol.SupportsPorts() {
 		structLevel.ReportError(

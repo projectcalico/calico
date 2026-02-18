@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -272,7 +272,7 @@ func setupCalicoNodeVxlan(ctx context.Context, c client.Interface, nodeName stri
 
 	log.Infof("Calico Node current value: %+v.", node)
 
-	node.Spec.BGP = &libapi.NodeBGPSpec{}
+	node.Spec.BGP = &internalapi.NodeBGPSpec{}
 	// Set public ip with subnet /32.
 	// The subnet part is required to pass Felix validation.
 	node.Spec.BGP.IPv4Address = fmt.Sprintf("%s/32", publicIP)

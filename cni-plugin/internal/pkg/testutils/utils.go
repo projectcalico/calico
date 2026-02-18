@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -143,7 +143,7 @@ func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 		log.WithField("node", host).WithError(err).Info("Node created")
 	} else {
 		// Otherwise, create it in Calico.
-		n := libapi.NewNode()
+		n := internalapi.NewNode()
 		n.Name = host
 		_, err = c.Nodes().Create(context.Background(), n, options.SetOptions{})
 		if err != nil {
@@ -161,7 +161,7 @@ func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error
 		log.WithError(err).WithField("node", host).Debug("Kubernetes node deleted")
 	} else {
 		// Otherwise, delete it in Calico.
-		n := libapi.NewNode()
+		n := internalapi.NewNode()
 		n.Name = host
 		_, err = c.Nodes().Delete(context.Background(), host, options.DeleteOptions{})
 		log.WithError(err).WithField("node", host).Debug("Calico node deleted")

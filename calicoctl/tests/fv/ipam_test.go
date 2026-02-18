@@ -31,7 +31,7 @@ import (
 
 	ipamcmd "github.com/projectcalico/calico/calicoctl/calicoctl/commands/ipam"
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -338,7 +338,7 @@ func createNodeForLocalhost(t *testing.T, ctx context.Context, client clientv3.I
 		}
 	} else {
 		t.Log("Creating etcd Node")
-		node := libapi.NewNode()
+		node := internalapi.NewNode()
 		node.Name = nodeName
 		Expect(err).NotTo(HaveOccurred())
 		_, err = client.Nodes().Create(ctx, node, options.SetOptions{})

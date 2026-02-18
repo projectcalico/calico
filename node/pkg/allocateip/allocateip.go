@@ -26,7 +26,7 @@ import (
 
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
@@ -195,7 +195,7 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 			log.Debugf("Updated IPPool resource: %s", key)
 			data = v
 
-		case *libapi.Node:
+		case *internalapi.Node:
 			// Only process our own node
 			if v.Name != r.nodename {
 				continue
@@ -300,7 +300,7 @@ func reconcileTunnelAddrs(
 	return nil
 }
 
-func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *libapi.Node, cidrs []net.IPNet, attrType string) (string, error) {
+func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *internalapi.Node, cidrs []net.IPNet, attrType string) (string, error) {
 	logCtx := getLogger(attrType)
 	logCtx.WithField("node", node.Name).Debug("Ensure tunnel address is set")
 
@@ -482,7 +482,7 @@ func generateHandleAndAttributes(nodename string, attrType string) (string, map[
 // assignHostTunnelAddr claims an IP address from the first pool
 // with some space. Stores the result in the host's config as its tunnel
 // address. It will assign a VXLAN address if vxlan is true, otherwise an IPIP address.
-func assignHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.Node, cidrs []net.IPNet, attrType string) (string, error) {
+func assignHostTunnelAddr(ctx context.Context, c client.Interface, node *internalapi.Node, cidrs []net.IPNet, attrType string) (string, error) {
 	// Build attributes and handle for this allocation.
 	handle, attrs := generateHandleAndAttributes(node.Name, attrType)
 	logCtx := getLogger(attrType)
@@ -537,7 +537,7 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.
 	return ip, nil
 }
 
-func updateNodeWithAddress(node *libapi.Node, addr string, attrType string) {
+func updateNodeWithAddress(node *internalapi.Node, addr string, attrType string) {
 	switch attrType {
 	case ipam.AttributeTypeVXLAN:
 		node.Spec.IPv4VXLANTunnelAddr = addr
@@ -545,17 +545,17 @@ func updateNodeWithAddress(node *libapi.Node, addr string, attrType string) {
 		node.Spec.IPv6VXLANTunnelAddr = addr
 	case ipam.AttributeTypeIPIP:
 		if node.Spec.BGP == nil {
-			node.Spec.BGP = &libapi.NodeBGPSpec{}
+			node.Spec.BGP = &internalapi.NodeBGPSpec{}
 		}
 		node.Spec.BGP.IPv4IPIPTunnelAddr = addr
 	case ipam.AttributeTypeWireguard:
 		if node.Spec.Wireguard == nil {
-			node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
+			node.Spec.Wireguard = &internalapi.NodeWireguardSpec{}
 		}
 		node.Spec.Wireguard.InterfaceIPv4Address = addr
 	case ipam.AttributeTypeWireguardV6:
 		if node.Spec.Wireguard == nil {
-			node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
+			node.Spec.Wireguard = &internalapi.NodeWireguardSpec{}
 		}
 		node.Spec.Wireguard.InterfaceIPv6Address = addr
 	}
@@ -564,7 +564,7 @@ func updateNodeWithAddress(node *libapi.Node, addr string, attrType string) {
 // removeHostTunnelAddr removes any existing IP address for this host's
 // tunnel device and releases the IP from IPAM.  If no IP is assigned this function
 // is a no-op.
-func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.Node, attrType string) error {
+func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *internalapi.Node, attrType string) error {
 	logCtx := getLogger(attrType)
 	logCtx.WithField("node", node.Name).Debug("Remove tunnel addresses")
 
@@ -585,7 +585,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.
 
 			// If removing the tunnel address causes the BGP spec to be empty, then nil it out.
 			// libcalico asserts that if a BGP spec is present, that it not be empty.
-			if reflect.DeepEqual(*node.Spec.BGP, libapi.NodeBGPSpec{}) {
+			if reflect.DeepEqual(*node.Spec.BGP, internalapi.NodeBGPSpec{}) {
 				logCtx.Debug("BGP spec is now empty, setting to nil")
 				node.Spec.BGP = nil
 			}
@@ -595,7 +595,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.
 			ipAddrStr = node.Spec.Wireguard.InterfaceIPv4Address
 			node.Spec.Wireguard.InterfaceIPv4Address = ""
 
-			if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
+			if reflect.DeepEqual(*node.Spec.Wireguard, internalapi.NodeWireguardSpec{}) {
 				logCtx.Debug("Wireguard spec is now empty, setting to nil")
 				node.Spec.Wireguard = nil
 			}
@@ -605,7 +605,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.
 			ipAddrStr = node.Spec.Wireguard.InterfaceIPv6Address
 			node.Spec.Wireguard.InterfaceIPv6Address = ""
 
-			if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
+			if reflect.DeepEqual(*node.Spec.Wireguard, internalapi.NodeWireguardSpec{}) {
 				logCtx.Debug("Wireguard spec is now empty, setting to nil")
 				node.Spec.Wireguard = nil
 			}
@@ -679,7 +679,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.
 // determineEnabledPools returns all enabled pools. If vxlan is true, then it will only return VXLAN pools. Otherwise
 // it will only return IPIP enabled pools.
 func determineEnabledPoolCIDRs(
-	node libapi.Node, ipPoolList api.IPPoolList, felixEnvConfig *felixconfig.Config, attrType string,
+	node internalapi.Node, ipPoolList api.IPPoolList, felixEnvConfig *felixconfig.Config, attrType string,
 ) []net.IPNet {
 	// For wireguard, an IP is only allocated from a pool if wireguard is actually running (there will be a public
 	// key configured on the node), and the cluster is not running in host encryption mode (which is required for

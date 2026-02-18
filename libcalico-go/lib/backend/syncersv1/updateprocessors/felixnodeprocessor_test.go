@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -31,7 +31,7 @@ import (
 
 var _ = Describe("Test the (Felix) Node update processor", func() {
 	v3NodeKey1 := model.ResourceKey{
-		Kind: libapiv3.KindNode,
+		Kind: internalapi.KindNode,
 		Name: "mynode",
 	}
 	numFelixConfigs := 8
@@ -47,7 +47,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 	// expects a node name of mynode.
 	It("should handle conversion of valid Nodes", func() {
 		By("converting a zero-ed Node")
-		res := libapiv3.NewNode()
+		res := internalapi.NewNode()
 		res.Name = "mynode"
 		expected := map[string]any{
 			hostIPMarker:       nil,
@@ -68,9 +68,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a zero-ed but non-nil BGPNodeSpec")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{}
+		res.Spec.BGP = &internalapi.NodeBGPSpec{}
 		expected[nodeMarker] = res
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -86,9 +86,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a zero-ed but non-nil WireguardSpec")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.Wireguard = &libapiv3.NodeWireguardSpec{}
+		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{}
 		expected[nodeMarker] = res
 		expected[wireguardMarker] = nil
 		kvps, err = up.Process(&model.KVPair{
@@ -105,9 +105,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with an IPv4 (specified without the network) only")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "1.2.3.4",
 		}
 		ip := net.MustParseIP("1.2.3.4")
@@ -129,9 +129,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with Wireguard interface IPv4 address")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.Wireguard = &libapiv3.NodeWireguardSpec{
+		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{
 			InterfaceIPv4Address: "1.2.3.4",
 		}
 		expected = map[string]any{
@@ -153,10 +153,10 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with Wireguard public-key")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
 		key := "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="
-		res.Status = libapiv3.NodeStatus{
+		res.Status = internalapi.NodeStatus{
 			WireguardPublicKey: key,
 		}
 		expected = map[string]any{
@@ -178,12 +178,12 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with Wireguard interface address and public-key")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.Wireguard = &libapiv3.NodeWireguardSpec{
+		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{
 			InterfaceIPv4Address: "1.2.3.4",
 		}
-		res.Status = libapiv3.NodeStatus{
+		res.Status = internalapi.NodeStatus{
 			WireguardPublicKey: key,
 		}
 		expected = map[string]any{
@@ -206,9 +206,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with IPv4 and IPv6 networks and no other config")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "100.200.100.200/24",
 			IPv6Address: "aa:bb::cc/120",
 		}
@@ -231,9 +231,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with IPv6 networks and an IPv4 tunnel address and no other config")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv6Address:        "aa:bb::cc/120",
 			IPv4IPIPTunnelAddr: "192.100.100.100",
 		}
@@ -255,9 +255,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with IPv4 address and an IPv4 VXLAN tunnel address and MAC")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "192.100.100.100",
 		}
 		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200"
@@ -282,9 +282,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with IPv6 address and an IPv6 VXLAN tunnel address and MAC")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv6Address: "fd10:10::10",
 		}
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
@@ -308,9 +308,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("converting a Node with both IPv4 and IPv6 addresses and both IPv4 and IPv6 VXLAN tunnel addresses and MACs")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "192.100.100.100",
 			IPv6Address: "fd10:10::10",
 		}
@@ -342,7 +342,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 
 	It("should fail to convert an invalid resource", func() {
 		By("trying to convert with the wrong key type")
-		res := libapiv3.NewNode()
+		res := internalapi.NewNode()
 
 		_, err := up.Process(&model.KVPair{
 			Key: model.GlobalConfigKey{
@@ -363,9 +363,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with an invalid IPv4 address - expect delete for that key")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address:        "1.2.3.4/240",
 			IPv4IPIPTunnelAddr: "192.100.100.100",
 		}
@@ -387,9 +387,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("trying to convert with an invalid Wireguard interface IPv4 address - expect delete for that key")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.Wireguard = &libapiv3.NodeWireguardSpec{
+		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{
 			InterfaceIPv4Address: "1.2.3.4/240",
 		}
 		kvps, err = up.Process(&model.KVPair{
@@ -409,9 +409,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("trying to convert with a tunnel address specified as a network - expect delete for that key")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address:        "1.2.3.4/24",
 			IPv4IPIPTunnelAddr: "192.100.100.100/24",
 		}
@@ -434,9 +434,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("trying to convert a Node with IPv4 address as a network and an IPv4 VXLAN tunnel address as a network and no MAC - expect delete for those keys")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "192.100.100.100/24",
 		}
 		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200/32"
@@ -461,9 +461,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("trying to convert a Node with IPv6 address as a network and an IPv6 VXLAN tunnel address as a network and no MAC - expect delete for those keys")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv6Address: "fd10:10::10/122",
 		}
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/122"
@@ -487,9 +487,9 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 
 		By("trying to convert a Node with both IPv4 and IPv6 addresses as networks and both IPv4 and IPv6 VXLAN tunnel addresses as networks and no MACs - expect delete for those keys")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "192.100.100.100/24",
 			IPv6Address: "fd10:10::10/122",
 		}
@@ -522,7 +522,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 
 var _ = Describe("Test the (Felix) Node update processor with USE_POD_CIDR=true", func() {
 	v3NodeKey1 := model.ResourceKey{
-		Kind: libapiv3.KindNode,
+		Kind: internalapi.KindNode,
 		Name: "mynode",
 	}
 	up := updateprocessors.NewFelixNodeUpdateProcessor(true)
@@ -544,7 +544,7 @@ var _ = Describe("Test the (Felix) Node update processor with USE_POD_CIDR=true"
 
 	It("should properly convert nodes into blocks for Felix", func() {
 		By("converting a node with PodCIDRs set")
-		res := libapiv3.NewNode()
+		res := internalapi.NewNode()
 		res.Name = "mynode"
 		res.Status.PodCIDRs = []string{
 			"192.168.1.0/24",

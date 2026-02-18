@@ -34,7 +34,7 @@ import (
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -668,15 +668,15 @@ func storePolicyName(name string, annotations map[string]string) (map[string]str
 }
 
 func prepForWrite(d *model.KVPair) error {
-	// We recieve v3 block affinity objects from the client, but they are stored as libapiv3 objects
+	// We receive v3 block affinity objects from the client, but they are stored as internalapi objects
 	// for historical reasons.
 	if _, ok := d.Value.(*apiv3.BlockAffinity); ok {
 		value := d.Value.(*apiv3.BlockAffinity)
 
-		// Convert the v3 object to a v1 object for storage.
-		v1Obj := libapiv3.NewBlockAffinity()
+		// Convert the v3 API object to an internalapi object for storage.
+		v1Obj := internalapi.NewBlockAffinity()
 		v1Obj.ObjectMeta = value.ObjectMeta
-		v1Obj.Spec = libapiv3.BlockAffinitySpec{
+		v1Obj.Spec = internalapi.BlockAffinitySpec{
 			State:   string(value.Spec.State),
 			Node:    value.Spec.Node,
 			Type:    value.Spec.Type,
@@ -689,12 +689,12 @@ func prepForWrite(d *model.KVPair) error {
 }
 
 func prepForReturn(d *model.KVPair) error {
-	// We store libapiv3 block affinity objects, but we return v3 objects to the client.
+	// We store internalapi block affinity objects, but we return v3 API objects to the client.
 	// So convert them here.
-	if _, ok := d.Value.(*libapiv3.BlockAffinity); ok {
-		value := d.Value.(*libapiv3.BlockAffinity)
+	if _, ok := d.Value.(*internalapi.BlockAffinity); ok {
+		value := d.Value.(*internalapi.BlockAffinity)
 
-		// Convert the v1 object to a v3 object for return.
+		// Convert the internalapi object to a v3 API object for return.
 		v3Obj := apiv3.NewBlockAffinity()
 		v3Obj.ObjectMeta = value.ObjectMeta
 		deleted, err := strconv.ParseBool(value.Spec.Deleted)

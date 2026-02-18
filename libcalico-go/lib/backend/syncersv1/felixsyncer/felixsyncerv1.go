@@ -18,7 +18,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
@@ -59,7 +59,7 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 				UpdateProcessor: updateprocessors.NewIPPoolUpdateProcessor(),
 			},
 			{
-				ListInterface:   model.ResourceListOptions{Kind: libapiv3.KindNode},
+				ListInterface:   model.ResourceListOptions{Kind: internalapi.KindNode},
 				UpdateProcessor: updateprocessors.NewFelixNodeUpdateProcessor(cfg.K8sUsePodCIDR),
 			},
 			{
@@ -67,7 +67,7 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 				UpdateProcessor: updateprocessors.NewProfileUpdateProcessor(),
 			},
 			{
-				ListInterface:   model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint},
+				ListInterface:   model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint},
 				UpdateProcessor: updateprocessors.NewWorkloadEndpointUpdateProcessor(),
 			},
 			{

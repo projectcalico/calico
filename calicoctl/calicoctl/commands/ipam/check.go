@@ -35,7 +35,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -475,7 +475,7 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 	return nil
 }
 
-func getWEPIPs(w apiv3.WorkloadEndpoint) ([]string, error) {
+func getWEPIPs(w internalapi.WorkloadEndpoint) ([]string, error) {
 	var ips []string
 	for _, a := range w.Spec.IPNetworks {
 		ip, err := normaliseIP(a)
@@ -606,7 +606,7 @@ func (c *IPAMChecker) recordInUseHandle(handle string) {
 	c.inUseHandles.Add(handle)
 }
 
-func getNodeIPs(n apiv3.Node) ([]string, error) {
+func getNodeIPs(n internalapi.Node) ([]string, error) {
 	var ips []string
 	if n.Spec.IPv4VXLANTunnelAddr != "" {
 		ip, err := normaliseIP(n.Spec.IPv4VXLANTunnelAddr)

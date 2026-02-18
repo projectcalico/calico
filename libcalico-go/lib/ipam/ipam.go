@@ -30,7 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -252,7 +252,7 @@ func detectOS(ctx context.Context) string {
 // If no pools are requested, all enabled pools are returned.
 // Also applies selector logic on node labels and namespace labels to determine if the pool is a match.
 // Returns the set of matching pools as well as the full set of ip pools.
-func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node libapiv3.Node, namespace *corev1.Namespace, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
+func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node internalapi.Node, namespace *corev1.Namespace, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
 	// Get all the enabled IP pools from the datastore.
 	enabledPools, err = c.pools.GetEnabledPools(ctx, version)
 	if err != nil {
@@ -352,7 +352,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	// Retrieve node for given hostname to use for ip pool node selection
 	var node *model.KVPair
 	var err error
-	var v3n *libapiv3.Node
+	var v3n *internalapi.Node
 	var ok bool
 	affinityCfg := AffinityConfig{
 		AffinityType: AffinityTypeHost,
@@ -360,20 +360,20 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	}
 	// Use is not LoadBalancer, continue as normal with node
 	if use != v3.IPPoolAllowedUseLoadBalancer {
-		node, err = c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
+		node, err = c.client.Get(ctx, model.ResourceKey{Kind: internalapi.KindNode, Name: host}, "")
 		if err != nil {
 			log.WithError(err).WithField("node", host).Error("failed to get node for host")
 			return nil, nil, err
 		}
 
 		// Make sure the returned value is OK.
-		v3n, ok = node.Value.(*libapiv3.Node)
+		v3n, ok = node.Value.(*internalapi.Node)
 		if !ok {
 			return nil, nil, fmt.Errorf("Datastore returned malformed node object")
 		}
 	} else {
 		// Special case for Service LoadBalancer that is affined to virtual node
-		v3n = libapiv3.NewNode()
+		v3n = internalapi.NewNode()
 		v3n.Name = v3.VirtualLoadBalancer
 		affinityCfg.AffinityType = AffinityTypeVirtual
 	}
@@ -2085,7 +2085,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	// we should release the block's affinity to this node so it can be
 	// used elsewhere.
 	logCtx.Debugf("Looking up node labels for host affinity")
-	node, err := c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: affinityCfg.Host}, "")
+	node, err := c.client.Get(ctx, model.ResourceKey{Kind: internalapi.KindNode, Name: affinityCfg.Host}, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			logCtx.WithError(err).WithField("node", affinityCfg.Host).Error("Failed to get node for host")
@@ -2096,7 +2096,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	}
 
 	// Make sure the returned value is a valid node.
-	v3n, ok := node.Value.(*libapiv3.Node)
+	v3n, ok := node.Value.(*internalapi.Node)
 	if !ok {
 		return fmt.Errorf("Datastore returned malformed node object")
 	}
@@ -2400,7 +2400,7 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 		return err
 	}
 	kvs, err := c.client.List(ctx, model.ResourceListOptions{
-		Kind:          libapiv3.KindBlockAffinity,
+		Kind:          internalapi.KindBlockAffinity,
 		LabelSelector: ls,
 	}, "")
 	if err != nil {
@@ -2410,7 +2410,7 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 	var errs []error
 	numUpgraded := 0
 	for _, kv := range kvs.KVPairs {
-		if val, ok := kv.Value.(*libapiv3.BlockAffinity); ok {
+		if val, ok := kv.Value.(*internalapi.BlockAffinity); ok {
 			if val.Spec.Node != nodeName {
 				// Only do _our_ affinities to avoid n x n conflicts with other
 				// nodes also doing this operation.

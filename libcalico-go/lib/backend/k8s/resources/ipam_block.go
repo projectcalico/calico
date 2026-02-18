@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -44,9 +44,9 @@ func NewIPAMBlockClient(r rest.Interface, group BackingAPIGroup) K8sResourceClie
 	rc := customResourceClient{
 		restClient:      r,
 		resource:        IPAMBlockResourceName,
-		k8sResourceType: reflect.TypeFor[libapiv3.IPAMBlock](),
-		k8sListType:     reflect.TypeFor[libapiv3.IPAMBlockList](),
-		kind:            libapiv3.KindIPAMBlock,
+		k8sResourceType: reflect.TypeFor[internalapi.IPAMBlock](),
+		k8sListType:     reflect.TypeFor[internalapi.IPAMBlockList](),
+		kind:            internalapi.KindIPAMBlock,
 		apiGroup:        group,
 	}
 
@@ -108,7 +108,7 @@ func (c *ipamBlockClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*mo
 	}
 
 	// Now actually delete the object.
-	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMBlock}
+	k := model.ResourceKey{Name: name, Kind: internalapi.KindIPAMBlock}
 	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision st
 func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	// Get the object.
 	name, _ := parseKey(key)
-	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMBlock}
+	k := model.ResourceKey{Name: name, Kind: internalapi.KindIPAMBlock}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision strin
 }
 
 func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	l := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
+	l := model.ResourceListOptions{Kind: internalapi.KindIPAMBlock}
 	v3list, err := c.rc.List(ctx, l, revision)
 	if err != nil {
 		return nil, err
@@ -174,7 +174,7 @@ func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, re
 }
 
 func (c *ipamBlockClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
-	resl := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
+	resl := model.ResourceListOptions{Kind: internalapi.KindIPAMBlock}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
 	k8sOpts := watchOptionsToK8sListOptions(options)
 	k8sWatch, err := k8sWatchClient.WatchFunc(k8sOpts)
@@ -236,14 +236,14 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 			Revision: kvpv3.Revision,
 			UID:      &ab.UID,
 		}, nil
-	case *libapiv3.IPAMBlock:
-		cidrStr := kvpv3.Value.(*libapiv3.IPAMBlock).Spec.CIDR
+	case *internalapi.IPAMBlock:
+		cidrStr := kvpv3.Value.(*internalapi.IPAMBlock).Spec.CIDR
 		_, cidr, err := net.ParseCIDR(cidrStr)
 		if err != nil {
 			return nil, err
 		}
 
-		ab := kvpv3.Value.(*libapiv3.IPAMBlock)
+		ab := kvpv3.Value.(*internalapi.IPAMBlock)
 
 		// Convert attributes.
 		attrs := []model.AllocationAttribute{}
@@ -296,11 +296,11 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		return &model.KVPair{
 			Key: model.ResourceKey{
 				Name: name,
-				Kind: libapiv3.KindIPAMBlock,
+				Kind: internalapi.KindIPAMBlock,
 			},
 			Value: &v3.IPAMBlock{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       libapiv3.KindIPAMBlock,
+					Kind:       internalapi.KindIPAMBlock,
 					APIVersion: apiVersion,
 				},
 				ObjectMeta: metav1.ObjectMeta{
@@ -327,9 +327,9 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		ab := kvpv1.Value.(*model.AllocationBlock)
 
 		// Convert attributes.
-		attrs := []libapiv3.AllocationAttribute{}
+		attrs := []internalapi.AllocationAttribute{}
 		for _, a := range ab.Attributes {
-			attrs = append(attrs, libapiv3.AllocationAttribute{
+			attrs = append(attrs, internalapi.AllocationAttribute{
 				AttrPrimary:   a.AttrPrimary,
 				AttrSecondary: a.AttrSecondary,
 			})
@@ -340,18 +340,18 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		return &model.KVPair{
 			Key: model.ResourceKey{
 				Name: name,
-				Kind: libapiv3.KindIPAMBlock,
+				Kind: internalapi.KindIPAMBlock,
 			},
-			Value: &libapiv3.IPAMBlock{
+			Value: &internalapi.IPAMBlock{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       libapiv3.KindIPAMBlock,
+					Kind:       internalapi.KindIPAMBlock,
 					APIVersion: apiVersion,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            name,
 					ResourceVersion: kvpv1.Revision,
 				},
-				Spec: libapiv3.IPAMBlockSpec{
+				Spec: internalapi.IPAMBlockSpec{
 					CIDR:                        cidr,
 					Allocations:                 ab.Allocations,
 					Unallocated:                 ab.Unallocated,

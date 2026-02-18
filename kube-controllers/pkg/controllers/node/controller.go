@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -147,7 +147,7 @@ func NewNodeController(ctx context.Context,
 }
 
 // getK8sNodeName is a helper method that searches a calicoNode for its kubernetes nodeRef.
-func getK8sNodeName(calicoNode api.Node) (string, error) {
+func getK8sNodeName(calicoNode internalapi.Node) (string, error) {
 	for _, orchRef := range calicoNode.Spec.OrchRefs {
 		if orchRef.Orchestrator == "k8s" {
 			if orchRef.NodeName == "" {

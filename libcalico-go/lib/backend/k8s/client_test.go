@@ -42,7 +42,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -1957,7 +1957,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		var nodename, peername1, peername2 string
 
 		By("Listing all Nodes to find a suitable Node name", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			// Get the hostname so we can make a Get call
 			kvp := *nodes.KVPairs[0]
@@ -2216,23 +2216,23 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Performing a List() operation", func() {
 			// Perform List and ensure it shows up in the Calico API.
-			weps, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, "")
+			weps, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
 		})
 
 		By("Performing a List(Name=wepName) operation", func() {
 			// Perform List, including a workload Name
-			weps, err := c.List(ctx, model.ResourceListOptions{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			weps, err := c.List(ctx, model.ResourceListOptions{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(weps.KVPairs)).To(Equal(1))
 		})
 
 		By("Performing a Get() operation then updating the wep", func() {
 			// Perform a Get and ensure no error in the Calico API.
-			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
-			fmt.Printf("Updating Wep %+v\n", wep.Value.(*libapiv3.WorkloadEndpoint).Spec)
+			fmt.Printf("Updating Wep %+v\n", wep.Value.(*internalapi.WorkloadEndpoint).Spec)
 			ctxCNI := resources.ContextWithPatchMode(ctx, resources.PatchModeCNI)
 			_, err = c.Update(ctxCNI, wep)
 			Expect(err).NotTo(HaveOccurred())
@@ -2302,7 +2302,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			})
 
 			var wepKV *model.KVPair
-			key := model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}
+			key := model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}
 			By("Checking the pod is visible before we mark it as finished", func() {
 				// Perform a Get and ensure no error in the Calico API.
 				var err error
@@ -2311,7 +2311,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				Expect(wepKV).NotTo(BeNil())
 
 				// Perform List and ensure it shows up in the Calico API.
-				weps, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, "")
+				weps, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint}, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
 			})
@@ -2328,7 +2328,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					// can finish).
 					wepKV, err = c.Get(ctx, key, "")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(wepKV.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
+					Expect(wepKV.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
 
 					// Deleting in the Calico API with incorrect UID should fail.
 					realUID := wepKV.UID
@@ -2339,14 +2339,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					wepKV.UID = realUID
 					wepKV2, err := c.Get(ctx, key, "")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(wepKV2.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
+					Expect(wepKV2.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
 
 					// Successful deletion in the Calico API should make the IPs disappear.
 					_, err = c.DeleteKVP(ctx, wepKV)
 					Expect(err).NotTo(HaveOccurred())
 					wepKV2, err = c.Get(ctx, key, "")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(wepKV2.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(HaveLen(0))
+					Expect(wepKV2.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks).To(HaveLen(0))
 
 					return
 				}
@@ -2426,12 +2426,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking the pod is visible before we remove its IP", func() {
 			// Perform a Get and ensure no error in the Calico API.
-			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(wep).NotTo(BeNil())
 
 			// Perform List and ensure it shows up in the Calico API.
-			weps, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, "")
+			weps, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
 		})
@@ -2480,12 +2480,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			// Add the IP via our API.  This simulates what the CNI plugin does.
 			wep, err := c.Get(
 				ctx,
-				model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint},
+				model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint},
 				"",
 			)
 			Expect(err).NotTo(HaveOccurred())
-			wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks = []string{"192.168.1.1"}
-			fmt.Printf("Updating Wep %+v\n", wep.Value.(*libapiv3.WorkloadEndpoint).Spec)
+			wep.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks = []string{"192.168.1.1"}
+			fmt.Printf("Updating Wep %+v\n", wep.Value.(*internalapi.WorkloadEndpoint).Spec)
 			ctxCNI := resources.ContextWithPatchMode(ctx, resources.PatchModeCNI)
 			_, err = c.Update(ctxCNI, wep)
 			Expect(err).NotTo(HaveOccurred())
@@ -2496,9 +2496,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(p.Annotations["cni.projectcalico.org/podIP"]).To(Equal("192.168.1.1"))
 
 			// Get the wep through our API to check that the annotation round-trips.
-			wep, err = c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			wep, err = c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.1.1/32"))
+			Expect(wep.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.1.1/32"))
 		})
 
 		By("Setting the pod phase to Running", func() {
@@ -2581,7 +2581,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		var nodename string
 
 		By("Listing all Nodes to find a suitable Node name", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			kvp := *nodes.KVPairs[0]
 			nodename = kvp.Key.(model.ResourceKey).Name
@@ -2824,7 +2824,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		ip := "192.168.0.101"
 
 		By("Listing all Nodes", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			// Get the hostname so we can make a Get call
 			kvp = *nodes.KVPairs[0]
@@ -2832,7 +2832,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing a specific Node", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Name: nodeHostname, Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Name: nodeHostname, Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(nodes.KVPairs).To(HaveLen(1))
 			Expect(nodes.KVPairs[0].Key).To(Equal(kvp.Key))
@@ -2840,13 +2840,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing a specific invalid Node", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Name: "foobarbaz-node", Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Name: "foobarbaz-node", Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(nodes.KVPairs).To(HaveLen(0))
 		})
 
 		By("Getting a specific nodeHostname", func() {
-			n, err := c.Get(ctx, model.ResourceKey{Name: nodeHostname, Kind: libapiv3.KindNode}, "")
+			n, err := c.Get(ctx, model.ResourceKey{Name: nodeHostname, Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check to see we have the right Node
@@ -2859,7 +2859,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Getting nonexistent Node", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: "Fake", Kind: libapiv3.KindNode}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: "Fake", Kind: internalapi.KindNode}, "")
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -2874,14 +2874,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			testKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: kvp.Key.(model.ResourceKey).Name,
-					Kind: libapiv3.KindNode,
+					Kind: internalapi.KindNode,
 				},
-				Value: &libapiv3.Node{
+				Value: &internalapi.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: kvp.Key.(model.ResourceKey).Name,
 					},
-					Spec: libapiv3.NodeSpec{
-						BGP: &libapiv3.NodeBGPSpec{
+					Spec: internalapi.NodeSpec{
+						BGP: &internalapi.NodeBGPSpec{
 							ASNumber:    &newAsn,
 							IPv4Address: ip,
 						},
@@ -2890,20 +2890,20 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			}
 			node, err := c.Update(ctx, &testKvp)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*node.Value.(*libapiv3.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
+			Expect(*node.Value.(*internalapi.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
 
 			// Also check that Get() returns the changes
 			getNode, err := c.Get(ctx, kvp.Key.(model.ResourceKey), "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*getNode.Value.(*libapiv3.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
-			Expect(getNode.Value.(*libapiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal(""))
+			Expect(*getNode.Value.(*internalapi.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
+			Expect(getNode.Value.(*internalapi.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal(""))
 
 			// We do not support creating Nodes, we should see an error
 			// if the Node does not exist.
 			missingKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: "IDontExist",
-					Kind: libapiv3.KindNode,
+					Kind: internalapi.KindNode,
 				},
 			}
 			_, err = c.Create(ctx, &missingKvp)
@@ -2915,14 +2915,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			testKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: kvp.Key.(model.ResourceKey).Name,
-					Kind: libapiv3.KindNode,
+					Kind: internalapi.KindNode,
 				},
-				Value: &libapiv3.Node{
+				Value: &internalapi.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: kvp.Key.(model.ResourceKey).Name,
 					},
-					Spec: libapiv3.NodeSpec{
-						BGP: &libapiv3.NodeBGPSpec{
+					Spec: internalapi.NodeSpec{
+						BGP: &internalapi.NodeBGPSpec{
 							IPv4Address:        ip,
 							IPv4IPIPTunnelAddr: "10.0.0.1",
 						},
@@ -2932,14 +2932,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			node, err := c.Update(ctx, &testKvp)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(node.Value.(*libapiv3.Node).Spec.BGP.ASNumber).To(BeNil())
-			Expect(node.Value.(*libapiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
+			Expect(node.Value.(*internalapi.Node).Spec.BGP.ASNumber).To(BeNil())
+			Expect(node.Value.(*internalapi.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
 
 			// Also check that Get() returns the changes
 			getNode, err := c.Get(ctx, kvp.Key.(model.ResourceKey), "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(getNode.Value.(*libapiv3.Node).Spec.BGP.ASNumber).To(BeNil())
-			Expect(getNode.Value.(*libapiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
+			Expect(getNode.Value.(*internalapi.Node).Spec.BGP.ASNumber).To(BeNil())
+			Expect(getNode.Value.(*internalapi.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
 		})
 
 		By("Syncing HostIPs over the Syncer", func() {
@@ -3687,19 +3687,19 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			deleteAllPods()
 		})
 		It("supports watching a specific workloadEndpoint", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("WorkloadEndpoint(default/127.0.0.1-k8s-test--pod--1-eth0)"))
 		})
 		It("rejects watching a specific workloadEndpoint without a namespace", func() {
-			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Kind: internalapi.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cannot watch a specific WorkloadEndpoint without a namespace"))
 		})
 		It("supports watching all workloadEndpoints", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
@@ -3709,7 +3709,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 	It("Should support watching Nodes", func() {
 		By("Watching a single node", func() {
 			name := "127.0.0.1" // Node created by test/mock-node.yaml
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: name, Kind: libapiv3.KindNode}, api.WatchOptions{Revision: ""})
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: name, Kind: internalapi.KindNode}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 
@@ -3732,7 +3732,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 
 		By("Watching all nodes", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, api.WatchOptions{Revision: ""})
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 

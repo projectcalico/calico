@@ -23,7 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -217,4 +217,4 @@ type IPNAT struct {
 	ExtIP net.IP `json:"ext_ip" validate:"ip"`
 }
 
-type QoSControls = v3.QoSControls
+type QoSControls = internalapi.QoSControls

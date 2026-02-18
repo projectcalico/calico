@@ -32,7 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -175,9 +175,9 @@ func UpdateK8sNode(c *kubernetes.Clientset, name string, update func(n *v1.Node)
 }
 
 // UpdateCalicoNode updates a Calico node resource, handling retries if there are update conflicts.
-func UpdateCalicoNode(c client.Interface, name string, update func(n *v3.Node)) error {
+func UpdateCalicoNode(c client.Interface, name string, update func(n *internalapi.Node)) error {
 	var err error
-	var cn *v3.Node
+	var cn *internalapi.Node
 
 	for range 10 {
 		// Retry node update in the event of an update conflict.

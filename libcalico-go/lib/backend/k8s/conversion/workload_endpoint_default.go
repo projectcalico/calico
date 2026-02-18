@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -167,7 +167,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	}
 
 	// Pull out floating IP annotation
-	var floatingIPs []libapiv3.IPNAT
+	var floatingIPs []internalapi.IPNAT
 	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok && len(podIPNets) > 0 {
 		// Parse Annotation data
 		var ips []string
@@ -197,14 +197,14 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		for _, ip := range ips {
 			if strings.Contains(ip, ":") {
 				if podnetV6 != nil {
-					floatingIPs = append(floatingIPs, libapiv3.IPNAT{
+					floatingIPs = append(floatingIPs, internalapi.IPNAT{
 						InternalIP: podnetV6.IP.String(),
 						ExternalIP: ip,
 					})
 				}
 			} else {
 				if podnetV4 != nil {
-					floatingIPs = append(floatingIPs, libapiv3.IPNAT{
+					floatingIPs = append(floatingIPs, internalapi.IPNAT{
 						InternalIP: podnetV4.IP.String(),
 						ExternalIP: ip,
 					})
@@ -220,7 +220,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	}
 
 	// Map any named ports through.
-	var endpointPorts []libapiv3.WorkloadEndpointPort
+	var endpointPorts []internalapi.WorkloadEndpointPort
 	endpointPorts = appendEndpointPorts(endpointPorts, pod, pod.Spec.Containers)
 	endpointPorts = appendEndpointPorts(endpointPorts, pod, pod.Spec.InitContainers)
 
@@ -235,7 +235,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	}
 
 	// Create the workload endpoint.
-	wep := libapiv3.NewWorkloadEndpoint()
+	wep := internalapi.NewWorkloadEndpoint()
 	wep.ObjectMeta = metav1.ObjectMeta{
 		Name:              wepName,
 		Namespace:         pod.Namespace,
@@ -244,7 +244,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Labels:            labels,
 		GenerateName:      pod.GenerateName,
 	}
-	wep.Spec = libapiv3.WorkloadEndpointSpec{
+	wep.Spec = internalapi.WorkloadEndpointSpec{
 		Orchestrator:               "k8s",
 		Node:                       pod.Spec.NodeName,
 		Pod:                        pod.Name,
@@ -272,7 +272,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Key: model.ResourceKey{
 			Name:      wepName,
 			Namespace: pod.Namespace,
-			Kind:      libapiv3.KindWorkloadEndpoint,
+			Kind:      internalapi.KindWorkloadEndpoint,
 		},
 		Value:    wep,
 		Revision: pod.ResourceVersion,
@@ -280,7 +280,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	return &kvp, nil
 }
 
-func appendEndpointPorts(ports []libapiv3.WorkloadEndpointPort, pod *kapiv1.Pod, containers []kapiv1.Container) []libapiv3.WorkloadEndpointPort {
+func appendEndpointPorts(ports []internalapi.WorkloadEndpointPort, pod *kapiv1.Pod, containers []kapiv1.Container) []internalapi.WorkloadEndpointPort {
 	for _, container := range containers {
 		for _, containerPort := range container.Ports {
 			if containerPort.ContainerPort != 0 && (containerPort.HostPort != 0 || containerPort.Name != "") {
@@ -301,7 +301,7 @@ func appendEndpointPorts(ports []libapiv3.WorkloadEndpointPort, pod *kapiv1.Pod,
 					continue
 				}
 
-				ports = append(ports, libapiv3.WorkloadEndpointPort{
+				ports = append(ports, internalapi.WorkloadEndpointPort{
 					Name:     containerPort.Name,
 					Protocol: modelProto,
 					Port:     uint16(containerPort.ContainerPort),
@@ -338,8 +338,8 @@ func HandleSourceIPSpoofingAnnotation(annot map[string]string) ([]string, error)
 	return sourcePrefixes, nil
 }
 
-func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSControls, error) {
-	qosControls := &libapiv3.QoSControls{}
+func handleQoSControlsAnnotations(annotations map[string]string) (*internalapi.QoSControls, error) {
+	qosControls := &internalapi.QoSControls{}
 	var errs []error
 
 	// k8s bandwidth annotations
@@ -540,7 +540,7 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 	}
 
 	// return nil if no control is configured
-	if (*qosControls == libapiv3.QoSControls{}) {
+	if (*qosControls == internalapi.QoSControls{}) {
 		qosControls = nil
 	}
 

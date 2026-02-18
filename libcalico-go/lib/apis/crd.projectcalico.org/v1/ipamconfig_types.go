@@ -17,7 +17,7 @@ package v1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
 
 // +genclient
@@ -28,5 +28,5 @@ import (
 type IPAMConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              v3.IPAMConfigSpec `json:"spec,omitempty"`
+	Spec              internalapi.IPAMConfigSpec `json:"spec,omitempty"`
 }

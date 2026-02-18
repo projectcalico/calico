@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -114,13 +114,13 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/bgpconfigurations/default")
 
-			var node *libapiv3.Node
+			var node *internalapi.Node
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				// For Kubernetes, update the existing node config to have some BGP configuration.
 				By("Configuring a node with BGP configuration")
 				node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				node.Spec.BGP = &libapiv3.NodeBGPSpec{
+				node.Spec.BGP = &internalapi.NodeBGPSpec{
 					IPv4Address: "1.2.3.4/24",
 					IPv6Address: "aa:bb::cc/120",
 				}
@@ -132,10 +132,10 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				By("Creating a node with BGP configuration")
 				node, err = c.Nodes().Create(
 					ctx,
-					&libapiv3.Node{
+					&internalapi.Node{
 						ObjectMeta: metav1.ObjectMeta{Name: "127.0.0.1"},
-						Spec: libapiv3.NodeSpec{
-							BGP: &libapiv3.NodeBGPSpec{
+						Spec: internalapi.NodeSpec{
+							BGP: &internalapi.NodeBGPSpec{
 								IPv4Address: "1.2.3.4/24",
 								IPv6Address: "aa:bb::cc/120",
 							},
@@ -293,7 +293,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				// The syncer only monitors affine blocks for one host, so IP allocations for a different
 				// host should not result in updates.
 				hostname := "not-this-host"
-				node, err = c.Nodes().Create(ctx, &libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: hostname}}, options.SetOptions{})
+				node, err = c.Nodes().Create(ctx, &internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: hostname}}, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				expectedCacheSize += 1
 				syncTester.ExpectCacheSize(expectedCacheSize)

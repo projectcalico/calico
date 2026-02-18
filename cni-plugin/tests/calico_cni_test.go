@@ -26,7 +26,7 @@ import (
 	grpc_dataplane "github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/linux"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
@@ -45,7 +45,7 @@ var _ = Describe("CalicoCni", func() {
 		testutils.WipeDatastore()
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var err error
-		n := libapiv3.NewNode()
+		n := internalapi.NewNode()
 		n.Name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
 		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
@@ -121,7 +121,7 @@ var _ = Describe("CalicoCni", func() {
 
 			mac := contVeth.Attrs().HardwareAddr
 
-			Expect(endpoints.Items[0].Spec).Should(Equal(libapiv3.WorkloadEndpointSpec{
+			Expect(endpoints.Items[0].Spec).Should(Equal(internalapi.WorkloadEndpointSpec{
 				InterfaceName: fmt.Sprintf("cali%s", containerID),
 				IPNetworks:    []string{result.IPs[0].Address.String()},
 				MAC:           mac.String(),
@@ -712,7 +712,7 @@ var _ = Describe("CalicoCni", func() {
 
 		var containerID string
 		var workloadName string
-		var endpointSpec libapiv3.WorkloadEndpointSpec
+		var endpointSpec internalapi.WorkloadEndpointSpec
 		var contNs ns.NetNS
 		var result *cniv1.Result
 

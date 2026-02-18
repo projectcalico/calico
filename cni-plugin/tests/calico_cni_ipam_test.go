@@ -16,7 +16,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	apiconfig "github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -570,9 +570,9 @@ var _ = Describe("Calico IPAM Tests", func() {
 					ExpectWithOffset(1, found1).NotTo(BeNil())
 					return found1.Labels
 				} else {
-					var list libapiv3.BlockAffinityList
+					var list internalapi.BlockAffinityList
 					Expect(crdClient.List(ctx, &list)).To(Succeed())
-					var found1 *libapiv3.BlockAffinity
+					var found1 *internalapi.BlockAffinity
 					for i := range list.Items {
 						if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == cidr {
 							found1 = &list.Items[i]

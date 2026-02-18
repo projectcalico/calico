@@ -36,7 +36,7 @@ import (
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
@@ -1026,11 +1026,11 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 		}
 
 		// It's a v3 resource - we care about some of these.
-		if v3key.Kind == libapiv3.KindNode {
+		if v3key.Kind == internalapi.KindNode {
 			// Convert to v1 key/value pairs.
 			log.Debugf("Node: %#v", u.Value)
 			if u.Value != nil {
-				log.Debugf("BGPSpec: %#v", u.Value.(*libapiv3.Node).Spec.BGP)
+				log.Debugf("BGPSpec: %#v", u.Value.(*internalapi.Node).Spec.BGP)
 			}
 			kvps, err := c.nodeV1Processor.Process(&u.KVPair)
 			if err != nil {
@@ -1091,7 +1091,7 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 				}
 			} else {
 				// This was a create or update - update node labels.
-				v3res, ok := u.Value.(*libapiv3.Node)
+				v3res, ok := u.Value.(*internalapi.Node)
 				if !ok {
 					log.Warning("Bad value for Node resource")
 					continue

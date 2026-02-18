@@ -21,7 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	wg "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -56,10 +56,10 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	// just treat that as a delete on the underlying key and return the error alongside
 	// the updates.
 	var ipv4, ipv4Tunl, vxlanTunlIp, vxlanTunlMac, vxlanV6TunlIp, vxlanV6TunlMac, wgConfig any
-	var node *libapiv3.Node
+	var node *internalapi.Node
 	var ok bool
 	if kvp.Value != nil {
-		node, ok = kvp.Value.(*libapiv3.Node)
+		node, ok = kvp.Value.(*internalapi.Node)
 		if !ok {
 			return nil, errors.New("Incorrect value type - expecting resource of kind Node")
 		}
@@ -95,13 +95,13 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		}
 		// Look for internal node address, if BGP is not running
 		if ipv4 == nil {
-			ip, _ := cresources.FindNodeAddress(node, libapiv3.InternalIP, 4)
+			ip, _ := cresources.FindNodeAddress(node, internalapi.InternalIP, 4)
 			if ip != nil {
 				ipv4 = ip
 			}
 		}
 		if ipv4 == nil {
-			ip, _ := cresources.FindNodeAddress(node, libapiv3.ExternalIP, 4)
+			ip, _ := cresources.FindNodeAddress(node, internalapi.ExternalIP, 4)
 			if ip != nil {
 				ipv4 = ip
 			}
@@ -271,7 +271,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 			// preserve that relationship here.
 			Key: model.ResourceKey{
 				Name: name,
-				Kind: libapiv3.KindNode,
+				Kind: internalapi.KindNode,
 			},
 			Value:    kvp.Value,
 			Revision: kvp.Revision,
@@ -338,7 +338,7 @@ func (c *FelixNodeUpdateProcessor) OnSyncerStarting() {
 
 func (c *FelixNodeUpdateProcessor) extractName(k model.Key) (string, error) {
 	rk, ok := k.(model.ResourceKey)
-	if !ok || rk.Kind != libapiv3.KindNode {
+	if !ok || rk.Kind != internalapi.KindNode {
 		return "", errors.New("Incorrect key type - expecting resource of kind Node")
 	}
 	return rk.Name, nil

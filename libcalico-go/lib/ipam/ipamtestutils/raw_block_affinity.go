@@ -23,7 +23,7 @@ import (
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -48,13 +48,13 @@ func CreateUnlabeledBlockAffinity(ctx context.Context, cclient crclient.Client, 
 
 	if !v3CRD {
 		// Use the crd.projectcalico.org/v1 API group.
-		ba := &libapiv3.BlockAffinity{
+		ba := &internalapi.BlockAffinity{
 			TypeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindBlockAffinity,
+				Kind:       internalapi.KindBlockAffinity,
 				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{Name: name},
-			Spec: libapiv3.BlockAffinitySpec{
+			Spec: internalapi.BlockAffinitySpec{
 				State:   string(apiv3.StateConfirmed),
 				Node:    host,
 				Type:    "host",

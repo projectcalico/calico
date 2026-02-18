@@ -20,7 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -64,7 +64,7 @@ func WorkloadEndpointKeyToStatusFilename(key *model.WorkloadEndpointKey) string 
 
 // V3WorkloadEndpointToWorkloadEndpointKey generates a WorkloadEndpointKey from the given WorkloadEndpoint.
 // Returns nil if passed endpoint is nil.
-func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) (*model.WorkloadEndpointKey, error) {
+func V3WorkloadEndpointToWorkloadEndpointKey(ep *internalapi.WorkloadEndpoint) (*model.WorkloadEndpointKey, error) {
 	if ep == nil {
 		return nil, nil
 	}
@@ -82,7 +82,7 @@ func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) (*model.Wo
 		}
 	}
 	v3Key := model.ResourceKey{
-		Kind:      v3.KindWorkloadEndpoint,
+		Kind:      internalapi.KindWorkloadEndpoint,
 		Name:      name,
 		Namespace: ep.GetNamespace(),
 	}

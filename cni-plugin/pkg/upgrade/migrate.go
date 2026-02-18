@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -120,7 +120,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 					return fmt.Errorf("failed to get calico node resource: %s", err)
 				}
 				if node.Spec.BGP == nil {
-					node.Spec.BGP = &libapiv3.NodeBGPSpec{}
+					node.Spec.BGP = &internalapi.NodeBGPSpec{}
 				}
 				node.Spec.BGP.IPv4IPIPTunnelAddr = tunIp.String()
 				if _, err = c.Nodes().Update(ctxt, node, options.SetOptions{}); err != nil {
