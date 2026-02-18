@@ -38,6 +38,7 @@ type StagedKubernetesNetworkPolicy struct {
 
 type StagedKubernetesNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
+	// +kubebuilder:default=Set
 	StagedAction StagedAction `json:"stagedAction,omitempty" validate:"omitempty,stagedAction"`
 
 	// Selects the pods to which this NetworkPolicy object applies. The array of

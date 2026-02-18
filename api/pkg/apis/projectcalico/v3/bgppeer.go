@@ -47,6 +47,12 @@ type BGPPeer struct {
 }
 
 // BGPPeerSpec contains the specification for a BGPPeer resource.
+// +kubebuilder:validation:XValidation:rule="(!has(self.node) || size(self.node) == 0) || (!has(self.nodeSelector) || size(self.nodeSelector) == 0)",message="node and nodeSelector cannot both be set"
+// +kubebuilder:validation:XValidation:rule="(!has(self.peerIP) || size(self.peerIP) == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)",message="peerIP and peerSelector cannot both be set"
+// +kubebuilder:validation:XValidation:rule="(!has(self.peerSelector) || size(self.peerSelector) == 0) || !has(self.asNumber) || self.asNumber == 0",message="asNumber must be empty when peerSelector is set"
+// +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (!has(self.peerIP) || size(self.peerIP) == 0)",message="peerIP must be empty when localWorkloadSelector is set"
+// +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)",message="peerSelector must be empty when localWorkloadSelector is set"
+// +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (has(self.asNumber) && self.asNumber != 0)",message="asNumber is required when localWorkloadSelector is set"
 type BGPPeerSpec struct {
 	// The node name identifying the Calico node instance that is targeted by this peer.
 	// If this is not set, and no nodeSelector is specified, then this BGP peer selects all
