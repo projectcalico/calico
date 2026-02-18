@@ -26,7 +26,7 @@ import (
 	"strconv"
 	"sync"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -515,6 +515,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			nil,
 			environment.NewFeatureDetector(nil).GetFeatures(),
 			1250,
+			nil,
+			nil,
 		)
 		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")

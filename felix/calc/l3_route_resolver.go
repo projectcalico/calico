@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -658,10 +658,10 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 	if pool == nil {
 		return proto.IPPoolType_NONE
 	}
-	if pool.VXLANMode != encap.Undefined {
+	if pool.VXLANMode != encap.Never {
 		return proto.IPPoolType_VXLAN
 	}
-	if pool.IPIPMode != encap.Undefined {
+	if pool.IPIPMode != encap.Never {
 		return proto.IPPoolType_IPIP
 	}
 	return proto.IPPoolType_NO_ENCAP
