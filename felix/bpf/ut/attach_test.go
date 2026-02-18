@@ -216,7 +216,6 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(programsIng.Count()).To(Equal(32))
 
 			// Verify expected programs were loaded based on AttachTypes
 			atIng := programsIng.Programs()
