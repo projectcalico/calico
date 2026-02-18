@@ -259,6 +259,10 @@ func startTestKubeProxy(t *testing.T) *KubeProxy {
 // under the runner lock. Safe to call from Eventually/Consistently.
 func getProxyHostMetadata(kp *KubeProxy) func() map[string]*proto.HostMetadataV4V6Update {
 	return func() map[string]*proto.HostMetadataV4V6Update {
+		if kp.proxy == nil {
+			return nil
+		}
+
 		p := kp.proxy.(*proxy)
 		p.runnerLck.Lock()
 		defer p.runnerLck.Unlock()
