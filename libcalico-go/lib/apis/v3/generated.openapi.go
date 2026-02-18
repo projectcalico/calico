@@ -2082,13 +2082,31 @@ func schema_libcalico_go_lib_apis_v3_AllocationAttribute(ref common.ReferenceCal
 				Properties: map[string]spec.Schema{
 					"handle_id": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "HandleID is the primary identifier for the allocation.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"secondary": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Description: "ActiveOwnerAttrs contains attributes of the active owner (the pod currently using the IP).",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"alternate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AlternateOwnerAttrs contains attributes of the previous or potential owner (used during live migration to track the source or target pod).",
+							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
 								Schema: &spec.Schema{
@@ -2577,6 +2595,13 @@ func schema_libcalico_go_lib_apis_v3_IPAMConfigSpec(ref common.ReferenceCallback
 							Description: "MaxBlocksPerHost, if non-zero, is the max number of blocks that can be affine to each host.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"kubeVirtVMAddressPersistence": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads maintain persistent IP addresses across VM lifecycle events. When set to VMAddressPersistenceEnabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses when their underlying pods are recreated during VM operations such as reboot, live migration, or pod eviction. IP persistency is ensured when the VirtualMachineInstance (VMI) resource is deleted and recreated by the VM controller. When set to VMAddressPersistenceDisabled, VMs receive new IP addresses whenever their pods are recreated, following standard pod IP allocation behavior. Live migration target pods are not allowed when this is set to VMAddressPersistenceDisabled and will result in an error. If nil, defaults to VMAddressPersistenceEnabled (IP persistence enabled if not specified).",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

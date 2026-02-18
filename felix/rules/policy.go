@@ -23,7 +23,7 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/hashutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/nftables"
@@ -1027,7 +1027,7 @@ func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bo
 	if nft {
 		maxLen = nftables.MaxChainNameLength
 	}
-	return hashutils.GetLengthLimitedID(
+	return hash.GetLengthLimitedID(
 		string(prefix),
 		polID.ID(),
 		maxLen,
@@ -1039,7 +1039,7 @@ func ProfileChainName(prefix ProfileChainNamePrefix, profID *types.ProfileID, nf
 	if nft {
 		maxLen = nftables.MaxChainNameLength
 	}
-	return hashutils.GetLengthLimitedID(
+	return hash.GetLengthLimitedID(
 		string(prefix),
 		profID.Name,
 		maxLen,
