@@ -196,7 +196,7 @@ func (kp *KubeProxy) start() error {
 
 	// Could be nil, initially.
 	hostMetadataUpdates := kp.recvHostMetadataV4V6Updates()
-	var hostMetadata map[string]*proto.HostMetadataV4V6Update
+	hostMetadata := make(map[string]*proto.HostMetadataV4V6Update)
 	mergeHostMetadataV4V6Updates(hostMetadata, hostMetadataUpdates)
 
 	err = kp.run(hostIPs, hostMetadata)
