@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
@@ -220,7 +221,6 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		apiv3.KindBGPFilter,
 		resources.NewBGPFilterClient(restClient, group),
 	)
-
 	// IPAMConfig can come to us from two places:
 	// - The lib/ipam code, which uses the older v1 API 'IPAMConfig'
 	// - The lib/clientv3 code, which uses the newer v3 API 'IPAMConfiguration'
@@ -233,8 +233,18 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		resources.NewIPAMConfigClientV3(restClient, group),
 	)
 
-	// These resources are backed directly by core Kubernetes APIs, and do not
-	// use CRDs.
+	// These resources are backed directly by core Kubernetes APIs or third-party
+	// APIs, and do not use CRDs.
+	dynClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build dynamic client: %v", err)
+	}
+	c.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		libapiv3.KindLiveMigration,
+		resources.NewLiveMigrationClient(dynClient),
+	)
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),
 		reflect.TypeFor[model.ResourceListOptions](),
