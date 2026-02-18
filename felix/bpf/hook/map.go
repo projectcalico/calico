@@ -75,6 +75,67 @@ var xdpSubProgNames = []string{
 	"calico_xdp_drop",
 }
 
+// GetSubProgNames returns the sub-program name array for the given hook type (TC vs XDP).
+func GetSubProgNames(hookType Hook) []string {
+	if hookType == XDP {
+		return xdpSubProgNames
+	}
+	return tcSubProgNames
+}
+
+// SubProgInfo contains information about a sub-program including its array index,
+// name, and enum identifier.
+type SubProgInfo struct {
+	Index   int     // Array index in the sub-program names array
+	Name    string  // Program name
+	SubProg SubProg // Enum identifier
+}
+
+// GetApplicableSubProgs returns a filtered list of sub-programs for the given AttachType.
+// It applies the same filtering logic as allocateLayout, returning only programs that should
+// be loaded for this specific attach type configuration.
+func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
+	subs := GetSubProgNames(at.Hook)
+	offset := 0
+	if at.Hook != XDP && at.LogLevel == "debug" {
+		offset = int(SubProgTCMainDebug)
+	}
+
+	var result []SubProgInfo
+	for idx, subprog := range subs {
+		if subprog == "" {
+			continue
+		}
+
+		// Apply the same filtering logic as allocateLayout
+		if SubProg(idx) == SubProgTCHostCtConflict && !at.hasHostConflictProg() {
+			continue
+		}
+
+		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
+			continue
+		}
+
+		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
+			continue
+		}
+
+		// Calculate the actual SubProg enum value
+		i := idx + offset
+		if SubProg(idx) == SubProgTCPolicy {
+			i = idx // Debug programs share the same policy
+		}
+
+		result = append(result, SubProgInfo{
+			Index:   idx,
+			Name:    subprog,
+			SubProg: SubProg(i),
+		})
+	}
+
+	return result
+}
+
 // Layout maps sub-programs of an object to their location in the ProgramsMap
 type Layout map[SubProg]int
 
@@ -305,44 +366,19 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefr
 
 	l := make(Layout)
 
-	offset := 0
-	subs := tcSubProgNames
-	if at.Hook == XDP {
-		subs = xdpSubProgNames
-	} else if at.LogLevel == "debug" {
-		offset = int(SubProgTCMainDebug)
-	}
+	// Use the new centralized API to get the applicable sub-programs
+	applicableProgs := GetApplicableSubProgs(at, skipIPDefrag)
 
-	for idx, subprog := range subs {
-		if subprog == "" {
-			continue
-		}
-
-		if SubProg(idx) == SubProgTCHostCtConflict && !at.hasHostConflictProg() {
-			continue
-		}
-
-		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
-			continue
-		}
-
-		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
-			continue
-		}
-
+	for _, progInfo := range applicableProgs {
 		pmIdx := pm.allocIdx()
-		err := obj.UpdateJumpMap(mapName, subprog, pmIdx)
+		err := obj.UpdateJumpMap(mapName, progInfo.Name, pmIdx)
 		if err != nil {
 			return nil, fmt.Errorf("error updating programs map with %s/%s at %d: %w",
-				ObjectFile(at), subprog, pmIdx, err)
+				ObjectFile(at), progInfo.Name, pmIdx, err)
 		}
-		log.Debugf("generic file %s prog %s loaded at %d", ObjectFile(at), subprog, pmIdx)
+		log.Debugf("generic file %s prog %s loaded at %d", ObjectFile(at), progInfo.Name, pmIdx)
 
-		i := idx + offset
-		if SubProg(idx) == SubProgTCPolicy {
-			i = idx // Debug programs share the same policy
-		}
-		l[SubProg(i)] = pmIdx
+		l[progInfo.SubProg] = pmIdx
 	}
 
 	return l, nil
