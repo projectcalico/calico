@@ -106,6 +106,7 @@ type Map interface {
 
 	// Size returns the maximun number of entries the table can hold.
 	Size() int
+	BatchUpdate(ks, vs [][]byte, flags uint64) (int, error)
 }
 
 type MapWithExistsCheck interface {

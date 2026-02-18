@@ -183,7 +183,7 @@ func makeNetSetAndPolUpdates(num int) []api.Update {
 			},
 		})
 
-		pol := &model.Policy{}
+		pol := &model.Policy{Tier: "default"}
 		pol.Selector = "all()"
 		pol.InboundRules = append(pol.InboundRules, model.Rule{
 			Action:      "Allow",
@@ -259,7 +259,7 @@ func makeTagPolicies(num int) []api.Update {
 	const rulesPerPol = 5
 	updates := make([]api.Update, 0, num)
 	for i := range num {
-		pol := &model.Policy{}
+		pol := &model.Policy{Tier: "default"}
 		pol.Selector = fmt.Sprintf("has(%s)", markerLabels[i%len(markerLabels)])
 		for j := range rulesPerPol {
 			pol.InboundRules = append(pol.InboundRules, model.Rule{
