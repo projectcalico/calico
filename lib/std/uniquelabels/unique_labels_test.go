@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
@@ -120,6 +121,149 @@ func TestAllHandles(t *testing.T) {
 	// Check that break is properly handled.
 	for range m.AllHandles() {
 		break
+	}
+}
+
+func sameUnderlyingMap(a, b Map) bool {
+	return reflect.ValueOf(a.m).UnsafePointer() == reflect.ValueOf(b.m).UnsafePointer()
+}
+
+func TestMakeCacheHit(t *testing.T) {
+	input := map[string]string{"a": "b", "c": "d"}
+
+	m1 := Make(input)
+	m2 := Make(input)
+
+	// Both calls should return the same underlying handleMap from the cache.
+	if !sameUnderlyingMap(m1, m2) {
+		t.Errorf("expected Make to return cached handleMap on repeat call")
+	}
+}
+
+func TestMakeCacheMiss(t *testing.T) {
+	m1 := Make(map[string]string{"a": "b"})
+	m2 := Make(map[string]string{"x": "y"})
+
+	if sameUnderlyingMap(m1, m2) {
+		t.Errorf("different inputs should produce different Map instances")
+	}
+}
+
+func TestMakeCacheEviction(t *testing.T) {
+	// Use a private cache so we don't interfere with other tests.
+	c := recentMapCache{seed: recentCache.seed}
+
+	input1 := map[string]string{"a": "b"}
+	input2 := map[string]string{"x": "y"}
+
+	// Force both inputs into the same slot by computing their hashes and
+	// using Store directly.
+	hash1 := c.hashMapStringString(input1)
+	m1 := Make(input1)
+	c.Store(hash1, m1)
+
+	// Verify it's cached.
+	cached, _, ok := c.Lookup(input1)
+	if !ok {
+		t.Fatal("expected cache hit for input1")
+	}
+	if !sameUnderlyingMap(cached, m1) {
+		t.Fatal("cached map should be the same instance")
+	}
+
+	// Overwrite the same slot with a different entry that has the same
+	// index (we force this by using the same hash value).
+	m2 := Make(input2)
+	c.Store(hash1, m2) // Same hash => same slot, evicts input1.
+
+	// input1 should now miss.
+	_, _, ok = c.Lookup(input1)
+	if ok {
+		t.Error("expected cache miss for input1 after eviction")
+	}
+
+	// input2 won't hit either because the stored hash doesn't match
+	// input2's real hash (we used hash1). That's fine — this tests that
+	// the old entry was evicted.
+}
+
+func TestMakeCacheHashCollision(t *testing.T) {
+	// Two different inputs that are forced into the same cache slot
+	// should still return correct (different) results from Make.
+	// We can't easily force a natural collision, but we can verify
+	// that Make returns correct values regardless of cache state.
+	inputs := make([]map[string]string, recentMapCacheSize+1)
+	for i := range inputs {
+		inputs[i] = map[string]string{"key": fmt.Sprintf("value-%d", i)}
+	}
+
+	// Fill the cache beyond capacity to force collisions.
+	results := make([]Map, len(inputs))
+	for i, input := range inputs {
+		results[i] = Make(input)
+	}
+
+	// Every result should have the correct content regardless of cache state.
+	for i, input := range inputs {
+		if !results[i].EquivalentTo(input) {
+			t.Errorf("Make result %d has wrong content", i)
+		}
+	}
+}
+
+func TestMakeCacheConcurrent(t *testing.T) {
+	const goroutines = 16
+	const iterations = 1000
+	inputs := []map[string]string{
+		{"a": "1"},
+		{"b": "2"},
+		{"c": "3"},
+		{"a": "1", "b": "2"},
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			for i := range iterations {
+				input := inputs[i%len(inputs)]
+				m := Make(input)
+				if !m.EquivalentTo(input) {
+					t.Errorf("concurrent Make returned wrong content")
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestEquivalentTo(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		mapInput map[string]string
+		compare  map[string]string
+		want     bool
+	}{
+		{"equal", map[string]string{"a": "b"}, map[string]string{"a": "b"}, true},
+		{"different value", map[string]string{"a": "b"}, map[string]string{"a": "x"}, false},
+		{"extra key", map[string]string{"a": "b"}, map[string]string{"a": "b", "c": "d"}, false},
+		{"missing key", map[string]string{"a": "b", "c": "d"}, map[string]string{"a": "b"}, false},
+		{"both empty", map[string]string{}, map[string]string{}, true},
+		{"empty vs non-empty", map[string]string{}, map[string]string{"a": "b"}, false},
+		{"both nil", nil, nil, true},
+		{"nil vs empty", nil, map[string]string{}, false},
+		{"empty vs nil", map[string]string{}, nil, false},
+		{"nil vs non-empty", nil, map[string]string{"a": "b"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := Make(tc.mapInput)
+			got := m.EquivalentTo(tc.compare)
+			if got != tc.want {
+				t.Errorf("Make(%v).EquivalentTo(%v) = %v, want %v", tc.mapInput, tc.compare, got, tc.want)
+			}
+		})
 	}
 }
 
