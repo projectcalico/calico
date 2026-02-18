@@ -213,8 +213,9 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 		attrs := []model.AllocationAttribute{}
 		for _, a := range ab.Spec.Attributes {
 			attrs = append(attrs, model.AllocationAttribute{
-				HandleID:         a.AttrPrimary,
-				ActiveOwnerAttrs: a.AttrSecondary,
+				HandleID:            a.HandleID,
+				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
+				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
 			})
 		}
 
@@ -287,8 +288,9 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		attrs := []v3.AllocationAttribute{}
 		for _, a := range ab.Attributes {
 			attrs = append(attrs, v3.AllocationAttribute{
-				AttrPrimary:   a.HandleID,
-				AttrSecondary: a.ActiveOwnerAttrs,
+				HandleID:            a.HandleID,
+				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
+				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
 			})
 		}
 
