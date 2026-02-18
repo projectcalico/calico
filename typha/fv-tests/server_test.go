@@ -36,7 +36,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -120,8 +120,8 @@ var (
 	}
 	v3Node = api.Update{
 		KVPair: model.KVPair{
-			Key: model.ResourceKey{Name: "node1", Kind: libapiv3.KindNode},
-			Value: &libapiv3.Node{
+			Key: model.ResourceKey{Name: "node1", Kind: internalapi.KindNode},
+			Value: &internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					ResourceVersion: "1237",
 				},

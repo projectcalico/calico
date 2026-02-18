@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -44,8 +44,8 @@ func NewBlockAffinityClientV3(r rest.Interface, group BackingAPIGroup) K8sResour
 	rc := customResourceClient{
 		restClient:       r,
 		resource:         BlockAffinityResourceName,
-		k8sResourceType:  reflect.TypeFor[libapiv3.BlockAffinity](),
-		k8sListType:      reflect.TypeFor[libapiv3.BlockAffinityList](),
+		k8sResourceType:  reflect.TypeFor[internalapi.BlockAffinity](),
+		k8sListType:      reflect.TypeFor[internalapi.BlockAffinityList](),
 		kind:             v3.KindBlockAffinity,
 		versionconverter: ipamAffinityVersionConverter{},
 		apiGroup:         group,
@@ -69,14 +69,14 @@ type blockAffinityClientV3 struct {
 	crdIsV3 bool
 }
 
-// ipamAffinityVersionConverter handles converstion between v3 and CRD representations of ipamAffinity.
+// ipamAffinityVersionConverter handles conversion between the v3 API and CRD representations of ipamAffinity.
 type ipamAffinityVersionConverter struct{}
 
-// crdToV3 converts the given CRD KVPair into a v3 model representation which can be passed back to the clientv3 code.
+// ConvertFromK8s converts the given CRD KVPair into a v3 API representation which can be passed back to the clientv3 code.
 func (c ipamAffinityVersionConverter) ConvertFromK8s(r Resource) (Resource, error) {
 	switch o := r.(type) {
-	case *libapiv3.BlockAffinity:
-		// This is a v1 CRD, convert it to the v3 struct expected by clientv3.
+	case *internalapi.BlockAffinity:
+		// This is a crd.projectcalico.org/v1 CRD, convert it to the v3 API struct expected by clientv3.
 		return &v3.BlockAffinity{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       v3.KindBlockAffinity,
@@ -107,7 +107,7 @@ func getBackingAffinityTypeMeta(isV3 bool) metav1.TypeMeta {
 		}
 	}
 	return metav1.TypeMeta{
-		Kind:       libapiv3.KindBlockAffinity,
+		Kind:       internalapi.KindBlockAffinity,
 		APIVersion: "crd.projectcalico.org/v1",
 	}
 }
@@ -135,13 +135,13 @@ func buildCRD(state, host, affType, cidr string, deleted bool, name, revision st
 	}
 
 	// If this is a v1 resource, then we need to use the old v1 API version and types.
-	ba := &libapiv3.BlockAffinity{
+	ba := &internalapi.BlockAffinity{
 		TypeMeta: getBackingAffinityTypeMeta(isV3),
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name,
 			ResourceVersion: revision,
 		},
-		Spec: libapiv3.BlockAffinitySpec{
+		Spec: internalapi.BlockAffinitySpec{
 			State:   string(state),
 			Node:    host,
 			Type:    affType,
@@ -244,7 +244,7 @@ func (c *blockAffinityClientV3) toKVPairV3(r Resource) (*model.KVPair, error) {
 }
 
 func (c *blockAffinityClientV3) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
-	resl := model.ResourceListOptions{Kind: libapiv3.KindBlockAffinity}
+	resl := model.ResourceListOptions{Kind: internalapi.KindBlockAffinity}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
 	k8sOpts := watchOptionsToK8sListOptions(options)
 	k8sWatch, err := k8sWatchClient.WatchFunc(k8sOpts)
