@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -502,15 +502,15 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 
 		// If there is no handle, then skip this IP. We need the handle
 		// in order to release the IP below.
-		if attr.AttrPrimary == nil {
+		if attr.HandleID == nil {
 			continue
 		}
-		handle := *attr.AttrPrimary
+		handle := *attr.HandleID
 
 		alloc := allocation{
 			ip:             ordinalToIP(b, ord).String(),
 			handle:         handle,
-			attrs:          attr.AttrSecondary,
+			attrs:          attr.ActiveOwnerAttrs,
 			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
 			block:          blockCIDR,
 		}

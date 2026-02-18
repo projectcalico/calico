@@ -25,7 +25,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/hashutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -809,7 +809,7 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, a
 }
 
 func EndpointChainName(prefix string, ifaceName string, maxLen int) string {
-	return hashutils.GetLengthLimitedID(
+	return hash.GetLengthLimitedID(
 		prefix,
 		ifaceName,
 		maxLen,

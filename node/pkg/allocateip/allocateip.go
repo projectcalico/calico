@@ -346,8 +346,10 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *liba
 		}
 
 		// Check if we got correct assignment attributes.
-		attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
+		allocAttr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
 		if err == nil {
+			attr := allocAttr.ActiveOwnerAttrs
+			handle := allocAttr.HandleID
 			if attr[ipam.AttributeType] == attrType && attr[ipam.AttributeNode] == node.Name {
 				// The tunnel address is still assigned to this node, but is it in the correct pool this time?
 				if !isIpInPool(addr, cidrs) {
@@ -639,18 +641,21 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.
 		// For scenario #2, we expect no attributes and no handle to be stored with the allocation.
 		// For scenario #3, we expect a handle in the attributes and it should match the expected value.
 		if ipAddr != nil {
-			// There are no addresses with this handle. If there is an IP configured on the node, check to see if it
-			// belongs to us. If it has no handle and no attributes, then we can pretty confidently
-			// say that it belongs to us rather than a pod and should be cleaned up.
-			logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
-			attr, storedHandle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
-			if err != nil {
-				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-					logCtx.WithError(err).Error("Failed to query attributes")
-					return err
-				}
-				// Scenario #1: The allocation actually doesn't exist, we don't have anything to do.
-			} else if len(attr) == 0 && storedHandle == nil {
+		// There are no addresses with this handle. If there is an IP configured on the node, check to see if it
+		// belongs to us. If it has no handle and no attributes, then we can pretty confidently
+		// say that it belongs to us rather than a pod and should be cleaned up.
+		logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
+		allocAttr, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				logCtx.WithError(err).Error("Failed to query attributes")
+				return err
+			}
+			// Scenario #1: The allocation actually doesn't exist, we don't have anything to do.
+		} else {
+			attr := allocAttr.ActiveOwnerAttrs
+			storedHandle := allocAttr.HandleID
+			if len(attr) == 0 && storedHandle == nil {
 				// Scenario #2: The allocation exists, but has no handle whatsoever.
 				// This is an ancient allocation and can be released.
 				if _, _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
