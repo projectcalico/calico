@@ -26,7 +26,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -155,7 +154,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		Context("NetworkPolicy", func() {
-			framework.ConformanceIt("should allow creation by a user with full tier RBAC", func() {
+			It("should allow creation by a user with full tier RBAC", func() {
 				cli := newImpersonatedClient(rbacTierAdminUser)
 
 				np := v3.NewNetworkPolicy()
@@ -172,7 +171,7 @@ var _ = describe.CalicoDescribe(
 				Expect(adminCli.Delete(ctx, np)).To(Succeed())
 			})
 
-			framework.ConformanceIt("should deny creation by a user without tier GET access", func() {
+			It("should deny creation by a user without tier GET access", func() {
 				cli := newImpersonatedClient(rbacNoTierGetUser)
 
 				np := v3.NewNetworkPolicy()
@@ -189,7 +188,7 @@ var _ = describe.CalicoDescribe(
 				Expect(err.Error()).To(ContainSubstring("tier"))
 			})
 
-			framework.ConformanceIt("should deny creation by a user without tier policy access", func() {
+			It("should deny creation by a user without tier policy access", func() {
 				cli := newImpersonatedClient(rbacNoPolicyUser)
 
 				np := v3.NewNetworkPolicy()
@@ -206,7 +205,7 @@ var _ = describe.CalicoDescribe(
 				Expect(err.Error()).To(ContainSubstring("tier"))
 			})
 
-			framework.ConformanceIt("should allow deletion by a user with full tier RBAC", func() {
+			It("should allow deletion by a user with full tier RBAC", func() {
 				By("Creating a policy with the admin client")
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-allow-delete"
@@ -224,7 +223,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		Context("GlobalNetworkPolicy", func() {
-			framework.ConformanceIt("should allow creation by a user with full tier RBAC", func() {
+			It("should allow creation by a user with full tier RBAC", func() {
 				cli := newImpersonatedClient(rbacTierAdminUser)
 
 				gnp := v3.NewGlobalNetworkPolicy()
@@ -240,7 +239,7 @@ var _ = describe.CalicoDescribe(
 				Expect(adminCli.Delete(ctx, gnp)).To(Succeed())
 			})
 
-			framework.ConformanceIt("should deny creation by a user without tier access", func() {
+			It("should deny creation by a user without tier access", func() {
 				cli := newImpersonatedClient(rbacNoTierGetUser)
 
 				gnp := v3.NewGlobalNetworkPolicy()
@@ -258,7 +257,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		Context("tier isolation", func() {
-			framework.ConformanceIt("should restrict a user to only their permitted tier", func() {
+			It("should restrict a user to only their permitted tier", func() {
 				cli := newImpersonatedClient(rbacOtherTierUser)
 
 				By("Creating a policy in the permitted tier should succeed")
