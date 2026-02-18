@@ -33,7 +33,6 @@ const (
 // optimal live migration processing.
 type LiveMigration struct {
 	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata"`
 	Spec LiveMigrationSpec `json:"spec"`
 }
