@@ -45,7 +45,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"

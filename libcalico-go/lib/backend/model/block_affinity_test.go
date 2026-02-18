@@ -20,7 +20,7 @@ import (
 	v4 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	k8slabels "k8s.io/apimachinery/pkg/labels"
 
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 

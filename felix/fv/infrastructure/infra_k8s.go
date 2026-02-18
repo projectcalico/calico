@@ -42,7 +42,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"

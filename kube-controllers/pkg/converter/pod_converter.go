@@ -22,7 +22,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )

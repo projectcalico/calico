@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
 
 var _ = Describe("PodConverter", func() {

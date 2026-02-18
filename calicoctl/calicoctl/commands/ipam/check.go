@@ -35,7 +35,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"

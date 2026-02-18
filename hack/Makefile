@@ -14,7 +14,7 @@ include ../lib.Makefile
 BINDIR?=bin
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
-APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
+APIS_SRCS := $(filter-out ./lib/apis/internalapi/zz_generated.deepcopy.go, $(wildcard ./lib/apis/internalapi/*.go))
 
 .PHONY: clean
 clean:

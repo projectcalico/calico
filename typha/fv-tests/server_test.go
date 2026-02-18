@@ -36,7 +36,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"

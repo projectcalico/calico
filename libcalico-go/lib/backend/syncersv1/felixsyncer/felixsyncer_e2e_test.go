@@ -27,7 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"

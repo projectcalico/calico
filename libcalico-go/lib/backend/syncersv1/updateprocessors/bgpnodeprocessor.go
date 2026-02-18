@@ -19,7 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"

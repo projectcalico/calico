@@ -30,7 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"

@@ -31,7 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"

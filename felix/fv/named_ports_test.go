@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )

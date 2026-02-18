@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"

@@ -32,7 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"

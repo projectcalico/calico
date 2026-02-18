@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"sync"
 
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )

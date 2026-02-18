@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"

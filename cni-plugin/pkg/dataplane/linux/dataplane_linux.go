@@ -32,7 +32,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
