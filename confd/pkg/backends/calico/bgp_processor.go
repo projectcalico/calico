@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -26,6 +27,8 @@ import (
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // NodeName gets the node name from environment
@@ -92,6 +95,13 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	// Process community rules
 	if err := c.processCommunityRules(config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to process community rules")
+		return nil, err
+	}
+	logc.Debugf("Processed community rules: found %d rules", len(config.Communities))
+
+	// Process ippools.
+	if err := c.processIPPools(config, ipVersion); err != nil {
+		logc.WithError(err).Warn("Failed to ippools")
 		return nil, err
 	}
 	logc.Debugf("Processed community rules: found %d rules", len(config.Communities))
@@ -715,4 +725,126 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	}
 
 	return nil
+}
+
+func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) error {
+	poolKey := fmt.Sprintf("/calico/v1/ipam/v%d/pool", ipVersion)
+	logCtx := log.WithFields(map[string]any{
+		"ipVersion": ipVersion,
+		"path":      poolKey,
+	})
+
+	kvPairs, err := c.GetValues([]string{poolKey})
+	if err != nil {
+		logCtx.WithError(err).Debug("No peers found or error retrieving them")
+		return nil
+	}
+
+	for key, value := range kvPairs {
+		var ippool model.IPPool
+		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
+			logCtx.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
+			continue
+		}
+
+		statement := processIPPool(&ippool, false, "", "reject", ipVersion)
+		if len(statement) != 0 {
+			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
+		}
+
+		statement = processIPPool(&ippool, false, "", "accept", ipVersion)
+		if len(statement) != 0 {
+			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
+		}
+
+		statement = processIPPool(&ippool, true, "", "", ipVersion)
+		if len(statement) != 0 {
+			config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
+		}
+	}
+
+	// Sort statements.
+	slices.Sort(config.KernelFilterForIPPools)
+	slices.Sort(config.BGPExportFilterForDisabledIPPools)
+	slices.Sort(config.BGPExportFilterForEnabledIPPools)
+
+	return nil
+}
+
+func processIPPool(
+	ippool *model.IPPool,
+	forProgrammingKernel bool,
+	localSubnet string,
+	filterAction string,
+	ipVersion int,
+) string {
+	cidr := ippool.CIDR.String()
+	var action, comment, extraStatement string
+	switch {
+	case ippool.DisableBGPExport && !forProgrammingKernel:
+		// IPPool's BGP export is disabled, and filter is for exporting to other peers.
+		action = "reject"
+		comment = "BGP export is disabled."
+	case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
+		// VXLAN encapsulation is always handled by Felix.
+		if forProgrammingKernel {
+			// Felix always handles programming VXLAN IPPools.
+			action = "reject"
+			comment = "VXLAN routes are handled by Felix."
+		} else {
+			action = "accept"
+		}
+	case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
+		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
+		// IPIP encapsulation or No-Encap.
+		if forProgrammingKernel && ipVersion == 4 && len(localSubnet) != 0 {
+			// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+			// our fork of BIRD.
+			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+		}
+		action = "accept"
+	default:
+		return ""
+	}
+
+	// Filter statements based on provided filterAction.
+	if len(filterAction) != 0 && filterAction != action {
+		return ""
+	}
+	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
+}
+
+func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSubnet string) string {
+	switch v3.EncapMode(ipipMode) {
+	case v3.Always:
+		return `krt_tunnel="tunl0";`
+	case v3.CrossSubnet:
+		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
+		return fmt.Sprintf(format, localSubnet)
+	case v3.Never:
+		// No-encap case.
+		return `krt_tunnel="";`
+	default:
+		return ``
+	}
+}
+
+func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string) (statement string) {
+	// Check mandatory inputs.
+	if len(cidr) == 0 || len(action) == 0 {
+		return
+	}
+	if len(extraStatement) != 0 {
+		statement = fmt.Sprintf("  if (net ~ %s) then { %s %s; }", cidr, extraStatement, action)
+	} else {
+		statement = fmt.Sprintf("  if (net ~ %s) then { %s; }", cidr, action)
+	}
+	if len(comment) != 0 {
+		statement = fmt.Sprintf("%s %s", statement, formatComment(comment))
+	}
+	return
+}
+
+func formatComment(comment string) string {
+	return fmt.Sprintf("# %s", comment)
 }
