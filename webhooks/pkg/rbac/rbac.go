@@ -63,7 +63,11 @@ func RegisterHook(cs kubernetes.Interface, handleFn utils.HandleFn) {
 }
 
 // NewTieredRBACHook returns a new instance of the tiered RBAC admission webhook backend, which uses
-// the provided TierAuthorizer to perform authorization checks.
+// the provided TierAuthorizer to perform authorization checks. Note that this hook is implemented as an admission webhook, which
+// has some limitations and benefits compared to a full authorization webhook. Namely:
+// - It can be installed on a cluster without needing to modify Kubernetes API server configuration, making it easier to deploy and manage.
+// - It can only be used to authorize admission requests, so it won't be able to handle authorization for non-admission requests (e.g., kubectl auth can-i).
+// - It does not have access to GET / LIST / WATCH requests, and so cannot make authorization decisions on those requests.
 func NewTieredRBACHook(authz authorizer.TierAuthorizer) utils.HandlerProvider {
 	return &tieredRBACHook{authz: authz}
 }
