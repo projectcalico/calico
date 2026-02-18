@@ -1660,10 +1660,30 @@ endif
 
 	touch $@
 
+# Create a kind cluster with the Calico authorization webhook configured.
+# Builds on kind-cluster-create, using the AuthorizationConfiguration from
+# webhooks/config/ to insert the Calico tier-based RBAC webhook between Node
+# and RBAC in the authorization chain.
+KIND_AUTHZ_CONFIG := $(KIND_DIR)/kind-authz.config
+KIND_AUTHZ_WEBHOOK_DIR := $(KIND_DIR)/authz-webhook-config
+kind-authz-cluster-create: $(KIND_AUTHZ_CONFIG)
+	# Copy the checked-in config files, patching the webhook kubeconfig to use
+	# insecure-skip-tls-verify instead of a CA cert (sufficient for kind testing).
+	mkdir -p $(KIND_AUTHZ_WEBHOOK_DIR)
+	cp $(REPO_ROOT)/webhooks/config/authorization-configuration.yaml $(KIND_AUTHZ_WEBHOOK_DIR)/
+	sed 's|certificate-authority:.*|insecure-skip-tls-verify: true|' \
+		$(REPO_ROOT)/webhooks/config/calico-authz-webhook-kubeconfig.yaml \
+		> $(KIND_AUTHZ_WEBHOOK_DIR)/calico-authz-webhook-kubeconfig.yaml
+	# Create the cluster using the standard kind-cluster-create target.
+	$(MAKE) kind-cluster-create KIND_CONFIG=$(KIND_AUTHZ_CONFIG)
+$(KIND_AUTHZ_CONFIG): $(KIND_DIR)/kind-authz.config.tpl
+	sed 's|__REPO_ROOT__|$(REPO_ROOT)|g' $< > $@
+
 kind-cluster-destroy kind-down: $(KIND) $(KUBECTL)
 	# Tear down the e2e external node (if any) alongside the cluster. Idempotent
 	# and a no-op when no external node was created (e.g. non-BPF jobs).
 	-$(KIND_DIR)/external-node.sh down
+
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
 	-$(KIND) delete cluster --name $(KIND_NAME)
