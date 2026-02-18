@@ -118,7 +118,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 				_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "", cid, cniVersion)
 				Expect(exitCode).Should(Equal(0))
-			,
+			},
 
 		Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
             {
