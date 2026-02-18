@@ -123,7 +123,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
 	}
 
-	syncChan := make(chan interface{}, 1)
+	syncChan := make(chan any, 1)
 
 	// Create a rate limited that compares two distinct limiters and uses the max. This rate limiter is used
 	// only to control the retry rate of whole IPAM sync executions.
@@ -159,7 +159,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		podDeletionChan:  make(chan *v1.Pod, utils.BatchUpdateSize),
 
 		// Buffered channels for potentially bursty channels.
-		syncerUpdates: make(chan interface{}, utils.BatchUpdateSize),
+		syncerUpdates: make(chan any, utils.BatchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
@@ -198,10 +198,10 @@ type IPAMController struct {
 	kubernetesNodesByCalicoName map[string]string
 
 	// syncChan triggers processing in response to an update.
-	syncChan chan interface{}
+	syncChan chan any
 
 	// For update / deletion events from the syncer.
-	syncerUpdates chan interface{}
+	syncerUpdates chan any
 
 	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
@@ -370,7 +370,7 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 
 // handleUpdate fans out proper handling of the update depending on the
 // information in the update.
-func (c *IPAMController) handleUpdate(upd interface{}) {
+func (c *IPAMController) handleUpdate(upd any) {
 	switch upd := upd.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = upd
@@ -473,8 +473,8 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	// release their affinity if needed.
 	var n string
 	if b.Affinity != nil {
-		if strings.HasPrefix(*b.Affinity, "host:") {
-			n = strings.TrimPrefix(*b.Affinity, "host:")
+		if after, ok := strings.CutPrefix(*b.Affinity, "host:"); ok {
+			n = after
 			c.nodesByBlock[blockCIDR] = n
 			if _, ok := c.blocksByNode[n]; !ok {
 				c.blocksByNode[n] = map[string]bool{}

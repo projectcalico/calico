@@ -16,6 +16,7 @@ package commands
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/pkg/errors"
@@ -81,9 +82,7 @@ func dumpIPSets() error {
 		setIDs = append(setIDs, k)
 		sort.Strings(v)
 	}
-	sort.Slice(setIDs, func(i, j int) bool {
-		return setIDs[i] < setIDs[j]
-	})
+	slices.Sort(setIDs)
 	for _, setID := range setIDs {
 		fmt.Printf("IP set %#x\n", setID)
 		for _, member := range membersBySet[setID] {

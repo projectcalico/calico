@@ -102,7 +102,7 @@ func NewNodeController(ctx context.Context,
 	// Setup event handlers for nodes and pods learned through the
 	// respective informers.
 	nodeHandlers := cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			// Call all of the registered node deletion funcs.
 			for _, f := range nodeDeletionFuncs {
 				f(obj.(*v1.Node))
@@ -110,7 +110,7 @@ func NewNodeController(ctx context.Context,
 		},
 	}
 	podHandlers := cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			// Call all of the registered pod deletion funcs.
 			for _, f := range podDeletionFuncs {
 				f(obj.(*v1.Pod))
@@ -196,7 +196,7 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 // kick puts an item on the channel in non-blocking write. This means if there
 // is already something pending, it has no effect. This allows us to coalesce
 // multiple requests into a single pending request.
-func kick(c chan<- interface{}) {
+func kick(c chan<- any) {
 	select {
 	case c <- nil:
 		// pass

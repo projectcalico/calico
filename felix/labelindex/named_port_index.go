@@ -17,6 +17,7 @@ package labelindex
 import (
 	"iter"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -91,12 +92,7 @@ func (d *endpointData) RemoveMatchingIPSetID(id string) {
 }
 
 func (d *endpointData) HasParent(parent *npParentData) bool {
-	for _, p := range d.parents {
-		if p == parent {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(d.parents, parent)
 }
 
 func (d *endpointData) LookupNamedPorts(name string, proto ipsetmember.Protocol) []uint16 {
@@ -783,7 +779,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, rawLab
 }
 
 func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, applyUpdate, revertUpdate func()) {
-	parentData.IterEndpointIDs(func(id interface{}) error {
+	parentData.IterEndpointIDs(func(id any) error {
 		epData, _ := idx.endpointKVIdx.Get(id)
 		// This endpoint matches this parent, calculate its old contribution.  (The revert function
 		// is a no-op on the first loop but keeping it here, rather than at the bottom of the loop

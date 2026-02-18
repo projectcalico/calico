@@ -34,7 +34,7 @@ import (
 
 var (
 	matchBlockAffinity = regexp.MustCompile(fmt.Sprintf("^/?calico/ipam/v2/(@|%s|%s)/([^/]+)/ipv./block/([^/]+)$", IPAMAffinityTypeHost, IPAMAffinityTypeVirtual))
-	typeBlockAff       = reflect.TypeOf(BlockAffinity{})
+	typeBlockAff       = reflect.TypeFor[BlockAffinity]()
 )
 
 type BlockAffinityState string

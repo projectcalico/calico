@@ -174,11 +174,11 @@ func MapMemIter(m MapMem) func(k, v []byte) {
 }
 
 func (m MapMem) String() string {
-	var out string
+	var out strings.Builder
 
 	for k := range m {
-		out += k.String() + "\n"
+		out.WriteString(k.String() + "\n")
 	}
 
-	return out
+	return out.String()
 }

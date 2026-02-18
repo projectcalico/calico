@@ -3,6 +3,7 @@ This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
 go 1.25.7
+github.com/Masterminds/semver/v3 v3.4.0
 github.com/aws/aws-sdk-go-v2 v1.39.5
 github.com/aws/aws-sdk-go-v2/config v1.31.16
 github.com/aws/aws-sdk-go-v2/credentials v1.18.20
@@ -74,10 +75,10 @@ github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
-github.com/nxadm/tail v1.4.8
 github.com/olekukonko/tablewriter v0.0.5
 github.com/onsi/ginkgo v1.16.5
-github.com/onsi/gomega v1.38.2
+github.com/onsi/ginkgo/v2 v2.28.1
+github.com/onsi/gomega v1.39.1
 github.com/opencontainers/go-digest v1.0.0
 github.com/pelletier/go-toml v1.9.5
 github.com/pelletier/go-toml/v2 v2.2.4
@@ -113,14 +114,16 @@ go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.3
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/crypto v0.46.0
-golang.org/x/net v0.48.0
+golang.org/x/crypto v0.47.0
+golang.org/x/mod v0.32.0
+golang.org/x/net v0.49.0
 golang.org/x/oauth2 v0.34.0
 golang.org/x/sync v0.19.0
-golang.org/x/sys v0.39.0
-golang.org/x/term v0.38.0
-golang.org/x/text v0.32.0
+golang.org/x/sys v0.40.0
+golang.org/x/term v0.39.0
+golang.org/x/text v0.33.0
 golang.org/x/time v0.14.0
+golang.org/x/tools v0.41.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 google.golang.org/genproto v0.0.0-20250603155806-513f23925822
@@ -131,7 +134,6 @@ google.golang.org/protobuf v1.36.10
 gopkg.in/evanphx/json-patch.v4 v4.12.0
 gopkg.in/go-playground/validator.v9 v9.30.2
 gopkg.in/inf.v0 v0.9.1
-gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
 gopkg.in/yaml.v3 v3.0.1
 k8s.io/api v0.34.3
 k8s.io/apiextensions-apiserver v0.34.3

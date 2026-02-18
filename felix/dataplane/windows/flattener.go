@@ -185,7 +185,7 @@ func combinePorts(as string, bs string) (string, error) {
 
 func parsePorts(portsStr string) *bitset.BitSet {
 	setOfPorts := bitset.New(2 ^ 16 + 1)
-	for _, p := range strings.Split(portsStr, ",") {
+	for p := range strings.SplitSeq(portsStr, ",") {
 		if strings.Contains(p, "-") {
 			// Range
 			parts := strings.Split(p, "-")

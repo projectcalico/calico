@@ -51,12 +51,12 @@ const (
 // The loaded resources may be a slice containing resources and resource lists, or
 // may be a single resource or a single resource list.  This function handles the
 // different possible options to convert to a single slice of resources.
-func convertToSliceOfResources(loaded interface{}) ([]resourcemgr.ResourceObject, error) {
+func convertToSliceOfResources(loaded any) ([]resourcemgr.ResourceObject, error) {
 	res := []resourcemgr.ResourceObject{}
 	log.Infof("Converting resource to slice: %v", loaded)
 	switch r := loaded.(type) {
 	case []runtime.Object:
-		for i := 0; i < len(r); i++ {
+		for i := range r {
 			r, err := convertToSliceOfResources(r[i])
 			if err != nil {
 				return nil, err
@@ -124,7 +124,7 @@ type fileError struct {
 //   - Convert the loaded resources into a list of resources (easier to handle)
 //   - Process each resource individually, fanning out to the appropriate methods on
 //     the client interface, collate results and exit on the first error.
-func ExecuteConfigCommand(args map[string]interface{}, action action) CommandResults {
+func ExecuteConfigCommand(args map[string]any, action action) CommandResults {
 	var resources []resourcemgr.ResourceObject
 
 	singleKind := false
@@ -145,7 +145,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		// Filename is specified.  Use the file iterator to handle the fact that this may be a directory rather than a
 		// single file. For each file load the resources from the file and convert to a single slice of resources for
 		// easier handling.
-		err := file.Iter(args, func(modifiedArgs map[string]interface{}) error {
+		err := file.Iter(args, func(modifiedArgs map[string]any) error {
 			modifiedFilename := modifiedArgs["--filename"].(string)
 
 			r, err := resourcemgr.CreateResourcesFromFile(modifiedFilename)
@@ -307,7 +307,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 // ExecuteResourceAction fans out the specific resource action to the appropriate method
 // on the ResourceManager for the specific resource.
-func ExecuteResourceAction(args map[string]interface{}, client client.Interface, resource resourcemgr.ResourceObject, action action) ([]runtime.Object, error) {
+func ExecuteResourceAction(args map[string]any, client client.Interface, resource resourcemgr.ResourceObject, action action) ([]runtime.Object, error) {
 	rm := resourcemgr.GetResourceManager(resource)
 
 	err := handleNamespace(resource, rm, args)
@@ -373,7 +373,7 @@ func tryEnsureInitialized(ctx context.Context, client client.Interface) {
 // handleNamespace fills in the namespace information in the resource (if required),
 // and validates the namespace depending on whether or not a namespace should be
 // provided based on the resource kind.
-func handleNamespace(resource resourcemgr.ResourceObject, rm resourcemgr.ResourceManager, args map[string]interface{}) error {
+func handleNamespace(resource resourcemgr.ResourceObject, rm resourcemgr.ResourceManager, args map[string]any) error {
 	allNs := argutils.ArgBoolOrFalse(args, "--all-namespaces")
 	cliNs := argutils.ArgStringOrBlank(args, "--namespace")
 	resNs := resource.GetObjectMeta().GetNamespace()

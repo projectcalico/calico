@@ -26,6 +26,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -386,12 +387,9 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// Just update the profile on the endpoint. The profile will be created if needed during the
 			// profile processing step.
 			foundProfile := false
-			for _, p := range endpoint.Spec.Profiles {
-				if p == profileID {
-					logger.Infof("Calico CNI endpoint already has profile: %s\n", profileID)
-					foundProfile = true
-					break
-				}
+			if slices.Contains(endpoint.Spec.Profiles, profileID) {
+				logger.Infof("Calico CNI endpoint already has profile: %s\n", profileID)
+				foundProfile = true
 			}
 			if !foundProfile {
 				logger.Infof("Calico CNI appending profile: %s\n", profileID)

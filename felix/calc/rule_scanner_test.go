@@ -20,8 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -200,12 +199,12 @@ var _ = Describe("ParsedRule", func() {
 		// We expect all the fields to have the same name, except for
 		// the selectors, which differ, and LogPrefix, which
 		// is deprecated.
-		prType := reflect.TypeOf(ParsedRule{})
+		prType := reflect.TypeFor[ParsedRule]()
 		numPRFields := prType.NumField()
 		prFields := set.New[string]()
 
 		// Build a set of ParsedRule fields, minus the IPSetIDs variants.
-		for i := 0; i < numPRFields; i++ {
+		for i := range numPRFields {
 			name := prType.Field(i).Name
 			if strings.Contains(name, "IPSetIDs") || strings.Contains(name, "IPPortSetIDs") {
 				continue
@@ -220,10 +219,10 @@ var _ = Describe("ParsedRule", func() {
 
 		// Build a set of model.Rule fields, excluding
 		// those which aren't copied through to the ParsedRule.
-		mrType := reflect.TypeOf(model.Rule{})
+		mrType := reflect.TypeFor[model.Rule]()
 		numMRFields := mrType.NumField()
 		mrFields := set.New[string]()
-		for i := 0; i < numMRFields; i++ {
+		for i := range numMRFields {
 			name := mrType.Field(i).Name
 			if strings.Contains(name, "Tag") ||
 				strings.Contains(name, "LogPrefix") ||
@@ -251,10 +250,10 @@ var _ = Describe("ParsedRule", func() {
 	It("should have correct fields relative to proto.Rule", func() {
 		// We expect all the fields to have the same name, except for
 		// ICMP and service account matches, which differ in structure.
-		prType := reflect.TypeOf(ParsedRule{})
+		prType := reflect.TypeFor[ParsedRule]()
 		numPRFields := prType.NumField()
 		prFields := []string{}
-		for i := 0; i < numPRFields; i++ {
+		for i := range numPRFields {
 			name := strings.ToLower(prType.Field(i).Name)
 			if strings.Contains(name, "icmptype") ||
 				strings.Contains(name, "icmpcode") ||
@@ -269,10 +268,10 @@ var _ = Describe("ParsedRule", func() {
 			}
 			prFields = append(prFields, name)
 		}
-		protoType := reflect.TypeOf(proto.Rule{})
+		protoType := reflect.TypeFor[proto.Rule]()
 		numMRFields := protoType.NumField()
 		protoFields := []string{}
-		for i := 0; i < numMRFields; i++ {
+		for i := range numMRFields {
 			name := strings.ToLower(protoType.Field(i).Name)
 			if strings.Contains(name, "icmp") ||
 				strings.Contains(name, "serviceaccount") {

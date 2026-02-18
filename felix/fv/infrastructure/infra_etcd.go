@@ -21,7 +21,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -271,7 +271,7 @@ func (eds *EtcdDatastoreInfra) DumpErrorData() {
 func (eds *EtcdDatastoreInfra) Stop() {
 	// Collect diagnostics first, before tearing anything down.
 	log.Info("Stopping etcd infra.")
-	if ginkgo.CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentSpecReport().Failed() {
 		// Queue up the diags dump so that the cleanupStack will handle any
 		// panic from it.
 		eds.AddCleanup(eds.DumpErrorData)

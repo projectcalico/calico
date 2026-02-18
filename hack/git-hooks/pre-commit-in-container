@@ -139,8 +139,8 @@ for filename in $changed_go_files; do
       echo "  Test suite doesn't call HookLogrusForGinkgo(): $filename"
       logrus_hook_check_failed=true
     fi
-    if ! grep -q 'NewJUnitReporter' "$filename"; then
-      echo "  Test suite doesn't call NewJUnitReporter(): $filename"
+    if ! grep -q 'RunSpecs' "$filename"; then
+      echo "  Test suite doesn't call RunSpecs(): $filename"
       junit_hook_check_failed=true
     fi
   fi
@@ -198,15 +198,16 @@ if $logrus_hook_check_failed; then
 fi
 if $junit_hook_check_failed; then
   echo
-  echo "One or more test suites don't call NewJUnitReporter()."
-  echo "If a suite doesn't call NewJUnitReporter() then it won't generate "
+  echo "One or more test suites don't call RunSpecs()."
+  echo "If a suite doesn't call RunSpecs() then it won't generate "
   echo "a junit report during UT runs.  Example:"
   echo
-  echo 'import "github.com/onsi/ginkgo/reporters"'
+  echo 'import "github.com/onsi/ginkgo/ginkgo/v2"'
   echo 'func TestFoo(t *testing.T) {'
-  echo '	RegisterFailHandler(Fail)'
-  echo '	junitReporter := reporters.NewJUnitReporter("junit.xml")'
-  echo '	RunSpecsWithDefaultAndCustomReporters(t, "Foo Suite", []Reporter{junitReporter})'
+  echo '	gomega.RegisterFailHandler(Fail)'
+  echo '	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()'
+  echo '	reporterConfig.JUnitReport = "/path/to/foo_suite.xml"'
+  echo '	ginkgo.RunSpecs(t, "Foo Suite", suiteConfig, reporterConfig)'
   echo '}'
 fi
 if $go_copyright_check_failed; then

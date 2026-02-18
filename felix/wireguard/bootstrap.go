@@ -430,7 +430,7 @@ func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient client
 
 	var err error
 	var node *apiv3.Node
-	for r := 0; r < maxRetries; r++ {
+	for range maxRetries {
 		cxt, cancel := context.WithTimeout(context.Background(), bootstrapK8sClientTimeout)
 		node, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
@@ -537,7 +537,7 @@ func removeWireguardDevice(
 	// Make a few attempts to delete the wireguard device.
 	var err error
 	var handle netlinkshim.Interface
-	for r := 0; r < bootstrapMaxRetries; r++ {
+	for range bootstrapMaxRetries {
 		if handle == nil {
 			if handle, err = getNetlinkHandle(); err != nil {
 				<-expBackoffMgr.Backoff().C()
@@ -586,7 +586,7 @@ func removeWireguardPublicKey(
 	// Make a few attempts to remove the public key from the datastore.
 	var err error
 	var thisNode *apiv3.Node
-	for r := 0; r < bootstrapMaxRetries; r++ {
+	for range bootstrapMaxRetries {
 		cxt, cancel := context.WithTimeout(context.Background(), bootstrapK8sClientTimeout)
 		thisNode, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()

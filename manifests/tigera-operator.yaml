@@ -107,7 +107,7 @@ rules:
       - globalnetworksets.projectcalico.org
       - hostendpoints.projectcalico.org
       - ipamblocks.projectcalico.org
-      - ipamconfigs.projectcalico.org
+      - ipamconfigurations.projectcalico.org
       - ipamhandles.projectcalico.org
       - ippools.projectcalico.org
       - ipreservations.projectcalico.org
@@ -433,6 +433,18 @@ rules:
     resources:
       - certificatesigningrequests
     verbs:
+      - list
+      - watch
+  # The operator needs permissions to create and update validating webhook configuration.
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - create
+      - update
+      - delete
+      - get
       - list
       - watch
   # Add the appropriate pod security policy permissions

@@ -97,7 +97,7 @@ func TestMapDownSize(t *testing.T) {
 	RegisterTestingT(t)
 	// Add 10 entries to the old map
 	numEntries := 10
-	for i := 0; i < numEntries; i++ {
+	for i := range numEntries {
 		err := insertNumberedKey(i)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -150,7 +150,7 @@ func TestCTDeltaMigration(t *testing.T) {
 
 	// Add 10 more entries to the old map
 	numEntries := 10
-	for i := 0; i < numEntries; i++ {
+	for i := range numEntries {
 		err := insertNumberedKey(i)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -158,7 +158,7 @@ func TestCTDeltaMigration(t *testing.T) {
 	matchKeyVals := func(ctSaved conntrack.MapMem) {
 		Expect(ctSaved).Should(HaveKeyWithValue(k, newVal))
 		Expect(ctSaved).ShouldNot(HaveKeyWithValue(k, v))
-		for i := 0; i < numEntries; i++ {
+		for i := range numEntries {
 			key := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), uint16(i), net.ParseIP("10.0.0.2"), uint16(i>>16))
 			val := conntrack.Value{}
 			for j := range val {
@@ -265,7 +265,7 @@ func TestDeleteDuringIter(t *testing.T) {
 
 func testDelDuringIterN(numEntries int) {
 	cleanUpMaps()
-	for i := 0; i < numEntries; i++ {
+	for i := range numEntries {
 		err := insertNumberedKey(i)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -395,7 +395,7 @@ func benchMapIteration(b *testing.B, n int) {
 
 func setUpConntrackMapEntries(b *testing.B, n int) {
 	b.StopTimer()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		var k conntrack.Key
 		var v conntrack.Value
 		binary.LittleEndian.PutUint32(k[:], uint32(i))

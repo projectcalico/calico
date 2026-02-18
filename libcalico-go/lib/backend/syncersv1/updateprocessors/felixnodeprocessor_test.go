@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"reflect"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -49,7 +49,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		By("converting a zero-ed Node")
 		res := libapiv3.NewNode()
 		res.Name = "mynode"
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			hostIPMarker:       nil,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
@@ -111,7 +111,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			IPv4Address: "1.2.3.4",
 		}
 		ip := net.MustParseIP("1.2.3.4")
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:       &ip,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
@@ -134,7 +134,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.Wireguard = &libapiv3.NodeWireguardSpec{
 			InterfaceIPv4Address: "1.2.3.4",
 		}
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			nodeMarker: res,
 			wireguardMarker: &model.Wireguard{
 				InterfaceIPv4Addr: &ip,
@@ -159,7 +159,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Status = libapiv3.NodeStatus{
 			WireguardPublicKey: key,
 		}
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			nodeMarker: res,
 			wireguardMarker: &model.Wireguard{
 				PublicKey: key,
@@ -186,7 +186,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Status = libapiv3.NodeStatus{
 			WireguardPublicKey: key,
 		}
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			nodeMarker: res,
 			wireguardMarker: &model.Wireguard{
 				InterfaceIPv4Addr: &ip,
@@ -213,7 +213,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			IPv6Address: "aa:bb::cc/120",
 		}
 		ip = net.MustParseIP("100.200.100.200")
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:       &ip,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
@@ -237,7 +237,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			IPv6Address:        "aa:bb::cc/120",
 			IPv4IPIPTunnelAddr: "192.100.100.100",
 		}
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:       nil,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": "192.100.100.100",
@@ -263,7 +263,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200"
 		res.Spec.VXLANTunnelMACAddr = "00:11:22:33:44:55"
 		ip = net.MustParseIP("192.100.100.100")
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:          &ip,
 			nodeMarker:            res,
 			"IPv4VXLANTunnelAddr": "192.200.200.200",
@@ -289,7 +289,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		}
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
 		res.Spec.VXLANTunnelMACAddrV6 = "55:44:33:22:11:00"
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:           nil,
 			nodeMarker:             res,
 			"IPv6VXLANTunnelAddr":  "fd10:11::11",
@@ -319,7 +319,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
 		res.Spec.VXLANTunnelMACAddrV6 = "55:44:33:22:11:00"
 		ip = net.MustParseIP("192.100.100.100")
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:           &ip,
 			nodeMarker:             res,
 			"IPv4VXLANTunnelAddr":  "192.200.200.200",
@@ -374,7 +374,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			Value: res,
 		})
 		Expect(err).To(HaveOccurred())
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			hostIPMarker:       nil,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": "192.100.100.100",
@@ -397,7 +397,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			Value: res,
 		})
 		Expect(err).To(HaveOccurred())
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			nodeMarker:      res,
 			wireguardMarker: nil,
 		}
@@ -421,7 +421,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		})
 		Expect(err).To(HaveOccurred())
 		ip := net.MustParseIP("1.2.3.4")
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:       &ip,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
@@ -442,7 +442,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200/32"
 		res.Spec.VXLANTunnelMACAddr = ""
 		ip = net.MustParseIP("192.100.100.100")
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:          &ip,
 			nodeMarker:            res,
 			"IPv4VXLANTunnelAddr": nil,
@@ -468,7 +468,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		}
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/122"
 		res.Spec.VXLANTunnelMACAddrV6 = ""
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:           nil,
 			nodeMarker:             res,
 			"IPv6VXLANTunnelAddr":  nil,
@@ -498,7 +498,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/112"
 		res.Spec.VXLANTunnelMACAddrV6 = ""
 		ip = net.MustParseIP("192.100.100.100")
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			hostIPMarker:           &ip,
 			nodeMarker:             res,
 			"IPv4VXLANTunnelAddr":  nil,

@@ -86,16 +86,12 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	}
 
 	// Based on FlannelSubnetLen, work out the size of ippool.
-	blockSize := m.config.DefaultIppoolSize
-	if m.config.FlannelSubnetLen > m.config.DefaultIppoolSize {
+	blockSize := max(m.config.FlannelSubnetLen,
 		// Flannel subnet is smaller than one Calico IPAM block with default size of /26.
-		blockSize = m.config.FlannelSubnetLen
-	}
-	blockSizeV6 := m.config.DefaultIppoolSizeV6
-	if m.config.FlannelIpv6SubnetLen > m.config.DefaultIppoolSizeV6 {
+		m.config.DefaultIppoolSize)
+	blockSizeV6 := max(m.config.FlannelIpv6SubnetLen,
 		// Flannel subnet is smaller than one Calico IPAM block with default size of /122.
-		blockSizeV6 = m.config.FlannelIpv6SubnetLen
-	}
+		m.config.DefaultIppoolSizeV6)
 
 	// Canal creates default ippool and FelixConfigurations with no VXLAN.
 	// In this case, we should not check vxlan settings for existing ippool or FelixConfigurations.

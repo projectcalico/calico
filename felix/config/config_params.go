@@ -17,11 +17,13 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net"
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -581,22 +583,16 @@ func (config *Config) Copy() *Config {
 
 	// Copy the internal state over as a deep copy.
 	cp.internalOverrides = map[string]string{}
-	for k, v := range config.internalOverrides {
-		cp.internalOverrides[k] = v
-	}
+	maps.Copy(cp.internalOverrides, config.internalOverrides)
 
 	cp.sourceToRawConfig = map[Source]map[string]string{}
 	for k, v := range config.sourceToRawConfig {
 		cp.sourceToRawConfig[k] = map[string]string{}
-		for k2, v2 := range v {
-			cp.sourceToRawConfig[k][k2] = v2
-		}
+		maps.Copy(cp.sourceToRawConfig[k], v)
 	}
 
 	cp.rawValues = map[string]string{}
-	for k, v := range config.rawValues {
-		cp.rawValues[k] = v
-	}
+	maps.Copy(cp.rawValues, config.rawValues)
 
 	return &cp
 }
@@ -616,9 +612,7 @@ func (config *Config) ToConfigUpdate() *proto.ConfigUpdate {
 	buf.SourceToRawConfig = map[uint32]*proto.RawConfig{}
 	for source, c := range config.sourceToRawConfig {
 		kvs := map[string]string{}
-		for k, v := range c {
-			kvs[k] = v
-		}
+		maps.Copy(kvs, c)
 		buf.SourceToRawConfig[uint32(source)] = &proto.RawConfig{
 			Source: source.String(),
 			Config: kvs,
@@ -626,9 +620,7 @@ func (config *Config) ToConfigUpdate() *proto.ConfigUpdate {
 	}
 
 	buf.Config = map[string]string{}
-	for k, v := range config.rawValues {
-		buf.Config[k] = v
-	}
+	maps.Copy(buf.Config, config.rawValues)
 
 	return &buf
 }
@@ -639,9 +631,7 @@ func (config *Config) UpdateFromConfigUpdate(configUpdate *proto.ConfigUpdate) (
 	for sourceInt, c := range configUpdate.GetSourceToRawConfig() {
 		source := Source(sourceInt)
 		config.sourceToRawConfig[source] = map[string]string{}
-		for k, v := range c.GetConfig() {
-			config.sourceToRawConfig[source][k] = v
-		}
+		maps.Copy(config.sourceToRawConfig[source], c.GetConfig())
 	}
 	// Note: the ConfigUpdate also carries the rawValues, but we recalculate those by calling resolve(),
 	// which tells us if anything changed as a result.
@@ -702,11 +692,9 @@ func (config *Config) OpenstackActive() bool {
 		log.Debug("OpenStack metadata port set to non-default, assuming OpenStack active")
 		return true
 	}
-	for _, prefix := range config.InterfacePrefixes() {
-		if prefix == "tap" {
-			log.Debug("Interface prefix list contains 'tap', assuming OpenStack")
-			return true
-		}
+	if slices.Contains(config.InterfacePrefixes(), "tap") {
+		log.Debug("Interface prefix list contains 'tap', assuming OpenStack")
+		return true
 	}
 	log.Debug("No evidence this is an OpenStack deployment; disabling OpenStack special-cases")
 	return false
@@ -715,8 +703,8 @@ func (config *Config) OpenstackActive() bool {
 // KubernetesProvider attempts to parse the kubernetes provider, e.g. AKS out of the ClusterType.
 // The ClusterType is a string which contains a set of comma-separated values in no particular order.
 func (config *Config) KubernetesProvider() Provider {
-	settings := strings.Split(config.ClusterType, ",")
-	for _, s := range settings {
+	settings := strings.SplitSeq(config.ClusterType, ",")
+	for s := range settings {
 		p, err := newProvider(s)
 		if err == nil {
 			log.WithFields(log.Fields{"clusterType": config.ClusterType, "provider": p}).Debug(
@@ -793,7 +781,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 
 			log.Infof("Parsing value for %v: %v (from %v)",
 				name, rawValue, source)
-			var value interface{}
+			var value any
 			if strings.ToLower(rawValue) == "none" {
 				// Special case: we allow a value of "none" to force the value to
 				// the zero value for a field.  The zero value often differs from
@@ -843,7 +831,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 	}
 
 	changedFields = set.New[string]()
-	kind := reflect.TypeOf(Config{})
+	kind := reflect.TypeFor[Config]()
 	for ii := 0; ii < kind.NumField(); ii++ {
 		field := kind.Field(ii)
 		tag := field.Tag.Get("config")
@@ -883,7 +871,7 @@ func SafeParamsEqual(a any, b any) bool {
 		if len(a) != len(b) {
 			return false
 		}
-		for i := 0; i < len(a); i++ {
+		for i := range a {
 			if (a[i] == nil) || (b[i] == nil) {
 				if a[i] == b[i] {
 					continue
@@ -1029,7 +1017,7 @@ func Params() map[string]Param {
 func loadParams() {
 	knownParams = make(map[string]Param)
 	config := Config{}
-	kind := reflect.TypeOf(config)
+	kind := reflect.TypeFor[Config]()
 	metaRegexp := regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
 		`([^;]*)(?:;` +
 		`([^;]*))?$`)
@@ -1059,7 +1047,7 @@ func loadParams() {
 			paramMin := math.MinInt
 			paramMax := math.MaxInt
 			if kindParams != "" {
-				for _, r := range strings.Split(kindParams, ",") {
+				for r := range strings.SplitSeq(kindParams, ",") {
 					minAndMax := strings.Split(r, ":")
 					paramMin = mustParseOptionalInt(minAndMax[0], math.MinInt, field.Name)
 					if len(minAndMax) == 2 {
@@ -1251,9 +1239,7 @@ func (config *Config) UseNodeResourceUpdates() bool {
 
 func (config *Config) RawValues() map[string]string {
 	cp := map[string]string{}
-	for k, v := range config.rawValues {
-		cp[k] = v
-	}
+	maps.Copy(cp, config.rawValues)
 	return cp
 }
 
@@ -1311,7 +1297,7 @@ func New() *Config {
 
 type Param interface {
 	GetMetadata() *Metadata
-	Parse(raw string) (result interface{}, err error)
+	Parse(raw string) (result any, err error)
 	setDefault(*Config)
 	SchemaDescription() string
 }

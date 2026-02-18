@@ -229,6 +229,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexNewFlow,
 		tcdefs.ProgIndexIPFrag,
 		tcdefs.ProgIndexMaglev,
+		tcdefs.ProgIndexTCPRst,
 	},
 	"IPv4 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -241,6 +242,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexNewFlowDebug,
 		tcdefs.ProgIndexIPFragDebug,
 		tcdefs.ProgIndexMaglevDebug,
+		tcdefs.ProgIndexTCPRstDebug,
 	},
 	"IPv6": []int{
 		tcdefs.ProgIndexMain,
@@ -252,6 +254,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpInnerNat,
 		tcdefs.ProgIndexNewFlow,
 		tcdefs.ProgIndexMaglev,
+		tcdefs.ProgIndexTCPRst,
 	},
 	"IPv6 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -263,6 +266,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpInnerNatDebug,
 		tcdefs.ProgIndexNewFlowDebug,
 		tcdefs.ProgIndexMaglevDebug,
+		tcdefs.ProgIndexTCPRstDebug,
 	},
 }
 
@@ -290,8 +294,8 @@ func TestLoadZeroProgram(t *testing.T) {
 }
 
 type testLogger interface {
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
+	Log(args ...any)
+	Logf(format string, args ...any)
 }
 
 func startBPFLogging() *exec.Cmd {
@@ -475,14 +479,16 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 			}
 			Expect(errs).To(BeEmpty())
 		}()
-		var progType uint32
+		progType := uint32(0)
+		attachType := uint32(0)
 		if topts.xdp {
 			progType = unix.BPF_PROG_TYPE_XDP
+			attachType = libbpf.AttachTypeXDP
 		} else {
 			progType = unix.BPF_PROG_TYPE_SCHED_CLS
 		}
 		for i, p := range insns {
-			polProgFD, err := bpf.LoadBPFProgramFromInsns(p, "calico_policy", "Apache-2.0", progType)
+			polProgFD, err := bpf.LoadBPFProgramFromInsnsWithAttachType(p, "calico_policy", "Apache-2.0", progType, attachType)
 			Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 			Expect(polProgFD).NotTo(BeZero())
 			polProgFDs = append(polProgFDs, polProgFD)
@@ -808,11 +814,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			}
 			if forXDP {
 				var globals libbpf.XDPGlobalData
-				for i := 0; i < 16; i++ {
+				for i := range 16 {
 					globals.Jumps[i] = uint32(i)
 				}
 				if topts.ipv6 {
-					for i := 0; i < 16; i++ {
+					for i := range 16 {
 						globals.JumpsV6[i] = uint32(i)
 					}
 				}
@@ -862,7 +868,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					copy(globals.HostIPv6[:], hostIP.To16())
 					copy(globals.IntfIPv6[:], intfIPV6.To16())
 
-					for i := 0; i < tcdefs.ProgIndexEnd; i++ {
+					for i := range tcdefs.ProgIndexEnd {
 						globals.JumpsV6[i] = uint32(i)
 					}
 					globals.Flags |= libbpf.GlobalsRPFOptionStrict
@@ -872,7 +878,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					copy(globals.IntfIPv4[0:4], intfIP)
 					copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 
-					for i := 0; i < tcdefs.ProgIndexEnd; i++ {
+					for i := range tcdefs.ProgIndexEnd {
 						globals.Jumps[i] = uint32(i)
 					}
 					log.WithField("globals", globals).Debugf("configure program")
@@ -2144,7 +2150,7 @@ func TestMapIterWithDelete(t *testing.T) {
 	err := m.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		var k, v [8]byte
 
 		binary.LittleEndian.PutUint64(k[:], uint64(i))
@@ -2170,7 +2176,7 @@ func TestMapIterWithDelete(t *testing.T) {
 
 	Expect(cnt).To(Equal(10))
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		Expect(out).To(HaveKey(uint64(i)))
 		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
 	}
@@ -2193,7 +2199,7 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 
 	items := 3*maps.IteratorNumKeys + 5
 
-	for i := 0; i < items; i++ {
+	for i := range items {
 		var k, v [8]byte
 
 		binary.LittleEndian.PutUint64(k[:], uint64(i))
@@ -2225,7 +2231,7 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 	Expect(len(out)).To(Equal(items))
 	Expect(cnt).To(Equal(items))
 
-	for i := 0; i < items; i++ {
+	for i := range items {
 		Expect(out).To(HaveKey(uint64(i)))
 		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
 	}

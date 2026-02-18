@@ -165,7 +165,7 @@ func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
 		}
 		err := bpfMap.EnsureExists()
 		if err != nil {
-			for j := 0; j < i; j++ {
+			for j := range i {
 				m := mps[j]
 				os.Remove(m.(pinnedMap).Path())
 				m.(pinnedMap).Close()

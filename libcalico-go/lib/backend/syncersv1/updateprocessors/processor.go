@@ -40,7 +40,7 @@ type ConvertV3KeyToV1Key func(key model.ResourceKey) (model.Key, error)
 // results by returning nil.  The generic watchersyncer will handle filtered out events
 // by either sending no event or sending delete events depending on whether the entry
 // is currently in the cache.
-type ConvertV3ToV1Value func(interface{}) (interface{}, error)
+type ConvertV3ToV1Value func(any) (any, error)
 
 func NewSimpleUpdateProcessor(v3Kind string, kConverter ConvertV3KeyToV1Key, vConverter ConvertV3ToV1Value) watchersyncer.SyncerUpdateProcessor {
 	up := &simpleUpdateProcessor{
@@ -70,7 +70,7 @@ func (sup *simpleUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, e
 		return nil, fmt.Errorf("Unable to convert v3 key to v1 key: %v", err)
 	}
 
-	var v1value interface{}
+	var v1value any
 	// Deletion events will have a value of nil. Do not convert anything for a deletion event.
 	if kvp.Value != nil {
 		v1value, err = sup.valueConverter(kvp.Value)

@@ -46,9 +46,9 @@ type nodeLabelController struct {
 	nodeInformer  cache.SharedIndexInformer
 	nodeLister    v1lister.NodeLister
 	syncStatus    bapi.SyncStatus
-	syncerUpdates chan interface{}
+	syncerUpdates chan any
 	k8sNodeUpdate chan *v1.Node
-	syncChan      chan interface{}
+	syncChan      chan any
 }
 
 func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIndexInformer) *nodeLabelController {
@@ -58,9 +58,9 @@ func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIn
 		client:          client,
 		nodeInformer:    nodeInformer,
 		nodeLister:      v1lister.NewNodeLister(nodeInformer.GetIndexer()),
-		syncerUpdates:   make(chan interface{}, utils.BatchUpdateSize),
+		syncerUpdates:   make(chan any, utils.BatchUpdateSize),
 		k8sNodeUpdate:   make(chan *v1.Node, utils.BatchUpdateSize),
-		syncChan:        make(chan interface{}, 1),
+		syncChan:        make(chan any, 1),
 	}
 
 	_, err := c.nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -75,19 +75,19 @@ func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIn
 	return c
 }
 
-func (c *nodeLabelController) OnKubernetesNodeAdd(obj interface{}) {
+func (c *nodeLabelController) OnKubernetesNodeAdd(obj any) {
 	if n, ok := obj.(*v1.Node); ok {
 		c.k8sNodeUpdate <- n
 	}
 }
 
-func (c *nodeLabelController) OnKubernetesNodeUpdate(objOld interface{}, objNew interface{}) {
+func (c *nodeLabelController) OnKubernetesNodeUpdate(objOld any, objNew any) {
 	if n, ok := objNew.(*v1.Node); ok {
 		c.k8sNodeUpdate <- n
 	}
 }
 
-func (c *nodeLabelController) OnKubernetesNodeDelete(obj interface{}) {
+func (c *nodeLabelController) OnKubernetesNodeDelete(obj any) {
 	if n, ok := obj.(*v1.Node); ok {
 		c.k8sNodeUpdate <- n
 	}
@@ -117,7 +117,7 @@ func (c *nodeLabelController) onUpdate(update bapi.Update) {
 	}
 }
 
-func (c *nodeLabelController) handleUpdate(update interface{}) {
+func (c *nodeLabelController) handleUpdate(update any) {
 	switch update := update.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = update

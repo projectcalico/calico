@@ -214,10 +214,7 @@ func scoreLabelRestriction(lr parser.LabelRestriction) int {
 		score += 10
 	}
 	if lr.MustHaveOneOfValues != nil {
-		s := 10000 - len(lr.MustHaveOneOfValues)
-		if s < 100 {
-			s = 100
-		}
+		s := max(10000-len(lr.MustHaveOneOfValues), 100)
 		score += s
 	}
 	return score
