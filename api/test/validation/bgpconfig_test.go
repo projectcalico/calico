@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,9 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-func boolPtr(b bool) *bool { return &b }
 
 func TestBGPConfiguration_Validation(t *testing.T) {
 	dur := metav1.Duration{Duration: 120 * time.Second}
@@ -37,7 +36,7 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 			obj: &v3.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
 				Spec: v3.BGPConfigurationSpec{
-					NodeToNodeMeshEnabled: boolPtr(false),
+					NodeToNodeMeshEnabled: ptr.To(false),
 					NodeMeshPassword: &v3.BGPPassword{
 						SecretKeyRef: nil,
 					},
@@ -50,7 +49,7 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 			obj: &v3.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
 				Spec: v3.BGPConfigurationSpec{
-					NodeToNodeMeshEnabled: boolPtr(false),
+					NodeToNodeMeshEnabled: ptr.To(false),
 					NodeMeshMaxRestartTime: &dur,
 				},
 			},
@@ -61,7 +60,7 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 			obj: &v3.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
 				Spec: v3.BGPConfigurationSpec{
-					NodeToNodeMeshEnabled: boolPtr(true),
+					NodeToNodeMeshEnabled: ptr.To(true),
 					NodeMeshPassword: &v3.BGPPassword{
 						SecretKeyRef: nil,
 					},
@@ -73,7 +72,7 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 			obj: &v3.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
 				Spec: v3.BGPConfigurationSpec{
-					NodeToNodeMeshEnabled:  boolPtr(true),
+					NodeToNodeMeshEnabled:  ptr.To(true),
 					NodeMeshMaxRestartTime: &dur,
 				},
 			},

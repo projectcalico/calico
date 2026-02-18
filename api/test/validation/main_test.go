@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,6 +60,11 @@ func crdDir() string {
 	}
 }
 
+// TestMain spins up a real kube-apiserver process (via controller-runtime's
+// envtest package) with our CRDs installed, then runs the tests against it.
+// This lets us validate CRD-level validation (CEL rules, OpenAPI schemas, etc.)
+// without needing a full cluster. The apiserver is started once before all
+// tests and torn down after they complete.
 func TestMain(m *testing.M) {
 	testEnvObj = &envtest.Environment{
 		CRDDirectoryPaths: []string{crdDir()},
@@ -71,30 +76,29 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	code := 1
+	defer func() {
+		if err := testEnvObj.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to stop envtest: %v\n", err)
+		}
+		os.Exit(code)
+	}()
+
 	scheme := k8sruntime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to add client-go scheme: %v\n", err)
-		testEnvObj.Stop() //nolint:errcheck
-		os.Exit(1)
+		return
 	}
 	if err := v3.AddToScheme(scheme); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to add calico v3 scheme: %v\n", err)
-		testEnvObj.Stop() //nolint:errcheck
-		os.Exit(1)
+		return
 	}
 
 	testClient, err = client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		testEnvObj.Stop() //nolint:errcheck
-		os.Exit(1)
+		return
 	}
 
-	code := m.Run()
-
-	if err := testEnvObj.Stop(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to stop envtest: %v\n", err)
-	}
-
-	os.Exit(code)
+	code = m.Run()
 }
