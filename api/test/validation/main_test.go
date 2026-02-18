@@ -21,12 +21,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 var (
