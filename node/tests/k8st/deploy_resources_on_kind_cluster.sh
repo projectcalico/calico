@@ -1,13 +1,75 @@
 #!/bin/bash -e
 
-# Clean up background jobs on exit.
+# Clean up background jobs on exit, and collect diagnostics on failure.
 set -m
 function cleanup() {
   rc=$?
+  if [ $rc -ne 0 ]; then
+    collect_diags
+  fi
   jobs -p | xargs --no-run-if-empty kill
   exit $rc
 }
 trap 'cleanup' SIGINT SIGHUP SIGTERM EXIT
+
+# collect_diags prints detailed cluster diagnostics on failure.
+# It collects tigerastatus, tigera-operator logs, and logs from failing pods.
+function collect_diags() {
+  # Guard against kubectl not being set yet (failure during variable init).
+  local kctl="${kubectl:-../hack/test/kind/kubectl}"
+
+  echo ""
+  echo "========================================================================"
+  echo "  DIAGNOSTICS: Collecting cluster state after failure"
+  echo "========================================================================"
+
+  echo ""
+  echo "-------- TigeraStatus Resources (YAML) --------"
+  ${kctl} get tigerastatus -o yaml 2>&1 || true
+
+  echo ""
+  echo "-------- Tigera Operator Logs --------"
+  ${kctl} logs -n tigera-operator -l k8s-app=tigera-operator --tail=200 2>&1 || true
+
+  echo ""
+  echo "-------- All Pod Status --------"
+  ${kctl} get po -A -o wide 2>&1 || true
+
+  echo ""
+  echo "-------- Logs from Non-Running / Non-Ready Pods --------"
+  ${kctl} get po -A --no-headers 2>/dev/null | while read ns name ready status rest; do
+    if [ "$status" != "Running" ] && [ "$status" != "Completed" ] && [ "$status" != "Succeeded" ]; then
+      echo ""
+      echo "---- Pod ${ns}/${name} (Status: ${status}) ----"
+      echo "  -- Description --"
+      ${kctl} describe pod -n "${ns}" "${name}" 2>&1 || true
+      echo "  -- Logs --"
+      ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=100 2>&1 || true
+    fi
+  done
+
+  # Also check for Running pods that aren't fully ready (e.g., 0/1, 1/2).
+  ${kctl} get po -A --no-headers 2>/dev/null | while read ns name ready status rest; do
+    if [ "$status" = "Running" ]; then
+      ready_count="${ready%%/*}"
+      total_count="${ready##*/}"
+      if [ "$ready_count" != "$total_count" ]; then
+        echo ""
+        echo "---- Pod ${ns}/${name} (Running but not Ready: ${ready}) ----"
+        echo "  -- Description --"
+        ${kctl} describe pod -n "${ns}" "${name}" 2>&1 || true
+        echo "  -- Logs --"
+        ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=100 2>&1 || true
+      fi
+    fi
+  done
+
+  echo ""
+  echo "========================================================================"
+  echo "  END OF DIAGNOSTICS"
+  echo "========================================================================"
+  echo ""
+}
 
 function wait_pod_ready() {
   args="$@"
@@ -33,11 +95,6 @@ function wait_pod_ready() {
 
   if [ $rc -ne 0 ]; then
     echo "Pod $args failed to become ready within 300s"
-    echo "collecting diags..."
-    ${kubectl} get po -A -o wide
-    ${kubectl} describe po $args
-    ${kubectl} logs $args
-    echo "Pod $args failed to become ready within 300s; diags above ^^"
   fi
 
   set -e
@@ -87,13 +144,7 @@ echo
 echo "Wait for tigera status to be ready"
 if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
        ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/calico ); then
-  echo "TigeraStatus for Calico is down, collecting diags..."
-  ${kubectl} get -o yaml tigerastatus/calico
-  echo "Logs for tigera-operator:"
-  ${kubectl} logs -n tigera-operator -l k8s-app=tigera-operator
-  echo "Status of pods:"
-  ${kubectl} get po -A -o wide
-  ${kubectl} describe po -n calico-system
+  echo "TigeraStatus for Calico failed to become Available"
   exit 1
 fi
 
@@ -102,7 +153,7 @@ fi
 if [ "$CALICO_API_GROUP" != "projectcalico.org/v3" ]; then
   echo "Wait for the Calico API server to be ready"
   if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
-    ${kubectl} get -o yaml tigerastatus/apiserver
+    echo "TigeraStatus for API server failed to become Available"
     exit 1
   fi
 fi
