@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -740,7 +741,6 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	for key, value := range kvPairs {
-		logCtx.Infof("pepper %v %v", key, value)
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
 			logCtx.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
@@ -762,6 +762,11 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 			config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 		}
 	}
+
+	// Sort statements.
+	slices.Sort(config.KernelFilterForIPPools)
+	slices.Sort(config.BGPExportFilterForDisabledIPPools)
+	slices.Sort(config.BGPExportFilterForEnabledIPPools)
 
 	return nil
 }
