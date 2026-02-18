@@ -5,7 +5,6 @@ package util
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,10 +15,6 @@ import (
 
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
-)
-
-const (
-	policyDelim = "."
 )
 
 // EnsureTierSelector parses the given options and ensures the correct tier selector is set.
@@ -143,11 +138,10 @@ func buildSelectorFromTiers(tiers []string) (*labels.Requirement, error) {
 	return requirement, nil
 }
 
-// GetTierFromPolicyName extracts the Tier name from the policy name.
-func GetTierFromPolicyName(policyName string) (string, string) {
-	policySlice := strings.Split(policyName, policyDelim)
-	if len(policySlice) < 2 {
-		return "default", policySlice[0]
+// TierOrDefault returns the tier name, defaulting to "default" if empty.
+func TierOrDefault(tier string) string {
+	if tier == "" {
+		return "default"
 	}
-	return policySlice[0], policySlice[1]
+	return tier
 }
