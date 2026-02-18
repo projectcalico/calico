@@ -1,0 +1,91 @@
+# AuthorizationConfiguration for the Calico tier-based RBAC authorization webhook.
+#
+# This file configures the Kubernetes API server to route authorization decisions
+# for Calico tiered policy resources through the Calico authorization webhook before
+# falling through to RBAC for base resource permissions.
+#
+# Usage:
+#   1. Pass this file to kube-apiserver via:
+#        --authorization-config=/path/to/authorization-configuration.yaml
+#
+#   2. Ensure the kubeconfig file referenced below (calico-authz-webhook-kubeconfig.yaml)
+#      exists and points to the running Calico webhook server.
+#
+#   3. The webhook server must be running and accessible from the API server before
+#      the API server starts, since failurePolicy is set to NoOpinion (fail-open).
+#
+# How it works:
+#   - The Webhook authorizer is listed first so it is consulted before RBAC.
+#   - matchConditions use CEL to send only read operations (get, list, watch) on
+#     Calico tiered policy resources to the webhook. Mutating operations (create,
+#     update, patch, delete) are handled by the admission webhook instead.
+#   - The webhook returns Deny if the user lacks tier access, or NoOpinion to let
+#     the request fall through to RBAC for base resource permission checks.
+#   - RBAC is listed second and handles all other authorization decisions, including
+#     the tier/tier.* sub-checks made by the webhook's TierAuthorizer (no recursion).
+apiVersion: apiserver.config.k8s.io/v1beta1
+kind: AuthorizationConfiguration
+authorizers:
+  # Calico tier-based RBAC authorization webhook. Enforces tier-level access control
+  # on GET, LIST, and WATCH for tiered policy resources. Mutating verbs are handled
+  # by the Calico admission webhook and are not sent here.
+  - type: Webhook
+    name: calico-tiered-rbac
+    webhook:
+      # Timeout for each authorization request to the webhook.
+      timeout: 5s
+
+      # Cache authorized responses for 5 minutes to reduce webhook load.
+      authorizedTTL: 5m0s
+
+      # Cache unauthorized (denied) responses for 30 seconds so that permission
+      # changes take effect relatively quickly.
+      unauthorizedTTL: 30s
+
+      # Send SubjectAccessReview v1 to the webhook.
+      subjectAccessReviewVersion: v1
+
+      # Use SubjectAccessReview v1 for evaluating CEL matchConditions.
+      matchConditionSubjectAccessReviewVersion: v1
+
+      # Fail open: if the webhook is unreachable, return NoOpinion and let RBAC
+      # handle the request. This prevents the webhook from blocking the entire
+      # cluster if it goes down.
+      failurePolicy: NoOpinion
+
+      connectionInfo:
+        type: KubeConfigFile
+        kubeConfigFile: /etc/kubernetes/calico-authz-webhook-kubeconfig.yaml
+
+      # CEL matchConditions filter requests so only read operations on tiered
+      # policy resources are sent to the webhook. All conditions must evaluate
+      # to true for the request to be forwarded. Requests that don't match get
+      # an automatic NoOpinion.
+      matchConditions:
+        # Only match resource requests (skip non-resource URL requests).
+        - expression: has(request.resourceAttributes)
+
+        # Only match read verbs. Mutating verbs (create, update, patch, delete,
+        # deletecollection) are enforced by the Calico admission webhook.
+        - expression: >-
+            request.resourceAttributes.verb in ['get', 'list', 'watch']
+
+        # Only match the projectcalico.org API group.
+        - expression: request.resourceAttributes.resource.group == 'projectcalico.org'
+
+        # Only match tiered policy resource types.
+        - expression: >-
+            request.resourceAttributes.resource.resource in [
+              'networkpolicies',
+              'globalnetworkpolicies',
+              'stagednetworkpolicies',
+              'stagedglobalnetworkpolicies',
+              'stagedkubernetesnetworkpolicies'
+            ]
+
+  # Standard RBAC authorizer handles all other authorization decisions, including:
+  # - Base resource permissions for tiered policies (after the webhook returns NoOpinion)
+  # - Tier and tier.* resource checks made by the webhook's TierAuthorizer
+  # - All non-Calico resources
+  - type: RBAC
+    name: rbac

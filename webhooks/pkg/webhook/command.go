@@ -32,6 +32,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/admission/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
@@ -40,6 +41,7 @@ import (
 	ctls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/webhooks/pkg/authz"
 	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
@@ -164,6 +166,7 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface) {
 	rbac.RegisterHook(cs, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
 	clusterinfo.RegisterHook(utils.HandleFn(handleFn))
+	authz.RegisterHook(cs, authz.HandleAuthzFn(handleAuthzFn))
 
 	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
 	http.HandleFunc("/readyz", readyFn())
@@ -225,7 +228,62 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 // wrapping a Calico resource will not legitimately exceed this.
 const maxRequestBodyBytes = 3 << 20 // 3MB
 
-func decodeAdmissionReview(w http.ResponseWriter, r *http.Request) (runtime.Object, *schema.GroupVersionKind, error) {
+// handleAuthzFn implements authz.HandleAuthzFn to allow registration of the authorization webhook.
+func handleAuthzFn(handler authz.AuthzHandler) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		handleAuthzRequest(w, r, handler)
+	}
+}
+
+// handleAuthzRequest handles an incoming HTTP request, decodes the SubjectAccessReview, processes it, and writes the response.
+func handleAuthzRequest(w http.ResponseWriter, r *http.Request, handler authz.AuthzHandler) {
+	obj, gvk, err := decodeRequest(w, r)
+	if err != nil {
+		logrus.Error(err)
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	// Ensure we received a SubjectAccessReview.
+	expectedGVK := authorizationv1.SchemeGroupVersion.WithKind("SubjectAccessReview")
+	if *gvk != expectedGVK {
+		errMsg := fmt.Sprintf("unsupported group version kind: %v, expected %v", gvk, expectedGVK)
+		logrus.Error(errMsg)
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
+	}
+
+	sar, ok := obj.(*authorizationv1.SubjectAccessReview)
+	if !ok {
+		errMsg := fmt.Sprintf("expected *authorizationv1.SubjectAccessReview but got: %T", obj)
+		logrus.Error(errMsg)
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
+	}
+
+	// Process the authorization review.
+	sar.Status = *handler.Authorize(*sar)
+
+	// Encode and send the response.
+	respBytes, err := json.Marshal(sar)
+	if err != nil {
+		logrus.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(respBytes); err != nil {
+		logrus.Error(err)
+	}
+}
+
+// decodeRequest reads and decodes an HTTP request body into a runtime.Object.
+func decodeRequest(w http.ResponseWriter, r *http.Request) (runtime.Object, *schema.GroupVersionKind, error) {
 	var body []byte
 	if r.Body != nil {
 		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
@@ -243,14 +301,16 @@ func decodeAdmissionReview(w http.ResponseWriter, r *http.Request) (runtime.Obje
 		return nil, nil, fmt.Errorf("invalid Content-Type '%s', expected `application/json`", ct)
 	}
 
-	// Decode the body into an AdmissionReview object, and check the
-	// GroupVersionKind to ensure it's something we support.
 	deserializer := utils.Codecs.UniversalDeserializer()
 	obj, gvk, err := deserializer.Decode(body, nil, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("request could not be decoded: %v", err)
 	}
 	return obj, gvk, nil
+}
+
+func decodeAdmissionReview(w http.ResponseWriter, r *http.Request) (runtime.Object, *schema.GroupVersionKind, error) {
+	return decodeRequest(w, r)
 }
 
 func processAdmissionReview(obj runtime.Object, gvk *schema.GroupVersionKind, handler utils.AdmissionReviewHandler) (*v1.AdmissionReview, error) {
