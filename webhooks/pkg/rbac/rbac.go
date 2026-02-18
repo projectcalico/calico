@@ -41,7 +41,7 @@ import (
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
-// RegisterHook creates a new teired RBAC admission webhook authorizer and registers the necessary HTTP handler.
+// RegisterHook creates a new tiered RBAC admission webhook authorizer and registers the necessary HTTP handler.
 func RegisterHook(cs kubernetes.Interface, handleFn utils.HandleFn) {
 	logrus.WithFields(logrus.Fields{
 		"path": "/rbac",

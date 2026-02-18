@@ -68,13 +68,6 @@ func main() {
 	os.Exit(cli.Run(rootCmd))
 }
 
-func registerHooks(cs kubernetes.Interface) {
-	rbac.RegisterHook(cs, utils.HandleFn(handleFn))
-
-	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
-	http.HandleFunc("/readyz", readyFn())
-}
-
 func configureLogging() {
 	// Set up logging.
 	l, err := logrus.ParseLevel(logLevel)
@@ -119,6 +112,13 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to start webhook server on port %d", port)
 	}
+}
+
+func registerHooks(cs kubernetes.Interface) {
+	rbac.RegisterHook(cs, utils.HandleFn(handleFn))
+
+	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
+	http.HandleFunc("/readyz", readyFn())
 }
 
 func readyFn() func(http.ResponseWriter, *http.Request) {

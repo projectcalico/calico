@@ -142,7 +142,8 @@ func TestParsePolicy(t *testing.T) {
 			Tier: "default",
 		},
 	}
-	npRaw, _ := json.Marshal(np)
+	npRaw, err := json.Marshal(np)
+	assert.NoError(t, err)
 
 	gnp := &v3.GlobalNetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
@@ -156,7 +157,8 @@ func TestParsePolicy(t *testing.T) {
 			Tier: "admin",
 		},
 	}
-	gnpRaw, _ := json.Marshal(gnp)
+	gnpRaw, err := json.Marshal(gnp)
+	assert.NoError(t, err)
 
 	snp := &v3.StagedNetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
@@ -170,7 +172,8 @@ func TestParsePolicy(t *testing.T) {
 			Tier: "trusted",
 		},
 	}
-	snpRaw, _ := json.Marshal(snp)
+	snpRaw, err := json.Marshal(snp)
+	assert.NoError(t, err)
 
 	sgnp := &v3.StagedGlobalNetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
@@ -184,7 +187,8 @@ func TestParsePolicy(t *testing.T) {
 			Tier: "trusted-global",
 		},
 	}
-	sgnpRaw, _ := json.Marshal(sgnp)
+	sgnpRaw, err := json.Marshal(sgnp)
+	assert.NoError(t, err)
 
 	sknp := &v3.StagedKubernetesNetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
@@ -196,7 +200,8 @@ func TestParsePolicy(t *testing.T) {
 		},
 		Spec: v3.StagedKubernetesNetworkPolicySpec{},
 	}
-	sknpRaw, _ := json.Marshal(sknp)
+	sknpRaw, err := json.Marshal(sknp)
+	assert.NoError(t, err)
 
 	testCases := []struct {
 		name         string
