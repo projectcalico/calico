@@ -89,7 +89,7 @@ func newNoEncapManagerWithSims(
 	return m
 }
 
-func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
+func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")

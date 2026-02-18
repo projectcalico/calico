@@ -3235,7 +3235,7 @@ func reverseStateOrder(baseTest StateList) (desc string, mappedTests []StateList
 	desc = "with order of states reversed"
 	palindrome := true
 	mappedTest := StateList{}
-	for ii := 0; ii < len(baseTest); ii++ {
+	for ii := range baseTest {
 		mappedTest = append(mappedTest, baseTest[len(baseTest)-ii-1])
 		if &baseTest[len(baseTest)-1-ii] != &baseTest[ii] {
 			palindrome = false

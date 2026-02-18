@@ -504,7 +504,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 	Describe("with many left-over IP sets in place", func() {
 		BeforeEach(func() {
-			for i := 0; i < MaxIPSetDeletionsPerIteration*3; i++ {
+			for i := range MaxIPSetDeletionsPerIteration * 3 {
 				setName := fmt.Sprintf("cali40s:%d", i)
 				dataplane.IPSetMembers[setName] = set.From("10.0.0.1")
 			}

@@ -279,7 +279,6 @@ var _ = Describe("Parser", func() {
 	})
 
 	for _, test := range canonicalisationTests {
-		test := test
 		It(fmt.Sprintf("should canonicalise %v as %v with UID %v and round-trip",
 			test.input, test.expected, test.expectedUid), func() {
 			sel, err := parser.Parse(test.input)
@@ -295,7 +294,6 @@ var _ = Describe("Parser", func() {
 	}
 
 	for _, test := range canonicalisationTests {
-		test := test
 		if test.expectedUid == "" {
 			continue
 		}

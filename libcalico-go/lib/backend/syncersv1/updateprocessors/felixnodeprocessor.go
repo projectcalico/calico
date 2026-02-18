@@ -55,7 +55,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	// v1 model.  For a delete these will all be nil.  If we fail to convert any value then
 	// just treat that as a delete on the underlying key and return the error alongside
 	// the updates.
-	var ipv4, ipv4Tunl, vxlanTunlIp, vxlanTunlMac, vxlanV6TunlIp, vxlanV6TunlMac, wgConfig interface{}
+	var ipv4, ipv4Tunl, vxlanTunlIp, vxlanTunlMac, vxlanV6TunlIp, vxlanV6TunlMac, wgConfig any
 	var node *libapiv3.Node
 	var ok bool
 	if kvp.Value != nil {

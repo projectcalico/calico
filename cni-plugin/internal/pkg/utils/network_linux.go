@@ -26,7 +26,7 @@ import (
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
-func updateHostLocalIPAMDataForOS(subnet string, ipamData map[string]interface{}) error {
+func updateHostLocalIPAMDataForOS(subnet string, ipamData map[string]any) error {
 	return nil
 }
 

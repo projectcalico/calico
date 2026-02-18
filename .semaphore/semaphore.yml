@@ -1046,12 +1046,10 @@ blocks:
         # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
         - name: "kube-controllers: CI (projectcalico.org/v3)"
           commands:
-            - ../.semaphore/run-and-monitor ut.log make ut
+            - ../.semaphore/run-and-monitor ut.log make image ut
           env_vars:
             - name: CALICO_API_GROUP
               value: "projectcalico.org/v3"
-            - name: WHAT
-              value: "/pkg/controllers/ippool /pkg/controllers/node"
             - name: STORE_BUILD_CACHE
               value: "true"
   - name: Libraries (lib)
@@ -1266,6 +1264,25 @@ blocks:
         always:
           commands:
             - 'test-results publish --ignore-missing ./report/*.xml ../felix/report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Typha" || true'
+  - name: webhooks
+    run:
+      when: "change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml','/.semaphore/semaphore.yml.d/02-global_job_config.yml','/.semaphore/semaphore.yml.d/03-promotions.yml','/.semaphore/semaphore.yml.d/09-blocks.yml','/.semaphore/semaphore.yml.d/99-after_pipeline.yml','/.semaphore/semaphore.yml.d/blocks/20-webhooks.yml','/api/examples/list-gnp/*.go','/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/client/clientset_generated/clientset/*.go','/api/pkg/client/clientset_generated/clientset/scheme/*.go','/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3/*.go','/api/pkg/defaults/*.go','/api/pkg/lib/numorstring/*.go','/api/pkg/openapi/*.go','/apiserver/cmd/apiserver/*.go','/apiserver/cmd/apiserver/server/*.go','/apiserver/pkg/apiserver/*.go','/apiserver/pkg/printers/projectcalico/*.go','/apiserver/pkg/rbac/*.go','/apiserver/pkg/registry/projectcalico/authorizer/*.go','/apiserver/pkg/registry/projectcalico/bgpconfiguration/*.go','/apiserver/pkg/registry/projectcalico/bgpfilter/*.go','/apiserver/pkg/registry/projectcalico/bgppeer/*.go','/apiserver/pkg/registry/projectcalico/blockaffinity/*.go','/apiserver/pkg/registry/projectcalico/caliconodestatus/*.go','/apiserver/pkg/registry/projectcalico/clusterinformation/*.go','/apiserver/pkg/registry/projectcalico/felixconfig/*.go','/apiserver/pkg/registry/projectcalico/globalnetworkset/*.go','/apiserver/pkg/registry/projectcalico/globalpolicy/*.go','/apiserver/pkg/registry/projectcalico/hostendpoint/*.go','/apiserver/pkg/registry/projectcalico/ipamconfig/*.go','/apiserver/pkg/registry/projectcalico/ippool/*.go','/apiserver/pkg/registry/projectcalico/ipreservation/*.go','/apiserver/pkg/registry/projectcalico/kubecontrollersconfig/*.go','/apiserver/pkg/registry/projectcalico/networkpolicy/*.go','/apiserver/pkg/registry/projectcalico/networkset/*.go','/apiserver/pkg/registry/projectcalico/profile/*.go','/apiserver/pkg/registry/projectcalico/rest/*.go','/apiserver/pkg/registry/projectcalico/server/*.go','/apiserver/pkg/registry/projectcalico/stagedglobalnetworkpolicy/*.go','/apiserver/pkg/registry/projectcalico/stagedkubernetesnetworkpolicy/*.go','/apiserver/pkg/registry/projectcalico/stagednetworkpolicy/*.go','/apiserver/pkg/registry/projectcalico/tier/*.go','/apiserver/pkg/registry/projectcalico/util/*.go','/apiserver/pkg/storage/calico/*.go','/apiserver/pkg/storage/etcd/*.go','/crypto/pkg/tls/*.go','/hack/test/certs/','/lib.Makefile','/lib/std/uniquelabels/*.go','/lib/std/uniquestr/*.go','/libcalico-go/lib/apiconfig/*.go','/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go','/libcalico-go/lib/apis/v3/*.go','/libcalico-go/lib/backend/*.go','/libcalico-go/lib/backend/api/*.go','/libcalico-go/lib/backend/encap/*.go','/libcalico-go/lib/backend/etcdv3/*.go','/libcalico-go/lib/backend/k8s/*.go','/libcalico-go/lib/backend/k8s/conversion/*.go','/libcalico-go/lib/backend/k8s/resources/*.go','/libcalico-go/lib/backend/model/*.go','/libcalico-go/lib/backend/watchersyncer/*.go','/libcalico-go/lib/clientv3/*.go','/libcalico-go/lib/errors/*.go','/libcalico-go/lib/hash/*.go','/libcalico-go/lib/json/*.go','/libcalico-go/lib/logutils/*.go','/libcalico-go/lib/names/*.go','/libcalico-go/lib/namespace/*.go','/libcalico-go/lib/net/*.go','/libcalico-go/lib/options/*.go','/libcalico-go/lib/resources/*.go','/libcalico-go/lib/selector/*.go','/libcalico-go/lib/selector/parser/*.go','/libcalico-go/lib/selector/tokenizer/*.go','/libcalico-go/lib/set/*.go','/libcalico-go/lib/validator/v3/*.go','/libcalico-go/lib/watch/*.go','/libcalico-go/lib/winutils/*.go','/metadata.mk','/pkg/buildinfo/*.go','/webhooks/**','api/**/*Dockerfile*','api/Makefile','api/deps.txt','apiserver/**/*Dockerfile*','apiserver/Makefile','apiserver/deps.txt'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/apiserver/**/*_test.go','/crypto/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go','/pkg/**/*_test.go']})"
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "webhooks"
+      prologue:
+        commands:
+          - cd webhooks
+      jobs:
+        - name: "webhooks: CI"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Whisker backend
     run:
       when: "change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml','/.semaphore/semaphore.yml.d/02-global_job_config.yml','/.semaphore/semaphore.yml.d/03-promotions.yml','/.semaphore/semaphore.yml.d/09-blocks.yml','/.semaphore/semaphore.yml.d/99-after_pipeline.yml','/.semaphore/semaphore.yml.d/blocks/20-whisker-backend.yml','/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/crypto/pkg/tls/*.go','/felix/proto/*.go','/felix/types/*.go','/goldmane/pkg/client/*.go','/goldmane/pkg/internal/flowcache/*.go','/goldmane/pkg/types/*.go','/goldmane/proto/*.go','/hack/test/certs/','/lib.Makefile','/lib/httpmachinery/pkg/apiutil/*.go','/lib/httpmachinery/pkg/codec/*.go','/lib/httpmachinery/pkg/context/*.go','/lib/httpmachinery/pkg/header/*.go','/lib/httpmachinery/pkg/server/*.go','/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go','/lib/std/cryptoutils/*.go','/lib/std/testutils/json/*.go','/lib/std/time/*.go','/lib/std/uniquelabels/*.go','/lib/std/uniquestr/*.go','/libcalico-go/lib/apis/v3/*.go','/libcalico-go/lib/backend/encap/*.go','/libcalico-go/lib/backend/model/*.go','/libcalico-go/lib/errors/*.go','/libcalico-go/lib/json/*.go','/libcalico-go/lib/logutils/*.go','/libcalico-go/lib/namespace/*.go','/libcalico-go/lib/net/*.go','/metadata.mk','/whisker-backend/**'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/felix/**/*_test.go','/goldmane/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go']})"

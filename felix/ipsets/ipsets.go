@@ -353,7 +353,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 	}
 
 	var resyncErr, updateErr error
-	for attempt := 0; attempt < MaxRetryAttempt; attempt++ {
+	for attempt := range MaxRetryAttempt {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
 		}
@@ -930,7 +930,7 @@ func (s *IPSets) writeUpdates(setName string, w io.Writer, listener UpdateListen
 
 	// writeLine until an error occurs, writeLine writes a line to the output, after an error,
 	// it is a no-op.
-	writeLine := func(format string, a ...interface{}) {
+	writeLine := func(format string, a ...any) {
 		if err != nil {
 			return
 		}

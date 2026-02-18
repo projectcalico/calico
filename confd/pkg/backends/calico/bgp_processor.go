@@ -380,7 +380,7 @@ func (c *client) processNodePeers(config *types.BirdBGPConfig, nodeClusterID str
 
 // processPeersFromPath is a helper that processes both remote and local BGP peers from a given datastore path
 func (c *client) processPeersFromPath(peerPath, peerType string, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
-	logc := log.WithFields(map[string]interface{}{
+	logc := log.WithFields(map[string]any{
 		"ipVersion": ipVersion,
 		"peerType":  peerType,
 		"path":      peerPath,

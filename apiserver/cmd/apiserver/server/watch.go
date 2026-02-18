@@ -66,21 +66,21 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 		ObjectType:    &corev1.ConfigMap{},
 		ResyncPeriod:  0,
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc: func(_ interface{}) {
+			AddFunc: func(_ any) {
 				if synced {
 					logrus.Info("Detected creation of extension-apiserver-authentication ConfigMap")
 					changed = true
 					cancel()
 				}
 			},
-			DeleteFunc: func(_ interface{}) {
+			DeleteFunc: func(_ any) {
 				if synced {
 					logrus.Info("Detected deletion of extension-apiserver-authentication ConfigMap")
 					changed = true
 					cancel()
 				}
 			},
-			UpdateFunc: func(old, new interface{}) {
+			UpdateFunc: func(old, new any) {
 				if synced {
 					o := old.(*corev1.ConfigMap)
 					n := new.(*corev1.ConfigMap)

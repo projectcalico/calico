@@ -257,7 +257,7 @@ func (n *trieNode) containsIP(ip net.IP, depth uint64) bool {
 }
 
 func (bm *networkBitmap) isEmpty() bool {
-	for i := 0; i < BitmapSize; i++ {
+	for i := range BitmapSize {
 		if bm[i] != 0 {
 			// Still has IP addresses bitmapped
 			return false

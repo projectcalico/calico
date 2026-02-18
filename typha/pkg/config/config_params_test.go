@@ -25,7 +25,7 @@ import (
 )
 
 var _ = DescribeTable("Config parsing",
-	func(key, value string, expected interface{}, errorExpected ...bool) {
+	func(key, value string, expected any, errorExpected ...bool) {
 		cfg := config.New()
 		_, err := cfg.UpdateFrom(map[string]string{key: value},
 			config.EnvironmentVariable)

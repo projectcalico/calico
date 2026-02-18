@@ -37,7 +37,7 @@ type WorkloadEndpointData struct {
 }
 
 type PodConverter interface {
-	Convert(k8sObj interface{}) ([]WorkloadEndpointData, error)
+	Convert(k8sObj any) ([]WorkloadEndpointData, error)
 	GetKey(obj WorkloadEndpointData) string
 	DeleteArgsFromKey(key string) (string, string)
 }
@@ -76,7 +76,7 @@ func NewPodConverter() PodConverter {
 	return &podConverter{}
 }
 
-func (p *podConverter) Convert(k8sObj interface{}) ([]WorkloadEndpointData, error) {
+func (p *podConverter) Convert(k8sObj any) ([]WorkloadEndpointData, error) {
 	// Convert Pod into a workload endpoint.
 	c := conversion.NewConverter()
 	pod, err := ExtractPodFromUpdate(k8sObj)
@@ -128,7 +128,7 @@ func (p *podConverter) DeleteArgsFromKey(key string) (string, string) {
 // ExtractPodFromUpdate takes an update as received from the informer and returns the pod object, if present.
 // some updates (particularly deletes) can include tombstone placeholders rather than an exact pod object. This
 // function should be called in order to safely handles those cases.
-func ExtractPodFromUpdate(obj interface{}) (*v1.Pod, error) {
+func ExtractPodFromUpdate(obj any) (*v1.Pod, error) {
 	pod, ok := obj.(*v1.Pod)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)

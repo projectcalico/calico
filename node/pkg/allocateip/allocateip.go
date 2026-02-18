@@ -100,7 +100,7 @@ func run(
 		cfg:            cfg,
 		client:         c,
 		ch:             make(chan struct{}),
-		data:           make(map[string]interface{}),
+		data:           make(map[string]any),
 		felixEnvConfig: felixEnvConfig,
 	}
 
@@ -135,7 +135,7 @@ type reconciler struct {
 	cfg            *apiconfig.CalicoAPIConfig
 	client         client.Interface
 	ch             chan struct{}
-	data           map[string]interface{}
+	data           map[string]any
 	felixEnvConfig *felixconfig.Config
 	inSync         bool
 }
@@ -189,7 +189,7 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 		}
 
 		// Handle non-nil value updates (Add or Update)
-		var data interface{}
+		var data any
 		switch v := u.Value.(type) {
 		case *model.IPPool:
 			log.Debugf("Updated IPPool resource: %s", key)

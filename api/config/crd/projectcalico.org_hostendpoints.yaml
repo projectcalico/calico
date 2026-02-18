@@ -10,11 +10,25 @@ spec:
     kind: HostEndpoint
     listKind: HostEndpointList
     plural: hostendpoints
+    shortNames:
+      - hep
+      - heps
     singular: hostendpoint
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description:
+            The node name identifying the Calico node instance that is targeted
+            by this HostEndpoint
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The name of the interface that is targeted by this HostEndpoint
+          jsonPath: .spec.interfaceName
+          name: Interface
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -68,3 +82,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

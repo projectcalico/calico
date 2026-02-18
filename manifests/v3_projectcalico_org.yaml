@@ -32018,6 +32018,9 @@ spec:
     kind: BGPConfiguration
     listKind: BGPConfigurationList
     plural: bgpconfigurations
+    shortNames:
+      - bgpconfig
+      - bgpconfigs
     singular: bgpconfiguration
   preserveUnknownFields: false
   scope: Cluster
@@ -32375,7 +32378,38 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: Selector for the nodes that should have this peering
+          jsonPath: .spec.nodeSelector
+          name: Node Selector
+          type: string
+        - description:
+            The node name identifying the Calico node instance that is targeted
+            by this peer
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description:
+            The optional Local AS Number to use when peering with this remote
+            peer
+          jsonPath: .spec.localASNumber
+          name: Local ASN
+          type: string
+        - description: Selector for the remote nodes to peer with
+          jsonPath: .spec.peerSelector
+          name: Peer Selector
+          type: string
+        - description:
+            The IP address of the peer followed by an optional port number
+            to peer with
+          jsonPath: .spec.peerIP
+          name: Peer IP
+          type: string
+        - description: The AS Number of the peer
+          jsonPath: .spec.asNumber
+          name: Peer ASN
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -32463,6 +32497,7 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_blockaffinities.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -32492,6 +32527,10 @@ spec:
         - description: The node the block is affine to
           jsonPath: .spec.node
           name: Node
+          type: string
+        - description: The type of block affinity
+          jsonPath: .spec.type
+          name: Type
           type: string
       name: v3
       schema:
@@ -32553,7 +32592,16 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The name of the node
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The types of information to monitor for this calico/node
+          jsonPath: .spec.classes
+          name: Classes
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -32754,6 +32802,7 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_clusterinformations.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -32775,7 +32824,20 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The version of Calico that the cluster is running
+          jsonPath: .spec.calicoVersion
+          name: Version
+          type: string
+        - description: Whether the datastore is ready for use
+          jsonPath: .spec.datastoreReady
+          name: Ready
+          type: boolean
+        - description: The types associated with the cluster
+          jsonPath: .spec.clusterType
+          name: Types
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -32804,6 +32866,7 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_felixconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -33411,11 +33474,24 @@ spec:
     kind: GlobalNetworkPolicy
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
+    shortNames:
+      - gnp
+      - cgnp
     singular: globalnetworkpolicy
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -33823,6 +33899,7 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_globalnetworksets.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -33837,11 +33914,17 @@ spec:
     kind: GlobalNetworkSet
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
+    shortNames:
+      - gns
     singular: globalnetworkset
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -33865,6 +33948,7 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_hostendpoints.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -33879,11 +33963,25 @@ spec:
     kind: HostEndpoint
     listKind: HostEndpointList
     plural: hostendpoints
+    shortNames:
+      - hep
+      - heps
     singular: hostendpoint
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description:
+            The node name identifying the Calico node instance that is targeted
+            by this HostEndpoint
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The name of the interface that is targeted by this HostEndpoint
+          jsonPath: .spec.interfaceName
+          name: Interface
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -33937,6 +34035,7 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_ipamblocks.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -33962,8 +34061,12 @@ spec:
           type: string
         - description: The block affinity
           jsonPath: .spec.affinity
-          name: Affininty
+          name: Affinity
           type: string
+        - description: The time at which affinity was claimed
+          jsonPath: .spec.affinityClaimTime
+          name: ClaimTime
+          type: date
       name: v3
       schema:
         openAPIV3Schema:
@@ -34055,7 +34158,20 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: Whether borrowing IP addresses is allowed
+          jsonPath: .spec.strictAffinity
+          name: StrictAffinity
+          type: boolean
+        - description: The max number of blocks that can be affine to each host
+          jsonPath: .spec.maxBlocksPerHost
+          name: MaxBlocksPerHost
+          type: integer
+        - description: Whether or not to auto allocate blocks to hosts
+          jsonPath: .spec.autoAllocateBlocks
+          name: AutoAllocateBlocks
+          type: boolean
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -34089,6 +34205,7 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_ipamhandles.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -34107,7 +34224,12 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: The handle ID
+          jsonPath: .spec.handleID
+          name: ID
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -34137,6 +34259,7 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_ippools.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -34343,6 +34466,9 @@ spec:
     kind: KubeControllersConfiguration
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
+    shortNames:
+      - kcc
+      - kccs
     singular: kubecontrollersconfiguration
   preserveUnknownFields: false
   scope: Cluster
@@ -34627,6 +34753,9 @@ spec:
         - jsonPath: .spec.tier
           name: Tier
           type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
       name: v3
       schema:
         openAPIV3Schema:
@@ -35096,6 +35225,9 @@ spec:
         - jsonPath: .spec.tier
           name: Tier
           type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
       name: v3
       schema:
         openAPIV3Schema:
@@ -35800,6 +35932,9 @@ spec:
         - jsonPath: .spec.tier
           name: Tier
           type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
       name: v3
       schema:
         openAPIV3Schema:

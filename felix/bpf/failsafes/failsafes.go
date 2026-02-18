@@ -46,7 +46,7 @@ type Manager struct {
 	ipFamily     proto.IPVersion
 }
 
-func (m *Manager) OnUpdate(_ interface{}) {
+func (m *Manager) OnUpdate(_ any) {
 }
 
 func NewManager(

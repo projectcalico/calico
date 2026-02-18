@@ -46,7 +46,7 @@ func convertWorkloadEndpointV3ToV1Key(key model.ResourceKey) (model.Key, error) 
 	return names.ConvertWorkloadEndpointV3KeyToV1Key(key)
 }
 
-func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
+func convertWorkloadEndpointV2ToV1Value(val any) (any, error) {
 	v3res, ok := val.(*libapiv3.WorkloadEndpoint)
 	if !ok {
 		return nil, errors.New("Value is not a valid WorkloadEndpoint resource value")

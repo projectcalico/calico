@@ -16,6 +16,7 @@ package rbac_test
 
 import (
 	"encoding/json"
+	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -125,12 +126,7 @@ var (
 )
 
 func isOneOf(rt ResourceType, rts ...ResourceType) bool {
-	for _, rtss := range rts {
-		if rt == rtss {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(rts, rt)
 }
 
 var allResourceVerbs []ResourceVerbs
@@ -983,10 +979,5 @@ func expectPresentButEmpty(p Permissions, rvs []ResourceVerbs) {
 }
 
 func contains[T comparable](elems []T, v T) bool {
-	for _, s := range elems {
-		if v == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(elems, v)
 }

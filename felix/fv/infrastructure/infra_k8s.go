@@ -131,25 +131,19 @@ func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 	}
 
 	if kds.etcdContainer != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			kds.etcdContainer.Stop()
-		}()
+		})
 	}
 	if kds.k8sApiContainer != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			kds.k8sApiContainer.Stop()
-		}()
+		})
 	}
 	if kds.k8sControllerManager != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			kds.k8sControllerManager.Stop()
-		}()
+		})
 	}
 	wg.Wait()
 	log.Info("TearDownK8sInfra done")

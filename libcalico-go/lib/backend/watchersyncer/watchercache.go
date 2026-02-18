@@ -44,7 +44,7 @@ type watcherCache struct {
 	watch                  api.WatchInterface
 	resources              map[string]cacheEntry
 	oldResources           map[string]cacheEntry
-	results                chan<- interface{}
+	results                chan<- any
 	hasSynced              bool
 	resourceType           ResourceType
 	currentWatchRevision   string
@@ -84,7 +84,7 @@ type cacheEntry struct {
 }
 
 // Create a new watcherCache.
-func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- interface{}, watchTimeout time.Duration) *watcherCache {
+func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- any, watchTimeout time.Duration) *watcherCache {
 	return &watcherCache{
 		logger:               logrus.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
 		client:               client,

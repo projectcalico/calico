@@ -19,6 +19,7 @@ import (
 	"net"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -143,7 +144,7 @@ var (
 
 // Validate is used to validate the supplied structure according to the
 // registered field and structure validators.
-func Validate(current interface{}) error {
+func Validate(current any) error {
 	// Perform field-only validation first, that way the struct validators can assume
 	// individual fields are valid format.
 	if err := validate.Struct(current); err != nil {
@@ -286,8 +287,8 @@ func reason(r string) string {
 // extractReason extracts the error reason from the field tag in a validator
 // field error (if there is one).
 func extractReason(e validator.FieldError) string {
-	if strings.HasPrefix(e.Tag(), reasonString) {
-		return strings.TrimPrefix(e.Tag(), reasonString)
+	if after, ok := strings.CutPrefix(e.Tag(), reasonString); ok {
+		return after
 	}
 	return fmt.Sprintf("%sfailed to validate Field: %s because of Tag: %s ",
 		reasonString,
@@ -302,7 +303,7 @@ func registerFieldValidator(key string, fn validator.Func) {
 	validate.RegisterValidation(key, fn)
 }
 
-func registerStructValidator(validator *validator.Validate, fn validator.StructLevelFunc, t ...interface{}) {
+func registerStructValidator(validator *validator.Validate, fn validator.StructLevelFunc, t ...any) {
 	validator.RegisterStructValidation(fn, t...)
 }
 
@@ -797,7 +798,7 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 		return true
 	}
 
-	for _, item := range strings.Split(n, ",") {
+	for item := range strings.SplitSeq(n, ",") {
 		if item == "" {
 			// Accept empty items (e.g tailing ",")
 			continue
@@ -1246,13 +1247,7 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	}
 
 	// Check for invalid combination: Tunnel allowedUse with namespaceSelector
-	hasTunnelUse := false
-	for _, use := range pool.AllowedUses {
-		if use == api.IPPoolAllowedUseTunnel {
-			hasTunnelUse = true
-			break
-		}
-	}
+	hasTunnelUse := slices.Contains(pool.AllowedUses, api.IPPoolAllowedUseTunnel)
 
 	if hasTunnelUse && pool.NamespaceSelector != "" {
 		structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),

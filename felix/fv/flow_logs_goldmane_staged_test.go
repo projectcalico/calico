@@ -234,7 +234,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		Expect(err).NotTo(HaveOccurred())
 
 		// (s)knp3.1->sknp3.9 egress: (N2-1)
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			sknp := api.NewStagedKubernetesNetworkPolicy()
 			sknp.Name = fmt.Sprintf("knp3-%d", i+1)
 			sknp.Namespace = "default"

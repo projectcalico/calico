@@ -67,7 +67,7 @@ func newVXLANManager(hcn hcnInterface, hostname string, networkName *regexp.Rege
 	}
 }
 
-func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
+func (m *vxlanManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
 		if msg.Types&proto.RouteType_REMOTE_WORKLOAD != 0 && msg.IpPoolType == proto.IPPoolType_VXLAN {
