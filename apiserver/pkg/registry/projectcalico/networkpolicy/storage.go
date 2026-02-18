@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // rest implements a RESTStorage for API services against etcd
@@ -117,7 +118,7 @@ func (r *REST) List(ctx context.Context, options *metainternalversion.ListOption
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, val rest.ValidateObjectFunc, createOpt *metav1.CreateOptions) (runtime.Object, error) {
 	policy := obj.(*calico.NetworkPolicy)
-	tierName := util.TierOrDefault(policy.Spec.Tier)
+	tierName := names.TierOrDefault(policy.Spec.Tier)
 	err := r.authorizer.AuthorizeTierOperation(ctx, policy.Name, tierName)
 	if err != nil {
 		return nil, err
@@ -132,7 +133,7 @@ func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObje
 	if err != nil {
 		return nil, false, err
 	}
-	tierName := util.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
+	tierName := names.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
 	err = r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
 	if err != nil {
 		return nil, false, err
@@ -147,7 +148,7 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	if err != nil {
 		return nil, err
 	}
-	tierName := util.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
+	tierName := names.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
 	err = r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
 	if err != nil {
 		return nil, err
@@ -161,7 +162,7 @@ func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.Va
 	if err != nil {
 		return nil, false, err
 	}
-	tierName := util.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
+	tierName := names.TierOrDefault(obj.(*calico.NetworkPolicy).Spec.Tier)
 	err = r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
 	if err != nil {
 		return nil, false, err

@@ -137,11 +137,3 @@ func buildSelectorFromTiers(tiers []string) (*labels.Requirement, error) {
 
 	return requirement, nil
 }
-
-// TierOrDefault returns the tier name, defaulting to "default" if empty.
-func TierOrDefault(tier string) string {
-	if tier == "" {
-		return "default"
-	}
-	return tier
-}
