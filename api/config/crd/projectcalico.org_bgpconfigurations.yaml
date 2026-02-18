@@ -134,6 +134,19 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message:
+                    nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is
+                    false
+                  rule:
+                    "!has(self.nodeMeshPassword) || !has(self.nodeToNodeMeshEnabled)
+                    || self.nodeToNodeMeshEnabled == true"
+                - message:
+                    nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled
+                    is false
+                  rule:
+                    "!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled)
+                    || self.nodeToNodeMeshEnabled == true"
           required:
             - metadata
             - spec

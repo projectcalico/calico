@@ -67,6 +67,8 @@ const (
 )
 
 // BGPConfigurationSpec contains the values of the BGP configuration.
+// +kubebuilder:validation:XValidation:rule="!has(self.nodeMeshPassword) || !has(self.nodeToNodeMeshEnabled) || self.nodeToNodeMeshEnabled == true",message="nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is false"
+// +kubebuilder:validation:XValidation:rule="!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled) || self.nodeToNodeMeshEnabled == true",message="nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled is false"
 type BGPConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
 	// +kubebuilder:default=Info
