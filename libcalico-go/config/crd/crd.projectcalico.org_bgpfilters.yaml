@@ -68,6 +68,13 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        rule:
+                          (size(self.cidr) == 0 && size(self.matchOperator) == 0)
+                          || (size(self.cidr) > 0 && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        rule: "!has(self.prefixLength) || size(self.cidr) > 0"
                   type: array
                 exportV6:
                   items:
@@ -111,6 +118,13 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        rule:
+                          (size(self.cidr) == 0 && size(self.matchOperator) == 0)
+                          || (size(self.cidr) > 0 && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        rule: "!has(self.prefixLength) || size(self.cidr) > 0"
                   type: array
                 importV4:
                   items:
@@ -154,6 +168,13 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        rule:
+                          (size(self.cidr) == 0 && size(self.matchOperator) == 0)
+                          || (size(self.cidr) > 0 && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        rule: "!has(self.prefixLength) || size(self.cidr) > 0"
                   type: array
                 importV6:
                   items:
@@ -197,6 +218,13 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        rule:
+                          (size(self.cidr) == 0 && size(self.matchOperator) == 0)
+                          || (size(self.cidr) > 0 && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        rule: "!has(self.prefixLength) || size(self.cidr) > 0"
                   type: array
               type: object
           type: object

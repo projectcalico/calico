@@ -49,7 +49,7 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 			obj: &v3.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
 				Spec: v3.BGPConfigurationSpec{
-					NodeToNodeMeshEnabled: ptr.To(false),
+					NodeToNodeMeshEnabled:  ptr.To(false),
 					NodeMeshMaxRestartTime: &dur,
 				},
 			},
