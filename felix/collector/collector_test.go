@@ -3178,9 +3178,7 @@ func (m *mockEgressDomainCache) GetTopLevelDomainsForIP(clientIP string, ip [16]
 func (m *mockEgressDomainCache) IterWatchedDomainsForIP(clientIP string, ip [16]byte, fn func(domain string) bool) {
 	if clientDomains, ok := m.domains[clientIP]; ok {
 		if domains, ok := clientDomains[ip]; ok {
-			if slices.ContainsFunc(domains, fn) {
-
-			}
+			_ = slices.ContainsFunc(domains, fn)
 		}
 	}
 }

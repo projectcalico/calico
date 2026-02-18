@@ -455,16 +455,13 @@ func CommonPrefix(a, b CIDR) CIDR {
 }
 
 func V4CommonPrefix(a, b V4CIDR) V4CIDR {
-	var result V4CIDR
-	var maxLen uint8
-	maxLen = min(b.prefix, a.prefix)
-
 	a32 := a.addr.AsUint32()
 	b32 := b.addr.AsUint32()
 
 	xored := a32 ^ b32 // Has a zero bit wherever the two values are the same.
 	commonPrefixLen := uint8(bits.LeadingZeros32(xored))
-	result.prefix = min(commonPrefixLen, maxLen)
+	var result V4CIDR
+	result.prefix = min(commonPrefixLen, min(b.prefix, a.prefix))
 
 	mask := uint32(0xffffffff) << (32 - result.prefix)
 	commonPrefix32 := mask & a32
@@ -474,11 +471,6 @@ func V4CommonPrefix(a, b V4CIDR) V4CIDR {
 }
 
 func V6CommonPrefix(a, b V6CIDR) V6CIDR {
-	var result V6CIDR
-	var maxLen uint8
-
-	maxLen = min(b.prefix, a.prefix)
-
 	a_h, a_l := a.addr.AsUint64Pair()
 	b_h, b_l := b.addr.AsUint64Pair()
 
@@ -487,6 +479,8 @@ func V6CommonPrefix(a, b V6CIDR) V6CIDR {
 
 	commonPrefixLen := uint8(bits.LeadingZeros64(xored_h))
 
+	var result V6CIDR
+	maxLen := min(b.prefix, a.prefix)
 	if xored_h == 0 {
 		// This means a_h == b_h and commonPrefixLen will be > 64. The first
 		// 8 bytes of the result will be equal to a_h (and b_h), last 8 will
