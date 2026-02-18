@@ -58,6 +58,7 @@ type TierSpec struct {
 	// DefaultAction specifies the action applied to workloads selected by a policy in the tier,
 	// but not rule matched the workload's traffic.
 	// [Default: Deny]
+	// +kubebuilder:default=Deny
 	// +kubebuilder:validation:Enum=Pass;Deny
 	DefaultAction *Action `json:"defaultAction,omitempty" validate:"omitempty,oneof=Deny Pass"`
 }

@@ -49,6 +49,8 @@ type HostEndpoint struct {
 }
 
 // HostEndpointSpec contains the specification for a HostEndpoint resource.
+// +kubebuilder:validation:XValidation:rule="(has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs) && size(self.expectedIPs) > 0)",message="at least one of interfaceName or expectedIPs must be specified"
+// +kubebuilder:validation:XValidation:rule="has(self.node) && size(self.node) > 0",message="node must be specified"
 type HostEndpointSpec struct {
 	// The node name identifying the Calico node instance.
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
@@ -95,7 +97,7 @@ type EndpointPort struct {
 	Name     string               `json:"name" validate:"portName"`
 	Protocol numorstring.Protocol `json:"protocol"`
 
-	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port uint16 `json:"port" validate:"gt=0"`
 }

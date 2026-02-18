@@ -31,6 +31,7 @@ hack/test/kind/.*updated*
 hack/test/kind/kubectl
 hack/test/kind/kubectl-v*
 hack/test/kind/*kubeconfig.yaml
+hack/test/envtest/
 pod2daemon/node-driver-registrar/
 
 /networking-calico/upper-constraints*.txt
