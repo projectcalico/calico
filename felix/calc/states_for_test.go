@@ -24,7 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 

@@ -24,7 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/labelindex"
-	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	sel "github.com/projectcalico/calico/libcalico-go/lib/selector"

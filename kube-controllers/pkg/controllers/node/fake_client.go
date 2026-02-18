@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
