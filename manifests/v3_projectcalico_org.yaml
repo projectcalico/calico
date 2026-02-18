@@ -32142,6 +32142,19 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message:
+                    nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is
+                    false
+                  rule:
+                    "!has(self.nodeMeshPassword) || !has(self.nodeToNodeMeshEnabled)
+                    || self.nodeToNodeMeshEnabled == true"
+                - message:
+                    nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled
+                    is false
+                  rule:
+                    "!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled)
+                    || self.nodeToNodeMeshEnabled == true"
           required:
             - metadata
             - spec
@@ -32220,6 +32233,13 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        rule:
+                          (size(self.cidr) == 0 && size(self.matchOperator) == 0)
+                          || (size(self.cidr) > 0 && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        rule: "!has(self.prefixLength) || size(self.cidr) > 0"
                   type: array
                 exportV6:
                   items:
@@ -32263,6 +32283,13 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        rule:
+                          (size(self.cidr) == 0 && size(self.matchOperator) == 0)
+                          || (size(self.cidr) > 0 && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        rule: "!has(self.prefixLength) || size(self.cidr) > 0"
                   type: array
                 importV4:
                   items:
@@ -32306,6 +32333,13 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        rule:
+                          (size(self.cidr) == 0 && size(self.matchOperator) == 0)
+                          || (size(self.cidr) > 0 && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        rule: "!has(self.prefixLength) || size(self.cidr) > 0"
                   type: array
                 importV6:
                   items:
@@ -32349,6 +32383,13 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        rule:
+                          (size(self.cidr) == 0 && size(self.matchOperator) == 0)
+                          || (size(self.cidr) > 0 && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        rule: "!has(self.prefixLength) || size(self.cidr) > 0"
                   type: array
               type: object
           required:
@@ -32457,6 +32498,31 @@ spec:
                 ttlSecurity:
                   type: integer
               type: object
+              x-kubernetes-validations:
+                - message: node and nodeSelector cannot both be set
+                  rule:
+                    (!has(self.node) || size(self.node) == 0) || (!has(self.nodeSelector)
+                    || size(self.nodeSelector) == 0)
+                - message: peerIP and peerSelector cannot both be set
+                  rule:
+                    (!has(self.peerIP) || size(self.peerIP) == 0) || (!has(self.peerSelector)
+                    || size(self.peerSelector) == 0)
+                - message: asNumber must be empty when peerSelector is set
+                  rule:
+                    (!has(self.peerSelector) || size(self.peerSelector) == 0) || !has(self.asNumber)
+                    || self.asNumber == 0
+                - message: peerIP must be empty when localWorkloadSelector is set
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (!has(self.peerIP) || size(self.peerIP) == 0)
+                - message: peerSelector must be empty when localWorkloadSelector is set
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)
+                - message: asNumber is required when localWorkloadSelector is set
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (has(self.asNumber) && self.asNumber != 0)
           required:
             - metadata
             - spec
@@ -33391,6 +33457,9 @@ spec:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
               type: object
+              x-kubernetes-validations:
+                - message: routeTableRange and routeTableRanges cannot both be set
+                  rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           required:
             - metadata
             - spec
@@ -33497,15 +33566,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -33515,10 +33588,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -33538,10 +33614,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -33608,6 +33687,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -33675,15 +33767,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -33693,10 +33789,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -33716,10 +33815,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -33786,6 +33888,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 namespaceSelector:
                   type: string
@@ -33817,6 +33932,25 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: preDNAT and doNotTrack cannot both be true
+                  rule:
+                    "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
+                    && self.preDNAT))"
+                - message: preDNAT policy cannot have any egress rules
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
+                    size(self.egress) == 0
+                - message: preDNAT policy cannot have 'Egress' type
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
+                    t == 'Egress')
+                - message:
+                    applyOnForward must be true if either preDNAT or doNotTrack
+                    is true
+                  rule:
+                    (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
+                    || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
           required:
             - metadata
             - spec
@@ -33911,7 +34045,7 @@ spec:
                         type: string
                       port:
                         maximum: 65535
-                        minimum: 0
+                        minimum: 1
                         type: integer
                       protocol:
                         anyOf:
@@ -33931,6 +34065,13 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: at least one of interfaceName or expectedIPs must be specified
+                  rule:
+                    (has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs)
+                    && size(self.expectedIPs) > 0)
+                - message: node must be specified
+                  rule: has(self.node) && size(self.node) > 0
           required:
             - metadata
             - spec
@@ -34199,6 +34340,7 @@ spec:
                       - Tunnel
                       - LoadBalancer
                     type: string
+                  maxItems: 10
                   type: array
                   x-kubernetes-list-type: set
                 assignmentMode:
@@ -34239,6 +34381,24 @@ spec:
               required:
                 - cidr
               type: object
+              x-kubernetes-validations:
+                - message: ipipMode and vxlanMode cannot both be enabled
+                  rule:
+                    "!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode
+                    == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode)
+                    == 0 || size(self.vxlanMode) == 0"
+                - message: LoadBalancer IP pool cannot have IPIP or VXLAN enabled
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode
+                    == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) ==
+                    0 || self.vxlanMode == 'Never')"
+                - message:
+                    LoadBalancer cannot be combined with Workload or Tunnel allowed
+                    uses
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')"
             status:
               properties:
                 conditions:
@@ -34705,15 +34865,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -34723,10 +34887,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -34746,10 +34913,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -34816,6 +34986,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -34883,15 +35066,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -34901,10 +35088,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -34924,10 +35114,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -34994,6 +35187,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 order:
                   type: number
@@ -35178,15 +35384,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -35196,10 +35406,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -35219,10 +35432,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -35289,6 +35505,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -35356,15 +35585,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -35374,10 +35607,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -35397,10 +35633,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -35467,6 +35706,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 namespaceSelector:
                   type: string
@@ -35485,6 +35737,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -35505,6 +35758,25 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: preDNAT and doNotTrack cannot both be true
+                  rule:
+                    "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
+                    && self.preDNAT))"
+                - message: preDNAT policy cannot have any egress rules
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
+                    size(self.egress) == 0
+                - message: preDNAT policy cannot have 'Egress' type
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
+                    t == 'Egress')
+                - message:
+                    applyOnForward must be true if either preDNAT or doNotTrack
+                    is true
+                  rule:
+                    (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
+                    || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
           required:
             - metadata
             - spec
@@ -35762,6 +36034,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -35878,15 +36151,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -35896,10 +36173,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -35919,10 +36199,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -35989,6 +36272,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -36056,15 +36352,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -36074,10 +36374,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -36097,10 +36400,13 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -36167,6 +36473,19 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP'"
+                      - message: HTTP match is only valid on Allow rules
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 order:
                   type: number
@@ -36181,6 +36500,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -36259,6 +36579,7 @@ spec:
                     - enum:
                         - Pass
                         - Deny
+                  default: Deny
                   type: string
                 order:
                   type: number
