@@ -31,6 +31,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -830,7 +831,7 @@ func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
 	}
 }
 
-func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
+func (m *bpfEndpointManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	// Updates from the dataplane:
 
@@ -1405,7 +1406,7 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID types.WorkloadEndpointID,
 }
 
 func jumpMapDeleteSubProgs(m maps.Map, idx, stride int) error {
-	for subProg := 0; subProg < jump.MaxSubPrograms; subProg++ {
+	for subProg := range jump.MaxSubPrograms {
 		if err := m.Delete(jump.Key(polprog.SubProgramJumpIdx(idx, subProg, stride))); err != nil {
 			if maps.IsNotExists(err) {
 				if subProg == 0 {
@@ -1830,12 +1831,10 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	}
 
 	if m.v6 != nil {
-		parallelWG.Add(1)
-		go func() {
-			defer parallelWG.Done()
+		parallelWG.Go(func() {
 			ingressAP6, egressAP6, xdpAP6, err6 = m.v6.applyPolicyToDataIface(iface, hepPtr, &state,
 				tcAttachPoint, xdpAttachPoint, xdpMode)
-		}()
+		})
 	}
 	if m.v4 != nil {
 		ingressAP4, egressAP4, xdpAP4, err4 = m.v4.applyPolicyToDataIface(iface, hepPtr, &state,
@@ -1845,20 +1844,16 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	parallelWG.Wait()
 
 	// Attach ingress program.
-	parallelWG.Add(1)
-	go func() {
-		defer parallelWG.Done()
+	parallelWG.Go(func() {
 		ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 		if ingressAP != nil {
 			m.loadFilterProgram(ingressAP)
 			ingressErr = m.dp.ensureProgramAttached(ingressAP)
 		}
-	}()
+	})
 
 	// Attach xdp program.
-	parallelWG.Add(1)
-	go func() {
-		defer parallelWG.Done()
+	parallelWG.Go(func() {
 		xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
 		if xdpAP != nil {
 			if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 {
@@ -1867,7 +1862,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 				xdpErr = m.dp.ensureNoProgram(xdpAP)
 			}
 		}
-	}()
+	})
 
 	// Attach egress program.
 	egressAP := mergeAttachPoints(egressAP4, egressAP6)
@@ -2469,11 +2464,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	if m.v6 != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			ingressAP6, egressAP6, err6 = m.v6.applyPolicyToWeps(v6Readiness, ifaceName, &state, wep, ap)
-		}()
+		})
 	}
 
 	if m.v4 != nil {
@@ -2492,15 +2485,13 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	// Attach preamble TC program
 	if attachPreamble {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 			if ingressAP != nil {
 				m.loadFilterProgram(ingressAP)
 				ingressErr = m.dp.ensureProgramAttached(ingressAP)
 			}
-		}()
+		})
 		egressAP := mergeAttachPoints(egressAP4, egressAP6)
 		if egressAP != nil {
 			m.loadFilterProgram(egressAP)
@@ -2774,12 +2765,10 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToWeps(
 	var ingressAP *tc.AttachPoint
 	var ingressErr error
 
-	parallelWG.Add(1)
-	go func() {
-		defer parallelWG.Done()
+	parallelWG.Go(func() {
 		ingressAP, ingressErr = d.wepApplyPolicyToDirection(readiness,
 			state, endpoint, PolDirnIngress, &ingressAttachPoint)
-	}()
+	})
 
 	egressAP, egressErr := d.wepApplyPolicyToDirection(readiness,
 		state, endpoint, PolDirnEgress, &egressAttachPoint)
@@ -2806,19 +2795,15 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	var ingressErr, egressErr, xdpErr error
 
 	if xdpMode != XDPModeNone {
-		parallelWG.Add(1)
-		go func() {
-			defer parallelWG.Done()
+		parallelWG.Go(func() {
 			xdpAP, xdpErr = d.attachXDPProgram(&xdpAttachPoint, ep, state)
-		}()
+		})
 	}
 
 	if xdpMode != XDPModeOnly {
-		parallelWG.Add(1)
-		go func() {
-			defer parallelWG.Done()
+		parallelWG.Go(func() {
 			ingressAP, ingressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnIngress, state, &ingressAttachPoint)
-		}()
+		})
 
 		egressAP, egressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnEgress, state, &egressAttachPoint)
 	}
@@ -3296,7 +3281,7 @@ func (m *bpfEndpointManager) addWEPToIndexes(wlID types.WorkloadEndpointID, wl *
 	m.addProfileToEPMappings(wl.ProfileIds, wlID)
 }
 
-func (m *bpfEndpointManager) addPolicyToEPMappings(tier string, policies []*proto.PolicyID, id interface{}) {
+func (m *bpfEndpointManager) addPolicyToEPMappings(tier string, policies []*proto.PolicyID, id any) {
 	for _, p := range policies {
 		polID := types.ProtoToPolicyID(p)
 		if m.policiesToWorkloads[polID] == nil {
@@ -3306,7 +3291,7 @@ func (m *bpfEndpointManager) addPolicyToEPMappings(tier string, policies []*prot
 	}
 }
 
-func (m *bpfEndpointManager) addProfileToEPMappings(profileIds []string, id interface{}) {
+func (m *bpfEndpointManager) addProfileToEPMappings(profileIds []string, id any) {
 	for _, profName := range profileIds {
 		profID := types.ProfileID{Name: profName}
 		profSet := m.profilesToWorkloads[profID]
@@ -3336,7 +3321,7 @@ func (m *bpfEndpointManager) removeWEPFromIndexes(wlID types.WorkloadEndpointID,
 	})
 }
 
-func (m *bpfEndpointManager) removePolicyToEPMappings(tier string, policies []*proto.PolicyID, id interface{}) {
+func (m *bpfEndpointManager) removePolicyToEPMappings(tier string, policies []*proto.PolicyID, id any) {
 	for _, pol := range policies {
 		polID := types.ProtoToPolicyID(pol)
 		polSet := m.policiesToWorkloads[polID]
@@ -4407,13 +4392,7 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 
 	// Check which IPs have been removed (no-op if we haven't seen it yet)
 	for _, old := range m.services[key] {
-		exists := false
-		for _, svcIP := range ips {
-			if old == svcIP {
-				exists = true
-				break
-			}
-		}
+		exists := slices.Contains(ips, old)
 		if !exists {
 			m.dp.delRoute(old)
 		}
@@ -4866,7 +4845,7 @@ func newJumpMapAlloc(name string, entryPoints int) *jumpMapAlloc {
 		freeStack: make([]int, entryPoints),
 		inUse:     map[int]string{},
 	}
-	for i := 0; i < entryPoints; i++ {
+	for i := range entryPoints {
 		a.free.Add(i)
 		a.freeStack[entryPoints-1-i] = i
 	}

@@ -864,7 +864,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	// The expectation is that, WorkloadEndpointUpdates must not
 	// result in re-attaching the program. Hence the priority, handle of
 	// the tc filters must be the same.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 			Id: &proto.WorkloadEndpointID{
 				OrchestratorId: "k8s",
@@ -939,7 +939,7 @@ func TestRepeatedAttach(t *testing.T) {
 	ingressProg, err := tc.ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(ingressProg)).To(Equal(1))
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		err = ap.AttachProgram()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to attach preamble : %d", i))
 	}
@@ -1469,7 +1469,7 @@ func ifstateMapDump(m maps.Map) ifstate.MapMem {
 func jumpMapDump(m maps.Map) map[int]int {
 	jumpMap := make(map[int]int)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		if v, err := m.Get(jump.Key(i) /* a good key for any jump map */); err == nil {
 			jumpMap[i] = int(binary.LittleEndian.Uint32(v))
 		}

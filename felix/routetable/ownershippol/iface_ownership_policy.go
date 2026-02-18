@@ -15,6 +15,8 @@
 package ownershippol
 
 import (
+	"slices"
+
 	"github.com/vishvananda/netlink"
 )
 
@@ -37,12 +39,7 @@ func (d *ExclusiveOwnershipPolicy) IfaceIsOurs(ifaceName string) bool {
 	if d.InterfaceNames == nil {
 		return true
 	}
-	for _, iface := range d.InterfaceNames {
-		if iface == ifaceName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(d.InterfaceNames, ifaceName)
 }
 
 func (d *ExclusiveOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.Route) bool {

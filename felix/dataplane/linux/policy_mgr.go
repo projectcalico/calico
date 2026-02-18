@@ -78,7 +78,7 @@ func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVe
 	}
 }
 
-func (m *policyManager) OnUpdate(msg interface{}) {
+func (m *policyManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
 		id := types.ProtoToPolicyID(msg.GetId())

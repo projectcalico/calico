@@ -114,7 +114,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 
 			// Implemented retry on conflict, because we get stuck if the upgrade-ipam
 			// container fails here and retries assigning an IP which is already assigned
-			for i := uint(0); i < 5; i++ {
+			for range uint(5) {
 				node, err := c.Nodes().Get(ctxt, nodename, options.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("failed to get calico node resource: %s", err)
@@ -174,7 +174,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	// Disable cni by setting DatastoreReady to false.
 	log.Info("setting datastore readiness to false")
 	var clusterInfo *apiv3.ClusterInformation
-	for i := uint(0); i < 5; i++ {
+	for range uint(5) {
 		clusterInfo, err = c.ClusterInformation().Get(ctxt, "default", options.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to fetch cluster information: %s", err)

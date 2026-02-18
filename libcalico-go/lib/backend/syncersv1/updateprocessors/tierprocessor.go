@@ -42,7 +42,7 @@ func ConvertTierV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 	}, nil
 }
 
-func ConvertTierV3ToV1Value(val interface{}) (interface{}, error) {
+func ConvertTierV3ToV1Value(val any) (any, error) {
 	v3res, ok := val.(*apiv3.Tier)
 	if !ok {
 		return nil, errors.New("Value is not a valid Tier resource value")

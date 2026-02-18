@@ -27,7 +27,7 @@ func panicAfter(delay time.Duration) {
 
 func simulateDataRace() {
 	i := 0
-	for j := 0; j < 3; j++ {
+	for range 3 {
 		go func() {
 			for {
 				k := i

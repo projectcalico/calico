@@ -15,7 +15,6 @@
 package checker
 
 import (
-	"context"
 	"testing"
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
@@ -29,8 +28,7 @@ import (
 
 func TestCheckNoStore(t *testing.T) {
 	RegisterTestingT(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	stores := policystore.NewPolicyStoreManager()
 	uut := NewServer(ctx, stores)
@@ -44,8 +42,7 @@ func TestCheckNoStore(t *testing.T) {
 
 func TestCheckStore(t *testing.T) {
 	RegisterTestingT(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	stores := policystore.NewPolicyStoreManager()
 	uut := NewServer(ctx, stores)

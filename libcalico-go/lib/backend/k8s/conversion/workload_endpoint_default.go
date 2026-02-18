@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"strconv"
@@ -77,7 +78,7 @@ func (wc defaultWorkloadEndpointConverter) VethNameForWorkload(namespace, podnam
 	// A SHA1 is always 20 bytes long, and so is sufficient for generating the
 	// veth name and mac addr.
 	h := sha1.New()
-	h.Write([]byte(fmt.Sprintf("%s.%s", namespace, podname)))
+	h.Write(fmt.Appendf(nil, "%s.%s", namespace, podname))
 	prefix := os.Getenv("FELIX_INTERFACEPREFIX")
 	if prefix == "" {
 		// Prefix is not set. Default to "cali"
@@ -156,9 +157,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	// Build the labels map.  Start with the pod labels, and append two additional labels for
 	// namespace and orchestrator matches.
 	labels := make(map[string]string)
-	for k, v := range pod.Labels {
-		labels[k] = v
-	}
+	maps.Copy(labels, pod.Labels)
 	labels[apiv3.LabelNamespace] = pod.Namespace
 	labels[apiv3.LabelOrchestrator] = apiv3.OrchestratorKubernetes
 

@@ -46,7 +46,7 @@ func CalculateEndpointPolicies(
 	found := false
 	for _, inPol := range inputPols {
 		// Decode the raw policy as a dict so we can inspect it without losing any fields.
-		decoded := map[string]interface{}{}
+		decoded := map[string]any{}
 		err := json.Unmarshal(inPol, &decoded)
 		if err != nil {
 			logger.WithError(err).Error("GetHNSEndpointPolicies() returned bad JSON")
@@ -71,7 +71,7 @@ func CalculateEndpointPolicies(
 				continue
 			}
 
-			excList, _ := decoded["ExceptionList"].([]interface{})
+			excList, _ := decoded["ExceptionList"].([]any)
 			excList = appendCIDRs(excList, extraNATExceptions)
 			decoded["ExceptionList"] = excList
 			outPol, err = json.Marshal(decoded)
@@ -100,7 +100,7 @@ func CalculateEndpointPolicies(
 	}
 	if !found && natOutgoing && len(extraNATExceptions) > 0 {
 		exceptions := appendCIDRs(nil, extraNATExceptions)
-		dict := map[string]interface{}{
+		dict := map[string]any{
 			"Type":          "OutBoundNAT",
 			"ExceptionList": exceptions,
 		}
@@ -148,7 +148,7 @@ func CalculateEndpointPolicies(
 //	    []byte(`{"ExceptionList":["10.96.0.0/12","192.168.0.0/16"]}`),
 //	  ),
 //	}
-func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPolicy, error) {
+func convertToHcnEndpointPolicy(policy map[string]any) (hcn.EndpointPolicy, error) {
 	hcnPolicy := hcn.EndpointPolicy{}
 
 	// Get v2 policy type.
@@ -169,7 +169,7 @@ func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPoli
 	return hcnPolicy, nil
 }
 
-func appendCIDRs(excList []interface{}, extraNATExceptions []*net.IPNet) []interface{} {
+func appendCIDRs(excList []any, extraNATExceptions []*net.IPNet) []any {
 	for _, cidr := range extraNATExceptions {
 		maskedCIDR := &net.IPNet{
 			IP:   cidr.IP.Mask(cidr.Mask),

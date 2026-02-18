@@ -26,8 +26,7 @@ import (
 
 func TestRunner(t *testing.T) {
 	RegisterTestingT(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	kicks := make(chan struct{})
 

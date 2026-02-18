@@ -423,7 +423,7 @@ func (s *Scanner) writeNewSizeFile() error {
 	// Write the new map size to disk so that restarts will pick it up.
 	filename := "/var/lib/calico/bpf_ct_map_size"
 	log.Debugf("Writing %d to "+filename, newSize)
-	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", newSize)), 0o644); err != nil {
+	if err := os.WriteFile(filename, fmt.Appendf(nil, "%d", newSize), 0o644); err != nil {
 		return fmt.Errorf("unable to write to %s: %w", filename, err)
 	}
 	return nil
@@ -441,9 +441,7 @@ func (s *Scanner) get(k KeyInterface) (ValueInterface, error) {
 
 // Start the periodic scanner
 func (s *Scanner) Start() {
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
+	s.wg.Go(func() {
 
 		log.Debug("Conntrack scanner thread started")
 		defer log.Debug("Conntrack scanner thread stopped")
@@ -461,7 +459,7 @@ func (s *Scanner) Start() {
 				return
 			}
 		}
-	}()
+	})
 }
 
 func (s *Scanner) iterStart() {

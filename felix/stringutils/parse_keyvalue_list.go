@@ -35,7 +35,7 @@ func ParseKeyValueList(param string) (map[string]string, error) {
 		return res, nil
 	}
 	var invalidItems []string
-	for _, item := range strings.Split(param, ",") {
+	for item := range strings.SplitSeq(param, ",") {
 		if item == "" {
 			// Accept empty items (e.g trailing ",")
 			continue

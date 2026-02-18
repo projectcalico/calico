@@ -332,7 +332,7 @@ var _ = Describe("ServiceAccount update/remove", func() {
 			Labels: map[string]string{"k1": "v2"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{
+		Expect(recorder.Messages).To(Equal([]any{
 			&proto.ServiceAccountUpdate{
 				Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 				Labels: map[string]string{"k1": "v2"},
@@ -357,7 +357,7 @@ var _ = Describe("ServiceAccount update/remove", func() {
 			Labels: map[string]string{"k1": "v1"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountUpdate{
+		Expect(recorder.Messages).To(Equal([]any{&proto.ServiceAccountUpdate{
 			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		}}))
@@ -369,16 +369,16 @@ var _ = Describe("ServiceAccount update/remove", func() {
 			Labels: map[string]string{"k1": "v1"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountUpdate{
+		Expect(recorder.Messages).To(Equal([]any{&proto.ServiceAccountUpdate{
 			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		}}))
 		// Clear messages
-		recorder.Messages = make([]interface{}, 0)
+		recorder.Messages = make([]any, 0)
 
 		uut.OnServiceAccountRemove(types.ServiceAccountID{Name: "test", Namespace: "test"})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountRemove{
+		Expect(recorder.Messages).To(Equal([]any{&proto.ServiceAccountRemove{
 			Id: &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 		}}))
 	})
@@ -404,7 +404,7 @@ var _ = Describe("Namespace update/remove", func() {
 			Labels: map[string]string{"k1": "v2"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{
+		Expect(recorder.Messages).To(Equal([]any{
 			&proto.NamespaceUpdate{
 				Id:     &proto.NamespaceID{Name: "test"},
 				Labels: map[string]string{"k1": "v2"},
@@ -429,7 +429,7 @@ var _ = Describe("Namespace update/remove", func() {
 			Labels: map[string]string{"k1": "v1"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceUpdate{
+		Expect(recorder.Messages).To(Equal([]any{&proto.NamespaceUpdate{
 			Id:     &proto.NamespaceID{Name: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		}}))
@@ -441,16 +441,16 @@ var _ = Describe("Namespace update/remove", func() {
 			Labels: map[string]string{"k1": "v1"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceUpdate{
+		Expect(recorder.Messages).To(Equal([]any{&proto.NamespaceUpdate{
 			Id:     &proto.NamespaceID{Name: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		}}))
 		// Clear messages
-		recorder.Messages = make([]interface{}, 0)
+		recorder.Messages = make([]any, 0)
 
 		uut.OnNamespaceRemove(types.NamespaceID{Name: "test"})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceRemove{
+		Expect(recorder.Messages).To(Equal([]any{&proto.NamespaceRemove{
 			Id: &proto.NamespaceID{Name: "test"},
 		}}))
 	})
@@ -477,10 +477,10 @@ var _ = Describe("IPPool update/remove", func() {
 })
 
 type dataplaneRecorder struct {
-	Messages []interface{}
+	Messages []any
 }
 
-func (d *dataplaneRecorder) record(message interface{}) {
+func (d *dataplaneRecorder) record(message any) {
 	d.Messages = append(d.Messages, message)
 }
 

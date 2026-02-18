@@ -205,7 +205,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 			ports := []numorstring.Port{
 				numorstring.NamedPort(sharedPortName),
 			}
-			for i := 0; i < numNumericPorts; i++ {
+			for i := range numNumericPorts {
 				ports = append(ports, numorstring.SinglePort(3000+uint16(i)))
 			}
 			entRule := api.EntityRule{}

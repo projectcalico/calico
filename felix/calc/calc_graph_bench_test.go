@@ -97,7 +97,7 @@ func benchInitialSnap(
 		conf.FelixHostname = "localhost"
 		es := NewEventSequencer(conf)
 		numMessages := 0
-		es.Callback = func(message interface{}) {
+		es.Callback = func(message any) {
 			numMessages++
 		}
 		cg = NewCalculationGraph(es, nil, conf, func() {})
@@ -167,7 +167,7 @@ func sendDeletions(cg *CalcGraph, localDeletes []api.Update) {
 
 func makeNetSetAndPolUpdates(num int) []api.Update {
 	updates := make([]api.Update, 0, num*2)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		// Make one netset and a matching policy.
 		name := fmt.Sprintf("network-set-%d", i)
 		netset := &model.NetworkSet{
@@ -210,7 +210,7 @@ var netSetSizes = []int{
 func generateNetSetIPs() (ips []calinet.IPNet) {
 	size := netSetSizes[nextNetSetSizeIdx%len(netSetSizes)]
 	nextNetSetSizeIdx++
-	for i := 0; i < size; i++ {
+	for range size {
 		theIP := net.IPv4(0, 0, 0, 0)
 		binary.BigEndian.PutUint32(theIP, nextNetSetIP)
 		_, n, _ := calinet.ParseCIDROrIP(theIP.String())
@@ -222,7 +222,7 @@ func generateNetSetIPs() (ips []calinet.IPNet) {
 
 func makeNamespaceUpdates(num int) []api.Update {
 	updates := make([]api.Update, 0, 2*num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		name := fmt.Sprintf("namespace-%d", i)
 		prof := &v3.Profile{
 			Spec: v3.ProfileSpec{
@@ -258,10 +258,10 @@ var nextTagPolID int
 func makeTagPolicies(num int) []api.Update {
 	const rulesPerPol = 5
 	updates := make([]api.Update, 0, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		pol := &model.Policy{}
 		pol.Selector = fmt.Sprintf("has(%s)", markerLabels[i%len(markerLabels)])
-		for j := 0; j < rulesPerPol; j++ {
+		for j := range rulesPerPol {
 			pol.InboundRules = append(pol.InboundRules, model.Rule{
 				Action:      "Allow",
 				SrcSelector: fmt.Sprintf("has(%s)", markerLabels[(nextTagPolID+j)%len(markerLabels)]),
@@ -282,7 +282,7 @@ func makeTagPolicies(num int) []api.Update {
 
 func makeEndpointUpdates(num int, host string) []api.Update {
 	updates := make([]api.Update, num)
-	for n := 0; n < num; n++ {
+	for n := range num {
 		key := model.WorkloadEndpointKey{
 			Hostname:       host,
 			OrchestratorID: "k8s",
@@ -305,7 +305,7 @@ func makeEndpointUpdates(num int, host string) []api.Update {
 }
 func makeEndpointDeletes(num int, host string) []api.Update {
 	updates := make([]api.Update, num)
-	for n := 0; n < num; n++ {
+	for n := range num {
 		key := model.WorkloadEndpointKey{
 			Hostname:       host,
 			OrchestratorID: "k8s",

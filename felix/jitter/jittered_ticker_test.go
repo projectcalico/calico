@@ -43,7 +43,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		lastTime := startTime
 		foundLT5 := false
 		foundGT5 := false
-		for i := 0; i < 40; i++ {
+		for range 40 {
 			<-ticker.Channel()
 			now := time.Now()
 			duration := time.Since(lastTime)
@@ -78,7 +78,7 @@ var _ = Describe("Delay calculation", func() {
 		ticker = NewTicker(20*time.Millisecond, 10*time.Millisecond)
 		ticker.Stop()
 	})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		It(fmt.Sprintf("should tick before max delay, trial: %v", i), func() {
 			duration := ticker.calculateDelay()
 			Expect(duration).To(BeNumerically("<=", 30*time.Millisecond))
@@ -92,7 +92,7 @@ var _ = Describe("Delay calculation", func() {
 	It("should produce longer and shorter ticks", func() {
 		foundLT5 := false
 		foundGT5 := false
-		for i := 0; i < 40; i++ {
+		for range 40 {
 			duration := ticker.calculateDelay()
 			logrus.WithField("duration", duration).Debug("Tick")
 			if duration < 25*time.Millisecond {

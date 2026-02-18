@@ -35,7 +35,7 @@ var _ = Describe("Windows CNI config template tests", func() {
 		f = bytes.ReplaceAll(f, []byte("__DNS_NAME_SERVERS__"), []byte("0"))
 		f = bytes.ReplaceAll(f, []byte("__DSR_SUPPORT__"), []byte("0"))
 
-		var data map[string]interface{}
+		var data map[string]any
 		err = json.Unmarshal(f, &data)
 		Expect(err).NotTo(HaveOccurred())
 	})

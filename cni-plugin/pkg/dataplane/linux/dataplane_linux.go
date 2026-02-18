@@ -310,7 +310,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			// after these sysctls
 			var err error
 			var addresses []netlink.Addr
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				if i > 0 {
 					time.Sleep(50 * time.Millisecond)
 					d.logger.Info("Retry lookup of host-side IPv6 link local address...")

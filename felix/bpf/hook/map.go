@@ -80,9 +80,7 @@ func MergeLayouts(layouts ...Layout) Layout {
 	ret := make(Layout)
 
 	for _, l := range layouts {
-		for k, v := range l {
-			ret[k] = v
-		}
+		maps.Copy(ret, l)
 	}
 
 	return ret

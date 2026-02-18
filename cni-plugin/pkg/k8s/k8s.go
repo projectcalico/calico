@@ -102,7 +102,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		//
 		// We unpack the JSON data as an untyped map rather than using a typed struct because we want to
 		// round-trip any fields that we don't know about.
-		var stdinData map[string]interface{}
+		var stdinData map[string]any
 		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 			return nil, err
 		}
@@ -138,15 +138,15 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.Debug("Updated stdin data")
 
 		// Extract any custom routes from the IPAM configuration.
-		ipamData := stdinData["ipam"].(map[string]interface{})
+		ipamData := stdinData["ipam"].(map[string]any)
 		untypedRoutes := ipamData["routes"]
-		hlRoutes, ok := untypedRoutes.([]interface{})
+		hlRoutes, ok := untypedRoutes.([]any)
 		if untypedRoutes != nil && !ok {
 			return nil, fmt.Errorf(
 				"failed to parse host-local IPAM routes section; expecting list, not: %v", stdinData["ipam"])
 		}
 		for _, route := range hlRoutes {
-			route := route.(map[string]interface{})
+			route := route.(map[string]any)
 			untypedDst, ok := route["dst"]
 			if !ok {
 				logger.Debug("Ignoring host-ipam route with no dst")
@@ -234,7 +234,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			}
 
 			if len(v4pools) != 0 || len(v6pools) != 0 || len(ipFamilies) != 0 {
-				var stdinData map[string]interface{}
+				var stdinData map[string]any
 				if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 					return nil, err
 				}
@@ -246,10 +246,10 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 						return nil, err
 					}
 
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+					if _, ok := stdinData["ipam"].(map[string]any); !ok {
 						return nil, errors.New("data on stdin was of unexpected type")
 					}
-					stdinData["ipam"].(map[string]interface{})["ipv4_pools"] = v4PoolSlice
+					stdinData["ipam"].(map[string]any)["ipv4_pools"] = v4PoolSlice
 					logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
 				}
 				if len(v6pools) > 0 {
@@ -258,10 +258,10 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 						return nil, err
 					}
 
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+					if _, ok := stdinData["ipam"].(map[string]any); !ok {
 						return nil, errors.New("data on stdin was of unexpected type")
 					}
-					stdinData["ipam"].(map[string]interface{})["ipv6_pools"] = v6PoolSlice
+					stdinData["ipam"].(map[string]any)["ipv6_pools"] = v6PoolSlice
 					logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
 				}
 
@@ -285,12 +285,12 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 						}
 					}
 
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+					if _, ok := stdinData["ipam"].(map[string]any); !ok {
 						return nil, errors.New("data on stdin was of unexpected type")
 					}
 
-					stdinData["ipam"].(map[string]interface{})["assign_ipv4"] = &assignV4
-					stdinData["ipam"].(map[string]interface{})["assign_ipv6"] = &assignV6
+					stdinData["ipam"].(map[string]any)["assign_ipv4"] = &assignV4
+					stdinData["ipam"].(map[string]any)["assign_ipv6"] = &assignV6
 					logger.WithField("assign_ipv4", assignV4).Debug("Setting assignV4")
 					logger.WithField("assign_ipv6", assignV6).Debug("Setting assignV6")
 				}

@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -565,7 +566,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					testOpts.protocol)
 
 				// Start a couple of workloads so we can check workload-to-workload and workload-to-host.
-				for i := 0; i < 2; i++ {
+				for i := range 2 {
 					wIP := fmt.Sprintf("10.65.0.%d", i+2)
 					if testOpts.ipv6 {
 						wIP = fmt.Sprintf("dead:beef::%d", i+2)
@@ -4160,8 +4161,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 										arpRegexp := regexp.MustCompile(fmt.Sprintf(".*%s : (.*) -> (.*)", felixIP(1)))
 
-										lines := strings.Split(out, "\n")
-										for _, l := range lines {
+										lines := strings.SplitSeq(out, "\n")
+										for l := range lines {
 											if strings.Contains(l, felixIP(1)) {
 												MACs := arpRegexp.FindStringSubmatch(l)
 												Expect(MACs).To(HaveLen(3))
@@ -6159,14 +6160,14 @@ func conntrackFlushWorkloadEntries(felixes []*infrastructure.Felix) func() {
 	}
 }
 
-func conntrackChecks(felixes []*infrastructure.Felix) []interface{} {
+func conntrackChecks(felixes []*infrastructure.Felix) []any {
 	if felixes[0].ExpectedIPIPTunnelAddr != "" ||
 		felixes[0].ExpectedWireguardTunnelAddr != "" ||
 		felixes[0].ExpectedWireguardV6TunnelAddr != "" {
 		return nil
 	}
 
-	return []interface{}{
+	return []any{
 		CheckWithInit(conntrackFlushWorkloadEntries(felixes)),
 		CheckWithFinalTest(conntrackCheck(felixes)),
 		CheckWithBeforeRetry(conntrackFlushWorkloadEntries(felixes)),
@@ -6232,13 +6233,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	lines := strings.Split(out, "\n")
 	rtRE := regexp.MustCompile(ip + " .* dev bpfin.cali")
 
-	for _, l := range lines {
-		if rtRE.MatchString(l) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(lines, rtRE.MatchString)
 }
 
 func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool, polType string, ipFamily proto.IPVersion) bool {

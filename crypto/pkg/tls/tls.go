@@ -83,8 +83,8 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	var result []uint16
 	supportedCiphers := supportedCipherMap()
 
-	cipherNames := strings.Split(ciphers, ",")
-	for _, name := range cipherNames {
+	cipherNames := strings.SplitSeq(ciphers, ",")
+	for name := range cipherNames {
 		name = strings.TrimSpace(name)
 		cipherValue, ok := supportedCiphers[name]
 		if !ok {

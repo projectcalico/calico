@@ -242,11 +242,9 @@ func (p *proxy) Stop() {
 }
 
 func (p *proxy) startRoutine(f func()) {
-	p.stopWg.Add(1)
-	go func() {
-		defer p.stopWg.Done()
+	p.stopWg.Go(func() {
 		f()
-	}()
+	})
 }
 
 func (p *proxy) syncDP() {
@@ -426,7 +424,7 @@ func (is *initState) setEpsSynced() {
 
 type loggerRecorder struct{}
 
-func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...any) {
 }
 
 const (

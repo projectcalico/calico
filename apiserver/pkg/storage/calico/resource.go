@@ -44,7 +44,7 @@ type resourceConverter interface {
 	convertToAAPI(resourceObject, runtime.Object)
 	convertToAAPIList(resourceListObject, runtime.Object, storage.SelectionPredicate)
 }
-type clientOpts interface{}
+type clientOpts any
 
 type (
 	clientObjectOperator func(context.Context, clientv3.Interface, resourceObject, clientOpts) (resourceObject, error)
