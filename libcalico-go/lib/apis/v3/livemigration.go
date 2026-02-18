@@ -35,7 +35,6 @@ type LiveMigration struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata"`
-	// Specification of the LiveMigration.
 	Spec LiveMigrationSpec `json:"spec"`
 }
 
