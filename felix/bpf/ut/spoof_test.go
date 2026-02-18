@@ -38,31 +38,44 @@ func TestWorkloadSpoof(t *testing.T) {
 	defer cleanUpMaps()
 
 	t.Log("Missing return route -> DROP")
+	runSpoofTest(t, resTC_ACT_SHOT, withWorkloadSrcSpoofingConfigured())
+	cleanUpMaps()
+
+	t.Log("Missing return route & workload source spoofing not configured -> DROP")
 	runSpoofTest(t, resTC_ACT_SHOT)
 	cleanUpMaps()
 
 	t.Log("Correct return route -> ALLOW")
 	err := rtMap.Update(rtKeySrc, rtValGood)
 	Expect(err).NotTo(HaveOccurred())
-	runSpoofTest(t, resTC_ACT_UNSPEC)
+	runSpoofTest(t, resTC_ACT_UNSPEC, withWorkloadSrcSpoofingConfigured())
 	cleanUpMaps()
 
 	t.Log("Incorrect if_index -> DROP")
 	err = rtMap.Update(rtKeySrc, rtValWrongIface)
 	Expect(err).NotTo(HaveOccurred())
-	runSpoofTest(t, resTC_ACT_SHOT)
+	runSpoofTest(t, resTC_ACT_SHOT, withWorkloadSrcSpoofingConfigured())
 	cleanUpMaps()
 
 	t.Log("Incorrect type -> DROP")
 	err = rtMap.Update(rtKeySrc, rtValWrongType)
 	Expect(err).NotTo(HaveOccurred())
-	runSpoofTest(t, resTC_ACT_SHOT)
+	runSpoofTest(t, resTC_ACT_SHOT, withWorkloadSrcSpoofingConfigured())
 	cleanUpMaps()
 
 	t.Log("Missing return route & allowed sources -> ALLOW")
 	err = allowSourcesMap.Update(allowSourcesKey, allowsources.DummyValue)
 	Expect(err).NotTo(HaveOccurred())
-	runSpoofTest(t, resTC_ACT_UNSPEC)
+	runSpoofTest(t, resTC_ACT_UNSPEC, withWorkloadSrcSpoofingConfigured())
+	cleanUpMaps()
+
+	t.Log("Missing return route & source allowed as part of large prefix -> ALLOW")
+	allowedPrefix, err := ip.ParseCIDROrIP("1.1.1.0/24")
+	Expect(err).NotTo(HaveOccurred())
+	prefixKey := allowsources.NewKey(allowedPrefix, 1).AsBytes()
+	err = allowSourcesMap.Update(prefixKey, allowsources.DummyValue)
+	Expect(err).NotTo(HaveOccurred())
+	runSpoofTest(t, resTC_ACT_UNSPEC, withWorkloadSrcSpoofingConfigured())
 	cleanUpMaps()
 
 	t.Log("Correct return route & allowed source -> ALLOW")
@@ -70,20 +83,26 @@ func TestWorkloadSpoof(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	err = rtMap.Update(rtKeySrc, rtValGood)
 	Expect(err).NotTo(HaveOccurred())
-	runSpoofTest(t, resTC_ACT_UNSPEC)
+	runSpoofTest(t, resTC_ACT_UNSPEC, withWorkloadSrcSpoofingConfigured())
 	cleanUpMaps()
 
 	t.Log("Annotation removed -> DROP")
 	err = allowSourcesMap.Update(allowSourcesKey, allowsources.DummyValue)
 	Expect(err).NotTo(HaveOccurred())
-	runSpoofTest(t, resTC_ACT_UNSPEC)
+	runSpoofTest(t, resTC_ACT_UNSPEC, withWorkloadSrcSpoofingConfigured())
 	err = allowSourcesMap.Delete(allowSourcesKey)
+	Expect(err).NotTo(HaveOccurred())
+	runSpoofTest(t, resTC_ACT_SHOT, withWorkloadSrcSpoofingConfigured())
+	cleanUpMaps()
+
+	t.Log("Annotation but workload source spoofing not enabled -> DROP")
+	err = allowSourcesMap.Update(allowSourcesKey, allowsources.DummyValue)
 	Expect(err).NotTo(HaveOccurred())
 	runSpoofTest(t, resTC_ACT_SHOT)
 	cleanUpMaps()
 }
 
-func runSpoofTest(t *testing.T, expRC int) {
+func runSpoofTest(t *testing.T, expRC int, opts ...testOption) {
 	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	skbMark = 0
@@ -91,5 +110,5 @@ func runSpoofTest(t *testing.T, expRC int) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(expRC))
-	})
+	}, opts...)
 }

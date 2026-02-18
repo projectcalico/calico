@@ -105,7 +105,8 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		struct calico_ct_value *ct_value = cali_ct_lookup_elem(k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!");
-			if (cali_allowsource_lookup(&ctx->state->ip_src, ctx->skb->ifindex)) {
+			if (WORKLOAD_SRC_SPOOFING_CONFIGURED && cali_allowsource_lookup(&ctx->state->ip_src, skb_ingress_ifindex(ctx->skb))) {
+				CALI_DEBUG("CT-ALL src IP " IP_FMT " is allowed, skipping CT creation", debug_ip(ctx->state->ip_src));
 				return 0;
 			}
 			goto create;
@@ -1132,6 +1133,7 @@ static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_c
 		return 0;
 	}
 
+	CALI_DEBUG("creating conntrack entry for src ip" IP_FMT "", debug_ip(ctx->state->ip_src));
 	err = calico_ct_v4_create_tracking(ctx, ct_ctx, k);
 	if (err) {
 		CALI_DEBUG("calico_ct_v4_create_tracking err %d", err);

@@ -848,6 +848,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 				}
 
+				if topts.workloadSrcSpoofingConfigured {
+					globals.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
+				}
+
 				globals.DSCP = -1
 				if topts.dscp >= 0 {
 					globals.DSCP = topts.dscp
@@ -1212,22 +1216,23 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
-	description          string
-	subtests             bool
-	logLevel             log.Level
-	xdp                  bool
-	psnaStart            uint32
-	psnatEnd             uint32
-	hostNetworked        bool
-	fromHost             bool
-	progLog              string
-	ipv6                 bool
-	objname              string
-	flowLogsEnabled      bool
-	natOutExcludeHosts   bool
-	ingressQoSPacketRate bool
-	egressQoSPacketRate  bool
-	dscp                 int8
+	description                   string
+	subtests                      bool
+	logLevel                      log.Level
+	xdp                           bool
+	psnaStart                     uint32
+	psnatEnd                      uint32
+	hostNetworked                 bool
+	fromHost                      bool
+	progLog                       string
+	ipv6                          bool
+	objname                       string
+	flowLogsEnabled               bool
+	natOutExcludeHosts            bool
+	ingressQoSPacketRate          bool
+	egressQoSPacketRate           bool
+	dscp                          int8
+	workloadSrcSpoofingConfigured bool
 }
 
 type testOption func(opts *testOpts)
@@ -1316,6 +1321,12 @@ func withObjName(name string) testOption {
 func withDescription(desc string) testOption {
 	return func(o *testOpts) {
 		o.description = desc
+	}
+}
+
+func withWorkloadSrcSpoofingConfigured() testOption {
+	return func(o *testOpts) {
+		o.workloadSrcSpoofingConfigured = true
 	}
 }
 

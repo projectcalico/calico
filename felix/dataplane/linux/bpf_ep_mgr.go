@@ -404,6 +404,8 @@ type bpfEndpointManager struct {
 
 	QoSMap        maps.MapWithUpdateWithFlags
 	maglevLUTSize int
+
+	workloadSourceSpoofing bool
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -526,6 +528,7 @@ func NewBPFEndpointManager(
 
 		QoSMap:        bpfmaps.CommonMaps.QoSMap,
 		maglevLUTSize: config.BPFMaglevLUTSize,
+		workloadSourceSpoofing: config.WorkloadSourceSpoofing,
 	}
 
 	m.policyTrampolineStride.Store(int32(asm.TrampolineStrideDefault))
@@ -3076,6 +3079,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.OverlayTunnelID = m.overlayTunnelID
 	ap.AttachType = m.bpfAttachType
 	ap.RedirectPeer = true
+	ap.WorkloadSrcSpoofingConfigured = m.workloadSourceSpoofing
 	if m.bpfRedirectToPeer == "Disabled" {
 		ap.RedirectPeer = false
 	} else if (ap.Type == tcdefs.EpTypeIPIP || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
