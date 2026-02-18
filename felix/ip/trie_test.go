@@ -96,7 +96,7 @@ var _ = Describe("CIDRTrie tests", func() {
 		return s
 	}
 
-	lpm := func(cidr string, expectedCidr string) interface{} {
+	lpm := func(cidr string, expectedCidr string) any {
 		cidrIn := ip.MustParseCIDROrIP(cidr)
 		cidrOut, data := trie.LPM(cidrIn)
 

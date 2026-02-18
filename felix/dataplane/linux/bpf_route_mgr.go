@@ -189,7 +189,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 	return m
 }
 
-func (m *bpfRouteManager) OnUpdate(msg interface{}) {
+func (m *bpfRouteManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	// Updates to local IPs.  We use these to include host IPs in the map.
 	case *ifaceStateUpdate:

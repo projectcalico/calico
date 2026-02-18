@@ -556,7 +556,8 @@ func (r *connectionResult) Failed() bool {
 
 func buildFailureMessage(results []connectionResult) string {
 	// Builed an error message.
-	msg := "One or more connection tests failed:\n"
+	var msg strings.Builder
+	msg.WriteString("One or more connection tests failed:\n")
 
 	// Add expected results.
 	for _, res := range results {
@@ -566,7 +567,7 @@ func buildFailureMessage(results []connectionResult) string {
 		if exp != actual {
 			status = "ERROR"
 		}
-		msg += fmt.Sprintf(
+		msg.WriteString(fmt.Sprintf(
 			"\n%s: %s/%s -> %s (%s, %s, %s); Expected=%s, Actual=%s",
 			status,
 			res.clientPod.Namespace, res.clientPod.Name,
@@ -576,10 +577,10 @@ func buildFailureMessage(results []connectionResult) string {
 			res.target.AccessType(),
 			exp,
 			actual,
-		)
+		))
 	}
-	msg += "\n"
-	return msg
+	msg.WriteString("\n")
+	return msg.String()
 }
 
 // createClientPod creates a long lived pod that sleeps, and can be used to execute connection tests as a client.

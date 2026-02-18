@@ -51,8 +51,8 @@ func init() {
 			func(eps []string, expected []uint32) {
 				result := []uint32{}
 				for _, ep := range eps {
-					if strings.HasPrefix(ep, "x") {
-						epmm.ReleaseEndpointMark(strings.TrimPrefix(ep, "x"))
+					if after, ok := strings.CutPrefix(ep, "x"); ok {
+						epmm.ReleaseEndpointMark(after)
 					} else {
 						// if error, function return 0 which match ErrMark.
 						mark, _ := epmm.GetEndpointMark(ep)

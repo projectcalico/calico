@@ -315,7 +315,7 @@ func (d *FeatureDetector) netlinkSupportsStrict() (bool, error) {
 
 func countRulesInIptableOutput(in []byte) int {
 	count := 0
-	for _, x := range bytes.Split(in, []byte("\n")) {
+	for x := range bytes.SplitSeq(in, []byte("\n")) {
 		if len(x) >= 1 && x[0] == '-' {
 			count++
 		}

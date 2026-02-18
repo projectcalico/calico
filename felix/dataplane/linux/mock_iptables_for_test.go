@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/gomega"
@@ -86,16 +87,17 @@ func (t *mockTable) checkChains(expecteds [][]*generictables.Chain) {
 
 func (t *mockTable) checkChainsSameAsBefore() {
 	// Build a failure message in case of unexpected chains.
-	msg := "Unexpected chain:\n\n %+v\n\n Expected chains:\n\n"
+	var msg strings.Builder
+	msg.WriteString("Unexpected chain:\n\n %+v\n\n Expected chains:\n\n")
 	for _, chain := range t.expectedChains {
 		log.WithField("chain", *chain).Debug("")
-		msg += fmt.Sprintf(" %+v\n", *chain)
+		msg.WriteString(fmt.Sprintf(" %+v\n", *chain))
 	}
 
 	// Check each current chain is as expected.
 	for _, chain := range t.currentChains {
 		expected, ok := t.expectedChains[chain.Name]
-		ExpectWithOffset(2, ok).To(BeTrue(), fmt.Sprintf(msg, *chain))
+		ExpectWithOffset(2, ok).To(BeTrue(), fmt.Sprintf(msg.String(), *chain))
 		ExpectWithOffset(2, *chain).To(Equal(*expected), cmp.Diff(expected, chain))
 	}
 

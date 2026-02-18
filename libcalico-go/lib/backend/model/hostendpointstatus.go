@@ -26,7 +26,7 @@ import (
 
 var (
 	matchHostEndpointStatus = regexp.MustCompile("^/?calico/felix/v1/host/([^/]+)/endpoint/([^/]+)$")
-	typeHostEndpointStatus  = reflect.TypeOf(HostEndpointStatus{})
+	typeHostEndpointStatus  = reflect.TypeFor[HostEndpointStatus]()
 )
 
 type HostEndpointStatusKey struct {

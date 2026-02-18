@@ -50,7 +50,7 @@ type TemplateResource struct {
 	StageFile     *os.File
 	Uid           int
 	ExpandedKeys  []string
-	funcMap       map[string]interface{}
+	funcMap       map[string]any
 	keepStageFile bool
 	noop          bool
 	store         memkv.Store

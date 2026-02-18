@@ -245,7 +245,7 @@ func getNodeRoutes(cli ctrlclient.Client, match string) []string {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying routes from pod %s", p.Name)
 
 	matches := []string{}
-	for _, s := range strings.Split(out, "\n") {
+	for s := range strings.SplitSeq(out, "\n") {
 		if strings.Contains(s, match) {
 			matches = append(matches, s)
 		}

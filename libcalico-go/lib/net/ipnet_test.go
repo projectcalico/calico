@@ -34,7 +34,6 @@ func TestIPNet_Covers(t *testing.T) {
 		{A: "10.0.0.0/9", B: "10.0.0.0/8", ACoversB: false},
 		{A: "11.0.0.0/9", B: "10.0.0.0/9", ACoversB: false},
 	} {
-		test := test
 		t.Run(fmt.Sprintf("%s_Covers_%s", test.A, test.B), func(t *testing.T) {
 			RegisterTestingT(t)
 			larger := MustParseCIDR(test.A)
@@ -64,7 +63,6 @@ func TestIPNet_NthIP(t *testing.T) {
 		{CIDR: "255.255.255.255/32", N: 0, ExpectedIP: "255.255.255.255"},
 		{CIDR: "255.255.255.254/32", N: 1, ExpectedIP: "255.255.255.255"},
 	} {
-		test := test
 		t.Run(fmt.Sprintf("IPNet(%s).NthIP(%v) should be %v", test.CIDR, test.N, test.ExpectedIP), func(t *testing.T) {
 			RegisterTestingT(t)
 			cidr := MustParseCIDR(test.CIDR)

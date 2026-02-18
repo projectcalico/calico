@@ -49,7 +49,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		By("converting a zero-ed Node")
 		res := libapiv3.NewNode()
 		res.Name = "bgpnode1"
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"ip_addr_v4":    "",
 			"ip_addr_v6":    "",
 			"network_v4":    nil,
@@ -92,7 +92,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		res.Spec.BGP = &libapiv3.NodeBGPSpec{
 			IPv4Address: "1.2.3.4",
 		}
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			"ip_addr_v4":    "1.2.3.4",
 			"ip_addr_v6":    "",
 			"network_v4":    "1.2.3.4/32",
@@ -118,7 +118,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		res.Spec.BGP = &libapiv3.NodeBGPSpec{
 			IPv6Address: "aa:bb:cc::",
 		}
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			"ip_addr_v4":    "",
 			"ip_addr_v6":    "aa:bb:cc::",
 			"network_v4":    nil,
@@ -147,7 +147,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			IPv6Address: "aa:bb:cc::ffff/120",
 			ASNumber:    &asn,
 		}
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			"ip_addr_v4":    "1.2.3.4",
 			"ip_addr_v6":    "aa:bb:cc::ffff",
 			"network_v4":    "1.2.3.0/24",
@@ -204,7 +204,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			Value: res,
 		})
 		// IPv4 address should be blank, network should be nil (deleted)
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"ip_addr_v4":    "",
 			"ip_addr_v6":    "aa:bb:cc::ffff",
 			"network_v4":    nil,
@@ -232,7 +232,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			Value: res,
 		})
 		// IPv6 address should be blank, network should be nil (deleted)
-		expected = map[string]interface{}{
+		expected = map[string]any{
 			"ip_addr_v4":    "1.2.3.4",
 			"ip_addr_v6":    "",
 			"network_v4":    "1.2.3.0/24",
@@ -256,7 +256,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			IPv4Address:             "172.17.0.2/24",
 			RouteReflectorClusterID: "255.0.0.1",
 		}
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"ip_addr_v4":    "172.17.0.2",
 			"ip_addr_v6":    "",
 			"network_v4":    "172.17.0.0/24",

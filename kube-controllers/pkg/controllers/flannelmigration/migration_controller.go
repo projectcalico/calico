@@ -107,7 +107,7 @@ func NewFlannelMigrationController(ctx context.Context, k8sClientset *kubernetes
 
 	// Setup event handlers
 	handlers := cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			mc.processNewNode(obj.(*v1.Node))
 		},
 	}

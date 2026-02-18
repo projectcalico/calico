@@ -49,7 +49,6 @@ func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 	waiter := sync.WaitGroup{}
 	waiter.Add(len(nsMaturity))
 	for nsName := range nsMaturity {
-		nsName := nsName
 		go func() {
 			for _, role := range []string{"1", "2", "3", "4", "5"} {
 				for _, instance := range []string{"1", "2", "3", "4", "5"} {

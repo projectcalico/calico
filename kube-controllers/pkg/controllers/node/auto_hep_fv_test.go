@@ -16,6 +16,7 @@ package node_test
 
 import (
 	"context"
+	"maps"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1075,9 +1076,7 @@ func calicoNode(name string, k8sNodeName string, labels map[string]string) *liba
 	node := libapi.NewNode()
 	node.Name = name
 	node.Labels = make(map[string]string)
-	for k, v := range labels {
-		node.Labels[k] = v
-	}
+	maps.Copy(node.Labels, labels)
 
 	node.Spec = libapi.NodeSpec{
 		BGP: &libapi.NodeBGPSpec{

@@ -585,7 +585,7 @@ func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
 }
 
 // recordInUseIP records that the given IP is currently being used by the given resource (i.e., pod, node, etc).
-func (c *IPAMChecker) recordInUseIP(ip string, referrer interface{}, friendlyName string) {
+func (c *IPAMChecker) recordInUseIP(ip string, referrer any, friendlyName string) {
 	if c.showAllIPs {
 		fmt.Printf("  %s belongs to %s\n", ip, friendlyName)
 	}
@@ -707,5 +707,5 @@ func formatAttrs(attribute model.AllocationAttribute) string {
 
 type ownerRecord struct {
 	FriendlyName string
-	Resource     interface{}
+	Resource     any
 }

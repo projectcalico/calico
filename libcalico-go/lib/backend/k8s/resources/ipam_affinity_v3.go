@@ -44,8 +44,8 @@ func NewBlockAffinityClientV3(r rest.Interface, group BackingAPIGroup) K8sResour
 	rc := customResourceClient{
 		restClient:       r,
 		resource:         BlockAffinityResourceName,
-		k8sResourceType:  reflect.TypeOf(libapiv3.BlockAffinity{}),
-		k8sListType:      reflect.TypeOf(libapiv3.BlockAffinityList{}),
+		k8sResourceType:  reflect.TypeFor[libapiv3.BlockAffinity](),
+		k8sListType:      reflect.TypeFor[libapiv3.BlockAffinityList](),
 		kind:             v3.KindBlockAffinity,
 		versionconverter: ipamAffinityVersionConverter{},
 		apiGroup:         group,
@@ -54,8 +54,8 @@ func NewBlockAffinityClientV3(r rest.Interface, group BackingAPIGroup) K8sResour
 	if group == BackingAPIGroupV3 {
 		// If this is a v3 resource, then we need to use the v3 API types, as they
 		// differ.
-		rc.k8sResourceType = reflect.TypeOf(v3.BlockAffinity{})
-		rc.k8sListType = reflect.TypeOf(v3.BlockAffinityList{})
+		rc.k8sResourceType = reflect.TypeFor[v3.BlockAffinity]()
+		rc.k8sListType = reflect.TypeFor[v3.BlockAffinityList]()
 	}
 
 	return &blockAffinityClientV3{

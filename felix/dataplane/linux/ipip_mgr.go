@@ -120,7 +120,7 @@ func newIPIPManagerWithShims(
 	return m
 }
 
-func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
+func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")

@@ -192,7 +192,6 @@ func TestFeatureDetection(t *testing.T) {
 			},
 		},
 	} {
-		tst := tst
 		t.Run("iptables version "+tst.iptablesVersion+" kernel "+tst.kernelVersion, func(t *testing.T) {
 			RegisterTestingT(t)
 			dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
@@ -277,7 +276,6 @@ func TestFeatureDetectionOverride(t *testing.T) {
 			},
 		},
 	} {
-		tst := tst
 		t.Run("iptables version "+tst.iptablesVersion+" kernel "+tst.kernelVersion, func(t *testing.T) {
 			RegisterTestingT(t)
 			dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
@@ -449,7 +447,6 @@ func TestIptablesBackendDetection(t *testing.T) {
 			"legacy",
 		},
 	} {
-		tst := tst
 		t.Run("DetectingBackend, testing "+tst.name, func(t *testing.T) {
 			RegisterTestingT(t)
 			Expect(DetectBackend(testutils.LookPathAll, tst.cmdF.NewCmd, tst.spec)).To(Equal(tst.expectedBackend))
@@ -528,10 +525,10 @@ func (d *ipOutputCmd) Output() ([]byte, error) {
 
 	out := []byte{}
 	for i := 0; i < d.outKube; i++ {
-		out = append(out, []byte(fmt.Sprintf("KUBE-IPTABLES-HINT - [0:0] %d\n", i))...)
+		out = append(out, fmt.Appendf(nil, "KUBE-IPTABLES-HINT - [0:0] %d\n", i)...)
 	}
 	for i := 0; i < d.out-d.outKube; i++ {
-		out = append(out, []byte(fmt.Sprintf("-Output line %d\n", i))...)
+		out = append(out, fmt.Appendf(nil, "-Output line %d\n", i)...)
 	}
 
 	return out, nil

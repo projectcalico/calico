@@ -32,8 +32,8 @@ func NewTierClient(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	return &customResourceClient{
 		restClient:       r,
 		resource:         TierResourceName,
-		k8sResourceType:  reflect.TypeOf(apiv3.Tier{}),
-		k8sListType:      reflect.TypeOf(apiv3.TierList{}),
+		k8sResourceType:  reflect.TypeFor[apiv3.Tier](),
+		k8sListType:      reflect.TypeFor[apiv3.TierList](),
 		kind:             apiv3.KindTier,
 		versionconverter: tierDefaulter{},
 		apiGroup:         group,

@@ -78,11 +78,9 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 			CACertPath:        clientCertFile.Name(),
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			gmdaemon.Run(ctx, cfg)
-		}()
+		})
 
 		// We want to actually wait 5 seconds, not use our fake time for this.
 		realtime.Sleep(time.Second * 5)
@@ -96,11 +94,9 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 			TLSKeyPath:   clientKeyFile.Name(),
 		}
 		whiskerCfg.ConfigureLogging()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			app.Run(ctx, whiskerCfg)
-		}()
+		})
 
 		cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 		Expect(err).ShouldNot(HaveOccurred())
@@ -193,11 +189,9 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 		CACertPath:        clientCertFile.Name(),
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		gmdaemon.Run(ctx, cfg)
-	}()
+	})
 
 	whiskerCfg := &wconfig.Config{
 		Port:         "8080",
@@ -209,11 +203,9 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 	}
 	whiskerCfg.ConfigureLogging()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		app.Run(ctx, whiskerCfg)
-	}()
+	})
 
 	// We want to actually wait 5 seconds, not use our fake time for this.
 	realtime.Sleep(time.Second * 5)
