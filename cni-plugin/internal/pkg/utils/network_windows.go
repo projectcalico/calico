@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -201,7 +201,7 @@ func RegisterDeletedWep(containerID string) error {
 func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 	conf types.NetConf,
 	epIDs WEPIdentifiers,
-	endpoint *api.WorkloadEndpoint,
+	endpoint *internalapi.WorkloadEndpoint,
 	logger *logrus.Entry) (*cniv1.Result, error) {
 	var err error
 	var result *cniv1.Result

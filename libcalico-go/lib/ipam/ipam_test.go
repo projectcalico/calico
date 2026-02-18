@@ -35,7 +35,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
@@ -3444,7 +3444,7 @@ var _ = DescribeTable("determinePools tests IPV4",
 		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
 
 		// Create a node object for the test.
-		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
 
 		// Prep input data
 		reqPools := []cnet.IPNet{}
@@ -3513,7 +3513,7 @@ var _ = DescribeTable("determinePools tests IPV6",
 		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
 
 		// Create a node object for the test.
-		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
 
 		// Prep input data
 		reqPools := []cnet.IPNet{}
@@ -3656,10 +3656,10 @@ func tryApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels m
 	} else {
 		// Otherwise, create it in Calico.
 		_, err := c.Apply(context.Background(), &model.KVPair{
-			Key: model.ResourceKey{Name: host, Kind: libapiv3.KindNode},
-			Value: libapiv3.Node{
+			Key: model.ResourceKey{Name: host, Kind: internalapi.KindNode},
+			Value: internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: libapiv3.NodeSpec{OrchRefs: []libapiv3.OrchRef{
+				Spec: internalapi.NodeSpec{OrchRefs: []internalapi.OrchRef{
 					{Orchestrator: "k8s", NodeName: host},
 				}},
 			},
@@ -3678,7 +3678,7 @@ func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
 			Fail(fmt.Sprintf("Error deleting node %s: %v", host, err))
 		}
 	} else {
-		_, err := c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: libapiv3.KindNode}, "")
+		_, err := c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: internalapi.KindNode}, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				Fail(fmt.Sprintf("Error deleting node %s: %v", host, err))
@@ -3805,7 +3805,7 @@ var _ = Describe("determinePools with namespace selector", func() {
 				blockSize:         26,
 			}
 
-			node := libapiv3.Node{
+			node := internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: nodeLabels,
 				},
@@ -3946,7 +3946,7 @@ var _ = Describe("determinePools with namespace selector", func() {
 			blockSize:         26,
 		}
 
-		node := libapiv3.Node{
+		node := internalapi.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{},
 			},
@@ -3988,7 +3988,7 @@ var _ = Describe("determinePools with namespace selector", func() {
 			blockSize:         26,
 		}
 
-		node := libapiv3.Node{
+		node := internalapi.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{},
 			},
@@ -4022,7 +4022,7 @@ var _ = Describe("determinePools with namespace selector", func() {
 			blockSize:         26,
 		}
 
-		node := libapiv3.Node{
+		node := internalapi.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{},
 			},

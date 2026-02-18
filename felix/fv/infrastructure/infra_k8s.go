@@ -42,7 +42,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -856,7 +856,7 @@ func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {
 	return err
 }
 
-func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+func (kds *K8sDatastoreInfra) AddWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error) {
 	desiredStatus := getPodStatusFromWep(wep)
 	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
@@ -901,7 +901,7 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 	return kds.calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, name, options.GetOptions{})
 }
 
-func (kds *K8sDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+func (kds *K8sDatastoreInfra) UpdateWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error) {
 	log.WithField("wep", wep).Debug("Updating Pod for workload (labels, annotations and status only)")
 	podIn, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Get(context.Background(), wep.Spec.Workload, metav1.GetOptions{})
 	if err != nil {
@@ -1391,7 +1391,7 @@ func K8sWithDualStack() CreateOption {
 	}
 }
 
-func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
+func getPodStatusFromWep(wep *internalapi.WorkloadEndpoint) v1.PodStatus {
 	podIPs := []v1.PodIP{}
 	for _, ipnet := range wep.Spec.IPNetworks {
 		podIP := strings.Split(ipnet, "/")[0]
@@ -1416,7 +1416,7 @@ func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
 	return podStatus
 }
 
-func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v1.Pod {
+func updatePodLabelsAndAnnotations(wep *internalapi.WorkloadEndpoint, pod *v1.Pod) *v1.Pod {
 	if wep.Labels != nil {
 		pod.Labels = wep.Labels
 	}
