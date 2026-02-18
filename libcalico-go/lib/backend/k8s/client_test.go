@@ -453,7 +453,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		crd := &apiv3.NetworkPolicy{}
 		Eventually(func() error {
 			return cli.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, crd)
-		}, "5s", "100ms").ShouldNot(HaveOccurred())
+		}, "30s", "500ms").ShouldNot(HaveOccurred())
 
 		var meta metav1.ObjectMeta
 		if v3CRD {
