@@ -140,6 +140,7 @@ func (d *windowsDataplane) DoNetworking(
 	routes []*net.IPNet,
 	endpoint *api.WorkloadEndpoint,
 	annotations map[string]string,
+	skipHostSideRoutes bool,
 ) (hostVethName, contVethMAC string, err error) {
 	hostVethName = desiredVethName
 	if len(routes) > 0 {

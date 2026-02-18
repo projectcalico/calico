@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,8 +85,13 @@ type IPAMBlockSpec struct {
 }
 
 type AllocationAttribute struct {
-	AttrPrimary   *string           `json:"handle_id,omitempty"`
-	AttrSecondary map[string]string `json:"secondary,omitempty"`
+	// HandleID is the primary identifier for the allocation.
+	HandleID *string `json:"handle_id,omitempty"`
+	// ActiveOwnerAttrs contains attributes of the active owner (the pod currently using the IP).
+	ActiveOwnerAttrs map[string]string `json:"secondary,omitempty"`
+	// AlternateOwnerAttrs contains attributes of the previous or potential owner
+	// (used during live migration to track the source or target pod).
+	AlternateOwnerAttrs map[string]string `json:"alternate,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
