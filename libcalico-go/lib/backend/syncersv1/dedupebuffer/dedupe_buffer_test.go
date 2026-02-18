@@ -16,6 +16,7 @@ package dedupebuffer
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 	"testing"
 
@@ -574,9 +575,7 @@ func (r *Receiver) FinalValues() map[string]string {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	fvCopy := map[string]string{}
-	for k, v := range r.finalValues {
-		fvCopy[k] = v
-	}
+	maps.Copy(fvCopy, r.finalValues)
 	return fvCopy
 }
 

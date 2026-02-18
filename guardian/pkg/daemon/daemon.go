@@ -78,25 +78,21 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 	}()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		// Allow requests to come down from the management cluster.
 		if err := srv.ListenAndServeManagementCluster(); err != nil {
 			logrus.WithError(err).Warn("Serving the tunnel exited.")
 		}
-	}()
+	})
 
 	// Allow requests from the cluster to be sent up to the management cluster.
 	if cfg.Listen {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 
 			if err := srv.ListenAndServeCluster(); err != nil {
 				logrus.WithError(err).Warn("proxy tunnel exited with an error")
 			}
-		}()
+		})
 	}
 
 	if err := srv.WaitForShutdown(); err != nil {

@@ -215,7 +215,7 @@ func SetNodeNetworkUnavailableCondition(
 	if err != nil {
 		return err
 	}
-	patch := []byte(fmt.Sprintf(`{"status":{"conditions":%s}}`, raw))
+	patch := fmt.Appendf(nil, `{"status":{"conditions":%s}}`, raw)
 	to := time.After(timeout)
 	for {
 		select {

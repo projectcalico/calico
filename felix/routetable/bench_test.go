@@ -87,8 +87,8 @@ func benchResyncNumRoutes(b *testing.B, numRoutes int) {
 
 	n := 0
 outer:
-	for i := 0; i < 256; i++ {
-		for j := 0; j < 256; j++ {
+	for i := range 256 {
+		for j := range 256 {
 			rt.RouteUpdate(RouteClassLocalWorkload, ifaceName, Target{
 				CIDR: ip.MustParseCIDROrIP(fmt.Sprintf("10.0.%d.%d/32", i, j)),
 			})

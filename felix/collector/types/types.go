@@ -18,7 +18,7 @@ import "github.com/projectcalico/calico/felix/rules"
 
 type Reporter interface {
 	Start() error
-	Report(interface{}) error
+	Report(any) error
 }
 
 type TrafficDirection int

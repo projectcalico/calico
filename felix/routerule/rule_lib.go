@@ -47,7 +47,7 @@ func (r *Rule) NetLinkRule() *netlink.Rule {
 }
 
 func (r *Rule) LogCxt() *log.Entry {
-	var src interface{}
+	var src any
 	if r.nlRule.Src != nil {
 		src = r.nlRule.Src
 	}

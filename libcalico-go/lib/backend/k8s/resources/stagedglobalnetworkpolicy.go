@@ -29,8 +29,8 @@ func NewStagedGlobalNetworkPolicyClient(r rest.Interface, group BackingAPIGroup)
 	return &customResourceClient{
 		restClient:      r,
 		resource:        StagedGlobalNetworkPolicyResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.StagedGlobalNetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(apiv3.StagedGlobalNetworkPolicyList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.StagedGlobalNetworkPolicy](),
+		k8sListType:     reflect.TypeFor[apiv3.StagedGlobalNetworkPolicyList](),
 		kind:            apiv3.KindStagedGlobalNetworkPolicy,
 		apiGroup:        group,
 	}

@@ -116,7 +116,6 @@ var ruleStringTests = []ruleTest{
 
 var _ = Describe("Rule", func() {
 	for _, test := range ruleStringTests {
-		test := test // For closure
 		Describe(fmt.Sprintf("%#v", test.rule), func() {
 			It("should stringify as "+test.expectedOutput, func() {
 				Expect(fmt.Sprintf("%s", test.rule)).To(Equal(test.expectedOutput))

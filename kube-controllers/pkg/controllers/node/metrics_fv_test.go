@@ -729,7 +729,7 @@ func deletePodWithIP(pod string, ip string, k8sClient *kubernetes.Clientset, cal
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
-func validateExpectedAndUnexpectedMetrics(expectedMetrics []string, notExpectedMetrics []string, host string, intervals ...interface{}) {
+func validateExpectedAndUnexpectedMetrics(expectedMetrics []string, notExpectedMetrics []string, host string, intervals ...any) {
 	EventuallyWithOffset(1, func() error {
 		out, err := getMetrics(fmt.Sprintf("http://%s:9094/metrics", host))
 		Expect(err).NotTo(HaveOccurred())

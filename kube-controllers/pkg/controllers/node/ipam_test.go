@@ -136,11 +136,11 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		pods = make(chan *v1.Pod, 1)
 		_, err := podInformer.AddEventHandler(&cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
+			AddFunc: func(obj any) {
 				pod := obj.(*v1.Pod)
 				pods <- pod
 			},
-			DeleteFunc: func(obj interface{}) {
+			DeleteFunc: func(obj any) {
 				pod := obj.(*v1.Pod)
 				pods <- pod
 			},
@@ -148,11 +148,11 @@ var _ = Describe("IPAM controller UTs", func() {
 		Expect(err).NotTo(HaveOccurred())
 		nodes = make(chan *v1.Node, 1)
 		_, err = nodeInformer.AddEventHandler(&cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
+			AddFunc: func(obj any) {
 				node := obj.(*v1.Node)
 				nodes <- node
 			},
-			DeleteFunc: func(obj interface{}) {
+			DeleteFunc: func(obj any) {
 				node := obj.(*v1.Node)
 				nodes <- node
 			},
@@ -1425,9 +1425,9 @@ var _ = Describe("IPAM controller UTs", func() {
 		c.Start(stopChan)
 
 		// Add 5 empty blocks to the node.
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			unallocated := make([]int, 64)
-			for i := 0; i < len(unallocated); i++ {
+			for i := range unallocated {
 				unallocated[i] = i
 			}
 			cidr := net.MustParseCIDR(fmt.Sprintf("10.0.%d.0/24", i))
@@ -1504,9 +1504,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Add small, empty blocks to the node.
 		// Use a block size of 31, resulting in 2 allocations per block.
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			unallocated := make([]int, 64)
-			for i := 0; i < len(unallocated); i++ {
+			for i := range unallocated {
 				unallocated[i] = i
 			}
 			cidr := net.MustParseCIDR(fmt.Sprintf("10.0.%d.0/31", i))
@@ -1719,7 +1719,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			c.Start(stopChan)
 
 			// Create 5k nodes.
-			for i := 0; i < numNodes; i++ {
+			for i := range numNodes {
 				n := libapiv3.Node{}
 				n.Name = fmt.Sprintf("node%d", i)
 				n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: n.Name, Orchestrator: apiv3.OrchestratorKubernetes}}
@@ -1736,7 +1736,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 			// For each node, create 30 pods and assign them IPs. Pre-create the blocks, and then
 			// send them all in at once to separate the test setup from the controller processing.
-			for nodeNum := 0; nodeNum < numNodes; nodeNum++ {
+			for nodeNum := range numNodes {
 				// Determine the block CIDR for this node. Each node is given a /26,
 				// which means for 5k nodes we need a /13 IP pool.
 				baseIPInt := big.NewInt(int64(0x0a000000 + nodeNum*64))
@@ -1746,7 +1746,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				podIP := baseIP
 				nodeName := fmt.Sprintf("node%d", nodeNum)
 				nodePods := []v1.Pod{}
-				for podNum := 0; podNum < podsPerNode; podNum++ {
+				for podNum := range podsPerNode {
 					p := v1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      fmt.Sprintf("pod%d-%d", nodeNum, podNum),

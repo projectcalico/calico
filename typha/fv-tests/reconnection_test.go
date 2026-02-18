@@ -76,9 +76,7 @@ func TestReconnectionNewServerNotInSync(t *testing.T) {
 	// keep the extra value from h[0].
 	tweakUpdateTypes(h1ConfigUpdates, h0ConfigUpdates)
 	h0Withh1Overlay := maps.Clone(h0ConfigUpdates)
-	for k, v := range h1ConfigUpdates {
-		h0Withh1Overlay[k] = v
-	}
+	maps.Copy(h0Withh1Overlay, h1ConfigUpdates)
 	Eventually(recorder.KVs).Should(Equal(h0Withh1Overlay))
 	Consistently(recorder.Status).Should(Equal(api.ResyncInProgress))
 
@@ -120,7 +118,7 @@ func setUpReconnectionTest(t *testing.T) (
 	logutils.RedirectLogrusToTestingT(t)
 
 	var h [2]*ServerHarness
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		h[i] = NewHarness()
 		t.Cleanup(h[i].Stop)
 		h[i].Start()

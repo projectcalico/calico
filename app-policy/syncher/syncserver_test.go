@@ -34,16 +34,14 @@ import (
 func TestSyncRestart(t *testing.T) {
 	RegisterTestingT(t)
 
-	sCtx, sCancel := context.WithCancel(context.Background())
-	defer sCancel()
+	sCtx := t.Context()
 
 	server := newTestSyncServer(sCtx)
 
 	storeManager := policystore.NewPolicyStoreManager()
 	uut := NewClient(server.GetTarget(), storeManager, uds.GetDialOptions())
 
-	cCtx, cCancel := context.WithCancel(context.Background())
-	defer cCancel()
+	cCtx := t.Context()
 	go uut.Sync(cCtx)
 
 	if uut.Readiness() {
@@ -67,8 +65,7 @@ func TestSyncRestart(t *testing.T) {
 func TestSyncCancelBeforeInSync(t *testing.T) {
 	RegisterTestingT(t)
 
-	sCtx, sCancel := context.WithCancel(context.Background())
-	defer sCancel()
+	sCtx := t.Context()
 
 	server := newTestSyncServer(sCtx)
 
@@ -90,8 +87,7 @@ func TestSyncCancelBeforeInSync(t *testing.T) {
 func TestSyncCancelAfterInSync(t *testing.T) {
 	RegisterTestingT(t)
 
-	sCtx, sCancel := context.WithCancel(context.Background())
-	defer sCancel()
+	sCtx := t.Context()
 
 	server := newTestSyncServer(sCtx)
 

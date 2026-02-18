@@ -25,8 +25,8 @@ import (
 // running Calico's agent, Felix. By default, Calico doesn't apply any policy to such interfaces.
 type HostEndpoint struct {
 	unversioned.TypeMetadata
-	Metadata HostEndpointMetadata `json:"metadata,omitempty"`
-	Spec     HostEndpointSpec     `json:"spec,omitempty"`
+	Metadata HostEndpointMetadata `json:"metadata"`
+	Spec     HostEndpointSpec     `json:"spec"`
 }
 
 func (t HostEndpoint) GetResourceMetadata() unversioned.ResourceMetadata {
@@ -97,7 +97,7 @@ func NewHostEndpoint() *HostEndpoint {
 // enumerations in the client interface.
 type HostEndpointList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Metadata unversioned.ListMetadata `json:"metadata"`
 	Items    []HostEndpoint           `json:"items" validate:"dive"`
 }
 
