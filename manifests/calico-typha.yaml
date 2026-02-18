@@ -1738,6 +1738,22 @@ spec:
                     IPv6Support controls whether Felix enables support for
                     IPv6 (if supported by the in-use dataplane).
                   type: boolean
+                istioAmbientMode:
+                  description: |-
+                    IstioAmbientMode configures Felix to work together with Tigera's Istio distribution.
+                    [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                istioDSCPMark:
+                  description: |-
+                    IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
+                    SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
+                    with other Istio installation. [Default: 23]
+                  pattern: ^.*
+                  type: integer
+                  x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   description: |-
                     KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.

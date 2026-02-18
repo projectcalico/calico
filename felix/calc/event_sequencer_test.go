@@ -35,7 +35,7 @@ var dscp numorstring.DSCP = numorstring.DSCPFromString("AF43")
 
 var _ = DescribeTable("ModelWorkloadEndpointToProto",
 	func(in model.WorkloadEndpoint, expected *proto.WorkloadEndpoint) {
-		out := calc.ModelWorkloadEndpointToProto(&in, nil, []*proto.TierInfo{})
+		out := calc.ModelWorkloadEndpointToProto(&in, nil, nil, []*proto.TierInfo{})
 		Expect(out).To(Equal(expected))
 	},
 	Entry("workload endpoint with NAT", model.WorkloadEndpoint{

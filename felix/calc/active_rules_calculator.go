@@ -45,6 +45,8 @@ type FelixSender interface {
 type PolicyMatchListener interface {
 	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
+	OnComputedSelectorMatch(cs string, endpointKey model.EndpointKey)
+	OnComputedSelectorMatchStopped(cs string, endpointKey model.EndpointKey)
 }
 
 // ActiveRulesCalculator calculates the set of policies and profiles (i.e. the rules) that
@@ -96,6 +98,8 @@ type ActiveRulesCalculator struct {
 	OnPolicyCountsChanged func(numTiers, numPolicies, numProfiles, numALPPolicies int)
 	OnAlive               func()
 }
+
+type computedSelector string
 
 func NewActiveRulesCalculator() *ActiveRulesCalculator {
 	arc := &ActiveRulesCalculator{
@@ -284,6 +288,21 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
+// AddExtraComputedSelector adds an extra non-policy selector to the label index and gives OnComputedSelectorActive
+// and OnComputedSelectorInactive callbacks when that selector matches/stops matching local endpoints.  Allows for
+// sharing the expensive selector index.
+func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string) {
+	sel, err := selector.Parse(cs)
+	if err != nil {
+		log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
+	}
+	arc.labelIndex.UpdateSelector(computedSelector(cs), sel)
+}
+
+func (arc *ActiveRulesCalculator) RemoveExtraComputedSelector(cs string) {
+	arc.labelIndex.DeleteSelector(computedSelector(cs))
+}
+
 func policyForceProgrammed(policy *model.Policy) bool {
 	if policy == nil {
 		return false
@@ -346,6 +365,14 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 }
 
 func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId any) {
+	if cs, ok := selID.(computedSelector); ok {
+		for _, l := range arc.PolicyMatchListeners {
+			if labelId, ok := labelId.(model.EndpointKey); ok {
+				l.OnComputedSelectorMatch(string(cs), labelId)
+			}
+		}
+		return
+	}
 	polKey := selID.(model.PolicyKey)
 	policyWasActive := arc.policyIDToEndpointKeys.ContainsKey(polKey)
 	arc.policyIDToEndpointKeys.Put(selID, labelId)
@@ -370,6 +397,14 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId any) {
 }
 
 func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId any) {
+	if cs, ok := selID.(computedSelector); ok {
+		for _, l := range arc.PolicyMatchListeners {
+			if labelId, ok := labelId.(model.EndpointKey); ok {
+				l.OnComputedSelectorMatchStopped(string(cs), labelId)
+			}
+		}
+		return
+	}
 	polKey := selID.(model.PolicyKey)
 	arc.policyIDToEndpointKeys.Discard(selID, labelId)
 	if !arc.policyIDToEndpointKeys.ContainsKey(selID) {

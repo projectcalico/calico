@@ -229,6 +229,10 @@ type Config struct {
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
 
+	// Istio config fields
+	IstioAmbientMode string           `config:"oneof(Disabled,Enabled);Disabled"`
+	IstioDSCPMark    numorstring.DSCP `config:"dscp;23"`
+
 	// CgroupV2Path is not used by Felix, but its init container
 	CgroupV2Path string `config:"string;;"`
 
@@ -1176,6 +1180,8 @@ func loadParams() {
 			param = &KeyValueListParam{}
 		case "keydurationlist":
 			param = &KeyDurationListParam{}
+		case "dscp":
+			param = &DSCPParam{}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
 			panic("Unknown type of parameter") // Unreachable, keep the linter happy.
@@ -1278,6 +1284,10 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 
 func (config *Config) GetBPFAttachType() v3.BPFAttachOption {
 	return v3.BPFAttachOption(config.BPFAttachType)
+}
+
+func (config *Config) IsIstioAmbientModeEnabled() bool {
+	return config.IstioAmbientMode == "Enabled"
 }
 
 func New() *Config {

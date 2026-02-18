@@ -19,13 +19,18 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // Canned tiers/policies.
@@ -46,7 +51,8 @@ var tier1_order20 = Tier{
 // might prefer to start with a simpler state instead.
 
 // empty is the base state, with nothing in the datastore or dataplane.
-var empty = NewState().withName("<empty>")
+var empty = NewState().withName("<empty>").
+	withIPSet(rules.IPSetIDAllIstioWEPs, []string{})
 
 // initialisedStore builds on empty, adding in the ready flag and global config.
 var initialisedStore = empty.withKVUpdates(
@@ -3185,6 +3191,159 @@ var wireguardV4V6 = empty.withKVUpdates(
 	}...,
 )
 
+// Test states for Istio functionality
+// Base state with Istio enabled but no endpoints
+var istioBaseState = initialisedStore.withIPSet("all-istio-weps", []string{}).withName("istio base state")
+
+// State with Istio ambient namespace and pod
+// Note: all-istio-weps IPSet should contain WEPs from ambient namespaces
+var istioWithAmbientPod = istioBaseState.withKVUpdates(
+	KVPair{Key: ResourceKey{Name: "istio-ambient", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceAmbient)},
+	KVPair{Key: istioWepAmbientKey, Value: &istioWepAmbient},
+).withEndpoint(
+	"orch/istio-wep-ambient/ep1",
+	[]mock.TierInfo{},
+).withActiveProfiles(
+	types.ProfileID{Name: "istio-ambient"},
+).withRoutes(
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.1.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::1/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+).withIPSet("all-istio-weps", []string{
+	"10.10.1.1/32",
+	"fc00:fe10::1/128",
+}).withName("istio with ambient pod")
+
+// State with multiple pods - mixed scenarios
+// Note: all-istio-weps IPSet should contain only ambient and direct-ambient WEPs
+var istioWithMixedPods = istioBaseState.withKVUpdates(
+	KVPair{Key: ResourceKey{Name: "istio-ambient", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceAmbient)},
+	KVPair{Key: ResourceKey{Name: "istio-none", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceNone)},
+	KVPair{Key: ResourceKey{Name: "regular", Kind: v3.KindProfile}, Value: namespaceToProfile(&regularNamespace)},
+	KVPair{Key: istioWepAmbientKey, Value: &istioWepAmbient},
+	KVPair{Key: istioWepNoneKey, Value: &istioWepNone},
+	KVPair{Key: regularWepKey, Value: &regularWep},
+	KVPair{Key: istioWepDirectAmbientKey, Value: &istioWepDirectAmbient},
+).withEndpoint(
+	"orch/istio-wep-ambient/ep1",
+	[]mock.TierInfo{},
+).withEndpoint(
+	"orch/istio-wep-none/ep1",
+	[]mock.TierInfo{},
+).withEndpoint(
+	"orch/regular-wep/ep1",
+	[]mock.TierInfo{},
+).withEndpoint(
+	"orch/istio-wep-direct-ambient/ep1",
+	[]mock.TierInfo{},
+).withActiveProfiles(
+	types.ProfileID{Name: "istio-ambient"},
+	types.ProfileID{Name: "istio-none"},
+	types.ProfileID{Name: "regular"},
+).withRoutes(
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.1.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::1/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.3.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::3/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.4.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::4/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.5.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::5/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+).withIPSet("all-istio-weps", []string{
+	"10.10.1.1/32",     // ambient namespace WEP
+	"fc00:fe10::1/128", // ambient namespace WEP
+	"10.10.5.1/32",     // direct ambient label WEP
+	"fc00:fe10::5/128", // direct ambient label WEP
+}).withName("istio with mixed pods")
+
+// Edge case: Pod in ambient namespace but with explicit istio.io/dataplane-mode=none label
+// Original selector: Should be EXCLUDED (namespace ambient but pod has explicit none)
+// Your selector: Should be EXCLUDED (pod doesn't have ambient label)
+// This test should FAIL with your change because the pod should NOT be in the IPSet
+var istioSelectorEdgeCases = istioBaseState.withKVUpdates(
+	KVPair{Key: ResourceKey{Name: "istio-ambient", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceAmbient)},
+	KVPair{Key: WorkloadEndpointKey{
+		Hostname:       localHostname,
+		OrchestratorID: "orch",
+		WorkloadID:     "ambient-ns-but-pod-none",
+		EndpointID:     "ep1",
+	}, Value: &WorkloadEndpoint{
+		State: "active",
+		Name:  "ambient-ns-but-pod-none",
+		IPv4Nets: []calinet.IPNet{
+			mustParseNet("10.10.9.1/32"),
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"projectcalico.org/namespace": "istio-ambient",
+			v3.LabelIstioDataplaneMode:    v3.LabelIstioDataplaneModeNone, // Explicit none on pod
+		}),
+		ProfileIDs: []string{"istio-ambient"},
+	}},
+).withEndpoint(
+	"orch/ambient-ns-but-pod-none/ep1",
+	[]mock.TierInfo{},
+).withActiveProfiles(
+	types.ProfileID{Name: "istio-ambient"},
+).withRoutes(
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.9.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+).withIPSet("all-istio-weps", []string{
+	// Should be EMPTY - this pod should be excluded by both selectors
+}).withName("istio selector edge cases")
+
 type StateList []State
 
 func (l StateList) String() string {
@@ -3319,4 +3478,17 @@ func squashStates(baseTests StateList) (desc string, mappedTests []StateList) {
 	mappedTest = append(mappedTest, mappedState)
 	mappedTests = []StateList{mappedTest}
 	return
+}
+
+func namespaceToProfile(ns *kapiv1.Namespace) *v3.Profile {
+	c := conversion.NewConverter()
+	kv, err := c.NamespaceToProfile(ns)
+	if err != nil {
+		panic(err)
+	}
+	profile, ok := kv.Value.(*v3.Profile)
+	if !ok {
+		panic(fmt.Errorf("Failed to convert namespace to profile.\nns: %v", ns))
+	}
+	return profile
 }
