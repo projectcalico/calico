@@ -216,6 +216,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
+			Expect(programsIng.Count()).To(Equal(32))
 
 			// Verify expected programs were loaded based on AttachTypes
 			atIng := programsIng.Programs()
@@ -369,7 +370,6 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		expectedEgCount := expectedProgramCount(atEg)
 		Expect(programsIng.Count()).To(Equal(expectedIngCount))
 		Expect(programsEg.Count()).To(Equal(expectedEgCount))
-
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
 		jumpMapLen := 1
