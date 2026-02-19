@@ -73,7 +73,9 @@ func CleanDatastore(cli client.Client) error {
 		// with Calico Enterprise and not provisioned by the tests.
 		logrus.Info("Cleaning any left-over network policies")
 		for _, np := range nps.Items {
-			if np.Spec.Tier != "calico-system" && np.Namespace != "addon-policies" {
+			// XXX keeping allow-tigera while e2e still run on versions with
+			// the old tier name
+			if np.Spec.Tier != "allow-tigera" && np.Spec.Tier != "calico-system" && np.Namespace != "addon-policies" {
 				if err = cli.Delete(ctx, &np); err != nil {
 					return fmt.Errorf("failed to delete network policy %s: %w", np.Name, err)
 				}
@@ -90,7 +92,9 @@ func CleanDatastore(cli client.Client) error {
 		// with Calico Enterprise and not provisioned by the tests.
 		logrus.Info("Cleaning left-over GNPs")
 		for _, gnp := range gnps.Items {
-			if gnp.Spec.Tier != "calico-system" {
+			// XXX keeping allow-tigera while e2e still run on versions with
+			// the old tier name
+			if np.Spec.Tier != "allow-tigera" && gnp.Spec.Tier != "calico-system" {
 				err = cli.Delete(ctx, &gnp)
 				if err != nil {
 					return err
