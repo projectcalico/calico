@@ -413,15 +413,15 @@ func generateLabels() uniquelabels.Map {
 //   - production: boolean "true"/"false"
 
 func BenchmarkIsolatedCustomers1k(b *testing.B) {
-	benchIsolatedCustomers(b, 1_000, 10, 100)
+	benchIsolatedCustomers(b, 1_000, 1, 100)
 }
 
 func BenchmarkIsolatedCustomers10k(b *testing.B) {
-	benchIsolatedCustomers(b, 10_000, 10, 100)
+	benchIsolatedCustomers(b, 10_000, 1, 100)
 }
 
 func BenchmarkIsolatedCustomers100k(b *testing.B) {
-	benchIsolatedCustomers(b, 100_000, 10, 100)
+	benchIsolatedCustomers(b, 100_000, 1, 100)
 }
 
 const (
