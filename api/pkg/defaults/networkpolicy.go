@@ -30,7 +30,22 @@ func defaultGlobalNetworkPolicy(p *v3.GlobalNetworkPolicy) (bool, error) {
 	return changed, nil
 }
 
+func defaultStagedNetworkPolicy(p *v3.StagedNetworkPolicy) (bool, error) {
+	changed := defaultPolicyTypesField(p.Spec.Ingress, p.Spec.Egress, &p.Spec.Types)
+	changed = setTierLabel(p, p.Spec.Tier) || changed
+	return changed, nil
+}
+
+func defaultStagedGlobalNetworkPolicy(p *v3.StagedGlobalNetworkPolicy) (bool, error) {
+	changed := defaultPolicyTypesField(p.Spec.Ingress, p.Spec.Egress, &p.Spec.Types)
+	changed = setTierLabel(p, p.Spec.Tier) || changed
+	return changed, nil
+}
+
 func setTierLabel(obj v1.Object, tier string) bool {
+	if tier == "" {
+		tier = "default"
+	}
 	labels := obj.GetLabels()
 	if labels == nil {
 		labels = map[string]string{}
