@@ -173,7 +173,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			"pod":               epIDs.Pod,
 			"namespace":         epIDs.Namespace,
 			"vmiName":           vmiInfo.GetName(),
-			"vmiUID":            vmiInfo.VMIResource.GetVMIUID(),
+			"vmiUID":            vmiInfo.GetVMIUID(),
 			"isMigrationTarget": vmiInfo.IsMigrationTarget(),
 			"handleID":          handleID,
 		}).Info("Detected KubeVirt virt-launcher pod, using VMI-based handle ID")
@@ -660,10 +660,10 @@ func cmdDel(args *skel.CmdArgs) error {
 			"pod":                   epIDs.Pod,
 			"namespace":             epIDs.Namespace,
 			"vmiName":               vmiInfo.GetName(),
-			"vmiUID":                vmiInfo.VMIResource.GetVMIUID(),
-			"vmDeletionInProgress":  vmiInfo.VMIResource.IsVMObjectDeletionInProgress(),
-			"vmiDeletionInProgress": vmiInfo.VMIResource.IsVMIObjectDeletionInProgress(),
-			"hasVMOwner":            vmiInfo.VMIResource.VMOwner != nil,
+			"vmiUID":                vmiInfo.GetVMIUID(),
+			"vmDeletionInProgress":  vmiInfo.IsVMObjectDeletionInProgress(),
+			"vmiDeletionInProgress": vmiInfo.IsVMIObjectDeletionInProgress(),
+			"hasVMOwner":            vmiInfo.VMOwner != nil,
 			"handleID":              handleID,
 		}).Info("Detected KubeVirt virt-launcher pod deletion")
 	} else {
@@ -696,16 +696,16 @@ func cmdDel(args *skel.CmdArgs) error {
 	// - If VMI is standalone (no VM owner): release when VMI has DeletionTimestamp
 	if vmiInfo != nil && ipPersistenceEnabled {
 		shouldRelease := false
-		if vmiInfo.VMIResource.VMOwner != nil {
+		if vmiInfo.VMOwner != nil {
 			// VMI is owned by a VM - check VM deletion status
-			shouldRelease = vmiInfo.VMIResource.IsVMObjectDeletionInProgress()
+			shouldRelease = vmiInfo.IsVMObjectDeletionInProgress()
 		} else {
 			// Standalone VMI (no VM owner) - check VMI deletion status
-			shouldRelease = vmiInfo.VMIResource.IsVMIObjectDeletionInProgress()
+			shouldRelease = vmiInfo.IsVMIObjectDeletionInProgress()
 		}
 		logger.WithFields(logrus.Fields{
 			"shouldRelease": shouldRelease,
-			"hasVMOwner":    vmiInfo.VMIResource.VMOwner != nil,
+			"hasVMOwner":    vmiInfo.VMOwner != nil,
 		}).Info("Processing VMI pod deletion")
 
 		// Get IPs allocated to this handle so we can clear their attributes
