@@ -309,19 +309,23 @@ func poolSortFunc(a, b any) int {
 }
 
 // poolSortCategory returns the sort priority for a pool:
-//   - 0: Active pools (allocatable, not being deleted) — sorted first so we prefer to keep existing active pools active.
+//   - 0: Active pools (explicitly Allocatable=True) — sorted first so we prefer to keep existing active pools active.
 //   - 1: Terminating pools (DeletionTimestamp set) — sorted after active but before disabled pools, so they are
 //     inserted into the overlap trie before disabled pools are evaluated. This ensures terminating pools continue
 //     to mask overlapping disabled pools until fully deleted.
-//   - 2: Disabled pools (Allocatable=False, not being deleted) — sorted last.
+//   - 2: Disabled pools (Allocatable=False, not being deleted) — sorted after terminating pools.
+//   - 3: New pools (no Allocatable condition yet) — sorted last so they don't preempt any existing pools.
 func poolSortCategory(p *v3.IPPool) int {
 	if p.DeletionTimestamp != nil {
 		return 1
 	}
+	if hasCondition(p, v3.IPPoolConditionAllocatable, metav1.ConditionTrue) {
+		return 0
+	}
 	if hasCondition(p, v3.IPPoolConditionAllocatable, metav1.ConditionFalse) {
 		return 2
 	}
-	return 0
+	return 3
 }
 
 // reconcileFinalizer ensures that a finalizer is added to the pool when it is created, and that when the pool is deleted, all associated

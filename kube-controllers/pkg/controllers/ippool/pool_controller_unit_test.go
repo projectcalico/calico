@@ -110,22 +110,39 @@ func TestPoolSortFunc(t *testing.T) {
 			expected: []string{"pool-a", "pool-b"},
 		},
 		{
-			name: "new pool with no condition sorts as active",
+			name: "new pools with no condition sort after active pools",
 			pools: []*v3.IPPool{
-				makePool("disabled-pool", now.Add(-1*time.Minute), disabled, false),
-				makePool("new-pool", now, nil, false),
+				makePool("new-pool", now.Add(-1*time.Minute), nil, false),
+				makePool("active-pool", now, allocatable, false),
 			},
-			expected: []string{"new-pool", "disabled-pool"},
+			expected: []string{"active-pool", "new-pool"},
 		},
 		{
-			name: "full scenario: active, terminating, and disabled pools",
+			name: "new pools with no condition sort after terminating pools",
+			pools: []*v3.IPPool{
+				makePool("new-pool", now.Add(-1*time.Minute), nil, false),
+				makePool("terminating-pool", now, allocatable, true),
+			},
+			expected: []string{"terminating-pool", "new-pool"},
+		},
+		{
+			name: "new pools with no condition sort after disabled pools",
+			pools: []*v3.IPPool{
+				makePool("new-pool", now.Add(-1*time.Minute), nil, false),
+				makePool("disabled-pool", now, disabled, false),
+			},
+			expected: []string{"disabled-pool", "new-pool"},
+		},
+		{
+			name: "full scenario: active, terminating, disabled, and new pools",
 			pools: []*v3.IPPool{
 				makePool("disabled-2", now.Add(-1*time.Minute), disabled, false),
-				makePool("active-pool", now.Add(-4*time.Minute), allocatable, false),
+				makePool("active-pool", now.Add(-5*time.Minute), allocatable, false),
+				makePool("new-pool", now, nil, false),
 				makePool("disabled-1", now.Add(-2*time.Minute), disabled, false),
 				makePool("terminating-pool", now.Add(-3*time.Minute), allocatable, true),
 			},
-			expected: []string{"active-pool", "terminating-pool", "disabled-1", "disabled-2"},
+			expected: []string{"active-pool", "terminating-pool", "disabled-1", "disabled-2", "new-pool"},
 		},
 	}
 
