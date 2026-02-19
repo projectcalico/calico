@@ -74,7 +74,7 @@ spec:
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
-          image: quay.io/calico/apiserver:v3.31.3
+          image: quay.io/calico/apiserver:v3.31.4
           name: calico-apiserver
           readinessProbe:
             httpGet:
