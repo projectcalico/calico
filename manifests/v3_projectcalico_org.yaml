@@ -34095,6 +34095,10 @@ spec:
                 attributes:
                   items:
                     properties:
+                      alternate:
+                        additionalProperties:
+                          type: string
+                        type: object
                       handle_id:
                         type: string
                       secondary:
@@ -34186,6 +34190,12 @@ spec:
                 autoAllocateBlocks:
                   default: true
                   type: boolean
+                kubeVirtVMAddressPersistence:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 maxBlocksPerHost:
                   default: 0
                   format: int32
