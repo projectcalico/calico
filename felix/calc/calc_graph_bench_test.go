@@ -396,42 +396,48 @@ func generateLabels() uniquelabels.Map {
 
 // --- Isolated customer environments benchmark ---
 //
-// Simulates a multi-tenant SaaS cluster: many identical namespaces each with
-// a handful of pods (frontend*2, backend*2, database) and a namespaced Calico
-// NetworkPolicy allowing frontend→backend, backend→database, and DNS egress.
-// A "system" namespace has monitoring pods that can reach all customers.
+// Simulates a multi-tenant SaaS cluster with many identical namespaces, each
+// containing uniform pods. Pod and namespace labels are modelled on a real
+// SaaS deployment with realistic cardinalities.
+//
+// Pod labels (15):
+//   - 5 unique-per-pod (string lengths 20, 20, 10, 20, 8)
+//   - 4 binary (values "0" or "1")
+//   - 4 small-set (environment, tier, region, team)
+//   - 1 marker (identical on every pod)
+//   - 1 high-cardinality (~5000 distinct values, 10 chars)
+//
+// Namespace labels (3, applied via Profile):
+//   - kubernetes.io/metadata.name (= namespace name)
+//   - namespace-id: unique 20-char identifier
+//   - production: boolean "true"/"false"
 
 func BenchmarkIsolatedCustomers1k(b *testing.B) {
-	benchIsolatedCustomers(b, 1_000, 100)
+	benchIsolatedCustomers(b, 1_000, 10, 100)
 }
 
 func BenchmarkIsolatedCustomers10k(b *testing.B) {
-	benchIsolatedCustomers(b, 10_000, 100)
+	benchIsolatedCustomers(b, 10_000, 10, 100)
 }
 
 func BenchmarkIsolatedCustomers100k(b *testing.B) {
-	benchIsolatedCustomers(b, 100_000, 100)
+	benchIsolatedCustomers(b, 100_000, 10, 100)
 }
 
 const (
-	podsPerCustomer     = 5 // 2 frontend + 2 backend + 1 database
-	monitoringPods      = 10
-	localMonitoringPods = 2
-	kubeDNSCIDR         = "10.96.0.10/32"
-	nsLabelKey          = conversion.NamespaceLabelPrefix + conversion.NameLabel
-	nsProfilePrefix     = conversion.NamespaceProfileNamePrefix
-	systemNamespace     = "system"
-	systemNSProfileName = nsProfilePrefix + systemNamespace
+	nsLabelKey      = conversion.NamespaceLabelPrefix + conversion.NameLabel
+	nsProfilePrefix = conversion.NamespaceProfileNamePrefix
+	kubeDNSCIDR     = "10.96.0.10/32"
 )
 
-func benchIsolatedCustomers(b *testing.B, numCustomers, numLocalEps int) {
+func benchIsolatedCustomers(b *testing.B, numCustomers, podsPerNamespace, numLocalEps int) {
 	RegisterTestingT(b)
 	defer logrus.SetLevel(logrus.GetLevel())
 	logrus.SetLevel(logrus.ErrorLevel)
 
 	nsUpdates := makeCustomerNamespaceUpdates(numCustomers)
 	polUpdates := makeCustomerPolicies(numCustomers)
-	remoteEpUpdates, localEpUpdates := makeAllCustomerEndpoints(numCustomers, numLocalEps)
+	remoteEpUpdates, localEpUpdates := makeAllCustomerEndpoints(numCustomers, podsPerNamespace, numLocalEps)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -499,17 +505,22 @@ func sendCustomerLocalEndpoints(cg *CalcGraph, updates []api.Update) {
 }
 
 // makeCustomerNamespaceUpdates creates Profile + ProfileRules for each
-// customer namespace and the system namespace.
+// customer namespace. Each namespace gets three labels:
+//   - kubernetes.io/metadata.name (standard)
+//   - namespace-id: unique 20-char identifier
+//   - production: boolean "true"/"false"
 func makeCustomerNamespaceUpdates(numCustomers int) []api.Update {
-	total := numCustomers + 1 // +1 for system namespace
-	updates := make([]api.Update, 0, 2*total)
+	updates := make([]api.Update, 0, 2*numCustomers)
 
-	addNS := func(name string) {
+	for n := 0; n < numCustomers; n++ {
+		name := fmt.Sprintf("customer-%d", n)
 		profName := nsProfilePrefix + name
 		prof := &v3.Profile{
 			Spec: v3.ProfileSpec{
 				LabelsToApply: map[string]string{
-					nsLabelKey: name,
+					nsLabelKey:     name,
+					"namespace-id": deterministicString(n, 20),
+					"production":   fmt.Sprintf("%v", n%2 == 0),
 				},
 			},
 		}
@@ -529,212 +540,77 @@ func makeCustomerNamespaceUpdates(numCustomers int) []api.Update {
 		})
 	}
 
-	for n := 0; n < numCustomers; n++ {
-		addNS(fmt.Sprintf("customer-%d", n))
-	}
-	addNS(systemNamespace)
-
 	return updates
 }
 
-// makeCustomerPolicies creates one namespaced policy per deployment per
-// customer namespace (frontend, backend, database = 3 per namespace) plus
-// one global monitoring egress policy for the system namespace.
+// makeCustomerPolicies creates one namespaced isolation policy per customer
+// namespace: allows intra-namespace traffic and DNS egress.
 func makeCustomerPolicies(numCustomers int) []api.Update {
-	tcp := numorstring.ProtocolFromString("TCP")
 	udp := numorstring.ProtocolFromString("UDP")
-	port8080 := numorstring.SinglePort(8080)
-	port5432 := numorstring.SinglePort(5432)
 	port53 := numorstring.SinglePort(53)
-	port9090 := numorstring.SinglePort(9090)
-
 	_, dnsNet, _ := calinet.ParseCIDROrIP(kubeDNSCIDR)
 
-	dnsEgressRule := model.Rule{
-		Action:   "Allow",
-		Protocol: &udp,
-		DstNets:  []*calinet.IPNet{dnsNet},
-		DstPorts: []numorstring.Port{port53},
-	}
-	monitoringIngressRule := model.Rule{
-		Action:      "Allow",
-		Protocol:    &tcp,
-		SrcSelector: fmt.Sprintf("%s == '%s' && role == 'monitoring'", nsLabelKey, systemNamespace),
-		DstPorts:    []numorstring.Port{port9090},
-	}
-
-	polsPerCustomer := 3 // frontend, backend, database
-	updates := make([]api.Update, 0, numCustomers*polsPerCustomer+1)
+	updates := make([]api.Update, 0, numCustomers)
 
 	for n := 0; n < numCustomers; n++ {
 		ns := fmt.Sprintf("customer-%d", n)
 		nsSelector := fmt.Sprintf("%s == '%s'", nsLabelKey, ns)
 
-		// -- frontend policy --
-		// Selector targets only frontend pods.
-		// Ingress: monitoring → frontend (metrics scrape)
-		// Egress: frontend → backend (TCP/8080), DNS
-		frontendPol := &model.Policy{
+		pol := &model.Policy{
 			Namespace: ns,
 			Tier:      "default",
-			Selector:  nsSelector + " && role == 'frontend'",
-			Types:     []string{"ingress", "egress"},
-			InboundRules: []model.Rule{
-				monitoringIngressRule,
-			},
-			OutboundRules: []model.Rule{
-				{
-					Action:      "Allow",
-					Protocol:    &tcp,
-					DstSelector: nsSelector + " && role == 'backend'",
-					DstPorts:    []numorstring.Port{port8080},
-				},
-				dnsEgressRule,
-			},
-		}
-		updates = append(updates, api.Update{
-			KVPair: model.KVPair{
-				Key:   model.PolicyKey{Name: fmt.Sprintf("customer-%d/frontend", n), Namespace: ns},
-				Value: frontendPol,
-			},
-		})
-
-		// -- backend policy --
-		// Selector targets only backend pods.
-		// Ingress: frontend → backend (TCP/8080), monitoring → backend
-		// Egress: backend → database (TCP/5432), DNS
-		backendPol := &model.Policy{
-			Namespace: ns,
-			Tier:      "default",
-			Selector:  nsSelector + " && role == 'backend'",
+			Selector:  nsSelector,
 			Types:     []string{"ingress", "egress"},
 			InboundRules: []model.Rule{
 				{
 					Action:      "Allow",
-					Protocol:    &tcp,
-					SrcSelector: nsSelector + " && role == 'frontend'",
-					DstPorts:    []numorstring.Port{port8080},
+					SrcSelector: nsSelector,
 				},
-				monitoringIngressRule,
 			},
 			OutboundRules: []model.Rule{
 				{
 					Action:      "Allow",
-					Protocol:    &tcp,
-					DstSelector: nsSelector + " && role == 'database'",
-					DstPorts:    []numorstring.Port{port5432},
+					DstSelector: nsSelector,
 				},
-				dnsEgressRule,
-			},
-		}
-		updates = append(updates, api.Update{
-			KVPair: model.KVPair{
-				Key:   model.PolicyKey{Name: fmt.Sprintf("customer-%d/backend", n), Namespace: ns},
-				Value: backendPol,
-			},
-		})
-
-		// -- database policy --
-		// Selector targets only database pods.
-		// Ingress: backend → database (TCP/5432), monitoring → database
-		// Egress: DNS only
-		databasePol := &model.Policy{
-			Namespace: ns,
-			Tier:      "default",
-			Selector:  nsSelector + " && role == 'database'",
-			Types:     []string{"ingress", "egress"},
-			InboundRules: []model.Rule{
 				{
-					Action:      "Allow",
-					Protocol:    &tcp,
-					SrcSelector: nsSelector + " && role == 'backend'",
-					DstPorts:    []numorstring.Port{port5432},
+					Action:   "Allow",
+					Protocol: &udp,
+					DstNets:  []*calinet.IPNet{dnsNet},
+					DstPorts: []numorstring.Port{port53},
 				},
-				monitoringIngressRule,
-			},
-			OutboundRules: []model.Rule{
-				dnsEgressRule,
 			},
 		}
 		updates = append(updates, api.Update{
 			KVPair: model.KVPair{
-				Key:   model.PolicyKey{Name: fmt.Sprintf("customer-%d/database", n), Namespace: ns},
-				Value: databasePol,
+				Key:   model.PolicyKey{Name: fmt.Sprintf("customer-%d/isolation", n), Namespace: ns},
+				Value: pol,
 			},
 		})
 	}
-
-	// Global monitoring egress policy.
-	monitoringPol := &model.Policy{
-		Tier:     "default",
-		Selector: fmt.Sprintf("%s == '%s' && role == 'monitoring'", nsLabelKey, systemNamespace),
-		Types:    []string{"egress"},
-		OutboundRules: []model.Rule{
-			{
-				Action:      "Allow",
-				Protocol:    &tcp,
-				DstSelector: "has(role)",
-				DstPorts:    []numorstring.Port{port9090},
-			},
-			dnsEgressRule,
-		},
-	}
-	updates = append(updates, api.Update{
-		KVPair: model.KVPair{
-			Key:   model.PolicyKey{Name: "system-monitoring-egress"},
-			Value: monitoringPol,
-		},
-	})
 
 	return updates
 }
 
-// k8sPodName generates a realistic K8s pod name following the
-// <deployment>-<replicaset-hash>-<pod-hash> convention.
-func k8sPodName(deployment string, nsIdx, replicaIdx int) string {
-	// Deterministic but realistic-looking 9+5 char hex suffixes.
-	rsHash := fmt.Sprintf("%09x", uint32(nsIdx*7+3))[:9]
-	podHash := fmt.Sprintf("%05x", uint16(replicaIdx*13+nsIdx*17+5))[:5]
-	return fmt.Sprintf("%s-%s-%s", deployment, rsHash, podHash)
-}
+// Small-set label values for pods.
+var (
+	saasEnvironments = []string{"dev", "staging", "prod"}
+	saasPodTiers     = []string{"frontend", "backend", "middleware", "data"}
+	saasRegions      = []string{"us-east", "us-west", "eu-west", "ap-south"}
+	saasTeams        = []string{"platform", "payments", "identity", "growth", "infra"}
+)
 
-type podTemplate struct {
-	deployment string
-	replica    int
-	labels     map[string]string
-}
-
-var customerPodTemplates = []podTemplate{
-	{"frontend", 0, map[string]string{"role": "frontend", "app": "web"}},
-	{"frontend", 1, map[string]string{"role": "frontend", "app": "web"}},
-	{"backend", 0, map[string]string{"role": "backend", "app": "api"}},
-	{"backend", 1, map[string]string{"role": "backend", "app": "api"}},
-	{"database", 0, map[string]string{"role": "database", "app": "db"}},
-}
-
-// makeAllCustomerEndpoints creates all endpoints across customer and system
-// namespaces, assigning each pod to exactly one host. numLocalEps pods
-// (including localMonitoringPods monitoring pods) are placed on "localhost",
-// scattered across namespaces to simulate realistic K8s scheduling. The
-// remainder go to "remotehost". Returns (remote, local) slices.
-func makeAllCustomerEndpoints(numCustomers, numLocalEps int) (remote, local []api.Update) {
-	totalCustomerEps := numCustomers * podsPerCustomer
-	totalEps := totalCustomerEps + monitoringPods
-
-	// Reserve some local slots for monitoring pods.
-	numLocalCustomerEps := numLocalEps - localMonitoringPods
-	if numLocalCustomerEps < 0 {
-		numLocalCustomerEps = 0
-	}
-	if numLocalCustomerEps > totalCustomerEps {
-		numLocalCustomerEps = totalCustomerEps
+// makeAllCustomerEndpoints creates uniform pods across customer namespaces.
+// numLocalEps pods are placed on "localhost" scattered via stride; the rest
+// go to "remotehost". Returns (remote, local) slices.
+func makeAllCustomerEndpoints(numCustomers, podsPerNamespace, numLocalEps int) (remote, local []api.Update) {
+	totalEps := numCustomers * podsPerNamespace
+	if numLocalEps > totalEps {
+		numLocalEps = totalEps
 	}
 
-	// Determine stride for scattering local pods across all customer pods.
-	// Every stride-th customer pod lands on localhost.
 	stride := 1
-	if numLocalCustomerEps > 0 {
-		stride = totalCustomerEps / numLocalCustomerEps
+	if numLocalEps > 0 {
+		stride = totalEps / numLocalEps
 		if stride < 1 {
 			stride = 1
 		}
@@ -743,57 +619,59 @@ func makeAllCustomerEndpoints(numCustomers, numLocalEps int) (remote, local []ap
 	remote = make([]api.Update, 0, totalEps-numLocalEps)
 	local = make([]api.Update, 0, numLocalEps)
 
-	localCustomerCount := 0
+	localCount := 0
 	epIdx := 0
 	for n := 0; n < numCustomers; n++ {
 		ns := fmt.Sprintf("customer-%d", n)
 		profID := nsProfilePrefix + ns
-		for _, t := range customerPodTemplates {
-			podName := k8sPodName(t.deployment, n, t.replica)
-			if localCustomerCount < numLocalCustomerEps && epIdx%stride == 0 {
-				local = append(local, makeCustomerWEP(
-					"localhost", ns, podName, profID, t.labels,
-				))
-				localCustomerCount++
+		for p := 0; p < podsPerNamespace; p++ {
+			podName := fmt.Sprintf("app-%09x-%05x", uint32(n*7+3), uint16(p*13+n*17+5))
+			labels := makeCustomerPodLabels(epIdx)
+			if localCount < numLocalEps && epIdx%stride == 0 {
+				local = append(local, makeCustomerWEP("localhost", ns, podName, profID, labels))
+				localCount++
 			} else {
-				remote = append(remote, makeCustomerWEP(
-					"remotehost", ns, podName, profID, t.labels,
-				))
+				remote = append(remote, makeCustomerWEP("remotehost", ns, podName, profID, labels))
 			}
 			epIdx++
-		}
-	}
-
-	// System namespace monitoring pods: first localMonitoringPods on
-	// localhost, remainder on remotehost.
-	for i := 0; i < monitoringPods; i++ {
-		podName := k8sPodName("prometheus", 0, i)
-		if i < localMonitoringPods {
-			local = append(local, makeCustomerWEP(
-				"localhost", systemNamespace, podName,
-				systemNSProfileName,
-				map[string]string{"role": "monitoring", "app": "prometheus"},
-			))
-		} else {
-			remote = append(remote, makeCustomerWEP(
-				"remotehost", systemNamespace, podName,
-				systemNSProfileName,
-				map[string]string{"role": "monitoring", "app": "prometheus"},
-			))
 		}
 	}
 
 	return remote, local
 }
 
-func makeCustomerWEP(host, ns, podName, profileID string, extraLabels map[string]string) api.Update {
-	labels := make(map[string]string, len(extraLabels)+1)
-	for k, v := range extraLabels {
-		labels[k] = v
-	}
-	labels["customer"] = ns
+// makeCustomerPodLabels generates the 15 realistic labels for a pod at the
+// given global index.
+func makeCustomerPodLabels(podIdx int) map[string]string {
+	labels := map[string]string{
+		// 5 unique-per-pod labels with specified string lengths.
+		"pod-id":      deterministicString(podIdx*5, 20),
+		"instance-id": deterministicString(podIdx*5+1, 20),
+		"short-id":    deterministicString(podIdx*5+2, 10),
+		"config-hash": deterministicString(podIdx*5+3, 20),
+		"version-tag": deterministicString(podIdx*5+4, 8),
 
-	// Round-trip through JSON to make strings unique, matching real decoder behaviour.
+		// 4 binary labels.
+		"enabled": fmt.Sprintf("%d", podIdx%2),
+		"debug":   fmt.Sprintf("%d", (podIdx/2)%2),
+		"canary":  fmt.Sprintf("%d", (podIdx/4)%2),
+		"managed": fmt.Sprintf("%d", (podIdx/8)%2),
+
+		// 4 small-set labels.
+		"environment": saasEnvironments[podIdx%len(saasEnvironments)],
+		"tier":        saasPodTiers[podIdx%len(saasPodTiers)],
+		"region":      saasRegions[podIdx%len(saasRegions)],
+		"team":        saasTeams[podIdx%len(saasTeams)],
+
+		// 1 marker label (same on every pod).
+		"managed-by": "saas-controller",
+
+		// 1 high-cardinality label (~5000 distinct values, 10 chars).
+		"tenant-id": deterministicString(podIdx%5000, 10),
+	}
+
+	// Round-trip through JSON to make strings unique, matching real
+	// decoder behaviour.
 	buf, err := json.Marshal(labels)
 	if err != nil {
 		panic(err)
@@ -803,6 +681,23 @@ func makeCustomerWEP(host, ns, podName, profileID string, extraLabels map[string
 		panic(err)
 	}
 
+	return labels
+}
+
+// deterministicString returns a deterministic hex-like string of the given
+// length, seeded by n.
+func deterministicString(n, length int) string {
+	const chars = "abcdef0123456789"
+	b := make([]byte, length)
+	v := uint64(n)*2654435761 + 1
+	for i := range b {
+		b[i] = chars[v%uint64(len(chars))]
+		v = v*6364136223846793005 + 1442695040888963407
+	}
+	return string(b)
+}
+
+func makeCustomerWEP(host, ns, podName, profileID string, labels map[string]string) api.Update {
 	return api.Update{
 		KVPair: model.KVPair{
 			Key: model.WorkloadEndpointKey{
