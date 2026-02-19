@@ -24,7 +24,7 @@ import (
 )
 
 func TestPoolSortFunc(t *testing.T) {
-	now := time.Unix(1000000, 0)
+	now := time.Unix(0, 0)
 
 	makePool := func(name string, createdAt time.Time, condition *metav1.Condition, deleting bool) *v3.IPPool {
 		p := &v3.IPPool{
@@ -148,17 +148,13 @@ func TestPoolSortFunc(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Convert to []any for the sort function.
-			items := make([]any, len(tt.pools))
+			slices.SortFunc(tt.pools, func(a, b *v3.IPPool) int {
+				return poolSortFunc(a, b)
+			})
+
+			got := make([]string, len(tt.pools))
 			for i, p := range tt.pools {
-				items[i] = p
-			}
-
-			slices.SortFunc(items, poolSortFunc)
-
-			got := make([]string, len(items))
-			for i, item := range items {
-				got[i] = item.(*v3.IPPool).Name
+				got[i] = p.Name
 			}
 
 			if len(got) != len(tt.expected) {

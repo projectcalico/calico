@@ -309,7 +309,7 @@ func poolSortFunc(a, b any) int {
 }
 
 // poolSortCategory returns the sort priority for a pool:
-//   - 0: Active pools (explicitly Allocatable=True) — sorted first so we prefer to keep existing active pools active.
+//   - 0: Active pools (Allocatable=True, not being deleted) — sorted first so we prefer to keep existing active pools active.
 //   - 1: Terminating pools (DeletionTimestamp set) — sorted after active but before disabled pools, so they are
 //     inserted into the overlap trie before disabled pools are evaluated. This ensures terminating pools continue
 //     to mask overlapping disabled pools until fully deleted.
