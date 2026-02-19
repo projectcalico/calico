@@ -17,15 +17,15 @@ package resourcemgr
 import (
 	"context"
 
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func init() {
 	registerResource(
-		api.NewNode(),
-		api.NewNodeList(),
+		internalapi.NewNode(),
+		internalapi.NewNodeList(),
 		false,
 		[]string{"node", "nodes", "no", "nos"},
 		[]string{"NAME"},
@@ -37,23 +37,23 @@ func init() {
 			"IPV6": "{{if .Spec.BGP}}{{if .Spec.BGP.IPv6Address}}{{.Spec.BGP.IPv6Address}}{{end}}{{end}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.Node)
+			r := resource.(*internalapi.Node)
 			return client.Nodes().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.Node)
+			r := resource.(*internalapi.Node)
 			return client.Nodes().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.Node)
+			r := resource.(*internalapi.Node)
 			return client.Nodes().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.Node)
+			r := resource.(*internalapi.Node)
 			return client.Nodes().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.Node)
+			r := resource.(*internalapi.Node)
 			return client.Nodes().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
