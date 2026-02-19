@@ -740,6 +740,11 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		return nil
 	}
 
+	var filterActionForKernel string
+	if ipVersion == 6 {
+		filterActionForKernel = "reject"
+	}
+
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
@@ -757,7 +762,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
-		statement = c.processIPPool(&ippool, true, "", ipVersion)
+		statement = c.processIPPool(&ippool, true, filterActionForKernel, ipVersion)
 		if len(statement) != 0 {
 			config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 		}
@@ -798,11 +803,13 @@ func (c *client) processIPPool(
 		// IPIP encapsulation or No-Encap.
 		if forProgrammingKernel && ipVersion == 4 {
 			localSubnet := c.localSubnet(ipVersion)
-			if len(localSubnet) != 0 {
-				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
-				// our fork of BIRD.
-				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+			if len(localSubnet) == 0 {
+				return ""
 			}
+
+			// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+			// our fork of BIRD.
+			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 		}
 		action = "accept"
 	default:
@@ -824,7 +831,7 @@ func (c *client) localSubnet(ipVersion int) string {
 		"path":      key,
 	})
 	if subnet, err := c.GetValue(key); err != nil {
-		logCtx.WithError(err).Debug("Failed to get host subnet")
+		logCtx.WithError(err).Debug("pepper Failed to get host subnet")
 		return ""
 	} else {
 		return subnet

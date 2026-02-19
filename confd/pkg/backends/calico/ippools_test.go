@@ -195,12 +195,13 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 	err := c.processIPPools(config, 4)
 	require.NoError(t, err)
 
-	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
+	expected := filterExpectedStatements(forKernelStatements, "reject")
+	if !reflect.DeepEqual(config.KernelFilterForIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.KernelFilterForIPPools, forKernelStatements)
+			config.KernelFilterForIPPools, expected)
 	}
 
-	expected := filterExpectedStatements(forExportStatements, "reject")
+	expected = filterExpectedStatements(forExportStatements, "reject")
 	if !reflect.DeepEqual(config.BGPExportFilterForDisabledIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForDisabledIPPools, expected)
@@ -265,12 +266,13 @@ func Test_processIPPoolsV6(t *testing.T) {
 	err := c.processIPPools(config, 6)
 	require.NoError(t, err)
 
-	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
+	expected := filterExpectedStatements(forKernelStatements, "reject")
+	if !reflect.DeepEqual(config.KernelFilterForIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.KernelFilterForIPPools, forKernelStatements)
+			config.KernelFilterForIPPools, expected)
 	}
 
-	expected := filterExpectedStatements(forExportStatements, "reject")
+	expected = filterExpectedStatements(forExportStatements, "reject")
 	if !reflect.DeepEqual(config.BGPExportFilterForDisabledIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForDisabledIPPools, expected)
