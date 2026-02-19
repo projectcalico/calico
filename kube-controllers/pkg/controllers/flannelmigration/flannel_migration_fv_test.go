@@ -318,10 +318,10 @@ func validateCalicoIPAM(fc *testutils.FlannelCluster, client client.Interface, b
 		Expect(node.Spec.VXLANTunnelMACAddr).To(Equal(fn.VtepMac))
 
 		// Check tunnel ip been correctly assigned.
-		attr, _, err := client.IPAM().GetAssignmentAttributes(ctx, vtepIP)
+		allocAttr, err := client.IPAM().GetAssignmentAttributes(ctx, vtepIP)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(attr[ipam.AttributeNode]).To(Equal(nodeName))
-		Expect(attr[ipam.AttributeType]).To(Equal(ipam.AttributeTypeVXLAN))
+		Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributeNode]).To(Equal(nodeName))
+		Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributeType]).To(Equal(ipam.AttributeTypeVXLAN))
 
 		// Check block affinities been correctly claimed.
 		opts := model.BlockAffinityListOptions{Host: nodeName, AffinityType: string(ipam.AffinityTypeHost), IPVersion: 4}
