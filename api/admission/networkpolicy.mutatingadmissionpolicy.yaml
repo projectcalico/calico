@@ -1,8 +1,8 @@
-# This MutatingAdmissionPolicy performs defaulting for Calico policy types.
+# This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingAdmissionPolicy
 metadata:
-  name: "policy.projectcalico.org"
+  name: "policytypes.policy.projectcalico.org"
 spec:
   paramKind:
     kind: NetworkPolicy
