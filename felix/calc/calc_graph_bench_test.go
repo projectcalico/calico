@@ -25,6 +25,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
@@ -391,4 +392,430 @@ func generateLabels() uniquelabels.Map {
 	}
 
 	return uniquelabels.Make(labels)
+}
+
+// --- Isolated customer environments benchmark ---
+//
+// Simulates a multi-tenant SaaS cluster: many identical namespaces each with
+// a handful of pods (frontend*2, backend*2, database) and a namespaced Calico
+// NetworkPolicy allowing frontend→backend, backend→database, and DNS egress.
+// A "system" namespace has monitoring pods that can reach all customers.
+
+func BenchmarkIsolatedCustomers1k(b *testing.B) {
+	benchIsolatedCustomers(b, 1_000, 100)
+}
+
+func BenchmarkIsolatedCustomers10k(b *testing.B) {
+	benchIsolatedCustomers(b, 10_000, 100)
+}
+
+func BenchmarkIsolatedCustomers100k(b *testing.B) {
+	benchIsolatedCustomers(b, 100_000, 100)
+}
+
+const (
+	podsPerCustomer     = 5 // 2 frontend + 2 backend + 1 database
+	monitoringPods      = 10
+	localMonitoringPods = 2
+	kubeDNSCIDR         = "10.96.0.10/32"
+	nsLabelKey          = conversion.NamespaceLabelPrefix + conversion.NameLabel
+	nsProfilePrefix     = conversion.NamespaceProfileNamePrefix
+	systemNamespace     = "system"
+	systemNSProfileName = nsProfilePrefix + systemNamespace
+)
+
+func benchIsolatedCustomers(b *testing.B, numCustomers, numLocalEps int) {
+	RegisterTestingT(b)
+	defer logrus.SetLevel(logrus.GetLevel())
+	logrus.SetLevel(logrus.ErrorLevel)
+
+	nsUpdates := makeCustomerNamespaceUpdates(numCustomers)
+	polUpdates := makeCustomerPolicies(numCustomers)
+	remoteEpUpdates, localEpUpdates := makeAllCustomerEndpoints(numCustomers, numLocalEps)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		runtime.GC()
+		logrus.SetLevel(logrus.ErrorLevel)
+
+		conf := config.New()
+		conf.FelixHostname = "localhost"
+		es := NewEventSequencer(conf)
+		numMessages := 0
+		es.Callback = func(message interface{}) {
+			numMessages++
+		}
+		cg = NewCalculationGraph(es, nil, conf, func() {})
+
+		logrus.SetLevel(logrus.WarnLevel)
+		b.StartTimer()
+		b.ReportAllocs()
+		startTime := time.Now()
+
+		sendCustomerPolicies(cg, polUpdates)
+		sendCustomerProfiles(cg, nsUpdates)
+		sendCustomerRemoteEndpoints(cg, remoteEpUpdates)
+		sendCustomerLocalEndpoints(cg, localEpUpdates)
+		cg.AllUpdDispatcher.OnDatamodelStatus(api.InSync)
+
+		cg.Flush()
+
+		Expect(es.pendingEndpointUpdates).To(HaveLen(len(localEpUpdates)))
+
+		b.ReportMetric(float64(len(localEpUpdates)), "LocalEps")
+		b.ReportMetric(float64(len(es.pendingAddedIPSets)), "IPSets")
+		b.ReportMetric(float64(len(es.pendingPolicyUpdates)), "Policies")
+		es.Flush()
+
+		b.ReportMetric(float64(time.Since(startTime).Seconds()), "s")
+		b.ReportMetric(float64(numMessages), "Msgs")
+	}
+	b.StopTimer()
+
+	runtime.GC()
+	time.Sleep(time.Second)
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	b.ReportMetric(float64(m.HeapAlloc)/(1024*1024), "HeapAllocMB")
+}
+
+// Broken out for CPU profiling visibility.
+
+func sendCustomerPolicies(cg *CalcGraph, updates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(updates)
+}
+
+func sendCustomerProfiles(cg *CalcGraph, updates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(updates)
+}
+
+func sendCustomerRemoteEndpoints(cg *CalcGraph, updates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(updates)
+}
+
+func sendCustomerLocalEndpoints(cg *CalcGraph, updates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(updates)
+}
+
+// makeCustomerNamespaceUpdates creates Profile + ProfileRules for each
+// customer namespace and the system namespace.
+func makeCustomerNamespaceUpdates(numCustomers int) []api.Update {
+	total := numCustomers + 1 // +1 for system namespace
+	updates := make([]api.Update, 0, 2*total)
+
+	addNS := func(name string) {
+		profName := nsProfilePrefix + name
+		prof := &v3.Profile{
+			Spec: v3.ProfileSpec{
+				LabelsToApply: map[string]string{
+					nsLabelKey: name,
+				},
+			},
+		}
+		updates = append(updates, api.Update{
+			KVPair: model.KVPair{
+				Key:   model.ResourceKey{Kind: v3.KindProfile, Name: profName},
+				Value: prof,
+			},
+		})
+		updates = append(updates, api.Update{
+			KVPair: model.KVPair{
+				Key: model.ProfileRulesKey{
+					ProfileKey: model.ProfileKey{Name: profName},
+				},
+				Value: &model.ProfileRules{},
+			},
+		})
+	}
+
+	for n := 0; n < numCustomers; n++ {
+		addNS(fmt.Sprintf("customer-%d", n))
+	}
+	addNS(systemNamespace)
+
+	return updates
+}
+
+// makeCustomerPolicies creates one namespaced policy per deployment per
+// customer namespace (frontend, backend, database = 3 per namespace) plus
+// one global monitoring egress policy for the system namespace.
+func makeCustomerPolicies(numCustomers int) []api.Update {
+	tcp := numorstring.ProtocolFromString("TCP")
+	udp := numorstring.ProtocolFromString("UDP")
+	port8080 := numorstring.SinglePort(8080)
+	port5432 := numorstring.SinglePort(5432)
+	port53 := numorstring.SinglePort(53)
+	port9090 := numorstring.SinglePort(9090)
+
+	_, dnsNet, _ := calinet.ParseCIDROrIP(kubeDNSCIDR)
+
+	dnsEgressRule := model.Rule{
+		Action:   "Allow",
+		Protocol: &udp,
+		DstNets:  []*calinet.IPNet{dnsNet},
+		DstPorts: []numorstring.Port{port53},
+	}
+	monitoringIngressRule := model.Rule{
+		Action:      "Allow",
+		Protocol:    &tcp,
+		SrcSelector: fmt.Sprintf("%s == '%s' && role == 'monitoring'", nsLabelKey, systemNamespace),
+		DstPorts:    []numorstring.Port{port9090},
+	}
+
+	polsPerCustomer := 3 // frontend, backend, database
+	updates := make([]api.Update, 0, numCustomers*polsPerCustomer+1)
+
+	for n := 0; n < numCustomers; n++ {
+		ns := fmt.Sprintf("customer-%d", n)
+		nsSelector := fmt.Sprintf("%s == '%s'", nsLabelKey, ns)
+
+		// -- frontend policy --
+		// Selector targets only frontend pods.
+		// Ingress: monitoring → frontend (metrics scrape)
+		// Egress: frontend → backend (TCP/8080), DNS
+		frontendPol := &model.Policy{
+			Namespace: ns,
+			Tier:      "default",
+			Selector:  nsSelector + " && role == 'frontend'",
+			Types:     []string{"ingress", "egress"},
+			InboundRules: []model.Rule{
+				monitoringIngressRule,
+			},
+			OutboundRules: []model.Rule{
+				{
+					Action:      "Allow",
+					Protocol:    &tcp,
+					DstSelector: nsSelector + " && role == 'backend'",
+					DstPorts:    []numorstring.Port{port8080},
+				},
+				dnsEgressRule,
+			},
+		}
+		updates = append(updates, api.Update{
+			KVPair: model.KVPair{
+				Key:   model.PolicyKey{Name: fmt.Sprintf("customer-%d/frontend", n), Namespace: ns},
+				Value: frontendPol,
+			},
+		})
+
+		// -- backend policy --
+		// Selector targets only backend pods.
+		// Ingress: frontend → backend (TCP/8080), monitoring → backend
+		// Egress: backend → database (TCP/5432), DNS
+		backendPol := &model.Policy{
+			Namespace: ns,
+			Tier:      "default",
+			Selector:  nsSelector + " && role == 'backend'",
+			Types:     []string{"ingress", "egress"},
+			InboundRules: []model.Rule{
+				{
+					Action:      "Allow",
+					Protocol:    &tcp,
+					SrcSelector: nsSelector + " && role == 'frontend'",
+					DstPorts:    []numorstring.Port{port8080},
+				},
+				monitoringIngressRule,
+			},
+			OutboundRules: []model.Rule{
+				{
+					Action:      "Allow",
+					Protocol:    &tcp,
+					DstSelector: nsSelector + " && role == 'database'",
+					DstPorts:    []numorstring.Port{port5432},
+				},
+				dnsEgressRule,
+			},
+		}
+		updates = append(updates, api.Update{
+			KVPair: model.KVPair{
+				Key:   model.PolicyKey{Name: fmt.Sprintf("customer-%d/backend", n), Namespace: ns},
+				Value: backendPol,
+			},
+		})
+
+		// -- database policy --
+		// Selector targets only database pods.
+		// Ingress: backend → database (TCP/5432), monitoring → database
+		// Egress: DNS only
+		databasePol := &model.Policy{
+			Namespace: ns,
+			Tier:      "default",
+			Selector:  nsSelector + " && role == 'database'",
+			Types:     []string{"ingress", "egress"},
+			InboundRules: []model.Rule{
+				{
+					Action:      "Allow",
+					Protocol:    &tcp,
+					SrcSelector: nsSelector + " && role == 'backend'",
+					DstPorts:    []numorstring.Port{port5432},
+				},
+				monitoringIngressRule,
+			},
+			OutboundRules: []model.Rule{
+				dnsEgressRule,
+			},
+		}
+		updates = append(updates, api.Update{
+			KVPair: model.KVPair{
+				Key:   model.PolicyKey{Name: fmt.Sprintf("customer-%d/database", n), Namespace: ns},
+				Value: databasePol,
+			},
+		})
+	}
+
+	// Global monitoring egress policy.
+	monitoringPol := &model.Policy{
+		Tier:     "default",
+		Selector: fmt.Sprintf("%s == '%s' && role == 'monitoring'", nsLabelKey, systemNamespace),
+		Types:    []string{"egress"},
+		OutboundRules: []model.Rule{
+			{
+				Action:      "Allow",
+				Protocol:    &tcp,
+				DstSelector: "has(role)",
+				DstPorts:    []numorstring.Port{port9090},
+			},
+			dnsEgressRule,
+		},
+	}
+	updates = append(updates, api.Update{
+		KVPair: model.KVPair{
+			Key:   model.PolicyKey{Name: "system-monitoring-egress"},
+			Value: monitoringPol,
+		},
+	})
+
+	return updates
+}
+
+// k8sPodName generates a realistic K8s pod name following the
+// <deployment>-<replicaset-hash>-<pod-hash> convention.
+func k8sPodName(deployment string, nsIdx, replicaIdx int) string {
+	// Deterministic but realistic-looking 9+5 char hex suffixes.
+	rsHash := fmt.Sprintf("%09x", uint32(nsIdx*7+3))[:9]
+	podHash := fmt.Sprintf("%05x", uint16(replicaIdx*13+nsIdx*17+5))[:5]
+	return fmt.Sprintf("%s-%s-%s", deployment, rsHash, podHash)
+}
+
+type podTemplate struct {
+	deployment string
+	replica    int
+	labels     map[string]string
+}
+
+var customerPodTemplates = []podTemplate{
+	{"frontend", 0, map[string]string{"role": "frontend", "app": "web"}},
+	{"frontend", 1, map[string]string{"role": "frontend", "app": "web"}},
+	{"backend", 0, map[string]string{"role": "backend", "app": "api"}},
+	{"backend", 1, map[string]string{"role": "backend", "app": "api"}},
+	{"database", 0, map[string]string{"role": "database", "app": "db"}},
+}
+
+// makeAllCustomerEndpoints creates all endpoints across customer and system
+// namespaces, assigning each pod to exactly one host. numLocalEps pods
+// (including localMonitoringPods monitoring pods) are placed on "localhost",
+// scattered across namespaces to simulate realistic K8s scheduling. The
+// remainder go to "remotehost". Returns (remote, local) slices.
+func makeAllCustomerEndpoints(numCustomers, numLocalEps int) (remote, local []api.Update) {
+	totalCustomerEps := numCustomers * podsPerCustomer
+	totalEps := totalCustomerEps + monitoringPods
+
+	// Reserve some local slots for monitoring pods.
+	numLocalCustomerEps := numLocalEps - localMonitoringPods
+	if numLocalCustomerEps < 0 {
+		numLocalCustomerEps = 0
+	}
+	if numLocalCustomerEps > totalCustomerEps {
+		numLocalCustomerEps = totalCustomerEps
+	}
+
+	// Determine stride for scattering local pods across all customer pods.
+	// Every stride-th customer pod lands on localhost.
+	stride := 1
+	if numLocalCustomerEps > 0 {
+		stride = totalCustomerEps / numLocalCustomerEps
+		if stride < 1 {
+			stride = 1
+		}
+	}
+
+	remote = make([]api.Update, 0, totalEps-numLocalEps)
+	local = make([]api.Update, 0, numLocalEps)
+
+	localCustomerCount := 0
+	epIdx := 0
+	for n := 0; n < numCustomers; n++ {
+		ns := fmt.Sprintf("customer-%d", n)
+		profID := nsProfilePrefix + ns
+		for _, t := range customerPodTemplates {
+			podName := k8sPodName(t.deployment, n, t.replica)
+			if localCustomerCount < numLocalCustomerEps && epIdx%stride == 0 {
+				local = append(local, makeCustomerWEP(
+					"localhost", ns, podName, profID, t.labels,
+				))
+				localCustomerCount++
+			} else {
+				remote = append(remote, makeCustomerWEP(
+					"remotehost", ns, podName, profID, t.labels,
+				))
+			}
+			epIdx++
+		}
+	}
+
+	// System namespace monitoring pods: first localMonitoringPods on
+	// localhost, remainder on remotehost.
+	for i := 0; i < monitoringPods; i++ {
+		podName := k8sPodName("prometheus", 0, i)
+		if i < localMonitoringPods {
+			local = append(local, makeCustomerWEP(
+				"localhost", systemNamespace, podName,
+				systemNSProfileName,
+				map[string]string{"role": "monitoring", "app": "prometheus"},
+			))
+		} else {
+			remote = append(remote, makeCustomerWEP(
+				"remotehost", systemNamespace, podName,
+				systemNSProfileName,
+				map[string]string{"role": "monitoring", "app": "prometheus"},
+			))
+		}
+	}
+
+	return remote, local
+}
+
+func makeCustomerWEP(host, ns, podName, profileID string, extraLabels map[string]string) api.Update {
+	labels := make(map[string]string, len(extraLabels)+1)
+	for k, v := range extraLabels {
+		labels[k] = v
+	}
+	labels["customer"] = ns
+
+	// Round-trip through JSON to make strings unique, matching real decoder behaviour.
+	buf, err := json.Marshal(labels)
+	if err != nil {
+		panic(err)
+	}
+	labels = nil
+	if err := json.Unmarshal(buf, &labels); err != nil {
+		panic(err)
+	}
+
+	return api.Update{
+		KVPair: model.KVPair{
+			Key: model.WorkloadEndpointKey{
+				Hostname:       host,
+				OrchestratorID: "k8s",
+				WorkloadID:     fmt.Sprintf("%s/%s", ns, podName),
+				EndpointID:     "eth0",
+			},
+			Value: &model.WorkloadEndpoint{
+				Labels:     uniquelabels.Make(labels),
+				IPv4Nets:   []calinet.IPNet{getNextIP()},
+				ProfileIDs: []string{profileID},
+			},
+		},
+	}
 }
