@@ -39,7 +39,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -250,13 +250,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),
 		reflect.TypeFor[model.ResourceListOptions](),
-		libapiv3.KindWorkloadEndpoint,
+		internalapi.KindWorkloadEndpoint,
 		resources.NewWorkloadEndpointClient(cs),
 	)
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),
 		reflect.TypeFor[model.ResourceListOptions](),
-		libapiv3.KindNode,
+		internalapi.KindNode,
 		resources.NewNodeClient(cs, ca.K8sUsePodCIDR),
 	)
 	c.registerResourceClient(
@@ -288,13 +288,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		c.registerResourceClient(
 			reflect.TypeFor[model.BlockAffinityKey](),
 			reflect.TypeFor[model.BlockAffinityListOptions](),
-			libapiv3.KindBlockAffinity,
+			internalapi.KindBlockAffinity,
 			resources.NewBlockAffinityClientV1(restClient, group),
 		)
 		c.registerResourceClient(
 			reflect.TypeFor[model.IPAMConfigKey](),
 			nil,
-			libapiv3.KindIPAMConfig,
+			internalapi.KindIPAMConfig,
 			resources.NewIPAMConfigClientV1(restClient, group),
 		)
 
@@ -303,13 +303,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		c.registerResourceClient(
 			reflect.TypeFor[model.BlockKey](),
 			reflect.TypeFor[model.BlockListOptions](),
-			libapiv3.KindIPAMBlock,
+			internalapi.KindIPAMBlock,
 			resources.NewIPAMBlockClient(restClient, group),
 		)
 		c.registerResourceClient(
 			reflect.TypeFor[model.IPAMHandleKey](),
 			reflect.TypeFor[model.IPAMHandleListOptions](),
-			libapiv3.KindIPAMHandle,
+			internalapi.KindIPAMHandle,
 			resources.NewIPAMHandleClient(restClient, group),
 		)
 	}
@@ -493,7 +493,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindIPAMConfiguration,
 		apiv3.KindBlockAffinity,
 		apiv3.KindBGPFilter,
-		libapiv3.KindIPAMConfig,
+		internalapi.KindIPAMConfig,
 	}
 
 	// Deletion can fail due to CAS conflicts if multiple resources are
@@ -618,11 +618,11 @@ func (c *KubeClient) Clean() error {
 	}
 
 	// Get a list of Nodes and remove all BGP configuration from the nodes.
-	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, ""); err != nil {
+	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, ""); err != nil {
 		log.Warning("Failed to list Nodes")
 	} else {
 		for _, nodeKvp := range nodes.KVPairs {
-			node := nodeKvp.Value.(*libapiv3.Node)
+			node := nodeKvp.Value.(*internalapi.Node)
 			node.Spec.BGP = nil
 			if _, err := c.Update(ctx, nodeKvp); err != nil {
 				log.WithField("Node", node.Name).Warning("Failed to remove Calico config from node")

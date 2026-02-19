@@ -18,12 +18,12 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // makeNode creates an api.Node with some BGPSpec info populated.
-func makeNode(ipv4 string, ipv6 string) *libapi.Node {
+func makeNode(ipv4 string, ipv6 string) *internalapi.Node {
 	ip4, ip4net, _ := net.ParseCIDR(ipv4)
 	ip4net.IP = ip4.IP
 
@@ -37,13 +37,13 @@ func makeNode(ipv4 string, ipv6 string) *libapi.Node {
 		ip6Addr = ip6net.String()
 	}
 
-	n := &libapi.Node{
-		Spec: libapi.NodeSpec{
-			BGP: &libapi.NodeBGPSpec{
+	n := &internalapi.Node{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: ip4net.String(),
 				IPv6Address: ip6Addr,
 			},
-			Wireguard: &libapi.NodeWireguardSpec{},
+			Wireguard: &internalapi.NodeWireguardSpec{},
 		},
 	}
 	return n
