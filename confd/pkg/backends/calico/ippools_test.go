@@ -285,7 +285,6 @@ func Test_processIPPoolsV6(t *testing.T) {
 	}
 }
 
-// func ippoolTestCasesToKVPairs(t *testing.T, tcs []ippoolTestCase, ipVersion int) memkv.KVPairs {
 func ippoolTestCasesToKVPairs(t *testing.T, tcs []ippoolTestCase, ipVersion int) map[string]string {
 	cache := map[string]string{}
 	for _, tc := range tcs {

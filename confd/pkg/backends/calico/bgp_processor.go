@@ -101,7 +101,7 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 
 	// Process ippools.
 	if err := c.processIPPools(config, ipVersion); err != nil {
-		logc.WithError(err).Warn("Failed to ippools")
+		logc.WithError(err).Warn("Failed to process ippools")
 		return nil, err
 	}
 	logc.WithFields(log.Fields{
@@ -851,6 +851,10 @@ func (c *client) processIPPool(
 		}
 		action = "accept"
 	default:
+		log.WithFields(log.Fields{
+			"ippool":    ippool.CIDR,
+			"ipVersion": ipVersion,
+		}).Error("Invalid ippool")
 		return ""
 	}
 
