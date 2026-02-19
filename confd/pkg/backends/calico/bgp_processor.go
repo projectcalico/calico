@@ -747,17 +747,17 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 			continue
 		}
 
-		statement := processIPPool(&ippool, false, "", "reject", ipVersion)
+		statement := c.processIPPool(&ippool, false, "reject", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
-		statement = processIPPool(&ippool, false, "", "accept", ipVersion)
+		statement = c.processIPPool(&ippool, false, "accept", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
-		statement = processIPPool(&ippool, true, "", "", ipVersion)
+		statement = c.processIPPool(&ippool, true, "", ipVersion)
 		if len(statement) != 0 {
 			config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 		}
@@ -771,10 +771,9 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	return nil
 }
 
-func processIPPool(
+func (c *client) processIPPool(
 	ippool *model.IPPool,
 	forProgrammingKernel bool,
-	localSubnet string,
 	filterAction string,
 	ipVersion int,
 ) string {
@@ -797,10 +796,13 @@ func processIPPool(
 	case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
 		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
 		// IPIP encapsulation or No-Encap.
-		if forProgrammingKernel && ipVersion == 4 && len(localSubnet) != 0 {
-			// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
-			// our fork of BIRD.
-			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+		if forProgrammingKernel && ipVersion == 4 {
+			localSubnet := c.localSubnet(ipVersion)
+			if len(localSubnet) != 0 {
+				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+				// our fork of BIRD.
+				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+			}
 		}
 		action = "accept"
 	default:
@@ -812,6 +814,21 @@ func processIPPool(
 		return ""
 	}
 	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
+}
+
+// {{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}
+func (c *client) localSubnet(ipVersion int) string {
+	key := fmt.Sprintf("/calico/bgp/v1/host/%s/network_v%d", NodeName, ipVersion)
+	logCtx := log.WithFields(map[string]any{
+		"ipVersion": ipVersion,
+		"path":      key,
+	})
+	if subnet, err := c.GetValue(key); err != nil {
+		logCtx.WithError(err).Debug("Failed to get host subnet")
+		return ""
+	} else {
+		return subnet
+	}
 }
 
 func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSubnet string) string {
