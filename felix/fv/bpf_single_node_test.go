@@ -39,7 +39,7 @@ import (
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -49,7 +49,7 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 		var (
 			hostW   *workload.Workload
 			w       [2]*workload.Workload
-			wepCopy [2]*libapi.WorkloadEndpoint
+			wepCopy [2]*internalapi.WorkloadEndpoint
 		)
 
 		if !s.testOpts.connTimeEnabled {
