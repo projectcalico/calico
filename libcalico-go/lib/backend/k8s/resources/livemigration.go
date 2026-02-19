@@ -21,11 +21,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kwatch "k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/dynamic"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+	kubevirtclient "kubevirt.io/client-go/kubevirt/typed/core/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -33,21 +32,15 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-var vmimGVR = schema.GroupVersionResource{
-	Group:    "kubevirt.io",
-	Version:  "v1",
-	Resource: "virtualmachineinstancemigrations",
-}
-
-func NewLiveMigrationClient(dynClient dynamic.Interface) K8sResourceClient {
-	return &LiveMigrationClient{dynClient: dynClient}
+func NewLiveMigrationClient(kvClient kubevirtclient.KubevirtV1Interface) K8sResourceClient {
+	return &LiveMigrationClient{kvClient: kvClient}
 }
 
 // LiveMigrationClient implements the K8sResourceClient interface for LiveMigration
 // resources. LiveMigration is backed by KubeVirt VirtualMachineInstanceMigration
 // resources in the Kubernetes datastore.
 type LiveMigrationClient struct {
-	dynClient dynamic.Interface
+	kvClient kubevirtclient.KubevirtV1Interface
 }
 
 func (c *LiveMigrationClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -84,14 +77,14 @@ func (c *LiveMigrationClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) 
 
 func (c *LiveMigrationClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	k := key.(model.ResourceKey)
-	u, err := c.dynClient.Resource(vmimGVR).Namespace(k.Namespace).Get(ctx, k.Name, metav1.GetOptions{ResourceVersion: revision})
+	vmim, err := c.kvClient.VirtualMachineInstanceMigrations(k.Namespace).Get(ctx, k.Name, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
 	}
-	if !vmimShouldEmitLiveMigration(u) {
+	if !vmimShouldEmitLiveMigration(vmim) {
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: key}
 	}
-	return convertVMIMToLiveMigration(u)
+	return convertVMIMToLiveMigration(vmim)
 }
 
 func (c *LiveMigrationClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
@@ -104,7 +97,7 @@ func (c *LiveMigrationClient) List(ctx context.Context, list model.ListInterface
 		opts.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
 	}
 
-	result, err := c.dynClient.Resource(vmimGVR).Namespace(l.Namespace).List(ctx, opts)
+	result, err := c.kvClient.VirtualMachineInstanceMigrations(l.Namespace).List(ctx, opts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
@@ -116,7 +109,7 @@ func (c *LiveMigrationClient) List(ctx context.Context, list model.ListInterface
 		}
 		kvp, err := convertVMIMToLiveMigration(&result.Items[i])
 		if err != nil {
-			logContext.WithError(err).WithField("name", result.Items[i].GetName()).Warning("unable to process VMIM resource, skipping")
+			logContext.WithError(err).WithField("name", result.Items[i].Name).Warning("unable to process VMIM resource, skipping")
 			continue
 		}
 		kvps = append(kvps, kvp)
@@ -124,14 +117,14 @@ func (c *LiveMigrationClient) List(ctx context.Context, list model.ListInterface
 
 	return &model.KVPairList{
 		KVPairs:  kvps,
-		Revision: result.GetResourceVersion(),
+		Revision: result.ResourceVersion,
 	}, nil
 }
 
 func (c *LiveMigrationClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	rlo := list.(model.ResourceListOptions)
 	k8sOpts := watchOptionsToK8sListOptions(options)
-	k8sWatch, err := c.dynClient.Resource(vmimGVR).Namespace(rlo.Namespace).Watch(ctx, k8sOpts)
+	k8sWatch, err := c.kvClient.VirtualMachineInstanceMigrations(rlo.Namespace).Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
@@ -145,22 +138,19 @@ func (c *LiveMigrationClient) EnsureInitialized() error {
 
 // vmimShouldEmitLiveMigration returns true if the VMIM is in a phase that
 // warrants emitting a LiveMigration resource and has the required fields set.
-func vmimShouldEmitLiveMigration(u *unstructured.Unstructured) bool {
-	phase, _, _ := unstructured.NestedString(u.Object, "status", "phase")
-	switch phase {
-	case "TargetReady", "Running", "Failed":
+func vmimShouldEmitLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigration) bool {
+	switch vmim.Status.Phase {
+	case kubevirtv1.MigrationTargetReady, kubevirtv1.MigrationRunning, kubevirtv1.MigrationFailed:
 	default:
 		return false
 	}
-	vmiName, _, _ := unstructured.NestedString(u.Object, "spec", "vmiName")
-	if vmiName == "" {
+	if vmim.Spec.VMIName == "" {
 		return false
 	}
-	sourcePod, _, _ := unstructured.NestedString(u.Object, "status", "migrationState", "sourcePod")
-	if sourcePod == "" {
+	if vmim.Status.MigrationState == nil || vmim.Status.MigrationState.SourcePod == "" {
 		return false
 	}
-	if string(u.GetUID()) == "" {
+	if vmim.UID == "" {
 		return false
 	}
 	return true
@@ -168,65 +158,52 @@ func vmimShouldEmitLiveMigration(u *unstructured.Unstructured) bool {
 
 // convertVMIMToLiveMigrationSpec extracts the LiveMigrationSpec from a VMIM.
 // The caller must ensure the VMIM has the required fields (see vmimShouldEmitLiveMigration).
-func convertVMIMToLiveMigrationSpec(u *unstructured.Unstructured) libapiv3.LiveMigrationSpec {
-	vmiName, _, _ := unstructured.NestedString(u.Object, "spec", "vmiName")
-	migrationUID := string(u.GetUID())
-	sourcePod, _, _ := unstructured.NestedString(u.Object, "status", "migrationState", "sourcePod")
+func convertVMIMToLiveMigrationSpec(vmim *kubevirtv1.VirtualMachineInstanceMigration) libapiv3.LiveMigrationSpec {
 	return libapiv3.LiveMigrationSpec{
 		DestinationWorkloadEndpointSelector: fmt.Sprintf(
 			"kubevirt.io/vmi-name == '%s' && kubevirt.io/migrationJobUID == '%s'",
-			vmiName, migrationUID,
+			vmim.Spec.VMIName, string(vmim.UID),
 		),
 		SourceWorkloadEndpoint: types.NamespacedName{
-			Name:      sourcePod,
-			Namespace: u.GetNamespace(),
+			Name:      vmim.Status.MigrationState.SourcePod,
+			Namespace: vmim.Namespace,
 		},
 	}
 }
 
 // convertVMIMToLiveMigration converts a KubeVirt VirtualMachineInstanceMigration
-// (represented as an *unstructured.Unstructured) to a Calico LiveMigration KVPair.
-func convertVMIMToLiveMigration(u *unstructured.Unstructured) (*model.KVPair, error) {
+// to a Calico LiveMigration KVPair.
+func convertVMIMToLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigration) (*model.KVPair, error) {
 	lm := libapiv3.NewLiveMigration()
-	lm.Name = u.GetName()
-	lm.Namespace = u.GetNamespace()
-	lm.ResourceVersion = u.GetResourceVersion()
-	lm.CreationTimestamp = u.GetCreationTimestamp()
-	lm.UID = u.GetUID()
-	lm.Labels = u.GetLabels()
-	lm.Annotations = u.GetAnnotations()
-	lm.Spec = convertVMIMToLiveMigrationSpec(u)
+	lm.Name = vmim.Name
+	lm.Namespace = vmim.Namespace
+	lm.ResourceVersion = vmim.ResourceVersion
+	lm.CreationTimestamp = vmim.CreationTimestamp
+	lm.UID = vmim.UID
+	lm.Labels = vmim.Labels
+	lm.Annotations = vmim.Annotations
+	lm.Spec = convertVMIMToLiveMigrationSpec(vmim)
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Kind:      libapiv3.KindLiveMigration,
-			Namespace: u.GetNamespace(),
-			Name:      u.GetName(),
+			Namespace: vmim.Namespace,
+			Name:      vmim.Name,
 		},
 		Value:    lm,
-		Revision: u.GetResourceVersion(),
+		Revision: vmim.ResourceVersion,
 	}, nil
 }
 
 // convertVMIMResourceToLiveMigration is a ConvertK8sResourceToKVPair adapter
-// that unwraps the unstructuredResource wrapper used by the watch adapter.
+// for the watch converter.
 func convertVMIMResourceToLiveMigration(r Resource) (*model.KVPair, error) {
-	return convertVMIMToLiveMigration(r.(*unstructuredResource).Unstructured)
+	return convertVMIMToLiveMigration(r.(*kubevirtv1.VirtualMachineInstanceMigration))
 }
 
-// unstructuredResource wraps *unstructured.Unstructured to implement the
-// Resource interface (adding ObjectMetaAccessor).
-type unstructuredResource struct {
-	*unstructured.Unstructured
-}
-
-func (u *unstructuredResource) GetObjectMeta() metav1.Object {
-	return u.Unstructured
-}
-
-// vmimWatchAdapter wraps a kwatch.Interface from the dynamic client and
-// performs phase filtering and spec-change deduplication for VMIM→LiveMigration
-// conversion. It tracks the last-emitted spec for each active VMIM and
-// synthesises Added/Deleted events on phase transitions.
+// vmimWatchAdapter wraps a kwatch.Interface and performs phase filtering and
+// spec-change deduplication for VMIM→LiveMigration conversion. It tracks the
+// last-emitted spec for each active VMIM and synthesises Added/Deleted events
+// on phase transitions.
 type vmimWatchAdapter struct {
 	inner  kwatch.Interface
 	ch     chan kwatch.Event
@@ -254,45 +231,44 @@ func (w *vmimWatchAdapter) ResultChan() <-chan kwatch.Event {
 func (w *vmimWatchAdapter) run() {
 	defer close(w.ch)
 	for event := range w.inner.ResultChan() {
-		u, ok := event.Object.(*unstructured.Unstructured)
+		vmim, ok := event.Object.(*kubevirtv1.VirtualMachineInstanceMigration)
 		if !ok {
 			// Pass through Bookmark/Error events unchanged.
 			w.ch <- event
 			continue
 		}
-		key := u.GetNamespace() + "/" + u.GetName()
-		wrapped := &unstructuredResource{Unstructured: u}
+		key := vmim.Namespace + "/" + vmim.Name
 
 		switch event.Type {
 		case kwatch.Added, kwatch.Modified:
-			matches := vmimShouldEmitLiveMigration(u)
+			matches := vmimShouldEmitLiveMigration(vmim)
 			_, wasActive := w.active[key]
 
 			if matches {
-				spec := convertVMIMToLiveMigrationSpec(u)
+				spec := convertVMIMToLiveMigrationSpec(vmim)
 				if !wasActive {
 					w.active[key] = spec
-					w.ch <- kwatch.Event{Type: kwatch.Added, Object: wrapped}
+					w.ch <- kwatch.Event{Type: kwatch.Added, Object: vmim}
 				} else if !reflect.DeepEqual(spec, w.active[key]) {
 					w.active[key] = spec
-					w.ch <- kwatch.Event{Type: kwatch.Modified, Object: wrapped}
+					w.ch <- kwatch.Event{Type: kwatch.Modified, Object: vmim}
 				}
 				// else: unchanged spec → no-op
 			} else if wasActive {
 				delete(w.active, key)
-				w.ch <- kwatch.Event{Type: kwatch.Deleted, Object: wrapped}
+				w.ch <- kwatch.Event{Type: kwatch.Deleted, Object: vmim}
 			}
 			// else: does not match and was not active → no-op
 
 		case kwatch.Deleted:
 			if _, wasActive := w.active[key]; wasActive {
 				delete(w.active, key)
-				w.ch <- kwatch.Event{Type: kwatch.Deleted, Object: wrapped}
+				w.ch <- kwatch.Event{Type: kwatch.Deleted, Object: vmim}
 			}
 			// else: was not active → no-op
 
 		default:
-			w.ch <- kwatch.Event{Type: event.Type, Object: wrapped}
+			w.ch <- kwatch.Event{Type: event.Type, Object: vmim}
 		}
 	}
 }

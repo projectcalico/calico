@@ -24,11 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/dynamic/fake"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+	kubevirtfake "kubevirt.io/client-go/kubevirt/fake"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -37,46 +35,27 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-// vmimGVR duplicated from the resources package (unexported).
-var vmimGVR = schema.GroupVersionResource{
-	Group:    "kubevirt.io",
-	Version:  "v1",
-	Resource: "virtualmachineinstancemigrations",
-}
-
-var gvrToListKind = map[schema.GroupVersionResource]string{
-	vmimGVR: "VirtualMachineInstanceMigrationList",
-}
-
-func newVMIMUnstructured(namespace, name, resourceVersion, phase, vmiName, sourcePod, uid string) *unstructured.Unstructured {
-	obj := map[string]interface{}{
-		"apiVersion": "kubevirt.io/v1",
-		"kind":       "VirtualMachineInstanceMigration",
-		"metadata": map[string]interface{}{
-			"namespace":       namespace,
-			"name":            name,
-			"resourceVersion": resourceVersion,
-			"uid":             uid,
+func newVMIM(namespace, name, resourceVersion string, phase kubevirtv1.VirtualMachineInstanceMigrationPhase, vmiName, sourcePod, uid string) *kubevirtv1.VirtualMachineInstanceMigration {
+	vmim := &kubevirtv1.VirtualMachineInstanceMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       namespace,
+			Name:            name,
+			ResourceVersion: resourceVersion,
+			UID:             types.UID(uid),
+		},
+		Spec: kubevirtv1.VirtualMachineInstanceMigrationSpec{
+			VMIName: vmiName,
+		},
+		Status: kubevirtv1.VirtualMachineInstanceMigrationStatus{
+			Phase: phase,
 		},
 	}
-	if vmiName != "" {
-		obj["spec"] = map[string]interface{}{
-			"vmiName": vmiName,
+	if sourcePod != "" {
+		vmim.Status.MigrationState = &kubevirtv1.VirtualMachineInstanceMigrationState{
+			SourcePod: sourcePod,
 		}
 	}
-	if phase != "" || sourcePod != "" {
-		status := map[string]interface{}{}
-		if phase != "" {
-			status["phase"] = phase
-		}
-		if sourcePod != "" {
-			status["migrationState"] = map[string]interface{}{
-				"sourcePod": sourcePod,
-			}
-		}
-		obj["status"] = status
-	}
-	return &unstructured.Unstructured{Object: obj}
+	return vmim
 }
 
 var _ = Describe("LiveMigrationClient", func() {
@@ -84,12 +63,10 @@ var _ = Describe("LiveMigrationClient", func() {
 
 	Describe("Get", func() {
 		It("converts a matching VMIM to a LiveMigration with spec populated", func() {
-			vmim := newVMIMUnstructured("test-ns", "vmim-1", "100", "Running", "my-vmi", "source-pod-abc", "uid-123")
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind, vmim,
-			)
+			vmim := newVMIM("test-ns", "vmim-1", "100", kubevirtv1.MigrationRunning, "my-vmi", "source-pod-abc", "uid-123")
+			kvFake := kubevirtfake.NewSimpleClientset(vmim)
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvp, err := client.Get(ctx, model.ResourceKey{
 				Kind:      libapiv3.KindLiveMigration,
 				Namespace: "test-ns",
@@ -122,11 +99,9 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("returns an error when the VMIM does not exist", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
+			kvFake := kubevirtfake.NewSimpleClientset()
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			_, err := client.Get(ctx, model.ResourceKey{
 				Kind:      libapiv3.KindLiveMigration,
 				Namespace: "test-ns",
@@ -137,12 +112,10 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("returns not-found when VMIM is in a non-matching phase", func() {
-			vmim := newVMIMUnstructured("test-ns", "vmim-done", "100", "Succeeded", "my-vmi", "source-pod-abc", "uid-123")
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind, vmim,
-			)
+			vmim := newVMIM("test-ns", "vmim-done", "100", kubevirtv1.MigrationSucceeded, "my-vmi", "source-pod-abc", "uid-123")
+			kvFake := kubevirtfake.NewSimpleClientset(vmim)
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			_, err := client.Get(ctx, model.ResourceKey{
 				Kind:      libapiv3.KindLiveMigration,
 				Namespace: "test-ns",
@@ -154,12 +127,10 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("returns not-found when VMIM is in matching phase but missing sourcePod", func() {
-			vmim := newVMIMUnstructured("test-ns", "vmim-no-source", "100", "Running", "my-vmi", "", "uid-123")
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind, vmim,
-			)
+			vmim := newVMIM("test-ns", "vmim-no-source", "100", kubevirtv1.MigrationRunning, "my-vmi", "", "uid-123")
+			kvFake := kubevirtfake.NewSimpleClientset(vmim)
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			_, err := client.Get(ctx, model.ResourceKey{
 				Kind:      libapiv3.KindLiveMigration,
 				Namespace: "test-ns",
@@ -173,13 +144,11 @@ var _ = Describe("LiveMigrationClient", func() {
 
 	Describe("List", func() {
 		It("lists matching VMIMs and converts them to LiveMigrations with spec", func() {
-			vmim1 := newVMIMUnstructured("test-ns", "vmim-1", "100", "Running", "vmi-a", "src-pod-1", "uid-1")
-			vmim2 := newVMIMUnstructured("test-ns", "vmim-2", "101", "TargetReady", "vmi-b", "src-pod-2", "uid-2")
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind, vmim1, vmim2,
-			)
+			vmim1 := newVMIM("test-ns", "vmim-1", "100", kubevirtv1.MigrationRunning, "vmi-a", "src-pod-1", "uid-1")
+			vmim2 := newVMIM("test-ns", "vmim-2", "101", kubevirtv1.MigrationTargetReady, "vmi-b", "src-pod-2", "uid-2")
+			kvFake := kubevirtfake.NewSimpleClientset(vmim1, vmim2)
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvps, err := client.List(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
 				Kind:      libapiv3.KindLiveMigration,
@@ -200,13 +169,11 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("lists VMIMs across all namespaces", func() {
-			vmim1 := newVMIMUnstructured("ns-a", "vmim-1", "100", "Running", "vmi-a", "src-pod-1", "uid-1")
-			vmim2 := newVMIMUnstructured("ns-b", "vmim-2", "101", "Failed", "vmi-b", "src-pod-2", "uid-2")
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind, vmim1, vmim2,
-			)
+			vmim1 := newVMIM("ns-a", "vmim-1", "100", kubevirtv1.MigrationRunning, "vmi-a", "src-pod-1", "uid-1")
+			vmim2 := newVMIM("ns-b", "vmim-2", "101", kubevirtv1.MigrationFailed, "vmi-b", "src-pod-2", "uid-2")
+			kvFake := kubevirtfake.NewSimpleClientset(vmim1, vmim2)
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvps, err := client.List(ctx, model.ResourceListOptions{
 				Kind: libapiv3.KindLiveMigration,
 			}, "")
@@ -216,11 +183,9 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("returns empty list when no VMIMs exist", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
+			kvFake := kubevirtfake.NewSimpleClientset()
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvps, err := client.List(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
 				Kind:      libapiv3.KindLiveMigration,
@@ -231,14 +196,12 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("filters out non-matching VMIMs", func() {
-			matching := newVMIMUnstructured("test-ns", "vmim-running", "100", "Running", "vmi-a", "src-pod-1", "uid-1")
-			nonMatching := newVMIMUnstructured("test-ns", "vmim-succeeded", "101", "Succeeded", "vmi-b", "src-pod-2", "uid-2")
-			noSourcePod := newVMIMUnstructured("test-ns", "vmim-no-src", "102", "Running", "vmi-c", "", "uid-3")
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind, matching, nonMatching, noSourcePod,
-			)
+			matching := newVMIM("test-ns", "vmim-running", "100", kubevirtv1.MigrationRunning, "vmi-a", "src-pod-1", "uid-1")
+			nonMatching := newVMIM("test-ns", "vmim-succeeded", "101", kubevirtv1.MigrationSucceeded, "vmi-b", "src-pod-2", "uid-2")
+			noSourcePod := newVMIM("test-ns", "vmim-no-src", "102", kubevirtv1.MigrationRunning, "vmi-c", "", "uid-3")
+			kvFake := kubevirtfake.NewSimpleClientset(matching, nonMatching, noSourcePod)
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvps, err := client.List(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
 				Kind:      libapiv3.KindLiveMigration,
@@ -253,11 +216,9 @@ var _ = Describe("LiveMigrationClient", func() {
 
 	Describe("Watch", func() {
 		It("receives watch events for matching VMIM resources as LiveMigrations", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
+			kvFake := kubevirtfake.NewSimpleClientset()
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			w, err := client.Watch(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
 				Kind:      libapiv3.KindLiveMigration,
@@ -284,8 +245,8 @@ var _ = Describe("LiveMigrationClient", func() {
 				}
 			}()
 
-			vmim := newVMIMUnstructured("test-ns", "vmim-watch-1", "200", "Running", "vmi-w", "src-pod-w", "uid-w")
-			_, err = dynClient.Resource(vmimGVR).Namespace("test-ns").Create(ctx, vmim, metav1.CreateOptions{})
+			vmim := newVMIM("test-ns", "vmim-watch-1", "200", kubevirtv1.MigrationRunning, "vmi-w", "src-pod-w", "uid-w")
+			_, err = kvFake.KubevirtV1().VirtualMachineInstanceMigrations("test-ns").Create(ctx, vmim, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			wg.Wait()
@@ -293,11 +254,9 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("emits Deleted event when VMIM transitions to non-matching phase", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
+			kvFake := kubevirtfake.NewSimpleClientset()
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			w, err := client.Watch(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
 				Kind:      libapiv3.KindLiveMigration,
@@ -305,8 +264,8 @@ var _ = Describe("LiveMigrationClient", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a matching VMIM.
-			vmim := newVMIMUnstructured("test-ns", "vmim-trans", "300", "Running", "vmi-t", "src-pod-t", "uid-t")
-			_, err = dynClient.Resource(vmimGVR).Namespace("test-ns").Create(ctx, vmim, metav1.CreateOptions{})
+			vmim := newVMIM("test-ns", "vmim-trans", "300", kubevirtv1.MigrationRunning, "vmi-t", "src-pod-t", "uid-t")
+			_, err = kvFake.KubevirtV1().VirtualMachineInstanceMigrations("test-ns").Create(ctx, vmim, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			timer := time.NewTimer(2 * time.Second)
@@ -324,8 +283,8 @@ var _ = Describe("LiveMigrationClient", func() {
 			}
 
 			// Update to non-matching phase (Succeeded).
-			vmimUpdated := newVMIMUnstructured("test-ns", "vmim-trans", "301", "Succeeded", "vmi-t", "src-pod-t", "uid-t")
-			_, err = dynClient.Resource(vmimGVR).Namespace("test-ns").Update(ctx, vmimUpdated, metav1.UpdateOptions{})
+			vmimUpdated := newVMIM("test-ns", "vmim-trans", "301", kubevirtv1.MigrationSucceeded, "vmi-t", "src-pod-t", "uid-t")
+			_, err = kvFake.KubevirtV1().VirtualMachineInstanceMigrations("test-ns").Update(ctx, vmimUpdated, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Second event should be Deleted.
@@ -341,11 +300,9 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("does not emit events for non-matching VMIMs", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
+			kvFake := kubevirtfake.NewSimpleClientset()
 
-			client := resources.NewLiveMigrationClient(dynClient)
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			w, err := client.Watch(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
 				Kind:      libapiv3.KindLiveMigration,
@@ -353,8 +310,8 @@ var _ = Describe("LiveMigrationClient", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a non-matching VMIM (Scheduling phase).
-			vmim := newVMIMUnstructured("test-ns", "vmim-sched", "400", "Scheduling", "vmi-s", "src-pod-s", "uid-s")
-			_, err = dynClient.Resource(vmimGVR).Namespace("test-ns").Create(ctx, vmim, metav1.CreateOptions{})
+			vmim := newVMIM("test-ns", "vmim-sched", "400", kubevirtv1.MigrationScheduling, "vmi-s", "src-pod-s", "uid-s")
+			_, err = kvFake.KubevirtV1().VirtualMachineInstanceMigrations("test-ns").Create(ctx, vmim, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should not receive any event.
@@ -373,10 +330,8 @@ var _ = Describe("LiveMigrationClient", func() {
 
 	Describe("Read-only stubs", func() {
 		It("Create returns ErrorOperationNotSupported", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
-			client := resources.NewLiveMigrationClient(dynClient)
+			kvFake := kubevirtfake.NewSimpleClientset()
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 
 			kvp := &model.KVPair{
 				Key: model.ResourceKey{
@@ -394,10 +349,8 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("Update returns ErrorOperationNotSupported", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
-			client := resources.NewLiveMigrationClient(dynClient)
+			kvFake := kubevirtfake.NewSimpleClientset()
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 
 			kvp := &model.KVPair{
 				Key: model.ResourceKey{
@@ -415,10 +368,8 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("Delete returns ErrorOperationNotSupported", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
-			client := resources.NewLiveMigrationClient(dynClient)
+			kvFake := kubevirtfake.NewSimpleClientset()
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 
 			_, err := client.Delete(ctx, model.ResourceKey{
 				Kind:      libapiv3.KindLiveMigration,
@@ -431,10 +382,8 @@ var _ = Describe("LiveMigrationClient", func() {
 		})
 
 		It("DeleteKVP returns ErrorOperationNotSupported", func() {
-			dynClient := fake.NewSimpleDynamicClientWithCustomListKinds(
-				runtime.NewScheme(), gvrToListKind,
-			)
-			client := resources.NewLiveMigrationClient(dynClient)
+			kvFake := kubevirtfake.NewSimpleClientset()
+			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 
 			kvp := &model.KVPair{
 				Key: model.ResourceKey{

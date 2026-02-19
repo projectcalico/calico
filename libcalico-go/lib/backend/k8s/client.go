@@ -30,12 +30,12 @@ import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	kubevirtclient "kubevirt.io/client-go/kubevirt/typed/core/v1"
 	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -235,15 +235,15 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 
 	// These resources are backed directly by core Kubernetes APIs or third-party
 	// APIs, and do not use CRDs.
-	dynClient, err := dynamic.NewForConfig(config)
+	kvClient, err := kubevirtclient.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build dynamic client: %v", err)
+		return nil, fmt.Errorf("failed to build KubeVirt client: %v", err)
 	}
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		libapiv3.KindLiveMigration,
-		resources.NewLiveMigrationClient(dynClient),
+		resources.NewLiveMigrationClient(kvClient),
 	)
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),
