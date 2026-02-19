@@ -39,6 +39,13 @@ func GetInterfaces(getSystemInterfaces func() ([]net.Interface, error), includeR
 		return nil, err
 	}
 
+	// Single bulk address retrieval for all interfaces (Linux optimization)
+	addrsByIndex, err := getAllInterfaceAddrs()
+	if err != nil {
+		log.WithError(err).Debug("Failed to bulk-fetch addresses, falling back to per-interface queries")
+		addrsByIndex = nil // Fall back to i.Addrs() in convertInterface
+	}
+
 	var filteredIfaces []Interface
 	var includeRegexp *regexp.Regexp
 	var excludeRegexp *regexp.Regexp
@@ -65,7 +72,14 @@ func GetInterfaces(getSystemInterfaces func() ([]net.Interface, error), includeR
 		include := (includeRegexp == nil) || includeRegexp.MatchString(iface.Name)
 		exclude := (excludeRegexp != nil) && excludeRegexp.MatchString(iface.Name)
 		if include && !exclude {
-			if i, err := convertInterface(&iface, versions); err == nil {
+			// Look up pre-fetched addresses (or nil for fallback)
+			var addrs []net.Addr
+			if addrsByIndex != nil {
+				addrs = addrsByIndex[iface.Index]
+			}
+
+			// Convert with pre-fetched or fallback addresses
+			if i, err := convertInterface(&iface, addrs, versions); err == nil {
 				filteredIfaces = append(filteredIfaces, *i)
 			}
 		}
@@ -75,12 +89,19 @@ func GetInterfaces(getSystemInterfaces func() ([]net.Interface, error), includeR
 
 // convertInterface converts a net.Interface to our Interface type (which has
 // converted address types).
-func convertInterface(i *net.Interface, versions []int) (*Interface, error) {
+// If addrs is non-nil, uses them instead of calling i.Addrs() (optimization).
+// If addrs is nil, falls back to i.Addrs() (non-Linux or error case).
+func convertInterface(i *net.Interface, addrs []net.Addr, versions []int) (*Interface, error) {
 	log.WithField("Interface", i.Name).Debug("Querying interface addresses")
-	addrs, err := i.Addrs()
-	if err != nil {
-		log.Warnf("Cannot get interface address(es): %v", err)
-		return nil, err
+
+	var err error
+	if addrs == nil {
+		// Fallback to per-interface query
+		addrs, err = i.Addrs()
+		if err != nil {
+			log.Warnf("Cannot get interface address(es): %v", err)
+			return nil, err
+		}
 	}
 
 	iface := &Interface{Name: i.Name}
