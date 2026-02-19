@@ -79,7 +79,7 @@ Dual-stack support uses separate IPv4/IPv6 header variants and `#ifdef IPVER6` f
 - `bpf-gpl/bin/` — compiled eBPF `.o` object files
 - `bpf-gpl/libbpf/` — libbpf dependency (kernel headers, BPF helpers)
 - `bpf-gpl/ut/` — C-level unit test programs (ICMP, parsing, NAT, perf)
-- `bpf-gpl/include/` — additional/arch-specific headers
+- `bpf-gpl/libbpf/include/uapi/` — kernel UAPI headers used by BPF programs
 
 ### Go User-Space Code (`bpf/`)
 
