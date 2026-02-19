@@ -104,7 +104,11 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		logc.WithError(err).Warn("Failed to ippools")
 		return nil, err
 	}
-	logc.Debugf("Processed community rules: found %d rules", len(config.Communities))
+	logc.WithFields(log.Fields{
+		"numOfFiltersForProgrammingKernel": len(config.KernelFilterForIPPools),
+		"numOfRejectedFiltersForBGPExport": len(config.BGPExportFilterForDisabledIPPools),
+		"numOfAcceptedFiltersForBGPExport": len(config.BGPExportFilterForEnabledIPPools),
+	}).Debug("Processed ippools")
 
 	// Update cache with write lock
 	configCacheMutex.Lock()
@@ -736,10 +740,11 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 
 	kvPairs, err := c.GetValues([]string{poolKey})
 	if err != nil {
-		logCtx.WithError(err).Debug("No peers found or error retrieving them")
+		logCtx.WithError(err).Debug("No ippool found or error retrieving them")
 		return nil
 	}
 
+	// In IPv6, we only need to include statements with "reject" action, since we include a default "accept" at the end.
 	var filterActionForKernel string
 	if ipVersion == 6 {
 		filterActionForKernel = "reject"
@@ -748,20 +753,23 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
-			logCtx.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
+			logCtx.WithError(err).Warnf("Failed to unmarshal ippool data for key %s", key)
 			continue
 		}
 
+		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
 		statement := c.processIPPool(&ippool, false, "reject", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
+		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
 		statement = c.processIPPool(&ippool, false, "accept", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
+		// Generate statements for kernel programming filter.
 		statement = c.processIPPool(&ippool, true, filterActionForKernel, ipVersion)
 		if len(statement) != 0 {
 			config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
@@ -776,6 +784,35 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	return nil
 }
 
+// This function generates BIRD statements for an IPPool to be used as BIRD filters based on the following input:
+//   - ippool: IPPool resource.
+//   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
+//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
+//   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
+//     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
+//     "accept", "reject", and "" (no filtering).
+//   - version: the statement ip family.
+//
+// As an example, For the following sample IPPool resource:
+//
+// apiVersion: projectcalico.org/v3
+// kind: IPPool
+// metadata:
+//
+//	name: my.ippool-1
+//
+// spec:
+//
+//	cidr: 10.1.0.0/16
+//	ipipMode: Always
+//
+// this function generates the following statement for programming routes to kernel:
+//
+//	if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }
+//
+// and the following statement for exporting to BGP peers:
+//
+//	if (net ~ 10.10.0.0/16) then { accept; }
 func (c *client) processIPPool(
 	ippool *model.IPPool,
 	forProgrammingKernel bool,
@@ -823,7 +860,6 @@ func (c *client) processIPPool(
 	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
 }
 
-// {{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}
 func (c *client) localSubnet(ipVersion int) string {
 	key := fmt.Sprintf("/calico/bgp/v1/host/%s/network_v%d", NodeName, ipVersion)
 	logCtx := log.WithFields(map[string]any{
@@ -831,7 +867,7 @@ func (c *client) localSubnet(ipVersion int) string {
 		"path":      key,
 	})
 	if subnet, err := c.GetValue(key); err != nil {
-		logCtx.WithError(err).Debug("pepper Failed to get host subnet")
+		logCtx.WithError(err).Debug("Failed to get local host subnet")
 		return ""
 	} else {
 		return subnet
