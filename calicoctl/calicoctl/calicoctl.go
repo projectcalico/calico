@@ -48,6 +48,7 @@ func main() {
     version      Display the version of this binary.
     datastore    Calico datastore management.
     cluster      Access cluster information.
+    hackathon    Hello world from Calico.
 
 Options:
   -h --help                    Show this screen.
@@ -135,6 +136,8 @@ Description:
 			err = commands.Cluster(args)
 		case "datastore":
 			err = commands.Datastore(args)
+		case "hackathon":
+			err = commands.Hackathon(args)
 		default:
 			err = fmt.Errorf("unknown command: %q\n%s", command, doc)
 		}
