@@ -201,13 +201,60 @@ build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 ###############################################################################
 # Unit Tests
 ###############################################################################
+
 fv:
 	@echo "No FV tests for CNI plugin"
 
+
+## Install KubeVirt CRDs for testing (without operator/controllers)
+.PHONY: install-kubevirt-crds
+install-kubevirt-crds:
+	@echo "Installing KubeVirt CRDs for testing..."
+	@while ! docker exec calico-local-apiserver kubectl \
+		apply -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml; \
+		do echo "Waiting to install KubeVirt CRDs..."; \
+		sleep 1; \
+		done
+	@echo "KubeVirt CRDs installed successfully"
+
+## Remove KubeVirt CRDs
+.PHONY: remove-kubevirt-crds
+remove-kubevirt-crds:
+	@echo "Removing KubeVirt CRDs..."
+	@docker exec calico-local-apiserver kubectl \
+		delete -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml 2>/dev/null || \
+		echo "KubeVirt CRDs already removed or not present"
+
+
 ## Run the unit tests.
-ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico install-kubevirt-crds
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
+
+## Run KubeVirt IPAM tests only with Kubernetes datastore (for quick iteration)
+## Usage: make song-ut [FOCUS="specific test name"]
+## Examples:
+##   make song-ut                          # Run all KubeVirt tests
+##   make song-ut FOCUS="should use VM-based handle ID for virt-launcher pod"
+##   make song-ut FOCUS="should return empty routes"
+song-ut: run-k8s-controller-manager $(BIN)/calico-ipam install-kubevirt-crds
+	@echo "Running KubeVirt IPAM tests with Kubernetes datastore only..."
+	docker run --rm -t --privileged --net=host \
+	$(EXTRA_DOCKER_ARGS) \
+	-e ETCD_IP=$(LOCAL_IP_ENV) \
+	-e RUN_AS_ROOT=true \
+	-e ARCH=$(ARCH) \
+	-e PLUGIN=calico \
+	-e BIN=/go/src/$(PACKAGE_NAME)/$(BIN) \
+	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
+	-e DATASTORE_TYPE=kubernetes \
+	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e KUBECONFIG=/home/user/certs/kubeconfig \
+	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
+	-v $(CERTS_PATH):/home/user/certs \
+	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+			cd  /go/src/$(PACKAGE_NAME) && \
+			ginkgo -v -focus="$(if $(FOCUS),$(FOCUS),KubeVirt VM-based handle ID)" tests/ $(GINKGO_ARGS)'
 
 ut-datastore:
 	# The tests need to run as root
