@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/allowsources"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
 )
@@ -66,6 +67,9 @@ func TestWorkloadSpoof(t *testing.T) {
 	t.Log("Missing return route & allowed sources -> ALLOW")
 	err = allowSourcesMap.Update(allowSourcesKey, allowsources.DummyValue)
 	Expect(err).NotTo(HaveOccurred())
+	ctKey := conntrack.NewKey(conntrack.ProtoUDP, srcIP, 1234, dstIP, 5678) // Check that srcIP does not exist in ctMap.
+	val, err := ctMap.Get(ctKey.AsBytes())
+	Expect(err).To(HaveOccurred(), "Expected srcIP to not exist in ctMap, got entry %v instead", val)
 	runSpoofTest(t, resTC_ACT_UNSPEC, withWorkloadSrcSpoofingConfigured())
 	cleanUpMaps()
 

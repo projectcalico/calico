@@ -526,8 +526,8 @@ func NewBPFEndpointManager(
 		profiling:        config.BPFProfiling,
 		bpfAttachType:    config.BPFAttachType,
 
-		QoSMap:        bpfmaps.CommonMaps.QoSMap,
-		maglevLUTSize: config.BPFMaglevLUTSize,
+		QoSMap:                 bpfmaps.CommonMaps.QoSMap,
+		maglevLUTSize:          config.BPFMaglevLUTSize,
 		workloadSourceSpoofing: config.WorkloadSourceSpoofing,
 	}
 

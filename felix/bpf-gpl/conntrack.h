@@ -1133,7 +1133,6 @@ static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_c
 		return 0;
 	}
 
-	CALI_DEBUG("creating conntrack entry for src ip" IP_FMT "", debug_ip(ctx->state->ip_src));
 	err = calico_ct_v4_create_tracking(ctx, ct_ctx, k);
 	if (err) {
 		CALI_DEBUG("calico_ct_v4_create_tracking err %d", err);

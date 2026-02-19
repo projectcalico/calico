@@ -254,7 +254,7 @@ type Config struct {
 	KubeProxyMinSyncPeriod     time.Duration
 	KubeProxyHealtzPort        int
 	SidecarAccelerationEnabled bool
-    WorkloadSourceSpoofing     bool
+	WorkloadSourceSpoofing     bool
 
 	// Flow logs related fields.
 	NfNetlinkBufSize int
