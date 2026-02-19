@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
@@ -70,6 +71,11 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		Communities: make([]types.CommunityRule, 0),
 	}
 
+	if err := c.BGPWithinCluster(config); err != nil {
+		logrus.WithError(err).Error("failed to get value of BGPWithinCluster")
+		return nil, err
+	}
+
 	// Get basic node configuration
 	if err := c.populateNodeConfig(config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to populate node configuration")
@@ -106,6 +112,19 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc.Debug("Updated BGP config cache")
 
 	return config, nil
+}
+
+// getNodeOrGlobalValue attempts to get a value from a node-specific key first,
+// then falls back to the global key. Returns the value and any error.
+func (c *client) BGPWithinCluster(config *types.BirdBGPConfig) error {
+	globalKey := fmt.Sprintf("/calico/bgp/v1/global/bgpWithinCluster")
+	v, err := c.GetValue(globalKey)
+	if err != nil {
+		return err
+	}
+	logrus.Debug("BGPWithinCluster is %s", v)
+	config.BGPWithinCluster = (v != "Disabled")
+	return nil
 }
 
 // populateNodeConfig fills in basic node configuration
