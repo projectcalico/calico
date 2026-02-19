@@ -44,10 +44,12 @@ fi # -v CI
 
 echo "[debug] Git remote: ${git_repo_slug} -> ${remote}" >&2
 
+echo "[debug] Checking remote branches for smallest merge-base difference:" >&2
+
 for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/${remote} | \
              grep --perl "${remote}/master$|${remote}/${release_prefix}[3-9]\.[2-9].*" ); do
   if git merge-base $ref HEAD > /dev/null; then
-    echo "[debug] Checking branch ${ref} with merge-base ${merge_base}" >&2
+    echo "[debug] Checking branch ${ref}" >&2
     count=$(git rev-list --count $(git merge-base $ref HEAD)..HEAD)
     if [[ "$count" -lt "$best_count" ]]; then
       echo "[debug] Updating best ref to ${ref} with count of ${count}" >&2
