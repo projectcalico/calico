@@ -32,9 +32,9 @@ const (
 // orchestrator-independent and holds the fields that Calico needs for
 // optimal live migration processing.
 type LiveMigration struct {
-	metav1.TypeMeta `json:",inline"`
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
-	Spec LiveMigrationSpec `json:"spec"`
+	Spec              LiveMigrationSpec `json:"spec"`
 }
 
 // LiveMigrationSpec contains the specification for a LiveMigration resource.
