@@ -79,6 +79,8 @@ var _ = Describe("Etcd to KDD Migration Export handling", func() {
 		allPlurals.Discard("profiles")
 		// WEPs are backed by Pods in KDD.
 		allPlurals.Discard("workloadendpoints")
+		// LiveMigrations are backed by KubeVirt VirtualMachineInstanceMigration in KDD.
+		allPlurals.Discard("livemigrations")
 		// ClusterInformation is generated fresh in the new cluster.
 		allPlurals.Discard("clusterinformations")
 		// Not supported in KDD (OpenStack only).
