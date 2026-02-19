@@ -280,7 +280,7 @@ func Test_processIPPoolsV6(t *testing.T) {
 
 	expected = filterExpectedStatements(forExportStatements, "accept")
 	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
-		t.Errorf(" Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForEnabledIPPools, expected)
 	}
 }
