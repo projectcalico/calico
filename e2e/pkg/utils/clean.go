@@ -94,7 +94,7 @@ func CleanDatastore(cli client.Client) error {
 		for _, gnp := range gnps.Items {
 			// XXX keeping allow-tigera while e2e still run on versions with
 			// the old tier name
-			if np.Spec.Tier != "allow-tigera" && gnp.Spec.Tier != "calico-system" {
+			if gnp.Spec.Tier != "allow-tigera" && gnp.Spec.Tier != "calico-system" {
 				err = cli.Delete(ctx, &gnp)
 				if err != nil {
 					return err
