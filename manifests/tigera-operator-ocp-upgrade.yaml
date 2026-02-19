@@ -21,37 +21,6 @@ metadata:
     name: tigera-operator
     openshift.io/run-level: "0"
 ---
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: tigera-operator-secrets
-  namespace: tigera-operator
-  labels:
-    k8s-app: tigera-operator
-subjects:
-  - kind: ServiceAccount
-    name: tigera-operator
-    namespace: tigera-operator
-roleRef:
-  kind: ClusterRole
-  name: tigera-operator-secrets
-  apiGroup: rbac.authorization.k8s.io
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: tigera-operator
-  labels:
-    k8s-app: tigera-operator
-subjects:
-  - kind: ServiceAccount
-    name: tigera-operator
-    namespace: tigera-operator
-roleRef:
-  kind: ClusterRole
-  name: tigera-operator
-  apiGroup: rbac.authorization.k8s.io
----
 # Permissions required to manipulate operator secrets for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -665,6 +634,37 @@ rules:
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
 ---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator-secrets
+  namespace: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator-secrets
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -778,25 +778,6 @@ spec:
             - name: calico-resources
               mountPath: /calico-resources
 ---
-# This MutatingAdmissionPolicyBinding binds the network policy mutation to the relevant resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
-kind: MutatingAdmissionPolicyBinding
-metadata:
-  name: set-networkpolicy-types-binding
-spec:
-  policyName: policy.projectcalico.org
-  matchResources:
-    resourceRules:
-      - apiGroups: ["projectcalico.org"]
-        apiVersions: ["v3"]
-        operations: ["CREATE", "UPDATE"]
-        resources:
-          - networkpolicies
-          - globalnetworkpolicies
-          - stagednetworkpolicies
-          - stagedglobalnetworkpolicies
-          - stagedkubernetesnetworkpolicies
----
 # This MutatingAdmissionPolicy performs defaulting for Calico policy types.
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingAdmissionPolicy
@@ -857,4 +838,23 @@ spec:
               value: object.kind == "StagedKubernetesNetworkPolicy" ? variables.defaultKubeTypes : variables.defaultTypes
             }
           ]
+---
+# This MutatingAdmissionPolicyBinding binds the network policy mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-networkpolicy-types-binding
+spec:
+  policyName: policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
 ---
