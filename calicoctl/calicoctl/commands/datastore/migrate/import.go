@@ -38,7 +38,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -415,7 +415,7 @@ func applyV3(args map[string]any) error {
 			case calicoErrors.ErrorResourceDoesNotExist:
 				// Check that the error is for a Node
 				if key, ok := e.Identifier.(model.ResourceKey); ok {
-					if key.Kind == libapiv3.KindNode {
+					if key.Kind == internalapi.KindNode {
 						fmt.Printf("[WARNING] Attempted to import node %v from etcd that references a nonexistent Kubernetes node. Skipping that node. Non-Kubernetes nodes are not supported in the Kubernetes datastore and will be skipped.", e.Identifier)
 						continue
 					}

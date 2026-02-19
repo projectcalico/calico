@@ -26,13 +26,13 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // ForEndpointReadyWithTimeout blocks until a status file for the given endpoint
 // is seen in the provided directory. Unblocks with an error after exceeding timeout.
-func ForEndpointReadyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndpoint, timeout time.Duration) error {
+func ForEndpointReadyWithTimeout(policyDir string, endpoint *internalapi.WorkloadEndpoint, timeout time.Duration) error {
 	if endpoint == nil {
 		logrus.Panic("Endpoint is nil")
 	}

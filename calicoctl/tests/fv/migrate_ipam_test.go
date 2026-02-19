@@ -27,7 +27,7 @@ import (
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -75,9 +75,9 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	}()
 
 	// Create a Node resource for this host.
-	node := libapiv3.NewNode()
+	node := internalapi.NewNode()
 	node.Name = "node4"
-	node.Spec.OrchRefs = []libapiv3.OrchRef{
+	node.Spec.OrchRefs = []internalapi.OrchRef{
 		{
 			NodeName:     "node4",
 			Orchestrator: "k8s",

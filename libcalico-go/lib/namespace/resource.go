@@ -17,7 +17,7 @@ package namespace
 import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 
 func IsNamespaced(kind string) bool {
 	switch kind {
-	case libapiv3.KindWorkloadEndpoint,
+	case internalapi.KindWorkloadEndpoint,
 		apiv3.KindNetworkPolicy,
 		apiv3.KindStagedNetworkPolicy,
 		apiv3.KindStagedKubernetesNetworkPolicy,

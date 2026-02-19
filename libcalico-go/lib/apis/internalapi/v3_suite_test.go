@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1
+package internalapi_test
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"testing"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 )
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// +k8s:openapi-gen=true
-// +kubebuilder:resource:scope=Cluster
-type IPAMHandle struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              internalapi.IPAMHandleSpec `json:"spec,omitempty"`
+func TestV2(t *testing.T) {
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../../report/v3_api_suite.xml"
+	ginkgo.RunSpecs(t, "v3 API Suite", suiteConfig, reporterConfig)
 }
