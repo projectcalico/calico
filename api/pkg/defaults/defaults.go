@@ -28,6 +28,10 @@ func Default(obj v1.Object) (bool, error) {
 		return defaultNetworkPolicy(o)
 	case *v3.GlobalNetworkPolicy:
 		return defaultGlobalNetworkPolicy(o)
+	case *v3.StagedNetworkPolicy:
+		return defaultStagedNetworkPolicy(o)
+	case *v3.StagedGlobalNetworkPolicy:
+		return defaultStagedGlobalNetworkPolicy(o)
 	}
 	return false, fmt.Errorf("no defaulting logic for object of type %T", obj)
 }
