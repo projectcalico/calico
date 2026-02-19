@@ -253,7 +253,6 @@ func (r *RouteRules) Apply() error {
 	toRemove := set.New[*Rule]()
 	for _, nlRule := range nlRules {
 		// Give each loop a fresh copy of nlRule since we would need to use pointer later.
-		nlRule := nlRule
 		if r.tableIndexSet.Contains(nlRule.Table) {
 			// Table index of the rule is managed by us.
 			// Be careful, do not use &nlRule below as it remain same value through iterations.

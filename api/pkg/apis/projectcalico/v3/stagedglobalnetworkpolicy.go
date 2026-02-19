@@ -30,6 +30,7 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster,shortName={sgnp}
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
+// +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 
 // StagedGlobalNetworkPolicy is a staged GlobalNetworkPolicy.
 type StagedGlobalNetworkPolicy struct {

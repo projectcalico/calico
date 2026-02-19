@@ -18,6 +18,7 @@ package wireguard
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"time"
 
@@ -274,9 +275,7 @@ func (collector *Metrics) defaultLabelValues(publicKey string, extend prometheus
 		l[labelPublicKey] = publicKey
 	}
 
-	for k, v := range extend {
-		l[k] = v
-	}
+	maps.Copy(l, extend)
 	return l
 }
 

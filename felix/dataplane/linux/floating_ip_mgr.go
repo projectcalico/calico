@@ -100,7 +100,7 @@ func newFloatingIPManager(
 	}
 }
 
-func (m *floatingIPManager) OnUpdate(protoBufMsg interface{}) {
+func (m *floatingIPManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		// We only program NAT mappings if the FloatingIPs feature is globally enabled, or

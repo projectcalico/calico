@@ -20,8 +20,7 @@ import (
 	"os"
 	"strconv"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -206,7 +205,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 			ports := []numorstring.Port{
 				numorstring.NamedPort(sharedPortName),
 			}
-			for i := 0; i < numNumericPorts; i++ {
+			for i := range numNumericPorts {
 				ports = append(ports, numorstring.SinglePort(3000+uint16(i)))
 			}
 			entRule := api.EntityRule{}
@@ -834,7 +833,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				if NFTMode() {
 					logNFTDiags(felix)

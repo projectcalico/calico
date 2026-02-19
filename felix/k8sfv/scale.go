@@ -45,7 +45,7 @@ func addEndpoints(
 	numEndpoints int,
 ) {
 	//last_time = time.Now()
-	for i := 0; i < numEndpoints; i++ {
+	for i := range numEndpoints {
 		endpoint_id := fmt.Sprintf("endpoint_%d", i+1)
 
 		ip := fmt.Sprintf("%d.%d.%d.%d",
@@ -79,7 +79,7 @@ func addEndpoints(
 }
 
 func addNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
-	for ii := 0; ii < 1000; ii++ {
+	for ii := range 1000 {
 		nsName := fmt.Sprintf("%s-%03d", nsPrefix, ii%1000)
 		createNamespace(clientset, nsName, nil)
 	}

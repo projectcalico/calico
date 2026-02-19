@@ -330,7 +330,6 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e GOOS=$(BUILDOS) \
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e "GOFLAGS=$(GOFLAGS)" \
-		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)

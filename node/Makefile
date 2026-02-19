@@ -302,6 +302,7 @@ K8ST_IMAGE_TARS=calico-node.tar \
 	calicoctl.tar \
 	kube-controllers.tar \
 	operator.tar \
+	webhook.tar \
 	whisker.tar \
 	whisker-backend.tar \
 	goldmane.tar
@@ -423,6 +424,11 @@ goldmane.tar: ../go.mod $(shell find ../goldmane -name '*.go')
 	make -C ../goldmane image
 	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(TEST_BUILD_TAG)
 	docker save --output $@ calico/goldmane:$(TEST_BUILD_TAG)
+
+webhook.tar: ../go.mod $(shell find ../webhooks -name '*.go') $(shell find ../libcalico-go -name '*.go')
+	make -C ../webhooks image
+	docker tag calico/webhooks:latest-$(ARCH) calico/webhooks:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/webhooks:$(TEST_BUILD_TAG)
 
 whisker.tar: ../go.mod $(shell find ../whisker)
 	make -C ../whisker image

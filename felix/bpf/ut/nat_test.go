@@ -1875,7 +1875,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		// Part 1: if we resend the same SYN, then it should get conntracked to the same backend.
-		for attempt := 0; attempt < 10; attempt++ {
+		for attempt := range 10 {
 			res, err := bpfrun(synPkt)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
@@ -1891,7 +1891,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 
 		// Part 2: If we vary the source port, we should hit both backends eventually.
 		seenOtherIP := false
-		for attempt := 0; attempt < 100; attempt++ {
+		for range 100 {
 			tcpSyn.SrcPort++
 			_, _, _, _, synPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
 			Expect(err).NotTo(HaveOccurred())

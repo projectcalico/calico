@@ -90,13 +90,14 @@ func (a V4Addr) String() string {
 }
 
 func (a V4Addr) AsBinary() string {
-	ipInBinary := fmt.Sprintf("%04b", 4)
-	for ii := 0; ii < net.IPv4len; ii++ {
+	var ipInBinary strings.Builder
+	ipInBinary.WriteString(fmt.Sprintf("%04b", 4))
+	for ii := range net.IPv4len {
 		temp := fmt.Sprintf("%08b", a[ii])
-		ipInBinary += temp
+		ipInBinary.WriteString(temp)
 	}
 
-	return ipInBinary
+	return ipInBinary.String()
 }
 
 func (a V4Addr) Add(n int) Addr {
@@ -154,13 +155,14 @@ func (a V6Addr) String() string {
 }
 
 func (a V6Addr) AsBinary() string {
-	ipInBinary := fmt.Sprintf("%04b", 6)
-	for ii := 0; ii < net.IPv6len; ii++ {
+	var ipInBinary strings.Builder
+	ipInBinary.WriteString(fmt.Sprintf("%04b", 6))
+	for ii := range net.IPv6len {
 		temp := fmt.Sprintf("%08b", a[ii])
-		ipInBinary += temp
+		ipInBinary.WriteString(temp)
 	}
 
-	return ipInBinary
+	return ipInBinary.String()
 }
 
 func (a V6Addr) Add(n int) Addr {
@@ -238,13 +240,14 @@ func (c V4CIDR) String() string {
 }
 
 func (c V4CIDR) AsBinary() string {
-	ipInBinary := fmt.Sprintf("%04b", 4)
-	for ii := 0; ii < net.IPv4len; ii++ {
+	var ipInBinary strings.Builder
+	ipInBinary.WriteString(fmt.Sprintf("%04b", 4))
+	for ii := range net.IPv4len {
 		temp := fmt.Sprintf("%08b", c.addr[ii])
-		ipInBinary += temp
+		ipInBinary.WriteString(temp)
 	}
 
-	return ipInBinary[0 : c.prefix+4]
+	return ipInBinary.String()[0 : c.prefix+4]
 }
 
 func (c V4CIDR) IsSingleAddress() bool {
@@ -303,12 +306,13 @@ func (c V6CIDR) String() string {
 }
 
 func (c V6CIDR) AsBinary() string {
-	ipInBinary := fmt.Sprintf("%04b", 6)
-	for ii := 0; ii < net.IPv6len; ii++ {
+	var ipInBinary strings.Builder
+	ipInBinary.WriteString(fmt.Sprintf("%04b", 6))
+	for ii := range net.IPv6len {
 		temp := fmt.Sprintf("%08b", c.addr[ii])
-		ipInBinary += temp
+		ipInBinary.WriteString(temp)
 	}
-	return ipInBinary[0 : c.prefix+4]
+	return ipInBinary.String()[0 : c.prefix+4]
 }
 
 func (c V6CIDR) IsSingleAddress() bool {

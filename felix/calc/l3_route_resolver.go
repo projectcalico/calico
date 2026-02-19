@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,7 +122,7 @@ func (i l3rrNodeInfo) Equal(b l3rrNodeInfo) bool {
 		l := len(i.Addresses)
 		for ia, a := range i.Addresses {
 			found := false
-			for j := 0; j < l; j++ {
+			for j := range l {
 				if a == b.Addresses[(ia+j)%l] {
 					found = true
 					break
@@ -587,7 +587,7 @@ func (c *L3RouteResolver) markAllNodeRoutesDirty(nodeName string) {
 }
 
 func (c *L3RouteResolver) visitAllRoutes(trie *ip.CIDRTrie, v func(route nodenameRoute)) {
-	trie.Visit(func(cidr ip.CIDR, data interface{}) bool {
+	trie.Visit(func(cidr ip.CIDR, data any) bool {
 		c.maybeReportLive()
 
 		// Construct a nodenameRoute to pass to the visiting function.
@@ -658,10 +658,10 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 	if pool == nil {
 		return proto.IPPoolType_NONE
 	}
-	if pool.VXLANMode != encap.Undefined {
+	if pool.VXLANMode != encap.Never {
 		return proto.IPPoolType_VXLAN
 	}
-	if pool.IPIPMode != encap.Undefined {
+	if pool.IPIPMode != encap.Never {
 		return proto.IPPoolType_IPIP
 	}
 	return proto.IPPoolType_NO_ENCAP
@@ -995,7 +995,7 @@ func (r *RouteTrie) UpdatePool(cidr ip.CIDR, poolType proto.IPPoolType, natOutgo
 func (r *RouteTrie) markChildrenDirty(cidr ip.CIDR) {
 	// TODO: avoid full scan to mark children dirty
 	trie := r.trieForCIDR(cidr)
-	trie.Visit(func(c ip.CIDR, data interface{}) bool {
+	trie.Visit(func(c ip.CIDR, data any) bool {
 		r.OnAlive()
 		if cidr.Contains(c.Addr()) {
 			r.MarkCIDRDirty(c)

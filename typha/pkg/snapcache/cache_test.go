@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -348,7 +348,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 	generateUpdates := func(num int) []api.Update {
 		var updates []api.Update
 		seenKeys := set.New[string]()
-		for i := 0; i < num; i++ {
+		for i := range num {
 			configIdx := i % 100
 			value := fmt.Sprintf("config%v", i%55)
 			name := fmt.Sprintf("config%v", configIdx)
@@ -383,10 +383,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			expectedEndResult[upd.Key] = upd
 		}
 		for i := 0; i < len(updates); i += blockSize {
-			end := i + blockSize
-			if end > len(updates) {
-				end = len(updates)
-			}
+			end := min(i+blockSize, len(updates))
 			cache.OnUpdates(updates[i:end])
 			if i == 0 {
 				// Cover the "skip empty updates" branch.

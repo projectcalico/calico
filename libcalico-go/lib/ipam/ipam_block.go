@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,7 +57,7 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 	b.SequenceNumber = uint64(time.Now().UnixNano())
 
 	// Initialize unallocated ordinals.
-	for i := 0; i < numAddresses; i++ {
+	for i := range numAddresses {
 		b.Unallocated[i] = i
 	}
 
@@ -592,10 +593,5 @@ func largerThanOrEqualToBlock(blockCIDR cnet.IPNet, pool *v3.IPPool) bool {
 }
 
 func intInSlice(searchInt int, slice []int) bool {
-	for _, v := range slice {
-		if v == searchInt {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, searchInt)
 }

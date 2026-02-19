@@ -115,9 +115,9 @@ type loadBalancerController struct {
 	dataFeed          *utils.DataFeed
 	cfg               config.LoadBalancerControllerConfig
 	clientSet         kubernetes.Interface
-	syncerUpdates     chan interface{}
+	syncerUpdates     chan any
 	syncStatus        bapi.SyncStatus
-	syncChan          chan interface{}
+	syncChan          chan any
 	serviceUpdates    chan serviceKey
 	ipPools           map[string]api.IPPool
 	serviceInformer   cache.SharedIndexInformer
@@ -135,8 +135,8 @@ func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient clie
 		cfg:               cfg,
 		clientSet:         clientset,
 		dataFeed:          dataFeed,
-		syncerUpdates:     make(chan interface{}, utils.BatchUpdateSize),
-		syncChan:          make(chan interface{}, 1),
+		syncerUpdates:     make(chan any, utils.BatchUpdateSize),
+		syncChan:          make(chan any, 1),
 		serviceUpdates:    make(chan serviceKey, utils.BatchUpdateSize),
 		ipPools:           make(map[string]api.IPPool),
 		serviceInformer:   serviceInformer,
@@ -181,7 +181,7 @@ func (c *loadBalancerController) Run(stopCh chan struct{}) {
 	log.Info("Stopping Service controller")
 }
 
-func (c *loadBalancerController) onServiceAdd(objNew interface{}) {
+func (c *loadBalancerController) onServiceAdd(objNew any) {
 	if svc, ok := objNew.(*v1.Service); ok {
 		svcKey, err := serviceKeyFromService(svc)
 		if err != nil {
@@ -191,7 +191,7 @@ func (c *loadBalancerController) onServiceAdd(objNew interface{}) {
 	}
 }
 
-func (c *loadBalancerController) onServiceUpdate(objNew interface{}, objOld interface{}) {
+func (c *loadBalancerController) onServiceUpdate(objNew any, objOld any) {
 	if svc, ok := objNew.(*v1.Service); ok {
 		svcKey, err := serviceKeyFromService(svc)
 		if err != nil {
@@ -201,7 +201,7 @@ func (c *loadBalancerController) onServiceUpdate(objNew interface{}, objOld inte
 	}
 }
 
-func (c *loadBalancerController) onServiceDelete(objNew interface{}) {
+func (c *loadBalancerController) onServiceDelete(objNew any) {
 	if svc, ok := objNew.(*v1.Service); ok {
 		svcKey, err := serviceKeyFromService(svc)
 		if err != nil {
@@ -262,7 +262,7 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 	}
 }
 
-func (c *loadBalancerController) handleUpdate(update interface{}) {
+func (c *loadBalancerController) handleUpdate(update any) {
 	switch update := update.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = update
@@ -1015,7 +1015,7 @@ func (c *loadBalancerController) poolForIP(ipAddr string) (*api.IPPool, error) {
 	return nil, nil
 }
 
-func kick(c chan<- interface{}) {
+func kick(c chan<- any) {
 	select {
 	case c <- nil:
 		// pass

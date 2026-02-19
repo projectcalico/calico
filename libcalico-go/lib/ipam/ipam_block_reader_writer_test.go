@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -223,7 +223,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					wg.Add(1)
 					j := i
 					go func() {
@@ -277,7 +277,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			By("checking each allocated IP is within the correct block for that host", func() {
 				// Iterate through all the hosts. If the host has an affine block,
 				// make sure the IPs assigned to that host are within the block.
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					hostname := fmt.Sprintf("host-%d", i)
 					affs, err := bc.List(ctx, model.BlockAffinityListOptions{Host: hostname, AffinityType: string(AffinityTypeHost)}, "")
 					Expect(err).NotTo(HaveOccurred())
@@ -316,7 +316,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 				testhost := "single-host"
 				applyNode(bc, kc, testhost, nil)
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
@@ -384,7 +384,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
@@ -438,7 +438,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()

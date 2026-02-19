@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/policysync"
@@ -30,7 +30,7 @@ var _ = Describe("AddIPSetsRule", func() {
 	It("should add all fields that end in IpSetIds", func() {
 		r := &proto.Rule{}
 		var fields []string
-		rt := reflect.TypeOf(r)
+		rt := reflect.TypeFor[*proto.Rule]()
 		rv := reflect.Indirect(reflect.ValueOf(r))
 		for i := 0; i < rv.Type().NumField(); i++ {
 			fn := rt.Elem().Field(i).Name

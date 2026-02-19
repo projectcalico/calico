@@ -83,7 +83,7 @@ func main() {
 		log.Fatal("No key found")
 	}
 
-	var parsedKey interface{}
+	var parsedKey any
 	if parsedKey, err = x509.ParsePKCS1PrivateKey(keyDER.Bytes); err != nil {
 		if parsedKey, err = x509.ParsePKCS8PrivateKey(keyDER.Bytes); err != nil {
 			log.Fatal(err)

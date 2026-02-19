@@ -31,7 +31,7 @@ import (
 // consumption by Felix.
 func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	return NewConfigUpdateProcessor(
-		reflect.TypeOf(apiv3.FelixConfigurationSpec{}),
+		reflect.TypeFor[apiv3.FelixConfigurationSpec](),
 		AllowAnnotations,
 		func(node, name string) model.Key { return model.HostConfigKey{Hostname: node, Name: name} },
 		func(name string) model.Key { return model.GlobalConfigKey{Name: name} },
@@ -47,7 +47,7 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 }
 
 // Convert a slice of ProtoPorts to the string representation required by Felix.
-func protoPortSliceToString(value interface{}) interface{} {
+func protoPortSliceToString(value any) any {
 	pps := value.([]apiv3.ProtoPort)
 	if len(pps) == 0 {
 		return "none"
@@ -73,7 +73,7 @@ func protoPortSliceToString(value interface{}) interface{} {
 
 // Converts multiple route table ranges to its string config representation.
 // e.g. RouteTableRanges{{Min: 0, Max: 250}, {Min: 255, Max: 3000}} => "0-250,255-3000"
-func routeTableRangeListToString(value interface{}) interface{} {
+func routeTableRangeListToString(value any) any {
 	ranges := value.(apiv3.RouteTableRanges)
 	rangesStr := make([]string, 0)
 	for _, r := range ranges {
@@ -84,12 +84,12 @@ func routeTableRangeListToString(value interface{}) interface{} {
 
 // Converts a route table range to its string config representation.
 // e.g. RouteTableRange{Min: 0, Max: 250} => "0-250"
-func routeTableRangeToString(value interface{}) interface{} {
+func routeTableRangeToString(value any) any {
 	r := value.(apiv3.RouteTableRange)
 	return fmt.Sprintf("%d-%d", r.Min, r.Max)
 }
 
-func healthTimeoutOverridesToString(value interface{}) interface{} {
+func healthTimeoutOverridesToString(value any) any {
 	htos := value.([]apiv3.HealthTimeoutOverride)
 	if len(htos) == 0 {
 		return nil
@@ -101,7 +101,7 @@ func healthTimeoutOverridesToString(value interface{}) interface{} {
 	return strings.Join(parts, ",")
 }
 
-func structToKeyValueString(input interface{}) (string, error) {
+func structToKeyValueString(input any) (string, error) {
 	// Get the type and value of the input struct
 	v := reflect.ValueOf(input)
 	t := reflect.TypeOf(input)
@@ -127,7 +127,7 @@ func structToKeyValueString(input interface{}) (string, error) {
 			parts = append(parts, fmt.Sprintf("%s=%s", field.Name, s))
 		}
 		// Handle pointer to string fields
-		if value.Kind() == reflect.Ptr && value.Type().Elem().Kind() == reflect.String {
+		if value.Kind() == reflect.Pointer && value.Type().Elem().Kind() == reflect.String {
 			if !value.IsNil() {
 				parts = append(parts, fmt.Sprintf("%s=%s", field.Name, value.Elem().String()))
 			}
@@ -138,7 +138,7 @@ func structToKeyValueString(input interface{}) (string, error) {
 	return strings.Join(parts, ","), nil
 }
 
-func bpfConntrackTimeoutsToString(value interface{}) interface{} {
+func bpfConntrackTimeoutsToString(value any) any {
 	res, _ := structToKeyValueString(value)
 	return res
 }

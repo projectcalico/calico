@@ -1248,7 +1248,7 @@ func (t *Table) applyUpdates() error {
 
 		// For simplicity, if we've discovered that we're out-of-sync, remove all our
 		// rules from this chain, then re-insert/re-append them below.
-		for i := 0; i < len(previousHashes); i++ {
+		for i := range previousHashes {
 			if previousHashes[i] != "" {
 				line, deleteRenderingErr = t.renderDeleteByValueLine(chainName, i)
 				if deleteRenderingErr != nil {

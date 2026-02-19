@@ -181,7 +181,7 @@ func (logger *RateLimitedLogger) WithError(err error) *RateLimitedLogger {
 }
 
 // WithField adds a single field to the RateLimitedLogger.
-func (logger *RateLimitedLogger) WithField(key string, value interface{}) *RateLimitedLogger {
+func (logger *RateLimitedLogger) WithField(key string, value any) *RateLimitedLogger {
 	return &RateLimitedLogger{
 		data:  logger.data,
 		entry: logger.entry.WithField(key, value),
@@ -196,7 +196,7 @@ func (logger *RateLimitedLogger) WithFields(fields logrus.Fields) *RateLimitedLo
 	}
 }
 
-func (logger *RateLimitedLogger) Debug(args ...interface{}) {
+func (logger *RateLimitedLogger) Debug(args ...any) {
 	if logger.level() >= logrus.DebugLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Debug(args...)
@@ -204,13 +204,13 @@ func (logger *RateLimitedLogger) Debug(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Print(args ...interface{}) {
+func (logger *RateLimitedLogger) Print(args ...any) {
 	if entry := logger.logEntry(); entry != nil {
 		entry.Print(args...)
 	}
 }
 
-func (logger *RateLimitedLogger) Info(args ...interface{}) {
+func (logger *RateLimitedLogger) Info(args ...any) {
 	if logger.level() >= logrus.InfoLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Info(args...)
@@ -218,7 +218,7 @@ func (logger *RateLimitedLogger) Info(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Warn(args ...interface{}) {
+func (logger *RateLimitedLogger) Warn(args ...any) {
 	if logger.level() >= logrus.WarnLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Warn(args...)
@@ -226,7 +226,7 @@ func (logger *RateLimitedLogger) Warn(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Warning(args ...interface{}) {
+func (logger *RateLimitedLogger) Warning(args ...any) {
 	if logger.level() >= logrus.WarnLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Warning(args...)
@@ -234,7 +234,7 @@ func (logger *RateLimitedLogger) Warning(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Error(args ...interface{}) {
+func (logger *RateLimitedLogger) Error(args ...any) {
 	if logger.level() >= logrus.ErrorLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Error(args...)
@@ -242,7 +242,7 @@ func (logger *RateLimitedLogger) Error(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Debugf(format string, args ...interface{}) {
+func (logger *RateLimitedLogger) Debugf(format string, args ...any) {
 	if logger.level() >= logrus.DebugLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Debugf(format, args...)
@@ -250,7 +250,7 @@ func (logger *RateLimitedLogger) Debugf(format string, args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Infof(format string, args ...interface{}) {
+func (logger *RateLimitedLogger) Infof(format string, args ...any) {
 	if logger.level() >= logrus.InfoLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Infof(format, args...)
@@ -258,13 +258,13 @@ func (logger *RateLimitedLogger) Infof(format string, args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Printf(format string, args ...interface{}) {
+func (logger *RateLimitedLogger) Printf(format string, args ...any) {
 	if entry := logger.logEntry(); entry != nil {
 		entry.Printf(format, args...)
 	}
 }
 
-func (logger *RateLimitedLogger) Warnf(format string, args ...interface{}) {
+func (logger *RateLimitedLogger) Warnf(format string, args ...any) {
 	if logger.level() >= logrus.WarnLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Warnf(format, args...)
@@ -272,7 +272,7 @@ func (logger *RateLimitedLogger) Warnf(format string, args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Warningf(format string, args ...interface{}) {
+func (logger *RateLimitedLogger) Warningf(format string, args ...any) {
 	if logger.level() >= logrus.WarnLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Warningf(format, args...)
@@ -280,7 +280,7 @@ func (logger *RateLimitedLogger) Warningf(format string, args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Errorf(format string, args ...interface{}) {
+func (logger *RateLimitedLogger) Errorf(format string, args ...any) {
 	if logger.level() >= logrus.ErrorLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Errorf(format, args...)
@@ -290,7 +290,7 @@ func (logger *RateLimitedLogger) Errorf(format string, args ...interface{}) {
 
 // Entry Println family functions
 
-func (logger *RateLimitedLogger) Debugln(args ...interface{}) {
+func (logger *RateLimitedLogger) Debugln(args ...any) {
 	if logger.level() >= logrus.DebugLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Debugln(args...)
@@ -298,7 +298,7 @@ func (logger *RateLimitedLogger) Debugln(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Infoln(args ...interface{}) {
+func (logger *RateLimitedLogger) Infoln(args ...any) {
 	if logger.level() >= logrus.InfoLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Infoln(args...)
@@ -306,13 +306,13 @@ func (logger *RateLimitedLogger) Infoln(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Println(args ...interface{}) {
+func (logger *RateLimitedLogger) Println(args ...any) {
 	if entry := logger.logEntry(); entry != nil {
 		entry.Println(args...)
 	}
 }
 
-func (logger *RateLimitedLogger) Warnln(args ...interface{}) {
+func (logger *RateLimitedLogger) Warnln(args ...any) {
 	if logger.level() >= logrus.WarnLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Warnln(args...)
@@ -320,7 +320,7 @@ func (logger *RateLimitedLogger) Warnln(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Warningln(args ...interface{}) {
+func (logger *RateLimitedLogger) Warningln(args ...any) {
 	if logger.level() >= logrus.WarnLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Warningln(args...)
@@ -328,7 +328,7 @@ func (logger *RateLimitedLogger) Warningln(args ...interface{}) {
 	}
 }
 
-func (logger *RateLimitedLogger) Errorln(args ...interface{}) {
+func (logger *RateLimitedLogger) Errorln(args ...any) {
 	if logger.level() >= logrus.ErrorLevel {
 		if entry := logger.logEntry(); entry != nil {
 			entry.Errorln(args...)

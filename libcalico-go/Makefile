@@ -10,7 +10,7 @@ KIND_CONFIG = $(KIND_DIR)/kind-single.config
 # NETPOL_CNP_REF = refs/heads/main
 # For a commit, just use the commit ID:
 # NETPOL_CNP_REF = <commit ID>
-NETPOL_CNP_REF = 1f80acbe25809162f3f81ffa254eb24318ea387b
+NETPOL_CNP_REF = 412bf65729a56bc9f0569a5e5a95685ac22350d9
 NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/$(NETPOL_CNP_REF)/config/crd/standard
 NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
 
@@ -31,7 +31,7 @@ APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./l
 .PHONY: clean
 clean:
 	rm -rf $(BINDIR) checkouts
-	find . -name '*.coverprofile' -type f -delete
+	find . -name 'coverprofile.out' -type f -delete
 
 ###############################################################################
 # Building the binary

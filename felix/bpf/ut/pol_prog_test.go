@@ -173,7 +173,7 @@ func TestPolicyLoadGarbageProgram(t *testing.T) {
 	RegisterTestingT(t)
 
 	var insns asm.Insns
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		i := uint8(i)
 		insns = append(insns, asm.Insn{Instruction: [8]uint8{i, i, i, i, i, i, i, i}})
 	}
@@ -2339,11 +2339,11 @@ func initExtraTier() {
 	const numExtraPols = 250
 	const numRulesPerPol = 50
 	pols := make([]polprog.Policy, 0, numExtraPols)
-	for i := 0; i < numExtraPols; i++ {
+	for i := range numExtraPols {
 		pol := polprog.Policy{
 			Name: fmt.Sprintf("pol-%d", i),
 		}
-		for j := 0; j < numRulesPerPol; j++ {
+		for j := range numRulesPerPol {
 			pol.Rules = append(pol.Rules, noOpRule(i*numRulesPerPol+j))
 		}
 		pols = append(pols, pol)
@@ -2371,7 +2371,7 @@ func noOpRule(n int) polprog.Rule {
 	}
 	if n%1000 == 0 {
 		// Add lots of ports to a handful of rules.
-		for p := 0; p < 2000; p++ {
+		for p := range 2000 {
 			ports = append(ports, &proto.PortRange{
 				First: int32(p*2 + 10000),
 				Last:  int32(p*2 + 10001),

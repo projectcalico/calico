@@ -15,6 +15,7 @@
 package file
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,7 +27,7 @@ import (
 //   - invokes the callback for each manifest files in the directory if the filename in the parsed arguments is a
 //     directory (updating the arguments to include the specific file)
 //   - otherwise just invoke the callback with the unmodified arguments.
-func Iter(parsedArgs map[string]interface{}, cb func(map[string]interface{}) error) error {
+func Iter(parsedArgs map[string]any, cb func(map[string]any) error) error {
 	// File name is specified.
 	f, ok := parsedArgs["--filename"].(string)
 	if !ok {
@@ -84,11 +85,9 @@ func isDir(f string) bool {
 }
 
 // newParsedArgs returns an updated set of arguments which include the specified filename.
-func newParsedArgs(original map[string]interface{}, newFilename string) map[string]interface{} {
-	out := make(map[string]interface{})
-	for k, v := range original {
-		out[k] = v
-	}
+func newParsedArgs(original map[string]any, newFilename string) map[string]any {
+	out := make(map[string]any)
+	maps.Copy(out, original)
 	out["--filename"] = newFilename
 	return out
 }

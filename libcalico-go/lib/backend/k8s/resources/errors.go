@@ -25,7 +25,7 @@ import (
 
 // K8sErrorToCalico returns the equivalent libcalico error for the given
 // kubernetes error.
-func K8sErrorToCalico(ke error, id interface{}) error {
+func K8sErrorToCalico(ke error, id any) error {
 	if ke == nil {
 		return nil
 	}

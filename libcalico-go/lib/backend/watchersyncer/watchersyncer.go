@@ -88,7 +88,7 @@ var _ = WithWatchRetryTimeout
 func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
 	rs := &watcherSyncer{
 		watcherCaches:     make([]*watcherCache, len(resourceTypes)),
-		results:           make(chan interface{}, 2000),
+		results:           make(chan any, 2000),
 		callbacks:         callbacks,
 		watchRetryTimeout: DefaultWatchRetryTimeout,
 	}
@@ -105,7 +105,7 @@ func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCa
 type watcherSyncer struct {
 	status            api.SyncStatus
 	watcherCaches     []*watcherCache
-	results           chan interface{}
+	results           chan any
 	numSynced         int
 	callbacks         api.SyncerCallbacks
 	wgwc              *sync.WaitGroup
@@ -184,7 +184,7 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 		// Append results into the one update until we either flush the channel or we
 		// hit our fixed limit per update.
 	consolidatationloop:
-		for ii := 0; ii < maxUpdatesToConsolidate; ii++ {
+		for range maxUpdatesToConsolidate {
 			select {
 			case next := <-ws.results:
 				updates = ws.processResult(updates, next)
@@ -202,7 +202,7 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 // Process a result from the result channel.  We don't immediately action updates, but
 // instead start grouping them together so that we can send a larger single update to
 // Felix.
-func (ws *watcherSyncer) processResult(updates []api.Update, result interface{}) []api.Update {
+func (ws *watcherSyncer) processResult(updates []api.Update, result any) []api.Update {
 	// Switch on the result type.
 	switch r := result.(type) {
 	case []api.Update:

@@ -202,7 +202,7 @@ func splitImportFile(filename string) ([]byte, []byte, []byte, error) {
 	return split[0], split[1], split[2], nil
 }
 
-func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interface) error {
+func checkCalicoResourcesNotExist(args map[string]any, c client.Interface) error {
 	// Loop through all the v3 resources to see if anything is returned
 	extendedV3Resources := append(allV3Resources, "clusterinfo")
 	for _, r := range extendedV3Resources {
@@ -212,7 +212,7 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 		}
 
 		// Create mocked args in order to retrieve Get resources.
-		mockArgs := map[string]interface{}{
+		mockArgs := map[string]any{
 			"<KIND>":   r,
 			"<NAME>":   []string{},
 			"--config": args["--config"].(string),
@@ -330,7 +330,7 @@ func updateV3Resources(cfg *apiconfig.CalicoAPIConfig, data []byte) error {
 		return fmt.Errorf("error while writing to temporary v3 migration config file: %s", err)
 	}
 
-	mockArgs := map[string]interface{}{
+	mockArgs := map[string]any{
 		"--config":   tempConfigFile.Name(),
 		"--filename": tempfile.Name(),
 		"apply":      true,
@@ -393,7 +393,7 @@ func importCRDs(cfg *apiconfig.CalicoAPIConfig) error {
 	return nil
 }
 
-func applyV3(args map[string]interface{}) error {
+func applyV3(args map[string]any) error {
 	results := common.ExecuteConfigCommand(args, common.ActionApply)
 	log.Infof("results: %+v", results)
 

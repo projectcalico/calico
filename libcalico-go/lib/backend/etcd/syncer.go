@@ -134,11 +134,11 @@ func (syn *etcdSyncer) Start() {
 	// Channel used to send updates from the watcher thread to the merge
 	// thread.  We give it a large buffer because we want the watcher thread
 	// to be free running and only block if we get really backed up.
-	watcherUpdateC := make(chan interface{}, 20000)
+	watcherUpdateC := make(chan any, 20000)
 	// Channel used to send updates from the snapshot thread to the merge
 	// thread.  No buffer: we want the snapshot to be slowed down if the
 	// merge thread is under load.
-	snapshotUpdateC := make(chan interface{})
+	snapshotUpdateC := make(chan any)
 	// Channel used to signal from the merge thread to the snapshot thread
 	// that a new snapshot is required.  To avoid deadlock with the channel
 	// above, the merge only sends a new snapshot request once the old
@@ -168,7 +168,7 @@ func (sync *etcdSyncer) Stop() {
 // stale replica, the snapshot thread retries until it reads a snapshot that is
 // new enough.
 func (syn *etcdSyncer) readSnapshotsFromEtcd(
-	snapshotUpdateC chan<- interface{},
+	snapshotUpdateC chan<- any,
 	snapshotRequestC <-chan snapshotRequest,
 ) {
 	log.Info("Syncer snapshot-reading thread started")
@@ -226,7 +226,7 @@ func (syn *etcdSyncer) readSnapshotsFromEtcd(
 }
 
 // sendSnapshotNode sends the node and its children over the channel as events.
-func sendSnapshotNode(node *client.Node, snapshotUpdates chan<- interface{}, resp *client.Response) {
+func sendSnapshotNode(node *client.Node, snapshotUpdates chan<- any, resp *client.Response) {
 	if !node.Dir {
 		snapshotUpdates <- snapshotUpdate{
 			snapshotIndex: resp.Index,
@@ -247,7 +247,7 @@ func sendSnapshotNode(node *client.Node, snapshotUpdates chan<- interface{}, res
 // comment for the etcdSyncer, the watcher goroutine is free-running; it always
 // tries to keep up with etcd but it emits events when it drops out of sync
 // so that the merge goroutine can trigger a new resync via snapshot.
-func (syn *etcdSyncer) watchEtcd(watcherUpdateC chan<- interface{}) {
+func (syn *etcdSyncer) watchEtcd(watcherUpdateC chan<- any) {
 	log.Info("etcd watch thread started.")
 	var timeOfLastError time.Time
 	// Each trip around the outer loop establishes the current etcd index
@@ -417,8 +417,8 @@ func (syn *etcdSyncer) pollClusterID(interval time.Duration) {
 // and waiting until it finishes (and hence the snapshot thread is no longer sending)
 // before sending it a request for a new snapshot.
 func (syn *etcdSyncer) mergeUpdates(
-	snapshotUpdateC <-chan interface{},
-	watcherUpdateC <-chan interface{},
+	snapshotUpdateC <-chan any,
+	watcherUpdateC <-chan any,
 	snapshotRequestC chan<- snapshotRequest,
 ) {
 	var minRequiredSnapshotIndex uint64
@@ -428,7 +428,7 @@ func (syn *etcdSyncer) mergeUpdates(
 
 	syn.callbacks.OnStatusUpdated(api.WaitForDatastore)
 	for {
-		var event interface{}
+		var event any
 		select {
 		case event = <-snapshotUpdateC:
 			log.WithField("event", event).Debug("Snapshot update")
@@ -536,7 +536,7 @@ func (syn *etcdSyncer) sendUpdate(key string, value string, revision uint64, upd
 	}
 	log.Debugf("Parsed etcd key: %v", parsedKey)
 
-	var parsedValue interface{}
+	var parsedValue any
 	var err error
 
 	parsedValue, err = model.ParseValue(parsedKey, []byte(value))

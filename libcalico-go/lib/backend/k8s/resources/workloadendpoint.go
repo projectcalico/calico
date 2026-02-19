@@ -194,8 +194,8 @@ func (c *WorkloadEndpointClient) patchPodAnnotations(
 }
 
 func calculateAnnotationPatch(revision string, uid *types.UID, annotations map[string]string) ([]byte, error) {
-	patch := map[string]interface{}{}
-	metadata := map[string]interface{}{}
+	patch := map[string]any{}
+	metadata := map[string]any{}
 	patch["metadata"] = metadata
 	if len(annotations) > 0 {
 		metadata["annotations"] = annotations
