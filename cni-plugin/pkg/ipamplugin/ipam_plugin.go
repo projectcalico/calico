@@ -464,9 +464,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 		logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
 	}
 
-	// Set routes in the result - one route per IP for normal pods
-	// Note: For migration target pods, handleMigrationTarget() returns early with empty routes,
-	// so we only reach here for normal pods
+	// Set routes in the result - one route per IP for normal pods.
+	// For migration target pods, handleVirtLauncherPod() returns early with empty routes,
+	// so we only reach here for normal pods.
 	for _, ipConfig := range r.IPs {
 		r.Routes = append(r.Routes, &cnitypes.Route{
 			Dst: ipConfig.Address,
@@ -786,13 +786,12 @@ func cmdDel(args *skel.CmdArgs) error {
 				return fmt.Errorf("failed to verify owner attributes after cleanup for IP %s: %w", ip, err)
 			}
 
-			// Check if any owner attributes exist
-			if attr.ActiveOwnerAttrs != nil || attr.AlternateOwnerAttrs != nil {
+			if len(attr.ActiveOwnerAttrs) > 0 || len(attr.AlternateOwnerAttrs) > 0 {
 				anyOwnerAttributesRemain = true
 				logger.WithFields(logrus.Fields{
 					"ip":                ip,
-					"hasActiveOwner":    attr.ActiveOwnerAttrs != nil,
-					"hasAlternateOwner": attr.AlternateOwnerAttrs != nil,
+					"hasActiveOwner":    len(attr.ActiveOwnerAttrs) > 0,
+					"hasAlternateOwner": len(attr.AlternateOwnerAttrs) > 0,
 				}).Debug("Owner attributes still exist for this IP")
 				break // No need to check remaining IPs
 			}
