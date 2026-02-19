@@ -131,7 +131,7 @@ func getIPsForVMIHandle(calicoClient client.Interface, networkName, namespace, v
 
 	result := make([]string, len(ips))
 	for i, ip := range ips {
-		result[i] = ip.IP.String()
+		result[i] = ip.String()
 	}
 	sort.Strings(result)
 	return result

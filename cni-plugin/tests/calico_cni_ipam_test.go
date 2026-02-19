@@ -658,8 +658,3 @@ var _ = Describe("Calico IPAM Tests", func() {
 		})
 	})
 })
-
-// Helper function to create string pointer
-func stringPtr(s string) *string {
-	return &s
-}

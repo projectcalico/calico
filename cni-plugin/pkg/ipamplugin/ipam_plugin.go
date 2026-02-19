@@ -926,7 +926,7 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 	r := &cniv1.Result{}
 	for _, ip := range existingIPs {
 		var mask net.IPMask
-		if ip.IP.To4() != nil {
+		if ip.To4() != nil {
 			mask = net.CIDRMask(32, 32)
 		} else {
 			mask = net.CIDRMask(128, 128)
