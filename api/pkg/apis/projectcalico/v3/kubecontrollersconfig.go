@@ -39,6 +39,7 @@ type KubeControllersConfigurationList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster,shortName={kcc,kccs}
+// +kubebuilder:subresource:status
 
 type KubeControllersConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
