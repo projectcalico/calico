@@ -1,0 +1,93 @@
+# Minimal KubeVirt CRDs for testing
+# This file contains only the CRD definitions needed for CNI IPAM tests
+# It does not include any controllers or operators
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: virtualmachines.kubevirt.io
+spec:
+  group: kubevirt.io
+  names:
+    kind: VirtualMachine
+    listKind: VirtualMachineList
+    plural: virtualmachines
+    singular: virtualmachine
+    shortNames:
+      - vm
+      - vms
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: virtualmachineinstances.kubevirt.io
+spec:
+  group: kubevirt.io
+  names:
+    kind: VirtualMachineInstance
+    listKind: VirtualMachineInstanceList
+    plural: virtualmachineinstances
+    singular: virtualmachineinstance
+    shortNames:
+      - vmi
+      - vmis
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: virtualmachineinstancemigrations.kubevirt.io
+spec:
+  group: kubevirt.io
+  names:
+    kind: VirtualMachineInstanceMigration
+    listKind: VirtualMachineInstanceMigrationList
+    plural: virtualmachineinstancemigrations
+    singular: virtualmachineinstancemigration
+    shortNames:
+      - vmim
+      - vmims
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
