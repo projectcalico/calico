@@ -239,4 +239,3 @@ func verifyAndSwapSingleIP(
 
 	return nil
 }
-
