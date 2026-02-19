@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/hash"
+	calicohash "github.com/projectcalico/calico/libcalico-go/lib/hash"
 )
 
 const (
@@ -810,7 +810,7 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, a
 }
 
 func EndpointChainName(prefix string, ifaceName string, maxLen int) string {
-	return hash.GetLengthLimitedID(
+	return calicohash.GetLengthLimitedID(
 		prefix,
 		ifaceName,
 		maxLen,
