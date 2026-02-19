@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -187,6 +187,11 @@ func (c client) IPAMConfiguration() IPAMConfigurationInterface {
 // BlockAffinity returns an interface for viewing the IPAM block affinity resources.
 func (c client) BlockAffinities() BlockAffinityInterface {
 	return blockAffinities{client: c}
+}
+
+// LiveMigrations returns an interface for managing LiveMigration resources.
+func (c client) LiveMigrations() LiveMigrationInterface {
+	return liveMigrations{client: c}
 }
 
 // BGPFilter returns an interface for managing the BGPFilter resource.
