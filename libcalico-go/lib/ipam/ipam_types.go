@@ -24,6 +24,17 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
+// VMAddressPersistence controls whether KubeVirt VirtualMachine workloads
+// maintain persistent IP addresses across VM lifecycle events.
+type VMAddressPersistence string
+
+const (
+	// VMAddressPersistenceEnabled enables IP persistence for KubeVirt VMs.
+	VMAddressPersistenceEnabled VMAddressPersistence = "Enabled"
+	// VMAddressPersistenceDisabled disables IP persistence for KubeVirt VMs.
+	VMAddressPersistenceDisabled VMAddressPersistence = "Disabled"
+)
+
 // AssignIPArgs defines the set of arguments for assigning a specific IP address.
 type AssignIPArgs struct {
 	// The IP address to assign.
@@ -46,6 +57,11 @@ type AssignIPArgs struct {
 
 	// The intended use for the IP address.  Used to determine the affinityType of the host.
 	IntendedUse v3.IPPoolAllowedUse
+
+	// MaxAllocPerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)
+	// that can be allocated for this handle. If 0, no limit is enforced.
+	// Used for KubeVirt VMI pods to ensure only one IP allocation per VMI per IP version.
+	MaxAllocPerIPVersion int
 }
 
 // AutoAssignArgs defines the set of arguments for assigning one or more
@@ -91,6 +107,11 @@ type AutoAssignArgs struct {
 	// This field is required.
 	IntendedUse v3.IPPoolAllowedUse
 
+	// MaxAllocPerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)
+	// that can be allocated across all blocks for this handle. If 0, no limit is enforced.
+	// Used for KubeVirt VMI pods to ensure only one IP allocation per VMI per IP version.
+	MaxAllocPerIPVersion int
+
 	// The namespace object for namespaceSelector support.
 	Namespace *corev1.Namespace
 }
@@ -112,6 +133,18 @@ type IPAMConfig struct {
 	// If non-zero, MaxBlocksPerHost specifies the max number of blocks that may
 	// be affine to a node.
 	MaxBlocksPerHost int
+
+	// KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
+	// maintain persistent IP addresses across VM lifecycle events.
+	// When set to VMAddressPersistenceEnabled, Calico automatically ensures that KubeVirt VMs retain their
+	// IP addresses when their underlying pods are recreated during VM operations such as
+	// reboot, live migration, or pod eviction. IP persistency is ensured when the
+	// VirtualMachineInstance (VMI) resource is deleted and recreated by the VM controller.
+	// When set to VMAddressPersistenceDisabled, VMs receive new IP addresses whenever their pods are recreated,
+	// following standard pod IP allocation behavior. Live migration target pods are not allowed
+	// when this is set to VMAddressPersistenceDisabled and will result in an error.
+	// If nil, defaults to VMAddressPersistenceEnabled (IP persistence enabled if not specified).
+	KubeVirtVMAddressPersistence *VMAddressPersistence
 }
 
 // GetUtilizationArgs defines the set of arguments for requesting IP utilization.
@@ -210,4 +243,95 @@ func (opts *ReleaseOptions) AsNetIP() (*cnet.IP, error) {
 		return ip, nil
 	}
 	return nil, fmt.Errorf("failed to parse IP: %s", opts.Address)
+}
+
+// OwnerAttributeType specifies which owner attribute to operate on.
+type OwnerAttributeType string
+
+const (
+	// OwnerAttributeTypeActive refers to ActiveOwnerAttrs (current/primary owner).
+	OwnerAttributeTypeActive OwnerAttributeType = "active"
+
+	// OwnerAttributeTypeAlternate refers to AlternateOwnerAttrs (secondary owner during migration).
+	OwnerAttributeTypeAlternate OwnerAttributeType = "alternate"
+)
+
+// AttributeOwner represents the owner of an IP allocation attribute.
+type AttributeOwner struct {
+	// Namespace is the Kubernetes namespace of the pod.
+	Namespace string
+	// Name is the name of the pod.
+	Name string
+}
+
+// OwnerAttributeUpdates specifies the attribute values to set for ActiveOwnerAttrs and/or AlternateOwnerAttrs.
+// These are the actual values that will be written to the IP allocation.
+type OwnerAttributeUpdates struct {
+	// ActiveOwnerAttrs specifies attributes to set for ActiveOwnerAttrs.
+	// If nil and ClearActiveOwner is false, ActiveOwnerAttrs is not modified.
+	// If ClearActiveOwner is true, ActiveOwnerAttrs must be nil (error if both are set).
+	ActiveOwnerAttrs map[string]string
+
+	// ClearActiveOwner indicates that ActiveOwnerAttrs should be cleared (set to nil).
+	// If true, ActiveOwnerAttrs must be nil. An error is returned if both are set.
+	ClearActiveOwner bool
+
+	// AlternateOwnerAttrs specifies attributes to set for AlternateOwnerAttrs.
+	// If nil and ClearAlternateOwner is false, AlternateOwnerAttrs is not modified.
+	// If ClearAlternateOwner is true, AlternateOwnerAttrs must be nil (error if both are set).
+	AlternateOwnerAttrs map[string]string
+
+	// ClearAlternateOwner indicates that AlternateOwnerAttrs should be cleared (set to nil).
+	// If true, AlternateOwnerAttrs must be nil. An error is returned if both are set.
+	ClearAlternateOwner bool
+}
+
+// OwnerAttributePreconditions specifies expected owners for verification before setting attributes.
+// These are used to prevent overwriting attributes that belong to a different pod.
+type OwnerAttributePreconditions struct {
+	// ExpectedActiveOwner verifies current ActiveOwnerAttrs matches the specified owner before setting.
+	// If nil, no match on ExpectedActiveOwner is performed.
+	// Verification can still occur via VerifyActiveOwnerEmpty if that field is true.
+	// An error is returned if both ExpectedActiveOwner and VerifyActiveOwnerEmpty are set.
+	ExpectedActiveOwner *AttributeOwner
+
+	// VerifyActiveOwnerEmpty verifies that ActiveOwnerAttrs is empty (nil or empty map) before setting.
+	// If true, ActiveOwnerAttrs must be empty for the operation to proceed.
+	// An error is returned if both ExpectedActiveOwner and VerifyActiveOwnerEmpty are set.
+	VerifyActiveOwnerEmpty bool
+
+	// ExpectedAlternateOwner verifies current AlternateOwnerAttrs matches the specified owner before setting.
+	// If nil, no match on ExpectedAlternateOwner is performed.
+	// Verification can still occur via VerifyAlternateOwnerEmpty if that field is true.
+	// An error is returned if both ExpectedAlternateOwner and VerifyAlternateOwnerEmpty are set.
+	ExpectedAlternateOwner *AttributeOwner
+
+	// VerifyAlternateOwnerEmpty verifies that AlternateOwnerAttrs is empty (nil or empty map) before setting.
+	// If true, AlternateOwnerAttrs must be empty for the operation to proceed.
+	// An error is returned if both ExpectedAlternateOwner and VerifyAlternateOwnerEmpty are set.
+	VerifyAlternateOwnerEmpty bool
+}
+
+// expectedActiveOwner returns the expected active owner for precondition verification.
+// Returns nil if no check is needed. Safe to call on a nil receiver.
+func (p *OwnerAttributePreconditions) expectedActiveOwner() *AttributeOwner {
+	if p == nil {
+		return nil
+	}
+	if p.VerifyActiveOwnerEmpty {
+		return GetEmptyAttributeOwner()
+	}
+	return p.ExpectedActiveOwner
+}
+
+// expectedAlternateOwner returns the expected alternate owner for precondition verification.
+// Returns nil if no check is needed. Safe to call on a nil receiver.
+func (p *OwnerAttributePreconditions) expectedAlternateOwner() *AttributeOwner {
+	if p == nil {
+		return nil
+	}
+	if p.VerifyAlternateOwnerEmpty {
+		return GetEmptyAttributeOwner()
+	}
+	return p.ExpectedAlternateOwner
 }
