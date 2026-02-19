@@ -2841,7 +2841,6 @@ spec:
                 autoAllocateBlocks:
                   type: boolean
                 kubeVirtVMAddressPersistence:
-                  default: Enabled
                   enum:
                     - Enabled
                     - Disabled

@@ -158,17 +158,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(calicoClient)
 
 	// Reject migration target pods when persistence is disabled.
-	if vmiInfo != nil && !ipPersistenceEnabledForVM && vmiInfo.IsMigrationTarget() {
-		logrus.Error("Live migration target pod rejected: KubeVirtVMAddressPersistence is disabled")
-		return fmt.Errorf("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
+	if vmiInfo != nil && vmiInfo.IsMigrationTarget() {
+		if !ipPersistenceEnabledForVM {
+			logrus.Error("Live migration target pod rejected: KubeVirtVMAddressPersistence is disabled")
+			return fmt.Errorf("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
+		}
 	}
 
 	// Use VM-based handle ID only when both vmiInfo is present and persistence is enabled.
 	var handleID string
 	if ipPersistenceEnabledForVM {
-		// Use VMI-based handle ID for IP stability across VMI pod recreations/migrations
-		// Handle ID is based on hash(namespace/vmiName) for persistence across VMI recreation
-		handleID = ipam.CreateVMIHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
+		// Use VM-based handle ID for IP stability across pod recreations/migrations.
+		// Handle ID is based on namespace/vmName which remains stable across VMI recreation.
+		handleID = ipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
 		logrus.WithFields(logrus.Fields{
 			"pod":               epIDs.Pod,
 			"namespace":         epIDs.Namespace,
@@ -176,7 +178,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			"vmiUID":            vmiInfo.GetVMIUID(),
 			"isMigrationTarget": vmiInfo.IsMigrationTarget(),
 			"handleID":          handleID,
-		}).Info("Detected KubeVirt virt-launcher pod, using VMI-based handle ID")
+		}).Info("Detected KubeVirt virt-launcher pod, using VM-based handle ID")
 	} else {
 		// Default handle ID based on container ID
 		handleID = utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
@@ -215,8 +217,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			attrs[ipam.AttributeVMIMUID] = vmiInfo.GetVMIMigrationUID()
 		}
 
-		// Check if IPs already exist for this VMI handle and reuse them.
-		// - Source pod: reuses IPs from a previous pod with the same VMI (pod recreation).
+		// Check if IPs already exist for this VM handle and reuse them.
+		// - Source pod: reuses IPs from a previous pod with the same VM (pod recreation).
 		//   If no IPs exist, falls through to normal AutoAssign.
 		// - Migration target: IPs must exist (allocated by the source pod).
 		reuseExistingIPs, err := handleVirtLauncherPod(calicoClient, handleID, attrs, conf, logger, isMigrationTarget)
@@ -641,9 +643,9 @@ func cmdDel(args *skel.CmdArgs) error {
 	// Use VM-based handle ID only when both vmiInfo is present and persistence is enabled.
 	var handleID string
 	if ipPersistenceEnabledForVM {
-		// Use VMI-based handle ID
-		// Handle ID is based on hash(namespace/vmiName) for persistence across VMI recreation
-		handleID = ipam.CreateVMIHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
+		// Use VM-based handle ID
+		// Handle ID is based on namespace/vmName which remains stable across VMI recreation
+		handleID = ipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
 
 		// VMI deletion status is already available from embedded VMIResource
 		logrus.WithFields(logrus.Fields{
@@ -812,13 +814,13 @@ func cmdDel(args *skel.CmdArgs) error {
 			logger.WithFields(logrus.Fields{
 				"shouldRelease":            shouldRelease,
 				"anyOwnerAttributesRemain": anyOwnerAttributesRemain,
-			}).Info("Completed attribute cleanup - IP remains allocated to VMI")
+			}).Info("Completed attribute cleanup - IP remains allocated to VM handle")
 		}
 
 		return nil
 	}
 
-	// For non-VMI pods, use the standard release logic
+	// For non-VM pods, use the standard release logic
 	if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 			logger.WithError(err).Error("Failed to release address")
@@ -870,11 +872,8 @@ func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*
 	return ns, nil
 }
 
-// handleMigrationTarget handles CNI ADD for a migration target pod.
-// For migration targets, the IP(s) must already exist (allocated by source pod to VMI handle).
-// This function retrieves the existing IP(s) and sets AlternateOwnerAttrs with target pod info.
 // handleVirtLauncherPod handles IP allocation for KubeVirt virt-launcher pods by checking
-// if IPs are already allocated to the VMI handle and reusing them.
+// if IPs are already allocated to the VM handle and reusing them.
 //
 // For source pods (isMigrationTarget=false):
 //   - If existing IPs found: reuses them and sets ActiveOwnerAttrs. Returns (true, nil).
@@ -895,14 +894,14 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 			// Migration target requires existing IPs allocated by the source pod
 			if err != nil {
 				logger.WithError(err).Error("Failed to get existing IPs for migration target")
-				return false, fmt.Errorf("migration target pod but no IP allocated to VMI handle %s: %w", handleID, err)
+				return false, fmt.Errorf("migration target pod but no IP allocated to VM handle %s: %w", handleID, err)
 			}
-			logger.Error("Migration target pod but VMI handle has no allocated IPs")
-			return false, fmt.Errorf("migration target pod but no IP allocated to VMI handle %s", handleID)
+			logger.Error("Migration target pod but VM handle has no allocated IPs")
+			return false, fmt.Errorf("migration target pod but no IP allocated to VM handle %s", handleID)
 		}
 		// Source pod with no existing IPs - fall through to normal AutoAssign
 		if err != nil {
-			logger.WithError(err).Debug("No existing IPs for VMI handle, proceeding with new allocation")
+			logger.WithError(err).Debug("No existing IPs for VM handle, proceeding with new allocation")
 		}
 		return false, nil
 	}
@@ -910,7 +909,7 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 	logger.WithFields(logrus.Fields{
 		"ipCount":           len(existingIPs),
 		"isMigrationTarget": isMigrationTarget,
-	}).Info("Found existing IPs for VMI handle, reusing them")
+	}).Info("Found existing IPs for VM handle, reusing them")
 
 	// Build result IPs and update owner attributes for each IP
 	r := &cniv1.Result{}

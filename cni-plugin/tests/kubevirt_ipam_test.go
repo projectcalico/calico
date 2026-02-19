@@ -40,7 +40,7 @@ func GetCNIArgsForPod(podName, namespace, containerID string) string {
 		podName, namespace, containerID)
 }
 
-// verifyOwnerAttributes checks the IPAM owner attributes for all IPs allocated to a VMI handle.
+// verifyOwnerAttributes checks the IPAM owner attributes for all IPs allocated to a VM handle.
 func verifyOwnerAttributes(
 	calicoClient client.Interface,
 	networkName string,
@@ -53,7 +53,7 @@ func verifyOwnerAttributes(
 	expectedVMIMUID string,
 ) {
 	ctx := context.Background()
-	handleID := ipam.CreateVMIHandleID(networkName, namespace, vmName)
+	handleID := ipam.CreateVMHandleID(networkName, namespace, vmName)
 
 	ips, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get IPs by handle %s", handleID)
@@ -120,11 +120,11 @@ func verifyOwnerAttributes(
 	}
 }
 
-// getIPsForVMIHandle returns the sorted list of IP strings allocated to a VMI handle.
+// getIPsForVMHandle returns the sorted list of IP strings allocated to a VM handle.
 // Useful for comparing IPs across operations to verify persistence.
-func getIPsForVMIHandle(calicoClient client.Interface, networkName, namespace, vmName string) []string {
+func getIPsForVMHandle(calicoClient client.Interface, networkName, namespace, vmName string) []string {
 	ctx := context.Background()
-	handleID := ipam.CreateVMIHandleID(networkName, namespace, vmName)
+	handleID := ipam.CreateVMHandleID(networkName, namespace, vmName)
 
 	ips, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get IPs by handle %s", handleID)
@@ -138,10 +138,10 @@ func getIPsForVMIHandle(calicoClient client.Interface, networkName, namespace, v
 }
 
 // verifyOwnerAttributesCleared verifies that both ActiveOwnerAttrs and AlternateOwnerAttrs
-// are nil or empty for all IPs allocated to a VMI handle. IPs must still be allocated.
+// are nil or empty for all IPs allocated to a VM handle. IPs must still be allocated.
 func verifyOwnerAttributesCleared(calicoClient client.Interface, networkName, namespace, vmName string) {
 	ctx := context.Background()
-	handleID := ipam.CreateVMIHandleID(networkName, namespace, vmName)
+	handleID := ipam.CreateVMHandleID(networkName, namespace, vmName)
 
 	ips, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get IPs by handle %s", handleID)
@@ -163,10 +163,10 @@ func verifyOwnerAttributesCleared(calicoClient client.Interface, networkName, na
 	fmt.Printf("[TEST] Verified owner attributes cleared for handle %s (%d IPs)\n", handleID, len(ips))
 }
 
-// verifyHandleReleased verifies that the VMI handle has been released (no IPs allocated).
+// verifyHandleReleased verifies that the VM handle has been released (no IPs allocated).
 func verifyHandleReleased(calicoClient client.Interface, networkName, namespace, vmName string) {
 	ctx := context.Background()
-	handleID := ipam.CreateVMIHandleID(networkName, namespace, vmName)
+	handleID := ipam.CreateVMHandleID(networkName, namespace, vmName)
 
 	ips, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	// After ReleaseByHandle, either IPsByHandle returns an error (handle not found)
@@ -177,9 +177,9 @@ func verifyHandleReleased(calicoClient client.Interface, networkName, namespace,
 	fmt.Printf("[TEST] Verified handle %s is released (err=%v, ipCount=%d)\n", handleID, err, len(ips))
 }
 
-// verifyHandleNotReleased verifies that the VMI handle still has IPs allocated matching expectedIPs.
+// verifyHandleNotReleased verifies that the VM handle still has IPs allocated matching expectedIPs.
 func verifyHandleNotReleased(calicoClient client.Interface, networkName, namespace, vmName string, expectedIPs []string) {
-	currentIPs := getIPsForVMIHandle(calicoClient, networkName, namespace, vmName)
+	currentIPs := getIPsForVMHandle(calicoClient, networkName, namespace, vmName)
 	Expect(currentIPs).To(Equal(expectedIPs), "IPs should still be allocated to handle")
 	fmt.Printf("[TEST] Verified handle still has IPs: %v\n", currentIPs)
 }
@@ -336,7 +336,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 		Expect(result.IPs).To(HaveLen(2), "Expected dual-stack: one IPv4 and one IPv6")
 		verifyRoutesPopulatedInResult(result, true)
 
-		originalIPs = getIPsForVMIHandle(calicoClient, "net1", testNs, vmName)
+		originalIPs = getIPsForVMHandle(calicoClient, "net1", testNs, vmName)
 		Expect(originalIPs).To(HaveLen(2))
 		// Verify one IPv4 and one IPv6
 		hasIPv4 := net.ParseIP(originalIPs[0]).To4() != nil || net.ParseIP(originalIPs[1]).To4() != nil
@@ -398,7 +398,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 				Expect(exitCode).To(Equal(0))
 
 				// Verify IPs still allocated but owner attributes cleared
-				currentIPs := getIPsForVMIHandle(calicoClient, "net1", testNs, vmName)
+				currentIPs := getIPsForVMHandle(calicoClient, "net1", testNs, vmName)
 				Expect(currentIPs).To(Equal(originalIPs), "IPs should persist after pod deletion")
 				verifyOwnerAttributesCleared(calicoClient, "net1", testNs, vmName)
 
@@ -418,7 +418,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 				verifyRoutesPopulatedInResult(result2, true)
 
 				// Verify same IPs were reused
-				newIPs := getIPsForVMIHandle(calicoClient, "net1", testNs, vmName)
+				newIPs := getIPsForVMHandle(calicoClient, "net1", testNs, vmName)
 				Expect(newIPs).To(Equal(originalIPs), "IPs should be the same after pod recreation")
 				fmt.Printf("[TEST] Recreated pod IPs: %v (same as original)\n", newIPs)
 
@@ -448,7 +448,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 				Expect(exitCode).To(Equal(0), fmt.Sprintf("Target IPAM ADD failed: %v", errOut))
 				Expect(result.IPs).To(HaveLen(2), "Migration target should receive both existing IPs")
 
-				currentIPs := getIPsForVMIHandle(calicoClient, "net1", testNs, vmName)
+				currentIPs := getIPsForVMHandle(calicoClient, "net1", testNs, vmName)
 				Expect(currentIPs).To(Equal(originalIPs), "IPs should persist during migration")
 
 				verifyOwnerAttributes(calicoClient, "net1", testNs, vmName,
@@ -462,7 +462,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 				_, _, exitCode = testutils.RunIPAMPlugin(netconf, "DEL", sourceCNIArgs, sourceCID, cniVersion)
 				Expect(exitCode).To(Equal(0))
 
-				currentIPs = getIPsForVMIHandle(calicoClient, "net1", testNs, vmName)
+				currentIPs = getIPsForVMHandle(calicoClient, "net1", testNs, vmName)
 				Expect(currentIPs).To(Equal(originalIPs), "IPs should persist after source pod deletion")
 
 				verifyOwnerAttributes(calicoClient, "net1", testNs, vmName,
@@ -475,7 +475,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 				_, _, exitCode = testutils.RunIPAMPlugin(netconf, "DEL", targetCNIArgs, targetCID, cniVersion)
 				Expect(exitCode).To(Equal(0))
 
-				currentIPs = getIPsForVMIHandle(calicoClient, "net1", testNs, vmName)
+				currentIPs = getIPsForVMHandle(calicoClient, "net1", testNs, vmName)
 				Expect(currentIPs).To(Equal(originalIPs), "IPs should persist after both pod deletions")
 				verifyOwnerAttributesCleared(calicoClient, "net1", testNs, vmName)
 			})
@@ -499,7 +499,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 				fmt.Printf("[TEST] New VMI created with UID: %s (old: %s)\n", newVMIUID, oldVMIUID)
 
 				// IPs should still be allocated to the handle (handle is based on namespace+name, not UID)
-				currentIPs := getIPsForVMIHandle(calicoClient, "net1", testNs, vmName)
+				currentIPs := getIPsForVMHandle(calicoClient, "net1", testNs, vmName)
 				Expect(currentIPs).To(Equal(originalIPs), "IPs should persist across VMI recreation")
 
 				// Step 3: Create new source pod for the new VMI
@@ -515,7 +515,7 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 				verifyRoutesPopulatedInResult(result, true)
 
 				// Verify same IPs
-				newIPs := getIPsForVMIHandle(calicoClient, "net1", testNs, vmName)
+				newIPs := getIPsForVMHandle(calicoClient, "net1", testNs, vmName)
 				Expect(newIPs).To(Equal(originalIPs), "IPs should be the same after VMI recreation")
 				fmt.Printf("[TEST] New source pod IPs: %v (same as original)\n", newIPs)
 
@@ -755,9 +755,9 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 
 			netconf := getDualStackNetconf(cniVersion)
 			ctx := context.Background()
-			vmiHandleID := ipam.CreateVMIHandleID("net1", testNs, vmName)
+			vmHandleID := ipam.CreateVMHandleID("net1", testNs, vmName)
 
-			// 1. Create first pod, save its IPs, verify no VMI-based handle or owner attributes
+			// 1. Create first pod, save its IPs, verify no VM-based handle or owner attributes
 			firstPod := "virt-launcher-" + vmName + "-disabled-1"
 			firstCID := uuid.NewString()
 			virtResourceManager.CreateVirtLauncherPod(firstPod, "")
@@ -773,12 +773,12 @@ var _ = Describe("KubeVirt VM-based handle ID", func() {
 			}
 			fmt.Printf("[TEST] First pod IPs: %v\n", firstPodIPs)
 
-			// No VMI-based handle should exist
-			ips, err := calicoClient.IPAM().IPsByHandle(ctx, vmiHandleID)
+			// No VM-based handle should exist
+			ips, err := calicoClient.IPAM().IPsByHandle(ctx, vmHandleID)
 			if err == nil {
-				Expect(ips).To(BeEmpty(), "VMI-based handle should not have any IPs when persistence is disabled")
+				Expect(ips).To(BeEmpty(), "VM-based handle should not have any IPs when persistence is disabled")
 			}
-			fmt.Printf("[TEST] Confirmed no IPs on VMI handle %s (err=%v)\n", vmiHandleID, err)
+			fmt.Printf("[TEST] Confirmed no IPs on VM handle %s (err=%v)\n", vmHandleID, err)
 
 			// 2. Create second pod with same VMI owner, verify it gets a different IP
 			secondPod := "virt-launcher-" + vmName + "-disabled-2"

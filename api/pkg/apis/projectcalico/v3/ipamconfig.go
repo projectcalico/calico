@@ -86,7 +86,6 @@ type IPAMConfigurationSpec struct {
 	// When Disabled, VMs receive new IP addresses whenever their pods are recreated.
 	// Defaults to Enabled if not specified.
 	// +kubebuilder:validation:Enum=Enabled;Disabled
-	// +kubebuilder:default=Enabled
 	// +optional
 	KubeVirtVMAddressPersistence *VMAddressPersistence `json:"kubeVirtVMAddressPersistence,omitempty"`
 }

@@ -34191,7 +34191,6 @@ spec:
                   default: true
                   type: boolean
                 kubeVirtVMAddressPersistence:
-                  default: Enabled
                   enum:
                     - Enabled
                     - Disabled

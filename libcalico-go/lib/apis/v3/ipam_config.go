@@ -74,7 +74,6 @@ type IPAMConfigSpec struct {
 	// when this is set to VMAddressPersistenceDisabled and will result in an error.
 	// If nil, defaults to VMAddressPersistenceEnabled (IP persistence enabled if not specified).
 	// +kubebuilder:validation:Enum=Enabled;Disabled
-	// +kubebuilder:default=Enabled
 	// +optional
 	KubeVirtVMAddressPersistence *VMAddressPersistence `json:"kubeVirtVMAddressPersistence,omitempty"`
 }

@@ -37,7 +37,7 @@ var (
 	ErrAlternateOwnerMismatch = errors.New("AlternateOwnerAttrs doesn't match expected target owner")
 )
 
-// CreateVMIHandleID generates a consistent handle ID for a KubeVirt VMI allocation.
+// CreateVMHandleID generates a consistent handle ID for a KubeVirt VM allocation.
 // This ensures both CNI plugin and Felix use the same handle format.
 //
 // The handle ID is constructed with a prefix and suffix, and is length-limited to 128
@@ -46,24 +46,24 @@ var (
 // Parameters:
 //   - networkName: The Calico network name (from annotation "projectcalico.org/network").
 //     If empty, defaults to "k8s-pod-network".
-//   - namespace: The Kubernetes namespace of the VMI.
-//   - vmiName: The name of the VirtualMachineInstance.
+//   - namespace: The Kubernetes namespace of the VM.
+//   - vmName: The name of the VirtualMachine (VM and VMI share the same name).
 //
 // Returns:
-//   - Handle ID in format: "{networkName}.vmi.{namespace}.{vmiName}" (length-limited to 128 chars)
+//   - Handle ID in format: "{networkName}.vmi.{namespace}.{vmName}" (length-limited to 128 chars)
 //
 // Examples:
-//   - CreateVMIHandleID("", "default", "vm1") -> "k8s-pod-network.vmi.default.vm1"
-//   - CreateVMIHandleID("multus-net1", "default", "vm1") -> "multus-net1.vmi.default.vm1"
-//   - CreateVMIHandleID("net", "ns", "very-long-name...") -> "net.vmi.-<hash>" (if exceeds 128 chars)
-func CreateVMIHandleID(networkName, namespace, vmiName string) string {
+//   - CreateVMHandleID("", "default", "vm1") -> "k8s-pod-network.vmi.default.vm1"
+//   - CreateVMHandleID("multus-net1", "default", "vm1") -> "multus-net1.vmi.default.vm1"
+//   - CreateVMHandleID("net", "ns", "very-long-name...") -> "net.vmi.-<hash>" (if exceeds 128 chars)
+func CreateVMHandleID(networkName, namespace, vmName string) string {
 	if networkName == "" {
 		networkName = "k8s-pod-network"
 	}
 
-	// Create suffix from namespace and VMI name
+	// Create suffix from namespace and VM name
 	// Use dot separator instead of slash to ensure valid Kubernetes resource name
-	suffix := fmt.Sprintf("%s.%s", namespace, vmiName)
+	suffix := fmt.Sprintf("%s.%s", namespace, vmName)
 
 	// Build prefix: networkName.vmi.
 	prefix := fmt.Sprintf("%s.vmi.", networkName)
@@ -114,7 +114,7 @@ func VerifyAndSwapOwnerAttributeForVM(
 	targetPodName string,
 ) error {
 	// Step 1: Generate handleID using the same logic as CNI plugin
-	handleID := CreateVMIHandleID(networkName, namespace, vmiName)
+	handleID := CreateVMHandleID(networkName, namespace, vmiName)
 
 	// Step 2: Get all IPs allocated to this handle
 	ips, err := ipamClient.IPsByHandle(ctx, handleID)
@@ -151,7 +151,7 @@ func VerifyAndSwapOwnerAttributeForVM(
 		}
 
 		// IDEMPOTENCY CHECK: If target is already the active owner, skip this IP
-		if ownerMatches(allocAttr.ActiveOwnerAttrs, expectedTargetOwner) {
+		if MatchAttributeOwner(allocAttr.ActiveOwnerAttrs, expectedTargetOwner) {
 			log.WithField("ip", ip).Debug("Target is already active owner, skipping swap")
 			skippedCount++
 			continue
@@ -204,7 +204,7 @@ func verifyAndSwapSingleIP(
 	}
 
 	// Verify AlternateOwnerAttrs matches expected target owner
-	if !ownerMatches(allocAttr.AlternateOwnerAttrs, expectedTargetOwner) {
+	if !MatchAttributeOwner(allocAttr.AlternateOwnerAttrs, expectedTargetOwner) {
 		// AlternateOwnerAttrs contains a different pod than expected
 		return fmt.Errorf("%w: expected %v, got namespace=%s pod=%s for IP %s",
 			ErrAlternateOwnerMismatch,
@@ -240,19 +240,3 @@ func verifyAndSwapSingleIP(
 	return nil
 }
 
-// ownerMatches checks if the attributes map matches the expected AttributeOwner.
-// Returns true if:
-//   - Both are nil/empty
-//   - The namespace and pod name in attrs match the owner
-func ownerMatches(attrs map[string]string, owner *AttributeOwner) bool {
-	if owner == nil {
-		return len(attrs) == 0
-	}
-
-	if len(attrs) == 0 {
-		return false
-	}
-
-	return attrs[AttributeNamespace] == owner.Namespace &&
-		attrs[AttributePod] == owner.Name
-}
