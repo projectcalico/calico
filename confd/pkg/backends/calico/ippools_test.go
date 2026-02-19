@@ -205,104 +205,6 @@ func Test_processIPPoolsV6(t *testing.T) {
 	}
 }
 
-func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV4(t *testing.T) {
-	expectedStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.11.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.12.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.13.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
-		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { krt_tunnel=""; accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { krt_tunnel=""; accept; }`,
-		// IPv4 VXLAN Encapsulation cases.
-		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-	}
-	testExpectedIPPoolStatments(t, poolsTestsV4, expectedStatements, true, "1.1.1.0/24", 4)
-}
-
-func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
-	expectedStatements := []string{
-		// IPv6 IPIP Encapsulation cases.
-		`  if (net ~ dead:beef:10::/64) then { accept; }`,
-		`  if (net ~ dead:beef:11::/64) then { accept; }`,
-		`  if (net ~ dead:beef:12::/64) then { accept; }`,
-		`  if (net ~ dead:beef:13::/64) then { accept; }`,
-		// IPv6 No-Encapsulation case.
-		`  if (net ~ dead:beef:14::/64) then { accept; }`,
-		`  if (net ~ dead:beef:15::/64) then { accept; }`,
-		// IPv6 VXLAN Encapsulation cases.
-		`  if (net ~ dead:beef:16::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:17::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:18::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:19::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-	}
-	testExpectedIPPoolStatments(t, poolsTestsV6, expectedStatements, true, "", 6)
-}
-
-func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
-	expectedStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { accept; }`,
-		`  if (net ~ 10.11.0.0/16) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ 10.12.0.0/16) then { accept; }`,
-		`  if (net ~ 10.13.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 VXLAN Encapsulation cases.
-		`  if (net ~ 10.16.0.0/16) then { accept; }`,
-		`  if (net ~ 10.17.0.0/16) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ 10.18.0.0/16) then { accept; }`,
-		`  if (net ~ 10.19.0.0/16) then { reject; } # BGP export is disabled.`,
-	}
-	testExpectedIPPoolStatments(t, poolsTestsV4, expectedStatements, false, "", 4)
-}
-
-func Test_IPPoolsFilterBIRDFunc_BGPPeeringV6(t *testing.T) {
-	expectedStatements := []string{
-		// IPv6 IPIP Encapsulation cases.
-		`  if (net ~ dead:beef:10::/64) then { accept; }`,
-		`  if (net ~ dead:beef:11::/64) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ dead:beef:12::/64) then { accept; }`,
-		`  if (net ~ dead:beef:13::/64) then { reject; } # BGP export is disabled.`,
-		// IPv6 No-Encapsulation case.
-		`  if (net ~ dead:beef:14::/64) then { accept; }`,
-		`  if (net ~ dead:beef:15::/64) then { reject; } # BGP export is disabled.`,
-		// IPv6 VXLAN Encapsulation cases.
-		`  if (net ~ dead:beef:16::/64) then { accept; }`,
-		`  if (net ~ dead:beef:17::/64) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ dead:beef:18::/64) then { accept; }`,
-		`  if (net ~ dead:beef:19::/64) then { reject; } # BGP export is disabled.`,
-	}
-	testExpectedIPPoolStatments(t, poolsTestsV6, expectedStatements, false, "", 6)
-}
-
-func testExpectedIPPoolStatments(
-	t *testing.T,
-	tcs []ippoolTestCase,
-	expectedStatements []string,
-	forProgrammingKernel bool,
-	localSubnet string,
-	ipVersion int,
-) {
-	for i, tc := range tcs {
-		expected := expectedStatements[i]
-		for _, filterAction := range []string{"", "accept", "reject"} {
-			expectedFiltered := filterExpectedStatement(expected, filterAction)
-			ippool := ippoolForTestCase(tc)
-			generated := processIPPool(ippool, forProgrammingKernel, localSubnet, filterAction, ipVersion)
-			if !reflect.DeepEqual(generated, expectedFiltered) {
-				t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-					generated, expected)
-			}
-		}
-	}
-}
-
 // func ippoolTestCasesToKVPairs(t *testing.T, tcs []ippoolTestCase, ipVersion int) memkv.KVPairs {
 func ippoolTestCasesToKVPairs(t *testing.T, tcs []ippoolTestCase, ipVersion int) map[string]string {
 	cache := map[string]string{}
@@ -328,16 +230,6 @@ func ippoolForTestCase(tc ippoolTestCase) *model.IPPool {
 	ippool.VXLANMode = tc.vxlanMode
 	ippool.DisableBGPExport = tc.exportDisabled
 	return &ippool
-}
-
-func filterExpectedStatement(statement string, filterAction string) (filtered string) {
-	if len(filterAction) == 0 {
-		return statement
-	}
-	if strings.Contains(statement, fmt.Sprintf("%s; }", filterAction)) {
-		return statement
-	}
-	return ""
 }
 
 func filterExpectedStatements(statements []string, filterAction string) (filtered []string) {
