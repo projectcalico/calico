@@ -594,40 +594,48 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("get workloadendpoints -o yaml")
         rc.assert_empty_list("WorkloadEndpoint")
 
-    def test_non_namespaced(self):
-        """
-        Test namespace is handled as expected for each non-namespaced resource type.
-        """
-        for data in [
-                ippool_name1_rev1_v4,
-                ipresv_name1_rev1_v4,
-                profile_name1_rev1,
-                globalnetworkpolicy_name1_rev1,
-                stagedglobalnetworkpolicy_name1_rev1,
-                globalnetworkset_name1_rev1,
-                globalnetworkset_name1_rev1_large,
-                hostendpoint_name1_rev1,
-                bgppeer_name1_rev1_v4,
-                node_name1_rev1,
-                tier_name1_rev1,
-        ]:
-            with self.subTest(data=data):
-                self.setUp()
-                self._test_non_namespaced(data)
+    def test_non_namespaced_ippool(self):
+        self._test_non_namespaced(ippool_name1_rev1_v4)
 
-    def test_non_namespaced_tiered(self):
-        """
-        Test namespace is handled as expected for each non-namespaced resource type.
-        """
-        for data in [
-                globalnetworkpolicy_tiered_name2_rev1,
-                stagedglobalnetworkpolicy_tiered_name2_rev1,
-        ]:
-            with self.subTest(data=data):
-                self.setUp()
-                self._create_admin_tier()
-                self._test_non_namespaced(data)
-                self._delete_admin_tier()
+    def test_non_namespaced_ipresv(self):
+        self._test_non_namespaced(ipresv_name1_rev1_v4)
+
+    def test_non_namespaced_profile(self):
+        self._test_non_namespaced(profile_name1_rev1)
+
+    def test_non_namespaced_globalnetworkpolicy(self):
+        self._test_non_namespaced(globalnetworkpolicy_name1_rev1)
+
+    def test_non_namespaced_stagedglobalnetworkpolicy(self):
+        self._test_non_namespaced(stagedglobalnetworkpolicy_name1_rev1)
+
+    def test_non_namespaced_globalnetworkset(self):
+        self._test_non_namespaced(globalnetworkset_name1_rev1)
+
+    def test_non_namespaced_globalnetworkset_large(self):
+        self._test_non_namespaced(globalnetworkset_name1_rev1_large)
+
+    def test_non_namespaced_hostendpoint(self):
+        self._test_non_namespaced(hostendpoint_name1_rev1)
+
+    def test_non_namespaced_bgppeer(self):
+        self._test_non_namespaced(bgppeer_name1_rev1_v4)
+
+    def test_non_namespaced_node(self):
+        self._test_non_namespaced(node_name1_rev1)
+
+    def test_non_namespaced_tier(self):
+        self._test_non_namespaced(tier_name1_rev1)
+
+    def test_non_namespaced_tiered_globalnetworkpolicy(self):
+        self._create_admin_tier()
+        self._test_non_namespaced(globalnetworkpolicy_tiered_name2_rev1)
+        self._delete_admin_tier()
+
+    def test_non_namespaced_tiered_stagedglobalnetworkpolicy(self):
+        self._create_admin_tier()
+        self._test_non_namespaced(stagedglobalnetworkpolicy_tiered_name2_rev1)
+        self._delete_admin_tier()
 
     def _create_admin_tier(self):
         rc = calicoctl("create", data=tier_name1_rev1)
@@ -696,72 +704,66 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
 
-    def test_nets_truncation(self):
+    def test_nets_truncation_globalnetworkset(self):
+        self._test_nets_truncation(globalnetworkset_name1_rev1_large)
+
+    def test_nets_truncation_networkset(self):
+        self._test_nets_truncation(networkset_name1_rev1_large)
+
+    def _test_nets_truncation(self, data):
         """
         Test that the list of nets is truncated if it's too long.
         """
-        for data in [
-                globalnetworkset_name1_rev1_large,
-                networkset_name1_rev1_large,
-        ]:
-            with self.subTest(data=data):
-                self.setUp()
-                rc = calicoctl("create", data)
-                rc.assert_no_error()
+        rc = calicoctl("create", data)
+        rc.assert_no_error()
 
-                kind = data['kind']
-                if kind == "GlobalNetworkSet":
-                    rc = calicoctl("get %s -o wide" % kind)
-                else:
-                    rc = calicoctl("get %s -o wide -n %s" % (kind, data['metadata']['namespace']))
+        kind = data['kind']
+        if kind == "GlobalNetworkSet":
+            rc = calicoctl("get %s -o wide" % kind)
+        else:
+            rc = calicoctl("get %s -o wide -n %s" % (kind, data['metadata']['namespace']))
 
-                rc.assert_no_error()
-                rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
+        rc.assert_no_error()
+        rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
 
-    def test_nets_no_truncation(self):
+    def test_nets_no_truncation_globalnetworkset(self):
+        self._test_nets_no_truncation(globalnetworkset_name1_rev1)
+
+    def test_nets_no_truncation_networkset(self):
+        self._test_nets_no_truncation(networkset_name1_rev1)
+
+    def _test_nets_no_truncation(self, data):
         """
         Test that the list of nets is shown in full if not too long.
         """
-        for data in [
-                globalnetworkset_name1_rev1,
-                networkset_name1_rev1,
-        ]:
-            with self.subTest(data=data):
-                self.setUp()
-                rc = calicoctl("create", data)
-                rc.assert_no_error()
+        rc = calicoctl("create", data)
+        rc.assert_no_error()
 
-                rc = calicoctl("get %s -o wide" % data['kind'])
-                rc.assert_no_error()
-                rc.assert_output_contains("10.0.0.1,11.0.0.0/16,feed:beef::1,dead:beef::96")
+        rc = calicoctl("get %s -o wide" % data['kind'])
+        rc.assert_no_error()
+        rc.assert_output_contains("10.0.0.1,11.0.0.0/16,feed:beef::1,dead:beef::96")
 
-    def test_namespaced(self):
-        """
-        Tests namespace is handled as expected for each namespaced resource type.
-        """
-        for data in [
-                networkpolicy_name1_rev1,
-                stagednetworkpolicy_name1_rev1,
-                networkset_name1_rev1,
-                workloadendpoint_name1_rev1,
-        ]:
-            with self.subTest(data=data):
-                self.setUp()
-                self._test_namespaced(data)
+    def test_namespaced_networkpolicy(self):
+        self._test_namespaced(networkpolicy_name1_rev1)
 
-    def test_namespaced_tiered(self):
-        """
-        Tests namespace is handled as expected for each namespaced resource type.
-        """
-        for data in [
-                networkpolicy_tiered_name2_rev1,
-                stagednetworkpolicy_tiered_name2_rev1,
-        ]:
-            with self.subTest(data=data):
-                self.setUp()
-                self._create_admin_tier()
-                self._test_namespaced(data)
-                self._delete_admin_tier()
+    def test_namespaced_stagednetworkpolicy(self):
+        self._test_namespaced(stagednetworkpolicy_name1_rev1)
+
+    def test_namespaced_networkset(self):
+        self._test_namespaced(networkset_name1_rev1)
+
+    def test_namespaced_workloadendpoint(self):
+        self._test_namespaced(workloadendpoint_name1_rev1)
+
+    def test_namespaced_tiered_networkpolicy(self):
+        self._create_admin_tier()
+        self._test_namespaced(networkpolicy_tiered_name2_rev1)
+        self._delete_admin_tier()
+
+    def test_namespaced_tiered_stagednetworkpolicy(self):
+        self._create_admin_tier()
+        self._test_namespaced(stagednetworkpolicy_tiered_name2_rev1)
+        self._delete_admin_tier()
 
     def _test_namespaced(self, data):
         # Clone the data so that we can modify the metadata parms.
@@ -1042,14 +1044,11 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete kubecontrollersconfig %s" % name(rev2))
         rc.assert_no_error()
 
-    def test_metadata_unchanged(self):
-        for create_cmd, update_cmd in [
-                ('create', 'replace'),
-                ('apply', 'apply'),
-        ]:
-            with self.subTest(create_cmd=create_cmd, update_cmd=update_cmd):
-                self.setUp()
-                self._test_metadata_unchanged(create_cmd, update_cmd)
+    def test_metadata_unchanged_create_replace(self):
+        self._test_metadata_unchanged('create', 'replace')
+
+    def test_metadata_unchanged_apply(self):
+        self._test_metadata_unchanged('apply', 'apply')
 
     def _test_metadata_unchanged(self, create_cmd, update_cmd):
         """
@@ -1266,14 +1265,11 @@ class TestCalicoctlCommands(TestBase):
         # Delete the resources
         rc = calicoctl("delete", data=resources)
 
-    def test_disallow_update_old_resource_version(self):
-        for update_cmd in [
-                'replace',
-                'apply',
-        ]:
-            with self.subTest(update_cmd=update_cmd):
-                self.setUp()
-                self._test_disallow_update_old_resource_version(update_cmd)
+    def test_disallow_update_old_resource_version_replace(self):
+        self._test_disallow_update_old_resource_version('replace')
+
+    def test_disallow_update_old_resource_version_apply(self):
+        self._test_disallow_update_old_resource_version('apply')
 
     def _test_disallow_update_old_resource_version(self, update_cmd):
         """
@@ -2796,11 +2792,87 @@ class InvalidData(TestBase):
     def setUp(self):
         super(InvalidData, self).setUp()
 
-    def test_invalid_profiles_rejected(self):
-        for name, testdata, error in self.testdata:
-            with self.subTest(name=name, testdata=testdata, error=error):
-                self.setUp()
-                self._test_invalid_profiles_rejected(name, testdata, error)
+    @classmethod
+    def _find_testdata(cls, test_name):
+        for entry in cls.testdata:
+            if entry[0] == test_name:
+                return entry
+        raise ValueError("Unknown testdata: %s" % test_name)
+
+    def test_invalid_bgppeer_asnum(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("bgpPeer-invalidASnum"))
+
+    def test_invalid_bgppeer_ip(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("bgpPeer-invalidIP"))
+
+    def test_invalid_bgppeer_apiversion(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("bgpPeer-apiversion"))
+
+    def test_invalid_bgppeer_ipv6(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("bgpPeer-invalidIpv6"))
+
+    def test_invalid_bgppeer_nodename(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("bgpPeer-invalidnodename"))
+
+    def test_invalid_bgppeer_unrecognised_field(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("bgpPeer-unrecognisedfield"))
+
+    def test_invalid_hostendpoint_interface(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("hostEndpoint-invalidInterface"))
+
+    def test_invalid_policy_high_port_in_list(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("policy-invalidHighPortinList"))
+
+    def test_invalid_policy_high_port_in_range(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("policy-invalidHighPortinRange"))
+
+    def test_invalid_policy_low_port_in_range(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("policy-invalidLowPortinRange"))
+
+    def test_invalid_policy_low_port_in_list(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("policy-invalidLowPortinList"))
+
+    def test_invalid_policy_reversed_range(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("policy-invalidReversedRange"))
+
+    def test_invalid_policy_action(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("policy-invalidAction"))
+
+    def test_invalid_policy_networkpolicy_name_rejected(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("policy-NetworkPolicyNameRejected"))
+
+    def test_invalid_pool_net1(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidNet1"))
+
+    def test_invalid_pool_net2(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidNet2"))
+
+    def test_invalid_pool_net3(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidNet3"))
+
+    def test_invalid_pool_net4(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidNet4"))
+
+    def test_invalid_pool_net6(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidNet6"))
+
+    def test_invalid_pool_net7(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidNet7"))
+
+    def test_invalid_pool_net8(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidNet8"))
+
+    def test_invalid_pool_ipip1(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidIpIp1"))
+
+    def test_invalid_pool_ipip2(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("pool-invalidIpIp2"))
+
+    def test_invalid_profile_icmp_type(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("profile-ICMPtype"))
+
+    def test_invalid_profile_icmp_code(self):
+        self._test_invalid_profiles_rejected(*self._find_testdata("profile-ICMPcode"))
 
     def _test_invalid_profiles_rejected(self, name, testdata, error):
         log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
@@ -2816,11 +2888,8 @@ class InvalidData(TestBase):
         # Assert that we saw the correct error being reported
         ctl.assert_error(error)
 
-    def test_invalid_compound_profiles_rejected(self):
-        for name, testdata, errors in self.compound_test_data:
-            with self.subTest(name=name, testdata=testdata, errors=errors):
-                self.setUp()
-                self._test_invalid_compound_profiles_rejected(name, testdata, errors)
+    def test_invalid_compound_config(self):
+        self._test_invalid_compound_profiles_rejected(*self.compound_test_data[0])
 
     def _test_invalid_compound_profiles_rejected(self, name, testdata, errors):
         log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
@@ -2832,7 +2901,6 @@ class InvalidData(TestBase):
                     self.check_only_default_profile_returned(data)
                 else:
                     self.check_no_data_in_store(data)
-
 
         # Assert that we saw the correct error being reported
         for value in errors.values():
