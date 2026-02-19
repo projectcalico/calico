@@ -24,7 +24,7 @@ import (
 )
 
 func TestPoolSortFunc(t *testing.T) {
-	now := time.Now()
+	now := time.Unix(1000000, 0)
 
 	makePool := func(name string, createdAt time.Time, condition *metav1.Condition, deleting bool) *v3.IPPool {
 		p := &v3.IPPool{
