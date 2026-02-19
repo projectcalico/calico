@@ -793,6 +793,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 //   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
 //     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (no filtering).
+//   - localSubnet: the subnet of local node, which is needed by IPv4 IPIP pool in cross subnet mode.
 //   - version: the statement ip family.
 //
 // As an example, For the following sample IPPool resource:
