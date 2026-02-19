@@ -29,7 +29,7 @@ Prefix format: `<ip-version> <protocol>, ct=<bool>, log=<level>, tunnel=<mode>, 
 | Parameter | Values                                      |
 |-----------|---------------------------------------------|
 | ip version| `ipv4`, `ipv6`                              |
-| protocol  | `tcp`, `udp`, `udp-connected`               |
+| protocol  | `tcp`, `udp`, `udp-unconnected`, `udp-conn-recvmsg` |
 | ct        | `true`, `false`                              |
 | log       | `debug`, `none`                              |
 | tunnel    | `none`, `ipip`, `vxlan`, `wireguard`         |
