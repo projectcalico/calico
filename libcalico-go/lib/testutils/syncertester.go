@@ -31,7 +31,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -581,7 +581,7 @@ func isExternallyControlled(key model.Key) bool {
 		return true
 	case model.ResourceKey:
 		switch key.(model.ResourceKey).Kind {
-		case libapiv3.KindNode, model.KindKubernetesEndpointSlice, model.KindKubernetesService:
+		case internalapi.KindNode, model.KindKubernetesEndpointSlice, model.KindKubernetesService:
 			return true
 		}
 	}

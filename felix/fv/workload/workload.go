@@ -39,7 +39,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -57,11 +57,11 @@ type Workload struct {
 	outPipe               io.ReadCloser
 	errPipe               io.ReadCloser
 	namespacePath         string
-	WorkloadEndpoint      *api.WorkloadEndpoint
+	WorkloadEndpoint      *internalapi.WorkloadEndpoint
 	Protocol              string // "tcp" or "udp"
 	SpoofInterfaceName    string
 	SpoofName             string
-	SpoofWorkloadEndpoint *api.WorkloadEndpoint
+	SpoofWorkloadEndpoint *internalapi.WorkloadEndpoint
 	MTU                   int
 	isRunning             bool
 	isSpoofing            bool
@@ -197,7 +197,7 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 	// Build unique workload name and struct.
 	workloadIdx++
 
-	wep := api.NewWorkloadEndpoint()
+	wep := internalapi.NewWorkloadEndpoint()
 	wep.Labels = map[string]string{"name": n}
 	wep.Spec.Node = c.Hostname
 	wep.Spec.Orchestrator = "felixfv"
