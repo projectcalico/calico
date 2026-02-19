@@ -148,27 +148,27 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
-	// Check VM address persistence setting first (always, regardless of pod type).
-	ipPersistenceEnabled := getKubeVirtVMAddressPersistence(calicoClient)
-
 	// Always detect VMI info so we can reject migration targets when persistence is disabled.
 	vmiInfo, err := getVMIInfoForPod(conf, epIDs)
 	if err != nil {
 		return fmt.Errorf("failed to get VMI info: %w", err)
 	}
 
+	// Combined flag: VMI pod with persistence enabled.
+	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(calicoClient)
+
 	// Reject migration target pods when persistence is disabled.
-	if vmiInfo != nil && !ipPersistenceEnabled && vmiInfo.IsMigrationTarget() {
+	if vmiInfo != nil && !ipPersistenceEnabledForVM && vmiInfo.IsMigrationTarget() {
 		logrus.Error("Live migration target pod rejected: KubeVirtVMAddressPersistence is disabled")
 		return fmt.Errorf("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
 	}
 
 	// Use VM-based handle ID only when both vmiInfo is present and persistence is enabled.
 	var handleID string
-	if vmiInfo != nil && ipPersistenceEnabled {
+	if ipPersistenceEnabledForVM {
 		// Use VMI-based handle ID for IP stability across VMI pod recreations/migrations
 		// Handle ID is based on hash(namespace/vmiName) for persistence across VMI recreation
-		handleID = createVMIHandleID(conf.Name, vmiInfo)
+		handleID = ipam.CreateVMIHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
 		logrus.WithFields(logrus.Fields{
 			"pod":               epIDs.Pod,
 			"namespace":         epIDs.Namespace,
@@ -203,7 +203,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		attrs[ipam.AttributeNamespace] = epIDs.Namespace
 	}
 	// Add VMI attributes if this is a virt-launcher pod with persistence enabled
-	if vmiInfo != nil && ipPersistenceEnabled {
+	if ipPersistenceEnabledForVM {
 		attrs[ipam.AttributeVMIName] = vmiInfo.GetName()
 		attrs[ipam.AttributeVMIUID] = vmiInfo.GetVMIUID()
 		if vmUID := vmiInfo.GetVMUID(); vmUID != "" {
@@ -241,7 +241,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		// For VMI pods with persistence enabled, set MaxAllocPerIPVersion=1 to ensure only one IP per IP version per VMI.
-		if vmiInfo != nil && ipPersistenceEnabled {
+		if ipPersistenceEnabledForVM {
 			assignArgs.MaxAllocPerIPVersion = 1
 		}
 
@@ -357,7 +357,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// For VMI pods with persistence enabled, set MaxAllocPerIPVersion=1 to ensure only one IP per IP version per VMI.
 		// The IPAM library will automatically handle IP reuse if the handle already has an allocation.
-		if vmiInfo != nil && ipPersistenceEnabled {
+		if ipPersistenceEnabledForVM {
 			assignArgs.MaxAllocPerIPVersion = 1
 		}
 
@@ -543,16 +543,6 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 	}
 }
 
-// createVMIHandleID creates a handle ID for a KubeVirt VMI pod based on namespace and VMI name.
-// The handle ID format is: <networkName>.vmi.<namespace>.<vmiName> (length-limited to 128 chars)
-// This ensures IP persistence across VMI pod recreations and live migrations since
-// the VMI name and namespace remain stable (VM and VMI share the same name).
-// This function delegates to ipam.CreateVMIHandleID to ensure consistent handle generation
-// across CNI plugin and Felix.
-func createVMIHandleID(confName string, vmiInfo *kubevirt.PodVMIInfo) string {
-	return ipam.CreateVMIHandleID(confName, vmiInfo.GetNamespace(), vmiInfo.GetName())
-}
-
 // getVMIInfoForPod retrieves KubeVirt VirtualMachineInstance (VMI) information for a given pod.
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
 // Returns (nil, nil) if the pod is not a virt-launcher pod.
@@ -639,21 +629,21 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
-	// Check VM address persistence setting first (always, regardless of pod type).
-	ipPersistenceEnabled := getKubeVirtVMAddressPersistence(calicoClient)
-
 	// Always detect VMI info for logging, but only use VM-based handle when persistence is enabled.
 	vmiInfo, err := getVMIInfoForPod(conf, epIDs)
 	if err != nil {
 		return fmt.Errorf("failed to get VMI info: %w", err)
 	}
 
+	// Combined flag: VMI pod with persistence enabled.
+	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(calicoClient)
+
 	// Use VM-based handle ID only when both vmiInfo is present and persistence is enabled.
 	var handleID string
-	if vmiInfo != nil && ipPersistenceEnabled {
+	if ipPersistenceEnabledForVM {
 		// Use VMI-based handle ID
 		// Handle ID is based on hash(namespace/vmiName) for persistence across VMI recreation
-		handleID = createVMIHandleID(conf.Name, vmiInfo)
+		handleID = ipam.CreateVMIHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
 
 		// VMI deletion status is already available from embedded VMIResource
 		logrus.WithFields(logrus.Fields{
@@ -694,7 +684,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	// IP persistence is only maintained while the VM (or standalone VMI) is alive.
 	// - If VMI is owned by a VM: release when VM has DeletionTimestamp
 	// - If VMI is standalone (no VM owner): release when VMI has DeletionTimestamp
-	if vmiInfo != nil && ipPersistenceEnabled {
+	if ipPersistenceEnabledForVM {
 		shouldRelease := false
 		if vmiInfo.VMOwner != nil {
 			// VMI is owned by a VM - check VM deletion status
