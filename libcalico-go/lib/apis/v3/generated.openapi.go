@@ -2758,7 +2758,7 @@ func schema_libcalico_go_lib_apis_v3_LiveMigration(ref common.ReferenceCallback)
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "LiveMigration describes a live-migration operation in progress. It is orchestrator-independent and holds only the fields that Calico needs for optimal live migration processing.",
+				Description: "LiveMigration describes a live-migration operation in progress. It is orchestrator-independent and holds the fields that Calico needs for optimal live migration processing.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -2777,19 +2777,18 @@ func schema_libcalico_go_lib_apis_v3_LiveMigration(ref common.ReferenceCallback)
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Specification of the LiveMigration.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v3.LiveMigrationSpec"),
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v3.LiveMigrationSpec"),
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
@@ -2863,6 +2862,7 @@ func schema_libcalico_go_lib_apis_v3_LiveMigrationSpec(ref common.ReferenceCallb
 					"destinationWorkloadEndpointSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selector for the WorkloadEndpoint that this live migration operation is moving to.",
+							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2875,6 +2875,7 @@ func schema_libcalico_go_lib_apis_v3_LiveMigrationSpec(ref common.ReferenceCallb
 						},
 					},
 				},
+				Required: []string{"destinationWorkloadEndpoint", "destinationWorkloadEndpointSelector", "sourceWorkloadEndpoint"},
 			},
 		},
 		Dependencies: []string{
