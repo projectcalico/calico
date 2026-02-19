@@ -346,6 +346,11 @@ func (b *mockDatastore) HostEndpoints() clientv3.HostEndpointInterface {
 	panic("not implemented")
 }
 
+// LiveMigrations returns an interface for managing live migration resources.
+func (b *mockDatastore) LiveMigrations() clientv3.LiveMigrationInterface {
+	panic("not implemented")
+}
+
 // WorkloadEndpoints returns an interface for managing workload endpoint resources.
 func (b *mockDatastore) WorkloadEndpoints() clientv3.WorkloadEndpointInterface {
 	panic("not implemented")
