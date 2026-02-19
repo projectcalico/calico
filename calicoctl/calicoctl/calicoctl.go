@@ -48,6 +48,7 @@ func main() {
     version      Display the version of this binary.
     datastore    Calico datastore management.
     cluster      Access cluster information.
+    status       Display Calico cluster status.
 
 Options:
   -h --help                    Show this screen.
@@ -133,6 +134,8 @@ Description:
 			err = commands.IPAM(args)
 		case "cluster":
 			err = commands.Cluster(args)
+		case "status":
+			err = commands.Status(args)
 		case "datastore":
 			err = commands.Datastore(args)
 		default:
