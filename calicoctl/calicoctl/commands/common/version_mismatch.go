@@ -16,9 +16,12 @@ package common
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -27,6 +30,43 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
+
+var githubReleasesURL = "https://api.github.com/repos/projectcalico/calico/releases/latest"
+
+type githubRelease struct {
+	TagName string `json:"tag_name"`
+}
+
+func fetchLatestCalicoVersion() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubReleasesURL, nil)
+	if err != nil {
+		log.Debugf("failed to fetch latest Calico version: %v", err)
+		return ""
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Debugf("failed to fetch latest Calico version: %v", err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Debugf("failed to fetch latest Calico version: HTTP %d", resp.StatusCode)
+		return ""
+	}
+
+	var r githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		log.Debugf("failed to fetch latest Calico version: %v", err)
+		return ""
+	}
+
+	return r.TagName
+}
 
 func CheckVersionMismatch(configArg, allowMismatchArg any) error {
 	if allowMismatch, _ := allowMismatchArg.(bool); allowMismatch {
@@ -74,7 +114,14 @@ func CheckVersionMismatch(configArg, allowMismatchArg any) error {
 	clientv := strings.Split(strings.TrimPrefix(buildinfo.Version, "v"), "-")[0]
 
 	if clusterv != clientv {
-		return fmt.Errorf("version mismatch.\nClient Version:   %s\nCluster Version:  %s\nUse --allow-version-mismatch to override", buildinfo.Version, clusterv)
+		latest := fetchLatestCalicoVersion()
+		msg := fmt.Sprintf("Version mismatch detected\nClient Version:   %s\nCluster Version:  %s\n", buildinfo.Version, clusterv)
+		if latest != "" {
+			msg += fmt.Sprintf("Latest available Calico version: %s\n", latest)
+		}
+		msg += "Learn more: https://docs.tigera.io/calico/latest/release-notes/\n"
+		msg += "Upgrade or downgrade your components to match, or use --allow-version-mismatch to override"
+		return fmt.Errorf("%s", msg)
 	}
 
 	return nil
