@@ -750,6 +750,8 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		filterActionForKernel = "reject"
 	}
 
+	localSubnet := c.localSubnet(ipVersion)
+
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
@@ -758,19 +760,19 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
-		statement := c.processIPPool(&ippool, false, "reject", ipVersion)
+		statement := c.processIPPool(&ippool, false, "reject", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
-		statement = c.processIPPool(&ippool, false, "accept", ipVersion)
+		statement = c.processIPPool(&ippool, false, "accept", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
 		// Generate statements for kernel programming filter.
-		statement = c.processIPPool(&ippool, true, filterActionForKernel, ipVersion)
+		statement = c.processIPPool(&ippool, true, filterActionForKernel, localSubnet, ipVersion)
 		if len(statement) != 0 {
 			config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 		}
@@ -817,6 +819,7 @@ func (c *client) processIPPool(
 	ippool *model.IPPool,
 	forProgrammingKernel bool,
 	filterAction string,
+	localSubnet string,
 	ipVersion int,
 ) string {
 	cidr := ippool.CIDR.String()
@@ -839,11 +842,9 @@ func (c *client) processIPPool(
 		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
 		// IPIP encapsulation or No-Encap.
 		if forProgrammingKernel && ipVersion == 4 {
-			localSubnet := c.localSubnet(ipVersion)
 			if len(localSubnet) == 0 {
 				return ""
 			}
-
 			// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
 			// our fork of BIRD.
 			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
