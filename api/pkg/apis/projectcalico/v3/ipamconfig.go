@@ -51,6 +51,15 @@ type IPAMConfiguration struct {
 	Spec IPAMConfigurationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
+// VMAddressPersistence controls whether KubeVirt VirtualMachine workloads
+// maintain persistent IP addresses across VM lifecycle events.
+type VMAddressPersistence string
+
+const (
+	VMAddressPersistenceEnabled  VMAddressPersistence = "Enabled"
+	VMAddressPersistenceDisabled VMAddressPersistence = "Disabled"
+)
+
 // IPAMConfigurationSpec contains the specification for an IPAMConfiguration resource.
 type IPAMConfigurationSpec struct {
 	// When StrictAffinity is true, borrowing IP addresses is not allowed.
@@ -69,6 +78,17 @@ type IPAMConfigurationSpec struct {
 	// Whether or not to auto allocate blocks to hosts.
 	// +kubebuilder:default=true
 	AutoAllocateBlocks bool `json:"autoAllocateBlocks"`
+
+	// KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
+	// maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction).
+	// When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses
+	// when their underlying pods are recreated during VM operations.
+	// When Disabled, VMs receive new IP addresses whenever their pods are recreated.
+	// Defaults to Enabled if not specified.
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +kubebuilder:default=Enabled
+	// +optional
+	KubeVirtVMAddressPersistence *VMAddressPersistence `json:"kubeVirtVMAddressPersistence,omitempty"`
 }
 
 // NewIPAMConfiguration creates a new (zeroed) IPAMConfiguration struct with the TypeMetadata initialised to the current
