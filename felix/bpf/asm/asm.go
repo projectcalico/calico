@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -888,12 +889,7 @@ func (b *Block) nextInsnReachable() bool {
 	if lastOpCode == JumpA /*Unconditional jump*/ || lastOpCode == Exit {
 		// Previous instruction doesn't fall through to this one, need
 		// to check if something else jumps here...
-		for _, l := range b.insnIdxToLabels[len(b.insns)] {
-			if b.inUseJumpTargets.Contains(l) {
-				return true // Previous instruction jumps to this one, we're reachable.
-			}
-		}
-		return false
+		return slices.ContainsFunc(b.insnIdxToLabels[len(b.insns)], b.inUseJumpTargets.Contains)
 	}
 	return true
 }

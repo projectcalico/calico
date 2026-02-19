@@ -30,7 +30,7 @@ import (
 )
 
 type X509CSR struct {
-	PrivateKey    interface{}
+	PrivateKey    any
 	PrivateKeyPEM []byte
 	CSR           []byte
 }
@@ -129,7 +129,7 @@ type basicConstraints struct {
 
 // Create a private key based on the env variables.
 // Default: 2048 bit.
-func GeneratePrivateKey(algorithm string) (interface{}, []byte, error) {
+func GeneratePrivateKey(algorithm string) (any, []byte, error) {
 	switch algorithm {
 	case "RSAWithSize2048":
 		return genRSA(2048)
@@ -149,7 +149,7 @@ func GeneratePrivateKey(algorithm string) (interface{}, []byte, error) {
 }
 
 // genECDSA generates a private key.
-func genECDSA(curve elliptic.Curve) (interface{}, []byte, error) {
+func genECDSA(curve elliptic.Curve) (any, []byte, error) {
 	key, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
 		return nil, nil, err
@@ -236,7 +236,7 @@ func asn1BitLength(bitString []byte) int {
 	for i := range bitString {
 		b := bitString[len(bitString)-i-1]
 
-		for bit := uint(0); bit < 8; bit++ {
+		for bit := range uint(8) {
 			if (b>>bit)&1 == 1 {
 				return bitLen
 			}

@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -1029,7 +1029,7 @@ func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester
 		lws[name] = &listWatchSource{
 			name:            name,
 			watchCallError:  make(chan error, 50),
-			listCallResults: make(chan interface{}, 200),
+			listCallResults: make(chan any, 200),
 			stopEvents:      make(chan struct{}, 200),
 			results:         make(chan api.WatchEvent, 200),
 		}
@@ -1138,7 +1138,7 @@ func (rst *watcherSyncerTester) expectStop(r watchersyncer.ResourceType) {
 // Call to specify the response of the client List invocation.  The List call will block
 // until the response has been specified.
 // The response should either be of type error, or type *KVPairList.
-func (rst *watcherSyncerTester) clientListResponse(r watchersyncer.ResourceType, response interface{}) {
+func (rst *watcherSyncerTester) clientListResponse(r watchersyncer.ResourceType, response any) {
 	name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
 	log.WithFields(log.Fields{
 		"Name":     name,
@@ -1266,7 +1266,7 @@ type listWatchSource struct {
 	// The list results.  This channel with contain either:
 	// - an error
 	// - a *model.KVPairList
-	listCallResults chan interface{}
+	listCallResults chan any
 
 	// Stop events channel.  We add an event each time stop is called for a watcher.
 	stopEvents chan struct{}

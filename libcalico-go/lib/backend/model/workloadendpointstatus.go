@@ -89,7 +89,7 @@ func (key WorkloadEndpointStatusKey) defaultDeleteParentPaths() ([]string, error
 }
 
 func (key WorkloadEndpointStatusKey) valueType() (reflect.Type, error) {
-	return reflect.TypeOf(WorkloadEndpointStatus{}), nil
+	return reflect.TypeFor[WorkloadEndpointStatus](), nil
 }
 
 func (key WorkloadEndpointStatusKey) parseValue(rawData []byte) (any, error) {

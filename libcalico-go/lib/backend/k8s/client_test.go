@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -141,7 +141,7 @@ var (
 
 	// Use a back-off set of intervals for testing deletion of a namespace
 	// which can sometimes be slow.
-	slowCheck = []interface{}{
+	slowCheck = []any{
 		60 * time.Second,
 		1 * time.Second,
 	}
@@ -312,8 +312,8 @@ func expectEventOfType(events <-chan api.WatchEvent, type_ api.WatchEventType) *
 //
 // The returned function returns the cached entry or nil if the entry does not
 // exist in the cache.
-func (c *cb) GetSyncerValueFunc(key model.Key) func() interface{} {
-	return func() interface{} {
+func (c *cb) GetSyncerValueFunc(key model.Key) func() any {
+	return func() any {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
 		defer c.Lock.Unlock()
@@ -331,8 +331,8 @@ func (c *cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 // the Value may itself by nil.
 //
 // The returned function returns true if the entry is present.
-func (c *cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
-	return func() interface{} {
+func (c *cb) GetSyncerValuePresentFunc(key model.Key) func() any {
+	return func() any {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
 		defer c.Lock.Unlock()
@@ -679,7 +679,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 	It("should handle the static default-allow Profile", func() {
 		findAllowAllProfileEvent := func(c <-chan api.WatchEvent) bool {
 			found := false
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				select {
 				case e := <-c:
 					if e.Type == api.WatchAdded &&
@@ -1599,7 +1599,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
-			vals := []interface{}{}
+			vals := []any{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
 				vals = append(vals, k.Value.(*apiv3.HostEndpoint).Spec)
@@ -1750,7 +1750,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
-			vals := []interface{}{}
+			vals := []any{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
 				vals = append(vals, k.Value.(*apiv3.NetworkSet).Spec)
@@ -1921,7 +1921,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
-			vals := []interface{}{}
+			vals := []any{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
 				vals = append(vals, k.Value.(*apiv3.BGPPeer).Spec)
@@ -2114,7 +2114,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
-			vals := []interface{}{}
+			vals := []any{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
 				vals = append(vals, k.Value.(*apiv3.BGPPeer).Spec)
@@ -2185,7 +2185,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Waiting for the pod to start", func() {
 			// Wait up to 120s for pod to start running.
 			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
-			for i := 0; i < 120; i++ {
+			for range 120 {
 				p, err := c.ClientSet.CoreV1().Pods("default").Get(ctx, pod.ObjectMeta.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				if p.Status.Phase == k8sapi.PodRunning {
@@ -2520,7 +2520,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			// Wait up to 120s for pod to start running.
 			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
 
-			for i := 0; i < 120; i++ {
+			for range 120 {
 				p, err := c.ClientSet.CoreV1().Pods("default").Get(ctx, pod.ObjectMeta.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				if p.Status.Phase == k8sapi.PodRunning {
@@ -3543,7 +3543,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(l.KVPairs).To(HaveLen(2))
 
 			// Watch from part way
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
@@ -3565,7 +3565,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(l.KVPairs).To(HaveLen(2))
 
 			// Watch from part way
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
@@ -3587,7 +3587,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(l.KVPairs).To(HaveLen(2))
 
 			// Watch from part way
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
@@ -3715,7 +3715,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			// We should get at least one event from the watch.
 			var receivedEvent bool
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
@@ -3738,7 +3738,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			// We should get at least one event from the watch.
 			var receivedEvent bool
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
@@ -3773,7 +3773,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			// We should get at least one event from the watch.
 			var receivedEvent bool
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.

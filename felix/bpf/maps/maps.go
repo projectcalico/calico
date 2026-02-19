@@ -106,6 +106,7 @@ type Map interface {
 
 	// Size returns the maximun number of entries the table can hold.
 	Size() int
+	BatchUpdate(ks, vs [][]byte, flags uint64) (int, error)
 }
 
 type MapWithExistsCheck interface {
@@ -422,7 +423,7 @@ func (b *PinnedMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
 	k := make([]byte, 0, count*len(ks[0]))
 	v := make([]byte, 0, count*len(vs[0]))
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		k = append(k, ks[i]...)
 		v = append(v, vs[i]...)
 	}
@@ -460,7 +461,7 @@ func (b *PinnedMap) BatchDelete(ks [][]byte, flags uint64) (int, error) {
 
 	k := make([]byte, 0, count*len(ks[0]))
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		k = append(k, ks[i]...)
 	}
 
@@ -983,7 +984,7 @@ func (m *TypedMap[K, V]) BatchUpdate(ks []K, vs []V) (int, error) {
 			k := make([]byte, 0, count*b.GetKeySize())
 			v := make([]byte, 0, count*b.GetValueSize())
 
-			for i := 0; i < count; i++ {
+			for i := range count {
 				k = append(k, ks[i].AsBytes()...)
 				v = append(v, vs[i].AsBytes()...)
 			}
@@ -1037,7 +1038,7 @@ func (m *TypedMap[K, V]) BatchDelete(ks []K) (int, error) {
 		if isBatchOpsSupported() {
 			k := make([]byte, 0, count*b.GetKeySize())
 
-			for i := 0; i < count; i++ {
+			for i := range count {
 				k = append(k, ks[i].AsBytes()...)
 			}
 

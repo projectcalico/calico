@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	typeBGPNode = reflect.TypeOf(BGPNode{})
+	typeBGPNode = reflect.TypeFor[BGPNode]()
 )
 
 type BGPNodeKey struct {

@@ -266,6 +266,7 @@ blocks:
             - name: STORE_BUILD_CACHE
               value: "true"
           commands:
+            - make check-ginkgo-v2
             - make check-go-mod
             - make verify-go-mods
             - make gen-deps-files
@@ -1045,12 +1046,10 @@ blocks:
         # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
         - name: "kube-controllers: CI (projectcalico.org/v3)"
           commands:
-            - ../.semaphore/run-and-monitor ut.log make ut
+            - ../.semaphore/run-and-monitor ut.log make image ut
           env_vars:
             - name: CALICO_API_GROUP
               value: "projectcalico.org/v3"
-            - name: WHAT
-              value: "/pkg/controllers/ippool /pkg/controllers/node"
             - name: STORE_BUILD_CACHE
               value: "true"
   - name: Libraries (lib)
@@ -1265,6 +1264,25 @@ blocks:
         always:
           commands:
             - 'test-results publish --ignore-missing ./report/*.xml ../felix/report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Typha" || true'
+  - name: webhooks
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "webhooks"
+      prologue:
+        commands:
+          - cd webhooks
+      jobs:
+        - name: "webhooks: CI"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Whisker backend
     run:
       when: "true"

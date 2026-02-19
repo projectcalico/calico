@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 )
@@ -38,12 +38,12 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		now := time.Now()
 		duration := now.Sub(startTime)
 		Expect(duration).To(BeNumerically(">=", 20*time.Millisecond))
-	}, 1)
+	})
 	It("should produce longer and shorter ticks", func() {
 		lastTime := startTime
 		foundLT5 := false
 		foundGT5 := false
-		for i := 0; i < 40; i++ {
+		for range 40 {
 			<-ticker.Channel()
 			now := time.Now()
 			duration := time.Since(lastTime)
@@ -60,7 +60,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		}
 		Expect(foundLT5).To(BeTrue())
 		Expect(foundGT5).To(BeTrue())
-	}, 1)
+	})
 })
 
 var _ = Describe("Ticker.Stop()", func() {
@@ -78,7 +78,7 @@ var _ = Describe("Delay calculation", func() {
 		ticker = NewTicker(20*time.Millisecond, 10*time.Millisecond)
 		ticker.Stop()
 	})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		It(fmt.Sprintf("should tick before max delay, trial: %v", i), func() {
 			duration := ticker.calculateDelay()
 			Expect(duration).To(BeNumerically("<=", 30*time.Millisecond))
@@ -92,7 +92,7 @@ var _ = Describe("Delay calculation", func() {
 	It("should produce longer and shorter ticks", func() {
 		foundLT5 := false
 		foundGT5 := false
-		for i := 0; i < 40; i++ {
+		for range 40 {
 			duration := ticker.calculateDelay()
 			logrus.WithField("duration", duration).Debug("Tick")
 			if duration < 25*time.Millisecond {
@@ -106,7 +106,7 @@ var _ = Describe("Delay calculation", func() {
 		}
 		Expect(foundLT5).To(BeTrue())
 		Expect(foundGT5).To(BeTrue())
-	}, 1)
+	})
 })
 
 var _ = Describe("Ticker constructor", func() {

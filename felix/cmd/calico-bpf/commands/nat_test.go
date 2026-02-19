@@ -35,5 +35,5 @@ func TestNATDump(t *testing.T) {
 		nat2.NewNATBackendKey(108, 0): nat2.NewNATBackendValue(net.IPv4(3, 3, 3, 3), 553),
 	}
 
-	dumpNice(func(format string, i ...interface{}) { fmt.Printf(format, i...) }, nat, back)
+	dumpNice(func(format string, i ...any) { fmt.Printf(format, i...) }, nat, back)
 }

@@ -15,7 +15,7 @@
 package calc_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/calc"
@@ -32,7 +32,7 @@ var _ = Describe("ConfigBatcher", func() {
 		cb = NewConfigBatcher("myhost", recorder)
 	})
 
-	sendHostUpdate := func(name string, value interface{}) {
+	sendHostUpdate := func(name string, value any) {
 		cb.OnUpdate(api.Update{
 			KVPair: model.KVPair{
 				Key:   model.HostConfigKey{Name: name, Hostname: "myhost"},
@@ -40,7 +40,7 @@ var _ = Describe("ConfigBatcher", func() {
 			},
 		})
 	}
-	sendGlobalUpdate := func(name string, value interface{}) {
+	sendGlobalUpdate := func(name string, value any) {
 		cb.OnUpdate(api.Update{
 			KVPair: model.KVPair{
 				Key:   model.GlobalConfigKey{Name: name},
@@ -48,7 +48,7 @@ var _ = Describe("ConfigBatcher", func() {
 			},
 		})
 	}
-	sendReady := func(ready interface{}) {
+	sendReady := func(ready any) {
 		cb.OnUpdate(api.Update{
 			KVPair: model.KVPair{
 				Key:   model.ReadyFlagKey{},

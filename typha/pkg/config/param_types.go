@@ -36,8 +36,8 @@ const (
 
 type Metadata struct {
 	Name              string
-	Default           interface{}
-	ZeroValue         interface{}
+	Default           any
+	ZeroValue         any
 	NonZero           bool
 	DieOnParseFailure bool
 	Local             bool
@@ -63,7 +63,7 @@ type BoolParam struct {
 	Metadata
 }
 
-func (p *BoolParam) Parse(raw string) (interface{}, error) {
+func (p *BoolParam) Parse(raw string) (any, error) {
 	switch strings.ToLower(raw) {
 	case "true", "1", "yes", "y", "t":
 		return true, nil
@@ -79,7 +79,7 @@ type IntParam struct {
 	Max int
 }
 
-func (p *IntParam) Parse(raw string) (interface{}, error) {
+func (p *IntParam) Parse(raw string) (any, error) {
 	value, err := strconv.ParseInt(raw, 0, 32)
 	if err != nil {
 		err = p.parseFailed(raw, "invalid int")
@@ -100,7 +100,7 @@ type Int32Param struct {
 	Metadata
 }
 
-func (p *Int32Param) Parse(raw string) (interface{}, error) {
+func (p *Int32Param) Parse(raw string) (any, error) {
 	value, err := strconv.ParseInt(raw, 0, 32)
 	if err != nil {
 		err = p.parseFailed(raw, "invalid 32-bit int")
@@ -114,7 +114,7 @@ type FloatParam struct {
 	Metadata
 }
 
-func (p *FloatParam) Parse(raw string) (result interface{}, err error) {
+func (p *FloatParam) Parse(raw string) (result any, err error) {
 	result, err = strconv.ParseFloat(raw, 64)
 	if err != nil {
 		err = p.parseFailed(raw, "invalid float")
@@ -127,7 +127,7 @@ type SecondsParam struct {
 	Metadata
 }
 
-func (p *SecondsParam) Parse(raw string) (result interface{}, err error) {
+func (p *SecondsParam) Parse(raw string) (result any, err error) {
 	seconds, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		err = p.parseFailed(raw, "invalid float")
@@ -143,7 +143,7 @@ type RegexpParam struct {
 	Msg    string
 }
 
-func (p *RegexpParam) Parse(raw string) (result interface{}, err error) {
+func (p *RegexpParam) Parse(raw string) (result any, err error) {
 	if !p.Regexp.MatchString(raw) {
 		err = p.parseFailed(raw, p.Msg)
 	} else {
@@ -158,7 +158,7 @@ type FileParam struct {
 	Executable bool
 }
 
-func (p *FileParam) Parse(raw string) (interface{}, error) {
+func (p *FileParam) Parse(raw string) (any, error) {
 	if p.Executable {
 		// Special case: for executable files, we search our directory
 		// and the system path.
@@ -211,7 +211,7 @@ type Ipv4Param struct {
 	Metadata
 }
 
-func (p *Ipv4Param) Parse(raw string) (result interface{}, err error) {
+func (p *Ipv4Param) Parse(raw string) (result any, err error) {
 	res := net.ParseIP(raw)
 	if res == nil {
 		err = p.parseFailed(raw, "invalid IP")
@@ -224,7 +224,7 @@ type PortParam struct {
 	Metadata
 }
 
-func (p *PortParam) Parse(raw string) (interface{}, error) {
+func (p *PortParam) Parse(raw string) (any, error) {
 	port, err := strconv.Atoi(strings.Trim(raw, " "))
 	if err != nil {
 		err = p.parseFailed(raw, "ports should be integers")
@@ -241,9 +241,9 @@ type PortListParam struct {
 	Metadata
 }
 
-func (p *PortListParam) Parse(raw string) (interface{}, error) {
+func (p *PortListParam) Parse(raw string) (any, error) {
 	var result []ProtoPort
-	for _, portStr := range strings.Split(raw, ",") {
+	for portStr := range strings.SplitSeq(raw, ",") {
 		portStr = strings.Trim(portStr, " ")
 		if portStr == "" {
 			continue
@@ -284,7 +284,7 @@ type EndpointListParam struct {
 	Metadata
 }
 
-func (p *EndpointListParam) Parse(raw string) (result interface{}, err error) {
+func (p *EndpointListParam) Parse(raw string) (result any, err error) {
 	value := strings.Split(raw, ",")
 	scheme := ""
 	resultSlice := []string{}
@@ -328,7 +328,7 @@ type MarkBitmaskParam struct {
 	Metadata
 }
 
-func (p *MarkBitmaskParam) Parse(raw string) (interface{}, error) {
+func (p *MarkBitmaskParam) Parse(raw string) (any, error) {
 	value, err := strconv.ParseUint(raw, 0, 32)
 	if err != nil {
 		log.Warningf("Failed to parse %#v as an int: %v", raw, err)
@@ -337,7 +337,7 @@ func (p *MarkBitmaskParam) Parse(raw string) (interface{}, error) {
 	}
 	result := uint32(value)
 	bitCount := uint32(0)
-	for i := uint(0); i < 32; i++ {
+	for i := range uint(32) {
 		bit := (result >> i) & 1
 		bitCount += bit
 	}
@@ -354,7 +354,7 @@ type OneofListParam struct {
 	lowerCaseOptionsToCanonical map[string]string
 }
 
-func (p *OneofListParam) Parse(raw string) (result interface{}, err error) {
+func (p *OneofListParam) Parse(raw string) (result any, err error) {
 	result, ok := p.lowerCaseOptionsToCanonical[strings.ToLower(raw)]
 	if !ok {
 		err = p.parseFailed(raw, "unknown option")

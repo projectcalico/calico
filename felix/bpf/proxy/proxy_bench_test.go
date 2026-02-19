@@ -106,7 +106,7 @@ func BenchmarkProxyUpdates(b *testing.B) {
 func makeSvcs(n int) []runtime.Object {
 	svcs := make([]runtime.Object, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		ip := net.IPv4(10, byte((i&0xff0000)>>16), byte((i&0xff00)>>8), byte(i&0xff))
 		svcs[i] = &v1.Service{
 			TypeMeta:   typeMetaV1("Service"),
@@ -133,9 +133,9 @@ func makeSvcs(n int) []runtime.Object {
 func makeEps(sn, ep int) []runtime.Object {
 	eps := make([]runtime.Object, sn)
 
-	for i := 0; i < sn; i++ {
+	for i := range sn {
 		addrs := make([]string, ep)
-		for a := 0; a < ep; a++ {
+		for a := range ep {
 			addrs[a] = fmt.Sprintf("10.11.12.%d", a)
 		}
 		ep := &discoveryv1.EndpointSlice{

@@ -19,8 +19,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -1445,7 +1444,7 @@ var _ = Describe("Test UID conversion", func() {
 	})
 
 	It("should always maintain the v4 version metadata bits, and convert back", func() {
-		for i := 0; i < 100000; i++ {
+		for range 100000 {
 			original := types.UID(uuid.New().String())
 			converted, err := ConvertUID(original)
 			Expect(err).NotTo(HaveOccurred())
@@ -3740,7 +3739,7 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 var _ = DescribeTable("Test port simplification",
 	func(inputPorts string, expectedOutput string) {
 		var ports []numorstring.Port
-		for _, p := range strings.Split(inputPorts, ",") {
+		for p := range strings.SplitSeq(inputPorts, ",") {
 			if p == "" {
 				continue
 			}

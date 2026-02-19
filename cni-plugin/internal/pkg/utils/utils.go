@@ -215,7 +215,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
 		dummyPodCidrv4 := "0.0.0.0/0"
 		dummyPodCidrv6 := "::/0"
-		var stdinData map[string]interface{}
+		var stdinData map[string]any
 		err := json.Unmarshal(args.StdinData, &stdinData)
 		if err != nil {
 			return err
@@ -301,8 +301,8 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 //	  }
 //	  ...
 //	}
-func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]interface{}, getPodCIDRs func() (string, string, error)) error {
-	ipamData, ok := stdinData["ipam"].(map[string]interface{})
+func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]any, getPodCIDRs func() (string, string, error)) error {
+	ipamData, ok := stdinData["ipam"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("failed to parse host-local IPAM data; was expecting a dict, not: %v", stdinData["ipam"])
 	}
@@ -314,13 +314,13 @@ func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]int
 	// Newer versions store one or more subnets in the "ranges" list:
 	untypedRanges := ipamData["ranges"]
 	if untypedRanges != nil {
-		rangeSets, ok := untypedRanges.([]interface{})
+		rangeSets, ok := untypedRanges.([]any)
 		if !ok {
 			return fmt.Errorf("failed to parse host-local IPAM ranges section; was expecting a list, not: %v",
 				ipamData["ranges"])
 		}
 		for _, urs := range rangeSets {
-			rs, ok := urs.([]interface{})
+			rs, ok := urs.([]any)
 			if !ok {
 				return fmt.Errorf("failed to parse host-local IPAM range set; was expecting a list, not: %v", rs)
 			}
@@ -335,9 +335,9 @@ func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]int
 	return nil
 }
 
-func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, getPodCidrs func() (string, string, error)) error {
+func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData any, getPodCidrs func() (string, string, error)) error {
 	logrus.WithField("ipamData", rawIpamData).Debug("Examining IPAM data for usePodCidr")
-	ipamData, ok := rawIpamData.(map[string]interface{})
+	ipamData, ok := rawIpamData.(map[string]any)
 	if !ok {
 		return fmt.Errorf("failed to parse host-local IPAM data; was expecting a dict, not: %v", rawIpamData)
 	}
@@ -383,7 +383,7 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 }
 
 // This function will update host-local IPAM data based on input from cni.conf
-func UpdateHostLocalIPAMDataForWindows(subnet string, ipamData map[string]interface{}) error {
+func UpdateHostLocalIPAMDataForWindows(subnet string, ipamData map[string]any) error {
 	if len(subnet) == 0 {
 		return nil
 	}

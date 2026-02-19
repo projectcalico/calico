@@ -28,9 +28,9 @@ func NameAndDescription() (string, string) {
 func Resources() string {
 	kinds := resourcemgr.ValidResources()
 	sort.Strings(kinds)
-	resourceList := ""
+	var resourceList strings.Builder
 	for _, r := range kinds {
-		resourceList += fmt.Sprintf("    - %s\n", strings.ToLower(r))
+		resourceList.WriteString(fmt.Sprintf("    - %s\n", strings.ToLower(r)))
 	}
-	return resourceList
+	return resourceList.String()
 }

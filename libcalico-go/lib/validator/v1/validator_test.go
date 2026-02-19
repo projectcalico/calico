@@ -15,7 +15,7 @@
 package v1_test
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -67,7 +67,7 @@ func init() {
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
 	// code paths.
 	DescribeTable("Validator",
-		func(input interface{}, valid bool) {
+		func(input any, valid bool) {
 			if valid {
 				Expect(validator.Validate(input)).NotTo(HaveOccurred(),
 					"expected value to be valid")

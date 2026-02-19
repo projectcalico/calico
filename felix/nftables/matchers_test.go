@@ -27,7 +27,7 @@ type containRule struct {
 	expected knftables.Rule
 }
 
-func (c *containRule) Match(actual interface{}) (success bool, err error) {
+func (c *containRule) Match(actual any) (success bool, err error) {
 	rules, ok := actual.([]*knftables.Rule)
 	if !ok {
 		return false, fmt.Errorf("Expected []*knftables.Rule, but got: %+v", reflect.TypeOf(actual).String())
@@ -45,12 +45,12 @@ func (c *containRule) Match(actual interface{}) (success bool, err error) {
 	return false, nil
 }
 
-func (c *containRule) FailureMessage(actual interface{}) (message string) {
+func (c *containRule) FailureMessage(actual any) (message string) {
 	j, _ := json.MarshalIndent(actual, "", "  ")
 	return fmt.Sprintf("Expected rules to contain %+v.\nRules: %s", c.expected, j)
 }
 
-func (c *containRule) NegatedFailureMessage(actual interface{}) (message string) {
+func (c *containRule) NegatedFailureMessage(actual any) (message string) {
 	j, _ := json.MarshalIndent(actual, "", "  ")
 	return fmt.Sprintf("Expected rules to not contain %+v.\nRules: %s", c.expected, j)
 }
@@ -82,7 +82,7 @@ func EqualRules(expected []knftables.Rule) types.GomegaMatcher {
 	}
 }
 
-func (e *equalRulesMatcher) Match(actual interface{}) (success bool, err error) {
+func (e *equalRulesMatcher) Match(actual any) (success bool, err error) {
 	rules, ok := actual.([]*knftables.Rule)
 	if !ok {
 		return false, fmt.Errorf("Expected []*knftables.Rule, but got: %+v", reflect.TypeOf(actual).String())
@@ -106,13 +106,13 @@ func (e *equalRulesMatcher) Match(actual interface{}) (success bool, err error) 
 	return true, nil
 }
 
-func (e *equalRulesMatcher) FailureMessage(actual interface{}) (message string) {
+func (e *equalRulesMatcher) FailureMessage(actual any) (message string) {
 	exp, _ := json.MarshalIndent(e.expected, "", "  ")
 	act, _ := json.MarshalIndent(actual, "", "  ")
 	return fmt.Sprintf("Expected rules to equal %s, but got %s", exp, act)
 }
 
-func (e *equalRulesMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (e *equalRulesMatcher) NegatedFailureMessage(actual any) (message string) {
 	exp, _ := json.MarshalIndent(e.expected, "", "  ")
 	act, _ := json.MarshalIndent(actual, "", "  ")
 

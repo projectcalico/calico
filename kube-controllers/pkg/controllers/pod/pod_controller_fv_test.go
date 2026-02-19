@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
@@ -189,7 +189,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 		By("updating the workload endpoint's container ID", func() {
 			var err error
 			var gwep *libapi.WorkloadEndpoint
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				// This emulates a scenario in which the CNI plugin can be called for the same Kubernetes
 				// Pod multiple times with a different container ID.
 				gwep, err = calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, wep.Name, options.GetOptions{})

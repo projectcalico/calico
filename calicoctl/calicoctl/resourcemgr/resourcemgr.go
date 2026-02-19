@@ -249,7 +249,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 	// If the resourceVersion is not specified then we do a Get to get
 	// the latest resourceVersion and then do an Update with it.
 	// We retry only if we get an update conflict.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		// Get the resource to get the resourceVersion.
 		ro, err := rh.get(ctx, client, resource)
 		if err != nil {
@@ -348,7 +348,7 @@ func GetResourceManager(resource runtime.Object) ResourceManager {
 // This function also inserts resource name, namespace if specified.
 // Example "calicoctl get bgppeer peer123" will return
 // a BGPPeer resource with name field populated to "peer123".
-func GetResourcesFromArgs(args map[string]interface{}) ([]ResourceObject, error) {
+func GetResourcesFromArgs(args map[string]any) ([]ResourceObject, error) {
 	kind := args["<KIND>"].(string)
 	argname := "<NAME>"
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -169,8 +169,7 @@ func (c *EncapsulationCalculator) handleModelPool(p model.KVPair) error {
 		c.removePool(poolKey)
 	} else {
 		pool, _ := p.Value.(*model.IPPool)
-		c.updatePool(poolKey, pool.IPIPMode != encap.Undefined, pool.VXLANMode != encap.Undefined)
-
+		c.updatePool(poolKey, pool.IPIPMode != encap.Never, pool.VXLANMode != encap.Never)
 	}
 
 	return nil

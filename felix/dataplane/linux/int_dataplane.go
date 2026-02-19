@@ -321,8 +321,8 @@ type UpdateBatchResolver interface {
 // depend on them. For example, it is important that the datastore layer sends an IP set
 // create event before it sends a rule that references that IP set.
 type InternalDataplane struct {
-	toDataplane             chan interface{}
-	fromDataplane           chan interface{}
+	toDataplane             chan any
+	fromDataplane           chan any
 	sendDataplaneInSyncOnce sync.Once
 
 	mainRouteTables []routetable.SyncerInterface
@@ -489,8 +489,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	dp := &InternalDataplane{
-		toDataplane:                 make(chan interface{}, msgPeekLimit),
-		fromDataplane:               make(chan interface{}, 100),
+		toDataplane:                 make(chan any, msgPeekLimit),
+		fromDataplane:               make(chan any, 100),
 		ruleRenderer:                ruleRenderer,
 		ifaceMonitor:                ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
 		ifaceUpdates:                make(chan any, 100),
@@ -938,15 +938,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
 		var conntrackScannerV4, conntrackScannerV6 *bpfconntrack.Scanner
+		var workloadRemoveChanV4, workloadRemoveChanV6 chan string
 		var ipSetIDAllocatorV4, ipSetIDAllocatorV6 *idalloc.IDAllocator
 		ipSetIDAllocatorV4 = idalloc.New()
 
 		// Start IPv4 BPF dataplane components
-		conntrackScannerV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp)
+		conntrackScannerV4, workloadRemoveChanV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
 			ipSetIDAllocatorV6 = idalloc.New()
-			conntrackScannerV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp)
+			conntrackScannerV6, workloadRemoveChanV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp)
 		}
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
@@ -981,6 +982,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.HealthAggregator,
 			dataplaneFeatures,
 			podMTU,
+			workloadRemoveChanV4,
+			workloadRemoveChanV6,
 		)
 		if err != nil {
 			log.WithError(err).Panic("Failed to create BPF endpoint manager.")
@@ -1494,7 +1497,7 @@ func writeMTUFile(mtu int) error {
 	// Write the smallest MTU to disk so other components can rely on this calculation consistently.
 	filename := "/var/lib/calico/mtu"
 	log.Debugf("Writing %d to "+filename, mtu)
-	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", mtu)), 0o644); err != nil {
+	if err := os.WriteFile(filename, fmt.Appendf(nil, "%d", mtu), 0o644); err != nil {
 		log.WithError(err).Error("Unable to write to " + filename)
 		return err
 	}
@@ -1676,7 +1679,7 @@ type Manager interface {
 	// send updates to the IPSets and generictables.Table objects (which will queue the updates
 	// until the main loop instructs them to act) or (for efficiency) may wait until
 	// a call to CompleteDeferredWork() to flush updates to the dataplane.
-	OnUpdate(protoBufMsg interface{})
+	OnUpdate(protoBufMsg any)
 	// Called before the main loop flushes updates to the dataplane to allow for batched
 	// work to be completed.
 	CompleteDeferredWork() error
@@ -1854,12 +1857,12 @@ func NewIfaceAddrsUpdate(name string, ips ...string) any {
 	}
 }
 
-func (d *InternalDataplane) SendMessage(msg interface{}) error {
+func (d *InternalDataplane) SendMessage(msg any) error {
 	d.toDataplane <- msg
 	return nil
 }
 
-func (d *InternalDataplane) RecvMessage() (interface{}, error) {
+func (d *InternalDataplane) RecvMessage() (any, error) {
 	return <-d.fromDataplane, nil
 }
 
@@ -2251,7 +2254,7 @@ func (d *InternalDataplane) shutdownXDPCompletely() error {
 	maxTries := 10
 	waitInterval := 100 * time.Millisecond
 	var err error
-	for i := 0; i < maxTries; i++ {
+	for i := range maxTries {
 		err = d.xdpState.WipeXDP()
 		if err == nil {
 			d.xdpState = nil
@@ -2397,7 +2400,7 @@ func newRefreshTicker(name string, interval time.Duration) <-chan time.Time {
 
 // onDatastoreMessage is called when we get a message from the calculation graph
 // it opportunistically processes a match of messages from its channel.
-func (d *InternalDataplane) onDatastoreMessage(msg interface{}) {
+func (d *InternalDataplane) onDatastoreMessage(msg any) {
 	d.datastoreBatchSize = 1
 
 	// Process the message we received, then opportunistically process any other
@@ -2409,7 +2412,7 @@ func (d *InternalDataplane) onDatastoreMessage(msg interface{}) {
 	summaryBatchSize.Observe(float64(d.datastoreBatchSize))
 }
 
-func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
+func (d *InternalDataplane) processMsgFromCalcGraph(msg any) {
 	if log.IsLevelEnabled(log.InfoLevel) {
 		log.Infof("Received %T update from calculation graph. msg=%s", msg, proto.MsgStringer{Msg: msg}.String())
 	}
@@ -2505,7 +2508,7 @@ func (d *InternalDataplane) processIfaceAddrsUpdate(ifaceAddrsUpdate *ifaceAddrs
 }
 
 func drainChan[T any](c <-chan T, f func(T)) {
-	for i := 0; i < msgPeekLimit; i++ {
+	for range msgPeekLimit {
 		select {
 		case v := <-c:
 			f(v)
@@ -2566,7 +2569,7 @@ func (d *InternalDataplane) configureKernel() {
 	}
 }
 
-func (d *InternalDataplane) recordMsgStat(msg interface{}) {
+func (d *InternalDataplane) recordMsgStat(msg any) {
 	typeName := reflect.ValueOf(msg).Elem().Type().Name()
 	countMessages.WithLabelValues(typeName).Inc()
 }
@@ -2813,7 +2816,7 @@ func (d *InternalDataplane) apply() {
 
 func (d *InternalDataplane) applyXDPActions() error {
 	var err error = nil
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		err = d.xdpState.ResyncIfNeeded(d.ipsetsSourceV4)
 		if err != nil {
 			return err
@@ -2869,7 +2872,7 @@ func startBPFDataplaneComponents(
 	config *Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
-) *bpfconntrack.Scanner {
+) (*bpfconntrack.Scanner, chan string) {
 	ipSetConfig := config.RulesConfig.IPSetConfigV4
 	ipSetEntry := bpfipsets.IPSetEntryFromBytes
 	ipSetProtoEntry := bpfipsets.ProtoIPSetMemberToBPFEntry
@@ -2959,12 +2962,13 @@ func startBPFDataplaneComponents(
 		log.Errorf("error creating the bpf cleaner %v", err)
 	}
 
+	workloadRemoveChan := make(chan string, 1000)
 	conntrackScanner := bpfconntrack.NewScanner(maps.CtMap, ctKey, ctVal,
 		config.ConfigChangedRestartCallback,
 		config.BPFMapSizeConntrackScaling, maps.CtCleanupMap.(bpfmaps.MapWithExistsCheck),
 		int(ipFamily),
 		bpfCleaner,
-		livenessScanner)
+		livenessScanner, bpfconntrack.NewWorkloadRemoveScannerTCP(workloadRemoveChan))
 
 	// Before we start, scan for all finished / timed out connections to
 	// free up the conntrack table asap as it may take time to sync up the
@@ -2988,7 +2992,7 @@ func startBPFDataplaneComponents(
 	} else {
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 	}
-	return conntrackScanner
+	return conntrackScanner, workloadRemoveChan
 }
 
 func conntrackMapSizeFromFile() (int, error) {

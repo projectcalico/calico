@@ -67,7 +67,7 @@ var (
 
 // Validate is used to validate the supplied structure according to the
 // registered field and structure validators.
-func Validate(current interface{}) error {
+func Validate(current any) error {
 	err := validate.Struct(current)
 	if err == nil {
 		return nil
@@ -137,8 +137,8 @@ func reason(r string) string {
 // extractReason extracts the error reason from the field tag in a validator
 // field error (if there is one).
 func extractReason(tag string) string {
-	if strings.HasPrefix(tag, reasonString) {
-		return strings.TrimPrefix(tag, reasonString)
+	if after, ok := strings.CutPrefix(tag, reasonString); ok {
+		return after
 	}
 	return ""
 }
@@ -147,7 +147,7 @@ func registerFieldValidator(key string, fn validator.Func) {
 	validate.RegisterValidation(key, fn)
 }
 
-func registerStructValidator(fn validator.StructLevelFunc, t ...interface{}) {
+func registerStructValidator(fn validator.StructLevelFunc, t ...any) {
 	validate.RegisterStructValidation(fn, t...)
 }
 

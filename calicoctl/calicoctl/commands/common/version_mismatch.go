@@ -28,7 +28,7 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-func CheckVersionMismatch(configArg, allowMismatchArg interface{}) error {
+func CheckVersionMismatch(configArg, allowMismatchArg any) error {
 	if allowMismatch, _ := allowMismatchArg.(bool); allowMismatch {
 		log.Infof("Skip version mismatch checking due to '--allow-version-mismatch' argument")
 

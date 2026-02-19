@@ -34,16 +34,16 @@ func ipamConfigResourceClient(r rest.Interface, group BackingAPIGroup) customRes
 	rc := customResourceClient{
 		restClient:      r,
 		resource:        resource,
-		k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfig{}),
-		k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigList{}),
+		k8sResourceType: reflect.TypeFor[libapiv3.IPAMConfig](),
+		k8sListType:     reflect.TypeFor[libapiv3.IPAMConfigList](),
 		kind:            v3.KindIPAMConfiguration,
 		apiGroup:        group,
 	}
 
 	if group == BackingAPIGroupV3 {
 		// If this is a v3 resource, then we need to use the v3 API types, as they differ.
-		rc.k8sResourceType = reflect.TypeOf(v3.IPAMConfiguration{})
-		rc.k8sListType = reflect.TypeOf(v3.IPAMConfigurationList{})
+		rc.k8sResourceType = reflect.TypeFor[v3.IPAMConfiguration]()
+		rc.k8sListType = reflect.TypeFor[v3.IPAMConfigurationList]()
 	}
 	return rc
 }

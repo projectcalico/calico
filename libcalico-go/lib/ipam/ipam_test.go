@@ -24,8 +24,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -205,21 +204,21 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Create many pools
 			pool26 = nil
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				cidr := fmt.Sprintf("10.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 26}
 				pool26 = append(pool26, cnet.MustParseCIDR(cidr))
 			}
 
 			pool32 = nil
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				cidr := fmt.Sprintf("11.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 32}
 				pool32 = append(pool32, cnet.MustParseCIDR(cidr))
 			}
 
 			pool20 = nil
-			for i := 0; i < 50; i++ {
+			for i := range 50 {
 				cidr := fmt.Sprintf("12.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 20}
 				pool20 = append(pool20, cnet.MustParseCIDR(cidr))
@@ -252,7 +251,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 100)
+		})
 
 		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
@@ -269,7 +268,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 100)
+		})
 
 		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
@@ -286,7 +285,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 100)
+		})
 
 		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
@@ -303,13 +302,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 20)
+		})
 
 		Context("with 1000 nodes", func() {
 			BeforeEach(func() {
 				var eg errgroup.Group
 				eg.SetLimit(runtime.NumCPU())
-				for i := 0; i < 1000; i++ {
+				for i := range 1000 {
 					eg.Go(func() error {
 						defer GinkgoRecover()
 						applyNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i), map[string]string{"foo": "bar"})
@@ -323,7 +322,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// Clean up the nodes.
 				var eg errgroup.Group
 				eg.SetLimit(runtime.NumCPU())
-				for i := 0; i < 1000; i++ {
+				for i := range 1000 {
 					eg.Go(func() error {
 						defer GinkgoRecover()
 						deleteNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i))
@@ -337,10 +336,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			allocOneIPPerNode := func() {
 				var eg errgroup.Group
 				eg.SetLimit(runtime.NumCPU())
-				for i := 0; i < 1000; i++ {
+				for i := range 1000 {
 					eg.Go(func() error {
 						defer GinkgoRecover()
-						for j := 0; j < 1; j++ {
+						for range 1 {
 							// Build a new backend client. We use a different client for each iteration of the test
 							// so that the k8s QPS /burst limits don't carry across "hosts". This is more realistic.
 							bc, err = backend.NewClient(config)
@@ -374,14 +373,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				b.Time("runtime", func() {
 					allocOneIPPerNode()
 				})
-			}, 1)
+			})
 
 			Measure("time to allocate second IP per node across 1000 nodes", func(b Benchmarker) {
 				allocOneIPPerNode() // Pre-create one IPAM block per node.
 				b.Time("runtime", func() {
 					allocOneIPPerNode()
 				})
-			}, 1)
+			})
 		})
 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
@@ -407,7 +406,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
-		}, 20)
+		})
 	})
 
 	Describe("ReleaseIPs test", func() {
@@ -428,7 +427,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Run this test several times so that we can assert the logic works with a multitude of different sequence numbers, and
 			// that the sequence number is actually incremented properly.
 			var expectedSeqNum uint64
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				// Allocate an IP address.
 				v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 0, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseTunnel})
 				Expect(err).NotTo(HaveOccurred())
@@ -647,7 +646,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			for _, node := range []string{"node1", "node2", "node3", "node4"} {
 				// 4 nodes
 				applyNode(bc, kc, node, map[string]string{"foo": "bar", "name": node})
-				for i := 0; i < 6; i++ {
+				for range 6 {
 					// 6 addresses of each family per-node.
 					v4ia, v6ia, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 1, Hostname: node, IntendedUse: v3.IPPoolAllowedUseWorkload})
 					Expect(err).NotTo(HaveOccurred())
@@ -1004,7 +1003,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Allocate several blocks to the node. The pool is a /30, so 4 addresses
 			// per each block.
 			handle := "test-handle"
-			for i := 0; i < 12; i++ {
+			for range 12 {
 				v4ia, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(v4ia).ToNot(BeNil())
@@ -1045,7 +1044,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Allocate several blocks to the node. The pool is a /30, so 4 addresses
 			// per each block.
 			handle := "test-handle"
-			for i := 0; i < 12; i++ {
+			for range 12 {
 				v4ia, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(v4ia).ToNot(BeNil())
@@ -1454,7 +1453,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			applyPoolWithBlockSize("10.0.0.0/28", true, `foo == "bar"`, 30)
 
 			// We should be able to assign 8 addresses to node0, fully using its two blocks.
-			for i := 0; i < 8; i++ {
+			for range 8 {
 				v4ia, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
 					IntendedUse: v3.IPPoolAllowedUseWorkload,
 					Num4:        1,

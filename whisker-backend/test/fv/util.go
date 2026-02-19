@@ -52,8 +52,8 @@ func newSSEScanner[E any](t *testing.T, r io.Reader) <-chan ObjWithErr[*E] {
 		for scanner.Scan() {
 			line := scanner.Text()
 
-			if strings.HasPrefix(line, "data:") {
-				data := strings.TrimPrefix(line, "data:")
+			if after, ok := strings.CutPrefix(line, "data:"); ok {
+				data := after
 				fmt.Println("Event Data: ", strings.TrimSpace(data))
 
 				responseChan <- ObjWithErr[*E]{Obj: jsontestutil.MustUnmarshal[E](t, []byte(data))}

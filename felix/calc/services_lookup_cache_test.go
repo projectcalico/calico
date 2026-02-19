@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kapiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -259,7 +259,7 @@ var _ = Describe("ServiceLookupsCache tests", func() {
 		}
 
 		// Make a list with 600 operations to be performed.
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			operations = append(operations,
 				onResourceUpdateFn,
 				getServiceFromPreDNATDestFn,

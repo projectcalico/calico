@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"net"
 	"os"
@@ -73,7 +74,7 @@ var (
 	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 )
 
-var sensitiveValues = map[string]interface{}{
+var sensitiveValues = map[string]any{
 	"/calico/bgp/v1/global/node_mesh_password": nil,
 }
 
@@ -164,7 +165,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
 		// calls were processed synchronously.
-		syncerC: make(chan interface{}),
+		syncerC: make(chan any),
 
 		// This channel holds a trigger for existing BGP peerings to be recomputed.  We only
 		// ever need 1 pending trigger, hence capacity 1.  recheckPeerConfig() does a
@@ -172,9 +173,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		// pending.
 		recheckC: make(chan struct{}, 1),
 	}
-	for k, v := range globalDefaults {
-		c.cache[k] = v
-	}
+	maps.Copy(c.cache, globalDefaults)
 
 	// Create secret watcher.  Must do this before the syncer, because updates from
 	// the syncer can trigger calling c.secretWatcher.MarkStale().
@@ -378,7 +377,7 @@ type client struct {
 	localBGPPeerWatcher *LocalBGPPeerWatcher
 
 	// Channels used to decouple update and status processing.
-	syncerC  chan interface{}
+	syncerC  chan any
 	recheckC chan struct{}
 
 	// Cached value of the default BGP configuration for node to node mesh BGP password lookup.
@@ -1257,7 +1256,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 	}
 }
 
-func getBGPConfigKey(v1KeyName string, key interface{}) model.Key {
+func getBGPConfigKey(v1KeyName string, key any) model.Key {
 	switch k := key.(type) {
 	case model.NodeBGPConfigKey:
 		k.Name = v1KeyName
@@ -1284,7 +1283,7 @@ func getKVPair(key model.Key, value ...string) *model.KVPair {
 	}
 }
 
-func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, key any) {
 	ipv4Key := getBGPConfigKey("prefix_advertisements/ip_v4", key)
 	ipv6Key := getBGPConfigKey("prefix_advertisements/ip_v6", key)
 
@@ -1341,7 +1340,7 @@ func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, ke
 	}
 }
 
-func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interface{}, updatePeersV1 *bool, updateReasons *[]string) {
+func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
 	listenPortKey := getBGPConfigKey("listen_port", key)
 
 	if v3res != nil && v3res.Spec.ListenPort != 0 {
@@ -1366,7 +1365,7 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interfac
 	*updatePeersV1 = true
 }
 
-func (c *client) getBindModeKVPair(v3res *apiv3.BGPConfiguration, key interface{}, updatePeersV1 *bool, updateReasons *[]string) {
+func (c *client) getBindModeKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
 	bindMode := getBGPConfigKey("bind_mode", key)
 	if v3res != nil && v3res.Spec.BindMode != nil {
 		*updateReasons = append(*updateReasons, "bindMode updated.")
@@ -1378,7 +1377,7 @@ func (c *client) getBindModeKVPair(v3res *apiv3.BGPConfiguration, key interface{
 	*updatePeersV1 = true
 }
 
-func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key interface{}, updatePeersV1 *bool, updateReasons *[]string) {
+func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
 	asNumberKey := getBGPConfigKey("as_num", key)
 	if v3res != nil && v3res.Spec.ASNumber != nil {
 		*updateReasons = append(*updateReasons, "AS number updated.")
@@ -1390,7 +1389,7 @@ func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key interface{
 	*updatePeersV1 = true
 }
 
-func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key interface{}, svcAdvertisement *bool) {
+func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
 	svcExternalIPKey := getBGPConfigKey("svc_external_ips", key)
 
 	if v3res != nil && v3res.Spec.ServiceExternalIPs != nil && len(v3res.Spec.ServiceExternalIPs) != 0 {
@@ -1411,7 +1410,7 @@ func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key 
 	*svcAdvertisement = true
 }
 
-func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, key interface{}, svcAdvertisement *bool) {
+func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
 	svcLoadBalancerIPKey := getBGPConfigKey("svc_loadbalancer_ips", key)
 
 	if v3res != nil && v3res.Spec.ServiceLoadBalancerIPs != nil && len(v3res.Spec.ServiceLoadBalancerIPs) != 0 {
@@ -1430,7 +1429,7 @@ func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, 
 	*svcAdvertisement = true
 }
 
-func (c *client) getServiceClusterIPsKVPair(v3res *apiv3.BGPConfiguration, key interface{}, svcAdvertisement *bool) {
+func (c *client) getServiceClusterIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
 	svcInternalIPKey := getBGPConfigKey("svc_cluster_ips", key)
 
 	if len(os.Getenv(envAdvertiseClusterIPs)) != 0 {
@@ -1458,7 +1457,7 @@ func (c *client) getServiceClusterIPsKVPair(v3res *apiv3.BGPConfiguration, key i
 	}
 }
 
-func (c *client) getNodeToNodeMeshKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+func (c *client) getNodeToNodeMeshKVPair(v3res *apiv3.BGPConfiguration, key any) {
 	meshKey := getBGPConfigKey("node_mesh", key)
 
 	if v3res != nil && v3res.Spec.NodeToNodeMeshEnabled != nil {
@@ -1473,7 +1472,7 @@ func (c *client) getNodeToNodeMeshKVPair(v3res *apiv3.BGPConfiguration, key inte
 	}
 }
 
-func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key any) {
 	logLevelKey := getBGPConfigKey("loglevel", key)
 
 	if v3res != nil && v3res.Spec.LogSeverityScreen != "" {
@@ -1491,7 +1490,7 @@ func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key interfa
 	}
 }
 
-func (c *client) getNodeMeshRestartTimeKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+func (c *client) getNodeMeshRestartTimeKVPair(v3res *apiv3.BGPConfiguration, key any) {
 	meshRestartKey := getBGPConfigKey("node_mesh_restart_time", key)
 
 	if v3res != nil && v3res.Spec.NodeMeshMaxRestartTime != nil {
@@ -1502,7 +1501,7 @@ func (c *client) getNodeMeshRestartTimeKVPair(v3res *apiv3.BGPConfiguration, key
 	}
 }
 
-func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key any) {
 	meshPasswordKey := getBGPConfigKey("node_mesh_password", key)
 
 	if c.secretWatcher != nil && v3res != nil && v3res.Spec.NodeMeshPassword != nil && v3res.Spec.NodeMeshPassword.SecretKeyRef != nil {
@@ -1522,7 +1521,7 @@ func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key in
 	}
 }
 
-func (c *client) getIgnoredInterfacesKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+func (c *client) getIgnoredInterfacesKVPair(v3res *apiv3.BGPConfiguration, key any) {
 	ignoredIfacesKey := getBGPConfigKey("ignored_interfaces", key)
 	if v3res != nil && v3res.Spec.IgnoredInterfaces != nil {
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ignoredIfacesKey, strings.Join(v3res.Spec.IgnoredInterfaces, ",")))

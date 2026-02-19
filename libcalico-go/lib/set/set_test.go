@@ -17,7 +17,7 @@ package set_test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -286,7 +286,7 @@ var _ = Describe("EmptySet", func() {
 		Expect(func() { empty.Discard("foo") }).NotTo(Panic())
 	})
 	It("should iterate 0 times", func() {
-		empty.Iter(func(item interface{}) error {
+		empty.Iter(func(item any) error {
 			Fail("Iterated > 0 times")
 			return nil
 		})
