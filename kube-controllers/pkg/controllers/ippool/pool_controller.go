@@ -290,19 +290,13 @@ func poolSortFunc(a, b any) int {
 	poolA := a.(*v3.IPPool)
 	poolB := b.(*v3.IPPool)
 
-	// Allocatable pools should be sorted first, so that we prefer to keep
-	// existing active pools active when there are overlaps.
-	aDisabled := hasCondition(poolA, v3.IPPoolConditionAllocatable, metav1.ConditionFalse)
-	bDisabled := hasCondition(poolB, v3.IPPoolConditionAllocatable, metav1.ConditionFalse)
-	if aDisabled && !bDisabled {
-		return 1
-	}
-	if !aDisabled && bDisabled {
-		return -1
+	aCat := poolSortCategory(poolA)
+	bCat := poolSortCategory(poolB)
+	if aCat != bCat {
+		return aCat - bCat
 	}
 
-	// If both pools are in the same state (both active or both disabled), sort by creation timestamp,
-	// sorting older pools first.
+	// Within the same category, sort by creation timestamp (older first).
 	if poolA.CreationTimestamp.Before(&poolB.CreationTimestamp) {
 		return -1
 	}
@@ -312,6 +306,22 @@ func poolSortFunc(a, b any) int {
 
 	// If creation timestamps are equal, sort by name to ensure a deterministic order.
 	return strings.Compare(poolA.Name, poolB.Name)
+}
+
+// poolSortCategory returns the sort priority for a pool:
+//   - 0: Active pools (allocatable, not being deleted) — sorted first so we prefer to keep existing active pools active.
+//   - 1: Terminating pools (DeletionTimestamp set) — sorted after active but before disabled pools, so they are
+//     inserted into the overlap trie before disabled pools are evaluated. This ensures terminating pools continue
+//     to mask overlapping disabled pools until fully deleted.
+//   - 2: Disabled pools (Allocatable=False, not being deleted) — sorted last.
+func poolSortCategory(p *v3.IPPool) int {
+	if p.DeletionTimestamp != nil {
+		return 1
+	}
+	if hasCondition(p, v3.IPPoolConditionAllocatable, metav1.ConditionFalse) {
+		return 2
+	}
+	return 0
 }
 
 // reconcileFinalizer ensures that a finalizer is added to the pool when it is created, and that when the pool is deleted, all associated
