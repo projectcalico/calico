@@ -1711,6 +1711,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.IstioAmbientMode != nil {
+		in, out := &in.IstioAmbientMode, &out.IstioAmbientMode
+		*out = new(IstioAmbientMode)
+		**out = **in
+	}
+	if in.IstioDSCPMark != nil {
+		in, out := &in.IstioDSCPMark, &out.IstioDSCPMark
+		*out = new(numorstring.DSCP)
+		**out = **in
+	}
 	if in.FlowLogsPolicyEvaluationMode != nil {
 		in, out := &in.FlowLogsPolicyEvaluationMode, &out.FlowLogsPolicyEvaluationMode
 		*out = new(FlowLogsPolicyEvaluationModeType)

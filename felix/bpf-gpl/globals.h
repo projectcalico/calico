@@ -27,6 +27,7 @@ struct name {                              \
 	__u32 log_filter_jmp;                  \
 	__u32 jumps[40];                       \
 	__s8 dscp;                             \
+	__s8 istio_dscp;                       \
 	__u32 maglev_lut_size;                 \
 }
 
