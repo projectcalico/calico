@@ -16,204 +16,202 @@ package bgp
 
 import (
 	"context"
-	"strings"
-	"time"
+	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	v1 "github.com/tigera/operator/api/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/utils/ptr"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/sirupsen/logrus"
-
-	v1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/e2e/framework/kubectl"
-	e2eskipper "k8s.io/kubernetes/test/e2e/framework/skipper"
+	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
 
-// DESCRIPTION: This test only verifies bgp password via birdcl output
-// It picks two worker nodes and set bgppeer with correct password
-// and verifies that all is as expected by looking at birdcl ouput.
-// Then it configures bgppeers with different password and
-// verifies that all is as expected by looking at birdcl output.
-
-// Once the bgppeers are configured, k8s apiserver will likely lose
-// connectivity with the Calico apiserver (by not having a route anymore - since
-// the peering is only between the worker nodes).
-// That is the reason why after configuring/verifying bgpconfiguration
-// and bgppeers, we delete the crd version of the resource instead of corresponding projectcalico.org/v3
-// resource.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
+	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
 	describe.WithSerial(),
-	describe.WithFeature("BGP"),
-	"BGP password tests",
+	"BGP password",
 	func() {
-		var nodeNames []string
-		var nodeIPs []string
 		var cli ctrlclient.Client
-		var calicoNamespace string
+		var checker conncheck.ConnectionTester
+		var server1 *conncheck.Server
+		var client1 *conncheck.Client
 		var restoreBGPConfig func()
-
-		const peer0Name string = "peer0"
-		const peer1Name string = "peer1"
-		const bgpSecret0Name string = "bgp-secret0"
-		const bgpSecret1Name string = "bgp-secret1"
 
 		f := utils.NewDefaultFramework("bgp-password")
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
+			checker = conncheck.NewConnectionTester(f)
+
+			var err error
+			cli, err = client.New(f.ClientConfig())
+			Expect(err).NotTo(HaveOccurred(), "failed to create API client")
+
+			// Ensure a clean starting environment before each test.
+			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred(), "failed to clean datastore")
+
 			// We need a minimum of two nodes for BGP peering tests.
 			utils.RequireNodeCount(f, 2)
 
-			// Get two ready schedulable nodes.
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(context.TODO(), f.ClientSet, 10)
-			Expect(err).ShouldNot(HaveOccurred())
-			if len(nodes.Items) == 0 {
-				Fail("No schedulable nodes exist, can't continue test.")
-			}
-			nodesInfo := utils.GetNodesInfo(f, nodes, false)
-			nodeNames = nodesInfo.GetNames()
-			nodeIPs = nodesInfo.GetIPv4s()
+			// Verify BGP is enabled via the Installation resource.
+			installation := &v1.Installation{}
+			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation)
+			Expect(err).NotTo(HaveOccurred(), "Error querying Installation resource")
+			Expect(installation.Spec.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
+			Expect(installation.Spec.CalicoNetwork.BGP).NotTo(BeNil(), "BGP is not enabled in the cluster")
+			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
 
-			if !birdIsRunning(f, nodeNames[0]) {
-				e2eskipper.Skipf("Skipping BGP Password test because BIRD is not running")
-			}
-
-			calicoNamespace = utils.CalicoNamespace(f)
-
-			cli, err = client.New(f.ClientConfig())
-			Expect(err).NotTo(HaveOccurred())
-
-			// Ensure a clean starting environment before each test.
-			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
-
-			// Ensure full-mesh BGP is functioning before each test.
+			// Ensure full mesh BGP is functioning before each test.
 			restoreBGPConfig = ensureInitialBGPConfig(cli)
 
-			// Check if peer has been established.
-			waitForBGPEstablishedForNode(cli, nodeNames[0])
-			waitForBGPEstablishedForNode(cli, nodeNames[1])
+			// Deploy server and client on different nodes to verify cross-node traffic.
+			server1 = conncheck.NewServer("server", f.Namespace,
+				conncheck.WithServerLabels(map[string]string{"role": "server"}),
+				conncheck.WithServerPodCustomizer(conncheck.AvoidEachOther),
+			)
+			client1 = conncheck.NewClient("client", f.Namespace,
+				conncheck.WithClientCustomizer(conncheck.AvoidEachOther),
+			)
+			checker.AddServer(server1)
+			checker.AddClient(client1)
+			checker.Deploy()
 
-			addCalicoNodeRbacForSecret(f, bgpSecret0Name, calicoNamespace)
-			addCalicoNodeRbacForSecret(f, bgpSecret1Name, calicoNamespace)
+			// Verify initial connectivity via full mesh.
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.Execute()
 		})
 
-		AfterEach(func() {
+		ginkgo.AfterEach(func() {
+			checker.Stop()
 			restoreBGPConfig()
-
-			// Clean up the RBAC we created.
-
-			// Ensure peering has been restored.
-			waitForBGPEstablishedForNode(cli, nodeNames[0])
-			waitForBGPEstablishedForNode(cli, nodeNames[1])
-
-			removeCalicoNodeRbacForSecret(f, bgpSecret0Name, calicoNamespace)
-			removeCalicoNodeRbacForSecret(f, bgpSecret1Name, calicoNamespace)
 		})
 
-		It("should require a BGP password if given", func() {
-			By("creating two secrets with same password")
-			createSecret(f, bgpSecret0Name, calicoNamespace, "password0")
-			createSecret(f, bgpSecret1Name, calicoNamespace, "password0")
+		// Verifies that BGP peers establish and carry traffic when configured with
+		// matching passwords via secret references, and that mismatched passwords
+		// prevent BGP sessions from establishing.
+		ginkgo.It("should enforce BGP password authentication", func() {
+			ctx := context.Background()
+			calicoNS := utils.CalicoNamespace(f)
 
-			By("Configure explicit peering between two nodes with same password")
-			createBGPPeer(cli, peer0Name, nodeNames[0], nodeIPs[1], bgpSecret0Name)
-			createBGPPeer(cli, peer1Name, nodeNames[1], nodeIPs[0], bgpSecret1Name)
+			// Create a shared secret and RBAC so calico-node can read the password.
+			ginkgo.By("Creating a BGP password secret and RBAC")
+			createBGPSecret(f, "bgp-password", calicoNS, "correct-horse")
+			createSecretRBAC(f, "bgp-password", calicoNS)
 
-			// Disable full mesh so that node peering connection would not stay Idle.
+			// Create a selector-based BGPPeer that peers all nodes with password auth.
+			ginkgo.By("Creating a password-protected BGPPeer for all nodes")
+			peer := &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "password-peer"},
+				Spec: v3.BGPPeerSpec{
+					NodeSelector: "all()",
+					PeerSelector: "all()",
+					Password: &v3.BGPPassword{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							Key:                  "password",
+							LocalObjectReference: corev1.LocalObjectReference{Name: "bgp-password"},
+						},
+					},
+				},
+			}
+			err := cli.Create(ctx, peer)
+			Expect(err).NotTo(HaveOccurred(), "failed to create password-protected BGPPeer")
+			ginkgo.DeferCleanup(func() {
+				if err := cli.Delete(context.Background(), peer); err != nil && !errors.IsNotFound(err) {
+					framework.Logf("WARNING: failed to delete BGPPeer %s: %v", peer.Name, err)
+				}
+			})
+
+			// Disable full mesh so only the password-protected peers are active.
 			disableFullMesh(cli)
 
-			// BGP should be established on both nodes.
-			waitForBGPEstablishedForNode(cli, nodeNames[0])
-			waitForBGPEstablishedForNode(cli, nodeNames[1])
+			// Verify traffic flows through password-authenticated peers.
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.Execute()
 
-			restoreBGPConfig()
+			// --- Phase 2: Password mismatch should prevent peering. ---
 
-			By("Creating a secret with a different password")
-			createSecret(f, bgpSecret1Name, calicoNamespace, "password1")
+			// Delete the working peer. With full mesh still disabled, only the
+			// per-node peers we create next will be active.
+			ginkgo.By("Removing the working peer for mismatch test")
+			err = cli.Delete(ctx, peer)
+			Expect(err).NotTo(HaveOccurred(), "failed to delete password-protected BGPPeer")
 
-			By("Set bgp peers with different password")
-			createBGPPeer(cli, peer0Name, nodeNames[0], nodeIPs[1], bgpSecret0Name)
-			createBGPPeer(cli, peer1Name, nodeNames[1], nodeIPs[0], bgpSecret1Name)
+			// Get two nodes for explicit per-node peering with different passwords.
+			nodes := &corev1.NodeList{}
+			err = cli.List(ctx, nodes)
+			Expect(err).NotTo(HaveOccurred(), "failed to list nodes")
+			Expect(len(nodes.Items)).To(BeNumerically(">=", 2), "need at least 2 nodes")
+			node0 := nodes.Items[0]
+			node1 := nodes.Items[1]
+			node0IP := nodeInternalIP(&node0)
+			node1IP := nodeInternalIP(&node1)
 
-			// Disable full mesh so that node peering connection would not stay Idle.
-			disableFullMesh(cli)
+			// Create two secrets with different passwords.
+			ginkgo.By("Creating two secrets with different passwords")
+			createBGPSecret(f, "bgp-secret-0", calicoNS, "alpha")
+			createBGPSecret(f, "bgp-secret-1", calicoNS, "beta")
+			createSecretRBAC(f, "bgp-secret-0", calicoNS)
+			createSecretRBAC(f, "bgp-secret-1", calicoNS)
 
-			By("Checking bgp peer sessions stay in Connect because of password mismatch")
-			Eventually(func() bool {
-				return checkPeerForCalicoNode(f, nodeNames[0], nodeIPs[1], "Connect")
-			}, "10s", "1s").Should(BeTrue())
-			Eventually(func() bool {
-				return checkPeerForCalicoNode(f, nodeNames[1], nodeIPs[0], "Connect")
-			}, "10s", "1s").Should(BeTrue())
+			// Create explicit per-node peers with mismatched passwords.
+			ginkgo.By("Creating per-node BGPPeers with mismatched passwords")
+			createBGPPeerWithPassword(cli, "mismatch-peer-0", node0.Name, node1IP, "bgp-secret-0")
+			createBGPPeerWithPassword(cli, "mismatch-peer-1", node1.Name, node0IP, "bgp-secret-1")
 
-			Consistently(func() bool {
-				return checkPeerForCalicoNode(f, nodeNames[0], nodeIPs[1], "Connect")
-			}, "5s", "1s").Should(BeTrue())
-			Consistently(func() bool {
-				return checkPeerForCalicoNode(f, nodeNames[1], nodeIPs[0], "Connect")
-			}, "5s", "1s").Should(BeTrue())
+			// Verify that the BGP sessions do not establish due to password mismatch.
+			// We use CalicoNodeStatus to check per-peer session state rather than
+			// exec'ing into calico-node pods, since CalicoNodeStatus is the user-facing
+			// API for observing BGP state.
+			ginkgo.By("Verifying BGP sessions stay non-established due to password mismatch")
+			expectBGPPeerNotEstablished(cli, node0.Name, node1IP)
+			expectBGPPeerNotEstablished(cli, node1.Name, node0IP)
 		})
 	},
 )
 
-func createSecret(f *framework.Framework, secretName, secretNamespace, password string) {
-	secret := &v1.Secret{
+// createBGPSecret creates a Secret containing a BGP password and registers cleanup.
+func createBGPSecret(f *framework.Framework, name, namespace, password string) {
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: secretNamespace,
-			Name:      secretName,
+			Name:      name,
+			Namespace: namespace,
 		},
 		StringData: map[string]string{
 			"password": password,
 		},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	_, err := f.ClientSet.CoreV1().Secrets(secretNamespace).Create(ctx, secret, metav1.CreateOptions{})
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	_, err := f.ClientSet.CoreV1().Secrets(namespace).Create(context.Background(), secret, metav1.CreateOptions{})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create secret %s", name)
 
-	DeferCleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := f.ClientSet.CoreV1().Secrets(secretNamespace).Delete(ctx, secretName, metav1.DeleteOptions{})
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ginkgo.DeferCleanup(func() {
+		err := f.ClientSet.CoreV1().Secrets(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			framework.Logf("WARNING: failed to delete secret %s: %v", name, err)
+		}
 	})
 }
 
-// Get calico-node pod.
-func getCalicoNodePod(f *framework.Framework, nodeName string) *v1.Pod {
-	// Get calico-node pods.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	podList, err := f.ClientSet.CoreV1().Pods(metav1.NamespaceAll).List(
-		ctx,
-		metav1.ListOptions{
-			FieldSelector: fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName}).String(),
-			LabelSelector: labels.SelectorFromSet(map[string]string{"k8s-app": "calico-node"}).String(),
-		},
-	)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(len(podList.Items)).To(Equal(1))
-	return &(podList.Items[0])
-}
-
-func addCalicoNodeRbacForSecret(f *framework.Framework, secretName, secretNamespace string) {
+// createSecretRBAC creates a Role and RoleBinding allowing calico-node to read the named secret.
+func createSecretRBAC(f *framework.Framework, secretName, namespace string) {
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
-			Namespace: secretNamespace,
+			Namespace: namespace,
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -224,21 +222,25 @@ func addCalicoNodeRbacForSecret(f *framework.Framework, secretName, secretNamesp
 			},
 		},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	_, err := f.ClientSet.RbacV1().Roles(secretNamespace).Create(ctx, role, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	_, err := f.ClientSet.RbacV1().Roles(namespace).Create(context.Background(), role, metav1.CreateOptions{})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create Role for secret %s", secretName)
+	ginkgo.DeferCleanup(func() {
+		err := f.ClientSet.RbacV1().Roles(namespace).Delete(context.Background(), secretName, metav1.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			framework.Logf("WARNING: failed to delete Role %s: %v", secretName, err)
+		}
+	})
 
 	binding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
-			Namespace: secretNamespace,
+			Namespace: namespace,
 		},
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      "ServiceAccount",
 				Name:      "calico-node",
-				Namespace: secretNamespace,
+				Namespace: namespace,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -247,100 +249,101 @@ func addCalicoNodeRbacForSecret(f *framework.Framework, secretName, secretNamesp
 			Name:     secretName,
 		},
 	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	_, err = f.ClientSet.RbacV1().RoleBindings(secretNamespace).Create(ctx, binding, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
-}
-
-func removeCalicoNodeRbacForSecret(f *framework.Framework, secretName, secretNamespace string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	err := f.ClientSet.RbacV1().RoleBindings(secretNamespace).Delete(ctx, secretName, metav1.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
-
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	err = f.ClientSet.RbacV1().Roles(secretNamespace).Delete(ctx, secretName, metav1.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
-}
-
-func birdIsRunning(f *framework.Framework, nodeName string) bool {
-	// Get calico-node pod.
-	pod := getCalicoNodePod(f, nodeName)
-
-	// Try to run birdcl.
-	output, err := kubectl.RunKubectl(pod.Namespace,
-		"exec",
-		"--",
-		"birdcl",
-		"-s", "/var/run/calico/bird.ctl",
-		"show",
-		"protocol")
-	logrus.WithError(err).Infof("birdcl error, output %s", output)
-
-	return err == nil
-}
-
-// Check peering status.
-// If peering is established, keyWord to check is Established.
-// If peering duplicated, keyWord to check is Idle.
-// If peering with mismatched password, keyWord to check is Connect.
-func checkPeerForCalicoNode(f *framework.Framework, nodeName string, peerIP string, keyWord string) bool {
-	// Get calico-node pod.
-	pod := getCalicoNodePod(f, nodeName)
-
-	// Run birdcl.
-	output, err := kubectl.RunKubectl(pod.Namespace,
-		"exec",
-		pod.Name,
-		"--",
-		"birdcl",
-		"-s", "/var/run/calico/bird.ctl",
-		"show",
-		"protocol")
-	Expect(err).NotTo(HaveOccurred())
-	logrus.Infof("output is %s", output)
-
-	// Extract birdcl output.
-	ipString := strings.Replace(peerIP, ".", "_", -1)
-
-	// Check if bgp session status with keyWord.
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, ipString) && strings.Contains(line, keyWord) {
-			logrus.Infof("BGP session found keyWord with peer. < %s >", line)
-			return true
+	_, err = f.ClientSet.RbacV1().RoleBindings(namespace).Create(context.Background(), binding, metav1.CreateOptions{})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create RoleBinding for secret %s", secretName)
+	ginkgo.DeferCleanup(func() {
+		err := f.ClientSet.RbacV1().RoleBindings(namespace).Delete(context.Background(), secretName, metav1.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			framework.Logf("WARNING: failed to delete RoleBinding %s: %v", secretName, err)
 		}
-	}
-
-	return false
+	})
 }
 
-// Set bgp peer resources.
-func createBGPPeer(cli ctrlclient.Client, name, node, peerIP, secret string) {
-	as, err := numorstring.ASNumberFromString("64512")
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-	peer := v3.NewBGPPeer()
-	peer.Name = name
-	peer.Spec = v3.BGPPeerSpec{
-		Node:     node,
-		PeerIP:   peerIP,
-		ASNumber: as,
-		Password: &v3.BGPPassword{
-			SecretKeyRef: &v1.SecretKeySelector{
-				Key:                  "password",
-				LocalObjectReference: v1.LocalObjectReference{Name: secret},
+// createBGPPeerWithPassword creates a per-node BGPPeer with password authentication
+// and registers cleanup.
+func createBGPPeerWithPassword(cli ctrlclient.Client, name, node, peerIP, secretName string) {
+	peer := &v3.BGPPeer{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: v3.BGPPeerSpec{
+			Node:     node,
+			PeerIP:   peerIP,
+			ASNumber: 64512,
+			Password: &v3.BGPPassword{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					Key:                  "password",
+					LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+				},
 			},
 		},
 	}
-	err = cli.Create(context.Background(), peer)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-	DeferCleanup(func() {
-		err := cli.Delete(context.Background(), peer)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	err := cli.Create(context.Background(), peer)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create BGPPeer %s", name)
+	ginkgo.DeferCleanup(func() {
+		if err := cli.Delete(context.Background(), peer); err != nil && !errors.IsNotFound(err) {
+			framework.Logf("WARNING: failed to delete BGPPeer %s: %v", name, err)
+		}
 	})
+}
+
+// expectBGPPeerNotEstablished verifies via CalicoNodeStatus that the BGP session
+// from nodeName to peerIP is not Established, and remains so for a sustained period.
+func expectBGPPeerNotEstablished(cli ctrlclient.Client, nodeName, peerIP string) {
+	status := &v3.CalicoNodeStatus{
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		Spec: v3.CalicoNodeStatusSpec{
+			Node:                nodeName,
+			Classes:             []v3.NodeStatusClassType{v3.NodeStatusClassTypeBGP},
+			UpdatePeriodSeconds: ptr.To[uint32](1),
+		},
+	}
+	err := cli.Create(context.Background(), status)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create CalicoNodeStatus for node %s", nodeName)
+	defer func() {
+		err := cli.Delete(context.Background(), status)
+		if err != nil && !errors.IsNotFound(err) {
+			framework.Logf("WARNING: failed to delete CalicoNodeStatus for node %s: %v", nodeName, err)
+		}
+	}()
+
+	// Wait for the specific peer to appear in the status report as non-established.
+	EventuallyWithOffset(1, func() error {
+		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: nodeName}, status); err != nil {
+			return fmt.Errorf("failed to get CalicoNodeStatus for node %s: %w", nodeName, err)
+		}
+		for _, peer := range status.Status.BGP.PeersV4 {
+			if peer.PeerIP == peerIP {
+				if peer.State == v3.BGPSessionStateEstablished {
+					return fmt.Errorf("peer %s on node %s is unexpectedly Established", peerIP, nodeName)
+				}
+				// Found the peer and it's not established — this is the expected state.
+				return nil
+			}
+		}
+		return fmt.Errorf("peer %s not yet reported in CalicoNodeStatus for node %s (peers: %v)",
+			peerIP, nodeName, status.Status.BGP.PeersV4)
+	}, "30s", "1s").Should(Succeed(), "peer %s on node %s should appear as non-established", peerIP, nodeName)
+
+	// Verify the peer stays non-established over a sustained period.
+	ConsistentlyWithOffset(1, func() error {
+		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: nodeName}, status); err != nil {
+			return nil // Transient error, don't fail Consistently
+		}
+		for _, peer := range status.Status.BGP.PeersV4 {
+			if peer.PeerIP == peerIP && peer.State == v3.BGPSessionStateEstablished {
+				return fmt.Errorf("peer %s on node %s unexpectedly became Established", peerIP, nodeName)
+			}
+		}
+		return nil
+	}, "10s", "1s").Should(Succeed(), "peer %s on node %s should remain non-established", peerIP, nodeName)
+}
+
+// nodeInternalIP returns the first InternalIP address of a node.
+func nodeInternalIP(node *corev1.Node) string {
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP {
+			return addr.Address
+		}
+	}
+	framework.Failf("no InternalIP found for node %s", node.Name)
+	return ""
 }
