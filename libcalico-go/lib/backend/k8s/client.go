@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	kubevirtclient "kubevirt.io/client-go/kubevirt/typed/core/v1"
 	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -220,7 +221,6 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		apiv3.KindBGPFilter,
 		resources.NewBGPFilterClient(restClient, group),
 	)
-
 	// IPAMConfig can come to us from two places:
 	// - The lib/ipam code, which uses the older v1 API 'IPAMConfig'
 	// - The lib/clientv3 code, which uses the newer v3 API 'IPAMConfiguration'
@@ -233,8 +233,20 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		resources.NewIPAMConfigClientV3(restClient, group),
 	)
 
-	// These resources are backed directly by core Kubernetes APIs, and do not
-	// use CRDs.
+	// These resources are backed directly by core Kubernetes APIs or third-party
+	// APIs, and do not use CRDs.
+	kvClient, err := kubevirtclient.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build KubeVirt client: %v", err)
+	}
+	c.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		internalapi.KindLiveMigration,
+		resources.NewLiveMigrationClient(func(namespace string) resources.VMIMClient {
+			return kvClient.VirtualMachineInstanceMigrations(namespace)
+		}),
+	)
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),
 		reflect.TypeFor[model.ResourceListOptions](),
