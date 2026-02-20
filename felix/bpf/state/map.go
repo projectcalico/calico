@@ -121,10 +121,13 @@ type State struct {
 	SrcAddrMasq1        uint32
 	SrcAddrMasq2        uint32
 	SrcAddrMasq3        uint32
-	_                   [48]byte // ipv6 padding
+	NATSvcID            uint32
+	_                   uint32
+	_                   [44]byte // ipv6 padding
 }
 
-const expectedSize = 488
+const expectedSize = 496
+const entrySize = 512
 
 func (s *State) AsBytes() []byte {
 	bPtr := (*[expectedSize]byte)(unsafe.Pointer(s))
@@ -143,10 +146,10 @@ func StateFromBytes(bytes []byte) State {
 var MapParameters = maps.MapParameters{
 	Type:       "percpu_array",
 	KeySize:    4,
-	ValueSize:  expectedSize,
+	ValueSize:  entrySize,
 	MaxEntries: 2,
 	Name:       "cali_state",
-	Version:    4,
+	Version:    6,
 }
 
 func Map() maps.Map {
@@ -157,7 +160,7 @@ func MapForTest() maps.Map {
 	return maps.NewPinnedMap(maps.MapParameters{
 		Type:       "array",
 		KeySize:    4,
-		ValueSize:  expectedSize,
+		ValueSize:  entrySize,
 		MaxEntries: 2,
 		Name:       "test_state",
 	})

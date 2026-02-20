@@ -17,6 +17,7 @@ package utils
 import (
 	"context"
 	"net"
+	"slices"
 	"time"
 
 	"github.com/onsi/gomega"
@@ -164,12 +165,7 @@ func checkNodeIsMaster(f *framework.Framework, ips []string) bool {
 	}
 
 	hasIP := func(endpointIP string) bool {
-		for _, ip := range ips {
-			if ip == endpointIP {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(ips, endpointIP)
 	}
 
 	for _, ss := range endpnts.Subsets {

@@ -18,6 +18,8 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
 // Policy is a struct to hold policy config (which currently happens to also contain some K8s config)
@@ -44,7 +46,7 @@ type Kubernetes struct {
 }
 
 type Args struct {
-	Mesos Mesos `json:"org.apache.mesos,omitempty"`
+	Mesos Mesos `json:"org.apache.mesos"`
 }
 
 type Mesos struct {
@@ -58,7 +60,7 @@ type NetworkInfo struct {
 			Key   string `json:"key"`
 			Value string `json:"value"`
 		} `json:"labels,omitempty"`
-	} `json:"labels,omitempty"`
+	} `json:"labels"`
 }
 
 // NetConf stores the common network config for Calico CNI plugin
@@ -77,32 +79,34 @@ type NetConf struct {
 		AssignIpv6 *string  `json:"assign_ipv6"`
 		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
 		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
-	} `json:"ipam,omitempty"`
-	Args                 Args                   `json:"args"`
-	MTU                  int                    `json:"mtu"`
-	NumQueues            int                    `json:"num_queues"`
-	Nodename             string                 `json:"nodename"`
-	NodenameFile         string                 `json:"nodename_file"`
-	IPAMLockFile         string                 `json:"ipam_lock_file"`
-	NodenameFileOptional bool                   `json:"nodename_file_optional"`
-	DatastoreType        string                 `json:"datastore_type"`
-	EtcdEndpoints        string                 `json:"etcd_endpoints"`
-	EtcdDiscoverySrv     string                 `json:"etcd_discovery_srv"`
-	LogLevel             string                 `json:"log_level"`
-	LogFilePath          string                 `json:"log_file_path"`
-	LogFileMaxSize       int                    `json:"log_file_max_size"`
-	LogFileMaxAge        int                    `json:"log_file_max_age"`
-	LogFileMaxCount      int                    `json:"log_file_max_count"`
-	Policy               Policy                 `json:"policy"`
-	Kubernetes           Kubernetes             `json:"kubernetes"`
-	FeatureControl       FeatureControl         `json:"feature_control"`
-	EtcdScheme           string                 `json:"etcd_scheme"`
-	EtcdKeyFile          string                 `json:"etcd_key_file"`
-	EtcdCertFile         string                 `json:"etcd_cert_file"`
-	EtcdCaCertFile       string                 `json:"etcd_ca_cert_file"`
-	ContainerSettings    ContainerSettings      `json:"container_settings,omitempty"`
-	IncludeDefaultRoutes bool                   `json:"include_default_routes,omitempty"`
-	DataplaneOptions     map[string]interface{} `json:"dataplane_options,omitempty"`
+	} `json:"ipam"`
+	QPS                  int               `json:"qps,omitempty"`
+	Burst                int               `json:"burst,omitempty"`
+	Args                 Args              `json:"args"`
+	MTU                  int               `json:"mtu"`
+	NumQueues            int               `json:"num_queues"`
+	Nodename             string            `json:"nodename"`
+	NodenameFile         string            `json:"nodename_file"`
+	IPAMLockFile         string            `json:"ipam_lock_file"`
+	NodenameFileOptional bool              `json:"nodename_file_optional"`
+	DatastoreType        string            `json:"datastore_type"`
+	EtcdEndpoints        string            `json:"etcd_endpoints"`
+	EtcdDiscoverySrv     string            `json:"etcd_discovery_srv"`
+	LogLevel             string            `json:"log_level"`
+	LogFilePath          string            `json:"log_file_path"`
+	LogFileMaxSize       int               `json:"log_file_max_size"`
+	LogFileMaxAge        int               `json:"log_file_max_age"`
+	LogFileMaxCount      int               `json:"log_file_max_count"`
+	Policy               Policy            `json:"policy"`
+	Kubernetes           Kubernetes        `json:"kubernetes"`
+	FeatureControl       FeatureControl    `json:"feature_control"`
+	EtcdScheme           string            `json:"etcd_scheme"`
+	EtcdKeyFile          string            `json:"etcd_key_file"`
+	EtcdCertFile         string            `json:"etcd_cert_file"`
+	EtcdCaCertFile       string            `json:"etcd_ca_cert_file"`
+	ContainerSettings    ContainerSettings `json:"container_settings"`
+	IncludeDefaultRoutes bool              `json:"include_default_routes,omitempty"`
+	DataplaneOptions     map[string]any    `json:"dataplane_options,omitempty"`
 
 	// Windows-specific configuration.
 	// WindowsPodDeletionTimestampTimeout defines number of seconds before a pod deletion timestamp timeout and
@@ -147,6 +151,10 @@ type NetConf struct {
 
 	// RequireMTUFile specifies whether mtu file is required to execute the cni-plugin
 	RequireMTUFile bool `json:"require_mtu_file,omitempty"`
+
+	// CalicoAPIGroup specifies the API group to use when connecting to the Kubernetes API server.
+	// If not specified, the default value of "crd.projectcalico.org" is used.
+	CalicoAPIGroup resources.BackingAPIGroup `json:"calico_api_group,omitempty"`
 }
 
 // Runtime Config is provided by kubernetes

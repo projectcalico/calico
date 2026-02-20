@@ -145,8 +145,7 @@ bin/LICENSE: ../LICENSE.md
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: protobuf
-	mkdir -p report
-	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "go test -v $(GINKGO_ARGS) ./... | go-junit-report > ./report/tests.xml"
+	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "cd /go/src/$(PACKAGE_NAME) && go test -v ./..."
 
 ###############################################################################
 # CI

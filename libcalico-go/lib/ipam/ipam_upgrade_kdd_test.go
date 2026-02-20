@@ -15,15 +15,16 @@ package ipam
 
 import (
 	"context"
+	"os"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
@@ -37,6 +38,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		bc        bapi.Client
 		ic        Interface
 		crdClient crclient.Client
+		useV3     = os.Getenv("CALICO_API_GROUP") == "projectcalico.org"
 	)
 
 	BeforeEach(func() {
@@ -50,7 +52,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		// Build a raw CRD REST client using the same kubeconfig as the backend client.
 		cfg, _, err := k8s.CreateKubernetesClientset(&config.Spec)
 		Expect(err).NotTo(HaveOccurred())
-		crdClient, err = rawcrdclient.New(cfg)
+		crdClient, err = rawcrdclient.New(cfg, useV3)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -60,6 +62,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 	})
 
 	It("should add labels to this host's block affinities only", func() {
+		if !useV3 {
+			Skip("Block affinity upgrade not needed for v1 API group")
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -71,7 +77,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, hostB, "10.10.1.0/26")).To(Succeed())
 
 		// Sanity check: List and assert they currently have no labels.
-		var list libapiv3.BlockAffinityList
+		var list internalapi.BlockAffinityList
 		Expect(crdClient.List(ctx, &list)).To(Succeed())
 		Expect(list.Items).To(HaveLen(3))
 		for _, item := range list.Items {
@@ -82,7 +88,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		Expect(ic.UpgradeHost(ctx, hostA)).To(Succeed())
 
 		// Re-list and verify labels applied to hostA's affinities, but not hostB.
-		list = libapiv3.BlockAffinityList{}
+		list = internalapi.BlockAffinityList{}
 		Expect(crdClient.List(ctx, &list)).To(Succeed())
 		By("verifying labels exist for host-a and not for host-b")
 		for _, item := range list.Items {

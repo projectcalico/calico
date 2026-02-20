@@ -30,7 +30,7 @@ import (
 
 var (
 	matchIPPool = regexp.MustCompile("^/?calico/v1/ipam/v./pool/([^/]+)$")
-	typeIPPool  = reflect.TypeOf(IPPool{})
+	typeIPPool  = reflect.TypeFor[IPPool]()
 )
 
 type IPPoolKey struct {

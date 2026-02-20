@@ -87,6 +87,9 @@ function init-vars() {
   CHERRY_PICK=${CHERRY_PICK:-""}
   SQUASH_COMMITS=${SQUASH_COMMITS:-""}
 
+  FAIL_ON_CONFLICT=${FAIL_ON_CONFLICT:-""}
+  AUTO_CREATE_PR=${AUTO_CREATE_PR:-""}
+
   if [[ -z ${GITHUB_USER:-} ]]; then
     echo "Please export GITHUB_USER=<your-user> (or GH organization, if that's where your fork lives)"
     exit 1
@@ -255,12 +258,19 @@ EOF
     echo
     cat "${pr_body_file}"
   else
-    echo "+++ Creating PR into ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}. Running: gh pr create -t \"[${relshort}] ${new_title}\" -F \"${pr_body_file}\" --repo \"${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}\" -H \"${GITHUB_USER}:${NEWBRANCH}\" -B \"${rel}\" -l \"${new_labels}\""
+    head_ref="${GITHUB_USER}:${NEWBRANCH}"
+
+    # If AUTO_CREATE_PR is set and true, there is no fork involved.
+    if [[ -n "${AUTO_CREATE_PR}" ]]; then
+      head_ref="${NEWBRANCH}"
+    fi
+
+    echo "+++ Creating PR into ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}. Running: gh pr create -t \"[${relshort}] ${new_title}\" -F \"${pr_body_file}\" --repo \"${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}\" -H \"${head_ref}\" -B \"${rel}\" -l \"${new_labels}\""
     gh pr create \
       -t "[${relshort}] ${new_title}" \
       -F "${pr_body_file}" \
       --repo "${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}" \
-      -H "${GITHUB_USER}:${NEWBRANCH}" \
+      -H "${head_ref}" \
       -B "${rel}" \
       -l "${new_labels}"
   fi
@@ -307,6 +317,11 @@ function create-branch-and-pr() {
       # If patch is applied cleanly, add files, they will be committed later
       eval "$add_cmd"
     else
+      if [[ -n "${FAIL_ON_CONFLICT}" ]]; then
+        echo "Conflicts detected and FAIL_ON_CONFLICT is set, aborting."
+        exit 1
+      fi
+
       # If there are conflicts, prompt user to resolve them in another window and continue
       conflicts=false
       while unmerged=$(git status --porcelain | grep ^U) && [[ -n ${unmerged} ]] \
@@ -395,10 +410,14 @@ function create-branch-and-pr() {
   echo
   echo "  git push ${FORK_REMOTE} ${NEWBRANCHUNIQ}:${NEWBRANCH}"
   echo
-  read -p "+++ Proceed (anything but 'y' aborts the cherry-pick)? [y/n] " -r
-  if ! [[ "${REPLY}" =~ ^[yY]$ ]]; then
-    echo "Aborting." >&2
-    exit 1
+  if [[ -n "${AUTO_CREATE_PR}" ]]; then
+    echo "AUTO_CREATE_PR is set, proceeding without prompt."
+  else
+    read -p "+++ Proceed (anything but 'y' aborts the cherry-pick)? [y/n] " -r
+    if ! [[ "${REPLY}" =~ ^[yY]$ ]]; then
+      echo "Aborting." >&2
+      exit 1
+    fi
   fi
   
   git push "${FORK_REMOTE}" -f "${NEWBRANCHUNIQ}:${NEWBRANCH}"

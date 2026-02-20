@@ -15,7 +15,7 @@
 package throttle_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/throttle"
@@ -31,7 +31,7 @@ var _ = Describe("Throttle with bucket size 3", func() {
 		Expect(throttle.WouldAdmit()).To(BeFalse())
 	})
 	It("should leak", func() {
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			throttle.Refill()
 		}
 		Expect(throttle.Admit()).To(BeTrue())
@@ -41,7 +41,7 @@ var _ = Describe("Throttle with bucket size 3", func() {
 		Expect(throttle.Admit()).To(BeFalse())
 	})
 	It("should not go negative", func() {
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			Expect(throttle.Admit()).To(BeFalse())
 		}
 		throttle.Refill()

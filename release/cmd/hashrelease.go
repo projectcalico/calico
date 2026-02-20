@@ -78,9 +78,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return fmt.Errorf("failed to clone operator repository: %v", err)
 				}
 
-				// Define the base hashrelease directory.
-				baseHashreleaseDir := baseHashreleaseOutputDir(cfg.RepoRootDir)
-
 				// Create the pinned config.
 				pinned := pinnedversion.CalicoPinnedVersions{
 					Dir:                 cfg.TmpDir,
@@ -99,7 +96,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				// Check if the hashrelease has already been published.
-				if published, err := tasks.HashreleasePublished(hashreleaseServerConfig(c), data.Hash(), c.Bool(ciFlag.Name)); err != nil {
+				serverCfg := hashreleaseServerConfig(c)
+				if published, err := tasks.HashreleasePublished(serverCfg, data.Hash(), c.Bool(ciFlag.Name)); err != nil {
 					return fmt.Errorf("failed to check if hashrelease has been published: %v", err)
 				} else if published {
 					// On CI, if the hashrelease has already been published, we exit successfully (return nil).
@@ -140,8 +138,11 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					}
 				}
 
-				// Define the hashrelease directory using the hash from the pinned file.
-				hashreleaseDir := filepath.Join(baseHashreleaseDir, data.Hash())
+				// Extract the pinned version as a hashrelease.
+				hashrel, err := pinnedversion.LoadHashrelease(cfg.RepoRootDir, cfg.TmpDir, baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+				if err != nil {
+					return fmt.Errorf("load hashrelease from pinned file: %v", err)
+				}
 
 				opts := []calico.Option{
 					calico.WithVersion(data.ProductVersion()),
@@ -150,7 +151,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.IsHashRelease(),
-					calico.WithOutputDir(hashreleaseDir),
+					calico.WithHashrelease(*hashrel, *serverCfg),
+					calico.WithOutputDir(hashrel.Source),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithBuildImages(c.Bool(buildHashreleaseImagesFlag.Name)),
 					calico.WithArchiveImages(c.Bool(archiveHashreleaseImagesFlag.Name)),
@@ -178,13 +180,13 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if c.String(orgFlag.Name) == utils.TigeraOrg {
 					logrus.Warn("Release notes are not supported for Tigera releases, skipping...")
 				} else {
-					if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(hashreleaseDir, releaseNotesDir), releaseVersion); err != nil {
+					if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(hashrel.Source, releaseNotesDir), releaseVersion); err != nil {
 						return err
 					}
 				}
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
-				return tasks.ReformatHashrelease(hashreleaseDir, cfg.TmpDir)
+				return tasks.ReformatHashrelease(hashrel.Source, cfg.TmpDir)
 			},
 		},
 
@@ -247,8 +249,10 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					calico.WithTmpDir(cfg.TmpDir),
+					calico.WithOutputDir(hashrel.Source),
 					calico.WithHashrelease(*hashrel, *serverCfg),
 					calico.WithPublishImages(c.Bool(publishHashreleaseImagesFlag.Name)),
+					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
 					calico.WithPublishHashrelease(c.Bool(publishHashreleaseFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
@@ -264,6 +268,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return fmt.Errorf("failed to retrieve images for hashrelease: %w", err)
 				}
 				opts = append(opts, calico.WithComponents(components))
+				if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
+					opts = append(opts, calico.WithHelmRegistries(reg))
+				}
 				r := calico.NewManager(opts...)
 				if err := r.PublishRelease(); err != nil {
 					return err
@@ -283,7 +290,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				// Send a slack message to notify that the hashrelease has been published.
 				if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) {
-					return tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c))
+					if _, err := tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c)); err != nil {
+						logrus.WithError(err).Warn("Failed to send hashrelease announcement to Slack")
+					}
 				}
 				return nil
 			},
@@ -349,7 +358,9 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 func hashreleasePublishFlags() []cli.Flag {
 	f := append(gitFlags,
 		registryFlag,
+		helmRegistryFlag,
 		publishHashreleaseImagesFlag,
+		publishChartsFlag,
 		archFlag,
 		publishHashreleaseFlag,
 		latestFlag,

@@ -17,12 +17,13 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
 	"regexp"
 	"strconv"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -354,8 +355,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					felixIP6(0), externalClient.IPv6)
 
 				tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
-				tcpdump.Start()
-				defer tcpdump.Stop()
+				tcpdump.Start(infra)
 
 				_, err := w[0][0].ExecCombinedOutput("ping6", "-c", "2", externalClient.IPv6)
 				Expect(err).NotTo(HaveOccurred())
@@ -399,7 +399,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				for _, f := range tc.Felixes {
 					felixReady := func() int {
-						return healthStatus("["+f.IPv6+"]", "9099", "readiness")
+						return healthStatus(f.IPv6, "9099", "readiness")
 					}
 					Eventually(felixReady, "10s", "330ms").Should(BeGood())
 					Consistently(felixReady, "10s", "1s").Should(BeGood())
@@ -536,7 +536,7 @@ func describeBPFDualStackProxyHealthTests() bool {
 			}, "10s", "330ms").Should(Equal(200))
 
 			Eventually(func() int {
-				return healthStatus("["+tc.Felixes[0].IPv6+"]", strconv.Itoa(int(healthCheckNodePort)), "")
+				return healthStatus(tc.Felixes[0].IPv6, strconv.Itoa(int(healthCheckNodePort)), "")
 			}, "10s", "330ms").Should(Equal(200))
 
 			// Check health probe on node 1 (no local endpoint) - should return 503
@@ -545,7 +545,7 @@ func describeBPFDualStackProxyHealthTests() bool {
 			}, "10s", "330ms").Should(Equal(503))
 
 			Eventually(func() int {
-				return healthStatus("["+tc.Felixes[1].IPv6+"]", strconv.Itoa(int(healthCheckNodePort)), "")
+				return healthStatus(tc.Felixes[1].IPv6, strconv.Itoa(int(healthCheckNodePort)), "")
 			}, "10s", "330ms").Should(Equal(503))
 
 			// Clean up
@@ -595,9 +595,7 @@ func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, hostIfTy
 		"eth0": hostIfType | ready,
 	}
 
-	for k, v := range additionalInterfaces {
-		expectedIfacesToFlags[k] = v
-	}
+	maps.Copy(expectedIfacesToFlags, additionalInterfaces)
 
 	for _, w := range felix.Workloads {
 		if w.Runs() {

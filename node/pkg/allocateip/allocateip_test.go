@@ -20,15 +20,14 @@ import (
 	"fmt"
 	gnet "net"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -38,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
+func setTunnelAddressForNode(tunnelType string, n *internalapi.Node, addr string) {
 	switch tunnelType {
 	case ipam.AttributeTypeIPIP:
 		n.Spec.BGP.IPv4IPIPTunnelAddr = addr
@@ -49,7 +48,7 @@ func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
 	case ipam.AttributeTypeWireguard:
 		if addr != "" {
 			if n.Spec.Wireguard == nil {
-				n.Spec.Wireguard = &libapi.NodeWireguardSpec{}
+				n.Spec.Wireguard = &internalapi.NodeWireguardSpec{}
 			}
 			n.Spec.Wireguard.InterfaceIPv4Address = addr
 		} else if n.Spec.Wireguard != nil {
@@ -61,7 +60,7 @@ func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
 	case ipam.AttributeTypeWireguardV6:
 		if addr != "" {
 			if n.Spec.Wireguard == nil {
-				n.Spec.Wireguard = &libapi.NodeWireguardSpec{}
+				n.Spec.Wireguard = &internalapi.NodeWireguardSpec{}
 			}
 			n.Spec.Wireguard.InterfaceIPv6Address = addr
 		} else if n.Spec.Wireguard != nil {
@@ -150,7 +149,7 @@ func expectTunnelAddressEmptyForNodeName(c client.Interface, nodeName string, tu
 	Expect(checkTunnelAddressEmptyForNodeName(c, nodeName, tunnelType)).NotTo(HaveOccurred())
 }
 
-func expectTunnelAddressEmpty(n *libapi.Node, tunnelType string) {
+func expectTunnelAddressEmpty(n *internalapi.Node, tunnelType string) {
 	Expect(checkTunnelAddressEmpty(n, tunnelType)).NotTo(HaveOccurred())
 }
 
@@ -160,7 +159,7 @@ func checkTunnelAddressEmptyForNodeName(c client.Interface, nodeName string, tun
 	return checkTunnelAddressEmpty(n, tunnelType)
 }
 
-func checkTunnelAddressEmpty(n *libapi.Node, tunnelType string) error {
+func checkTunnelAddressEmpty(n *internalapi.Node, tunnelType string) error {
 	var addr string
 	switch tunnelType {
 	case ipam.AttributeTypeIPIP:
@@ -190,7 +189,7 @@ func expectTunnelAddressForNodeName(c client.Interface, nodeName string, tunnelT
 	Expect(checkTunnelAddressForNodeName(c, nodeName, tunnelType, addr)).NotTo(HaveOccurred())
 }
 
-func expectTunnelAddressForNode(c client.Interface, n *libapi.Node, tunnelType string, addr string) {
+func expectTunnelAddressForNode(c client.Interface, n *internalapi.Node, tunnelType string, addr string) {
 	Expect(checkTunnelAddressForNode(c, n, tunnelType, addr)).NotTo(HaveOccurred())
 }
 
@@ -200,7 +199,7 @@ func checkTunnelAddressForNodeName(c client.Interface, nodeName string, tunnelTy
 	return checkTunnelAddressForNode(c, n, tunnelType, expected)
 }
 
-func checkTunnelAddressForNode(c client.Interface, n *libapi.Node, tunnelType string, expected string) error {
+func checkTunnelAddressForNode(c client.Interface, n *internalapi.Node, tunnelType string, expected string) error {
 	ctx := context.Background()
 
 	// Check the address in the node is as expected.
@@ -439,7 +438,6 @@ var _ = Describe("FV tests", func() {
 })
 
 var _ = Describe("ensureHostTunnelAddress", func() {
-
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 
@@ -757,7 +755,6 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 })
 
 var _ = Describe("removeHostTunnelAddress", func() {
-
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 
@@ -929,7 +926,6 @@ var _ = Describe("removeHostTunnelAddress", func() {
 })
 
 var _ = Describe("Running as daemon", func() {
-
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 
@@ -1032,11 +1028,10 @@ var _ = Describe("Running as daemon", func() {
 })
 
 var _ = Describe("determineEnabledPoolCIDRs", func() {
-
 	Context("IPIP tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1055,7 +1050,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							IPIPMode:     api.IPIPModeAlways,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeIPIP)
@@ -1067,7 +1064,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 
 		It("should ignore IP pools that do not allow tunnel IPs", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1111,7 +1108,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("IPv4 VXLAN tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1130,7 +1127,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							VXLANMode:    api.VXLANModeAlways,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLAN)
@@ -1141,7 +1140,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 		It("should match ip-pool-1 but not ip-pool-2 for VXLANMode CrossSubnet", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1160,7 +1159,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							VXLANMode:    api.VXLANModeCrossSubnet,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLAN)
@@ -1174,7 +1175,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("IPv6 VXLAN tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1193,7 +1194,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							VXLANMode:    api.VXLANModeAlways,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLANV6)
@@ -1204,7 +1207,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 		It("should match ip-pool-1 but not ip-pool-2 for VXLANMode CrossSubnet", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1223,7 +1226,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							VXLANMode:    api.VXLANModeCrossSubnet,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLANV6)
@@ -1237,7 +1242,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("Dual stack VXLAN tests", func() {
 		It("should match both IPv4 and IPv6 pools", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1257,7 +1262,8 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							VXLANMode:    api.VXLANModeAlways,
 						},
 					},
-				}}
+				},
+			}
 
 			// Execute and test assertions.
 			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
@@ -1274,7 +1280,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 
 		It("should match both IPv4 and IPv6 pools for VXLANMode CrossSubnet", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1294,7 +1300,8 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							VXLANMode:    api.VXLANModeCrossSubnet,
 						},
 					},
-				}}
+				},
+			}
 
 			// Execute and test assertions.
 			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
@@ -1313,9 +1320,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("IPv4 Wireguard tests", func() {
 		It("node has public key - should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{
+			n := internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}},
-				Status:     libapi.NodeStatus{WireguardPublicKey: "abcde"},
+				Status:     internalapi.NodeStatus{WireguardPublicKey: "abcde"},
 			}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
@@ -1333,7 +1340,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							CIDR:         "172.128.0.0/9",
 							NodeSelector: `foo != "bar"`,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguard)
@@ -1344,7 +1353,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 		It("node has no public key - should match no pools", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1361,7 +1370,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							CIDR:         "172.128.0.0/9",
 							NodeSelector: `foo != "bar"`,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguard)
@@ -1372,9 +1383,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("IPv6 Wireguard tests", func() {
 		It("node has public key - should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{
+			n := internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}},
-				Status:     libapi.NodeStatus{WireguardPublicKeyV6: "abcde"},
+				Status:     internalapi.NodeStatus{WireguardPublicKeyV6: "abcde"},
 			}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
@@ -1392,7 +1403,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							CIDR:         "2001:db8:00:ff::/64",
 							NodeSelector: `foo != "bar"`,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguardV6)
@@ -1403,7 +1416,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 		It("node has no public key - should match no pools", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -1420,7 +1433,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							CIDR:         "2001:db8:00:ff::/64",
 							NodeSelector: `foo != "bar"`,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguardV6)
@@ -1431,9 +1446,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("Dual Stack Wireguard tests", func() {
 		It("node has both IPv4 and IPv6 public keys - should match both pools", func() {
 			// Mock out the node and ip pools
-			n := libapi.Node{
+			n := internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}},
-				Status: libapi.NodeStatus{
+				Status: internalapi.NodeStatus{
 					WireguardPublicKey:   "abcde",
 					WireguardPublicKeyV6: "fghij",
 				},
@@ -1455,7 +1470,8 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo == "bar"`,
 						},
 					},
-				}}
+				},
+			}
 
 			// Execute and test assertions.
 			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
@@ -1589,8 +1605,8 @@ func (c shimClient) CalicoNodeStatus() client.CalicoNodeStatusInterface {
 }
 
 // IPAMConfig returns an interface for managing the IPAMConfig resource.
-func (c shimClient) IPAMConfig() client.IPAMConfigInterface {
-	return c.client.IPAMConfig()
+func (c shimClient) IPAMConfiguration() client.IPAMConfigurationInterface {
+	return c.client.IPAMConfiguration()
 }
 
 // BlockAffinities returns an interface for managing the block affinity resources.

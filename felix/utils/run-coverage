@@ -17,7 +17,7 @@
 set -e
 
 # Remove the old profiles.
-find . -name "*.coverprofile" -type f -delete
+find . -name "coverprofile.out" -type f -delete
 
 echo "Calculating packages to cover..."
 go_dirs=$(find -type f -name '*.go' | \
@@ -39,10 +39,10 @@ if [ "$#" -eq 0 ]; then
 fi
 
 set -x
-ginkgo -cover -covermode=count -coverpkg=${go_dirs} -keepGoing -r "$@"
+ginkgo -cover -covermode=count -coverpkg=${go_dirs} -keep-going -r "$@"
 set +x
 
-gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
+gocovmerge $(find . -name 'coverprofile.out') > combined.coverprofile
 
 # Print the coverage.  We use sed to remove the verbose prefix and trim down
 # the whitespace.

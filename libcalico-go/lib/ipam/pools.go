@@ -19,7 +19,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
@@ -33,7 +33,7 @@ type PoolAccessorInterface interface {
 
 // SelectsNode determines whether or not the IPPool's nodeSelector
 // matches the labels on the given node.
-func SelectsNode(pool v3.IPPool, n libapiv3.Node) (bool, error) {
+func SelectsNode(pool v3.IPPool, n internalapi.Node) (bool, error) {
 	// No node selector means that the pool matches the node.
 	if len(pool.Spec.NodeSelector) == 0 {
 		return true, nil

@@ -17,8 +17,7 @@ package updateprocessors_test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -28,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
@@ -177,12 +176,12 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 
 // Define network policies and the corresponding expected v1 KVPairs.
 //
-// np1 is a NetworkPolicy with a single Egress rule, which contains ports only,
+// knp1 is a NetworkPolicy with a single Egress rule, which contains ports only,
 // and no selectors.
 var (
 	protocol = kapiv1.ProtocolTCP
 	port     = intstr.FromInt(80)
-	np1      = networkingv1.NetworkPolicy{
+	knp1     = networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test.policy",
 			Namespace: "default",
@@ -205,15 +204,15 @@ var (
 	}
 )
 
-// expected1 is the expected v1 KVPair representation of np1 from above.
+// expectedKNP1 is the expected v1 KVPair representation of np1 from above.
 var (
-	tcp       = numorstring.ProtocolFromStringV1("tcp")
-	expected1 = []*model.KVPair{
+	tcp          = numorstring.ProtocolFromStringV1("tcp")
+	expectedKNP1 = []*model.KVPair{
 		{
 			Key: model.PolicyKey{
-				Name:      "knp.default.test.policy",
+				Name:      "test.policy",
 				Namespace: "default",
-				Kind:      apiv3.KindNetworkPolicy,
+				Kind:      model.KindKubernetesNetworkPolicy,
 			},
 			Value: &model.Policy{
 				Tier:           "default",
@@ -236,8 +235,8 @@ var (
 	}
 )
 
-// np2 is a NetworkPolicy with a single Ingress rule which allows from all namespaces.
-var np2 = networkingv1.NetworkPolicy{
+// knp2 is a NetworkPolicy with a single Ingress rule which allows from all namespaces.
+var knp2 = networkingv1.NetworkPolicy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test.policy",
 		Namespace: "default",
@@ -258,12 +257,12 @@ var np2 = networkingv1.NetworkPolicy{
 	},
 }
 
-var expected2 = []*model.KVPair{
+var expectedKNP2 = []*model.KVPair{
 	{
 		Key: model.PolicyKey{
-			Name:      "knp.default.test.policy",
+			Name:      "test.policy",
 			Namespace: "default",
-			Kind:      apiv3.KindNetworkPolicy,
+			Kind:      model.KindKubernetesNetworkPolicy,
 		},
 		Value: &model.Policy{
 			Tier:           "default",
@@ -285,8 +284,8 @@ var expected2 = []*model.KVPair{
 	},
 }
 
-var _ = Describe("Test the NetworkPolicy update processor + conversion", func() {
-	up := updateprocessors.NewNetworkPolicyUpdateProcessor(apiv3.KindNetworkPolicy)
+var _ = Describe("Test KubernetesNetworkPolicy update processor + conversion", func() {
+	up := updateprocessors.NewNetworkPolicyUpdateProcessor(model.KindKubernetesNetworkPolicy)
 
 	DescribeTable("NetworkPolicy update processor + conversion tests",
 		func(np networkingv1.NetworkPolicy, expected []*model.KVPair) {
@@ -303,8 +302,8 @@ var _ = Describe("Test the NetworkPolicy update processor + conversion", func() 
 			Expect(out).To(Equal(expected))
 		},
 
-		Entry("should handle a NetworkPolicy with no rule selectors", np1, expected1),
-		Entry("should handle a NetworkPolicy with an empty ns selector", np2, expected2),
+		Entry("should handle a NetworkPolicy with no rule selectors", knp1, expectedKNP1),
+		Entry("should handle a NetworkPolicy with an empty ns selector", knp2, expectedKNP2),
 	)
 })
 
@@ -514,7 +513,7 @@ var _ = Describe("Test end-to-end pod and network policy processing", func() {
 		Expect(len(kvps)).To(Equal(1))
 
 		// Expect the serviceaccount name to be set on the resulting WEP.
-		Expect(kvps[0].Value.(*libapiv3.WorkloadEndpoint).Spec.ServiceAccountName).To(Equal(longName))
+		Expect(kvps[0].Value.(*internalapi.WorkloadEndpoint).Spec.ServiceAccountName).To(Equal(longName))
 
 		// Process
 		kvps, err = wepProcessor.Process(kvps[0])

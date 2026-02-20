@@ -24,6 +24,18 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
+// Short string representations of policy kinds.
+const (
+	ShortKindNetworkPolicy                  string = "np"
+	ShortKindGlobalNetworkPolicy            string = "gnp"
+	ShortKindStagedNetworkPolicy            string = "snp"
+	ShortKindStagedGlobalNetworkPolicy      string = "sgnp"
+	ShortKindStagedKubernetesNetworkPolicy  string = "sknp"
+	ShortKindKubernetesNetworkPolicy        string = "knp"
+	ShortKindKubernetesClusterNetworkPolicy string = "kcnp"
+	ShortKindProfile                        string = "pro"
+)
+
 type PolicyID struct {
 	Name      string
 	Namespace string
@@ -47,19 +59,19 @@ func (p PolicyID) ID() string {
 func (p PolicyID) KindShortName() string {
 	switch p.Kind {
 	case v3.KindNetworkPolicy:
-		return "np"
+		return ShortKindNetworkPolicy
 	case v3.KindGlobalNetworkPolicy:
-		return "gnp"
+		return ShortKindGlobalNetworkPolicy
 	case v3.KindStagedNetworkPolicy:
-		return "snp"
+		return ShortKindStagedNetworkPolicy
 	case v3.KindStagedGlobalNetworkPolicy:
-		return "sgnp"
+		return ShortKindStagedGlobalNetworkPolicy
 	case v3.KindStagedKubernetesNetworkPolicy:
-		return "sknp"
+		return ShortKindStagedKubernetesNetworkPolicy
 	case model.KindKubernetesNetworkPolicy:
-		return "knp"
+		return ShortKindKubernetesNetworkPolicy
 	case model.KindKubernetesClusterNetworkPolicy:
-		return "kcnp"
+		return ShortKindKubernetesClusterNetworkPolicy
 	default:
 		logrus.Warnf("Unrecognized policy kind %q when generating short name", p.Kind)
 		return p.Kind

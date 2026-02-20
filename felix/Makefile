@@ -96,7 +96,7 @@ clean:
 	       go/docs/calc.pdf \
 	       release-notes-*
 	find . -name "junit.xml" -type f -delete
-	find . -name "*.coverprofile" -type f -delete
+	find . -name "coverprofile.out" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
@@ -154,7 +154,7 @@ $(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
-$(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' )
+$(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	mkdir -p bpf-gpl/include/src/$(ARCH)
 	$(MAKE) register ARCH=$(ARCH)
@@ -226,6 +226,9 @@ $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]')
 	$(DOCKER_GO_BUILD) make -j 16 -C bpf-gpl all ut-objs map-objs
 	touch -c $@
 
+bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
+	$(MAKE) -C bpf-gpl $(@F)
+
 clean-bpf:
 	rm -rf bpf-gpl/*.d bpf-apache/*.d bin/bpf
 	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
@@ -287,7 +290,7 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) -e $(ACK_GINKGO) $(CALICO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
@@ -360,7 +363,6 @@ fv fv/latency.log fv/data-races.log: fv-prereqs
 fv-no-prereqs:
 	rm -f fv/data-races.log fv/latency.log
 	cd fv && \
-	  $(ACK_GINKGO) \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	  FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
@@ -377,6 +379,8 @@ fv-no-prereqs:
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
+	  CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	  CALICO_CRD_PATH=$(CALICO_CRD_PATH) \
 	  EXTRA_REPORT_SUFFIX=$(FV_EXTRA_REPORT_SUFFIX) \
 	  FELIX_FV_WIREGUARD_AVAILABLE=`./wireguard-available >/dev/null && echo true || echo false` \
 	  ./run-batches
@@ -477,7 +481,7 @@ stop-grafana:
 	@-docker rm -f k8sfv-grafana
 	sleep 2
 
-bin/calico-bpf: $(SRC_FILES)
+bin/calico-bpf: $(LIBBPF_A) $(SRC_FILES)
 	@echo Building calico-bpf...
 	$(call build_cgo_binary, "$(PACKAGE_NAME)/cmd/calico-bpf", $@)
 
@@ -534,12 +538,12 @@ release-build: .release-$(VERSION).created
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo watch -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
@@ -561,20 +565,25 @@ ut-bpf-prereqs: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 ut-bpf: ut-bpf-prereqs
 	$(MAKE) ut-bpf-no-prereqs
 
+# Set format for gotestsum based on VERBOSE environment variable
+ifeq ($(VERBOSE),1)
+  GOTESTSUM_FORMAT := standard-verbose
+else
+  GOTESTSUM_FORMAT := testname
+endif
+
 ut-bpf-no-prereqs:
 	mkdir -p report
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
-		-e $(ACK_GINKGO) \
 		$(CALICO_BUILD) bash -o pipefail -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		gotestsum --format testname --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
+		gotestsum --format $(GOTESTSUM_FORMAT) --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
 	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
-		-e $(ACK_GINKGO) \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
@@ -582,13 +591,12 @@ ut-bpf-no-prereqs:
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
 		../../bin/bpf_ut.test -test.v=test2json -test.run "$(FOCUS)" |& \
-		gotestsum --format testname --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
+		gotestsum --format $(GOTESTSUM_FORMAT) --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
 
 .PHONY: bench-bpf
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 	$(DOCKER_RUN) \
 		--privileged \
-		-e $(ACK_GINKGO) \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
@@ -629,9 +637,9 @@ bin/calico-felix.exe: $(SRC_FILES)
 docs/calc.pdf: docs/calc.dot
 	cd docs/ && dot -Tpdf calc.dot -o calc.pdf
 
-CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml
+CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../$(CALICO_CRD_PATH)crd.projectcalico.org_felixconfigurations.yaml
 
-../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
+../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml ../api/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
 	$(MAKE) -C ../libcalico-go gen-crds
 
 docs/config-params.json: $(CONFIG_PARAM_DEPS)

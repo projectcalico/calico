@@ -34,9 +34,9 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
 
 var title = cases.Title(language.English)
@@ -120,11 +120,11 @@ Description:
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
 	// Replace <RESOURCE_LIST> with the list of resources that will be exported.
-	resourceList := ""
+	var resourceList strings.Builder
 	for _, r := range allV3Resources {
-		resourceList += fmt.Sprintf("    - %s\n", resourceDisplayMap[r])
+		resourceList.WriteString(fmt.Sprintf("    - %s\n", resourceDisplayMap[r]))
 	}
-	doc = strings.Replace(doc, "<RESOURCE_LIST>", resourceList, 1)
+	doc = strings.Replace(doc, "<RESOURCE_LIST>", resourceList.String(), 1)
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
@@ -170,7 +170,7 @@ Description:
 	etcdToKddNodeMap := make(map[string]string)
 	// Loop through all the resource types to retrieve every resource available by the v3 API.
 	for _, r := range allV3Resources {
-		mockArgs := map[string]interface{}{
+		mockArgs := map[string]any{
 			"<KIND>":   r,
 			"<NAME>":   []string{},
 			"--config": cf,
@@ -186,14 +186,14 @@ Description:
 
 		results := common.ExecuteConfigCommand(mockArgs, common.ActionGetOrList)
 		if len(results.ResErrs) > 0 {
-			var errStr string
+			var errStr strings.Builder
 			for i, err := range results.ResErrs {
-				errStr += err.Error()
+				errStr.WriteString(err.Error())
 				if (i + 1) != len(results.ResErrs) {
-					errStr += "\n"
+					errStr.WriteString("\n")
 				}
 			}
-			return errors.New(errStr)
+			return errors.New(errStr.String())
 		}
 
 		for i, resource := range results.Resources {
@@ -224,7 +224,7 @@ Description:
 					if !ok {
 						return fmt.Errorf("unable to convert Calico network policy for inspection")
 					}
-					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
+					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), converter.KubernetesNetworkPolicyEtcdPrefix) {
 						filtered = append(filtered, obj)
 					}
 				}
@@ -236,38 +236,10 @@ Description:
 				results.Resources[i] = resource
 			}
 
-			// Skip exporting Kubernetes cluster network policies.
-			if r == "globalnetworkpolicies" {
-				objs, err := meta.ExtractList(resource)
-				if err != nil {
-					return fmt.Errorf("error extracting global network policies for inspection before exporting: %s", err)
-				}
-
-				filtered := []runtime.Object{}
-				for _, obj := range objs {
-					metaObj, ok := obj.(v1.ObjectMetaAccessor)
-					if !ok {
-						return fmt.Errorf("unable to convert Calico global network policy for inspection")
-					}
-					if strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
-						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) {
-						continue
-					}
-					filtered = append(filtered, obj)
-
-				}
-
-				err = meta.SetList(resource, filtered)
-				if err != nil {
-					return fmt.Errorf("unable to remove Kubernetes cluster network policies for export: %s", err)
-				}
-				results.Resources[i] = resource
-			}
-
 			// Nodes need to also be modified to move the Orchestrator reference to the name field.
 			if r == "nodes" {
 				err := meta.EachListItem(resource, func(obj runtime.Object) error {
-					node, ok := obj.(*libapiv3.Node)
+					node, ok := obj.(*internalapi.Node)
 					if !ok {
 						return fmt.Errorf("failed to convert resource to Node object for migration processing: %+v", obj)
 					}
@@ -302,8 +274,8 @@ Description:
 						return fmt.Errorf("failed to convert resource to FelixConfiguration object for migration processing: %+v", obj)
 					}
 
-					if strings.HasPrefix(felixConfig.GetObjectMeta().GetName(), "node.") {
-						etcdNodeName := strings.TrimPrefix(felixConfig.GetObjectMeta().GetName(), "node.")
+					if after, ok0 := strings.CutPrefix(felixConfig.GetObjectMeta().GetName(), "node."); ok0 {
+						etcdNodeName := after
 						if nodename, ok := etcdToKddNodeMap[etcdNodeName]; ok {
 							felixConfig.GetObjectMeta().SetName(fmt.Sprintf("node.%s", nodename))
 						}
@@ -328,8 +300,8 @@ Description:
 						return fmt.Errorf("failed to convert resource to BGPConfiguration object for migration processing: %+v", obj)
 					}
 
-					if strings.HasPrefix(bgpConfig.GetObjectMeta().GetName(), "node.") {
-						etcdNodeName := strings.TrimPrefix(bgpConfig.GetObjectMeta().GetName(), "node.")
+					if after, ok0 := strings.CutPrefix(bgpConfig.GetObjectMeta().GetName(), "node."); ok0 {
+						etcdNodeName := after
 						if nodename, ok := etcdToKddNodeMap[etcdNodeName]; ok {
 							bgpConfig.GetObjectMeta().SetName(fmt.Sprintf("node.%s", nodename))
 						}
@@ -354,7 +326,7 @@ Description:
 
 	// Denote separation between the v3 resources and the cluster info resource which requires separate handling on import.
 	fmt.Print("===\n")
-	mockArgs := map[string]interface{}{
+	mockArgs := map[string]any{
 		"<KIND>":   "clusterinfos",
 		"<NAME>":   "default",
 		"--config": cf,
@@ -378,14 +350,14 @@ Description:
 	}
 
 	if len(results.ResErrs) > 0 {
-		var errStr string
+		var errStr strings.Builder
 		for i, err := range results.ResErrs {
-			errStr += err.Error()
+			errStr.WriteString(err.Error())
 			if (i + 1) != len(results.ResErrs) {
-				errStr += "\n"
+				errStr.WriteString("\n")
 			}
 		}
-		return errors.New(errStr)
+		return errors.New(errStr.String())
 	}
 
 	// Denote separation between resources stored in YAML and the JSON IPAM resources.

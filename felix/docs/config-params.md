@@ -395,10 +395,10 @@ where N is a number and unit is one of: second, minute, hour, or day. For exampl
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogActionRateLimit` |
-| Encoding (env var/config file) | String matching regex <code>^(\d+/(?:second\|minute\|hour\|day))?$</code> |
+| Encoding (env var/config file) | String matching regex <code>^([1-9]\d{0,3}/(?:second\|minute\|hour\|day))?$</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `logActionRateLimit` (YAML) `LogActionRateLimit` (Go API) |
-| `FelixConfiguration` schema | String matching the regular expression <code>^\d+/(?:second\|minute\|hour\|day)$</code>. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^[1-9]\d{0,3}/(?:second\|minute\|hour\|day)$</code>. |
 | Default value (YAML) | none |
 
 ### `LogActionRateLimitBurst` (config file) / `logActionRateLimitBurst` (YAML)
@@ -408,10 +408,10 @@ Sets the rate limit burst of hitting a Log action when LogActionRateLimit is ena
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogActionRateLimitBurst` |
-| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
+| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
 | Default value (above encoding) | `5` |
 | `FelixConfiguration` field | `logActionRateLimitBurst` (YAML) `LogActionRateLimitBurst` (Go API) |
-| `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [-2<sup>63</sup>,2<sup>63</sup>-1] |
+| `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
 | Default value (YAML) | `5` |
 
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
@@ -451,6 +451,8 @@ to include extra information in the log prefix.
 - %k: Kind (short names).
 - %n: Policy or profile name.
 - %p: Policy or profile name (namespace/name for namespaced kinds or just name for non namespaced kinds).
+Calico includes ": " characters at the end of the generated log prefix.
+Note that iptables shows up to 29 characters for the log prefix and nftables up to 127 characters. Extra characters are truncated.
 
 | Detail |   |
 | --- | --- |
@@ -1020,7 +1022,7 @@ network stack is used.
 | Encoding (env var/config file) | Port range: either a single number in [0,65535] or a range of numbers <code>n:m</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `natPortRange` (YAML) `NATPortRange` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | Port range: either an integer in [0,65535] or a string, representing a range, in format <code>n:m</code> |
 | Default value (YAML) | `0` |
 
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
@@ -1030,11 +1032,11 @@ Configures nftables support in Felix.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NFTablesMode` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
-| Default value (above encoding) | `Disabled` |
+| Encoding (env var/config file) | One of: <code>Auto</code>, <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Auto` |
 | `FelixConfiguration` field | `nftablesMode` (YAML) `NFTablesMode` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Disabled` |
+| `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Auto` |
 
 ### `NetlinkTimeoutSecs` (config file) / `netlinkTimeout` (YAML)
 
@@ -1268,8 +1270,8 @@ should be cleaned up to avoid confusing interactions.
 | Encoding (env var/config file) | One of: <code>auto</code>, <code>legacy</code>, <code>nft</code> (case insensitive) |
 | Default value (above encoding) | `auto` |
 | `FelixConfiguration` field | `iptablesBackend` (YAML) `IptablesBackend` (Go API) |
-| `FelixConfiguration` schema | One of: <code>Auto</code>, <code>Legacy</code>, <code>NFT</code>. |
-| Default value (YAML) | `Auto` |
+| `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Legacy"</code>, <code>"NFT"</code>. |
+| Default value (YAML) | `auto` |
 
 ### `IptablesFilterAllowAction` (config file) / `iptablesFilterAllowAction` (YAML)
 
@@ -2140,7 +2142,7 @@ inclusive.
 | Encoding (env var/config file) | Port range: either a single number in [0,65535] or a range of numbers <code>n:m</code> |
 | Default value (above encoding) | `20000:29999` |
 | `FelixConfiguration` field | `bpfPSNATPorts` (YAML) `BPFPSNATPorts` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | Port range: either an integer in [0,65535] or a string, representing a range, in format <code>n:m</code> |
 | Default value (YAML) | `20000:29999` |
 
 ### `BPFPolicyDebugEnabled` (config file) / `bpfPolicyDebugEnabled` (YAML)

@@ -52,18 +52,21 @@ EOF
 
 # Pin the docker version; the node tests use an older docker client so we can't
 # let it float.
+docker_version=""
+buildx_version=""
 if [ "$ubuntu_codename" = "jammy" ]; then
   docker_version="=5:20.10.14~3-0~ubuntu-jammy"
+  # Need to pin because download.docker.com now has a newer buildx that tries to use an API version
+  # that is too new for the Docker daemon.
+  buildx_version="=0.29.0-0~ubuntu.22.04~jammy"
 elif [ "$ubuntu_codename" = "noble" ]; then
   docker_version="=5:27.5.1-1~ubuntu.24.04~noble"
 elif [ "$ubuntu_codename" = "plucky" ]; then
   docker_version="=5:28.3.3-1~ubuntu.25.04~plucky"
-else
-  docker_version=""
 fi
 
 retry apt-get update -y
-retry apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin containerd.io make iproute2 wireguard
+retry apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin"${buildx_version}" containerd.io make iproute2 wireguard
 usermod -a -G docker ubuntu
 
 # The IPIP module is loaded on demand, but pre-loading it prevents flakes in

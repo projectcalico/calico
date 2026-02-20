@@ -92,9 +92,6 @@ fi
 # Set correct constraints for Tempest to use.  We need to do this because we're pinning to a
 # different version of Tempest than the version that DevStack would naturally use.
 case "${DEVSTACK_BRANCH}" in
-    */yoga )
-        export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
-        ;;
     * )
         export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/${DEVSTACK_BRANCH}/upper-constraints.txt
         ;;
@@ -189,6 +186,7 @@ sudo tools/create-stack-user.sh
 cd ..
 sudo mkdir -p /opt/stack
 sudo mv devstack /opt/stack
+sudo chmod +x /opt/stack
 sudo chown -R stack:stack /opt/stack
 ls -ld /home/
 ls -la /home/

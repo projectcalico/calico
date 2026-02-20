@@ -31,7 +31,7 @@ import (
 
 	ipamcmd "github.com/projectcalico/calico/calicoctl/calicoctl/commands/ipam"
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -71,7 +71,7 @@ func TestIPAM(t *testing.T) {
 
 		// Set Calico version in ClusterInformation
 		out, err := SetCalicoVersion(kdd)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred(), out)
 		Expect(out).To(ContainSubstring("Calico version set to"))
 
 		// ipam show with specific unallocated IP.
@@ -116,7 +116,7 @@ func TestIPAM(t *testing.T) {
 		var allocatedIP string
 		r, err := regexp.Compile(`(10\.65\.[0-9]+\.)([0-9]+)/26`)
 		Expect(err).NotTo(HaveOccurred())
-		for _, line := range strings.Split(out, "\n") {
+		for line := range strings.SplitSeq(out, "\n") {
 			sm := r.FindStringSubmatch(line)
 			if len(sm) > 0 {
 				ordinalBase, err := strconv.Atoi(sm[2])
@@ -338,7 +338,7 @@ func createNodeForLocalhost(t *testing.T, ctx context.Context, client clientv3.I
 		}
 	} else {
 		t.Log("Creating etcd Node")
-		node := libapi.NewNode()
+		node := internalapi.NewNode()
 		node.Name = nodeName
 		Expect(err).NotTo(HaveOccurred())
 		_, err = client.Nodes().Create(ctx, node, options.SetOptions{})

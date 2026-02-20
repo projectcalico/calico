@@ -126,17 +126,18 @@ func indent(s string, prefix string) string {
 }
 
 func formatCommand(command string, args []string) string {
-	out := command
+	var out strings.Builder
+	out.WriteString(command)
 	for _, arg := range args {
 		// Only quote if there are actually some interesting characters in there, just to make it easier to read.
 		quoted := fmt.Sprintf("%q", arg)
 		if quoted == `"`+arg+`"` {
-			out += " " + arg
+			out.WriteString(" " + arg)
 		} else {
-			out += " " + quoted
+			out.WriteString(" " + quoted)
 		}
 	}
-	return out
+	return out.String()
 }
 
 func GetCommandOutput(command string, args ...string) (string, error) {

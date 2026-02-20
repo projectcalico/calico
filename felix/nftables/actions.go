@@ -329,7 +329,7 @@ func (g MasqAction) ToFragment(features *environment.Features) string {
 	}
 	if g.ToPorts != "" {
 		// e.g., masquerade to :1024-65535
-		return fmt.Sprintf("masquerade to %s"+fullyRand, g.ToPorts)
+		return fmt.Sprintf("masquerade to :%s"+fullyRand, g.ToPorts)
 	}
 	return "masquerade" + fullyRand
 }

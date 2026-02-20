@@ -1,0 +1,12 @@
+apiVersion: v2
+name: projectcalico.org.v3
+description: Installs projectcalico.org/v3 and operator.tigera.io Custom Resource Definitions (CRDs)
+home: https://docs.tigera.io/calico
+icon: https://docs.tigera.io/img/calico-logo.png
+sources:
+  - https://github.com/projectcalico/calico/tree/master/charts/projectcalico.org.v3
+  - https://github.com/tigera/operator
+  - https://github.com/projectcalico/calico
+
+# version will be overridden at chart compilation time via args, but still must exist in chart.yaml
+version: v0.0

@@ -98,7 +98,7 @@ func e2eLatency(cmd *cobra.Command, args []string) {
 		r := []string{i.Name}
 		hit := false
 
-		for kind := 0; kind < 4; kind++ {
+		for kind := range 4 {
 			k.Kind = kind
 			v, ok := data[k]
 			if !ok {

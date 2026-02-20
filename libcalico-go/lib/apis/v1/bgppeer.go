@@ -30,10 +30,10 @@ type BGPPeer struct {
 	unversioned.TypeMetadata
 
 	// Metadata for a BGPPeer.
-	Metadata BGPPeerMetadata `json:"metadata,omitempty"`
+	Metadata BGPPeerMetadata `json:"metadata"`
 
 	// Specification for a BGPPeer.
-	Spec BGPPeerSpec `json:"spec,omitempty"`
+	Spec BGPPeerSpec `json:"spec"`
 }
 
 func (t BGPPeer) GetResourceMetadata() unversioned.ResourceMetadata {
@@ -88,7 +88,7 @@ func NewBGPPeer() *BGPPeer {
 // enumerations in the client interface.
 type BGPPeerList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Metadata unversioned.ListMetadata `json:"metadata"`
 	Items    []BGPPeer                `json:"items" validate:"dive"`
 }
 

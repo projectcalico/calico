@@ -13,13 +13,10 @@ include ../lib.Makefile
 
 BINDIR?=bin
 
-# Create a list of files upon which the generated file depends, skip the generated file itself
-APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
-
 .PHONY: clean
 clean:
 	rm -rf $(BINDIR)
-	find . -name '*.coverprofile' -type f -delete
+	find . -name 'coverprofile.out' -type f -delete
 
 ###############################################################################
 # Building the binary

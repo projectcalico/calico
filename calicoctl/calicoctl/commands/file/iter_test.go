@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/file"
@@ -31,7 +31,7 @@ var _ = Describe("File and directory iteration", func() {
 	var dname string
 	var dfname1, dfname2, dfname3 string
 	var df2name1, df2name2, df2name3 string
-	var invocations []map[string]interface{}
+	var invocations []map[string]any
 	var testError error
 
 	BeforeEach(func() {
@@ -116,7 +116,7 @@ var _ = Describe("File and directory iteration", func() {
 	})
 
 	runTest := func(filename string, recursive bool, expected []string) error {
-		args := map[string]interface{}{
+		args := map[string]any{
 			"--abc": 1,
 			"--def": "hello",
 		}
@@ -127,7 +127,7 @@ var _ = Describe("File and directory iteration", func() {
 			args["--recursive"] = true
 		}
 
-		err := file.Iter(args, func(updated map[string]interface{}) error {
+		err := file.Iter(args, func(updated map[string]any) error {
 			invocations = append(invocations, updated)
 			return testError
 		})

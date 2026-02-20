@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -412,21 +413,22 @@ func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.Polic
 	ExpectWithOffset(1, kind).NotTo(Equal(""), "BUG: kind should not be empty")
 
 	// Build up an error message to help debug if the policy is not found
-	msg := fmt.Sprintf("Could not find flow:\nKind:%s Name:%s Tier:%s Action:%s\n\n", kind, name, tier, action)
-	msg += fmt.Sprintf("Found %d flow items:\n", len(response.Items))
+	var msg strings.Builder
+	msg.WriteString(fmt.Sprintf("Could not find flow:\nKind:%s Name:%s Tier:%s Action:%s\n\n", kind, name, tier, action))
+	msg.WriteString(fmt.Sprintf("Found %d flow items:\n", len(response.Items)))
 
 responseLoop:
 	for _, item := range response.Items {
 		pendingPolicies := item.Policies.Pending
 		for _, pending := range pendingPolicies {
-			msg += fmt.Sprintf(
+			msg.WriteString(fmt.Sprintf(
 				"  - %s\n", policyHitString(
 					pending.Kind,
 					pending.Namespace,
 					pending.Name,
 					pending.Tier,
 					pending.Action,
-				))
+				)))
 
 			if pending.Name == name &&
 				pending.Tier == tier &&
@@ -437,7 +439,7 @@ responseLoop:
 			}
 
 			if pending.Trigger != nil {
-				msg += fmt.Sprintf(
+				msg.WriteString(fmt.Sprintf(
 					"    - TriggeredBy(%s)\n",
 					policyHitString(
 						pending.Trigger.Kind,
@@ -445,7 +447,7 @@ responseLoop:
 						pending.Trigger.Name,
 						pending.Trigger.Tier,
 						pending.Trigger.Action,
-					))
+					)))
 				if pending.Trigger.Name == name &&
 					pending.Trigger.Tier == tier &&
 					pending.Trigger.Kind == kind &&
@@ -457,7 +459,7 @@ responseLoop:
 		}
 	}
 
-	Expect(containsStagedPolicy).Should(BeTrue(), msg)
+	Expect(containsStagedPolicy).Should(BeTrue(), msg.String())
 }
 
 func policyHitString(kind whiskerv1.PolicyKind, namespace, name, tier string, action whiskerv1.Action) string {

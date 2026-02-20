@@ -215,7 +215,7 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 		logrus.WithError(err).Error("Failed to decode service account token claims")
 		return TokenUpdate{}, err
 	}
-	var claimMap map[string]interface{}
+	var claimMap map[string]any
 	err = json.Unmarshal(decodedClaims, &claimMap)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to unmarshal service account token claims")

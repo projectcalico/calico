@@ -17,6 +17,7 @@ package intdataplane
 import (
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -132,7 +133,7 @@ func membersToSet(members []string) set.Set[string] {
 	return membersSet
 }
 
-func (x *xdpState) OnUpdate(protoBufMsg interface{}) {
+func (x *xdpState) OnUpdate(protoBufMsg any) {
 	log.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.IPSetDeltaUpdate:
@@ -199,7 +200,7 @@ func (x *xdpState) ResyncIfNeeded(ipsSourceV4 ipsetsSource) error {
 	}
 
 	success := false
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if i > 0 {
 			log.Info("Retrying after an XDP update failure...")
 		}
@@ -506,13 +507,7 @@ func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsets
 			if err != nil {
 				return false, err
 			}
-			matched := false
-			for _, id := range mapIDs {
-				if mapID == id {
-					matched = true
-					break
-				}
-			}
+			matched := slices.Contains(mapIDs, mapID)
 			return !matched, nil
 		}()
 		if err != nil {
@@ -570,12 +565,7 @@ func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsets
 }
 
 func isValidMode(mode bpf.XDPMode, xdpModes []bpf.XDPMode) bool {
-	for _, xdpMode := range xdpModes {
-		if xdpMode == mode {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(xdpModes, mode)
 }
 
 func (s *xdpIPState) getIPSetMembers(setID string, ipsSource ipsetsSource) (set.Set[string], error) {
@@ -1134,13 +1124,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 				continue
 			}
 			hep := rawHep[data.EpID]
-			foundPolicyID := false
-			for _, hepPolicyID := range getPolicyIDs(hep) {
-				if hepPolicyID == policyID {
-					foundPolicyID = true
-					break
-				}
-			}
+			foundPolicyID := slices.Contains(getPolicyIDs(hep), policyID)
 			if !foundPolicyID {
 				s.logCxt.WithFields(log.Fields{
 					"policyID": policyID,

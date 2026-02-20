@@ -39,14 +39,14 @@ ${GOMPLATE} --file ./run-fv-felix.ps1 --out ./windows/run-fv.ps1
 ${ASO_DIR}/scp-to-windows.sh 0 ./windows/run-fv.ps1 'c:\k\run-fv.ps1'
 echo "Copied run-fv.ps1 to Windows node"
 
+# Kill any existing win-fv.exe processes and clean up old reports
+echo "Killing any existing win-fv.exe processes..."
+${WINDOWS_CONNECT_COMMAND} "Stop-Process -Name win-fv -Force -ErrorAction SilentlyContinue; Remove-Item -Path c:\\k\\report\\* -Force -ErrorAction SilentlyContinue"
+
 make -C "${CALICO_HOME}/felix" fv/win-fv.exe
 
 ${ASO_DIR}/scp-to-windows.sh 0 ${CALICO_HOME}/felix/fv/win-fv.exe 'c:\k\win-fv.exe'
 echo "Copied win-fv.exe to Windows node"
-
-# Kill any existing win-fv.exe processes and clean up old reports
-echo "Killing any existing win-fv.exe processes..."
-${WINDOWS_CONNECT_COMMAND} "Stop-Process -Name win-fv -Force -ErrorAction SilentlyContinue; Remove-Item -Path c:\\k\\report\\* -Force -ErrorAction SilentlyContinue"
 
 # Run the FV test
 echo "Running FV test..."

@@ -17,14 +17,13 @@ package resourcemgr_test
 import (
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("KubeControllersConfig tests", func() {
-
 	It("Should return full spec as is", func() {
 		text := `apiVersion: projectcalico.org/v3
 kind: KubeControllersConfiguration
@@ -77,15 +76,6 @@ spec:
 
 		// Status
 		Expect(kcc.Status.EnvironmentVars).To(BeNil())
-		Expect(kcc.Status.RunningConfig.Controllers.Node).To(BeNil())
-		Expect(kcc.Status.RunningConfig.Controllers.Policy).To(BeNil())
-		Expect(kcc.Status.RunningConfig.Controllers.WorkloadEndpoint).To(BeNil())
-		Expect(kcc.Status.RunningConfig.Controllers.ServiceAccount).To(BeNil())
-		Expect(kcc.Status.RunningConfig.Controllers.Namespace).To(BeNil())
-		Expect(kcc.Status.RunningConfig.Controllers.LoadBalancer).To(BeNil())
-		Expect(kcc.Status.RunningConfig.LogSeverityScreen).To(Equal(""))
-		Expect(kcc.Status.RunningConfig.HealthChecks).To(Equal(""))
-		Expect(kcc.Status.RunningConfig.EtcdV3CompactionPeriod).To(BeNil())
+		Expect(kcc.Status.RunningConfig).To(BeNil())
 	})
-
 })

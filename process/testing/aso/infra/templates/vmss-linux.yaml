@@ -5,14 +5,13 @@
 {{- $nicName := printf "nic-linux-%d" $nodeNum -}}
 {{- $pipName := printf "pip-linux-%d" $nodeNum -}}
 {{- $extContainerdName := printf "vm-linux-%d-containerd" $nodeNum -}}
-{{- $extDockerName := printf "vm-linux-%d-docker-legacy" $nodeNum -}}
-{{- $computerName := printf "winfv-linux-%d" $nodeNum }}
+{{- $computerName := printf "asovm-linux-%d" $nodeNum -}}{{/* NOTE: asovm-linux-%d here would have the l2bridge cni-plugin hang, maybe there's a problem with the name being too short? */}}
 ---
 apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachine
 metadata:
   name: {{$nodeName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -27,16 +26,16 @@ spec:
           name: {{$nicName}}
   osProfile:
     computerName: {{$computerName}}
-    adminUsername: winfv
+    adminUsername: aso
     adminPassword:
       key: password
-      name: winfv-secret-windows
+      name: aso-secret-windows
     linuxConfiguration:
       disablePasswordAuthentication: true
       ssh:
         publicKeys:
           - keyData: {{$.Env.PUBLIC_KEY}}
-            path: /home/winfv/.ssh/authorized_keys
+            path: /home/aso/.ssh/authorized_keys
   storageProfile:
     imageReference:
       publisher: Canonical
@@ -52,7 +51,7 @@ apiVersion: compute.azure.com/v1api20220301
 kind: VirtualMachinesExtension
 metadata:
   name: {{$extContainerdName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -65,61 +64,42 @@ spec:
     commandToExecute: |
       /bin/bash -c '
       set -e
-      echo "Installing containerd and Docker..."
-      
+      echo "Installing containerd..."
+
       # Update package list
       apt-get update
-      
+
       # Install prerequisites
       apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-      
-      # Install Docker (includes containerd)
+
+      # Install containerd from the Docker repo
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
       echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
       apt-get update
-      apt-get install -y docker-ce docker-ce-cli containerd.io
-      
+      apt-get install -y containerd.io
+
       # Configure containerd for Kubernetes
       mkdir -p /etc/containerd
       containerd config default | tee /etc/containerd/config.toml
-      
+
       # Enable systemd cgroup driver (required for Kubernetes)
       sed -i "s/SystemdCgroup = false/SystemdCgroup = true/g" /etc/containerd/config.toml
-      
+
       # Restart containerd
       systemctl restart containerd
       systemctl enable containerd
-      
-      # Enable and start Docker
-      systemctl enable docker
-      systemctl start docker
-      
+
       # Verify installations
       containerd --version
-      docker --version
-      
-      echo "Containerd and Docker installation completed successfully"
+
+      echo "Containerd installation completed successfully"
       '
----
-apiVersion: compute.azure.com/v1api20220301
-kind: VirtualMachinesExtension
-metadata:
-  name: {{$extDockerName}}
-  namespace: winfv
-spec:
-  location: {{$.Env.AZURE_LOCATION}}
-  owner:
-    name: {{$nodeName}}
-  publisher: Microsoft.Azure.Extensions
-  type: DockerExtension
-  typeHandlerVersion: "1.0"
-  autoUpgradeMinorVersion: true
 ---
 apiVersion: network.azure.com/v1api20240301
 kind: NetworkInterface
 metadata:
   name: {{$nicName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -128,14 +108,14 @@ spec:
     reference:
       group: network.azure.com
       kind: NetworkSecurityGroup
-      name: winfv-sg
+      name: aso-sg
   ipConfigurations:
     - name: ipconfig-linux-{{$nodeNum}}
       subnet:
         reference:
           group: network.azure.com
           kind: VirtualNetworksSubnet
-          name: subnet-winfv
+          name: subnet-aso
       publicIPAddress:
         reference:
           group: network.azure.com
@@ -146,7 +126,7 @@ apiVersion: network.azure.com/v1api20240301
 kind: PublicIPAddress
 metadata:
   name: {{$pipName}}
-  namespace: winfv
+  namespace: aso
 spec:
   location: {{$.Env.AZURE_LOCATION}}
   owner:
@@ -154,4 +134,4 @@ spec:
   publicIPAllocationMethod: Static
   sku:
     name: Standard
-{{- end}}
+{{end}}

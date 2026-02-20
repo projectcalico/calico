@@ -26,6 +26,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -44,7 +45,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -298,7 +299,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	logger.Debugf("Retrieved list of endpoints: %v", endpoints)
 
-	var endpoint *libapi.WorkloadEndpoint
+	var endpoint *internalapi.WorkloadEndpoint
 
 	// If the prefix list returns 1 or more items, we go through the items and try to see if the name matches the WEP
 	// identifiers we have. The identifiers we use for this match at this point are:
@@ -386,12 +387,9 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// Just update the profile on the endpoint. The profile will be created if needed during the
 			// profile processing step.
 			foundProfile := false
-			for _, p := range endpoint.Spec.Profiles {
-				if p == profileID {
-					logger.Infof("Calico CNI endpoint already has profile: %s\n", profileID)
-					foundProfile = true
-					break
-				}
+			if slices.Contains(endpoint.Spec.Profiles, profileID) {
+				logger.Infof("Calico CNI endpoint already has profile: %s\n", profileID)
+				foundProfile = true
 			}
 			if !foundProfile {
 				logger.Infof("Calico CNI appending profile: %s\n", profileID)
@@ -409,8 +407,10 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// 3) Create the veth, configuring it on both the host and container namespace.
 
 			// 1) Run the IPAM plugin and make sure there's an IP address returned.
-			logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
-				"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
+			logger.WithFields(logrus.Fields{
+				"paths": os.Getenv("CNI_PATH"),
+				"type":  conf.IPAM.Type,
+			}).Debug("Looking for IPAM plugin in paths")
 			var ipamResult cnitypes.Result
 			ipamResult, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
@@ -450,7 +450,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			}
 
 			// 2) Create the endpoint object
-			endpoint = libapi.NewWorkloadEndpoint()
+			endpoint = internalapi.NewWorkloadEndpoint()
 			endpoint.Name = wepIDs.WEPName
 			endpoint.Namespace = wepIDs.Namespace
 			endpoint.Spec.Endpoint = wepIDs.Endpoint

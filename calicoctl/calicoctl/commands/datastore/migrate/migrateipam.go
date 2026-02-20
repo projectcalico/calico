@@ -140,8 +140,8 @@ func (m *migrateIPAM) PullFromDatastore() error {
 				// Update the handle ID for any tunnel addresses
 				if allocationAttribute.AttrPrimary != nil {
 					for _, handlePrefix := range ipamHandlePrefixes {
-						if strings.HasPrefix(*allocationAttribute.AttrPrimary, handlePrefix) {
-							etcdNodeName := strings.TrimPrefix(*allocationAttribute.AttrPrimary, handlePrefix)
+						if after, ok0 := strings.CutPrefix(*allocationAttribute.AttrPrimary, handlePrefix); ok0 {
+							etcdNodeName := after
 							if nodeName, ok := m.nodeMap[etcdNodeName]; ok {
 								handleID := fmt.Sprintf("%s%s", handlePrefix, nodeName)
 								block.Attributes[i].AttrPrimary = &handleID
@@ -205,8 +205,8 @@ func (m *migrateIPAM) PullFromDatastore() error {
 			return fmt.Errorf("unable to convert %+v to an IPAMHandleKey", item.Key)
 		}
 		for _, handlePrefix := range ipamHandlePrefixes {
-			if strings.HasPrefix(key.HandleID, handlePrefix) {
-				etcdNodeName := strings.TrimPrefix(key.HandleID, handlePrefix)
+			if after, ok0 := strings.CutPrefix(key.HandleID, handlePrefix); ok0 {
+				etcdNodeName := after
 				if nodeName, ok := m.nodeMap[etcdNodeName]; ok {
 					key.HandleID = fmt.Sprintf("%s%s", handlePrefix, nodeName)
 				}

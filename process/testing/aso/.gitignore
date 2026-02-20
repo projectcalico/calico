@@ -1,10 +1,16 @@
-.aso_installed
+.aso-installed
+.calico-installed
+.kubeadm-set-up
+.vmss-created
 .sshkey
 .sshkey.pub
-.vmss-created
 cert-manager.yaml
 connect.txt
 infra/manifests/
+EE/manifests/
+OSS/manifests/
+kind-kubeconfig
+kubeadm-config.yaml
 kubeconfig
 operator-crds.yaml
 password.txt
@@ -14,6 +20,7 @@ ssh-node-linux.sh
 ssh-node-windows.sh
 tigera-operator.yaml
 tigera-prometheus-operator.yaml
+windows/*.exe
 windows/config
 windows/kubeadm/
 windows/run-fv.ps1

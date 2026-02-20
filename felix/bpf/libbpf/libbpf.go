@@ -607,6 +607,7 @@ const (
 
 	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
 	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
+	AttachTypeXDP        uint32 = C.BPF_XDP
 )
 
 func (t *TcGlobalData) Set(m *Map) error {

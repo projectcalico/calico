@@ -28,8 +28,11 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-type policyConverter struct {
-}
+// KubernetesNetworkPolicyEtcdPrefix is the prefix added to Kubernetes NetworkPolicy names when
+// storing them in etcd to avoid name conflicts with Calico NetworkPolicies.
+const KubernetesNetworkPolicyEtcdPrefix = "knp.default."
+
+type policyConverter struct{}
 
 // NewPolicyConverter Constructor for policyConverter
 func NewPolicyConverter() Converter {
@@ -37,7 +40,7 @@ func NewPolicyConverter() Converter {
 }
 
 // Convert takes a Kubernetes NetworkPolicy and returns a Calico api.NetworkPolicy representation.
-func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
+func (p *policyConverter) Convert(k8sObj any) (any, error) {
 	np, ok := k8sObj.(*networkingv1.NetworkPolicy)
 
 	if !ok {
@@ -62,15 +65,18 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	}
 	cnp := kvp.Value.(*api.NetworkPolicy)
 
+	// Add a prefix to the name to avoid conflicts with Calico NetworkPolicies.
+	policyName := KubernetesNetworkPolicyEtcdPrefix + np.Name
+
 	// Isolate the metadata fields that we care about. ResourceVersion, CreationTimeStamp, etc are
 	// not relevant so we ignore them. This prevents unnecessary updates.
-	cnp.ObjectMeta = metav1.ObjectMeta{Name: cnp.Name, Namespace: cnp.Namespace}
+	cnp.ObjectMeta = metav1.ObjectMeta{Name: policyName, Namespace: cnp.Namespace}
 
 	return *cnp, err
 }
 
 // GetKey returns the 'namespace/name' for the given Calico NetworkPolicy as its key.
-func (p *policyConverter) GetKey(obj interface{}) string {
+func (p *policyConverter) GetKey(obj any) string {
 	policy := obj.(api.NetworkPolicy)
 	return fmt.Sprintf("%s/%s", policy.Namespace, policy.Name)
 }

@@ -21,12 +21,12 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -122,13 +122,13 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 		BeforeEach(func() {
 			kvNodeRev10 = model.KVPair{
-				Key: model.ResourceKey{Name: "node1", Kind: libapiv3.KindNode},
-				Value: &libapiv3.Node{
+				Key: model.ResourceKey{Name: "node1", Kind: internalapi.KindNode},
+				Value: &internalapi.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						ResourceVersion: "10",
 						Name:            "foo",
 					},
-					Spec: libapiv3.NodeSpec{
+					Spec: internalapi.NodeSpec{
 						IPv4VXLANTunnelAddr: "10.0.0.1",
 					},
 				},
@@ -161,13 +161,13 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			// Then send in another update with same value, and another value to make sure we generate another
 			// crumb.
 			kvNodeRev11 := model.KVPair{
-				Key: model.ResourceKey{Name: "node1", Kind: libapiv3.KindNode},
-				Value: &libapiv3.Node{
+				Key: model.ResourceKey{Name: "node1", Kind: internalapi.KindNode},
+				Value: &internalapi.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						ResourceVersion: "11",
 						Name:            "foo",
 					},
-					Spec: libapiv3.NodeSpec{
+					Spec: internalapi.NodeSpec{
 						IPv4VXLANTunnelAddr: "10.0.0.1",
 					},
 				},
@@ -348,7 +348,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 	generateUpdates := func(num int) []api.Update {
 		var updates []api.Update
 		seenKeys := set.New[string]()
-		for i := 0; i < num; i++ {
+		for i := range num {
 			configIdx := i % 100
 			value := fmt.Sprintf("config%v", i%55)
 			name := fmt.Sprintf("config%v", configIdx)
@@ -383,10 +383,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			expectedEndResult[upd.Key] = upd
 		}
 		for i := 0; i < len(updates); i += blockSize {
-			end := i + blockSize
-			if end > len(updates) {
-				end = len(updates)
-			}
+			end := min(i+blockSize, len(updates))
 			cache.OnUpdates(updates[i:end])
 			if i == 0 {
 				// Cover the "skip empty updates" branch.

@@ -28,7 +28,7 @@ func TestImagesPublished(t *testing.T) {
 		checkImages(t, images)
 
 		for _, reg := range registry.DefaultCalicoRegistries {
-			for _, image := range strings.Split(images, " ") {
+			for image := range strings.SplitSeq(images, " ") {
 				t.Run(image, func(t *testing.T) {
 					fqImage := fmt.Sprintf("%s/%s:%s", reg, image, releaseVersion)
 					if ok, err := registry.CheckImage(fqImage); err != nil {
@@ -101,7 +101,7 @@ func TestImagesInMetadata(t *testing.T) {
 	checkImages(t, images)
 
 	var expectedImages []string
-	for _, image := range strings.Split(images, " ") {
+	for image := range strings.SplitSeq(images, " ") {
 		registry := registry.DefaultCalicoRegistry
 		if registry != "" {
 			registry += "/"

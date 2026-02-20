@@ -19,6 +19,7 @@ import (
 )
 
 // PolicyType enumerates the possible values of the PolicySpec Types field.
+// +kubebuilder:validation:Enum=Ingress;Egress
 type PolicyType string
 
 const (
@@ -35,9 +36,13 @@ const (
 // the positive and negative version of a match and both must be satisfied for the rule to match.
 type Rule struct {
 	Action Action `json:"action" validate:"action"`
+
 	// IPVersion is an optional field that restricts the rule to only match a specific IP
 	// version.
+	// +kubebuilder:validation:Enum=4;6
+	// +optional
 	IPVersion *int `json:"ipVersion,omitempty" validate:"omitempty,ipVersion"`
+
 	// Protocol is an optional field that restricts the rule to only apply to traffic of
 	// a specific IP protocol. Required if any of the EntityRules contain Ports
 	// (because ports only apply to certain protocols).
@@ -45,18 +50,25 @@ type Rule struct {
 	// Must be one of these string values: "TCP", "UDP", "ICMP", "ICMPv6", "SCTP", "UDPLite"
 	// or an integer in the range 1-255.
 	Protocol *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
+
 	// ICMP is an optional field that restricts the rule to apply to a specific type and
 	// code of ICMP traffic.  This should only be specified if the Protocol field is set to
 	// "ICMP" or "ICMPv6".
 	ICMP *ICMPFields `json:"icmp,omitempty" validate:"omitempty"`
+
 	// NotProtocol is the negated version of the Protocol field.
 	NotProtocol *numorstring.Protocol `json:"notProtocol,omitempty" validate:"omitempty"`
+
 	// NotICMP is the negated version of the ICMP field.
 	NotICMP *ICMPFields `json:"notICMP,omitempty" validate:"omitempty"`
+
 	// Source contains the match criteria that apply to source entity.
-	Source EntityRule `json:"source,omitzero,omitempty" validate:"omitempty"`
+	// +optional
+	Source EntityRule `json:"source,omitzero" validate:"omitempty"`
+
 	// Destination contains the match criteria that apply to destination entity.
-	Destination EntityRule `json:"destination,omitzero,omitempty" validate:"omitempty"`
+	// +optional
+	Destination EntityRule `json:"destination,omitzero" validate:"omitempty"`
 
 	// HTTP contains match criteria that apply to HTTP requests.
 	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
@@ -94,10 +106,17 @@ type HTTPMatch struct {
 type ICMPFields struct {
 	// Match on a specific ICMP type.  For example a value of 8 refers to ICMP Echo Request
 	// (i.e. pings).
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=255
+	// +optional
 	Type *int `json:"type,omitempty" validate:"omitempty,gte=0,lte=254"`
+
 	// Match on a specific ICMP code.  If specified, the Type value must also be specified.
 	// This is a technical limitation imposed by the kernel's iptables firewall, which
 	// Calico uses to enforce the rule.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=255
+	// +optional
 	Code *int `json:"code,omitempty" validate:"omitempty,gte=0,lte=255"`
 }
 
@@ -109,6 +128,7 @@ type ICMPFields struct {
 type EntityRule struct {
 	// Nets is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in any of the given subnets.
+	// +listType=set
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,net"`
 
 	// Selector is an optional field that contains a selector expression (see Policy for
@@ -163,6 +183,7 @@ type EntityRule struct {
 	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
 
 	// NotNets is the negated version of the Nets field.
+	// listType=set
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
@@ -191,6 +212,7 @@ type ServiceMatch struct {
 type ServiceAccountMatch struct {
 	// Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
 	// at) a pod running as a service account whose name is in the list.
+	// +listType=set
 	Names []string `json:"names,omitempty" validate:"omitempty"`
 
 	// Selector is an optional field that restricts the rule to only apply to traffic that originates from
@@ -199,6 +221,7 @@ type ServiceAccountMatch struct {
 	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
 }
 
+// +kubebuilder:validation:Enum=Allow;Deny;Log;Pass
 type Action string
 
 const (
@@ -208,6 +231,7 @@ const (
 	Pass  Action = "Pass"
 )
 
+// +kubebuilder:validation:Enum=Set;Delete;Learn;Ignore
 type StagedAction string
 
 const (

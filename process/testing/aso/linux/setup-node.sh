@@ -47,7 +47,6 @@ fi
 # Verify systemd cgroup is enabled
 if ! grep -q "SystemdCgroup = true" /etc/containerd/config.toml; then
   echo "WARNING: SystemdCgroup is not enabled in containerd config"
-  # echo "This may cause issues with Kubernetes. Please check vmss-linux.yaml extension."
 
   echo "Enabling SystemdCgroup in containerd config"
   # Enable systemd cgroup driver (required for Kubernetes)
@@ -62,13 +61,13 @@ sudo systemctl status containerd --no-pager || {
 }
 
 # Install kubeadm, kubelet, and kubectl
-KUBE_VERSION=${1:-"v1.33.6"}
+KUBE_VERSION=${1:-"v1.33.7"}
 # Extract major.minor version (e.g., v1.33.6 -> v1.33)
 KUBE_MAJOR_MINOR=$(echo "${KUBE_VERSION}" | cut -d'.' -f1,2)
 echo "Installing kubeadm, kubelet, and kubectl ${KUBE_VERSION}..."
 echo "Using repository version: ${KUBE_MAJOR_MINOR}"
 sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+sudo apt-get -o DPkg::Lock::Timeout=60 install -y apt-transport-https ca-certificates curl gpg
 
 # Create keyrings directory
 sudo mkdir -p /etc/apt/keyrings
@@ -79,7 +78,7 @@ echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.
 
 # Install Kubernetes components
 sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-get -o DPkg::Lock::Timeout=60 install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 
 # Enable kubelet

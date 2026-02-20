@@ -17,7 +17,7 @@ package intdataplane
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -289,7 +289,7 @@ var _ = Describe("Raw egress policy manager", func() {
 			MarkDrop:            0x80,
 			MarkEndpoint:        0xff00,
 			MarkNonCaliEndpoint: 0x0100,
-		})
+		}, false)
 		policyMgr = newRawEgressPolicyManager(
 			rawTable,
 			ruleRenderer,
@@ -392,16 +392,16 @@ var _ = Describe("Raw egress policy manager", func() {
 })
 
 type ipSetsMatcher struct {
-	items []interface{}
+	items []any
 }
 
-func MatchIPSets(items ...interface{}) *ipSetsMatcher {
+func MatchIPSets(items ...any) *ipSetsMatcher {
 	return &ipSetsMatcher{
 		items: items,
 	}
 }
 
-func (m *ipSetsMatcher) Match(actual interface{}) (success bool, err error) {
+func (m *ipSetsMatcher) Match(actual any) (success bool, err error) {
 	actualSet := actual.(set.Set[string])
 	actualCopy := actualSet.Copy()
 	for _, expected := range m.items {
@@ -411,11 +411,11 @@ func (m *ipSetsMatcher) Match(actual interface{}) (success bool, err error) {
 	return
 }
 
-func (m *ipSetsMatcher) FailureMessage(actual interface{}) (message string) {
+func (m *ipSetsMatcher) FailureMessage(actual any) (message string) {
 	return fmt.Sprintf("Expected %v to match IP set IDs: %v", actual.(set.Set[string]), m.items)
 }
 
-func (m *ipSetsMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (m *ipSetsMatcher) NegatedFailureMessage(actual any) (message string) {
 	return fmt.Sprintf("Expected %v not to match IP set IDs: %v", actual.(set.Set[string]), m.items)
 }
 

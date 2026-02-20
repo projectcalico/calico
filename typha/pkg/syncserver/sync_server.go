@@ -338,6 +338,8 @@ func (s *Server) serve(cxt context.Context) {
 		l   net.Listener
 		err error
 	)
+
+	laddr := net.JoinHostPort(s.config.Host, fmt.Sprint(s.config.ListenPort()))
 	if s.config.requiringTLS() {
 		pwd, _ := os.Getwd()
 		logCxt.WithField("pwd", pwd).Info("Opening TLS listen socket")
@@ -373,12 +375,9 @@ func (s *Server) serve(cxt context.Context) {
 			s.config.ClientCN,
 			s.config.ClientURISAN,
 		)
-
-		laddr := fmt.Sprintf("[%v]:%v", s.config.Host, s.config.ListenPort())
 		l, err = tls.Listen("tcp", laddr, tlsConfig)
 	} else {
 		logCxt.Info("Opening listen socket")
-		laddr := fmt.Sprintf("[%v]:%v", s.config.Host, s.config.ListenPort())
 		l, err = net.Listen("tcp", laddr)
 	}
 	if err != nil {
@@ -386,8 +385,7 @@ func (s *Server) serve(cxt context.Context) {
 	}
 	logCxt.Info("Opened listen socket")
 
-	s.Finished.Add(1)
-	go func() {
+	s.Finished.Go(func() {
 		select {
 		case <-cxt.Done():
 			log.Info("Context finished, closing listen socket.")
@@ -398,8 +396,7 @@ func (s *Server) serve(cxt context.Context) {
 		if err != nil {
 			log.WithError(err).Warn("Ignoring error from socket Close during shut-down.")
 		}
-		s.Finished.Done()
-	}()
+	})
 
 	chosenPort := l.Addr().(*net.TCPAddr).Port
 
@@ -461,7 +458,7 @@ func (s *Server) serve(cxt context.Context) {
 
 			encoder:     gob.NewEncoder(connW),
 			flushWriter: func() error { return nil },
-			readC:       make(chan interface{}),
+			readC:       make(chan any),
 
 			allMetrics: s.perSyncerConnMetrics,
 		}
@@ -688,7 +685,7 @@ type connection struct {
 	currentWriteDeadline time.Time
 	encoder              *gob.Encoder
 	flushWriter          func() error
-	readC                chan interface{}
+	readC                chan any
 
 	logCxt                       *log.Entry
 	chosenCompression            syncproto.CompressionAlgorithm
@@ -876,7 +873,7 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 }
 
 // waitForMessage blocks, waiting for a message on the h.readC channel.  It imposes a timeout.
-func (h *connection) waitForMessage(logCxt *log.Entry, timeout time.Duration) (interface{}, error) {
+func (h *connection) waitForMessage(logCxt *log.Entry, timeout time.Duration) (any, error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
@@ -1020,7 +1017,7 @@ func (h *connection) waitForAckAndRestartEncoder() error {
 }
 
 // sendMsg sends a message to the client.  It may be called from multiple goroutines.
-func (h *connection) sendMsg(msg interface{}) error {
+func (h *connection) sendMsg(msg any) error {
 	if h.cxt.Err() != nil {
 		// Optimisation, don't bother to send if we're being torn down.
 		return h.cxt.Err()

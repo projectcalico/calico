@@ -28,7 +28,12 @@ export WINDOWS_NODE_COUNT="${WINDOWS_NODE_COUNT:=2}"
 # Verbose mode - set to "true" to see all command output, "false" to suppress output
 export VERBOSE="${VERBOSE:="true"}"
 
-export KUBE_VERSION="${KUBE_VERSION:="v1.33.6"}"
+export KUBE_VERSION="${KUBE_VERSION:="v1.33.7"}"
+
+export KINDEST_NODE_VERSION="${KINDEST_NODE_VERSION:="v1.31.0"}"
+export KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:="kind"}"
+
+export CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:="v1.14.1"}"
 
 export CONTAINERD_VERSION="${CONTAINERD_VERSION:="1.7.28"}"
 
@@ -36,6 +41,9 @@ export SSH_KEY_FILE="${ASO_DIR}/.sshkey"
 
 export GCR_IO_PULL_SECRET="${GCR_IO_PULL_SECRET:="${HOME}/secrets/docker_cfg.json"}"
 export TSEE_TEST_LICENSE="${TSEE_TEST_LICENSE:="${HOME}/secrets/license.yaml"}"
+
+export ASO_LINUX_DATAPLANE="${ASO_LINUX_DATAPLANE:="Iptables"}" # 'Iptables', 'Nftables' or 'BPF'
+export ASO_KUBE_PROXY_MODE="${ASO_KUBE_PROXY_MODE:="iptables"}" # 'iptables' or 'nftables', use 'nftables' with BPF
 
 export PRODUCT="calico"
 export RELEASE_STREAM="master"

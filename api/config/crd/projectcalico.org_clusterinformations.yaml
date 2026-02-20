@@ -1,0 +1,62 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: clusterinformations.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: ClusterInformation
+    listKind: ClusterInformationList
+    plural: clusterinformations
+    shortNames:
+      - clusterinfo
+      - clusterinfos
+    singular: clusterinformation
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - additionalPrinterColumns:
+        - description: The version of Calico that the cluster is running
+          jsonPath: .spec.calicoVersion
+          name: Version
+          type: string
+        - description: Whether the datastore is ready for use
+          jsonPath: .spec.datastoreReady
+          name: Ready
+          type: boolean
+        - description: The types associated with the cluster
+          jsonPath: .spec.clusterType
+          name: Types
+          type: string
+      name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                calicoVersion:
+                  type: string
+                clusterGUID:
+                  type: string
+                clusterType:
+                  type: string
+                datastoreReady:
+                  type: boolean
+                variant:
+                  type: string
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+      subresources: {}

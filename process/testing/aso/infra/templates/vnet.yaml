@@ -1,8 +1,8 @@
 apiVersion: network.azure.com/v1api20201101
 kind: VirtualNetwork
 metadata:
-  name: vnet-winfv
-  namespace: winfv
+  name: vnet-aso
+  namespace: aso
 spec:
   addressSpace:
     addressPrefixes:
@@ -15,10 +15,10 @@ spec:
 apiVersion: network.azure.com/v1api20201101
 kind: VirtualNetworksSubnet
 metadata:
-  name: subnet-winfv
-  namespace: winfv
+  name: subnet-aso
+  namespace: aso
 spec:
   addressPrefix: 10.0.0.0/24
   owner:
-    name: vnet-winfv
+    name: vnet-aso
   privateLinkServiceNetworkPolicies: Disabled

@@ -35,14 +35,14 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -202,7 +202,7 @@ func splitImportFile(filename string) ([]byte, []byte, []byte, error) {
 	return split[0], split[1], split[2], nil
 }
 
-func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interface) error {
+func checkCalicoResourcesNotExist(args map[string]any, c client.Interface) error {
 	// Loop through all the v3 resources to see if anything is returned
 	extendedV3Resources := append(allV3Resources, "clusterinfo")
 	for _, r := range extendedV3Resources {
@@ -212,7 +212,7 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 		}
 
 		// Create mocked args in order to retrieve Get resources.
-		mockArgs := map[string]interface{}{
+		mockArgs := map[string]any{
 			"<KIND>":   r,
 			"<NAME>":   []string{},
 			"--config": args["--config"].(string),
@@ -246,26 +246,7 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 						}
 
 						// Make sure that the network policy is a K8s network policy
-						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
-							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
-						}
-					}
-				case "globalnetworkpolicies":
-					// For globalnetworkpolicies, having K8s cluster network policies should not throw an error
-					objs, err := meta.ExtractList(resource)
-					if err != nil {
-						return fmt.Errorf("error extracting global network policies for inspection: %s", err)
-					}
-
-					for _, obj := range objs {
-						metaObj, ok := obj.(v1.ObjectMetaAccessor)
-						if !ok {
-							return fmt.Errorf("unable to convert Calico global network policy for inspection")
-						}
-
-						// Make sure that the global network policy is a K8s cluster network policy
-						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPAdminTierNamePrefix) ||
-							!strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sCNPBaselineTierNamePrefix) {
+						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), converter.KubernetesNetworkPolicyEtcdPrefix) {
 							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
 						}
 					}
@@ -349,7 +330,7 @@ func updateV3Resources(cfg *apiconfig.CalicoAPIConfig, data []byte) error {
 		return fmt.Errorf("error while writing to temporary v3 migration config file: %s", err)
 	}
 
-	mockArgs := map[string]interface{}{
+	mockArgs := map[string]any{
 		"--config":   tempConfigFile.Name(),
 		"--filename": tempfile.Name(),
 		"apply":      true,
@@ -412,7 +393,7 @@ func importCRDs(cfg *apiconfig.CalicoAPIConfig) error {
 	return nil
 }
 
-func applyV3(args map[string]interface{}) error {
+func applyV3(args map[string]any) error {
 	results := common.ExecuteConfigCommand(args, common.ActionApply)
 	log.Infof("results: %+v", results)
 
@@ -434,7 +415,7 @@ func applyV3(args map[string]interface{}) error {
 			case calicoErrors.ErrorResourceDoesNotExist:
 				// Check that the error is for a Node
 				if key, ok := e.Identifier.(model.ResourceKey); ok {
-					if key.Kind == libapiv3.KindNode {
+					if key.Kind == internalapi.KindNode {
 						fmt.Printf("[WARNING] Attempted to import node %v from etcd that references a nonexistent Kubernetes node. Skipping that node. Non-Kubernetes nodes are not supported in the Kubernetes datastore and will be skipped.", e.Identifier)
 						continue
 					}

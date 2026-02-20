@@ -33,19 +33,14 @@ static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali
 	CALI_DEBUG("Maglev: hashed packet to %d", hash);
 	struct cali_maglev_key ch_key = {
 		.ordinal = (hash % lut_size),
-		.vip = *ip_dst,
-		.port = dport,
-		.proto = ip_proto,
+		.sid = ctx->state->nat_svc_id,
 	};
 	struct calico_nat_dest *ch_val;
 
 	ch_val = cali_maglev_lookup_elem(&ch_key);
 
 	if (!ch_val) {
-		__u32 proto_debug = ip_proto;
-		CALI_DEBUG("Maglev: no backend found for " IP_FMT ":%d", debug_ip(*ip_dst), dport);
-		CALI_DEBUG("Packet proto: %d, Ordinal: %d", proto_debug, ch_key.ordinal);
-
+		CALI_DEBUG("Maglev: no backend found for svc %d, idx %d", ctx->state->nat_svc_id, ch_key.ordinal);
 		return NULL;
 	}
 

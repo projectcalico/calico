@@ -17,7 +17,7 @@ package resources
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	"github.com/sirupsen/logrus"
@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest/fake"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -42,12 +42,12 @@ var _ = Describe("ipamBlockClient tests with fake REST client", func() {
 			},
 			VersionedAPIPath: "/apis",
 		}
-		client = NewIPAMBlockClient(nil, fakeREST)
+		client = NewIPAMBlockClient(fakeREST, BackingAPIGroupV1)
 	})
 
 	It("should list all (v3)", func() {
 		l, err := client.List(context.TODO(), model.ResourceListOptions{
-			Kind: libapiv3.KindIPAMBlock,
+			Kind: internalapi.KindIPAMBlock,
 		}, "")
 
 		// Expect an error since the client is not implemented.

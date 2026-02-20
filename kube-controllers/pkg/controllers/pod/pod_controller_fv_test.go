@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -137,7 +137,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 		}
 		wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
 		Expect(err).NotTo(HaveOccurred())
-		wep := libapi.NewWorkloadEndpoint()
+		wep := internalapi.NewWorkloadEndpoint()
 		wep.Name = wepName
 		wep.Namespace = podNamespace
 		wep.Labels = map[string]string{
@@ -145,7 +145,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 			"projectcalico.org/namespace":    podNamespace,
 			"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 		}
-		wep.Spec = libapi.WorkloadEndpointSpec{
+		wep.Spec = internalapi.WorkloadEndpointSpec{
 			ContainerID:   "container-id-1",
 			Orchestrator:  "k8s",
 			Pod:           podName,
@@ -188,8 +188,8 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 
 		By("updating the workload endpoint's container ID", func() {
 			var err error
-			var gwep *libapi.WorkloadEndpoint
-			for i := 0; i < 5; i++ {
+			var gwep *internalapi.WorkloadEndpoint
+			for range 5 {
 				// This emulates a scenario in which the CNI plugin can be called for the same Kubernetes
 				// Pod multiple times with a different container ID.
 				gwep, err = calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, wep.Name, options.GetOptions{})
@@ -220,7 +220,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		var w *libapi.WorkloadEndpoint
+		var w *internalapi.WorkloadEndpoint
 		By("waiting for the labels to appear in the datastore", func() {
 			Eventually(func() error {
 				var err error
@@ -309,7 +309,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 		}
 		wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
 		Expect(err).NotTo(HaveOccurred())
-		wep := libapi.NewWorkloadEndpoint()
+		wep := internalapi.NewWorkloadEndpoint()
 		wep.Name = wepName
 		wep.Namespace = podNamespace
 		wep.Labels = map[string]string{
@@ -317,7 +317,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 			"projectcalico.org/namespace":    podNamespace,
 			"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 		}
-		wep.Spec = libapi.WorkloadEndpointSpec{
+		wep.Spec = internalapi.WorkloadEndpointSpec{
 			ContainerID:   "container-id-1",
 			Orchestrator:  "k8s",
 			Pod:           podName,

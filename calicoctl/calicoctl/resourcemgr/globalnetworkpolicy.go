@@ -16,14 +16,11 @@ package resourcemgr
 
 import (
 	"context"
-	"strings"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -43,35 +40,14 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsK8sCNP(r) {
-				return nil, cerrors.ErrorOperationNotSupported{
-					Operation:  "create or apply",
-					Identifier: resource,
-					Reason:     "kubernetes cluster network policies must be managed through the kubernetes API",
-				}
-			}
 			return client.GlobalNetworkPolicies().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsK8sCNP(r) {
-				return nil, cerrors.ErrorOperationNotSupported{
-					Operation:  "create or apply",
-					Identifier: resource,
-					Reason:     "kubernetes cluster network policies must be managed through the kubernetes API",
-				}
-			}
 			return client.GlobalNetworkPolicies().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			if policyIsK8sCNP(r) {
-				return nil, cerrors.ErrorOperationNotSupported{
-					Operation:  "create or apply",
-					Identifier: resource,
-					Reason:     "kubernetes cluster network policies must be managed through the kubernetes API",
-				}
-			}
 			return client.GlobalNetworkPolicies().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
@@ -83,11 +59,6 @@ func init() {
 			return client.GlobalNetworkPolicies().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
-}
-
-func policyIsK8sCNP(r *api.GlobalNetworkPolicy) bool {
-	return strings.HasPrefix(r.Name, names.K8sCNPAdminTierNamePrefix) ||
-		strings.HasPrefix(r.Name, names.K8sCNPBaselineTierNamePrefix)
 }
 
 // newGlobalNetworkPolicyList creates a new (zeroed) GlobalNetworkPolicyList struct with the TypeMetadata initialised to the current

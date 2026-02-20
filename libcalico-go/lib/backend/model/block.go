@@ -47,7 +47,7 @@ const (
 
 var (
 	matchBlock = regexp.MustCompile("^/?calico/ipam/v2/assignment/ipv./block/([^/]+)$")
-	typeBlock  = reflect.TypeOf(AllocationBlock{})
+	typeBlock  = reflect.TypeFor[AllocationBlock]()
 )
 
 type BlockKey struct {

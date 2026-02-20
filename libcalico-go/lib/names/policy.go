@@ -19,14 +19,6 @@ const (
 	KubeAdminTierName    = "kube-admin"
 	KubeBaselineTierName = "kube-baseline"
 
-	// K8sNetworkPolicyNamePrefix is the prefix used when translating a
-	// Kubernetes network policy into a Calico one.
-	K8sNetworkPolicyNamePrefix = "knp.default."
-	// K8sCNPAdminTierNamePrefix, and K8sCNPBaselineTierNamePrefix are the prefixes for
-	// ClusterNetworkPolicy (Admin and Baseline tiers) resources, which is cluster-scoped.
-	K8sCNPAdminTierNamePrefix    = "kcnp.kube-admin."
-	K8sCNPBaselineTierNamePrefix = "kcnp.kube-baseline."
-
 	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
 	OpenStackNetworkPolicyNamePrefix = "ossg."
 )

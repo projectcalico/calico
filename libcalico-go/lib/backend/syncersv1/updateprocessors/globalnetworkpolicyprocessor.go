@@ -29,7 +29,7 @@ import (
 // consumption by Felix.
 func NewGlobalNetworkPolicyUpdateProcessor(keyKind string) watchersyncer.SyncerUpdateProcessor {
 	return NewSimpleUpdateProcessor(
-		apiv3.KindGlobalNetworkPolicy,
+		keyKind,
 		gnpKeyConverter(keyKind),
 		ConvertGlobalNetworkPolicyV3ToV1Value,
 	)
