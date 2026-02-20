@@ -15,6 +15,6 @@
 package dataplane
 
 type DataplaneDriver interface {
-	SendMessage(msg interface{}) error
-	RecvMessage() (msg interface{}, err error)
+	SendMessage(msg any) error
+	RecvMessage() (msg any, err error)
 }

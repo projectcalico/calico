@@ -15,8 +15,7 @@
 package flowlog
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -95,7 +94,7 @@ var _ = Describe("FlowPolicySets", func() {
 			// Validate
 			Expect(len(flowlogs)).Should(Equal(len(expected.Traces)))
 
-			for i := 0; i < len(flowlogs); i++ {
+			for i := range flowlogs {
 				Expect(flowlogs[i].FlowEnforcedPolicySet).Should(Equal(expected.EnforcedTraces[i]))
 				Expect(flowlogs[i].FlowPendingPolicySet).Should(Equal(expected.PendingTrace))
 				Expect(flowlogs[i].FlowProcessReportedStats.PacketsOut).Should(Equal(expected.Packets))

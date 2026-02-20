@@ -27,8 +27,8 @@ import (
 // See Policy for more information.
 type Tier struct {
 	unversioned.TypeMetadata
-	Metadata TierMetadata `json:"metadata,omitempty"`
-	Spec     TierSpec     `json:"spec,omitempty"`
+	Metadata TierMetadata `json:"metadata"`
+	Spec     TierSpec     `json:"spec"`
 }
 
 func (t Tier) GetResourceMetadata() unversioned.ResourceMetadata {
@@ -72,7 +72,7 @@ func NewTier() *Tier {
 // enumerations in the client interface.
 type TierList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Metadata unversioned.ListMetadata `json:"metadata"`
 	Items    []Tier                   `json:"items" validate:"dive"`
 }
 

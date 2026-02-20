@@ -1,3 +1,5 @@
+# This file contains a values.yaml configuration for installing Calico backed by
+# the API server instead of using projectcalico.org/v3 CRDs.
 installation:
   enabled: true
   registry: docker.io

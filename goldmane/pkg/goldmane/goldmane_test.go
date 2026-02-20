@@ -68,11 +68,12 @@ func setupTest(t *testing.T, opts ...goldmane.Option) func() {
 
 func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow, additionalMsg ...string) {
 	if !googleproto.Equal(expected, actual) {
-		msg := fmt.Sprintf("\nExpected:\n\t%v\nActual:\n\t%v", expected, actual)
+		var msg strings.Builder
+		msg.WriteString(fmt.Sprintf("\nExpected:\n\t%v\nActual:\n\t%v", expected, actual))
 		for _, m := range additionalMsg {
-			msg += "\n" + m
+			msg.WriteString("\n" + m)
 		}
-		t.Error(msg)
+		t.Error(msg.String())
 	}
 }
 

@@ -269,10 +269,8 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 	connFinished.Add(1)
 	go s.loop(connCtx, cancelFn, connFinished)
 
-	connFinished.Add(1)
-	go func() {
+	connFinished.Go(func() {
 		// Broadcast that we're finished.
-		defer connFinished.Done()
 
 		// Wait for the context to finish, either due to external cancel or our own loop
 		// exiting.
@@ -284,17 +282,15 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 		if err != nil {
 			log.WithError(err).Warn("Ignoring error from Close during shut-down of client.")
 		}
-	}()
+	})
 	return nil
 }
 
 func (s *SyncerClient) calculateConnectionAttemptLimit(numDiscoveredTyphas int) int {
-	expectedNumTyphas := numDiscoveredTyphas
-	if expectedNumTyphas < 3 {
+	expectedNumTyphas := max(numDiscoveredTyphas,
 		// Most clusters have at least 3 Typha instances so, if we discovered fewer instances,
 		// assume that there may be more starting up.
-		expectedNumTyphas = 3
-	}
+		3)
 	// During upgrade, we expect all Typha instances to be replaced one by one so, for a safe
 	// upper bound on the number of potential connection attempts, assume that we try to connect
 	// to double the number of instances that we detected.
@@ -593,7 +589,7 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 
 // sendMessageToServer sends a single value-type MsgXYZ object to the server.  It updates the connection's
 // write deadline to ensure we don't block forever.  Logs errors via logConnectionFailure.
-func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt *log.Entry, op string, message interface{}) error {
+func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt *log.Entry, op string, message any) error {
 	err := s.connection.SetWriteDeadline(time.Now().Add(s.options.writeTimeout()))
 	if err != nil {
 		s.logConnectionFailure(cxt, logCxt, err, "set timeout before "+op)
@@ -611,7 +607,7 @@ func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt *log.Entr
 
 // readMessageFromServer reads a single value-type MsgXYZ object from the server.  It updates the connection's
 // read deadline to ensure we don't block forever.  Logs errors via logConnectionFailure.
-func (s *SyncerClient) readMessageFromServer(cxt context.Context, logCxt *log.Entry) (interface{}, error) {
+func (s *SyncerClient) readMessageFromServer(cxt context.Context, logCxt *log.Entry) (any, error) {
 	var envelope syncproto.Envelope
 	// Update the read deadline before we try to read, otherwise we could block for a very long time if the
 	// TCP connection was severed without being cleanly shut down.  Typha sends regular pings so we should receive

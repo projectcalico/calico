@@ -28,11 +28,11 @@ import (
 )
 
 var (
-	typeNode          = reflect.TypeOf(Node{})
-	typeHostMetadata  = reflect.TypeOf(HostMetadata{})
-	typeOrchRefs      = reflect.TypeOf([]OrchRef{})
+	typeNode          = reflect.TypeFor[Node]()
+	typeHostMetadata  = reflect.TypeFor[HostMetadata]()
+	typeOrchRefs      = reflect.TypeFor[[]OrchRef]()
 	typeHostIp        = rawIPType
-	typeWireguard     = reflect.TypeOf(Wireguard{})
+	typeWireguard     = reflect.TypeFor[Wireguard]()
 	matchHostMetadata = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/metadata$`)
 	matchHostIp       = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/bird_ip$`)
 	matchWireguard    = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/wireguard$`)

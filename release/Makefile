@@ -44,10 +44,14 @@ ci: static-checks ut
 .PHONY: hashrelease hashrelease-build hashrelease-publish
 hashrelease: hashrelease-build hashrelease-publish
 
+# Ensures helm is in the bin dir relative to repo root
+../bin/helm:
+	@$(MAKE) -C ../ helm
+
 hashrelease-build: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease build
 
-hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN
+hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN ../bin/helm
 	@bin/release hashrelease publish
 
 hashrelease-svr-gc: bin/release

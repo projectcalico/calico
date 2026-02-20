@@ -494,7 +494,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
 	copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
 
-	for i := 0; i < len(globalData.Jumps); i++ {
+	for i := range len(globalData.Jumps) {
 		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */
 		globalData.JumpsV6[i] = 0xffffffff /* uint32(-1) */
 	}
@@ -518,6 +518,8 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	in := []byte("---------------")
 	copy(in, ap.Iface)
 	globalData.IfaceName = string(in)
+
+	globalData.OverlayTunnelID = ap.OverlayTunnelID
 
 	return globalData
 }

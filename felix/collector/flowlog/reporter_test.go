@@ -20,7 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/mock"
@@ -70,7 +70,7 @@ func (d *testFlowLogReporter) Start() error {
 	return nil
 }
 
-func (d *testFlowLogReporter) Report(logSlice interface{}) error {
+func (d *testFlowLogReporter) Report(logSlice any) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
@@ -239,7 +239,7 @@ func (m *mockDispatcher) Start() error {
 	return nil
 }
 
-func (m *mockDispatcher) Report(logSlice interface{}) error {
+func (m *mockDispatcher) Report(logSlice any) error {
 	m.iteration++
 	log.Infof("Mocked dispatcher was called %d times ", m.iteration)
 	logs := logSlice.([]*FlowLog)

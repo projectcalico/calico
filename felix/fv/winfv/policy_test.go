@@ -18,10 +18,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -123,6 +124,7 @@ func newClient() clientv3.Interface {
 	cfg := apiconfig.NewCalicoAPIConfig()
 	cfg.Spec.DatastoreType = apiconfig.Kubernetes
 	cfg.Spec.Kubeconfig = `c:\k\config`
+	cfg.Spec.CalicoAPIGroup = os.Getenv("CALICO_API_GROUP")
 	client, err := clientv3.New(*cfg)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	mustInitDatastore(client)

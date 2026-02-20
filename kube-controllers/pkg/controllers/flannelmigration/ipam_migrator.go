@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -86,16 +86,12 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	}
 
 	// Based on FlannelSubnetLen, work out the size of ippool.
-	blockSize := m.config.DefaultIppoolSize
-	if m.config.FlannelSubnetLen > m.config.DefaultIppoolSize {
+	blockSize := max(m.config.FlannelSubnetLen,
 		// Flannel subnet is smaller than one Calico IPAM block with default size of /26.
-		blockSize = m.config.FlannelSubnetLen
-	}
-	blockSizeV6 := m.config.DefaultIppoolSizeV6
-	if m.config.FlannelIpv6SubnetLen > m.config.DefaultIppoolSizeV6 {
+		m.config.DefaultIppoolSize)
+	blockSizeV6 := max(m.config.FlannelIpv6SubnetLen,
 		// Flannel subnet is smaller than one Calico IPAM block with default size of /122.
-		blockSizeV6 = m.config.FlannelIpv6SubnetLen
-	}
+		m.config.DefaultIppoolSizeV6)
 
 	// Canal creates default ippool and FelixConfigurations with no VXLAN.
 	// In this case, we should not check vxlan settings for existing ippool or FelixConfigurations.
@@ -276,7 +272,7 @@ func setupCalicoNodeVxlan(ctx context.Context, c client.Interface, nodeName stri
 
 	log.Infof("Calico Node current value: %+v.", node)
 
-	node.Spec.BGP = &libapi.NodeBGPSpec{}
+	node.Spec.BGP = &internalapi.NodeBGPSpec{}
 	// Set public ip with subnet /32.
 	// The subnet part is required to pass Felix validation.
 	node.Spec.BGP.IPv4Address = fmt.Sprintf("%s/32", publicIP)

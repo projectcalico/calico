@@ -93,7 +93,7 @@ type policyMigrator struct {
 }
 
 func (c *policyMigrator) RegisterWith(f *utils.DataFeed) {
-	// Register for updates for NetworkPolicy and GlobalNetworkPolicy.
+	// Register for updates for policy resources.
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 
 	// Register for sync status updates.

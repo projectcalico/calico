@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -293,7 +293,7 @@ func (c *MockIPAMClient) CalicoNodeStatus() client.CalicoNodeStatusInterface {
 	return nil
 }
 
-func (c *MockIPAMClient) IPAMConfig() client.IPAMConfigInterface {
+func (c *MockIPAMClient) IPAMConfiguration() client.IPAMConfigurationInterface {
 	// DO NOTHING
 	return nil
 }

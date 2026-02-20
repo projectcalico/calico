@@ -143,7 +143,7 @@ func showBorrowedDetails(ctx context.Context, ippoolClient clientv3.IPPoolInterf
 	return nil
 }
 
-func showIP(ctx context.Context, ipamClient ipam.Interface, passedIP interface{}) error {
+func showIP(ctx context.Context, ipamClient ipam.Interface, passedIP any) error {
 	ip := argutils.ValidateIP(passedIP.(string))
 	attr, _, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 	if err != nil {
@@ -221,7 +221,7 @@ func showConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"PROPERTY", "VALUE"})
-	genRow := func(name string, value interface{}) []string {
+	genRow := func(name string, value any) []string {
 		return []string{
 			name,
 			fmt.Sprintf("%#v", value),

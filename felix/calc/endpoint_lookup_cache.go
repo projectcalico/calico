@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/stringutils"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -154,7 +154,7 @@ type EndpointLookupsCache struct {
 
 	// Node relationship data.
 	// TODO(rlb): We should just treat this as an endpoint
-	nodes         map[string]v3.NodeSpec
+	nodes         map[string]internalapi.NodeSpec
 	nodeIPToNames map[[16]byte][]string
 	deletionDelay time.Duration
 }
@@ -178,7 +178,7 @@ func NewEndpointLookupsCache(opts ...EndpointLookupsCacheOption) *EndpointLookup
 		endpointDeletionTimers: map[model.Key]*time.Timer{},
 		markedForDeletion:      map[model.EndpointKey]bool{},
 		nodeIPToNames:          make(map[[16]byte][]string),
-		nodes:                  make(map[string]v3.NodeSpec),
+		nodes:                  make(map[string]internalapi.NodeSpec),
 		deletionDelay:          endpointDataDeletionDelay,
 	}
 
@@ -244,7 +244,6 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 
 		var hasIngress, hasEgress bool
 		for _, pol := range ti.OrderedPolicies {
-
 			if pol.GovernsIngress() {
 				// Add an ingress tier default action lookup.
 				rid := NewRuleID(pol.Key.Kind, ti.Name, pol.Key.Name, pol.Key.Namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, tierDefaultAction)
@@ -356,11 +355,11 @@ func (ec *EndpointLookupsCache) OnResourceUpdate(update api.Update) (_ bool) {
 	switch k := update.Key.(type) {
 	case model.ResourceKey:
 		switch k.Kind {
-		case v3.KindNode:
+		case internalapi.KindNode:
 			if update.Value == nil {
 				ec.removeNode(k.Name)
 			} else {
-				ec.addOrUpdateNode(k.Name, update.Value.(*v3.Node))
+				ec.addOrUpdateNode(k.Name, update.Value.(*internalapi.Node))
 			}
 		default:
 			log.Tracef("Ignoring update for resource: %s", k)
@@ -785,7 +784,7 @@ func (ec *EndpointLookupsCache) DumpEndpoints() string {
 }
 
 // addOrUpdateNode tracks IP to node mappings.
-func (ec *EndpointLookupsCache) addOrUpdateNode(name string, node *v3.Node) {
+func (ec *EndpointLookupsCache) addOrUpdateNode(name string, node *internalapi.Node) {
 	ec.epMutex.Lock()
 	defer ec.epMutex.Unlock()
 
@@ -815,7 +814,7 @@ func (ec *EndpointLookupsCache) removeNode(name string) {
 }
 
 // handleNode handles the mappings for a node. The supplied operator is used to either add or remove the mappings.
-func (ec *EndpointLookupsCache) handleNode(name string, node v3.NodeSpec, nodeOp func(name string, ip [16]byte)) {
+func (ec *EndpointLookupsCache) handleNode(name string, node internalapi.NodeSpec, nodeOp func(name string, ip [16]byte)) {
 	if node.BGP != nil && node.BGP.IPv4Address != "" {
 		if nodeIP, ok := IPStringToArray(node.BGP.IPv4Address); ok {
 			nodeOp(name, nodeIP)

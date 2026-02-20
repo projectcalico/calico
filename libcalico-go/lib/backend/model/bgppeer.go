@@ -31,7 +31,7 @@ import (
 var (
 	matchGlobalBGPPeer        = regexp.MustCompile("^/?calico/bgp/v1/global/peer_v./([^/]+)$")
 	matchHostBGPPeer          = regexp.MustCompile("^/?calico/bgp/v1/host/([^/]+)/peer_v./([^/]+)$")
-	typeBGPPeer               = reflect.TypeOf(BGPPeer{})
+	typeBGPPeer               = reflect.TypeFor[BGPPeer]()
 	ipPortSeparator           = "-"
 	defaultPort        uint16 = 179
 )

@@ -445,12 +445,7 @@ func addFullIPLength(items []string) []string {
 
 // contains returns true if items contains the target.
 func contains(items []string, target string) bool {
-	for _, item := range items {
-		if item == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(items, target)
 }
 
 // advertiseThisService returns true if this service should be advertised on this node,
@@ -535,7 +530,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 
 // unsetRouteForSvc removes the route from the svcClusterRouteMap
 // but checks to see if it wasn't already deleted by its sibling resource
-func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
+func (rg *routeGenerator) unsetRouteForSvc(obj any) {
 	// generate key
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
@@ -605,7 +600,7 @@ func (rg *routeGenerator) withdrawRoutesForKey(key string, routes []string) {
 }
 
 // onSvcAdd is called when a k8s service is created
-func (rg *routeGenerator) onSvcAdd(obj interface{}) {
+func (rg *routeGenerator) onSvcAdd(obj any) {
 	svc, ok := obj.(*v1.Service)
 	if !ok {
 		log.Warn("onSvcAdd: failed to assert type to service, passing")
@@ -615,7 +610,7 @@ func (rg *routeGenerator) onSvcAdd(obj interface{}) {
 }
 
 // onSvcUpdate is called when a k8s service is updated
-func (rg *routeGenerator) onSvcUpdate(_, obj interface{}) {
+func (rg *routeGenerator) onSvcUpdate(_, obj any) {
 	svc, ok := obj.(*v1.Service)
 	if !ok {
 		log.Warn("onSvcUpdate: failed to assert type to service, passing")
@@ -625,12 +620,12 @@ func (rg *routeGenerator) onSvcUpdate(_, obj interface{}) {
 }
 
 // onSvcUpdate is called when a k8s service is deleted
-func (rg *routeGenerator) onSvcDelete(obj interface{}) {
+func (rg *routeGenerator) onSvcDelete(obj any) {
 	rg.unsetRouteForSvc(obj)
 }
 
 // onEPAdd is called when a k8s endpoint is created
-func (rg *routeGenerator) onEPAdd(obj interface{}) {
+func (rg *routeGenerator) onEPAdd(obj any) {
 	ep, ok := obj.(*discoveryv1.EndpointSlice)
 	if !ok {
 		log.Warn("onEPAdd: failed to assert type to endpoint, passing")
@@ -640,7 +635,7 @@ func (rg *routeGenerator) onEPAdd(obj interface{}) {
 }
 
 // onEPUpdate is called when a k8s endpoint is updated
-func (rg *routeGenerator) onEPUpdate(_, obj interface{}) {
+func (rg *routeGenerator) onEPUpdate(_, obj any) {
 	ep, ok := obj.(*discoveryv1.EndpointSlice)
 	if !ok {
 		log.Warn("onEPUpdate: failed to assert type to endpoints, passing")
@@ -650,7 +645,7 @@ func (rg *routeGenerator) onEPUpdate(_, obj interface{}) {
 }
 
 // onEPDelete is called when a k8s endpoint is deleted
-func (rg *routeGenerator) onEPDelete(obj interface{}) {
+func (rg *routeGenerator) onEPDelete(obj any) {
 	rg.unsetRouteForSvc(obj)
 }
 

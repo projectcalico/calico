@@ -19,11 +19,11 @@ import (
 	"path/filepath"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
@@ -33,18 +33,18 @@ var _ = Describe("k8s-wait", func() {
 		BeforeEach(func() {})
 		AfterEach(func() {})
 
-		pollAndReturn := func(exit chan error, dummyEndpoint *v3.WorkloadEndpoint, timeout time.Duration) {
+		pollAndReturn := func(exit chan error, dummyEndpoint *internalapi.WorkloadEndpoint, timeout time.Duration) {
 			defer close(exit)
 			err := ForEndpointReadyWithTimeout("/tmp", dummyEndpoint, timeout)
 			exit <- err
 		}
 
 		It("should wait for the given timeout and return error when no file is found", func() {
-			dummyEndpoint := &v3.WorkloadEndpoint{
+			dummyEndpoint := &internalapi.WorkloadEndpoint{
 				ObjectMeta: v1.ObjectMeta{
 					Namespace: "name-space",
 				},
-				Spec: v3.WorkloadEndpointSpec{
+				Spec: internalapi.WorkloadEndpointSpec{
 					Pod:          "podname",
 					Orchestrator: "k8s",
 					Node:         "node-1",
@@ -63,11 +63,11 @@ var _ = Describe("k8s-wait", func() {
 		})
 
 		It("should return immediately after the right file is created", func() {
-			dummyEndpoint := &v3.WorkloadEndpoint{
+			dummyEndpoint := &internalapi.WorkloadEndpoint{
 				ObjectMeta: v1.ObjectMeta{
 					Namespace: "name-space",
 				},
-				Spec: v3.WorkloadEndpointSpec{
+				Spec: internalapi.WorkloadEndpointSpec{
 					Pod:          "podname",
 					Orchestrator: "k8s",
 					Node:         "node-1",

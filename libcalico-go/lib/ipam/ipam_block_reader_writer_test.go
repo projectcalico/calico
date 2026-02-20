@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -81,6 +81,7 @@ func (c *fakeClient) Create(ctx context.Context, object *model.KVPair) (*model.K
 
 	panic(fmt.Sprintf("Create called on unexpected object: %+v", object))
 }
+
 func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	if f, ok := c.updateFuncs[object.Key.String()]; ok {
 		return f(ctx, object)
@@ -88,8 +89,8 @@ func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.K
 		return f(ctx, object)
 	}
 	panic(fmt.Sprintf("Update called on unexpected object: %+v", object))
-
 }
+
 func (c *fakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	panic("should not be called")
 }
@@ -161,11 +162,9 @@ type backendClientAccessor interface {
 }
 
 var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	log.SetLevel(log.DebugLevel)
 
 	Context("IPAM block allocation race conditions", func() {
-
 		var (
 			bc           api.Client
 			net          *cnet.IPNet
@@ -224,7 +223,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					wg.Add(1)
 					j := i
 					go func() {
@@ -278,7 +277,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			By("checking each allocated IP is within the correct block for that host", func() {
 				// Iterate through all the hosts. If the host has an affine block,
 				// make sure the IPs assigned to that host are within the block.
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					hostname := fmt.Sprintf("host-%d", i)
 					affs, err := bc.List(ctx, model.BlockAffinityListOptions{Host: hostname, AffinityType: string(AffinityTypeHost)}, "")
 					Expect(err).NotTo(HaveOccurred())
@@ -317,7 +316,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 				testhost := "single-host"
 				applyNode(bc, kc, testhost, nil)
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
@@ -385,7 +384,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
@@ -439,7 +438,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
@@ -451,7 +450,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							log.WithError(err).Errorf("Failed to release affinity for host %s", testhost)
 							testErr = err
 						}
-
 					}()
 				}
 
@@ -549,9 +547,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// - hostA proc2 creates the block.
 			// - hostA proc1 tries to delete the affinity.
 
-			var (
-				blockKVP, affinityKVP model.KVPair
-			)
+			var blockKVP, affinityKVP model.KVPair
 
 			By("setting up the client for the test", func() {
 				b := newBlock(*net, nil)
@@ -1242,7 +1238,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// Attributes[0] should be the reservation attribute.
 			Expect(*b.Attributes[0].AttrPrimary).To(Equal("test-handle"))
 			Expect(b.Attributes[0].AttrSecondary["note"]).To(Equal("ipam ut"))
-
 		})
 
 		It("should allocate one ip", func() {
@@ -1261,7 +1256,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 })
 
 var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd only)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
-
 	var (
 		bc  api.Client
 		net *cnet.IPNet
@@ -1356,5 +1350,4 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 		_, err = bc.DeleteKVP(ctx, kvpb)
 		Expect(err).NotTo(HaveOccurred())
 	})
-
 })

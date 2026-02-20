@@ -18,7 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -73,6 +73,50 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
 				return output
 			}, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp("-A cali-nat-outgoing .*-o eth\\+ "))
+		}
+	})
+})
+
+var _ = infrastructure.DatastoreDescribe("NATPortRange rendering test", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	var (
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
+	)
+
+	BeforeEach(func() {
+		var err error
+		infra = getInfra()
+
+		opts := infrastructure.DefaultTopologyOptions()
+		opts.IPIPMode = api.IPIPModeNever
+		opts.EnableIPv6 = true
+
+		opts.ExtraEnvVars = map[string]string{
+			"FELIX_NATPortRange": "32768:65535",
+		}
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
+
+		ctx := context.Background()
+		ippool := api.NewIPPool()
+		ippool.Name = "nat-pool"
+		ippool.Spec.CIDR = "10.244.255.0/24"
+		ippool.Spec.NATOutgoing = true
+		ippool, err = client.IPPools().Create(ctx, ippool, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should have expected rendering", func() {
+		if NFTMode() {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "nat-cali-nat-outgoing")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("32768-65535"))
+		} else {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("32768-65535"))
 		}
 	})
 })

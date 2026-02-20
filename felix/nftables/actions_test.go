@@ -15,8 +15,8 @@
 package nftables_test
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -25,7 +25,7 @@ import (
 
 var _ = DescribeTable("Actions",
 	func(features environment.Features, action generictables.Action, expRendering string) {
-		Expect(action.ToFragment(&features)).To(Equal(expRendering))
+		gomega.Expect(action.ToFragment(&features)).To(gomega.Equal(expRendering))
 	},
 	Entry("GotoAction", environment.Features{}, GotoAction{Target: "cali-abcd"}, "goto cali-abcd"),
 	Entry("JumpAction", environment.Features{}, JumpAction{Target: "cali-abcd"}, "jump cali-abcd"),
@@ -37,7 +37,9 @@ var _ = DescribeTable("Actions",
 	Entry("SNATAction", environment.Features{}, SNATAction{ToAddr: "10.0.0.1"}, "snat to 10.0.0.1"),
 	Entry("SNATAction fully random", environment.Features{SNATFullyRandom: true}, SNATAction{ToAddr: "10.0.0.1"}, "snat to 10.0.0.1 fully-random"),
 	Entry("MasqAction", environment.Features{}, MasqAction{}, "masquerade"),
+	Entry("MasqAction", environment.Features{}, MasqAction{ToPorts: "32768-65535"}, "masquerade to :32768-65535"),
 	Entry("MasqAction", environment.Features{MASQFullyRandom: true}, MasqAction{}, "masquerade fully-random"),
+	Entry("MasqAction", environment.Features{MASQFullyRandom: true}, MasqAction{ToPorts: "32768-65535"}, "masquerade to :32768-65535 fully-random"),
 	Entry("ClearMarkAction", environment.Features{}, ClearMarkAction{Mark: 0x1000}, "meta mark set mark & 0xffffefff"),
 	Entry("SetMarkAction", environment.Features{}, SetMarkAction{Mark: 0x1000}, "meta mark set mark or 0x1000"),
 	Entry("SetMaskedMarkAction", environment.Features{}, SetMaskedMarkAction{Mark: 0x1000, Mask: 0xf000}, "meta mark set mark & 0xffff0fff ^ 0x1000"),

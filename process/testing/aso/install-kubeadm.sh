@@ -19,8 +19,10 @@ set -e
 
 . ./vmss.sh node-ips
 
-: ${KUBECTL:=./bin/kubectl}
-: ${GOMPLATE:=./bin/gomplate}
+: "${KUBECTL:=./bin/kubectl}"
+: "${GOMPLATE:=./bin/gomplate}"
+
+: "${ASO_KUBE_PROXY_MODE:="iptables"}"
 
 # Reconstruct arrays from exported string variables
 # Bash arrays cannot be exported across shells, so we export them as space-separated strings
@@ -34,13 +36,12 @@ echo "========================================"
 echo "Node configuration loaded:"
 echo "  LINUX_NODE_COUNT: ${LINUX_NODE_COUNT}"
 echo "  WINDOWS_NODE_COUNT: ${WINDOWS_NODE_COUNT}"
-echo "  LINUX_EIPS (count: ${#LINUX_EIPS[@]}): ${LINUX_EIPS[@]}"
-echo "  LINUX_PIPS (count: ${#LINUX_PIPS[@]}): ${LINUX_PIPS[@]}"
-echo "  WINDOWS_EIPS (count: ${#WINDOWS_EIPS[@]}): ${WINDOWS_EIPS[@]}"
-echo "  WINDOWS_PIPS (count: ${#WINDOWS_PIPS[@]}): ${WINDOWS_PIPS[@]}"
+echo "  LINUX_EIPS (count: ${#LINUX_EIPS[@]}): ${LINUX_EIPS[*]}"
+echo "  LINUX_PIPS (count: ${#LINUX_PIPS[@]}): ${LINUX_PIPS[*]}"
+echo "  WINDOWS_EIPS (count: ${#WINDOWS_EIPS[@]}): ${WINDOWS_EIPS[*]}"
+echo "  WINDOWS_PIPS (count: ${#WINDOWS_PIPS[@]}): ${WINDOWS_PIPS[*]}"
 echo "========================================"
 echo
-
 
 function copy_scripts_to_linux_nodes() {
   echo "Copying Linux setup scripts to all Linux nodes..."
@@ -56,8 +57,8 @@ function copy_scripts_to_linux_nodes() {
     fi
 
     echo "Copying scripts to Linux node ${node_num} (${linux_eip})..."
-    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ./linux/*.sh aso@${linux_eip}:~/ || {
+    scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ./linux/*.sh "aso@${linux_eip}:~/" || {
       echo "ERROR: Failed to copy scripts to Linux node ${node_num}"
       return 1
     }
@@ -83,8 +84,8 @@ function copy_scripts_to_windows_nodes() {
     fi
 
     echo "Copying scripts to Windows node ${node_num} (${windows_eip})..."
-    scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ./windows/*.ps1 aso@${windows_eip}:c:\\k\\ || {
+    scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ./windows/*.ps1 "aso@${windows_eip}:c:\\k\\" || {
       echo "ERROR: Failed to copy scripts to Windows node ${node_num}"
       return 1
     }
@@ -114,7 +115,45 @@ function setup_kubeadm_cluster() {
   echo "  Pod Network CIDR: 192.168.0.0/16"
   echo "  Service CIDR: 10.96.0.0/12"
 
-  ${MASTER_CONNECT_COMMAND} "~/init-cluster.sh ${LOCAL_IP_ENV} 192.168.0.0/16 10.96.0.0/12 ${EXTERNAL_IP_ENV}"
+  echo "Generating kubeadm config yaml..."
+  ADVERTISE_ADDRESS=${LOCAL_IP_ENV}
+  POD_NETWORK_CIDR="192.168.0.0/16"
+  SERVICE_CIDR="10.96.0.0/12"
+  EXTERNAL_IP=${EXTERNAL_IP_ENV}
+  CERT_SANS="${ADVERTISE_ADDRESS}"
+  if [ -n "$EXTERNAL_IP" ]; then
+    CERT_SANS="${CERT_SANS},${EXTERNAL_IP}"
+    echo "  Certificate will include both internal and external IPs"
+  fi
+
+  cat <<EOF > ./kubeadm-config.yaml
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "${ADVERTISE_ADDRESS}"
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+apiServer:
+  certSANs:
+$(echo "${CERT_SANS}" | tr ',' '\n' | sed 's/^/  - /')
+networking:
+  podSubnet: "${POD_NETWORK_CIDR}"
+  serviceSubnet: "${SERVICE_CIDR}"
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: "${ASO_KUBE_PROXY_MODE}"
+EOF
+
+  echo "Copying kubeadm config yaml to Linux node 0 (${LINUX_EIPS[0]})..."
+  scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    ./kubeadm-config.yaml "aso@${LINUX_EIPS[0]}:~/" || {
+    echo "ERROR: Failed to copy kubeadm config yaml to Linux node 0"
+    return 1
+  }
+
+  ${MASTER_CONNECT_COMMAND} "~/init-cluster.sh ~/kubeadm-config.yaml"
 
   # Get the API server port (default is 6443 for kubeadm)
   APISERVER_PORT=6443
@@ -146,8 +185,8 @@ function setup_kubeadm_cluster() {
 
   # Copy kubeconfig to local directory
   echo "Copying kubeconfig from master node..."
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    aso@${LINUX_EIP}:/home/aso/.kube/config ./kubeconfig
+  scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    "aso@${LINUX_EIP}:/home/aso/.kube/config" ./kubeconfig
 
   # Fix the API server address in kubeconfig - replace internal IP with external IP
   echo "Updating API server address in kubeconfig to use external IP ${LINUX_EIP}..."
@@ -155,7 +194,7 @@ function setup_kubeadm_cluster() {
   echo "  Original API server address: ${INTERNAL_API_SERVER}"
 
   # Extract port from the original server URL
-  API_PORT=$(echo ${INTERNAL_API_SERVER} | sed -n 's/.*:\([0-9]*\)$/\1/p')
+  API_PORT=$(echo "${INTERNAL_API_SERVER}" | sed -n 's/.*:\([0-9]*\)$/\1/p')
   if [[ -z "${API_PORT}" ]]; then
     API_PORT="6443"  # Default Kubernetes API port
   fi
@@ -264,11 +303,11 @@ function copy_files_from_linux() {
   mkdir -p ./windows/kubeadm
 
   # Copy kubeconfig
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no aso@${LINUX_EIP}:/home/aso/.kube/config ./windows/kubeadm/config
+  scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "aso@${LINUX_EIP}:/home/aso/.kube/config" ./windows/kubeadm/config
 
   # Copy Kubernetes PKI certificates (needed for authentication)
   ${MASTER_CONNECT_COMMAND} "sudo cp /etc/kubernetes/pki/ca.crt /tmp/ca.crt && sudo chmod 644 /tmp/ca.crt"
-  scp -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no aso@${LINUX_EIP}:/tmp/ca.crt ./windows/kubeadm/
+  scp -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "aso@${LINUX_EIP}:/tmp/ca.crt" ./windows/kubeadm/
 
   echo "Kubernetes certificates copied successfully"
 }
@@ -309,11 +348,11 @@ function prepare_windows_node() {
 
   # Copy windows directory contents to c:\k\
   echo "Copying Windows files to node..."
-  scp -r -i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* aso@${windows_eip}:c:\\k\\
+  scp -r -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* "aso@${windows_eip}:c:\\k\\"
 
   # Enable containers feature (requires reboot)
   echo "Enabling Windows Containers feature..."
-  ${windows_connect_command} c:\\k\\enable-containers-with-reboot.ps1
+  ${windows_connect_command} "c:\\k\\enable-containers-with-reboot.ps1 -Force"
 
   # Wait for node to come back online after reboot
   sleep 10
@@ -322,11 +361,16 @@ function prepare_windows_node() {
 
   # Install containerd
   echo "Installing containerd..."
-  if ! ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION}"; then
+  if ! ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION} -Force"; then
     echo "ERROR: Failed to install containerd on Windows node ${display_name}"
     echo "You can SSH to the node to debug: ${windows_connect_command}"
     return 1
   fi
+
+  # Wait for node to come back online after reboot
+  sleep 10
+  echo "Waiting for node to be ready after reboot..."
+  retry_command 60 "${windows_connect_command} Write-Host 'Node is ready'"
 
   echo "Windows node ${display_name} prepared successfully"
   echo

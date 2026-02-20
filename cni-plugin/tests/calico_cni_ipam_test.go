@@ -9,15 +9,14 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	apiconfig "github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -28,12 +27,16 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var plugin = "calico-ipam"
-var defaultIPv4Pool = "192.168.0.0/16"
+var (
+	plugin          = "calico-ipam"
+	defaultIPv4Pool = "192.168.0.0/16"
+)
 
 var _ = Describe("Calico IPAM Tests", func() {
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
-	calicoClient, err := client.NewFromEnv()
+	config, err := apiconfig.LoadClientConfigFromEnvironment()
+	Expect(err).NotTo(HaveOccurred())
+	calicoClient, err := client.New(*config)
 	Expect(err).NotTo(HaveOccurred())
 	k8sClient := getKubernetesClient()
 
@@ -62,33 +65,32 @@ var _ = Describe("Calico IPAM Tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Describe("Run IPAM plugin", func() {
-		DescribeTable("Request different numbers of IP addresses",
-			func(expectedIPv4, expectedIPv6 bool, netconf string) {
-				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
-				var ip4Mask, ip6Mask string
+	DescribeTable("Request different numbers of IP addresses",
+		func(expectedIPv4, expectedIPv6 bool, netconf string) {
+			result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
+			var ip4Mask, ip6Mask string
 
-				for _, ip := range result.IPs {
-					if ip.Address.IP.To4() != nil {
-						ip4Mask = ip.Address.Mask.String()
-					} else if ip.Address.IP.To16() != nil {
-						ip6Mask = ip.Address.Mask.String()
-					}
+			for _, ip := range result.IPs {
+				if ip.Address.IP.To4() != nil {
+					ip4Mask = ip.Address.Mask.String()
+				} else if ip.Address.IP.To16() != nil {
+					ip6Mask = ip.Address.Mask.String()
 				}
+			}
 
-				if expectedIPv4 {
-					Expect(ip4Mask).Should(Equal("ffffffc0"))
-				}
+			if expectedIPv4 {
+				Expect(ip4Mask).Should(Equal("ffffffc0"))
+			}
 
-				if expectedIPv6 {
-					Expect(ip6Mask).Should(Equal("ffffffffffffffffffffffffffffffc0"))
-				}
+			if expectedIPv6 {
+				Expect(ip6Mask).Should(Equal("ffffffffffffffffffffffffffffffc0"))
+			}
 
-				_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "", cid, cniVersion)
-				Expect(exitCode).Should(Equal(0))
-			},
+			_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "", cid, cniVersion)
+			Expect(exitCode).Should(Equal(0))
+		},
 
-			Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
+		Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
             {
               "cniVersion": "%s",
               "name": "net1",
@@ -101,9 +103,10 @@ var _ = Describe("Calico IPAM Tests", func() {
               "datastore_type": "%s",
               "ipam": {
                 "type": "%s"
-              }
-            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
-			Entry("IPAM with IPv4 (explicit)", true, false, fmt.Sprintf(`
+              },
+              "calico_api_group": "%s"
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))),
+		Entry("IPAM with IPv4 (explicit)", true, false, fmt.Sprintf(`
             {
               "cniVersion": "%s",
               "name": "net1",
@@ -116,9 +119,10 @@ var _ = Describe("Calico IPAM Tests", func() {
               "ipam": {
                 "type": "%s",
                 "assign_ipv4": "true"
-              }
-            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
-			Entry("IPAM with IPv6 only", false, true, fmt.Sprintf(`
+              },
+              "calico_api_group": "%s"
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))),
+		Entry("IPAM with IPv6 only", false, true, fmt.Sprintf(`
             {
               "cniVersion": "%s",
               "name": "net1",
@@ -132,9 +136,10 @@ var _ = Describe("Calico IPAM Tests", func() {
                 "type": "%s",
                 "assign_ipv4": "false",
                 "assign_ipv6": "true"
-              }
-            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
-			Entry("IPAM with IPv4 and IPv6", true, true, fmt.Sprintf(`
+              },
+              "calico_api_group": "%s"
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))),
+		Entry("IPAM with IPv4 and IPv6", true, true, fmt.Sprintf(`
             {
               "cniVersion": "%s",
               "name": "net1",
@@ -149,10 +154,11 @@ var _ = Describe("Calico IPAM Tests", func() {
                 "type": "%s",
                 "assign_ipv4": "true",
                 "assign_ipv6": "true"
-              }
-            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
-		)
-	})
+              },
+              "calico_api_group": "%s"
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec)),
+		),
+	)
 
 	Describe("Run IPAM plugin - No partial assignments in dual stack", func() {
 		Context("With no IPv4 pool", func() {
@@ -176,8 +182,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                 "type": "%s",
                 "assign_ipv4": "true",
                 "assign_ipv6": "true"
-              }
-            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+              },
+              "calico_api_group": "%s"
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 				_, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 
 				// Attempt to assign both an IPv4 and IPv6 address
@@ -212,8 +219,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                 "type": "%s",
                 "assign_ipv4": "true",
                 "assign_ipv6": "true"
-              }
-            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+              },
+              "calico_api_group": "%s"
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 				_, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 
 				// Attempt to assign both an IPv4 and IPv6 address
@@ -245,8 +253,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                     "type": "%s",
                     "assign_ipv4": "true",
                     "ipv4_pools": [ "192.168.0.0/16" ]
-                    }
-                }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                  },
+                  "calico_api_group": "%s"
+                }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(len(result.IPs)).To(Equal(1))
 				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.168."))
@@ -270,8 +279,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "type": "%s",
                         "assign_ipv4": "true",
                         "ipv4_pools": [ "192.169.1.0/24", "192.168.0.0/16" ]
-                      }
-                }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                      },
+                      "calico_api_group": "%s"
+                }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(result.IPs[0].Address.IP.String()).Should(Or(HavePrefix("192.168."), HavePrefix("192.169.1")))
 			})
@@ -292,8 +302,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "ipam": {
                         "type": "%s",
                         "assign_ipv4": "true"
-                      }
-                }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                      },
+                      "calico_api_group": "%s"
+                }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 
 				// Get an allocation
 				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
@@ -320,7 +331,6 @@ var _ = Describe("Calico IPAM Tests", func() {
 				pool.Spec.Disabled = false
 				_, err = calicoClient.IPPools().Update(context.Background(), pool, options.SetOptions{})
 				Expect(err).ToNot(HaveOccurred())
-
 			})
 		})
 
@@ -341,8 +351,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "type": "%s",
                         "assign_ipv4": "true",
                         "ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
-                      }
-                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                      },
+                      "calico_api_group": "%s"
+                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 				_, err, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(err.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
@@ -363,13 +374,13 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "type": "%s",
                         "assign_ipv4": "true",
                         "ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
-                      }
-                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                      },
+                      "calico_api_group": "%s"
+                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 				_, err, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(err.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
 		})
-
 	})
 
 	Describe("Requesting an explicit IP address", func() {
@@ -385,8 +396,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "datastore_type": "%s",
                       "ipam": {
                         "type": "%s"
-                      }
-                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                      },
+                      "calico_api_group": "%s"
+                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 		Context("Pass explicit IP address", func() {
 			It("Return the expected IP", func() {
 				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
@@ -425,8 +437,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "datastore_type": "%s",
                       "ipam": {
                         "type": "%s"
-                      }
-                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                      },
+                      "calico_api_group": "%s"
+                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 
 		It("should exit successfully even if no address exists", func() {
 			_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cid, cniVersion)
@@ -495,6 +508,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 			crdClient crclient.Client
 			host      string
 			netconf   string
+			useV3     bool
 		)
 
 		BeforeEach(func() {
@@ -510,7 +524,8 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			kcfg, _, err := k8s.CreateKubernetesClientset(&cfg.Spec)
 			Expect(err).NotTo(HaveOccurred())
-			crdClient, err = rawcrdclient.New(kcfg)
+			useV3 = k8s.BackendAPIGroup(&config.Spec) == "projectcalico.org/v3"
+			crdClient, err = rawcrdclient.New(kcfg, useV3)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Determine host for BlockAffinity and ensure there is a usable netconf.
@@ -531,8 +546,9 @@ var _ = Describe("Calico IPAM Tests", func() {
               "log_level": "debug",
               "ipam": {
                 "type": "%s"
-              }
-            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+              },
+              "calico_api_group": "%s"
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin, k8s.BackendAPIGroup(&config.Spec))
 		})
 
 		It("upgrades unlabeled block affinities on first call and not on subsequent calls", func() {
@@ -540,18 +556,37 @@ var _ = Describe("Calico IPAM Tests", func() {
 			// 1) Create an unlabeled BlockAffinity for this host.
 			Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, host, "10.11.0.0/26")).To(Succeed())
 
-			// Sanity check: ensure the BA has no labels.
-			var list libapiv3.BlockAffinityList
-			Expect(crdClient.List(ctx, &list)).To(Succeed())
-			var found1 *libapiv3.BlockAffinity
-			for i := range list.Items {
-				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
-					found1 = &list.Items[i]
-					break
+			getLabels := func(cidr string) map[string]string {
+				if useV3 {
+					var list apiv3.BlockAffinityList
+					Expect(crdClient.List(ctx, &list)).To(Succeed())
+					var found1 *apiv3.BlockAffinity
+					for i := range list.Items {
+						if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == cidr {
+							found1 = &list.Items[i]
+							break
+						}
+					}
+					ExpectWithOffset(1, found1).NotTo(BeNil())
+					return found1.Labels
+				} else {
+					var list internalapi.BlockAffinityList
+					Expect(crdClient.List(ctx, &list)).To(Succeed())
+					var found1 *internalapi.BlockAffinity
+					for i := range list.Items {
+						if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == cidr {
+							found1 = &list.Items[i]
+							break
+						}
+					}
+					ExpectWithOffset(1, found1).NotTo(BeNil())
+					return found1.Labels
 				}
 			}
-			Expect(found1).NotTo(BeNil())
-			Expect(found1.Labels).To(HaveLen(0))
+
+			// Sanity check: ensure the BA has no labels.
+			foundLabels := getLabels("10.11.0.0/26")
+			Expect(foundLabels).To(HaveLen(0))
 
 			// 2) Run the IPAM plugin with explicit IP to trigger maybeUpgradeIPAM.
 			cid1 := uuid.NewString()
@@ -564,33 +599,16 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(statErr).NotTo(HaveOccurred())
 
 			// 4) Verify the previously unlabeled BA is now labeled.
-			list = libapiv3.BlockAffinityList{}
-			Expect(crdClient.List(ctx, &list)).To(Succeed())
-			found1 = nil
-			for i := range list.Items {
-				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
-					found1 = &list.Items[i]
-					break
-				}
-			}
-			Expect(found1).NotTo(BeNil())
-			Expect(found1.Labels).To(HaveKey(apiv3.LabelAffinityType))
-			Expect(found1.Labels).To(HaveKey(apiv3.LabelIPVersion))
-			Expect(found1.Labels).To(HaveKey(apiv3.LabelHostnameHash))
+			foundLabels = getLabels("10.11.0.0/26")
+			Expect(foundLabels).To(HaveKey(apiv3.LabelAffinityType))
+			Expect(foundLabels).To(HaveKey(apiv3.LabelIPVersion))
+			Expect(foundLabels).To(HaveKey(apiv3.LabelHostnameHash))
 
 			// 5) Create a second unlabeled BA for this host.
 			Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, host, "10.11.0.64/26")).To(Succeed())
-			list = libapiv3.BlockAffinityList{}
-			Expect(crdClient.List(ctx, &list)).To(Succeed())
-			var found2 *libapiv3.BlockAffinity
-			for i := range list.Items {
-				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
-					found2 = &list.Items[i]
-					break
-				}
-			}
-			Expect(found2).NotTo(BeNil())
-			Expect(found2.Labels).To(HaveLen(0))
+
+			labels2 := getLabels("10.11.0.64/26")
+			Expect(labels2).To(HaveLen(0))
 
 			// 6) Run the plugin again; since touchfile exists, no upgrade should occur.
 			cid2 := uuid.NewString()
@@ -599,17 +617,8 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(result2.IPs).To(HaveLen(1))
 
 			// Re-list and ensure the second BA remains unlabeled.
-			list = libapiv3.BlockAffinityList{}
-			Expect(crdClient.List(ctx, &list)).To(Succeed())
-			found2 = nil
-			for i := range list.Items {
-				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
-					found2 = &list.Items[i]
-					break
-				}
-			}
-			Expect(found2).NotTo(BeNil())
-			Expect(found2.Labels).To(HaveLen(0))
+			labels2 = getLabels("10.11.0.64/26")
+			Expect(labels2).To(HaveLen(0))
 
 			// Cleanup: release explicit IPs.
 			_, _, exit = testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cid1, os.Getenv("CNI_SPEC_VERSION"))

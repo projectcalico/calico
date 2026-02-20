@@ -25,8 +25,7 @@ export LOGPATH=/tests/logs/kdd
 export DATASTORE_TYPE=kubernetes
 export KUBECONFIG=/home/user/certs/kubeconfig
 
-# CRDs are pulled in from libcalico.
-CRDS=../libcalico-go/config/crd
+CRDS=../$CALICO_CRD_PATH
 
 # Prepopulate k8s with data that cannot be populated through calicoctl.
 # All tests use the same set of nodes - for k8s these cannot be created through
@@ -37,7 +36,14 @@ for i in $(seq 1 30); do kubectl apply -f $CRDS 1>/dev/null 2>&1 && break || sle
 echo "Populating k8s with test data that cannot be handled by calicoctl"
 kubectl apply -f $CRDS
 kubectl apply -f /tests/mock_data/kdd/nodes.yaml
-kubectl apply -f /tests/mock_data/kdd/ipam.yaml
+
+# Apply the right IPAM data based on the configured CALICO_API_GROUP.
+if [ "$CALICO_API_GROUP" = "projectcalico.org/v3" ]; then
+    kubectl apply -f /tests/mock_data/kdd/ipam_v3.yaml
+else
+    echo "Using legacy API group"
+    kubectl apply -f /tests/mock_data/kdd/ipam.yaml
+fi
 
 # Use calicoctl to apply some data - this will require the CRDs to be online.  Repeat
 # until successful.

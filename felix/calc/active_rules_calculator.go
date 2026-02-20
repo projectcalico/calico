@@ -16,6 +16,7 @@ package calc
 
 import (
 	"reflect"
+	"slices"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -287,12 +288,7 @@ func policyForceProgrammed(policy *model.Policy) bool {
 	if policy == nil {
 		return false
 	}
-	for _, v := range policy.PerformanceHints {
-		if v == v3.PerfHintAssumeNeededOnEveryNode {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(policy.PerformanceHints, v3.PerfHintAssumeNeededOnEveryNode)
 }
 
 func (arc *ActiveRulesCalculator) updateStats() {
@@ -349,7 +345,7 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 	}
 }
 
-func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
+func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId any) {
 	polKey := selID.(model.PolicyKey)
 	policyWasActive := arc.policyIDToEndpointKeys.ContainsKey(polKey)
 	arc.policyIDToEndpointKeys.Put(selID, labelId)
@@ -373,7 +369,7 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 	}
 }
 
-func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
+func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId any) {
 	polKey := selID.(model.PolicyKey)
 	arc.policyIDToEndpointKeys.Discard(selID, labelId)
 	if !arc.policyIDToEndpointKeys.ContainsKey(selID) {

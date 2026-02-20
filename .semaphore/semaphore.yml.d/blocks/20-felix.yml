@@ -247,19 +247,19 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
-- name: "Felix: BPF program-loading check on 25.04 (nftables)"
+- name: "Felix: BPF program-loading check on 25.10 (nftables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
     jobs:
-      - name: "Felix: BPF program-loading check on 25.04"
+      - name: "Felix: BPF program-loading check on 25.10"
         execution_time_limit:
           minutes: 30
         env_vars:
           - name: FELIX_TEST_GROUP
-            value: "bpf-25.04-nft-no-fv-with-ut"
+            value: "bpf-25.10-nft-no-fv-with-ut"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
         commands:
@@ -273,19 +273,19 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
-- name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2 (nftables)"
+- name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
     jobs:
-      - name: "Felix: BPF tests on Ubuntu 25.04 with jitharden=2"
+      - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2"
         execution_time_limit:
           minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
-            value: "bpf-25.04-nft-with-ut-jitharden"
+            value: "bpf-25.10-nft-with-ut-jitharden"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
         commands:

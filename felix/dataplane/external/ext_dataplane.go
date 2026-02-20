@@ -91,7 +91,7 @@ type extDataplaneConn struct {
 	nextSeqNumber uint64
 }
 
-func (c *extDataplaneConn) RecvMessage() (msg interface{}, err error) {
+func (c *extDataplaneConn) RecvMessage() (msg any, err error) {
 	buf := make([]byte, 8)
 	_, err = io.ReadFull(c.fromDataplane, buf)
 	if err != nil {
@@ -133,7 +133,7 @@ func (c *extDataplaneConn) RecvMessage() (msg interface{}, err error) {
 	return
 }
 
-func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
+func (fc *extDataplaneConn) SendMessage(msg any) error {
 	log.Debugf("Writing msg (%v) to felix: %#v", fc.nextSeqNumber, msg)
 
 	envelope, err := WrapPayloadWithEnvelope(msg, fc.nextSeqNumber)
@@ -169,7 +169,7 @@ func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 	return nil
 }
 
-func WrapPayloadWithEnvelope(msg interface{}, seqNo uint64) (*proto.ToDataplane, error) {
+func WrapPayloadWithEnvelope(msg any, seqNo uint64) (*proto.ToDataplane, error) {
 	// Wrap the payload message in an envelope so that protobuf takes care of deserialising
 	// it as the correct type.
 	envelope := &proto.ToDataplane{

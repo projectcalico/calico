@@ -27,14 +27,14 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/labels"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var (
 	matchBlockAffinity = regexp.MustCompile(fmt.Sprintf("^/?calico/ipam/v2/(@|%s|%s)/([^/]+)/ipv./block/([^/]+)$", IPAMAffinityTypeHost, IPAMAffinityTypeVirtual))
-	typeBlockAff       = reflect.TypeOf(BlockAffinity{})
+	typeBlockAff       = reflect.TypeFor[BlockAffinity]()
 )
 
 type BlockAffinityState string
@@ -152,7 +152,23 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 	}
 }
 
-func EnsureBlockAffinityLabels(ba *libapiv3.BlockAffinity) {
+func EnsureBlockAffinityLabelsV3(ba *apiv3.BlockAffinity) {
+	if ba.Labels == nil {
+		ba.Labels = make(map[string]string)
+	}
+	// Hostnames can be longer than labels are allowed to be, so we hash it down.
+	ba.Labels[apiv3.LabelHostnameHash] = hashHostnameForLabel(ba.Spec.Node)
+	ba.Labels[apiv3.LabelAffinityType] = ba.Spec.Type
+	var ipVersion string
+	if strings.Contains(ba.Spec.CIDR, ":") {
+		ipVersion = "6"
+	} else {
+		ipVersion = "4"
+	}
+	ba.Labels[apiv3.LabelIPVersion] = ipVersion
+}
+
+func EnsureBlockAffinityLabels(ba *internalapi.BlockAffinity) {
 	if ba.Labels == nil {
 		ba.Labels = make(map[string]string)
 	}

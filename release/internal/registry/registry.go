@@ -24,3 +24,7 @@ var DefaultCalicoRegistries = []string{
 	"asia.gcr.io/projectcalico-org",
 	"us.gcr.io/projectcalico-org",
 }
+
+var DefaultHelmRegistries = []string{
+	"quay.io/calico/charts",
+}

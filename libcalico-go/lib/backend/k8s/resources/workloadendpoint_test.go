@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	k8sapi "k8s.io/api/core/v1"
@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -67,12 +67,12 @@ var _ = Describe("WorkloadEndpointClient", func() {
 
 				wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
 				Expect(err).ShouldNot(HaveOccurred())
-				wep := &libapiv3.WorkloadEndpoint{
+				wep := &internalapi.WorkloadEndpoint{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      wepName,
 						Namespace: "testNamespace",
 					},
-					Spec: libapiv3.WorkloadEndpointSpec{
+					Spec: internalapi.WorkloadEndpointSpec{
 						IPNetworks: []string{},
 					},
 				}
@@ -81,7 +81,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Key: model.ResourceKey{
 						Name:      wep.Name,
 						Namespace: wep.Namespace,
-						Kind:      libapiv3.KindWorkloadEndpoint,
+						Kind:      internalapi.KindWorkloadEndpoint,
 					},
 					Value: wep,
 				}
@@ -117,12 +117,12 @@ var _ = Describe("WorkloadEndpointClient", func() {
 
 				wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
 				Expect(err).ShouldNot(HaveOccurred())
-				wep := &libapiv3.WorkloadEndpoint{
+				wep := &internalapi.WorkloadEndpoint{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      wepName,
 						Namespace: "testNamespace",
 					},
-					Spec: libapiv3.WorkloadEndpointSpec{
+					Spec: internalapi.WorkloadEndpointSpec{
 						ContainerID: "abcde12345",
 						IPNetworks:  []string{"192.168.91.117/32", "192.168.91.118/32"},
 					},
@@ -132,7 +132,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Key: model.ResourceKey{
 						Name:      wep.Name,
 						Namespace: wep.Namespace,
-						Kind:      libapiv3.KindWorkloadEndpoint,
+						Kind:      internalapi.KindWorkloadEndpoint,
 					},
 					Value: wep,
 				}
@@ -174,12 +174,12 @@ var _ = Describe("WorkloadEndpointClient", func() {
 
 				wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
 				Expect(err).ShouldNot(HaveOccurred())
-				wep := &libapiv3.WorkloadEndpoint{
+				wep := &internalapi.WorkloadEndpoint{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      wepName,
 						Namespace: "testNamespace",
 					},
-					Spec: libapiv3.WorkloadEndpointSpec{
+					Spec: internalapi.WorkloadEndpointSpec{
 						IPNetworks: []string{},
 					},
 				}
@@ -188,7 +188,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Key: model.ResourceKey{
 						Name:      wep.Name,
 						Namespace: wep.Namespace,
-						Kind:      libapiv3.KindWorkloadEndpoint,
+						Kind:      internalapi.KindWorkloadEndpoint,
 					},
 					Value: wep,
 				}
@@ -224,12 +224,12 @@ var _ = Describe("WorkloadEndpointClient", func() {
 
 				wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
 				Expect(err).ShouldNot(HaveOccurred())
-				wep := &libapiv3.WorkloadEndpoint{
+				wep := &internalapi.WorkloadEndpoint{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      wepName,
 						Namespace: "testNamespace",
 					},
-					Spec: libapiv3.WorkloadEndpointSpec{
+					Spec: internalapi.WorkloadEndpointSpec{
 						IPNetworks:  []string{"192.168.91.117/32", "192.168.91.118/32"},
 						ContainerID: "abcd1234",
 					},
@@ -239,7 +239,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Key: model.ResourceKey{
 						Name:      wep.Name,
 						Namespace: wep.Namespace,
-						Kind:      libapiv3.KindWorkloadEndpoint,
+						Kind:      internalapi.KindWorkloadEndpoint,
 					},
 					Value: wep,
 				}
@@ -293,7 +293,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				key := model.ResourceKey{
 					Name:      wepName,
 					Namespace: "testNamespace",
-					Kind:      libapiv3.KindWorkloadEndpoint,
+					Kind:      internalapi.KindWorkloadEndpoint,
 				}
 				wep, err := wepClient.Get(context.Background(), key, "")
 				Expect(err).NotTo(HaveOccurred())
@@ -354,13 +354,13 @@ var _ = Describe("WorkloadEndpointClient", func() {
 			wep, err := wepClient.Get(context.Background(), model.ResourceKey{
 				Name:      wepName,
 				Namespace: "testNamespace",
-				Kind:      libapiv3.KindWorkloadEndpoint,
+				Kind:      internalapi.KindWorkloadEndpoint,
 			}, "")
 
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(wep.Value).Should(Equal(&libapiv3.WorkloadEndpoint{
+			Expect(wep.Value).Should(Equal(&internalapi.WorkloadEndpoint{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       libapiv3.KindWorkloadEndpoint,
+					Kind:       internalapi.KindWorkloadEndpoint,
 					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
@@ -371,7 +371,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 						apiv3.LabelOrchestrator: "k8s",
 					},
 				},
-				Spec: libapiv3.WorkloadEndpointSpec{
+				Spec: internalapi.WorkloadEndpointSpec{
 					Orchestrator:  "k8s",
 					Node:          "test-node",
 					Pod:           "simplePod",
@@ -404,11 +404,11 @@ var _ = Describe("WorkloadEndpointClient", func() {
 						model.ResourceListOptions{
 							Name:      "test--node-k8s-simplePod-eth0",
 							Namespace: "testNamespace",
-							Kind:      libapiv3.KindWorkloadEndpoint,
+							Kind:      internalapi.KindWorkloadEndpoint,
 						},
-						[]*libapiv3.WorkloadEndpoint{{
+						[]*internalapi.WorkloadEndpoint{{
 							TypeMeta: metav1.TypeMeta{
-								Kind:       libapiv3.KindWorkloadEndpoint,
+								Kind:       internalapi.KindWorkloadEndpoint,
 								APIVersion: apiv3.GroupVersionCurrent,
 							},
 							ObjectMeta: metav1.ObjectMeta{
@@ -419,7 +419,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 									apiv3.LabelOrchestrator: "k8s",
 								},
 							},
-							Spec: libapiv3.WorkloadEndpointSpec{
+							Spec: internalapi.WorkloadEndpointSpec{
 								Orchestrator:  "k8s",
 								Node:          "test-node",
 								Pod:           "simplePod",
@@ -448,9 +448,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 						model.ResourceListOptions{
 							Name:      "test--node-k8s-simplePod-ens4",
 							Namespace: "testNamespace",
-							Kind:      libapiv3.KindWorkloadEndpoint,
+							Kind:      internalapi.KindWorkloadEndpoint,
 						},
-						[]*libapiv3.WorkloadEndpoint(nil),
+						[]*internalapi.WorkloadEndpoint(nil),
 					)
 				})
 			})
@@ -472,11 +472,11 @@ var _ = Describe("WorkloadEndpointClient", func() {
 						model.ResourceListOptions{
 							Name:      "test--node-k8s-simplePod",
 							Namespace: "testNamespace",
-							Kind:      libapiv3.KindWorkloadEndpoint,
+							Kind:      internalapi.KindWorkloadEndpoint,
 						},
-						[]*libapiv3.WorkloadEndpoint{{
+						[]*internalapi.WorkloadEndpoint{{
 							TypeMeta: metav1.TypeMeta{
-								Kind:       libapiv3.KindWorkloadEndpoint,
+								Kind:       internalapi.KindWorkloadEndpoint,
 								APIVersion: apiv3.GroupVersionCurrent,
 							},
 							ObjectMeta: metav1.ObjectMeta{
@@ -487,7 +487,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 									apiv3.LabelOrchestrator: "k8s",
 								},
 							},
-							Spec: libapiv3.WorkloadEndpointSpec{
+							Spec: internalapi.WorkloadEndpointSpec{
 								Orchestrator:  "k8s",
 								Node:          "test-node",
 								Pod:           "simplePod",
@@ -519,14 +519,14 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					_, err := wepClient.List(context.Background(), model.ResourceListOptions{
 						Name:      "test--node-k8s",
 						Namespace: "testNamespace",
-						Kind:      libapiv3.KindWorkloadEndpoint,
+						Kind:      internalapi.KindWorkloadEndpoint,
 					}, "")
 
 					Expect(err).Should(Equal(cerrors.ErrorResourceDoesNotExist{
 						Identifier: model.ResourceListOptions{
 							Name:      "test--node-k8s",
 							Namespace: "testNamespace",
-							Kind:      libapiv3.KindWorkloadEndpoint,
+							Kind:      internalapi.KindWorkloadEndpoint,
 						},
 						Err: errors.New("malformed WorkloadEndpoint name - unable to determine Pod name"),
 					}))
@@ -564,12 +564,12 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					},
 					model.ResourceListOptions{
 						Namespace: "testNamespace",
-						Kind:      libapiv3.KindWorkloadEndpoint,
+						Kind:      internalapi.KindWorkloadEndpoint,
 					},
-					[]*libapiv3.WorkloadEndpoint{
+					[]*internalapi.WorkloadEndpoint{
 						{
 							TypeMeta: metav1.TypeMeta{
-								Kind:       libapiv3.KindWorkloadEndpoint,
+								Kind:       internalapi.KindWorkloadEndpoint,
 								APIVersion: apiv3.GroupVersionCurrent,
 							},
 							ObjectMeta: metav1.ObjectMeta{
@@ -580,7 +580,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 									apiv3.LabelOrchestrator: "k8s",
 								},
 							},
-							Spec: libapiv3.WorkloadEndpointSpec{
+							Spec: internalapi.WorkloadEndpointSpec{
 								Orchestrator:  "k8s",
 								Node:          "test-node",
 								Pod:           "simplePod",
@@ -592,7 +592,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 						},
 						{
 							TypeMeta: metav1.TypeMeta{
-								Kind:       libapiv3.KindWorkloadEndpoint,
+								Kind:       internalapi.KindWorkloadEndpoint,
 								APIVersion: apiv3.GroupVersionCurrent,
 							},
 							ObjectMeta: metav1.ObjectMeta{
@@ -603,7 +603,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 									apiv3.LabelOrchestrator: "k8s",
 								},
 							},
-							Spec: libapiv3.WorkloadEndpointSpec{
+							Spec: internalapi.WorkloadEndpointSpec{
 								Orchestrator:  "k8s",
 								Node:          "test-node",
 								Pod:           "simplePod2",
@@ -634,9 +634,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 							PodIP: "192.168.91.113",
 						},
 					},
-				}, []*libapiv3.WorkloadEndpoint{{
+				}, []*internalapi.WorkloadEndpoint{{
 					TypeMeta: metav1.TypeMeta{
-						Kind:       libapiv3.KindWorkloadEndpoint,
+						Kind:       internalapi.KindWorkloadEndpoint,
 						APIVersion: apiv3.GroupVersionCurrent,
 					},
 					ObjectMeta: metav1.ObjectMeta{
@@ -647,7 +647,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 							apiv3.LabelOrchestrator: "k8s",
 						},
 					},
-					Spec: libapiv3.WorkloadEndpointSpec{
+					Spec: internalapi.WorkloadEndpointSpec{
 						Orchestrator:  "k8s",
 						Node:          "test-node",
 						Pod:           "simplePod",
@@ -698,10 +698,10 @@ var _ = Describe("WorkloadEndpointClient", func() {
 							PodIP: "192.168.91.115",
 						},
 					},
-				}, []*libapiv3.WorkloadEndpoint{
+				}, []*internalapi.WorkloadEndpoint{
 					{
 						TypeMeta: metav1.TypeMeta{
-							Kind:       libapiv3.KindWorkloadEndpoint,
+							Kind:       internalapi.KindWorkloadEndpoint,
 							APIVersion: apiv3.GroupVersionCurrent,
 						},
 						ObjectMeta: metav1.ObjectMeta{
@@ -712,7 +712,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 								apiv3.LabelOrchestrator: "k8s",
 							},
 						},
-						Spec: libapiv3.WorkloadEndpointSpec{
+						Spec: internalapi.WorkloadEndpointSpec{
 							Orchestrator:  "k8s",
 							Node:          "test-node",
 							Pod:           "termPod",
@@ -724,7 +724,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					},
 					{
 						TypeMeta: metav1.TypeMeta{
-							Kind:       libapiv3.KindWorkloadEndpoint,
+							Kind:       internalapi.KindWorkloadEndpoint,
 							APIVersion: apiv3.GroupVersionCurrent,
 						},
 						ObjectMeta: metav1.ObjectMeta{
@@ -735,7 +735,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 								apiv3.LabelOrchestrator: "k8s",
 							},
 						},
-						Spec: libapiv3.WorkloadEndpointSpec{
+						Spec: internalapi.WorkloadEndpointSpec{
 							Orchestrator:  "k8s",
 							Node:          "test-node",
 							Pod:           "termPod2",
@@ -751,22 +751,22 @@ var _ = Describe("WorkloadEndpointClient", func() {
 	})
 })
 
-func testListWorkloadEndpoints(pods []runtime.Object, listOptions model.ResourceListOptions, expectedWEPs []*libapiv3.WorkloadEndpoint) {
+func testListWorkloadEndpoints(pods []runtime.Object, listOptions model.ResourceListOptions, expectedWEPs []*internalapi.WorkloadEndpoint) {
 	k8sClient := fake.NewSimpleClientset(pods...)
 	wepClient := resources.NewWorkloadEndpointClient(k8sClient).(*resources.WorkloadEndpointClient)
 
 	kvps, err := wepClient.List(context.Background(), listOptions, "")
 	Expect(err).ShouldNot(HaveOccurred())
 
-	var weps []*libapiv3.WorkloadEndpoint
+	var weps []*internalapi.WorkloadEndpoint
 	for _, kvp := range kvps.KVPairs {
-		weps = append(weps, kvp.Value.(*libapiv3.WorkloadEndpoint))
+		weps = append(weps, kvp.Value.(*internalapi.WorkloadEndpoint))
 	}
 
 	Expect(weps).Should(Equal(expectedWEPs))
 }
 
-func testWatchWorkloadEndpoints(pods []*k8sapi.Pod, expectedWEPs []*libapiv3.WorkloadEndpoint) {
+func testWatchWorkloadEndpoints(pods []*k8sapi.Pod, expectedWEPs []*internalapi.WorkloadEndpoint) {
 	k8sClient := fake.NewSimpleClientset()
 	ctx := context.Background()
 
@@ -780,9 +780,7 @@ func testWatchWorkloadEndpoints(pods []*k8sapi.Pod, expectedWEPs []*libapiv3.Wor
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer GinkgoRecover()
 		i := 0
 
@@ -800,7 +798,7 @@ func testWatchWorkloadEndpoints(pods []*k8sapi.Pod, expectedWEPs []*libapiv3.Wor
 				Fail(fmt.Sprintf("expected exactly %d events before timer expired, received %d", len(expectedWEPs), i))
 			}
 		}
-	}()
+	})
 
 	for _, pod := range pods {
 		_, err = k8sClient.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})

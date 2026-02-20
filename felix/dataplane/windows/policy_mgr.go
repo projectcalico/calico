@@ -36,7 +36,7 @@ func newPolicyManager(policysets policysets.PolicySetsDataplane) *policyManager 
 
 // OnUpdate is called by the main dataplane driver loop during the first phase. It processes
 // specific types of updates from the datastore.
-func (m *policyManager) OnUpdate(msg interface{}) {
+func (m *policyManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
 		if model.KindIsStaged(msg.Id.Kind) {

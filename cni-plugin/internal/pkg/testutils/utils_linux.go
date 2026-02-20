@@ -35,7 +35,7 @@ import (
 	"github.com/google/uuid"
 	je "github.com/juju/errors"
 	"github.com/mcuadros/go-version"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega/gexec"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"

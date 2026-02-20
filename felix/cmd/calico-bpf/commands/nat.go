@@ -124,7 +124,7 @@ func dump(cmd *cobra.Command) error {
 	return nil
 }
 
-type printfFn func(format string, i ...interface{})
+type printfFn func(format string, i ...any)
 
 func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf printfFn,
 	natMap map[FK]nat.FrontendValue, back map[nat.BackendKey]BV) {
@@ -154,12 +154,8 @@ func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf
 			if !ok {
 				printf("is missing\n")
 			} else {
-				fmtStr := "%s:%d\n"
-				// Use "[]" with IPv6 addresses
-				if bv.Addr().To4() == nil {
-					fmtStr = "[%s]:%d\n"
-				}
-				printf(fmtStr, bv.Addr(), bv.Port())
+				ep := net.JoinHostPort(bv.Addr().String(), fmt.Sprint(bv.Port()))
+				printf("%s\n", ep)
 			}
 		}
 	}

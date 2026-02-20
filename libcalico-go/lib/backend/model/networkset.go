@@ -29,7 +29,7 @@ import (
 
 var (
 	matchNetworkSet = regexp.MustCompile("^/?calico/v1/netset/([^/]+)$")
-	typeNetworkSet  = reflect.TypeOf(NetworkSet{})
+	typeNetworkSet  = reflect.TypeFor[NetworkSet]()
 )
 
 type NetworkSetKey struct {
@@ -105,6 +105,6 @@ func (options NetworkSetListOptions) KeyFromDefaultPath(path string) Key {
 
 type NetworkSet struct {
 	Nets       []net.IPNet      `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
-	Labels     uniquelabels.Map `json:"labels,omitempty" validate:"omitempty,labels"`
+	Labels     uniquelabels.Map `json:"labels" validate:"omitempty,labels"`
 	ProfileIDs []string         `json:"profile_ids,omitempty" validate:"omitempty,dive,name"`
 }

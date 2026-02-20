@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -51,7 +51,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars["FELIX_BPFPolicyDebugEnabled"] = "true"
 		tc, calicoClient = infrastructure.StartNNodeTopology(1, opts, infra)
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			wIP := fmt.Sprintf("10.65.0.%d", i+2)
 			w[i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", "tcp")
 			w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
@@ -102,7 +102,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 
 		By("generating packets and checking the counter")
 		numberOfpackets := 10
-		for i := 0; i < numberOfpackets; i++ {
+		for i := range numberOfpackets {
 			_, err := w[0].RunCmd("pktgen", w[0].IP, w[1].IP, "udp", "--port-dst", "8055", "--ip-id", strconv.Itoa(i+1))
 			Expect(err).NotTo(HaveOccurred())
 			_, err = w[0].RunCmd("pktgen", w[0].IP, tc.Felixes[0].IP, "udp", "--port-dst", "8055")
@@ -138,7 +138,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			_, err := w[1].RunCmd("pktgen", w[1].IP, w[0].IP, "udp", "--port-src", "8055", "--port-dst", "8055")
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -170,7 +170,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			_, err := w[1].RunCmd("pktgen", w[1].IP, w[0].IP, "udp", "--port-src", "8055", "--port-dst", "8055")
 			Expect(err).NotTo(HaveOccurred())
 		}

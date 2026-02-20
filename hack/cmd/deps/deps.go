@@ -132,6 +132,14 @@ var nonGoDeps = map[string][]string{
 		// BPF programs.
 		"/felix/bpf-apache",
 		"/felix/bpf-gpl",
+		// Root-level Makefile is used to build operator and other images,
+		// used by the STs.
+		"/Makefile",
+	},
+
+	"e2e": {
+		// Root-level Makefile is used to build the operator and other images.
+		"/Makefile",
 	},
 
 	// Whisker is not a go project so we list the whole thing.
@@ -260,8 +268,8 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	// also run typha, api server, etc.  Add inclusions for those.
 	for _, otherPkg := range otherPkgs {
 		const nonGoPrefix = "non-go:"
-		if strings.HasPrefix(otherPkg, nonGoPrefix) {
-			inclusions.Add(strings.TrimPrefix(otherPkg, nonGoPrefix))
+		if after, ok := strings.CutPrefix(otherPkg, nonGoPrefix); ok {
+			inclusions.Add(after)
 			continue
 		}
 
@@ -674,16 +682,16 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 func indentBlocks(blocks []templateData) []templateData {
 	for i, block := range blocks {
 		lines := strings.Split(block.content, "\n")
-		indented := ""
+		var indented strings.Builder
 		for _, line := range lines {
 			if line == "" {
 				// Ignore blank lines (and in particular, the empty "line" that
 				// Split() creates if the content ends with a newline.
 				continue
 			}
-			indented += "  " + line + "\n"
+			indented.WriteString("  " + line + "\n")
 		}
-		blocks[i].content = indented
+		blocks[i].content = indented.String()
 	}
 	return blocks
 }

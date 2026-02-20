@@ -1,0 +1,41 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: ipreservations.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: IPReservation
+    listKind: IPReservationList
+    plural: ipreservations
+    singular: ipreservation
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                reservedCIDRs:
+                  format: cidr
+                  items:
+                    type: string
+                  type: array
+                  x-kubernetes-list-type: set
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true

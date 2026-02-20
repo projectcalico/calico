@@ -87,7 +87,7 @@ func benchmarkNReaders(b *testing.B, numReaders int, writeTo bool) {
 			out []byte
 			err error
 		}, numReaders)
-		for i := 0; i < numReaders; i++ {
+		for i := range numReaders {
 			wg.Add(1)
 			if writeTo {
 				// Use the WriteTo() method, which avoids copies.
@@ -117,10 +117,7 @@ func benchmarkNReaders(b *testing.B, numReaders int, writeTo bool) {
 
 		remainingData := data
 		for len(remainingData) > 0 {
-			wrSize := 1000
-			if wrSize > len(remainingData) {
-				wrSize = len(remainingData)
-			}
+			wrSize := min(1000, len(remainingData))
 			n, err := mrb.Write(remainingData[:wrSize])
 			if err != nil {
 				b.Fatalf("Write returned unexpected error: %v", err)

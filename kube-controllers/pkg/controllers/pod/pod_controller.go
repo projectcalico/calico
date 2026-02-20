@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -39,7 +39,7 @@ import (
 
 type WorkloadEndpointCache struct {
 	sync.RWMutex
-	m map[string]libapi.WorkloadEndpoint
+	m map[string]internalapi.WorkloadEndpoint
 }
 
 // podController implements the Controller interface for managing Kubernetes pods
@@ -58,7 +58,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 	podConverter := converter.NewPodConverter()
 
 	// Function returns map of key->WorkloadEndpointData from the Calico datastore.
-	listFunc := func() (map[string]interface{}, error) {
+	listFunc := func() (map[string]any, error) {
 		// Get all workloadEndpoints for kubernetes orchestrator from the Calico datastore
 		workloadEndpoints, err := c.WorkloadEndpoints().List(ctx, options.ListOptions{})
 		if err != nil {
@@ -66,7 +66,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 		}
 
 		// Iterate through and collect data from workload endpoints that we care about.
-		m := make(map[string]interface{})
+		m := make(map[string]any)
 		for _, wep := range workloadEndpoints.Items {
 			// We only care about Kubernetes workload endpoints.
 			if wep.Spec.Orchestrator == api.OrchestratorKubernetes {
@@ -83,7 +83,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 
 	cacheArgs := rcache.ResourceCacheArgs{
 		ListFunc:   listFunc,
-		ObjectType: reflect.TypeOf(converter.WorkloadEndpointData{}),
+		ObjectType: reflect.TypeFor[converter.WorkloadEndpointData](),
 
 		// We don't handle the cases where data is missing in the cache
 		// or in the datastore, so disable those events in the reconciler. They
@@ -95,12 +95,12 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 	}
 
 	resourceCache := rcache.NewResourceCache(cacheArgs)
-	workloadEndpointCache := WorkloadEndpointCache{m: make(map[string]libapi.WorkloadEndpoint)}
+	workloadEndpointCache := WorkloadEndpointCache{m: make(map[string]internalapi.WorkloadEndpoint)}
 
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
 	if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 			if err != nil {
 				log.WithError(err).Error("Failed to generate key")
@@ -135,7 +135,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 				resourceCache.Prime(k, wepData)
 			}
 		},
-		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+		UpdateFunc: func(oldObj any, newObj any) {
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
 			if err != nil {
 				log.WithError(err).Error("Failed to generate key")
@@ -168,7 +168,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 			}
 
 		},
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			if err != nil {
 				log.WithError(err).Error("Failed to generate key")

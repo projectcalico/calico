@@ -47,7 +47,7 @@ func ConvertStagedKubernetesNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (mod
 	}, nil
 }
 
-func ConvertStagedKubernetesNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
+func ConvertStagedKubernetesNetworkPolicyV3ToV1Value(val any) (any, error) {
 	staged, ok := val.(*apiv3.StagedKubernetesNetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid StagedKubernetesNetworkPolicy resource value")

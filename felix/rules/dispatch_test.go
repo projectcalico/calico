@@ -17,8 +17,7 @@ package rules_test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/generictables"
@@ -66,7 +65,7 @@ var _ = Describe("Dispatch chains", func() {
 		var epMarkMapper EndpointMarkMapper
 		var renderer RuleRenderer
 		BeforeEach(func() {
-			renderer = NewRenderer(rrConfigNormal)
+			renderer = NewRenderer(rrConfigNormal, false)
 			epMarkMapper = NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint)
 		})
 

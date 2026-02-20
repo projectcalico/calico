@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -123,7 +123,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
 	}
 
-	syncChan := make(chan interface{}, 1)
+	syncChan := make(chan any, 1)
 
 	// Create a rate limited that compares two distinct limiters and uses the max. This rate limiter is used
 	// only to control the retry rate of whole IPAM sync executions.
@@ -159,7 +159,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		podDeletionChan:  make(chan *v1.Pod, utils.BatchUpdateSize),
 
 		// Buffered channels for potentially bursty channels.
-		syncerUpdates: make(chan interface{}, utils.BatchUpdateSize),
+		syncerUpdates: make(chan any, utils.BatchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
@@ -198,10 +198,10 @@ type IPAMController struct {
 	kubernetesNodesByCalicoName map[string]string
 
 	// syncChan triggers processing in response to an update.
-	syncChan chan interface{}
+	syncChan chan any
 
 	// For update / deletion events from the syncer.
-	syncerUpdates chan interface{}
+	syncerUpdates chan any
 
 	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
@@ -270,7 +270,7 @@ func (c *IPAMController) onUpdate(update bapi.Update) {
 	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case libapiv3.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
+		case internalapi.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
@@ -370,7 +370,7 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 
 // handleUpdate fans out proper handling of the update depending on the
 // information in the update.
-func (c *IPAMController) handleUpdate(upd interface{}) {
+func (c *IPAMController) handleUpdate(upd any) {
 	switch upd := upd.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = upd
@@ -384,7 +384,7 @@ func (c *IPAMController) handleUpdate(upd interface{}) {
 		switch upd.Key.(type) {
 		case model.ResourceKey:
 			switch upd.Key.(model.ResourceKey).Kind {
-			case libapiv3.KindNode:
+			case internalapi.KindNode:
 				c.handleNodeUpdate(upd)
 				return
 			case apiv3.KindIPPool:
@@ -414,7 +414,7 @@ func (c *IPAMController) handleBlockUpdate(kvp model.KVPair) {
 // handleNodeUpdate wraps up the logic to execute when receiving a node update.
 func (c *IPAMController) handleNodeUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
-		n := kvp.Value.(*libapiv3.Node)
+		n := kvp.Value.(*internalapi.Node)
 		kn, err := getK8sNodeName(*n)
 		if err != nil {
 			log.WithError(err).Info("Unable to get corresponding k8s node name")
@@ -439,7 +439,10 @@ func (c *IPAMController) handleNodeUpdate(kvp model.KVPair) {
 }
 
 func (c *IPAMController) handlePoolUpdate(kvp model.KVPair) {
-	if kvp.Value != nil {
+	if kvp.Value != nil && kvp.Value.(*apiv3.IPPool).GetDeletionTimestamp() == nil {
+		// If the deletion timestamp is set, treat this as a deletion. There may be a window between
+		// deletion of the IP pool, and finalization completing. During this time, we treat the pool
+		// as though it has been deleted.
 		pool := kvp.Value.(*apiv3.IPPool)
 		c.onPoolUpdated(pool)
 	} else {
@@ -470,8 +473,8 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	// release their affinity if needed.
 	var n string
 	if b.Affinity != nil {
-		if strings.HasPrefix(*b.Affinity, "host:") {
-			n = strings.TrimPrefix(*b.Affinity, "host:")
+		if after, ok := strings.CutPrefix(*b.Affinity, "host:"); ok {
+			n = after
 			c.nodesByBlock[blockCIDR] = n
 			if _, ok := c.blocksByNode[n]; !ok {
 				c.blocksByNode[n] = map[string]bool{}
@@ -1020,7 +1023,7 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 			logc.Warn("Pod converted to nil WorkloadEndpoint")
 			continue
 		}
-		wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
+		wep := kvp.Value.(*internalapi.WorkloadEndpoint)
 		for _, nw := range wep.Spec.IPNetworks {
 			ip, _, err := net.ParseCIDR(nw)
 			if err != nil {

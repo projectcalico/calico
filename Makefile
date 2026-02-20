@@ -56,6 +56,9 @@ go-vet:
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
+update-x-libraries:
+	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
+
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
@@ -64,6 +67,9 @@ check-images-availability: bin/crane bin/yq
 
 check-language:
 	./hack/check-language.sh
+
+check-ginkgo-v2:
+	./hack/check-ginkgo-v2.sh
 
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
@@ -100,10 +106,11 @@ get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERA
 	@echo ==============================================================================================================
 	@echo === Pulling new operator CRDs from $(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) branch $(OPERATOR_BRANCH) ===
 	@echo ==============================================================================================================
-	cd ./charts/tigera-operator/crds/ && \
+	cd ./charts/crd.projectcalico.org.v1/templates/ && \
 	for file in operator.tigera.io_*.yaml; do \
 		echo "downloading $$file from operator repo"; \
 		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; \
+		cp $${file} ../../projectcalico.org.v3/templates/$${file}; \
 	done
 	$(MAKE) fix-changed
 
@@ -129,11 +136,31 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules $(dir $@)"; \
 	} > $@
 
-# Build the tigera-operator helm chart.
-chart: bin/tigera-operator-$(GIT_VERSION).tgz
-bin/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+CHART_DESTINATION ?= ./bin
+
+# Build helm charts.
+chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz \
+			 $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz \
+			 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+
+$(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/tigera-operator \
-	--destination ./bin/ \
+	--destination $(CHART_DESTINATION)/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
+
+$(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/crd.projectcalico.org.v1/ -type f)
+	mkdir -p $(CHART_DESTINATION)
+	bin/helm package ./charts/crd.projectcalico.org.v1/ \
+	--destination $(CHART_DESTINATION)/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
+
+$(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/projectcalico.org.v3/ -type f)
+	mkdir -p $(CHART_DESTINATION)
+	bin/helm package ./charts/projectcalico.org.v3/ \
+	--destination $(CHART_DESTINATION)/ \
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
 
@@ -173,7 +200,7 @@ e2e-test-clusternetworkpolicy:
 
 ## Run the general e2e tests against a pre-existing kind cluster.
 e2e-run-test:
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test --ginkgo.focus=$(E2E_FOCUS) --ginkgo.skip=$(E2E_SKIP)
 
 ## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
 e2e-run-cnp-test:
@@ -205,7 +232,7 @@ release: release/bin/release
 	@release/bin/release release build
 
 # Publish an already built release.
-release-publish: release/bin/release bin/ghr
+release-publish: release/bin/release bin/ghr bin/helm
 	@release/bin/release release publish
 
 release-public: bin/gh release/bin/release
@@ -217,7 +244,7 @@ create-release-branch: release/bin/release
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r release/pkg
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.

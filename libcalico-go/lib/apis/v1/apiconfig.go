@@ -26,8 +26,8 @@ const (
 // CalicoAPIConfig contains the connection information for a Calico CalicoAPIConfig resource
 type CalicoAPIConfig struct {
 	unversioned.TypeMetadata
-	Metadata CalicoAPIConfigMetadata `json:"metadata,omitempty"`
-	Spec     CalicoAPIConfigSpec     `json:"spec,omitempty"`
+	Metadata CalicoAPIConfigMetadata `json:"metadata"`
+	Spec     CalicoAPIConfigSpec     `json:"spec"`
 }
 
 // CalicoAPIConfigMetadata contains the metadata for a Calico CalicoAPIConfig resource.

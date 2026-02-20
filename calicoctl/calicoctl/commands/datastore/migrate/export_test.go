@@ -17,7 +17,7 @@ package migrate
 import (
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -85,6 +85,7 @@ var _ = Describe("Etcd to KDD Migration Export handling", func() {
 		allPlurals.Discard("caliconodestatuses")
 		// Handled by IPAM migration code.
 		allPlurals.Discard("ipamconfigs")
+		allPlurals.Discard("ipamconfigurations")
 		allPlurals.Discard("blockaffinities")
 
 		for resource := range allPlurals.All() {

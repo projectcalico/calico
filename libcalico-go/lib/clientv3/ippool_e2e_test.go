@@ -19,15 +19,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	backendapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -1065,7 +1064,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 
 			// Create test node
 			host := "host-test"
-			_, err = c.Nodes().Create(ctx, &libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
+			_, err = c.Nodes().Create(ctx, &internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Allocate an IP so that a block is allocated
@@ -1141,7 +1140,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 			Expect(err).NotTo(HaveOccurred())
 
 			host := "host-test"
-			_, err = c.Nodes().Create(ctx, &libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
+			_, err = c.Nodes().Create(ctx, &internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Allocate an IP so that a block is allocated

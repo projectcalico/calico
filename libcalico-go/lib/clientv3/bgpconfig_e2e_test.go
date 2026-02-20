@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -110,6 +109,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 		ServiceLoadBalancerAggregation: &enabled,
 		NodeMeshMaxRestartTime:         &restartTime,
 	}
+
 	specInfo := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:              "Info",
 		ServiceLoadBalancerAggregation: &enabled,
@@ -142,7 +142,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				Spec:       specInfo,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
+			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"), outError.Error())
 
 			By("Creating a new BGPConfiguration with name1/specInfo")
 			res1, outError := c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{

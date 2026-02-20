@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ const (
 	SubProgNewFlow
 	SubProgIPFrag
 	SubProgMaglev
+	SubProgTCPRst
 	SubProgTCMainDebug
 
 	SubProgXDPMain    = SubProgTCMain
@@ -63,6 +64,7 @@ var tcSubProgNames = []string{
 	"calico_tc_skb_new_flow_entrypoint",
 	"calico_tc_skb_ipv4_frag",
 	"calico_tc_maglev",
+	"calico_tc_skb_send_tcp_rst",
 }
 
 var xdpSubProgNames = []string{
@@ -73,6 +75,64 @@ var xdpSubProgNames = []string{
 	"calico_xdp_drop",
 }
 
+// GetSubProgNames returns the sub-program names for the given hook type.
+// This is useful for testing and other scenarios where you need to know
+// which sub-programs are defined for a particular hook.
+// Returns a copy of the internal array to prevent modifications.
+// For XDP hooks, returns XDP program names. For TC hooks (Ingress/Egress),
+// returns TC program names.
+func GetSubProgNames(hookType Hook) []string {
+	if hookType == XDP {
+		return append([]string{}, xdpSubProgNames...)
+	}
+	// Both Ingress and Egress use TC programs
+	return append([]string{}, tcSubProgNames...)
+}
+
+// SubProgInfo holds information about a sub-program that should be loaded.
+type SubProgInfo struct {
+	Index   int     // Index in the sub-program names array
+	Name    string  // Name of the sub-program
+	SubProg SubProg // SubProg identifier
+}
+
+// GetApplicableSubProgs returns the list of sub-programs that should be loaded
+// for the given AttachType. It filters out empty entries and conditionally
+// excludes programs based on the AttachType's characteristics.
+// The skipIPDefrag parameter allows skipping IP defrag even if the AttachType
+// normally supports it (used when loading fails and retrying without IP defrag).
+func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
+	var result []SubProgInfo
+
+	subs := GetSubProgNames(at.Hook)
+
+	for idx, subprog := range subs {
+		if subprog == "" {
+			continue
+		}
+
+		if SubProg(idx) == SubProgTCHostCtConflict && !at.hasHostConflictProg() {
+			continue
+		}
+
+		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
+			continue
+		}
+
+		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
+			continue
+		}
+
+		result = append(result, SubProgInfo{
+			Index:   idx,
+			Name:    subprog,
+			SubProg: SubProg(idx),
+		})
+	}
+
+	return result
+}
+
 // Layout maps sub-programs of an object to their location in the ProgramsMap
 type Layout map[SubProg]int
 
@@ -80,9 +140,7 @@ func MergeLayouts(layouts ...Layout) Layout {
 	ret := make(Layout)
 
 	for _, l := range layouts {
-		for k, v := range l {
-			ret[k] = v
-		}
+		maps.Copy(ret, l)
 	}
 
 	return ret
@@ -304,41 +362,25 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefr
 	l := make(Layout)
 
 	offset := 0
-	subs := tcSubProgNames
-	if at.Hook == XDP {
-		subs = xdpSubProgNames
-	} else if at.LogLevel == "debug" {
+	// Debug programs for TC hooks use a different offset
+	if at.Hook != XDP && at.LogLevel == "debug" {
 		offset = int(SubProgTCMainDebug)
 	}
 
-	for idx, subprog := range subs {
-		if subprog == "" {
-			continue
-		}
+	applicableProgs := GetApplicableSubProgs(at, skipIPDefrag)
 
-		if SubProg(idx) == SubProgTCHostCtConflict && !at.hasHostConflictProg() {
-			continue
-		}
-
-		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
-			continue
-		}
-
-		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
-			continue
-		}
-
+	for _, progInfo := range applicableProgs {
 		pmIdx := pm.allocIdx()
-		err := obj.UpdateJumpMap(mapName, subprog, pmIdx)
+		err := obj.UpdateJumpMap(mapName, progInfo.Name, pmIdx)
 		if err != nil {
 			return nil, fmt.Errorf("error updating programs map with %s/%s at %d: %w",
-				ObjectFile(at), subprog, pmIdx, err)
+				ObjectFile(at), progInfo.Name, pmIdx, err)
 		}
-		log.Debugf("generic file %s prog %s loaded at %d", ObjectFile(at), subprog, pmIdx)
+		log.Debugf("generic file %s prog %s loaded at %d", ObjectFile(at), progInfo.Name, pmIdx)
 
-		i := idx + offset
-		if SubProg(idx) == SubProgTCPolicy {
-			i = idx // Debug programs share the same policy
+		i := progInfo.Index + offset
+		if progInfo.SubProg == SubProgTCPolicy {
+			i = progInfo.Index // Debug programs share the same policy
 		}
 		l[SubProg(i)] = pmIdx
 	}
