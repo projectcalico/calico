@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -371,6 +372,7 @@ func CreateClientAndSyncer(cfg apiconfig.KubeConfig) (*KubeClient, *cb, api.Sync
 var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
 		c   *KubeClient
+		cs  *kubernetes.Clientset
 		cli ctrlclient.Client
 		ctx context.Context
 	)
@@ -383,10 +385,10 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		var err error
 		c, _, _ = CreateClientAndSyncer(cfg.Spec.KubeConfig)
 
-		// Create a controller-runtime client.
-		// Create a client for interacting with CRDs directly.
-		config, _, err := CreateKubernetesClientset(&cfg.Spec)
+		// Create a controller-runtime client for interacting with CRDs directly.
+		config, clientset, err := CreateKubernetesClientset(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
+		cs = clientset
 
 		// The CRD client needs to be configured with the correct scheme based on the
 		// API version of the underlying CRDs.
@@ -397,9 +399,50 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 	})
 
 	It("should properly read / write owner references", func() {
-		podUID := types.UID("3b5bff7a-501d-429f-b581-8954440883f4")
-		npUID := types.UID("19e9c0f4-501d-429f-b581-8954440883f4")
-		npUIDv1, err := conversion.ConvertUID(npUID)
+		// Create owner objects so the Kubernetes garbage collector doesn't delete the
+		// dependent NetworkPolicy. With v3 CRDs, owner references are stored as real
+		// Kubernetes ownerReferences (not in an annotation), so the GC will act on them
+		// and delete the NetworkPolicy if the owners don't exist.
+		pod, err := cs.CoreV1().Pods("default").Create(ctx, &k8sapi.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-owner-ref-pod",
+			},
+			Spec: k8sapi.PodSpec{
+				Containers: []k8sapi.Container{
+					{Name: "pause", Image: "busybox", Command: []string{"sleep", "infinity"}},
+				},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			_ = cs.CoreV1().Pods("default").Delete(ctx, pod.Name, metav1.DeleteOptions{})
+		}()
+		podUID := pod.UID
+
+		nsKVP := model.KVPair{
+			Key: model.ResourceKey{
+				Name:      "test-owner-ref-networkset",
+				Namespace: "default",
+				Kind:      apiv3.KindNetworkSet,
+			},
+			Value: &apiv3.NetworkSet{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindNetworkSet,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-owner-ref-networkset",
+					Namespace: "default",
+				},
+			},
+		}
+		nsResult, err := c.Create(ctx, &nsKVP)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			_, _ = c.Delete(ctx, nsKVP.Key, "")
+		}()
+		nsUID := nsResult.Value.(*apiv3.NetworkSet).UID
+		nsUIDv1, err := conversion.ConvertUID(nsUID)
 		Expect(err).NotTo(HaveOccurred())
 
 		name := "test-owner-ref-policy"
@@ -430,7 +473,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 							APIVersion: apiv3.GroupVersionCurrent,
 							Kind:       apiv3.KindNetworkSet,
 							Name:       "test-owner-ref-networkset",
-							UID:        npUID,
+							UID:        nsUID,
 						},
 					},
 				},
@@ -445,11 +488,9 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		Expect(kvp2.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences).To(Equal(kvp.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences))
 
 		// Query the underlying custom resource and check that the UID is as expected.
-		// The Pod UID should be unchanged, but the NetworkPolicy UID behavior varies based on API group:
+		// The Pod UID should be unchanged, but the NetworkSet UID behavior varies based on API group:
 		// - crd.projectcalico.org: UID belonging to the Calico resource has been translated.
 		// - projectcalico.org/v3: UID belonging to the Calico resource is unchanged.
-		// Do this in a retry since the controller runtime client is cache driven and may not have
-		// received the update yet.
 		crd := &apiv3.NetworkPolicy{}
 		Eventually(func() error {
 			return cli.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, crd)
@@ -473,11 +514,11 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 		if v3CRD {
 			// UID should be unchanged if we're in v3 CRD mode.
-			Expect(meta.OwnerReferences[1].UID).To(Equal(npUID))
+			Expect(meta.OwnerReferences[1].UID).To(Equal(nsUID))
 			Expect(meta.OwnerReferences[1].APIVersion).To(Equal("projectcalico.org/v3"))
 		} else {
-			// Compare the OwnerReferences. pod UID should be unchanged, but np UID should be translated.
-			Expect(meta.OwnerReferences[1].UID).To(Equal(npUIDv1))
+			// Compare the OwnerReferences. pod UID should be unchanged, but NetworkSet UID should be translated.
+			Expect(meta.OwnerReferences[1].UID).To(Equal(nsUIDv1))
 			Expect(meta.OwnerReferences[1].APIVersion).To(Equal("crd.projectcalico.org/v1"))
 		}
 	})
