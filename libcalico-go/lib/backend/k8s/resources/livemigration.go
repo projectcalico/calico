@@ -173,11 +173,9 @@ func convertVMIMToLiveMigrationSpec(vmim *kubevirtv1.VirtualMachineInstanceMigra
 		vmim.Spec.VMIName, string(vmim.UID),
 	)
 	return internalapi.LiveMigrationSpec{
-		Source: &internalapi.WorkloadEndpointIdentifier{
-			NamespacedName: &types.NamespacedName{
-				Name:      vmim.Status.MigrationState.SourcePod,
-				Namespace: vmim.Namespace,
-			},
+		Source: &types.NamespacedName{
+			Name:      vmim.Status.MigrationState.SourcePod,
+			Namespace: vmim.Namespace,
 		},
 		Destination: &internalapi.WorkloadEndpointIdentifier{
 			Selector: &selector,

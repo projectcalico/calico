@@ -884,7 +884,7 @@ func schema_libcalico_go_lib_apis_internalapi_LiveMigrationSpec(ref common.Refer
 					"Source": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Source identifies the WorkloadEndpoint that this live migration operation is moving from.",
-							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.WorkloadEndpointIdentifier"),
+							Ref:         ref("k8s.io/apimachinery/pkg/types.NamespacedName"),
 						},
 					},
 					"Destination": {
@@ -898,7 +898,7 @@ func schema_libcalico_go_lib_apis_internalapi_LiveMigrationSpec(ref common.Refer
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.WorkloadEndpointIdentifier"},
+			"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.WorkloadEndpointIdentifier", "k8s.io/apimachinery/pkg/types.NamespacedName"},
 	}
 }
 

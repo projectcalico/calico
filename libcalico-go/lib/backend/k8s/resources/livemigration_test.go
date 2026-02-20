@@ -92,7 +92,7 @@ var _ = Describe("LiveMigrationClient", func() {
 			Expect(*lm.Spec.Destination.Selector).To(Equal(
 				"kubevirt.io/vmi-name == 'my-vmi' && kubevirt.io/migrationJobUID == 'uid-123'",
 			))
-			Expect(*lm.Spec.Source.NamespacedName).To(Equal(types.NamespacedName{
+			Expect(*lm.Spec.Source).To(Equal(types.NamespacedName{
 				Name:      "source-pod-abc",
 				Namespace: "test-ns",
 			}))
@@ -166,12 +166,12 @@ var _ = Describe("LiveMigrationClient", func() {
 			lm1 := kvps.KVPairs[0].Value.(*internalapi.LiveMigration)
 			Expect(lm1.Name).To(Equal("vmim-1"))
 			Expect(lm1.Namespace).To(Equal("test-ns"))
-			Expect(lm1.Spec.Source.NamespacedName.Name).To(Equal("src-pod-1"))
+			Expect(lm1.Spec.Source.Name).To(Equal("src-pod-1"))
 
 			lm2 := kvps.KVPairs[1].Value.(*internalapi.LiveMigration)
 			Expect(lm2.Name).To(Equal("vmim-2"))
 			Expect(lm2.Namespace).To(Equal("test-ns"))
-			Expect(lm2.Spec.Source.NamespacedName.Name).To(Equal("src-pod-2"))
+			Expect(lm2.Spec.Source.Name).To(Equal("src-pod-2"))
 		})
 
 		It("lists VMIMs across all namespaces", func() {
@@ -245,7 +245,7 @@ var _ = Describe("LiveMigrationClient", func() {
 					lm := event.New.Value.(*internalapi.LiveMigration)
 					Expect(lm.Name).To(Equal("vmim-watch-1"))
 					Expect(lm.Namespace).To(Equal("test-ns"))
-					Expect(lm.Spec.Source.NamespacedName.Name).To(Equal("src-pod-w"))
+					Expect(lm.Spec.Source.Name).To(Equal("src-pod-w"))
 				case <-timer.C:
 					Fail(fmt.Sprintf("expected a watch event before timer expired"))
 				}

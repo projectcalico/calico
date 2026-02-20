@@ -484,8 +484,8 @@ func (in *LiveMigrationSpec) DeepCopyInto(out *LiveMigrationSpec) {
 	*out = *in
 	if in.Source != nil {
 		in, out := &in.Source, &out.Source
-		*out = new(WorkloadEndpointIdentifier)
-		(*in).DeepCopyInto(*out)
+		*out = new(types.NamespacedName)
+		**out = **in
 	}
 	if in.Destination != nil {
 		in, out := &in.Destination, &out.Destination

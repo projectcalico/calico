@@ -40,7 +40,7 @@ type LiveMigration struct {
 // LiveMigrationSpec contains the specification for a LiveMigration resource.
 type LiveMigrationSpec struct {
 	// Source identifies the WorkloadEndpoint that this live migration operation is moving from.
-	Source *WorkloadEndpointIdentifier
+	Source *types.NamespacedName
 
 	// Destination identifies the WorkloadEndpoint that this live migration operation is moving
 	// to.

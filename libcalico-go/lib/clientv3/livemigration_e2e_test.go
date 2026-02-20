@@ -40,22 +40,18 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 	destSelector1 := "kubevirt.io/vmi-name == 'vmi-1'"
 	destSelector2 := "kubevirt.io/vmi-name == 'vmi-2'"
 	spec1 := internalapi.LiveMigrationSpec{
-		Source: &internalapi.WorkloadEndpointIdentifier{
-			NamespacedName: &types.NamespacedName{
-				Namespace: "ns-src-1",
-				Name:      "wep-src-1",
-			},
+		Source: &types.NamespacedName{
+			Namespace: "ns-src-1",
+			Name:      "wep-src-1",
 		},
 		Destination: &internalapi.WorkloadEndpointIdentifier{
 			Selector: &destSelector1,
 		},
 	}
 	spec2 := internalapi.LiveMigrationSpec{
-		Source: &internalapi.WorkloadEndpointIdentifier{
-			NamespacedName: &types.NamespacedName{
-				Namespace: "ns-src-2",
-				Name:      "wep-src-2",
-			},
+		Source: &types.NamespacedName{
+			Namespace: "ns-src-2",
+			Name:      "wep-src-2",
 		},
 		Destination: &internalapi.WorkloadEndpointIdentifier{
 			Selector: &destSelector2,
