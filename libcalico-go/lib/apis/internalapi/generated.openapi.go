@@ -129,6 +129,21 @@ func schema_libcalico_go_lib_apis_internalapi_AllocationAttribute(ref common.Ref
 							},
 						},
 					},
+					"alternate": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
