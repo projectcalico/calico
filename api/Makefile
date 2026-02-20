@@ -166,7 +166,7 @@ ut-validation: setup-envtest
 		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
 		-e KUBEBUILDER_ASSETS=/envtest \
 		$(CALICO_BUILD) \
-		sh -c 'go test -count=1 ./test/validation/...'
+		sh -c 'go test -count=1 ./...'
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files
