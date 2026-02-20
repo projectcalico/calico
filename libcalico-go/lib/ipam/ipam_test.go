@@ -735,10 +735,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		sentinelIP := net.ParseIP("10.0.0.1")
 
 		It("Should return ResourceNotExist on no valid pool", func() {
-			attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
+			allocAttr, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
-			Expect(attrs).To(BeEmpty())
-			Expect(handle).To(BeNil())
+			Expect(allocAttr).To(BeNil())
 		})
 
 		Context("With valid pool", func() {
@@ -759,10 +758,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			It("Should return ResourceNotExist error on no block", func() {
-				attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
+				allocAttr, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
-				Expect(attrs).To(BeEmpty())
-				Expect(handle).To(BeNil())
+				Expect(allocAttr).To(BeNil())
 			})
 
 			It("Should return correct attributes on allocated ip", func() {
@@ -780,11 +778,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				err := ic.AssignIP(context.Background(), args)
 				Expect(err).NotTo(HaveOccurred())
 
-				attrs, returnedHandle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
+				allocAttr, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(attrs).To(Equal(ipAttr))
-				Expect(returnedHandle).NotTo(BeNil())
-				Expect(*returnedHandle).To(Equal(handle))
+				Expect(allocAttr).NotTo(BeNil())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(ipAttr))
+				Expect(allocAttr.HandleID).NotTo(BeNil())
+				Expect(*allocAttr.HandleID).To(Equal(handle))
 			})
 
 			It("Should return ResourceNotExist on unallocated ip", func() {
@@ -802,10 +801,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(err).NotTo(HaveOccurred())
 
 				// Block exists but sentinel ip is not allocated.
-				attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
+				allocAttr, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
-				Expect(attrs).To(BeEmpty())
-				Expect(handle).To(BeNil())
+				Expect(allocAttr).To(BeNil())
 			})
 		})
 	})
@@ -1148,10 +1146,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		It("Should be able to re-assign the sentinel IP", func() {
 			assignIPutil(ic, sentinelIP, host)
-			attrs, handle, attrErr := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
+			allocAttr, attrErr := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 			Expect(attrErr).NotTo(HaveOccurred())
-			Expect(attrs).To(BeEmpty())
-			Expect(handle).To(BeNil())
+			Expect(allocAttr).NotTo(BeNil())
+			Expect(allocAttr.ActiveOwnerAttrs).To(BeEmpty())
+			Expect(allocAttr.HandleID).To(BeNil())
 		})
 
 		It("Should fail to assign any more addresses", func() {
@@ -1301,6 +1300,1243 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			By("Querying the IP by handle and expecting none", func() {
 				_, err := ic.IPsByHandle(ctx, handle)
 				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("IP assignment with MaxAllocPerIPVersion", func() {
+			var hostname string
+			var handle string
+
+			BeforeEach(func() {
+				hostname = "test-host-maxalloc"
+				handle = "vmi-handle-maxalloc"
+
+				Expect(bc.Clean()).To(Succeed())
+				deleteAllPools()
+				applyPool("10.0.0.0/24", true, "")
+				applyPool("fd80:24e2:f998:72d6::/120", true, "")
+				applyNode(bc, kc, hostname, nil)
+			})
+
+			It("should reuse existing IPs when MaxAllocPerIPVersion is reached on a second AutoAssign with the same handle", func() {
+				ctx := context.Background()
+
+				var firstV4IP, firstV6IP cnet.IPNet
+
+				By("first AutoAssign: allocating 1 IPv4 + 1 IPv6 with MaxAllocPerIPVersion=1", func() {
+					args := AutoAssignArgs{
+						Num4:                 1,
+						Num6:                 1,
+						HandleID:             &handle,
+						Hostname:             hostname,
+						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						MaxAllocPerIPVersion: 1,
+					}
+					v4ia, v6ia, err := ic.AutoAssign(ctx, args)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(v4ia).ToNot(BeNil())
+					Expect(v4ia.IPs).To(HaveLen(1))
+					Expect(v6ia).ToNot(BeNil())
+					Expect(v6ia.IPs).To(HaveLen(1))
+
+					firstV4IP = v4ia.IPs[0]
+					firstV6IP = v6ia.IPs[0]
+				})
+
+				By("verifying handle has exactly 2 IPs (1 IPv4 + 1 IPv6)", func() {
+					ips, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ips).To(HaveLen(2))
+				})
+
+				By("second AutoAssign with the same handle and MaxAllocPerIPVersion=1: should reuse existing IPs", func() {
+					args := AutoAssignArgs{
+						Num4:                 1,
+						Num6:                 1,
+						HandleID:             &handle,
+						Hostname:             hostname,
+						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						MaxAllocPerIPVersion: 1,
+					}
+					v4ia, v6ia, err := ic.AutoAssign(ctx, args)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(v4ia).ToNot(BeNil())
+					Expect(v4ia.IPs).To(HaveLen(1))
+					Expect(v6ia).ToNot(BeNil())
+					Expect(v6ia.IPs).To(HaveLen(1))
+
+					// The reused IPs should be identical to the first allocation
+					Expect(v4ia.IPs[0].IP.Equal(firstV4IP.IP)).To(BeTrue(),
+						fmt.Sprintf("Expected reused IPv4 %s to match first allocation %s", v4ia.IPs[0].IP, firstV4IP.IP))
+					Expect(v6ia.IPs[0].IP.Equal(firstV6IP.IP)).To(BeTrue(),
+						fmt.Sprintf("Expected reused IPv6 %s to match first allocation %s", v6ia.IPs[0].IP, firstV6IP.IP))
+				})
+
+				By("verifying handle still has exactly 2 IPs after reuse (no duplicates)", func() {
+					ips, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ips).To(HaveLen(2))
+				})
+
+				By("releasing the IPs by handle", func() {
+					err := ic.ReleaseByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				By("verifying handle is empty after release", func() {
+					_, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).To(HaveOccurred())
+				})
+			})
+
+			It("should reuse existing IP when MaxAllocPerIPVersion is reached on a second AssignIP with the same handle", func() {
+				ctx := context.Background()
+
+				requestedIP := cnet.MustParseIP("10.0.0.1")
+
+				By("first AssignIP: assigning a specific IP with MaxAllocPerIPVersion=1", func() {
+					err := ic.AssignIP(ctx, AssignIPArgs{
+						IP:                   requestedIP,
+						HandleID:             &handle,
+						Hostname:             hostname,
+						Attrs:                map[string]string{"pod": "source-pod"},
+						MaxAllocPerIPVersion: 1,
+					})
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				By("verifying handle has exactly 1 IP", func() {
+					ips, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ips).To(HaveLen(1))
+					Expect(ips[0].IP.Equal(requestedIP.IP)).To(BeTrue())
+				})
+
+				By("second AssignIP with the same handle, same IP, and MaxAllocPerIPVersion=1: should succeed (idempotent)", func() {
+					err := ic.AssignIP(ctx, AssignIPArgs{
+						IP:                   requestedIP,
+						HandleID:             &handle,
+						Hostname:             hostname,
+						Attrs:                map[string]string{"pod": "target-pod"},
+						MaxAllocPerIPVersion: 1,
+					})
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				By("verifying handle still has exactly 1 IP after idempotent assign", func() {
+					ips, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ips).To(HaveLen(1))
+					Expect(ips[0].IP.Equal(requestedIP.IP)).To(BeTrue())
+				})
+
+				By("second AssignIP with the same handle but a DIFFERENT IP and MaxAllocPerIPVersion=1: should fail", func() {
+					differentIP := cnet.MustParseIP("10.0.0.2")
+					err := ic.AssignIP(ctx, AssignIPArgs{
+						IP:                   differentIP,
+						HandleID:             &handle,
+						Hostname:             hostname,
+						Attrs:                map[string]string{"pod": "target-pod"},
+						MaxAllocPerIPVersion: 1,
+					})
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("already has IP(s) allocated"))
+				})
+
+				By("releasing the IP by handle", func() {
+					err := ic.ReleaseByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			It("should allow two AutoAssigns and reuse on third when MaxAllocPerIPVersion is 2", func() {
+				ctx := context.Background()
+
+				var firstV4IP, secondV4IP cnet.IPNet
+
+				By("first AutoAssign: allocating 1 IPv4 with MaxAllocPerIPVersion=2", func() {
+					args := AutoAssignArgs{
+						Num4:                 1,
+						HandleID:             &handle,
+						Hostname:             hostname,
+						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						MaxAllocPerIPVersion: 2,
+					}
+					v4ia, _, err := ic.AutoAssign(ctx, args)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(v4ia).ToNot(BeNil())
+					Expect(v4ia.IPs).To(HaveLen(1))
+
+					firstV4IP = v4ia.IPs[0]
+				})
+
+				By("verifying handle has 1 IP", func() {
+					ips, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ips).To(HaveLen(1))
+				})
+
+				By("second AutoAssign: allocating another IPv4 with MaxAllocPerIPVersion=2 - should succeed", func() {
+					args := AutoAssignArgs{
+						Num4:                 1,
+						HandleID:             &handle,
+						Hostname:             hostname,
+						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						MaxAllocPerIPVersion: 2,
+					}
+					v4ia, _, err := ic.AutoAssign(ctx, args)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(v4ia).ToNot(BeNil())
+					Expect(v4ia.IPs).To(HaveLen(1))
+
+					secondV4IP = v4ia.IPs[0]
+					// Second IP should be different from the first
+					Expect(secondV4IP.IP.Equal(firstV4IP.IP)).To(BeFalse(),
+						fmt.Sprintf("Second IPv4 %s should differ from first %s", secondV4IP.IP, firstV4IP.IP))
+				})
+
+				By("verifying handle has 2 IPs", func() {
+					ips, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ips).To(HaveLen(2))
+				})
+
+				By("third AutoAssign with MaxAllocPerIPVersion=2: should hit limit and reuse existing IPs", func() {
+					args := AutoAssignArgs{
+						Num4:                 1,
+						HandleID:             &handle,
+						Hostname:             hostname,
+						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						MaxAllocPerIPVersion: 2,
+					}
+					v4ia, _, err := ic.AutoAssign(ctx, args)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(v4ia).ToNot(BeNil())
+					Expect(v4ia.IPs).To(HaveLen(2), "Should return both existing IPs on reuse")
+
+					// Returned IPs should contain both previously allocated IPs
+					returnedIPs := []net.IP{v4ia.IPs[0].IP, v4ia.IPs[1].IP}
+					Expect(returnedIPs).To(ContainElement(firstV4IP.IP))
+					Expect(returnedIPs).To(ContainElement(secondV4IP.IP))
+				})
+
+				By("verifying handle still has exactly 2 IPs (no duplicates)", func() {
+					ips, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ips).To(HaveLen(2))
+				})
+
+				By("releasing the IPs by handle", func() {
+					err := ic.ReleaseByHandle(ctx, handle)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				By("verifying handle is empty after release", func() {
+					_, err := ic.IPsByHandle(ctx, handle)
+					Expect(err).To(HaveOccurred())
+				})
+			})
+		})
+
+		Context("SetOwnerAttributes", func() {
+			var hostname string
+			var handle string
+			var allocatedIP cnet.IP
+
+			BeforeEach(func() {
+				hostname = "test-host-owner-attrs"
+				handle = "vmi-handle-owner-attrs"
+
+				Expect(bc.Clean()).To(Succeed())
+				deleteAllPools()
+				applyPool("10.0.0.0/24", true, "")
+				applyNode(bc, kc, hostname, nil)
+
+				// Allocate an IP so we have something to set owner attributes on.
+				ctx := context.Background()
+				args := AutoAssignArgs{
+					Num4:        1,
+					HandleID:    &handle,
+					Hostname:    hostname,
+					IntendedUse: v3.IPPoolAllowedUseWorkload,
+				}
+				v4ia, _, err := ic.AutoAssign(ctx, args)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v4ia).ToNot(BeNil())
+				Expect(v4ia.IPs).To(HaveLen(1))
+				allocatedIP = cnet.IP{IP: v4ia.IPs[0].IP}
+			})
+
+			It("should set ActiveOwnerAttrs on a freshly allocated IP", func() {
+				ctx := context.Background()
+
+				activeAttrs := map[string]string{
+					AttributePod:       "pod-a",
+					AttributeNamespace: "ns-a",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: activeAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify via GetAssignmentAttributes
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(activeAttrs))
+				Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+			})
+
+			It("should set AlternateOwnerAttrs on a freshly allocated IP", func() {
+				ctx := context.Background()
+
+				altAttrs := map[string]string{
+					AttributePod:       "pod-b",
+					AttributeNamespace: "ns-b",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					AlternateOwnerAttrs: altAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(BeNil())
+				Expect(allocAttr.AlternateOwnerAttrs).To(Equal(altAttrs))
+			})
+
+			It("should set both ActiveOwnerAttrs and AlternateOwnerAttrs atomically", func() {
+				ctx := context.Background()
+
+				activeAttrs := map[string]string{
+					AttributePod:       "pod-source",
+					AttributeNamespace: "ns-source",
+				}
+				altAttrs := map[string]string{
+					AttributePod:       "pod-target",
+					AttributeNamespace: "ns-target",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs:    activeAttrs,
+					AlternateOwnerAttrs: altAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(activeAttrs))
+				Expect(allocAttr.AlternateOwnerAttrs).To(Equal(altAttrs))
+			})
+
+			It("should clear ActiveOwnerAttrs with ClearActiveOwner", func() {
+				ctx := context.Background()
+
+				// First set active owner
+				activeAttrs := map[string]string{
+					AttributePod:       "pod-a",
+					AttributeNamespace: "ns-a",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: activeAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify it was set
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(activeAttrs))
+
+				// Now clear it
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearActiveOwner: true,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err = ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(BeNil())
+			})
+
+			It("should clear AlternateOwnerAttrs with ClearAlternateOwner", func() {
+				ctx := context.Background()
+
+				// First set alternate owner
+				altAttrs := map[string]string{
+					AttributePod:       "pod-b",
+					AttributeNamespace: "ns-b",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					AlternateOwnerAttrs: altAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify it was set
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.AlternateOwnerAttrs).To(Equal(altAttrs))
+
+				// Now clear it
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearAlternateOwner: true,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err = ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+			})
+
+			It("should clear both owners simultaneously", func() {
+				ctx := context.Background()
+
+				// Set both owners
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-a",
+						AttributeNamespace: "ns-a",
+					},
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "pod-b",
+						AttributeNamespace: "ns-b",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Clear both
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearActiveOwner:    true,
+					ClearAlternateOwner: true,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(BeNil())
+				Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+			})
+
+			It("should overwrite existing ActiveOwnerAttrs with new values", func() {
+				ctx := context.Background()
+
+				// Set initial active owner
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-old",
+						AttributeNamespace: "ns-old",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Overwrite with new owner
+				newAttrs := map[string]string{
+					AttributePod:       "pod-new",
+					AttributeNamespace: "ns-new",
+				}
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: newAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(newAttrs))
+			})
+
+			It("should not modify AlternateOwnerAttrs when only ActiveOwnerAttrs is updated", func() {
+				ctx := context.Background()
+
+				// Set both owners
+				altAttrs := map[string]string{
+					AttributePod:       "pod-alt",
+					AttributeNamespace: "ns-alt",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-active",
+						AttributeNamespace: "ns-active",
+					},
+					AlternateOwnerAttrs: altAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Update only active owner
+				newActiveAttrs := map[string]string{
+					AttributePod:       "pod-active-new",
+					AttributeNamespace: "ns-active-new",
+				}
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: newActiveAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Alternate should remain unchanged
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(newActiveAttrs))
+				Expect(allocAttr.AlternateOwnerAttrs).To(Equal(altAttrs))
+			})
+
+			It("should not modify ActiveOwnerAttrs when only AlternateOwnerAttrs is updated", func() {
+				ctx := context.Background()
+
+				// Set both owners
+				activeAttrs := map[string]string{
+					AttributePod:       "pod-active",
+					AttributeNamespace: "ns-active",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: activeAttrs,
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "pod-alt",
+						AttributeNamespace: "ns-alt",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Update only alternate owner
+				newAltAttrs := map[string]string{
+					AttributePod:       "pod-alt-new",
+					AttributeNamespace: "ns-alt-new",
+				}
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					AlternateOwnerAttrs: newAltAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Active should remain unchanged
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(activeAttrs))
+				Expect(allocAttr.AlternateOwnerAttrs).To(Equal(newAltAttrs))
+			})
+
+			// --- Precondition tests ---
+
+			It("should succeed when ExpectedActiveOwner matches the current active owner", func() {
+				ctx := context.Background()
+
+				activeAttrs := map[string]string{
+					AttributePod:       "pod-source",
+					AttributeNamespace: "ns-source",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: activeAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Now clear active with precondition that the current owner matches
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearActiveOwner: true,
+				}, &OwnerAttributePreconditions{
+					ExpectedActiveOwner: &AttributeOwner{
+						Namespace: "ns-source",
+						Name:      "pod-source",
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(BeNil())
+			})
+
+			It("should fail when ExpectedActiveOwner does not match the current active owner", func() {
+				ctx := context.Background()
+
+				activeAttrs := map[string]string{
+					AttributePod:       "pod-source",
+					AttributeNamespace: "ns-source",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: activeAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Try to clear with wrong precondition
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearActiveOwner: true,
+				}, &OwnerAttributePreconditions{
+					ExpectedActiveOwner: &AttributeOwner{
+						Namespace: "ns-wrong",
+						Name:      "pod-wrong",
+					},
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceUpdateConflict{}))
+
+				// Active should remain unchanged
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(activeAttrs))
+			})
+
+			It("should succeed when ExpectedAlternateOwner matches the current alternate owner", func() {
+				ctx := context.Background()
+
+				altAttrs := map[string]string{
+					AttributePod:       "pod-target",
+					AttributeNamespace: "ns-target",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					AlternateOwnerAttrs: altAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Clear alternate with correct precondition
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearAlternateOwner: true,
+				}, &OwnerAttributePreconditions{
+					ExpectedAlternateOwner: &AttributeOwner{
+						Namespace: "ns-target",
+						Name:      "pod-target",
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+			})
+
+			It("should fail when ExpectedAlternateOwner does not match the current alternate owner", func() {
+				ctx := context.Background()
+
+				altAttrs := map[string]string{
+					AttributePod:       "pod-target",
+					AttributeNamespace: "ns-target",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					AlternateOwnerAttrs: altAttrs,
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Try to clear with wrong precondition
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearAlternateOwner: true,
+				}, &OwnerAttributePreconditions{
+					ExpectedAlternateOwner: &AttributeOwner{
+						Namespace: "ns-wrong",
+						Name:      "pod-wrong",
+					},
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceUpdateConflict{}))
+
+				// Alternate should remain unchanged
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.AlternateOwnerAttrs).To(Equal(altAttrs))
+			})
+
+			It("should succeed when VerifyActiveOwnerEmpty is true and active owner is empty", func() {
+				ctx := context.Background()
+
+				// Active owner is empty on fresh allocation - set it with VerifyActiveOwnerEmpty precondition
+				activeAttrs := map[string]string{
+					AttributePod:       "pod-new",
+					AttributeNamespace: "ns-new",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: activeAttrs,
+				}, &OwnerAttributePreconditions{
+					VerifyActiveOwnerEmpty: true,
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(Equal(activeAttrs))
+			})
+
+			It("should fail when VerifyActiveOwnerEmpty is true but active owner is not empty", func() {
+				ctx := context.Background()
+
+				// Set active owner first
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-existing",
+						AttributeNamespace: "ns-existing",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Now try to set with VerifyActiveOwnerEmpty - should fail
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-new",
+						AttributeNamespace: "ns-new",
+					},
+				}, &OwnerAttributePreconditions{
+					VerifyActiveOwnerEmpty: true,
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceUpdateConflict{}))
+			})
+
+			It("should succeed when VerifyAlternateOwnerEmpty is true and alternate owner is empty", func() {
+				ctx := context.Background()
+
+				altAttrs := map[string]string{
+					AttributePod:       "pod-target",
+					AttributeNamespace: "ns-target",
+				}
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					AlternateOwnerAttrs: altAttrs,
+				}, &OwnerAttributePreconditions{
+					VerifyAlternateOwnerEmpty: true,
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.AlternateOwnerAttrs).To(Equal(altAttrs))
+			})
+
+			It("should fail when VerifyAlternateOwnerEmpty is true but alternate owner is not empty", func() {
+				ctx := context.Background()
+
+				// Set alternate owner first
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "pod-existing",
+						AttributeNamespace: "ns-existing",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Now try to set with VerifyAlternateOwnerEmpty - should fail
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "pod-new",
+						AttributeNamespace: "ns-new",
+					},
+				}, &OwnerAttributePreconditions{
+					VerifyAlternateOwnerEmpty: true,
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceUpdateConflict{}))
+			})
+
+			// --- Validation error tests ---
+
+			It("should fail when updates is nil", func() {
+				ctx := context.Background()
+
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, nil, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("updates cannot be nil"))
+			})
+
+			It("should fail when ClearActiveOwner and ActiveOwnerAttrs are both set", func() {
+				ctx := context.Background()
+
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearActiveOwner: true,
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-a",
+						AttributeNamespace: "ns-a",
+					},
+				}, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("mutually exclusive"))
+			})
+
+			It("should fail when ClearAlternateOwner and AlternateOwnerAttrs are both set", func() {
+				ctx := context.Background()
+
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearAlternateOwner: true,
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "pod-b",
+						AttributeNamespace: "ns-b",
+					},
+				}, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("mutually exclusive"))
+			})
+
+			It("should fail when ExpectedActiveOwner and VerifyActiveOwnerEmpty are both set", func() {
+				ctx := context.Background()
+
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearActiveOwner: true,
+				}, &OwnerAttributePreconditions{
+					ExpectedActiveOwner: &AttributeOwner{
+						Namespace: "ns-a",
+						Name:      "pod-a",
+					},
+					VerifyActiveOwnerEmpty: true,
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("mutually exclusive"))
+			})
+
+			It("should fail when ExpectedAlternateOwner and VerifyAlternateOwnerEmpty are both set", func() {
+				ctx := context.Background()
+
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearAlternateOwner: true,
+				}, &OwnerAttributePreconditions{
+					ExpectedAlternateOwner: &AttributeOwner{
+						Namespace: "ns-b",
+						Name:      "pod-b",
+					},
+					VerifyAlternateOwnerEmpty: true,
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("mutually exclusive"))
+			})
+
+			// --- Handle mismatch and unallocated IP tests ---
+
+			It("should fail when the handle does not match the allocation", func() {
+				ctx := context.Background()
+
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, "wrong-handle", &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-a",
+						AttributeNamespace: "ns-a",
+					},
+				}, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not assigned to handle"))
+			})
+
+			It("should fail when the IP is not allocated", func() {
+				ctx := context.Background()
+
+				unallocatedIP := cnet.IP{IP: net.ParseIP("10.0.0.200")}
+				err := ic.SetOwnerAttributes(ctx, unallocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-a",
+						AttributeNamespace: "ns-a",
+					},
+				}, nil)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should fail when the IP is not in any pool", func() {
+				ctx := context.Background()
+
+				outOfPoolIP := cnet.IP{IP: net.ParseIP("192.168.1.1")}
+				err := ic.SetOwnerAttributes(ctx, outOfPoolIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-a",
+						AttributeNamespace: "ns-a",
+					},
+				}, nil)
+				Expect(err).To(HaveOccurred())
+			})
+
+			// --- Live migration simulation test ---
+
+			It("should simulate a live migration owner swap: set active, add alternate, clear active, clear alternate", func() {
+				ctx := context.Background()
+
+				By("setting the source pod as active owner", func() {
+					err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+						ActiveOwnerAttrs: map[string]string{
+							AttributePod:       "virt-launcher-source",
+							AttributeNamespace: "vm-namespace",
+						},
+					}, nil)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				By("verifying source is active, no alternate", func() {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-source"))
+					Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+				})
+
+				By("target pod arrives: set alternate owner with VerifyAlternateOwnerEmpty precondition", func() {
+					err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+						AlternateOwnerAttrs: map[string]string{
+							AttributePod:       "virt-launcher-target",
+							AttributeNamespace: "vm-namespace",
+						},
+					}, &OwnerAttributePreconditions{
+						VerifyAlternateOwnerEmpty: true,
+					})
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				By("verifying both owners are set", func() {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-source"))
+					Expect(allocAttr.AlternateOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
+				})
+
+				By("source pod is deleted: clear active owner with ExpectedActiveOwner precondition", func() {
+					err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+						ClearActiveOwner: true,
+					}, &OwnerAttributePreconditions{
+						ExpectedActiveOwner: &AttributeOwner{
+							Namespace: "vm-namespace",
+							Name:      "virt-launcher-source",
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				By("verifying only alternate remains", func() {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs).To(BeNil())
+					Expect(allocAttr.AlternateOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
+				})
+
+				By("migration completes: promote target to active and clear alternate atomically", func() {
+					err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+						ActiveOwnerAttrs: map[string]string{
+							AttributePod:       "virt-launcher-target",
+							AttributeNamespace: "vm-namespace",
+						},
+						ClearAlternateOwner: true,
+					}, &OwnerAttributePreconditions{
+						VerifyActiveOwnerEmpty: true,
+						ExpectedAlternateOwner: &AttributeOwner{
+							Namespace: "vm-namespace",
+							Name:      "virt-launcher-target",
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				By("verifying final state: target is active, no alternate", func() {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
+					Expect(allocAttr.ActiveOwnerAttrs[AttributeNamespace]).To(Equal("vm-namespace"))
+					Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+				})
+			})
+
+			// --- Precondition with both active and alternate verification ---
+
+			It("should support preconditions on both active and alternate owners simultaneously", func() {
+				ctx := context.Background()
+
+				// Set both owners
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-active",
+						AttributeNamespace: "ns-active",
+					},
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "pod-alt",
+						AttributeNamespace: "ns-alt",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Clear both with preconditions on both - should succeed
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearActiveOwner:    true,
+					ClearAlternateOwner: true,
+				}, &OwnerAttributePreconditions{
+					ExpectedActiveOwner: &AttributeOwner{
+						Namespace: "ns-active",
+						Name:      "pod-active",
+					},
+					ExpectedAlternateOwner: &AttributeOwner{
+						Namespace: "ns-alt",
+						Name:      "pod-alt",
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs).To(BeNil())
+				Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+			})
+
+			It("should fail when active precondition passes but alternate precondition fails", func() {
+				ctx := context.Background()
+
+				// Set both owners
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-active",
+						AttributeNamespace: "ns-active",
+					},
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "pod-alt",
+						AttributeNamespace: "ns-alt",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Active precondition is correct, alternate is wrong
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ClearActiveOwner:    true,
+					ClearAlternateOwner: true,
+				}, &OwnerAttributePreconditions{
+					ExpectedActiveOwner: &AttributeOwner{
+						Namespace: "ns-active",
+						Name:      "pod-active",
+					},
+					ExpectedAlternateOwner: &AttributeOwner{
+						Namespace: "ns-wrong",
+						Name:      "pod-wrong",
+					},
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceUpdateConflict{}))
+
+				// Both owners should remain unchanged (atomic - active was not cleared either)
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("pod-active"))
+				Expect(allocAttr.AlternateOwnerAttrs[AttributePod]).To(Equal("pod-alt"))
+			})
+
+			// --- No-op test ---
+
+			It("should be a no-op when no updates are specified", func() {
+				ctx := context.Background()
+
+				// Set initial state
+				err := ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "pod-a",
+						AttributeNamespace: "ns-a",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Call with empty updates (no clear flags, no attrs)
+				err = ic.SetOwnerAttributes(ctx, allocatedIP, handle, &OwnerAttributeUpdates{}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// State should be unchanged
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, allocatedIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("pod-a"))
+			})
+		})
+
+		Context("VerifyAndSwapOwnerAttributeForVM", func() {
+			var hostname string
+			var handle string
+			var allocatedIPs []cnet.IP
+
+			BeforeEach(func() {
+				hostname = "test-host-swap"
+				handle = "k8s-pod-network.vmi.test-ns.test-vm"
+
+				Expect(bc.Clean()).To(Succeed())
+				deleteAllPools()
+				applyPool("10.0.0.0/24", true, "")
+				applyPool("fd80:24e2:f998:72d6::/120", true, "")
+				applyNode(bc, kc, hostname, nil)
+
+				ctx := context.Background()
+
+				// Allocate dual-stack IPs for the VMI handle
+				v4ia, v6ia, err := ic.AutoAssign(ctx, AutoAssignArgs{
+					Num4:        1,
+					Num6:        1,
+					HandleID:    &handle,
+					Hostname:    hostname,
+					IntendedUse: v3.IPPoolAllowedUseWorkload,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v4ia.IPs).To(HaveLen(1))
+				Expect(v6ia.IPs).To(HaveLen(1))
+
+				allocatedIPs = []cnet.IP{
+					{IP: v4ia.IPs[0].IP},
+					{IP: v6ia.IPs[0].IP},
+				}
+
+				// Set source pod as active owner and target pod as alternate owner on all IPs
+				for _, ip := range allocatedIPs {
+					err := ic.SetOwnerAttributes(ctx, ip, handle, &OwnerAttributeUpdates{
+						ActiveOwnerAttrs: map[string]string{
+							AttributePod:       "virt-launcher-source",
+							AttributeNamespace: "test-ns",
+						},
+						AlternateOwnerAttrs: map[string]string{
+							AttributePod:       "virt-launcher-target",
+							AttributeNamespace: "test-ns",
+						},
+					}, nil)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
+
+			It("should promote target to active owner on all IPs", func() {
+				ctx := context.Background()
+
+				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, ip := range allocatedIPs {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
+					Expect(allocAttr.ActiveOwnerAttrs[AttributeNamespace]).To(Equal("test-ns"))
+					// Source moves to alternate
+					Expect(allocAttr.AlternateOwnerAttrs[AttributePod]).To(Equal("virt-launcher-source"))
+					Expect(allocAttr.AlternateOwnerAttrs[AttributeNamespace]).To(Equal("test-ns"))
+				}
+			})
+
+			It("should be idempotent - second call succeeds when target is already active", func() {
+				ctx := context.Background()
+
+				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Call again - should succeed (idempotent)
+				err = VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, ip := range allocatedIPs {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
+				}
+			})
+
+			It("should return ErrAlternateOwnerEmpty when alternate is cleared before swap", func() {
+				ctx := context.Background()
+
+				// Clear alternate owner on all IPs (simulates target pod deleted before swap)
+				for _, ip := range allocatedIPs {
+					err := ic.SetOwnerAttributes(ctx, ip, handle, &OwnerAttributeUpdates{
+						ClearAlternateOwner: true,
+					}, nil)
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).To(HaveOccurred())
+				Expect(errors.Is(err, ErrAlternateOwnerEmpty)).To(BeTrue(),
+					fmt.Sprintf("Expected ErrAlternateOwnerEmpty, got: %v", err))
+			})
+
+			It("should return ErrAlternateOwnerMismatch when alternate is a different pod", func() {
+				ctx := context.Background()
+
+				// Overwrite alternate with a different pod
+				for _, ip := range allocatedIPs {
+					err := ic.SetOwnerAttributes(ctx, ip, handle, &OwnerAttributeUpdates{
+						AlternateOwnerAttrs: map[string]string{
+							AttributePod:       "virt-launcher-unexpected",
+							AttributeNamespace: "test-ns",
+						},
+					}, nil)
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).To(HaveOccurred())
+				Expect(errors.Is(err, ErrAlternateOwnerMismatch)).To(BeTrue(),
+					fmt.Sprintf("Expected ErrAlternateOwnerMismatch, got: %v", err))
+			})
+
+			It("should fail when no IPs are allocated to the handle", func() {
+				ctx := context.Background()
+
+				// Release all IPs
+				err := ic.ReleaseByHandle(ctx, handle)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to get IPs for handle"))
+			})
+
+			It("should succeed when source was already deleted but target is in alternate", func() {
+				ctx := context.Background()
+
+				// Clear active owner (simulates source pod deleted and its attrs cleared)
+				for _, ip := range allocatedIPs {
+					err := ic.SetOwnerAttributes(ctx, ip, handle, &OwnerAttributeUpdates{
+						ClearActiveOwner: true,
+					}, nil)
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				// Swap should still succeed - it only verifies alternate
+				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, ip := range allocatedIPs {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
+					// Active was empty, so alternate should now be empty (nil map swapped in)
+					Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+				}
+			})
+
+			It("should work with custom network name", func() {
+				ctx := context.Background()
+
+				// Allocate IPs with a custom network handle
+				customHandle := "multus-net1.vmi.test-ns.test-vm"
+				v4ia, _, err := ic.AutoAssign(ctx, AutoAssignArgs{
+					Num4:        1,
+					HandleID:    &customHandle,
+					Hostname:    hostname,
+					IntendedUse: v3.IPPoolAllowedUseWorkload,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				customIP := cnet.IP{IP: v4ia.IPs[0].IP}
+
+				// Set owners
+				err = ic.SetOwnerAttributes(ctx, customIP, customHandle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "virt-launcher-source",
+						AttributeNamespace: "test-ns",
+					},
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "virt-launcher-target",
+						AttributeNamespace: "test-ns",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = VerifyAndSwapOwnerAttributeForVM(ctx, ic, "multus-net1", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, customIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
+			})
+
+			It("should handle partial success - already-swapped IPs are skipped on retry", func() {
+				ctx := context.Background()
+
+				// Manually swap only the first IP
+				firstIP := allocatedIPs[0]
+				err := ic.SetOwnerAttributes(ctx, firstIP, handle, &OwnerAttributeUpdates{
+					ActiveOwnerAttrs: map[string]string{
+						AttributePod:       "virt-launcher-target",
+						AttributeNamespace: "test-ns",
+					},
+					AlternateOwnerAttrs: map[string]string{
+						AttributePod:       "virt-launcher-source",
+						AttributeNamespace: "test-ns",
+					},
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Now call the function - first IP should be skipped, second IP should be swapped
+				err = VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Both IPs should now have target as active
+				for _, ip := range allocatedIPs {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
+				}
 			})
 		})
 	})
