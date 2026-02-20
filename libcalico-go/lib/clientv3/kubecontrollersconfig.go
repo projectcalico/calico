@@ -33,6 +33,7 @@ import (
 type KubeControllersConfigurationInterface interface {
 	Create(ctx context.Context, res *apiv3.KubeControllersConfiguration, opts options.SetOptions) (*apiv3.KubeControllersConfiguration, error)
 	Update(ctx context.Context, res *apiv3.KubeControllersConfiguration, opts options.SetOptions) (*apiv3.KubeControllersConfiguration, error)
+	UpdateStatus(ctx context.Context, res *apiv3.KubeControllersConfiguration, opts options.SetOptions) (*apiv3.KubeControllersConfiguration, error)
 	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.KubeControllersConfiguration, error)
 	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.KubeControllersConfiguration, error)
 	List(ctx context.Context, opts options.ListOptions) (*apiv3.KubeControllersConfigurationList, error)
@@ -154,6 +155,17 @@ func (r kubeControllersConfiguration) Update(ctx context.Context, res *apiv3.Kub
 	}
 
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindKubeControllersConfiguration, res)
+	if out != nil {
+		return out.(*apiv3.KubeControllersConfiguration), err
+	}
+	return nil, err
+}
+
+// UpdateStatus takes the representation of a KubeControllersConfiguration and updates its status.
+// Returns the stored representation of the KubeControllersConfiguration, and an error
+// if there is any.
+func (r kubeControllersConfiguration) UpdateStatus(ctx context.Context, res *apiv3.KubeControllersConfiguration, opts options.SetOptions) (*apiv3.KubeControllersConfiguration, error) {
+	out, err := r.client.resources.UpdateStatus(ctx, opts, apiv3.KindKubeControllersConfiguration, res)
 	if out != nil {
 		return out.(*apiv3.KubeControllersConfiguration), err
 	}
