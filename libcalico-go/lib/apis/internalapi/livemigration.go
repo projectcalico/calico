@@ -39,17 +39,24 @@ type LiveMigration struct {
 
 // LiveMigrationSpec contains the specification for a LiveMigration resource.
 type LiveMigrationSpec struct {
-	// Name and namespace of the WorkloadEndpoint that this live
-	// migration operation is moving to.
-	DestinationWorkloadEndpoint types.NamespacedName `json:"destinationWorkloadEndpoint"`
+	// Source identifies the WorkloadEndpoint that this live migration operation is moving from.
+	Source *WorkloadEndpointIdentifier
 
-	// Selector for the WorkloadEndpoint that this live
-	// migration operation is moving to.
-	DestinationWorkloadEndpointSelector string `json:"destinationWorkloadEndpointSelector"`
+	// Destination identifies the WorkloadEndpoint that this live migration operation is moving
+	// to.
+	Destination *WorkloadEndpointIdentifier
+}
 
-	// Name and namespace of the WorkloadEndpoint that this live
-	// migration operation is moving from.
-	SourceWorkloadEndpoint types.NamespacedName `json:"sourceWorkloadEndpoint"`
+// +kubebuilder:validation:ExactlyOneOf
+type WorkloadEndpointIdentifier struct {
+	// NamespacedName is used when the WorkloadEndpoint can be identified directly by its
+	// name and namespace.
+	// +optional
+	NamespacedName *types.NamespacedName
+
+	// Selector is used when the WorkloadEndpoint must be identified by a selector expression.
+	// +optional
+	Selector *string
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

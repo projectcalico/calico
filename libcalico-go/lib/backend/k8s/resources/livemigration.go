@@ -168,14 +168,19 @@ func vmimShouldEmitLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigratio
 // convertVMIMToLiveMigrationSpec extracts the LiveMigrationSpec from a VMIM.
 // The caller must ensure the VMIM has the required fields (see vmimShouldEmitLiveMigration).
 func convertVMIMToLiveMigrationSpec(vmim *kubevirtv1.VirtualMachineInstanceMigration) internalapi.LiveMigrationSpec {
+	selector := fmt.Sprintf(
+		"kubevirt.io/vmi-name == '%s' && kubevirt.io/migrationJobUID == '%s'",
+		vmim.Spec.VMIName, string(vmim.UID),
+	)
 	return internalapi.LiveMigrationSpec{
-		DestinationWorkloadEndpointSelector: fmt.Sprintf(
-			"kubevirt.io/vmi-name == '%s' && kubevirt.io/migrationJobUID == '%s'",
-			vmim.Spec.VMIName, string(vmim.UID),
-		),
-		SourceWorkloadEndpoint: types.NamespacedName{
-			Name:      vmim.Status.MigrationState.SourcePod,
-			Namespace: vmim.Namespace,
+		Source: &internalapi.WorkloadEndpointIdentifier{
+			NamespacedName: &types.NamespacedName{
+				Name:      vmim.Status.MigrationState.SourcePod,
+				Namespace: vmim.Namespace,
+			},
+		},
+		Destination: &internalapi.WorkloadEndpointIdentifier{
+			Selector: &selector,
 		},
 	}
 }
