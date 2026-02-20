@@ -23,7 +23,7 @@ function reject_local_routes () {
 function calico_export_to_bgp_peers(bool internal_peer) {
   # filter code terminates when it calls `accept;` or `reject;`,
 
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") "reject" false "" 6 }}
+{{- range $line := $config.BGPExportFilterForDisabledIPPools }}
 {{ $line }}
 {{- end}}
 
@@ -58,9 +58,9 @@ function calico_export_to_bgp_peers(bool internal_peer) {
 {{- end}}
 {{- end}}
 
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") "accept" false "" 6 }}
+{{- range $line := $config.BGPExportFilterForEnabledIPPools }}
 {{ $line }}
-{{- end }}
+{{- end}}
 }
 
 filter calico_kernel_programming {
@@ -75,7 +75,8 @@ filter calico_kernel_programming {
   {{- end}}
 
 {{- end}}
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v6/pool/*") "reject" true "" 6 }}
+
+{{- range $line := $config.KernelFilterForIPPools }}
 {{ $line }}
 {{- end}}
   accept;                                  {{- /* Destination is not in any ipPool, accept  */}}
