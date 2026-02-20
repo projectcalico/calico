@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,6 +99,9 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 			},
 			{
 				ListInterface: model.ResourceListOptions{Kind: apiv3.KindBGPPeer},
+			},
+			{
+				ListInterface: model.ResourceListOptions{Kind: internalapi.KindLiveMigration},
 			},
 		}
 
