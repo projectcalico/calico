@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -50,14 +50,14 @@ type v3IPAMConfigurationClient struct {
 	v3 bool
 }
 
-// ipamConfigurationVersionConverter handles converstion between v3 and CRD representations of IPAMConfiguration.
+// ipamConfigurationVersionConverter handles conversion between the v3 API and CRD representations of IPAMConfiguration.
 type ipamConfigurationVersionConverter struct{}
 
-// crdToV3 converts the given CRD KVPair into a v3 model representation which can be passed back to the clientv3 code.
+// ConvertFromK8s converts the given CRD KVPair into a v3 API representation which can be passed back to the clientv3 code.
 func (c ipamConfigurationVersionConverter) ConvertFromK8s(r Resource) (Resource, error) {
 	switch o := r.(type) {
-	case *libapiv3.IPAMConfig:
-		// This is a v1 CRD, convert it to the v3 struct expected by clientv3.
+	case *internalapi.IPAMConfig:
+		// This is a crd.projectcalico.org/v1 CRD, convert it to the v3 API struct expected by clientv3.
 		return &v3.IPAMConfiguration{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       v3.KindIPAMConfiguration,
@@ -86,7 +86,7 @@ func (c v3IPAMConfigurationClient) getBackingTypeMeta() metav1.TypeMeta {
 		}
 	}
 	return metav1.TypeMeta{
-		Kind:       libapiv3.KindIPAMConfig,
+		Kind:       internalapi.KindIPAMConfig,
 		APIVersion: "crd.projectcalico.org/v1",
 	}
 }

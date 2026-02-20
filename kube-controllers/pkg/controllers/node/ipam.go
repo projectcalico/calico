@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -270,7 +270,7 @@ func (c *IPAMController) onUpdate(update bapi.Update) {
 	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case libapiv3.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
+		case internalapi.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
@@ -384,7 +384,7 @@ func (c *IPAMController) handleUpdate(upd any) {
 		switch upd.Key.(type) {
 		case model.ResourceKey:
 			switch upd.Key.(model.ResourceKey).Kind {
-			case libapiv3.KindNode:
+			case internalapi.KindNode:
 				c.handleNodeUpdate(upd)
 				return
 			case apiv3.KindIPPool:
@@ -414,7 +414,7 @@ func (c *IPAMController) handleBlockUpdate(kvp model.KVPair) {
 // handleNodeUpdate wraps up the logic to execute when receiving a node update.
 func (c *IPAMController) handleNodeUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
-		n := kvp.Value.(*libapiv3.Node)
+		n := kvp.Value.(*internalapi.Node)
 		kn, err := getK8sNodeName(*n)
 		if err != nil {
 			log.WithError(err).Info("Unable to get corresponding k8s node name")
@@ -1023,7 +1023,7 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 			logc.Warn("Pod converted to nil WorkloadEndpoint")
 			continue
 		}
-		wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
+		wep := kvp.Value.(*internalapi.WorkloadEndpoint)
 		for _, nw := range wep.Spec.IPNetworks {
 			ip, _, err := net.ParseCIDR(nw)
 			if err != nil {

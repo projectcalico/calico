@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -32,7 +32,7 @@ import (
 
 func NewFakeCalicoClient() *FakeCalicoClient {
 	nc := fakeNodeClient{
-		nodes: make(map[string]*apiv3.Node),
+		nodes: make(map[string]*internalapi.Node),
 	}
 	ipamClient := fakeIPAMClient{
 		affinitiesReleased: make(map[string]bool),
@@ -217,10 +217,10 @@ func (f *FakeCalicoClient) Close() error {
 // fakeNodeClient implements the clientv3 NodeInterface for testing purposes.
 type fakeNodeClient struct {
 	sync.Mutex
-	nodes map[string]*apiv3.Node
+	nodes map[string]*internalapi.Node
 }
 
-func (f *fakeNodeClient) Create(ctx context.Context, res *apiv3.Node, opts options.SetOptions) (*apiv3.Node, error) {
+func (f *fakeNodeClient) Create(ctx context.Context, res *internalapi.Node, opts options.SetOptions) (*internalapi.Node, error) {
 	f.Lock()
 	defer f.Unlock()
 
@@ -231,15 +231,15 @@ func (f *fakeNodeClient) Create(ctx context.Context, res *apiv3.Node, opts optio
 	return res, nil
 }
 
-func (f *fakeNodeClient) Update(ctx context.Context, res *apiv3.Node, opts options.SetOptions) (*apiv3.Node, error) {
+func (f *fakeNodeClient) Update(ctx context.Context, res *internalapi.Node, opts options.SetOptions) (*internalapi.Node, error) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (f *fakeNodeClient) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.Node, error) {
+func (f *fakeNodeClient) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*internalapi.Node, error) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (f *fakeNodeClient) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.Node, error) {
+func (f *fakeNodeClient) Get(ctx context.Context, name string, opts options.GetOptions) (*internalapi.Node, error) {
 	f.Lock()
 	defer f.Unlock()
 
@@ -249,7 +249,7 @@ func (f *fakeNodeClient) Get(ctx context.Context, name string, opts options.GetO
 	return f.nodes[name], nil
 }
 
-func (f *fakeNodeClient) List(ctx context.Context, opts options.ListOptions) (*apiv3.NodeList, error) {
+func (f *fakeNodeClient) List(ctx context.Context, opts options.ListOptions) (*internalapi.NodeList, error) {
 	panic("not implemented") // TODO: Implement
 }
 

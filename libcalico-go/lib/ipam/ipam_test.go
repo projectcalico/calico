@@ -26,6 +26,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gmeasure"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -35,7 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
@@ -236,8 +237,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			log.SetLevel(origLogLevel)
 		})
 
-		Measure("It should be able to allocate a single address quickly - blocksize 32", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		It("should be able to allocate a single address quickly - blocksize 32", func() {
+			experiment := gmeasure.NewExperiment("allocate single address - blocksize 32")
+			AddReportEntry(experiment.Name, experiment)
+
+			duration := experiment.MeasureDuration("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -250,11 +254,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4ia.IPs)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
+			Expect(duration.Seconds()).Should(BeNumerically("<", 5))
 		})
 
-		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		It("should be able to allocate a single address quickly - blocksize 26", func() {
+			experiment := gmeasure.NewExperiment("allocate single address - blocksize 26")
+			AddReportEntry(experiment.Name, experiment)
+
+			duration := experiment.MeasureDuration("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -267,11 +274,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4ia.IPs)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
+			Expect(duration.Seconds()).Should(BeNumerically("<", 5))
 		})
 
-		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		It("should be able to allocate a single address quickly - blocksize 20", func() {
+			experiment := gmeasure.NewExperiment("allocate single address - blocksize 20")
+			AddReportEntry(experiment.Name, experiment)
+
+			duration := experiment.MeasureDuration("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -284,11 +294,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4ia.IPs)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
+			Expect(duration.Seconds()).Should(BeNumerically("<", 5))
 		})
 
-		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		It("should be able to allocate a lot of addresses quickly", func() {
+			experiment := gmeasure.NewExperiment("allocate many addresses")
+			AddReportEntry(experiment.Name, experiment)
+
+			duration := experiment.MeasureDuration("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -301,7 +314,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4ia.IPs)).To(Equal(64))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
+			Expect(duration.Seconds()).Should(BeNumerically("<", 5))
 		})
 
 		Context("with 1000 nodes", func() {
@@ -369,22 +382,31 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(eg.Wait()).To(Succeed())
 			}
 
-			Measure("time to allocate first IP per node across 1000 nodes", func(b Benchmarker) {
-				b.Time("runtime", func() {
+			It("time to allocate first IP per node across 1000 nodes", func() {
+				experiment := gmeasure.NewExperiment("allocate first IP per node across 1000 nodes")
+				AddReportEntry(experiment.Name, experiment)
+
+				experiment.MeasureDuration("runtime", func() {
 					allocOneIPPerNode()
 				})
 			})
 
-			Measure("time to allocate second IP per node across 1000 nodes", func(b Benchmarker) {
+			It("time to allocate second IP per node across 1000 nodes", func() {
+				experiment := gmeasure.NewExperiment("allocate second IP per node across 1000 nodes")
+				AddReportEntry(experiment.Name, experiment)
+
 				allocOneIPPerNode() // Pre-create one IPAM block per node.
-				b.Time("runtime", func() {
+				experiment.MeasureDuration("runtime", func() {
 					allocOneIPPerNode()
 				})
 			})
 		})
 
-		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		It("should be able to allocate and release addresses quickly", func() {
+			experiment := gmeasure.NewExperiment("allocate and release addresses")
+			AddReportEntry(experiment.Name, experiment)
+
+			duration := experiment.MeasureDuration("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -405,7 +427,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(rel)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
+			Expect(duration.Seconds()).Should(BeNumerically("<", 5))
 		})
 	})
 
@@ -3444,7 +3466,7 @@ var _ = DescribeTable("determinePools tests IPV4",
 		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
 
 		// Create a node object for the test.
-		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
 
 		// Prep input data
 		reqPools := []cnet.IPNet{}
@@ -3513,7 +3535,7 @@ var _ = DescribeTable("determinePools tests IPV6",
 		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
 
 		// Create a node object for the test.
-		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
 
 		// Prep input data
 		reqPools := []cnet.IPNet{}
@@ -3656,10 +3678,10 @@ func tryApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels m
 	} else {
 		// Otherwise, create it in Calico.
 		_, err := c.Apply(context.Background(), &model.KVPair{
-			Key: model.ResourceKey{Name: host, Kind: libapiv3.KindNode},
-			Value: libapiv3.Node{
+			Key: model.ResourceKey{Name: host, Kind: internalapi.KindNode},
+			Value: internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: libapiv3.NodeSpec{OrchRefs: []libapiv3.OrchRef{
+				Spec: internalapi.NodeSpec{OrchRefs: []internalapi.OrchRef{
 					{Orchestrator: "k8s", NodeName: host},
 				}},
 			},
@@ -3678,7 +3700,7 @@ func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
 			Fail(fmt.Sprintf("Error deleting node %s: %v", host, err))
 		}
 	} else {
-		_, err := c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: libapiv3.KindNode}, "")
+		_, err := c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: internalapi.KindNode}, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				Fail(fmt.Sprintf("Error deleting node %s: %v", host, err))
@@ -3805,7 +3827,7 @@ var _ = Describe("determinePools with namespace selector", func() {
 				blockSize:         26,
 			}
 
-			node := libapiv3.Node{
+			node := internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: nodeLabels,
 				},
@@ -3946,7 +3968,7 @@ var _ = Describe("determinePools with namespace selector", func() {
 			blockSize:         26,
 		}
 
-		node := libapiv3.Node{
+		node := internalapi.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{},
 			},
@@ -3988,7 +4010,7 @@ var _ = Describe("determinePools with namespace selector", func() {
 			blockSize:         26,
 		}
 
-		node := libapiv3.Node{
+		node := internalapi.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{},
 			},
@@ -4022,7 +4044,7 @@ var _ = Describe("determinePools with namespace selector", func() {
 			blockSize:         26,
 		}
 
-		node := libapiv3.Node{
+		node := internalapi.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{},
 			},
